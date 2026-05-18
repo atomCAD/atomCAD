@@ -305,6 +305,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__add_node_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_type_name = <String>::sse_decode(&mut deserializer);
             let api_position =
                 <crate::api::common_api_types::APIVec2>::sse_decode(&mut deserializer);
@@ -315,6 +316,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__add_node_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::add_node(
+                        api_scope_path,
                         &api_node_type_name,
                         api_position,
                         api_drag_source,
@@ -359,11 +361,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__add_node_to_sel
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::add_node_to_selection(
+                        api_scope_path,
                         api_node_id,
                     ),
                 )?;
@@ -407,11 +411,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__add_nodes_to_se
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::add_nodes_to_selection(
+                        api_scope_path,
                         api_node_ids,
                     );
                 })?;
@@ -1748,6 +1754,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__auto_connect_to
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_source_node_id = <u64>::sse_decode(&mut deserializer);
             let api_source_pin_index = <i32>::sse_decode(&mut deserializer);
             let api_source_is_output = <bool>::sse_decode(&mut deserializer);
@@ -1756,6 +1763,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__auto_connect_to
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::auto_connect_to_node(
+                        api_scope_path,
                         api_source_node_id,
                         api_source_pin_index,
                         api_source_is_output,
@@ -1837,10 +1845,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__begin_move_node
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::structure_designer_api::begin_move_nodes();
+                    crate::api::structure_designer::structure_designer_api::begin_move_nodes(
+                        api_scope_path,
+                    );
                 })?;
                 Ok(output_ok)
             })())
@@ -1868,6 +1879,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__can_connect_nod
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_source_node_id = <u64>::sse_decode(&mut deserializer);
             let api_source_output_pin_index = <i32>::sse_decode(&mut deserializer);
             let api_dest_node_id = <u64>::sse_decode(&mut deserializer);
@@ -1876,6 +1888,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__can_connect_nod
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::can_connect_nodes(
+                        api_scope_path,
                         api_source_node_id,
                         api_source_output_pin_index,
                         api_dest_node_id,
@@ -2240,10 +2253,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__clear_selection
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::structure_designer_api::clear_selection();
+                    crate::api::structure_designer::structure_designer_api::clear_selection(
+                        api_scope_path,
+                    );
                 })?;
                 Ok(output_ok)
             })())
@@ -2271,6 +2287,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__connect_nodes_i
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_source_node_id = <u64>::sse_decode(&mut deserializer);
             let api_source_output_pin_index = <i32>::sse_decode(&mut deserializer);
             let api_dest_node_id = <u64>::sse_decode(&mut deserializer);
@@ -2279,6 +2296,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__connect_nodes_i
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::connect_nodes(
+                        api_scope_path,
                         api_source_node_id,
                         api_source_output_pin_index,
                         api_dest_node_id,
@@ -2311,10 +2329,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__copy_selection_
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::structure_designer_api::copy_selection(),
+                    crate::api::structure_designer::structure_designer_api::copy_selection(
+                        api_scope_path,
+                    ),
                 )?;
                 Ok(output_ok)
             })())
@@ -2342,10 +2363,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__cut_selection_i
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::structure_designer_api::cut_selection(),
+                    crate::api::structure_designer::structure_designer_api::cut_selection(
+                        api_scope_path,
+                    ),
                 )?;
                 Ok(output_ok)
             })())
@@ -2643,10 +2667,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__delete_selected
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::structure_designer_api::delete_selected();
+                    crate::api::structure_designer::structure_designer_api::delete_selected(
+                        api_scope_path,
+                    );
                 })?;
                 Ok(output_ok)
             })())
@@ -2744,11 +2771,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__duplicate_node_
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::duplicate_node(
+                        api_scope_path,
                         api_node_id,
                     ),
                 )?;
@@ -2871,10 +2900,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__end_move_nodes_
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::structure_designer_api::end_move_nodes();
+                    crate::api::structure_designer::structure_designer_api::end_move_nodes(
+                        api_scope_path,
+                    );
                 })?;
                 Ok(output_ok)
             })())
@@ -3771,12 +3803,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__get_compatible_
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "get_compatible_pins_for_auto_connect", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_source_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
+let api_source_node_id = <u64>::sse_decode(&mut deserializer);
 let api_source_pin_index = <i32>::sse_decode(&mut deserializer);
 let api_source_is_output = <bool>::sse_decode(&mut deserializer);
 let api_target_node_id = <u64>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::get_compatible_pins_for_auto_connect(api_source_node_id, api_source_pin_index, api_source_is_output, api_target_node_id))?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_api::get_compatible_pins_for_auto_connect(api_scope_path, api_source_node_id, api_source_pin_index, api_source_is_output, api_target_node_id))?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__get_cuboid_data_impl(
@@ -6761,6 +6794,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__move_node_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
             let api_position =
                 <crate::api::common_api_types::APIVec2>::sse_decode(&mut deserializer);
@@ -6768,6 +6802,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__move_node_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::move_node(
+                        api_scope_path,
                         api_node_id,
                         api_position,
                     );
@@ -6798,12 +6833,14 @@ fn wire__crate__api__structure_designer__structure_designer_api__move_selected_n
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_delta_x = <f64>::sse_decode(&mut deserializer);
             let api_delta_y = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::move_selected_nodes(
+                        api_scope_path,
                         api_delta_x,
                         api_delta_y,
                     );
@@ -7000,13 +7037,16 @@ fn wire__crate__api__structure_designer__structure_designer_api__paste_at_positi
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_x = <f64>::sse_decode(&mut deserializer);
             let api_y = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::paste_at_position(
-                        api_x, api_y,
+                        api_scope_path,
+                        api_x,
+                        api_y,
                     ),
                 )?;
                 Ok(output_ok)
@@ -7637,11 +7677,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__select_node_imp
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::select_node(
+                        api_scope_path,
                         api_node_id,
                     ),
                 )?;
@@ -7671,11 +7713,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__select_nodes_im
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::select_nodes(
+                        api_scope_path,
                         api_node_ids,
                     ),
                 )?;
@@ -8767,12 +8811,14 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_node_displa
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
             let api_is_displayed = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::set_node_display(
+                        api_scope_path,
                         api_node_id,
                         api_is_displayed,
                     );
@@ -8994,11 +9040,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__set_return_node
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::set_return_node_id(
+                        api_scope_path,
                         api_node_id,
                     ),
                 )?;
@@ -9338,11 +9386,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__toggle_node_sel
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::structure_designer::structure_designer_api::toggle_node_selection(
+                        api_scope_path,
                         api_node_id,
                     ),
                 )?;
@@ -9386,11 +9436,13 @@ fn wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_se
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
             let api_node_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok({
                     crate::api::structure_designer::structure_designer_api::toggle_nodes_selection(
+                        api_scope_path,
                         api_node_ids,
                     );
                 })?;
@@ -9407,10 +9459,11 @@ fn wire__crate__api__structure_designer__structure_designer_api__toggle_output_p
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "toggle_output_pin_display", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
+let api_node_id = <u64>::sse_decode(&mut deserializer);
 let api_pin_index = <i32>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::toggle_output_pin_display(api_node_id, api_pin_index); })?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::toggle_output_pin_display(api_scope_path, api_node_id, api_pin_index); })?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(

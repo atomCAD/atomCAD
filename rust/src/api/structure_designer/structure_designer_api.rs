@@ -543,19 +543,33 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
     }
 }
 
+/// Move a node. The targeted network is identified by `scope_path` — empty
+/// means the active top-level network (existing behavior); a non-empty path
+/// names a chain of HOF body owners to descend through via `Node.zone_mut()`.
+/// Phase U2 of `doc/design_zones_ui.md` plumbs the parameter through every
+/// mutation API.
 #[flutter_rust_bridge::frb(sync)]
-pub fn move_node(node_id: u64, position: APIVec2) {
+pub fn move_node(scope_path: Vec<u64>, node_id: u64, position: APIVec2) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            cad_instance
-                .structure_designer
-                .move_node(node_id, from_api_vec2(&position));
+            cad_instance.structure_designer.move_node_scoped(
+                &scope_path,
+                node_id,
+                from_api_vec2(&position),
+            );
         });
     }
 }
 
+/// Add a node to the network identified by `scope_path` (empty = active
+/// top-level network; non-empty = walk `Node.zone` down the chain). Phase U2
+/// plumbs the parameter through; body-scope adds run a simpler path without
+/// the top-level orchestration (undo / display policy / drag-source
+/// adapter) — those re-enter under a scope-aware code path in U4. See
+/// `doc/design_zones_ui.md`.
 #[flutter_rust_bridge::frb(sync)]
 pub fn add_node(
+    scope_path: Vec<u64>,
     node_type_name: &str,
     position: APIVec2,
     drag_source: Option<APIDragSource>,
@@ -579,7 +593,8 @@ pub fn add_node(
                         direction,
                     })
                 });
-                let ret = cad_instance.structure_designer.add_node_with_drag_source(
+                let ret = cad_instance.structure_designer.add_node_scoped(
+                    &scope_path,
                     node_type_name,
                     from_api_vec2(&position),
                     drag,
@@ -592,11 +607,21 @@ pub fn add_node(
     }
 }
 
+/// Duplicate a node within `scope_path`'s network. Phase U2 of
+/// `doc/design_zones_ui.md` — for empty path this routes to today's
+/// `duplicate_node`; non-empty paths are not yet routed (no body authoring
+/// path lands until U4) and currently return 0.
 #[flutter_rust_bridge::frb(sync)]
-pub fn duplicate_node(node_id: u64) -> u64 {
+pub fn duplicate_node(scope_path: Vec<u64>, node_id: u64) -> u64 {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    // Body-scope duplicate is wired in U4 alongside the
+                    // rest of body authoring. For U2 the parameter is
+                    // plumbed for API-shape completeness only.
+                    return 0;
+                }
                 let ret = cad_instance.structure_designer.duplicate_node(node_id);
                 refresh_structure_designer_auto(cad_instance);
                 ret
@@ -608,6 +633,7 @@ pub fn duplicate_node(node_id: u64) -> u64 {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn can_connect_nodes(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_output_pin_index: i32,
     dest_node_id: u64,
@@ -616,6 +642,11 @@ pub fn can_connect_nodes(
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    // Body-scope can_connect lands in U4/U5 alongside cross-
+                    // scope wire authoring. For U2 the param is plumbed only.
+                    return false;
+                }
                 cad_instance.structure_designer.can_connect_nodes(
                     source_node_id,
                     source_output_pin_index,
@@ -630,6 +661,7 @@ pub fn can_connect_nodes(
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn connect_nodes(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_output_pin_index: i32,
     dest_node_id: u64,
@@ -637,6 +669,11 @@ pub fn connect_nodes(
 ) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            if !scope_path.is_empty() {
+                // Body-scope wires (capture, iteration-value, body-return)
+                // come online in U4 / U5 — see `doc/design_zones_ui.md`.
+                return;
+            }
             cad_instance.structure_designer.connect_nodes(
                 source_node_id,
                 source_output_pin_index,
@@ -658,6 +695,7 @@ pub fn connect_nodes(
 /// Returns true if a connection was made, false otherwise.
 #[flutter_rust_bridge::frb(sync)]
 pub fn auto_connect_to_node(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_pin_index: i32,
     source_is_output: bool,
@@ -666,6 +704,9 @@ pub fn auto_connect_to_node(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    return false;
+                }
                 let result = cad_instance.structure_designer.auto_connect_to_node(
                     source_node_id,
                     source_pin_index,
@@ -686,6 +727,7 @@ pub fn auto_connect_to_node(
 /// When source_is_output is false, returns the OUTPUT pin if compatible.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_compatible_pins_for_auto_connect(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_pin_index: i32,
     source_is_output: bool,
@@ -694,6 +736,9 @@ pub fn get_compatible_pins_for_auto_connect(
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    return Vec::new();
+                }
                 cad_instance
                     .structure_designer
                     .get_compatible_pins_for_auto_connect(
@@ -1340,21 +1385,27 @@ pub fn delete_namespace(prefix: &str) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_node_display(node_id: u64, is_displayed: bool) {
+pub fn set_node_display(scope_path: Vec<u64>, node_id: u64, is_displayed: bool) {
     unsafe {
         with_mut_cad_instance(|instance| {
             instance
                 .structure_designer
-                .set_node_display(node_id, is_displayed);
+                .set_node_display_scoped(&scope_path, node_id, is_displayed);
             refresh_structure_designer_auto(instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_output_pin_display(node_id: u64, pin_index: i32) {
+pub fn toggle_output_pin_display(scope_path: Vec<u64>, node_id: u64, pin_index: i32) {
     unsafe {
         with_mut_cad_instance(|instance| {
+            if !scope_path.is_empty() {
+                // Per-pin display undo on body nodes lands in U4 alongside
+                // body authoring (see `doc/design_zones_ui.md`). For U2 we
+                // accept the parameter but body paths are inert.
+                return;
+            }
             instance
                 .structure_designer
                 .toggle_output_pin_display(node_id, pin_index);
@@ -1364,11 +1415,13 @@ pub fn toggle_output_pin_display(node_id: u64, pin_index: i32) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_node(node_id: u64) -> bool {
+pub fn select_node(scope_path: Vec<u64>, node_id: u64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                let result = instance.structure_designer.select_node(node_id);
+                let result = instance
+                    .structure_designer
+                    .select_node_scoped(&scope_path, node_id);
                 refresh_structure_designer_auto(instance);
                 result
             },
@@ -1402,20 +1455,28 @@ pub fn select_wire(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_selection() {
+pub fn clear_selection(scope_path: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            instance.structure_designer.clear_selection();
+            instance
+                .structure_designer
+                .clear_selection_scoped(&scope_path);
             refresh_structure_designer_auto(instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_node_selection(node_id: u64) -> bool {
+pub fn toggle_node_selection(scope_path: Vec<u64>, node_id: u64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
+                if !scope_path.is_empty() {
+                    // Body-scope toggle selection lands in U4. Until then the
+                    // body's selection cannot be reached from a click — the
+                    // call should be a no-op rather than mishandling.
+                    return false;
+                }
                 let result = instance.structure_designer.toggle_node_selection(node_id);
                 refresh_structure_designer_auto(instance);
                 result
@@ -1426,10 +1487,13 @@ pub fn toggle_node_selection(node_id: u64) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_node_to_selection(node_id: u64) -> bool {
+pub fn add_node_to_selection(scope_path: Vec<u64>, node_id: u64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
+                if !scope_path.is_empty() {
+                    return false;
+                }
                 let result = instance.structure_designer.add_node_to_selection(node_id);
                 refresh_structure_designer_auto(instance);
                 result
@@ -1440,10 +1504,13 @@ pub fn add_node_to_selection(node_id: u64) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_nodes(node_ids: Vec<u64>) -> bool {
+pub fn select_nodes(scope_path: Vec<u64>, node_ids: Vec<u64>) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
+                if !scope_path.is_empty() {
+                    return false;
+                }
                 let result = instance.structure_designer.select_nodes(node_ids);
                 refresh_structure_designer_auto(instance);
                 result
@@ -1454,9 +1521,12 @@ pub fn select_nodes(node_ids: Vec<u64>) -> bool {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_nodes_selection(node_ids: Vec<u64>) {
+pub fn toggle_nodes_selection(scope_path: Vec<u64>, node_ids: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
+            if !scope_path.is_empty() {
+                return;
+            }
             instance.structure_designer.toggle_nodes_selection(node_ids);
             refresh_structure_designer_auto(instance);
         });
@@ -1474,21 +1544,28 @@ pub fn get_selected_node_ids() -> Vec<u64> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn move_selected_nodes(delta_x: f64, delta_y: f64) {
+pub fn move_selected_nodes(scope_path: Vec<u64>, delta_x: f64, delta_y: f64) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            instance
-                .structure_designer
-                .move_selected_nodes(glam::f64::DVec2::new(delta_x, delta_y));
+            instance.structure_designer.move_selected_nodes_scoped(
+                &scope_path,
+                glam::f64::DVec2::new(delta_x, delta_y),
+            );
         });
     }
 }
 
-/// Called by Flutter when a node drag begins. Captures current positions for undo coalescing.
+/// Called by Flutter when a node drag begins. Captures current positions for
+/// undo coalescing. `scope_path` is plumbed per `doc/design_zones_ui.md`; in
+/// U2 only the top-level path (empty `scope_path`) creates a `PendingMove`,
+/// since body-scope drag coalescing lands in U4.
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_move_nodes() {
+pub fn begin_move_nodes(scope_path: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
+            if !scope_path.is_empty() {
+                return;
+            }
             instance.structure_designer.begin_move_nodes();
         });
     }
@@ -1496,9 +1573,12 @@ pub fn begin_move_nodes() {
 
 /// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
 #[flutter_rust_bridge::frb(sync)]
-pub fn end_move_nodes() {
+pub fn end_move_nodes(scope_path: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
+            if !scope_path.is_empty() {
+                return;
+            }
             instance.structure_designer.end_move_nodes();
         });
     }
@@ -1666,9 +1746,12 @@ pub fn get_selected_wires() -> Vec<WireView> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_nodes_to_selection(node_ids: Vec<u64>) {
+pub fn add_nodes_to_selection(scope_path: Vec<u64>, node_ids: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
+            if !scope_path.is_empty() {
+                return;
+            }
             instance.structure_designer.add_nodes_to_selection(node_ids);
             refresh_structure_designer_auto(instance);
         });
@@ -5350,20 +5433,29 @@ pub fn set_motif_sub_data(node_id: u64, data: APIMotifSubData) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn delete_selected() {
+pub fn delete_selected(scope_path: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            cad_instance.structure_designer.delete_selected();
+            cad_instance
+                .structure_designer
+                .delete_selected_scoped(&scope_path);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
+/// Set the return node of the active *top-level* network (a body has no
+/// return — its outputs flow through the HOF's zone-output pins). Per
+/// `doc/design_zones_ui.md` §"Mutation APIs grow a `scope_path` parameter",
+/// `scope_path` is plumbed for shape but must be empty.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_return_node_id(node_id: Option<u64>) -> bool {
+pub fn set_return_node_id(scope_path: Vec<u64>, node_id: Option<u64>) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    return false;
+                }
                 let result = cad_instance.structure_designer.set_return_node_id(node_id);
                 refresh_structure_designer_auto(cad_instance);
                 result
@@ -6164,20 +6256,30 @@ pub fn promote_node_to_parameter(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn copy_selection() -> bool {
+pub fn copy_selection(scope_path: Vec<u64>) -> bool {
     unsafe {
         with_mut_cad_instance_or(
-            |cad_instance| cad_instance.structure_designer.copy_selection(),
+            |cad_instance| {
+                if !scope_path.is_empty() {
+                    // Body-scope clipboard ops land in U4 / U5 alongside
+                    // body authoring.
+                    return false;
+                }
+                cad_instance.structure_designer.copy_selection()
+            },
             false,
         )
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn paste_at_position(x: f64, y: f64) -> Vec<u64> {
+pub fn paste_at_position(scope_path: Vec<u64>, x: f64, y: f64) -> Vec<u64> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    return vec![];
+                }
                 let position = glam::f64::DVec2::new(x, y);
                 let new_ids = cad_instance.structure_designer.paste_at_position(position);
                 refresh_structure_designer_auto(cad_instance);
@@ -6189,10 +6291,13 @@ pub fn paste_at_position(x: f64, y: f64) -> Vec<u64> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn cut_selection() -> bool {
+pub fn cut_selection(scope_path: Vec<u64>) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                if !scope_path.is_empty() {
+                    return false;
+                }
                 let result = cad_instance.structure_designer.cut_selection();
                 if result {
                     refresh_structure_designer_auto(cad_instance);

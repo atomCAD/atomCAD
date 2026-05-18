@@ -104,6 +104,19 @@ class DraggedWire {
 typedef WireDropCallback = void Function(
     PinReference startPin, Offset dropPosition);
 
+/// Convert a Dart-side scope chain (`List<BigInt>`, the type carried by
+/// [PinReference.scopeChain] and the model's `activeScopeChain`) into the
+/// `Uint64List` form expected by the FRB-generated Rust API. Empty input
+/// (the common case throughout phase U2) yields a length-0 `Uint64List`.
+Uint64List _scopeChainToBytes(List<BigInt> scopeChain) {
+  if (scopeChain.isEmpty) return Uint64List(0);
+  final out = Uint64List(scopeChain.length);
+  for (int i = 0; i < scopeChain.length; i++) {
+    out[i] = scopeChain[i].toUnsigned(64);
+  }
+  return out;
+}
+
 /// Manages the entire node graph.
 class StructureDesignerModel extends ChangeNotifier {
   List<APINetworkWithValidationErrors> nodeNetworkNames = [];
@@ -176,6 +189,13 @@ class StructureDesignerModel extends ChangeNotifier {
   /// toolbar toggle / `Ctrl+`` ` keyboard shortcut flips this.
   bool consolePanelVisible = false;
 
+  /// Chain of HOF node IDs identifying the body that keyboard shortcuts
+  /// (Delete, Ctrl+C/V/X/D, etc.) operate on. Empty means the active
+  /// top-level network. Defaulted to `const []` until U4 introduces a click-
+  /// into-body gesture that flips the active body. See
+  /// `doc/design_zones_ui.md` §"Phase U2".
+  List<BigInt> activeScopeChain = const [];
+
   StructureDesignerModel();
 
   void init() {
@@ -242,8 +262,10 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void clearSelection() {
-    structure_designer_api.clearSelection();
+  void clearSelection({List<BigInt> scopeChain = const []}) {
+    structure_designer_api.clearSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+    );
     refreshFromKernel();
   }
 
@@ -251,37 +273,53 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Toggle node in selection (for Ctrl+click)
   /// If selected, removes it; if not selected, adds it
-  bool toggleNodeSelection(BigInt nodeId) {
-    final result = structure_designer_api.toggleNodeSelection(nodeId: nodeId);
+  bool toggleNodeSelection(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
+    final result = structure_designer_api.toggleNodeSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
     refreshFromKernel();
     return result;
   }
 
   /// Add node to selection without clearing existing selection (for Shift+click)
-  bool addNodeToSelection(BigInt nodeId) {
-    final result = structure_designer_api.addNodeToSelection(nodeId: nodeId);
+  bool addNodeToSelection(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
+    final result = structure_designer_api.addNodeToSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
     refreshFromKernel();
     return result;
   }
 
   /// Select multiple nodes (for rectangle selection)
-  bool selectNodes(List<BigInt> nodeIds) {
+  bool selectNodes(List<BigInt> nodeIds,
+      {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
     }
-    final result = structure_designer_api.selectNodes(nodeIds: uint64Ids);
+    final result = structure_designer_api.selectNodes(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeIds: uint64Ids,
+    );
     refreshFromKernel();
     return result;
   }
 
   /// Toggle multiple nodes in selection (for Ctrl+rectangle)
-  void toggleNodesSelection(List<BigInt> nodeIds) {
+  void toggleNodesSelection(List<BigInt> nodeIds,
+      {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
     }
-    structure_designer_api.toggleNodesSelection(nodeIds: uint64Ids);
+    structure_designer_api.toggleNodesSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeIds: uint64Ids,
+    );
     refreshFromKernel();
   }
 
@@ -293,9 +331,13 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Move all selected nodes by delta (commits position to kernel)
-  void moveSelectedNodes(Offset delta) {
+  void moveSelectedNodes(Offset delta,
+      {List<BigInt> scopeChain = const []}) {
     structure_designer_api.moveSelectedNodes(
-        deltaX: delta.dx, deltaY: delta.dy);
+      scopePath: _scopeChainToBytes(scopeChain),
+      deltaX: delta.dx,
+      deltaY: delta.dy,
+    );
     refreshFromKernel();
   }
 
@@ -314,13 +356,15 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Commit positions of all selected nodes to the kernel
-  void updateSelectedNodesPosition() {
+  void updateSelectedNodesPosition({List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     final selectedIds = getSelectedNodeIds();
+    final scopePath = _scopeChainToBytes(scopeChain);
     for (final nodeId in selectedIds) {
       final node = nodeNetworkView!.nodes[nodeId];
       if (node != null) {
         structure_designer_api.moveNode(
+            scopePath: scopePath,
             nodeId: nodeId,
             position: APIVec2(x: node.position.x, y: node.position.y));
       }
@@ -359,12 +403,16 @@ class StructureDesignerModel extends ChangeNotifier {
   // ===== BATCH SELECTION METHODS (for rectangle selection) =====
 
   /// Add multiple nodes to selection (for Shift+rectangle)
-  void addNodesToSelection(List<BigInt> nodeIds) {
+  void addNodesToSelection(List<BigInt> nodeIds,
+      {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
     }
-    structure_designer_api.addNodesToSelection(nodeIds: uint64Ids);
+    structure_designer_api.addNodesToSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeIds: uint64Ids,
+    );
     refreshFromKernel();
   }
 
@@ -642,13 +690,17 @@ class StructureDesignerModel extends ChangeNotifier {
   // ===== MOVE COALESCING =====
 
   /// Called when a node drag begins. Captures positions for undo coalescing.
-  void beginMoveNodes() {
-    structure_designer_api.beginMoveNodes();
+  void beginMoveNodes({List<BigInt> scopeChain = const []}) {
+    structure_designer_api.beginMoveNodes(
+      scopePath: _scopeChainToBytes(scopeChain),
+    );
   }
 
   /// Called when a node drag ends. Creates a single MoveNodes undo command.
-  void endMoveNodes() {
-    structure_designer_api.endMoveNodes();
+  void endMoveNodes({List<BigInt> scopeChain = const []}) {
+    structure_designer_api.endMoveNodes(
+      scopePath: _scopeChainToBytes(scopeChain),
+    );
   }
 
   // Called on each small update when dragging a node
@@ -661,11 +713,12 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Updates a node's position in the kernel and notifies listeners.
-  void updateNodePosition(BigInt nodeId) {
+  void updateNodePosition(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     //print('updateNodePosition nodeId: ${nodeId} newPosition: ${newPosition}');
     if (nodeNetworkView != null) {
       final node = nodeNetworkView!.nodes[nodeId]!;
       structure_designer_api.moveNode(
+          scopePath: _scopeChainToBytes(scopeChain),
           nodeId: nodeId,
           position: APIVec2(x: node.position.x, y: node.position.y));
       refreshFromKernel();
@@ -707,7 +760,11 @@ class StructureDesignerModel extends ChangeNotifier {
       return false;
     }
 
+    // Phase U2: both pin scope chains are always `const []` (the editor only
+    // authors at the top level until U4 / U5 introduces body / cross-scope
+    // wire authoring). The non-empty branches in the API reject as a placeholder.
     return structure_designer_api.canConnectNodes(
+      scopePath: _scopeChainToBytes(inPin.scopeChain),
       sourceNodeId: outPin.nodeId,
       sourceOutputPinIndex: outPin.pinIndex,
       destNodeId: inPin.nodeId,
@@ -732,6 +789,7 @@ class StructureDesignerModel extends ChangeNotifier {
     }
 
     structure_designer_api.connectNodes(
+      scopePath: _scopeChainToBytes(inPin.scopeChain),
       sourceNodeId: outPin.nodeId,
       sourceOutputPinIndex: outPin.pinIndex,
       destNodeId: inPin.nodeId,
@@ -749,9 +807,11 @@ class StructureDesignerModel extends ChangeNotifier {
     BigInt sourceNodeId,
     int sourcePinIndex,
     bool sourceIsOutput,
-    BigInt targetNodeId,
-  ) {
+    BigInt targetNodeId, {
+    List<BigInt> scopeChain = const [],
+  }) {
     final result = structure_designer_api.autoConnectToNode(
+      scopePath: _scopeChainToBytes(scopeChain),
       sourceNodeId: sourceNodeId,
       sourcePinIndex: sourcePinIndex,
       sourceIsOutput: sourceIsOutput,
@@ -761,10 +821,11 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
-  void setSelectedNode(BigInt nodeId) {
+  void setSelectedNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView != null) {
       if (!nodeNetworkView!.nodes[nodeId]!.selected) {
         structure_designer_api.selectNode(
+          scopePath: _scopeChainToBytes(scopeChain),
           nodeId: nodeId,
         );
       }
@@ -861,7 +922,13 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setReturnNodeId(BigInt? nodeId) {
-    structure_designer_api.setReturnNodeId(nodeId: nodeId);
+    // Only the top-level network has a return node — bodies emit through
+    // zone-output pins instead. The `scope_path` parameter is plumbed for
+    // API-shape symmetry per `doc/design_zones_ui.md`.
+    structure_designer_api.setReturnNodeId(
+      scopePath: Uint64List(0),
+      nodeId: nodeId,
+    );
     refreshFromKernel();
   }
 
@@ -920,30 +987,36 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void toggleNodeDisplay(BigInt nodeId) {
+  void toggleNodeDisplay(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     final node = nodeNetworkView!.nodes[nodeId];
     if (node == null) return;
 
     structure_designer_api.setNodeDisplay(
+      scopePath: _scopeChainToBytes(scopeChain),
       nodeId: nodeId,
       isDisplayed: !node.displayed,
     );
     refreshFromKernel();
   }
 
-  void toggleOutputPinDisplay(BigInt nodeId, int pinIndex) {
+  void toggleOutputPinDisplay(BigInt nodeId, int pinIndex,
+      {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     structure_designer_api.toggleOutputPinDisplay(
+      scopePath: _scopeChainToBytes(scopeChain),
       nodeId: nodeId,
       pinIndex: pinIndex,
     );
     refreshFromKernel();
   }
 
-  void removeSelected() {
+  void removeSelected({List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
-    structure_designer_api.deleteSelected();
+    structure_designer_api.deleteSelected(
+      scopePath: _scopeChainToBytes(scopeChain),
+    );
     refreshFromKernel();
   }
 
@@ -951,20 +1024,29 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Copies the current selection to the clipboard.
   /// Returns true if something was copied, false if selection was empty.
-  bool copySelection() {
-    return structure_designer_api.copySelection();
+  bool copySelection({List<BigInt> scopeChain = const []}) {
+    return structure_designer_api.copySelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+    );
   }
 
   /// Pastes clipboard content at the given position (network coordinates).
-  void pasteAtPosition(double x, double y) {
-    structure_designer_api.pasteAtPosition(x: x, y: y);
+  void pasteAtPosition(double x, double y,
+      {List<BigInt> scopeChain = const []}) {
+    structure_designer_api.pasteAtPosition(
+      scopePath: _scopeChainToBytes(scopeChain),
+      x: x,
+      y: y,
+    );
     refreshFromKernel();
   }
 
   /// Cuts the current selection (copy + delete).
   /// Returns true if something was cut.
-  bool cutSelection() {
-    final result = structure_designer_api.cutSelection();
+  bool cutSelection({List<BigInt> scopeChain = const []}) {
+    final result = structure_designer_api.cutSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
+    );
     if (result) {
       refreshFromKernel();
     }
@@ -1242,9 +1324,11 @@ class StructureDesignerModel extends ChangeNotifier {
     String nodeTypeName,
     Offset position, {
     APIDragSource? dragSource,
+    List<BigInt> scopeChain = const [],
   }) {
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = structure_designer_api.addNode(
+      scopePath: _scopeChainToBytes(scopeChain),
       nodeTypeName: nodeTypeName,
       position: APIVec2(x: position.dx, y: position.dy),
       dragSource: dragSource,
@@ -1253,11 +1337,19 @@ class StructureDesignerModel extends ChangeNotifier {
     return nodeId;
   }
 
-  BigInt duplicateNode(BigInt nodeId) {
+  BigInt duplicateNode(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return BigInt.zero;
-    final newNodeId = structure_designer_api.duplicateNode(nodeId: nodeId);
+    final scopePath = _scopeChainToBytes(scopeChain);
+    final newNodeId = structure_designer_api.duplicateNode(
+      scopePath: scopePath,
+      nodeId: nodeId,
+    );
     if (newNodeId != BigInt.zero) {
-      structure_designer_api.selectNode(nodeId: newNodeId);
+      structure_designer_api.selectNode(
+        scopePath: scopePath,
+        nodeId: newNodeId,
+      );
     }
     refreshFromKernel();
     return newNodeId;

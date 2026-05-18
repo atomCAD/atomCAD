@@ -14,39 +14,67 @@ import 'structure_designer_preferences.dart';
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
 
-void moveNode({required BigInt nodeId, required APIVec2 position}) =>
+/// Move a node. The targeted network is identified by `scope_path` — empty
+/// means the active top-level network (existing behavior); a non-empty path
+/// names a chain of HOF body owners to descend through via `Node.zone_mut()`.
+/// Phase U2 of `doc/design_zones_ui.md` plumbs the parameter through every
+/// mutation API.
+void moveNode(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIVec2 position}) =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiMoveNode(
-        nodeId: nodeId, position: position);
+        scopePath: scopePath, nodeId: nodeId, position: position);
 
+/// Add a node to the network identified by `scope_path` (empty = active
+/// top-level network; non-empty = walk `Node.zone` down the chain). Phase U2
+/// plumbs the parameter through; body-scope adds run a simpler path without
+/// the top-level orchestration (undo / display policy / drag-source
+/// adapter) — those re-enter under a scope-aware code path in U4. See
+/// `doc/design_zones_ui.md`.
 BigInt addNode(
-        {required String nodeTypeName,
+        {required Uint64List scopePath,
+        required String nodeTypeName,
         required APIVec2 position,
         APIDragSource? dragSource}) =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiAddNode(
-        nodeTypeName: nodeTypeName, position: position, dragSource: dragSource);
+        scopePath: scopePath,
+        nodeTypeName: nodeTypeName,
+        position: position,
+        dragSource: dragSource);
 
-BigInt duplicateNode({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiDuplicateNode(nodeId: nodeId);
+/// Duplicate a node within `scope_path`'s network. Phase U2 of
+/// `doc/design_zones_ui.md` — for empty path this routes to today's
+/// `duplicate_node`; non-empty paths are not yet routed (no body authoring
+/// path lands until U4) and currently return 0.
+BigInt duplicateNode({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiDuplicateNode(
+            scopePath: scopePath, nodeId: nodeId);
 
 bool canConnectNodes(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourceOutputPinIndex,
         required BigInt destNodeId,
         required BigInt destParamIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiCanConnectNodes(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourceOutputPinIndex: sourceOutputPinIndex,
             destNodeId: destNodeId,
             destParamIndex: destParamIndex);
 
 void connectNodes(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourceOutputPinIndex,
         required BigInt destNodeId,
         required BigInt destParamIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiConnectNodes(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourceOutputPinIndex: sourceOutputPinIndex,
             destNodeId: destNodeId,
@@ -61,12 +89,14 @@ void connectNodes(
 ///
 /// Returns true if a connection was made, false otherwise.
 bool autoConnectToNode(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourcePinIndex,
         required bool sourceIsOutput,
         required BigInt targetNodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiAutoConnectToNode(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourcePinIndex: sourcePinIndex,
             sourceIsOutput: sourceIsOutput,
@@ -77,12 +107,14 @@ bool autoConnectToNode(
 /// When source_is_output is true, returns compatible INPUT pins on target.
 /// When source_is_output is false, returns the OUTPUT pin if compatible.
 List<(int, String, String)> getCompatiblePinsForAutoConnect(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourcePinIndex,
         required bool sourceIsOutput,
         required BigInt targetNodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiGetCompatiblePinsForAutoConnect(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourcePinIndex: sourcePinIndex,
             sourceIsOutput: sourceIsOutput,
@@ -253,18 +285,26 @@ APIResult deleteNamespace({required String prefix}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteNamespace(
         prefix: prefix);
 
-void setNodeDisplay({required BigInt nodeId, required bool isDisplayed}) =>
+void setNodeDisplay(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required bool isDisplayed}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetNodeDisplay(
-            nodeId: nodeId, isDisplayed: isDisplayed);
+            scopePath: scopePath, nodeId: nodeId, isDisplayed: isDisplayed);
 
-void toggleOutputPinDisplay({required BigInt nodeId, required int pinIndex}) =>
+void toggleOutputPinDisplay(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int pinIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiToggleOutputPinDisplay(
-            nodeId: nodeId, pinIndex: pinIndex);
+            scopePath: scopePath, nodeId: nodeId, pinIndex: pinIndex);
 
-bool selectNode({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiSelectNode(nodeId: nodeId);
+bool selectNode({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSelectNode(
+            scopePath: scopePath, nodeId: nodeId);
 
 bool selectWire(
         {required BigInt sourceNodeId,
@@ -278,39 +318,57 @@ bool selectWire(
             destinationNodeId: destinationNodeId,
             destinationArgumentIndex: destinationArgumentIndex);
 
-void clearSelection() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiClearSelection();
+void clearSelection({required Uint64List scopePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiClearSelection(
+        scopePath: scopePath);
 
-bool toggleNodeSelection({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiToggleNodeSelection(
-        nodeId: nodeId);
+bool toggleNodeSelection(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleNodeSelection(
+            scopePath: scopePath, nodeId: nodeId);
 
-bool addNodeToSelection({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiAddNodeToSelection(
-        nodeId: nodeId);
+bool addNodeToSelection(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddNodeToSelection(
+            scopePath: scopePath, nodeId: nodeId);
 
-bool selectNodes({required Uint64List nodeIds}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiSelectNodes(nodeIds: nodeIds);
+bool selectNodes(
+        {required Uint64List scopePath, required Uint64List nodeIds}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSelectNodes(
+            scopePath: scopePath, nodeIds: nodeIds);
 
-void toggleNodesSelection({required Uint64List nodeIds}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiToggleNodesSelection(
-        nodeIds: nodeIds);
+void toggleNodesSelection(
+        {required Uint64List scopePath, required Uint64List nodeIds}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiToggleNodesSelection(
+            scopePath: scopePath, nodeIds: nodeIds);
 
 Uint64List getSelectedNodeIds() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetSelectedNodeIds();
 
-void moveSelectedNodes({required double deltaX, required double deltaY}) =>
+void moveSelectedNodes(
+        {required Uint64List scopePath,
+        required double deltaX,
+        required double deltaY}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiMoveSelectedNodes(
-            deltaX: deltaX, deltaY: deltaY);
+            scopePath: scopePath, deltaX: deltaX, deltaY: deltaY);
 
-/// Called by Flutter when a node drag begins. Captures current positions for undo coalescing.
-void beginMoveNodes() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiBeginMoveNodes();
+/// Called by Flutter when a node drag begins. Captures current positions for
+/// undo coalescing. `scope_path` is plumbed per `doc/design_zones_ui.md`; in
+/// U2 only the top-level path (empty `scope_path`) creates a `PendingMove`,
+/// since body-scope drag coalescing lands in U4.
+void beginMoveNodes({required Uint64List scopePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiBeginMoveNodes(
+        scopePath: scopePath);
 
 /// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
-void endMoveNodes() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiEndMoveNodes();
+void endMoveNodes({required Uint64List scopePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndMoveNodes(
+        scopePath: scopePath);
 
 /// Undo the last command. Returns true if an undo was performed.
 bool undo() =>
@@ -363,9 +421,11 @@ bool addWireToSelection(
 List<WireView> getSelectedWires() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetSelectedWires();
 
-void addNodesToSelection({required Uint64List nodeIds}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiAddNodesToSelection(
-        nodeIds: nodeIds);
+void addNodesToSelection(
+        {required Uint64List scopePath, required Uint64List nodeIds}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddNodesToSelection(
+            scopePath: scopePath, nodeIds: nodeIds);
 
 void selectWires({required List<WireIdentifier> wires}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSelectWires(wires: wires);
@@ -1027,12 +1087,18 @@ APIResult setMotifSubData(
         .crateApiStructureDesignerStructureDesignerApiSetMotifSubData(
             nodeId: nodeId, data: data);
 
-void deleteSelected() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiDeleteSelected();
+void deleteSelected({required Uint64List scopePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiDeleteSelected(
+        scopePath: scopePath);
 
-bool setReturnNodeId({BigInt? nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
-        nodeId: nodeId);
+/// Set the return node of the active *top-level* network (a body has no
+/// return — its outputs flow through the HOF's zone-output pins). Per
+/// `doc/design_zones_ui.md` §"Mutation APIs grow a `scope_path` parameter",
+/// `scope_path` is plumbed for shape but must be empty.
+bool setReturnNodeId({required Uint64List scopePath, BigInt? nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
+            scopePath: scopePath, nodeId: nodeId);
 
 APIResult saveNodeNetworksAs({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiSaveNodeNetworksAs(
@@ -1272,15 +1338,21 @@ APIPromoteToParameterResult promoteNodeToParameter({required BigInt nodeId}) =>
         .crateApiStructureDesignerStructureDesignerApiPromoteNodeToParameter(
             nodeId: nodeId);
 
-bool copySelection() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiCopySelection();
+bool copySelection({required Uint64List scopePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCopySelection(
+        scopePath: scopePath);
 
-Uint64List pasteAtPosition({required double x, required double y}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerStructureDesignerApiPasteAtPosition(x: x, y: y);
+Uint64List pasteAtPosition(
+        {required Uint64List scopePath,
+        required double x,
+        required double y}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPasteAtPosition(
+            scopePath: scopePath, x: x, y: y);
 
-bool cutSelection() => RustLib.instance.api
-    .crateApiStructureDesignerStructureDesignerApiCutSelection();
+bool cutSelection({required Uint64List scopePath}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiCutSelection(
+        scopePath: scopePath);
 
 bool hasClipboardContent() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiHasClipboardContent();

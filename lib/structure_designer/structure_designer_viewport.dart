@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/gestures.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
@@ -826,6 +828,7 @@ class _StructureDesignerViewportState
           for (final other in candidates) {
             if (other.nodeId != candidate.nodeId) {
               structure_designer_api.setNodeDisplay(
+                scopePath: Uint64List(0),
                 nodeId: other.nodeId,
                 isDisplayed: false,
               );

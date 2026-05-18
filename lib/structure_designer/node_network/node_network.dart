@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -454,6 +456,7 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     // Get compatible pins on the target node
     final compatiblePins = sd_api.getCompatiblePinsForAutoConnect(
+      scopePath: Uint64List(0),
       sourceNodeId: startPin.nodeId,
       sourcePinIndex: startPin.pinIndex,
       sourceIsOutput: isOutput,
@@ -1055,13 +1058,16 @@ class NodeNetworkState extends State<NodeNetwork> {
                   return KeyEventResult.ignored;
                 }
 
-                model.duplicateNode(selectedNodeId);
+                // Active body's scope drives every keyboard shortcut per
+                // `doc/design_zones_ui.md` §"Phase U2 → activeScopeChain".
+                model.duplicateNode(selectedNodeId,
+                    scopeChain: model.activeScopeChain);
                 return KeyEventResult.handled;
               }
               // Ctrl+C: Copy selection
               if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyC) {
-                model.copySelection();
+                model.copySelection(scopeChain: model.activeScopeChain);
                 return KeyEventResult.handled;
               }
               // Ctrl+V: Paste at cursor position
@@ -1074,20 +1080,21 @@ class NodeNetworkState extends State<NodeNetwork> {
                   final logicalPos = scopeHit?.bodyLocal ??
                       screenToLogical(_lastMousePosition, _panOffset,
                           getZoomScale(_zoomLevel));
-                  model.pasteAtPosition(logicalPos.dx, logicalPos.dy);
+                  model.pasteAtPosition(logicalPos.dx, logicalPos.dy,
+                      scopeChain: model.activeScopeChain);
                 }
                 return KeyEventResult.handled;
               }
               // Ctrl+X: Cut selection
               if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyX) {
-                model.cutSelection();
+                model.cutSelection(scopeChain: model.activeScopeChain);
                 return KeyEventResult.handled;
               }
               if (event.logicalKey == LogicalKeyboardKey.delete ||
                   event.logicalKey == LogicalKeyboardKey.backspace ||
                   event.physicalKey == PhysicalKeyboardKey.delete) {
-                model.removeSelected();
+                model.removeSelected(scopeChain: model.activeScopeChain);
                 return KeyEventResult.handled;
               }
               return KeyEventResult.ignored;

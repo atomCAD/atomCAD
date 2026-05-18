@@ -210,6 +210,47 @@ impl StructureDesigner {
         self.print_log.clear();
     }
 
+    /// Resolve `(active_node_network_name, scope_path)` to the targeted
+    /// `&NodeNetwork`. Empty `scope_path` returns the active top-level network
+    /// (today's behavior). A non-empty path walks `Node.zone` down the chain of
+    /// HOF node IDs and returns the deepest body. Returns `None` if no network
+    /// is active, the network is missing, any node in the chain doesn't exist,
+    /// or any chain node is not an HOF (i.e. `node.zone == None`).
+    ///
+    /// Centralising the walk here is the gotcha noted in
+    /// `doc/design_zones_ui.md` §"Phase U2 → Gotchas": every scoped mutation
+    /// shares this helper so the body-resolution logic lives in exactly one
+    /// place.
+    pub fn get_scope_network(&self, scope_path: &[u64]) -> Option<&NodeNetwork> {
+        let network_name = self.active_node_network_name.as_ref()?;
+        let mut current = self.node_type_registry.node_networks.get(network_name)?;
+        for hof_id in scope_path {
+            let node = current.nodes.get(hof_id)?;
+            let zone = node.zone.as_ref()?;
+            current = zone;
+        }
+        Some(current)
+    }
+
+    /// Mutable counterpart of [`get_scope_network`]. Each step calls
+    /// `Node::zone_mut` so the `Arc<NodeNetwork>` is uniquely owned (CoW)
+    /// before the descent continues. Returns `None` under the same conditions
+    /// as the immutable variant.
+    pub fn get_scope_network_mut(&mut self, scope_path: &[u64]) -> Option<&mut NodeNetwork> {
+        let network_name = self.active_node_network_name.as_ref()?.clone();
+        let mut current = self
+            .node_type_registry
+            .node_networks
+            .get_mut(&network_name)?;
+        for hof_id in scope_path {
+            let node = current.nodes.get_mut(hof_id)?;
+            // `zone_mut` returns None for non-HOF nodes (zone == None) so this
+            // naturally rejects malformed scope paths.
+            current = node.zone_mut()?;
+        }
+        Some(current)
+    }
+
     /// Returns the atomic structure from the interactive pin of the selected node, if any.
     /// The interactive pin is the lowest-indexed displayed output pin.
     pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
@@ -1347,6 +1388,85 @@ impl StructureDesigner {
         self.add_node_with_drag_source(node_type_name, position, None)
     }
 
+    /// Scope-aware variant of [`add_node`]. With an empty `scope_path` falls
+    /// through to [`add_node_with_drag_source`] (existing top-level behavior).
+    /// With a non-empty `scope_path` adds the node directly into the named
+    /// body via the scope-network helper — no display-policy / undo /
+    /// validation orchestration is run, since those are top-level concerns
+    /// that U4 will redo on the body level. Phase U2 of
+    /// `doc/design_zones_ui.md`.
+    pub fn add_node_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_type_name: &str,
+        position: DVec2,
+        drag_source: Option<DragSource>,
+    ) -> u64 {
+        if scope_path.is_empty() {
+            return self.add_node_with_drag_source(node_type_name, position, drag_source);
+        }
+        // Body scope: drag-source adaptation and per-node-type bookkeeping
+        // (parameter `param_id` / param_name) are top-level concerns and not
+        // exercised inside an HOF body in U2. Add the node with default data
+        // and rely on U4 to re-introduce the richer adapter pass under a
+        // scope-aware add path.
+        let (num_parameters, node_data) =
+            match self.node_type_registry.get_node_type(node_type_name) {
+                Some(node_type) => {
+                    let data_creator = &node_type.node_data_creator;
+                    (node_type.parameters.len(), (data_creator)())
+                }
+                None => return 0,
+            };
+        let node_id = match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.add_node(node_type_name, position, num_parameters, node_data),
+            None => return 0,
+        };
+        if node_id != 0 {
+            // Initialize custom-node-type cache (incl. `ensure_zone_init` for
+            // nested HOFs). Mirrors the split-borrow pattern in
+            // `add_node_with_drag_source`'s top-level path: the read-only
+            // maps and the mutable `node_networks` are *sibling fields* of
+            // `node_type_registry`, so disjoint access through field
+            // destructuring is allowed by the borrow checker. We walk the
+            // scope path manually here (rather than through
+            // `get_scope_network_mut`, which borrows all of `self`) so the
+            // splits compose.
+            let active_name = match self.active_node_network_name.as_ref() {
+                Some(name) => name.clone(),
+                None => return node_id,
+            };
+            let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
+                &self.node_type_registry.built_in_node_types,
+                &self.node_type_registry.record_type_defs,
+                &self.node_type_registry.built_in_record_type_defs,
+                &mut self.node_type_registry.node_networks,
+            );
+            if let Some(top) = node_networks.get_mut(&active_name) {
+                let mut current: Option<&mut NodeNetwork> = Some(top);
+                for hof_id in scope_path {
+                    current = match current {
+                        Some(net) => net.nodes.get_mut(hof_id).and_then(|n| n.zone_mut()),
+                        None => None,
+                    };
+                }
+                if let Some(network) = current {
+                    if let Some(node) = network.nodes.get_mut(&node_id) {
+                        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+                            built_in_types,
+                            record_type_defs,
+                            built_in_record_type_defs,
+                            node,
+                            true,
+                        );
+                    }
+                }
+            }
+            self.set_dirty(true);
+        }
+        node_id
+    }
+
     /// Variant of `add_node` that pre-configures the new node's type
     /// properties to match a dragged source pin.
     ///
@@ -1750,16 +1870,15 @@ impl StructureDesigner {
     }
 
     pub fn move_node(&mut self, node_id: u64, position: DVec2) {
-        // Early return if active_node_network_name is None
-        let node_network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return,
-        };
-        if let Some(node_network) = self
-            .node_type_registry
-            .node_networks
-            .get_mut(node_network_name)
-        {
+        self.move_node_scoped(&[], node_id, position);
+    }
+
+    /// Scope-aware variant of [`move_node`]. With an empty `scope_path` the
+    /// targeted network is the active top-level network (existing behavior);
+    /// with a non-empty path the move is applied inside the named HOF body.
+    /// Phase U2 of `doc/design_zones_ui.md` — see §"Phase U2".
+    pub fn move_node_scoped(&mut self, scope_path: &[u64], node_id: u64, position: DVec2) {
+        if let Some(node_network) = self.get_scope_network_mut(scope_path) {
             node_network.move_node(node_id, position);
             // Mark design as dirty since we moved a node
             self.set_dirty(true);
@@ -2616,6 +2735,27 @@ impl StructureDesigner {
 
 impl StructureDesigner {
     pub fn set_node_display(&mut self, node_id: u64, is_displayed: bool) {
+        self.set_node_display_scoped(&[], node_id, is_displayed);
+    }
+
+    /// Scope-aware variant of [`set_node_display`]. Empty path: existing
+    /// top-level behavior (undo command + visibility tracking). Non-empty
+    /// path: flip the body node's display flag directly via the scope-network
+    /// helper. Body-internal display undo is deferred to U4 when body
+    /// authoring lands (`doc/design_zones_ui.md` §"Phase U4").
+    pub fn set_node_display_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        is_displayed: bool,
+    ) {
+        if !scope_path.is_empty() {
+            if let Some(network) = self.get_scope_network_mut(scope_path) {
+                network.set_node_display(node_id, is_displayed);
+            }
+            return;
+        }
+
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -2763,40 +2903,46 @@ impl StructureDesigner {
     }
 
     pub fn select_node(&mut self, node_id: u64) -> bool {
-        // Early return if active_node_network_name is None
-        let network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return false,
-        };
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-            // Get the previously active node ID before changing selection
-            let previously_active_node_id = network.active_node_id;
+        self.select_node_scoped(&[], node_id)
+    }
 
-            // Update the selection
-            let ret = network.select_node(node_id);
-
-            // If the selection was successful, update the display policy
-            if ret {
-                // Track selection change
-                let current_selection = Some(node_id);
-                self.mark_selection_changed(previously_active_node_id, current_selection);
-
-                // Create a HashSet with the previous and newly selected node IDs
-                let mut dirty_nodes = HashSet::new();
-                dirty_nodes.insert(node_id); // New selection
-
-                // Add previously active node to dirty nodes if it existed
-                if let Some(prev_id) = previously_active_node_id {
-                    dirty_nodes.insert(prev_id);
+    /// Scope-aware variant of [`select_node`]. See `doc/design_zones_ui.md`
+    /// §"Phase U2". The display-policy / dirty-node bookkeeping below is a
+    /// top-level-only concern (per-body display policy is a U4-onwards
+    /// problem); when called with a non-empty `scope_path` it sets the
+    /// body's selection but skips the global policy refresh.
+    pub fn select_node_scoped(&mut self, scope_path: &[u64], node_id: u64) -> bool {
+        if scope_path.is_empty() {
+            // Top-level: keep the existing behavior verbatim (display policy
+            // + selection-change tracking apply to the top-level network).
+            let network_name = match &self.active_node_network_name {
+                Some(name) => name,
+                None => return false,
+            };
+            if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+                let previously_active_node_id = network.active_node_id;
+                let ret = network.select_node(node_id);
+                if ret {
+                    let current_selection = Some(node_id);
+                    self.mark_selection_changed(previously_active_node_id, current_selection);
+                    let mut dirty_nodes = HashSet::new();
+                    dirty_nodes.insert(node_id);
+                    if let Some(prev_id) = previously_active_node_id {
+                        dirty_nodes.insert(prev_id);
+                    }
+                    self.apply_node_display_policy(Some(&dirty_nodes));
                 }
-
-                // Apply display policy considering these nodes as dirty
-                self.apply_node_display_policy(Some(&dirty_nodes));
+                ret
+            } else {
+                false
             }
-
-            ret
         } else {
-            false
+            // Body scope: route to the named body via the scope helper.
+            if let Some(network) = self.get_scope_network_mut(scope_path) {
+                network.select_node(node_id)
+            } else {
+                false
+            }
         }
     }
 
@@ -2847,30 +2993,31 @@ impl StructureDesigner {
     }
 
     pub fn clear_selection(&mut self) {
-        // Early return if active_node_network_name is None
-        let network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return,
-        };
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
-            // Get the previously active node ID before clearing selection
-            let previously_active_node_id = network.active_node_id;
+        self.clear_selection_scoped(&[]);
+    }
 
-            // Clear the selection
-            network.clear_selection();
-
-            // Track selection change
-            self.mark_selection_changed(previously_active_node_id, None);
-
-            // If there was a previously active node
-            if let Some(prev_id) = previously_active_node_id {
-                // Create a HashSet with just the previously active node ID
-                let mut dirty_nodes = HashSet::new();
-                dirty_nodes.insert(prev_id);
-
-                // Apply display policy considering only the previously active node as dirty
-                self.apply_node_display_policy(Some(&dirty_nodes));
+    /// Scope-aware variant of [`clear_selection`]. With an empty `scope_path`
+    /// behavior is identical to today's `clear_selection`; with a non-empty
+    /// path the body's `selected_node_ids` (and any wire/active state) is
+    /// cleared without touching the top-level display policy.
+    pub fn clear_selection_scoped(&mut self, scope_path: &[u64]) {
+        if scope_path.is_empty() {
+            let network_name = match &self.active_node_network_name {
+                Some(name) => name,
+                None => return,
+            };
+            if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+                let previously_active_node_id = network.active_node_id;
+                network.clear_selection();
+                self.mark_selection_changed(previously_active_node_id, None);
+                if let Some(prev_id) = previously_active_node_id {
+                    let mut dirty_nodes = HashSet::new();
+                    dirty_nodes.insert(prev_id);
+                    self.apply_node_display_policy(Some(&dirty_nodes));
+                }
             }
+        } else if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.clear_selection();
         }
     }
 
@@ -3000,11 +3147,15 @@ impl StructureDesigner {
 
     /// Move all selected nodes by delta
     pub fn move_selected_nodes(&mut self, delta: glam::f64::DVec2) {
-        let network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return,
-        };
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
+        self.move_selected_nodes_scoped(&[], delta);
+    }
+
+    /// Scope-aware variant of [`move_selected_nodes`]. Empty path: existing
+    /// top-level behavior. Non-empty path: moves the body's selected nodes
+    /// inside the named body. Phase U2 plumbing — see
+    /// `doc/design_zones_ui.md`.
+    pub fn move_selected_nodes_scoped(&mut self, scope_path: &[u64], delta: glam::f64::DVec2) {
+        if let Some(network) = self.get_scope_network_mut(scope_path) {
             network.move_selected_nodes(delta);
         }
     }
@@ -3292,6 +3443,21 @@ impl StructureDesigner {
     }
 
     pub fn delete_selected(&mut self) {
+        self.delete_selected_scoped(&[]);
+    }
+
+    /// Scope-aware variant of [`delete_selected`]. With a non-empty `scope_path`
+    /// the body's `delete_selected` runs without the top-level display-policy /
+    /// undo machinery — body-scope undo lands in U4 when body authoring is
+    /// reachable (`doc/design_zones_ui.md` §"Phase U4 → Gotchas").
+    pub fn delete_selected_scoped(&mut self, scope_path: &[u64]) {
+        if !scope_path.is_empty() {
+            if let Some(network) = self.get_scope_network_mut(scope_path) {
+                network.delete_selected();
+            }
+            return;
+        }
+
         // Early return if active_node_network_name is None
         let node_network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
