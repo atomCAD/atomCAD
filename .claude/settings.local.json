@@ -211,7 +211,8 @@
       "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\" -Directory)",
       "Bash(Select-Object Name)",
       "Read(//c/c/machine_phase_systems/flutter_cad/rust/tests/**)",
-      "Read(//c/c/machine_phase_systems/flutter_cad/rust/**)"
+      "Read(//c/c/machine_phase_systems/flutter_cad/rust/**)",
+      "Bash(rustfmt --check src/structure_designer/data_type.rs tests/structure_designer/data_type_test.rs)"
     ]
   }
 }
