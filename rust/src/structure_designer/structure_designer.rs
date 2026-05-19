@@ -6,7 +6,7 @@ use super::evaluator::network_result::NetworkResult;
 use super::navigation_history::NavigationHistory;
 use super::network_validator::{NetworkValidationResult, validate_network};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
-use super::node_network::NodeNetwork;
+use super::node_network::{NodeNetwork, NodeRef};
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
@@ -743,25 +743,43 @@ impl StructureDesigner {
             }
         }
 
-        // Step 2: Compute transitive dependencies of data changes and invalidate cache
-        let affected_by_data_changes = if !changes.data_changed.is_empty() {
+        // Step 2: Compute transitive dependencies of data changes and invalidate cache.
+        // `affected_by_data_changes` is scope-aware: it may contain body-internal
+        // NodeRefs as well as top-level ones. Top-level ids drive the displayed-
+        // node intersection in Step 4 below — the synthetic body-node → HOF edge
+        // in `build_scope_reverse_dependency_map` guarantees that any body edit
+        // lifts dirtiness up to a top-level HOF, so displayed nodes downstream
+        // of an HOF are reached even when only its body changed.
+        let affected_by_data_changes: HashSet<NodeRef> = if !changes.data_changed.is_empty() {
             if changes.skip_downstream {
                 // During interactive drag: only re-evaluate the directly changed nodes,
                 // skip computing downstream dependents for better performance.
                 let directly_changed = changes.data_changed.clone();
+                let top_level_ids: HashSet<u64> = directly_changed
+                    .iter()
+                    .filter(|nr| nr.is_top_level())
+                    .map(|nr| nr.node_id)
+                    .collect();
                 self.last_generated_structure_designer_scene
-                    .invalidate_cached_nodes(&directly_changed);
+                    .invalidate_cached_nodes(&top_level_ids);
                 directly_changed
             } else {
                 let affected = compute_downstream_dependents(network, &changes.data_changed);
-                // Clear input caches on affected nodes (upstream may have changed)
-                for &node_id in &affected {
-                    if let Some(data) = network.get_node_network_data(node_id) {
+                // Clear input caches on affected nodes (upstream may have changed).
+                // Walk scope_path to land on the right body — body-internal node ids
+                // can collide with top-level ids (per-body `next_node_id` counters).
+                for node_ref in &affected {
+                    if let Some(data) = find_node_data_at_scope(network, node_ref) {
                         data.clear_input_cache();
                     }
                 }
+                let top_level_ids: HashSet<u64> = affected
+                    .iter()
+                    .filter(|nr| nr.is_top_level())
+                    .map(|nr| nr.node_id)
+                    .collect();
                 self.last_generated_structure_designer_scene
-                    .invalidate_cached_nodes(&affected);
+                    .invalidate_cached_nodes(&top_level_ids);
                 affected
             }
         } else {
@@ -788,10 +806,16 @@ impl StructureDesigner {
             }
         }
 
-        // Step 4: Add visible nodes affected by data changes to evaluation set
-        for &node_id in &affected_by_data_changes {
-            if network.displayed_nodes.contains_key(&node_id) {
-                nodes_needing_evaluation.insert(node_id);
+        // Step 4: Add visible nodes affected by data changes to evaluation set.
+        // Only top-level NodeRefs participate — body-internal nodes aren't
+        // separately displayed today, and body dirtiness has already been
+        // lifted to its enclosing top-level HOF by the synthetic edge in
+        // `build_scope_reverse_dependency_map`.
+        for node_ref in &affected_by_data_changes {
+            if node_ref.is_top_level()
+                && network.displayed_nodes.contains_key(&node_ref.node_id)
+            {
+                nodes_needing_evaluation.insert(node_ref.node_id);
             }
         }
 
@@ -2164,6 +2188,12 @@ impl StructureDesigner {
             );
         }
         self.set_dirty(true);
+        // Mark the destination dirty at its actual scope so the partial-refresh
+        // path picks it up (and lifts it to the enclosing HOF via the synthetic
+        // body→HOF edge). Without this, an intra-body wire add would never
+        // trigger re-evaluation of the enclosing HOF.
+        self.pending_changes
+            .mark_node_data_changed_scoped(scope_path, dest_node_id);
         // Re-validate so zone-rule errors raised by a previous pass clear once
         // the user adds the wire that satisfies them.
         self.validate_active_network();
@@ -2241,6 +2271,11 @@ impl StructureDesigner {
             );
         }
         self.set_dirty(true);
+        // Mark the destination dirty so the partial-refresh path picks up the
+        // new wire and re-evaluates the consuming body (and, via the synthetic
+        // body→HOF edge, the enclosing HOF and its downstream).
+        self.pending_changes
+            .mark_node_data_changed_scoped(dest_scope_path, dest_node_id);
         // Re-validate so zone-rule errors raised by a previous pass clear once
         // the user adds the wire that satisfies them.
         self.validate_active_network();
@@ -2411,6 +2446,11 @@ impl StructureDesigner {
         }
         argument.set_source(source_node_id, source_output_pin_index);
         self.set_dirty(true);
+        // Mark the HOF dirty (in its parent scope): a body-return wire change
+        // alters what the HOF emits per iteration, so every downstream consumer
+        // of the HOF needs to re-evaluate. The HOF lives in `parent_path`.
+        self.pending_changes
+            .mark_node_data_changed_scoped(parent_path, hof_id);
         // Re-validate: this is the wire that satisfies zone validation rule 1
         // ("every zone-output pin has at least one incoming wire"). Without
         // re-running validation here the rule-1 error raised by a previous
@@ -2771,7 +2811,12 @@ impl StructureDesigner {
         };
         if mutated {
             self.set_dirty(true);
-            self.mark_node_data_changed(node_id);
+            // Mark the edited node dirty at its actual scope. For top-level
+            // edits this is equivalent to the old top-level `mark_node_data_changed`;
+            // for body edits the scope is what lets `compute_downstream_dependents`
+            // lift the dirtiness out of the body to the enclosing HOF.
+            self.pending_changes
+                .mark_node_data_changed_scoped(scope_path, node_id);
         }
 
         // Capture after-state and push undo command
@@ -5731,6 +5776,23 @@ fn clear_selection_recursive(network: &mut NodeNetwork) {
             clear_selection_recursive(zone);
         }
     }
+}
+
+/// Walk `network` along `node_ref.scope_path` and return the data for the
+/// node at the precise scoped address. Returns `None` if any HOF on the path
+/// is missing a zone or doesn't exist. Used by the partial refresh path to
+/// clear input caches without relying on the ambiguous "first id match"
+/// fallback in [`find_node_data_recursive`].
+fn find_node_data_at_scope<'a>(
+    network: &'a NodeNetwork,
+    node_ref: &NodeRef,
+) -> Option<&'a dyn NodeData> {
+    let mut current: &NodeNetwork = network;
+    for hof_id in &node_ref.scope_path {
+        let hof = current.nodes.get(hof_id)?;
+        current = hof.zone.as_deref()?;
+    }
+    current.get_node_network_data(node_ref.node_id)
 }
 
 /// Walk [network] and every HOF body reachable from it, returning the first

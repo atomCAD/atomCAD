@@ -59,6 +59,43 @@ impl ValidationError {
     }
 }
 
+/// Scope-aware address of a node. The `scope_path` is the chain of HOF node
+/// ids identifying the body the node lives in; an empty path means the
+/// top-level network. Used by the change-tracking and dependency-analysis
+/// machinery so body-internal node ids don't collide with top-level ids
+/// across nested per-body `next_node_id` counters.
+///
+/// See `doc/design_zones_ui.md` §"Mutation APIs grow a `scope_path` parameter"
+/// for the broader scope-chain convention.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct NodeRef {
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+}
+
+impl NodeRef {
+    /// A node in the top-level network.
+    pub fn top(node_id: u64) -> Self {
+        Self {
+            scope_path: Vec::new(),
+            node_id,
+        }
+    }
+
+    /// A node in the named body. `scope_path` is cloned.
+    pub fn scoped(scope_path: &[u64], node_id: u64) -> Self {
+        Self {
+            scope_path: scope_path.to_vec(),
+            node_id,
+        }
+    }
+
+    /// True if this ref addresses a top-level node (empty scope path).
+    pub fn is_top_level(&self) -> bool {
+        self.scope_path.is_empty()
+    }
+}
+
 /// Source pin kind for an incoming wire. Phase 1 only ever constructs
 /// `NodeOutput` (zone-input sources arrive with the zone work in later phases).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -624,6 +661,41 @@ pub struct NodeNetwork {
     pub camera_settings: Option<CameraSettings>,
 }
 
+/// Resolve the source side of an `IncomingWire` into a `NodeRef` against
+/// the destination's `scope_path`. Used by [`NodeNetwork::build_scope_reverse_dependency_map`].
+///
+/// - `NodeOutput` wires: source lives `source_scope_depth` levels up from
+///   the destination's scope. `depth = 0` keeps the same scope; `depth ≥ 1`
+///   pops that many ids off the path (captures from ancestor scopes).
+/// - `ZoneInput` wires: the value is supplied by the enclosing HOF's
+///   zone-input pin, which derives from the HOF's own external inputs.
+///   The body-node → HOF synthetic edge (added separately) already
+///   captures this dependency; we return `None` here to avoid double-
+///   counting and to skip the fragile "find the right ancestor HOF id"
+///   resolution.
+///
+/// Returns `None` if `source_scope_depth` exceeds the scope path length —
+/// in practice that's a validation error and would have been caught by
+/// `validate_zones_recursive`, so it's safe to drop the edge silently.
+fn resolve_wire_source(
+    dest_scope_path: &[u64],
+    source_scope_depth: u8,
+    source_pin: SourcePin,
+    source_node_id: u64,
+) -> Option<NodeRef> {
+    match source_pin {
+        SourcePin::NodeOutput { .. } => {
+            let depth = source_scope_depth as usize;
+            if depth > dest_scope_path.len() {
+                return None;
+            }
+            let source_scope = &dest_scope_path[..dest_scope_path.len() - depth];
+            Some(NodeRef::scoped(source_scope, source_node_id))
+        }
+        SourcePin::ZoneInput { .. } => None,
+    }
+}
+
 impl NodeNetwork {
     /// Builds a reverse dependency map (downstream connections)
     ///
@@ -655,6 +727,98 @@ impl NodeNetwork {
         }
 
         reverse_map
+    }
+
+    /// Scope-aware reverse-dependency map across the entire zone tree.
+    ///
+    /// Returns a map from each node's `NodeRef` (top-level or body-internal) to
+    /// the set of nodes that depend on it. Covers all four wire roles from
+    /// `doc/design_zones.md` §"How wires represent each role under zones":
+    ///
+    /// 1. Intra-scope wires (in `node.arguments`, `source_scope_depth = 0`).
+    /// 2. Captures (in body-internal `arguments`, `source_scope_depth ≥ 1`,
+    ///    `source_pin = NodeOutput`) — source lives in an ancestor scope.
+    /// 3. Zone-input references (`source_pin = ZoneInput`) — source is the
+    ///    enclosing HOF's zone-input pin. The HOF's zone-input pins exist
+    ///    because of the HOF's own external inputs (`xs`, `init`, …); a body
+    ///    edit that consumes `ZoneInput` therefore depends on the HOF's
+    ///    state via the synthetic edge below, so we don't add an explicit
+    ///    edge for `ZoneInput` here.
+    /// 4. Body-return wires (in `node.zone_output_arguments`,
+    ///    `source_scope_depth = 0` relative to the body) — source is a
+    ///    body-internal node, destination is the HOF in the parent scope.
+    ///
+    /// Plus a **synthetic body-node → enclosing-HOF edge** for every node
+    /// inside a body: changing any node in a body changes the HOF's per-step
+    /// output, which lifts the dirtiness out of the body into the parent
+    /// scope. This is what makes "editing an `expr` inside a `map` body
+    /// invalidates the `map`" work even when the body return wire happens
+    /// to be wired through a different body-internal node.
+    pub fn build_scope_reverse_dependency_map(&self) -> HashMap<NodeRef, HashSet<NodeRef>> {
+        let mut reverse_map: HashMap<NodeRef, HashSet<NodeRef>> = HashMap::new();
+        let mut scope_path: Vec<u64> = Vec::new();
+        Self::walk_scope_reverse_deps(self, &mut scope_path, &mut reverse_map);
+        reverse_map
+    }
+
+    fn walk_scope_reverse_deps(
+        network: &NodeNetwork,
+        scope_path: &mut Vec<u64>,
+        reverse_map: &mut HashMap<NodeRef, HashSet<NodeRef>>,
+    ) {
+        for (&node_id, node) in &network.nodes {
+            let dest_ref = NodeRef::scoped(scope_path, node_id);
+
+            // (1) and (2): intra-scope wires + captures + zone-input references.
+            for arg in &node.arguments {
+                for wire in &arg.incoming_wires {
+                    if let Some(source_ref) =
+                        resolve_wire_source(scope_path, wire.source_scope_depth, wire.source_pin, wire.source_node_id)
+                    {
+                        reverse_map
+                            .entry(source_ref)
+                            .or_default()
+                            .insert(dest_ref.clone());
+                    }
+                }
+            }
+
+            // Synthetic edge: this node → enclosing HOF (if we're inside a body).
+            if let Some((&hof_id, hof_scope)) = scope_path.split_last() {
+                let hof_ref = NodeRef::scoped(hof_scope, hof_id);
+                reverse_map
+                    .entry(dest_ref.clone())
+                    .or_default()
+                    .insert(hof_ref);
+            }
+
+            // Recurse into this node's zone body, if any.
+            if let Some(body) = node.zone.as_ref() {
+                // (4): body-return wires — destination is THIS HOF node, sources
+                // live inside the body that we're about to recurse into. Walk
+                // them now while we still have `node` in hand.
+                let hof_ref_for_returns = dest_ref.clone();
+                scope_path.push(node_id);
+                for arg in &node.zone_output_arguments {
+                    for wire in &arg.incoming_wires {
+                        if let Some(source_ref) = resolve_wire_source(
+                            scope_path,
+                            wire.source_scope_depth,
+                            wire.source_pin,
+                            wire.source_node_id,
+                        ) {
+                            reverse_map
+                                .entry(source_ref)
+                                .or_default()
+                                .insert(hof_ref_for_returns.clone());
+                        }
+                    }
+                }
+                // Recurse into the body itself.
+                Self::walk_scope_reverse_deps(body, scope_path, reverse_map);
+                scope_path.pop();
+            }
+        }
     }
 
     /// Returns a HashSet of all node IDs that are directly connected to the given node

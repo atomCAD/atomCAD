@@ -1,3 +1,4 @@
+use crate::structure_designer::node_network::NodeRef;
 use std::collections::HashSet;
 
 /// Refresh mode for structure designer operations
@@ -19,10 +20,13 @@ pub enum RefreshMode {
 pub struct StructureDesignerChanges {
     /// The refresh mode - defaults to Partial
     pub mode: RefreshMode,
-    /// Node IDs whose visibility changed (shown/hidden)
+    /// Node IDs whose visibility changed (top-level only — body-internal
+    /// nodes are not separately displayed, see `doc/design_zones_ui.md`).
     pub visibility_changed: HashSet<u64>,
-    /// Node IDs whose data changed
-    pub data_changed: HashSet<u64>,
+    /// Nodes whose data changed. Carries scope so a body-internal edit doesn't
+    /// collide with a top-level id that happens to match numerically (each
+    /// body has its own `next_node_id` counter — see `node_network.rs`).
+    pub data_changed: HashSet<NodeRef>,
     /// Selection change tracking
     pub previous_selection: Option<u64>,
     pub current_selection: Option<u64>,
@@ -70,9 +74,18 @@ impl StructureDesignerChanges {
         self.mode == RefreshMode::Partial
     }
 
-    /// Marks a node's data as changed
+    /// Mark a top-level node's data as changed. Convenience for the common
+    /// case; body-scope mutations use [`mark_node_data_changed_scoped`].
     pub fn mark_node_data_changed(&mut self, node_id: u64) {
-        self.data_changed.insert(node_id);
+        self.data_changed.insert(NodeRef::top(node_id));
+    }
+
+    /// Mark a node's data as changed at a specific scope. `scope_path` is the
+    /// chain of HOF ids identifying the body the node lives in; empty means
+    /// the top-level network.
+    pub fn mark_node_data_changed_scoped(&mut self, scope_path: &[u64], node_id: u64) {
+        self.data_changed
+            .insert(NodeRef::scoped(scope_path, node_id));
     }
 
     /// Marks a node's visibility as changed
@@ -107,7 +120,7 @@ impl StructureDesignerChanges {
         }
     }
 
-    /// Creates a partial refresh with specific node data changes
+    /// Creates a partial refresh with a top-level node's data marked changed.
     pub fn node_data_changed(node_id: u64) -> Self {
         let mut changes = Self::new();
         changes.mark_node_data_changed(node_id);
