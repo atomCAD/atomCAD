@@ -3,7 +3,7 @@ import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart'
-    show PIN_HIT_AREA_WIDTH;
+    show PIN_HIT_AREA_WIDTH, PIN_HIT_AREA_HEIGHT;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Per-frame caches keyed by full scope chain terminating at an HOF node id
@@ -401,6 +401,14 @@ class ScopeResolver {
       // body-empty-space click-to-activate handler. Body nodes are handled
       // by the recursion above, so by the time we reach this branch we know
       // no body node was hit.
+      //
+      // Exception: zone-input and zone-output pins are positioned at the
+      // inner edges of the body region, so geometrically they sit inside
+      // `bodyRect`. A click on one of those pins must NOT fall through to
+      // "empty space" — otherwise the root pointer-down handler starts a
+      // selection-rect drag in parallel with the pin's wire-drag Draggable,
+      // and the rect overlay obscures the dragged wire. Report it as a hit
+      // on the HOF.
       if (node.zone != null) {
         final bodyChain = [...scopeChain, node.id];
         final bodyOrigin = layout.lookupOrigin(bodyChain);
@@ -408,6 +416,9 @@ class ScopeResolver {
         if (bodyOrigin != null && bodySize != null) {
           final bodyRect = bodyOrigin & (bodySize * scale);
           if (bodyRect.contains(screenPos)) {
+            if (_isPositionOnZonePin(node, scopeChain, screenPos)) {
+              return (scopeChain: scopeChain, node: node);
+            }
             // Click is in body empty space — fall through to the next node
             // (the HOF is reported as "not hit"). Caller's right-click
             // handler will then see this as empty space and open Add Node
@@ -425,6 +436,38 @@ class ScopeResolver {
   /// [findNodeAtScreenPosition] for hit tests that don't need the node.
   bool isPositionOnNode(Offset screenPos) =>
       findNodeAtScreenPosition(screenPos) != null;
+
+  /// True if [screenPos] lands within the hit area of one of [hof]'s zone-input
+  /// or zone-output pins. Used by [_findNodeAt] to keep zone-pin clicks from
+  /// falling through the body-empty-space branch.
+  bool _isPositionOnZonePin(
+      NodeView hof, List<BigInt> scopeChain, Offset screenPos) {
+    final zone = hof.zone;
+    if (zone == null) return false;
+    final hw = PIN_HIT_AREA_WIDTH / 2 * scale;
+    final hh = PIN_HIT_AREA_HEIGHT / 2 * scale;
+    bool hitsPin(PinKind kind, int index) {
+      final ref = PinReference(
+        nodeId: hof.id,
+        scopeChain: scopeChain,
+        pinKind: kind,
+        pinIndex: index,
+        dataType: '',
+      );
+      final center = tryPinScreenPosition(ref)?.$1;
+      if (center == null) return false;
+      return (screenPos.dx - center.dx).abs() < hw &&
+          (screenPos.dy - center.dy).abs() < hh;
+    }
+
+    for (int i = 0; i < zone.zoneInputPins.length; i++) {
+      if (hitsPin(PinKind.zoneInput, i)) return true;
+    }
+    for (int i = 0; i < zone.zoneOutputPins.length; i++) {
+      if (hitsPin(PinKind.zoneOutput, i)) return true;
+    }
+    return false;
+  }
 
   /// Resolve a pin to its on-screen position and the data type the pin
   /// actually carries (effective resolved type for output pins, declared type
