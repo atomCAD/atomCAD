@@ -584,20 +584,27 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
       zone_input_pins: vec![],
       zone_output_pins: vec![],
       public: true,
-      node_data_creator: || Box::new(ExprData {
-        parameters: vec![
-          ExprParameter {
-            id: Some(1),  // Default parameter gets ID 1
+      node_data_creator: || {
+        // Parse the default expression up front so the new node arrives with
+        // `expr` populated. Otherwise `eval` returns "Expression not parsed"
+        // until the user opens the property panel and saves — and for nodes
+        // added inside an HOF body there is no scope-aware
+        // `set_node_network_data` path today, so the parse would never run.
+        let mut data = ExprData {
+          parameters: vec![ExprParameter {
+            id: Some(1),
             name: "x".to_string(),
             data_type: DataType::Int,
             data_type_str: None,
-          },
-        ],
-        expression: "x".to_string(),
-        expr: None,
-        error: None,
-        output_type: Some(DataType::Int),
-      }),
+          }],
+          expression: "x".to_string(),
+          expr: None,
+          error: None,
+          output_type: None,
+        };
+        let _ = data.parse_and_validate(0);
+        Box::new(data)
+      },
       node_data_saver: generic_node_data_saver::<ExprData>,
       node_data_loader: expr_data_loader,
     }

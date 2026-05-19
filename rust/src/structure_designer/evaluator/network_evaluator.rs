@@ -1582,13 +1582,24 @@ impl NetworkEvaluator {
         decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> NetworkResult {
-        let node = network_stack
+        // Defensive: if the node has gone missing from the top of the network
+        // stack (a stale wire source_node_id, a displayed_node id that survived
+        // a delete, or any other invariant violation) we return an Error
+        // rather than panic. The panic this guards against was reproducible by
+        // selecting a freshly-added expr node — see network_evaluator.rs:1591
+        // in the bug report. Even if a follow-up fix removes the underlying
+        // cause, this guard keeps the evaluator robust to similar issues.
+        let node = match network_stack
             .last()
-            .unwrap()
-            .node_network
-            .nodes
-            .get(&node_id)
-            .unwrap();
+            .and_then(|frame| frame.node_network.nodes.get(&node_id))
+        {
+            Some(node) => node,
+            None => {
+                let msg = format!("evaluate: node {} not found in active frame", node_id);
+                context.node_errors.insert(node_id, msg.clone());
+                return NetworkResult::Error(msg);
+            }
+        };
 
         // Subtitle override published by `NodeData::eval` via
         // `EvalOutput::pin_subtitles` for the requested pin. The outer
