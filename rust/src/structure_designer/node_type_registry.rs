@@ -525,10 +525,18 @@ impl NodeTypeRegistry {
         None
     }
 
-    /// Initializes custom node type cache for all parameter and expr nodes in a network
+    /// Initializes custom node type cache for all parameter and expr nodes in a network,
+    /// recursing into HOF zone bodies so nodes inside an `Arc<NodeNetwork>` body
+    /// (e.g. an `expr` inside a `map`'s zone) also get their dynamic pin layouts.
+    /// Without the zone recursion, body nodes whose pin list is built by
+    /// `calculate_custom_node_type` would fall back to the bare built-in type
+    /// after a `.cnnd` round-trip and panic on first parameter access.
     pub fn initialize_custom_node_types_for_network(&self, network: &mut NodeNetwork) {
         for node in network.nodes.values_mut() {
             self.populate_custom_node_type_cache(node, false);
+            if let Some(body) = node.zone_mut() {
+                self.initialize_custom_node_types_for_network(body);
+            }
         }
     }
 

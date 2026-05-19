@@ -626,7 +626,7 @@ fn test_collect_unbounded_exhausts_finite_stream() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3, 4]);
-    assert_eq!(subtitle.as_deref(), Some("(5 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[0, 1, 2, 3, 4]"));
 }
 
 #[test]
@@ -652,15 +652,16 @@ fn test_collect_stored_limit_above_stream_size_exhausts() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), vec![0, 1, 2]);
-    // Stream exhausts before the cap → element-count subtitle, not cap-hit.
-    assert_eq!(subtitle.as_deref(), Some("(3 elements)"));
+    // Stream exhausts before the cap → no cap-hit subtitle; default array
+    // display string flows through.
+    assert_eq!(subtitle.as_deref(), Some("[0, 1, 2]"));
 }
 
 #[test]
 fn test_collect_stored_limit_exactly_stream_size_reports_count() {
     // Walker exhausts at exactly the cap. The peek check distinguishes this
-    // from a true cap-hit so the subtitle reads "(N elements)" rather than
-    // "(stopped at limit N)".
+    // from a true cap-hit so no cap-hit subtitle is emitted and the default
+    // array display flows through.
     let mut designer = setup_designer_with_network("test");
     let range_id = add_range(&mut designer, 0.0, 5);
     let collect_id = add_collect_with_limit(&mut designer, 200.0, Some(5));
@@ -669,7 +670,7 @@ fn test_collect_stored_limit_exactly_stream_size_reports_count() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3, 4]);
-    assert_eq!(subtitle.as_deref(), Some("(5 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[0, 1, 2, 3, 4]"));
 }
 
 #[test]
@@ -840,7 +841,7 @@ fn test_collect_zero_offset_is_identity() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), vec![0, 1, 2, 3, 4]);
-    assert_eq!(subtitle.as_deref(), Some("(5 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[0, 1, 2, 3, 4]"));
 }
 
 #[test]
@@ -853,7 +854,7 @@ fn test_collect_stored_offset_skips_prefix() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), vec![3, 4, 5, 6, 7, 8, 9]);
-    assert_eq!(subtitle.as_deref(), Some("(7 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[3, 4, 5, 6, 7, 8, 9]"));
 }
 
 #[test]
@@ -882,7 +883,7 @@ fn test_collect_offset_overruns_yields_empty() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), Vec::<i32>::new());
-    assert_eq!(subtitle.as_deref(), Some("(0 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[]"));
 }
 
 #[test]
@@ -896,7 +897,7 @@ fn test_collect_offset_at_exact_end_yields_empty() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), Vec::<i32>::new());
-    assert_eq!(subtitle.as_deref(), Some("(0 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[]"));
 }
 
 #[test]
@@ -910,7 +911,7 @@ fn test_collect_offset_with_limit_overruns_yields_empty() {
 
     let (result, subtitle) = evaluate_with_subtitle(&designer, "test", collect_id);
     assert_eq!(extract_int_array(&result), Vec::<i32>::new());
-    assert_eq!(subtitle.as_deref(), Some("(0 elements)"));
+    assert_eq!(subtitle.as_deref(), Some("[]"));
 }
 
 #[test]

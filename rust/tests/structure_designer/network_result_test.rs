@@ -54,6 +54,106 @@ fn extract_molecule_only_matches_molecule() {
     assert!(NetworkResult::Int(1).extract_molecule().is_none());
 }
 
+// --- to_display_string_capped --------------------------------------------
+//
+// Tooltip-side helper that truncates `Array` (and arrays nested inside
+// `Record` fields) so the per-pin display string can't explode on large or
+// deeply nested arrays. Non-array variants delegate to `to_display_string`
+// and must render identically.
+
+fn ints(values: &[i32]) -> NetworkResult {
+    NetworkResult::Array(values.iter().map(|&v| NetworkResult::Int(v)).collect())
+}
+
+#[test]
+fn capped_array_short_renders_in_full() {
+    // len <= cap → no `...` suffix, identical to the uncapped rendering.
+    let arr = ints(&[1, 2, 3, 4, 5]);
+    assert_eq!(arr.to_display_string_capped(20), "[1, 2, 3, 4, 5]");
+    assert_eq!(arr.to_display_string_capped(20), arr.to_display_string());
+}
+
+#[test]
+fn capped_array_at_cap_renders_in_full() {
+    // len == cap → show all, no truncation marker.
+    let values: Vec<i32> = (0..20).collect();
+    let arr = ints(&values);
+    assert!(!arr.to_display_string_capped(20).contains("..."));
+}
+
+#[test]
+fn capped_array_over_cap_truncates_with_ellipsis() {
+    // len > cap → first `cap` elements followed by `, ...]`.
+    let values: Vec<i32> = (0..25).collect();
+    let arr = ints(&values);
+    let expected = format!(
+        "[{}, ...]",
+        (0..20)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    assert_eq!(arr.to_display_string_capped(20), expected);
+}
+
+#[test]
+fn capped_array_recurses_into_nested_arrays() {
+    // The cap must apply to inner arrays too — otherwise a single tooltip
+    // could still print thousands of inner elements.
+    let inner: Vec<i32> = (0..30).collect();
+    let outer = NetworkResult::Array(vec![ints(&inner), ints(&inner)]);
+    let inner_capped = format!(
+        "[{}, ...]",
+        (0..5).map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+    );
+    assert_eq!(
+        outer.to_display_string_capped(5),
+        format!("[{}, {}]", inner_capped, inner_capped)
+    );
+}
+
+#[test]
+fn capped_record_field_recurses() {
+    // Arrays nested inside record fields also get capped.
+    let arr = ints(&(0..30).collect::<Vec<i32>>());
+    let record = NetworkResult::record(vec![("xs".to_string(), arr)]);
+    let arr_capped = format!(
+        "[{}, ...]",
+        (0..5).map(|i| i.to_string()).collect::<Vec<_>>().join(", ")
+    );
+    assert_eq!(
+        record.to_display_string_capped(5),
+        format!("{{xs: {}}}", arr_capped)
+    );
+}
+
+#[test]
+fn capped_non_array_delegates_to_uncapped() {
+    // Scalars and other non-Array/Record variants pass through unchanged.
+    for s in [
+        NetworkResult::Int(42),
+        NetworkResult::Bool(false),
+        NetworkResult::Float(1.5),
+        NetworkResult::String("hi".into()),
+    ] {
+        assert_eq!(s.to_display_string_capped(20), s.to_display_string());
+    }
+}
+
+#[test]
+fn capped_array_cap_zero_shows_only_ellipsis() {
+    // Edge case: cap=0 on a non-empty array shows just `[...]`. (Not a
+    // realistic setting, but the contract should still be well-defined.)
+    let arr = ints(&[1, 2, 3]);
+    assert_eq!(arr.to_display_string_capped(0), "[...]");
+}
+
+#[test]
+fn capped_array_empty_renders_empty_brackets() {
+    let arr = NetworkResult::Array(Vec::new());
+    assert_eq!(arr.to_display_string_capped(20), "[]");
+}
+
 /// Runtime-guard invariant (§6.5 / OQ3): no `NetworkResult` variant should
 /// ever infer an abstract data type. The evaluator's post-eval guard
 /// (`evaluate_all_outputs`) replaces any value whose `infer_data_type()` is

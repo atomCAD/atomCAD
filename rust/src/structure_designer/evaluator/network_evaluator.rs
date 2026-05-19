@@ -10,6 +10,7 @@ use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::csg_cache::CsgConversionCache;
+use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
@@ -1553,8 +1554,9 @@ impl NetworkEvaluator {
         }
         // Record per-pin display strings. A node may publish a custom
         // subtitle via `EvalOutput::pin_subtitles` (e.g. `collect` reports
-        // "(N elements)" instead of the raw array dump); falls back to the
-        // result's display string when no override is set.
+        // "(stopped at limit N)" when the cap was hit); falls back to the
+        // result's display string (truncated to `ARRAY_DISPLAY_CAP` array
+        // elements) when no override is set.
         let pin_strings: Vec<String> = eval_output
             .results
             .iter()
@@ -1564,7 +1566,7 @@ impl NetworkEvaluator {
                     .pin_subtitles
                     .get(&idx)
                     .cloned()
-                    .unwrap_or_else(|| r.to_display_string())
+                    .unwrap_or_else(|| r.to_display_string_capped(ARRAY_DISPLAY_CAP))
             })
             .collect();
         context.node_output_strings.insert(node_id, pin_strings);
@@ -1738,8 +1740,10 @@ impl NetworkEvaluator {
 
         // Record per-pin display string (single-pin evaluation overwrites).
         // A subtitle override published via `EvalOutput::pin_subtitles` (e.g.
-        // `collect`'s "(N elements)") wins over the raw result display.
-        let display_string = pin_subtitle_override.unwrap_or_else(|| result.to_display_string());
+        // `collect`'s "(stopped at limit N)") wins over the raw result
+        // display (truncated to `ARRAY_DISPLAY_CAP` array elements).
+        let display_string = pin_subtitle_override
+            .unwrap_or_else(|| result.to_display_string_capped(ARRAY_DISPLAY_CAP));
         let pin_index = if output_pin_index < 0 {
             0
         } else {

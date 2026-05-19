@@ -21,3 +21,11 @@ pub const LINE_RADIUS: f64 = 0.18;
 pub const LINE_RADIUS_HIT_TEST_FACTOR: f64 = 1.3;
 
 pub const CONNECTED_PIN_SYMBOL: &str = "⎆";
+
+/// Max number of array elements rendered in the per-pin display string
+/// (output-pin tooltip / console). Arrays longer than this are truncated to
+/// the first `ARRAY_DISPLAY_CAP` elements followed by `, ...]`. Applies
+/// recursively to nested arrays and to arrays inside record fields. Does
+/// **not** affect `NetworkResult::to_display_string()` itself — CLI stdout
+/// and the `print` node still dump full arrays.
+pub const ARRAY_DISPLAY_CAP: usize = 20;

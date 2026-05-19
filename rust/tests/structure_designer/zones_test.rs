@@ -2451,8 +2451,7 @@ fn validation_error_attributed_to_body_internal_node_on_bad_capture() {
         "Expected a validation error attributed to body node {} (the capture's destination); \
          body errors were: {:?}",
         expr_id,
-        body
-            .validation_errors
+        body.validation_errors
             .iter()
             .map(|e| (e.node_id, e.error_text.clone()))
             .collect::<Vec<_>>()
@@ -2533,8 +2532,7 @@ fn validation_error_attributed_to_body_internal_node_on_bad_zone_input() {
         "Expected a validation error attributed to body node {} (the ZoneInput destination); \
          body errors were: {:?}",
         expr_id,
-        body
-            .validation_errors
+        body.validation_errors
             .iter()
             .map(|e| (e.node_id, e.error_text.clone()))
             .collect::<Vec<_>>()
@@ -2594,8 +2592,7 @@ fn validation_rule1_error_attributed_to_hof_in_parent_network() {
         "Expected a validation error attributed to the HOF node {} in the parent network; \
          errors were: {:?}",
         map_id,
-        main
-            .validation_errors
+        main.validation_errors
             .iter()
             .map(|e| (e.node_id, e.error_text.clone()))
             .collect::<Vec<_>>(),

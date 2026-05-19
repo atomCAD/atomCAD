@@ -5016,7 +5016,12 @@ pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APILiteralField>> {
 /// `set_node_network_data`, so it gets the existing `SetNodeData` undo command
 /// and `refresh_structure_designer_auto` for free.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name: String, value: APILiteralValue) {
+pub fn set_custom_node_literal(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    param_name: String,
+    value: APILiteralValue,
+) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
@@ -5120,7 +5125,12 @@ pub fn get_record_construct_fields(node_id: u64) -> Option<Vec<APILiteralField>>
 /// through `set_node_network_data`, picking up the existing `SetNodeData`
 /// undo command and `refresh_structure_designer_auto` for free.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_record_construct_literal(scope_path: Vec<u64>, node_id: u64, field_name: String, value: APILiteralValue) {
+pub fn set_record_construct_literal(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    field_name: String,
+    value: APILiteralValue,
+) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
@@ -5537,7 +5547,11 @@ pub fn get_materialize_data(node_id: u64) -> Option<APIMaterializeData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_materialize_data(scope_path: Vec<u64>, node_id: u64, data: APIMaterializeData) -> APIResult {
+pub fn set_materialize_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    data: APIMaterializeData,
+) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {

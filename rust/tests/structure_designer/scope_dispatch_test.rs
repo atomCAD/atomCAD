@@ -224,12 +224,8 @@ fn add_node_scoped_routes_to_nested_body_at_depth_two() {
     let (mut designer, outer_map_id) = setup_two_level_network();
 
     // Add an inner `map` HOF inside the outer map's body — depth-1 scope.
-    let inner_map_id = designer.add_node_scoped(
-        &[outer_map_id],
-        "map",
-        DVec2::new(20.0, 20.0),
-        None,
-    );
+    let inner_map_id =
+        designer.add_node_scoped(&[outer_map_id], "map", DVec2::new(20.0, 20.0), None);
     assert_ne!(inner_map_id, 0, "depth-1 add of inner HOF should succeed");
 
     // The inner map's own body must exist after creation (zone init runs
@@ -244,12 +240,7 @@ fn add_node_scoped_routes_to_nested_body_at_depth_two() {
     );
 
     // Add a leaf node inside the inner body via the public API.
-    let leaf_id = designer.add_node_scoped(
-        &depth2_chain,
-        "int",
-        DVec2::new(5.0, 5.0),
-        None,
-    );
+    let leaf_id = designer.add_node_scoped(&depth2_chain, "int", DVec2::new(5.0, 5.0), None);
     assert_ne!(leaf_id, 0, "depth-2 add_node_scoped should succeed");
 
     // Leaf lives in the inner body.
@@ -282,11 +273,12 @@ fn add_node_scoped_routes_to_nested_body_at_depth_two() {
         .node_networks
         .get("main")
         .unwrap();
-    assert_eq!(main.nodes.len(), 1, "top-level should only have the outer map");
     assert_eq!(
-        main.nodes.get(&outer_map_id).unwrap().node_type_name,
-        "map"
+        main.nodes.len(),
+        1,
+        "top-level should only have the outer map"
     );
+    assert_eq!(main.nodes.get(&outer_map_id).unwrap().node_type_name, "map");
 }
 
 #[test]
@@ -295,19 +287,9 @@ fn move_and_select_at_depth_two_target_the_right_body() {
     // inner-most body identified by the chain, without disturbing outer
     // bodies or the top-level network.
     let (mut designer, outer_map_id) = setup_two_level_network();
-    let inner_map_id = designer.add_node_scoped(
-        &[outer_map_id],
-        "map",
-        DVec2::new(0.0, 0.0),
-        None,
-    );
+    let inner_map_id = designer.add_node_scoped(&[outer_map_id], "map", DVec2::new(0.0, 0.0), None);
     let depth2_chain = [outer_map_id, inner_map_id];
-    let leaf_id = designer.add_node_scoped(
-        &depth2_chain,
-        "int",
-        DVec2::new(1.0, 1.0),
-        None,
-    );
+    let leaf_id = designer.add_node_scoped(&depth2_chain, "int", DVec2::new(1.0, 1.0), None);
 
     // Move the leaf via depth-2 scope.
     designer.move_node_scoped(&depth2_chain, leaf_id, DVec2::new(77.0, 99.0));

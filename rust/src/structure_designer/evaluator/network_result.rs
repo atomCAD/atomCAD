@@ -839,6 +839,39 @@ impl NetworkResult {
         }
     }
 
+    /// Like [`to_display_string`] but truncates arrays longer than `cap` to
+    /// `[e1, ..., e<cap>, ...]`. Recurses into nested arrays and into record
+    /// field values with the same `cap`, so a tooltip can never explode on
+    /// large or deeply nested arrays. Non-array variants delegate to
+    /// [`to_display_string`] unchanged — only the `Array` and `Record` arms
+    /// override.
+    pub fn to_display_string_capped(&self, cap: usize) -> String {
+        match self {
+            NetworkResult::Array(elements) => {
+                let shown = elements.len().min(cap);
+                let mut parts: Vec<String> = elements
+                    .iter()
+                    .take(shown)
+                    .map(|element| element.to_display_string_capped(cap))
+                    .collect();
+                if elements.len() > cap {
+                    parts.push("...".to_string());
+                }
+                format!("[{}]", parts.join(", "))
+            }
+            NetworkResult::Record(fields) => {
+                let field_strings: Vec<String> = fields
+                    .iter()
+                    .map(|(name, value)| {
+                        format!("{}: {}", name, value.to_display_string_capped(cap))
+                    })
+                    .collect();
+                format!("{{{}}}", field_strings.join(", "))
+            }
+            _ => self.to_display_string(),
+        }
+    }
+
     /// Returns a detailed string representation including full contents for complex types.
     /// For Blueprint/Geometry2D, shows unit cell/drawing plane, frame transform, and geo tree.
     /// For Atomic/Motif, shows counts plus first 10 atoms/sites/bonds.

@@ -169,17 +169,17 @@ impl NodeData for CollectData {
             }
         }
 
-        // Surface the live element count in the node-graph UI in place of
-        // the raw array dump (which would be unreadable for any nontrivial
-        // stream). The `pin_subtitles` channel is honored by the evaluator's
-        // post-eval display-string clobber.
-        let subtitle = if cap_hit {
-            format!("(stopped at limit {})", effective_limit.unwrap())
-        } else {
-            format!("({} elements)", out.len())
-        };
+        // Cap-hit gets a dedicated subtitle because the truncated array dump
+        // alone can't convey "there were more, but we stopped". When the
+        // walker exhausted, fall through to the evaluator's default display
+        // string (which truncates long arrays via `ARRAY_DISPLAY_CAP`).
         let mut output = EvalOutput::single(NetworkResult::Array(out));
-        output.pin_subtitles.insert(0, subtitle);
+        if cap_hit {
+            output.pin_subtitles.insert(
+                0,
+                format!("(stopped at limit {})", effective_limit.unwrap()),
+            );
+        }
         output
     }
 
