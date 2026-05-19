@@ -1001,19 +1001,23 @@ impl NodeTypeRegistry {
     pub fn find_parent_networks(&self, network_name: &str) -> Vec<String> {
         let mut parent_networks = Vec::new();
 
-        // Search through all networks to find ones that use this network as a node
+        // Search through all networks to find ones that use this network as a node.
+        // A reference inside an HOF's owned body still makes the containing
+        // named network a parent, so descend into zones during the search.
         for (parent_name, parent_network) in &self.node_networks {
             // Skip the network itself
             if parent_name == network_name {
                 continue;
             }
 
-            // Check if any node in the parent network uses this network as its type
-            for node in parent_network.nodes.values() {
-                if node.node_type_name == network_name {
-                    parent_networks.push(parent_name.clone());
-                    break; // No need to check other nodes in this network
+            let mut found = false;
+            crate::structure_designer::node_network::walk_all_nodes(parent_network, &mut |node| {
+                if !found && node.node_type_name == network_name {
+                    found = true;
                 }
+            });
+            if found {
+                parent_networks.push(parent_name.clone());
             }
         }
 
@@ -1306,16 +1310,17 @@ impl NodeTypeRegistry {
 
         // Find the network in our registry
         if let Some(network) = self.node_networks.get(network_name) {
-            // Examine all nodes in this network
-            for node in network.nodes.values() {
-                let node_type_name = &node.node_type_name;
-
-                // Check if this node references another user-defined network
-                // (Skip built-in node types)
-                if self.node_networks.contains_key(node_type_name) {
-                    // Recursively find dependencies of this referenced network
-                    self.dfs_dependencies(node_type_name, result, visited);
+            // Examine every node in this network, including nodes inside HOF
+            // zone bodies — a body-internal node may reference another
+            // user-defined network just like a top-level one.
+            let mut referenced: Vec<String> = Vec::new();
+            crate::structure_designer::node_network::walk_all_nodes(network, &mut |node| {
+                if self.node_networks.contains_key(&node.node_type_name) {
+                    referenced.push(node.node_type_name.clone());
                 }
+            });
+            for name in referenced {
+                self.dfs_dependencies(&name, result, visited);
             }
         }
 
@@ -1369,16 +1374,18 @@ impl NodeTypeRegistry {
         // Mark as temporarily visited (for cycle detection)
         temp_mark.insert(network_name.to_string());
 
-        // Find dependencies and visit them first
+        // Find dependencies and visit them first. Recurse into HOF zone
+        // bodies so a body-internal reference to another user-defined network
+        // pulls that network into the topological order.
         if let Some(network) = self.node_networks.get(network_name) {
-            for node in network.nodes.values() {
-                let node_type_name = &node.node_type_name;
-
-                // Check if this node references another user-defined network
-                if self.node_networks.contains_key(node_type_name) {
-                    // Visit dependency first
-                    self.dfs_topological_sort(node_type_name, result, visited, temp_mark);
+            let mut referenced: Vec<String> = Vec::new();
+            crate::structure_designer::node_network::walk_all_nodes(network, &mut |node| {
+                if self.node_networks.contains_key(&node.node_type_name) {
+                    referenced.push(node.node_type_name.clone());
                 }
+            });
+            for name in referenced {
+                self.dfs_topological_sort(&name, result, visited, temp_mark);
             }
         }
 
@@ -1539,7 +1546,10 @@ fn rewrite_record_name_in_registry(
             }
         }
 
-        for node in network.nodes.values_mut() {
+        // Recurse into HOF zone bodies — a body-internal `expr` / `map` / `record_*`
+        // node may carry the renamed `Named` reference in its per-node data type
+        // fields just like a top-level one.
+        crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
             // Per-node data containers that embed a DataType.
             let data: &mut dyn crate::structure_designer::node_data::NodeData = node.data.as_mut();
             if let Some(d) = data.as_any_mut().downcast_mut::<ParameterData>() {
@@ -1599,7 +1609,7 @@ fn rewrite_record_name_in_registry(
             // call from the (now-renamed) inputs; clear it defensively so any
             // stale `Named(old)` reference is not observable in the meantime.
             node.custom_node_type = None;
-        }
+        });
     }
 }
 

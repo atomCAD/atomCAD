@@ -178,12 +178,18 @@ impl NodeNetworksImportManager {
                 // 1. Update the network's internal node type name
                 network.node_type.name = final_name.clone();
 
-                // 2. Update all nodes in this network that reference any of the imported network names
-                for (_node_id, node) in network.nodes.iter_mut() {
-                    if let Some(new_name) = name_mapping.get(&node.node_type_name) {
-                        node.node_type_name = new_name.clone();
-                    }
-                }
+                // 2. Update all nodes in this network that reference any of the
+                //    imported network names. Recurse into HOF zone bodies so
+                //    body-internal references get the same prefixed name as
+                //    top-level ones.
+                crate::structure_designer::node_network::walk_all_nodes_mut(
+                    &mut network,
+                    &mut |node| {
+                        if let Some(new_name) = name_mapping.get(&node.node_type_name) {
+                            node.node_type_name = new_name.clone();
+                        }
+                    },
+                );
 
                 target_registry
                     .node_networks

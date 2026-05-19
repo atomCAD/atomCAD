@@ -92,18 +92,20 @@ fn repair_call_sites_for_network(
     // Find all parent networks that use this network
     let parent_network_names = node_type_registry.find_parent_networks(network_name);
 
-    // Update each parent network's call sites
+    // Update each parent network's call sites. Walk recursively into HOF
+    // zone bodies so a body-internal node calling the renamed network has
+    // its arguments fixed up too — `node_id` is per-network and can collide
+    // across scopes, so we apply the update in place during the walk
+    // rather than staging `(node_id, new_arguments)` pairs.
     for parent_name in parent_network_names {
         if let Some(parent_network) = node_type_registry.node_networks.get_mut(&parent_name) {
-            // Find all nodes in parent that use our network
-            let mut nodes_to_update: Vec<(u64, Vec<Argument>)> = Vec::new();
-
-            for (node_id, node) in &parent_network.nodes {
-                if node.node_type_name == network_name {
-                    // This node needs argument updates
+            crate::structure_designer::node_network::walk_all_nodes_mut(
+                parent_network,
+                &mut |node| {
+                    if node.node_type_name != network_name {
+                        return;
+                    }
                     let mut new_arguments = Vec::with_capacity(new_parameters.len());
-
-                    // For each new parameter, try to preserve old argument
                     for new_param in new_parameters {
                         let old_idx = {
                             // First try ID-based matching (handles renames)
@@ -119,31 +121,19 @@ fn repair_call_sites_for_network(
                                 old_param_name_map.get(new_param.name.as_str()).copied()
                             }
                         };
-
                         if let Some(old_idx) = old_idx {
-                            // Parameter existed before - preserve its argument if within bounds
                             if old_idx < node.arguments.len() {
                                 new_arguments.push(node.arguments[old_idx].clone());
                             } else {
-                                // Shouldn't happen, but handle gracefully
                                 new_arguments.push(Argument::new());
                             }
                         } else {
-                            // New parameter - create empty argument
                             new_arguments.push(Argument::new());
                         }
                     }
-
-                    nodes_to_update.push((*node_id, new_arguments));
-                }
-            }
-
-            // Apply updates
-            for (node_id, new_arguments) in nodes_to_update {
-                if let Some(node) = parent_network.nodes.get_mut(&node_id) {
                     node.arguments = new_arguments;
-                }
-            }
+                },
+            );
         }
     }
 }

@@ -1696,3 +1696,37 @@ impl NodeNetwork {
         Some(new_node_id)
     }
 }
+
+/// Visit every node in `network`, recursing into HOF zone bodies at every
+/// depth. The callback is invoked on each node before any descent into its
+/// own body, so a body-internal HOF receives `f` after its parent HOF but
+/// before its own nested children.
+///
+/// Use this anywhere a piece of code wants to do "per-node work for every
+/// node in the network tree" — populating caches, looking up references,
+/// counting things, rewriting names — without manually re-implementing the
+/// zone descent at every call site. The recurring class of bug this avoids:
+/// iterating `network.nodes.values()` and silently skipping nodes inside an
+/// HOF's owned body. See `doc/design_zones.md`.
+pub fn walk_all_nodes(network: &NodeNetwork, f: &mut impl FnMut(&Node)) {
+    for node in network.nodes.values() {
+        f(node);
+        if let Some(body) = node.zone.as_deref() {
+            walk_all_nodes(body, f);
+        }
+    }
+}
+
+/// Mutable counterpart to [`walk_all_nodes`]. The callback receives a
+/// `&mut Node` and the function descends into `node.zone_mut()` after the
+/// callback returns, so the borrow is released before recursion. Body
+/// access goes through `zone_mut`, which CoW-clones the `Arc<NodeNetwork>`
+/// on first mutation.
+pub fn walk_all_nodes_mut(network: &mut NodeNetwork, f: &mut impl FnMut(&mut Node)) {
+    for node in network.nodes.values_mut() {
+        f(node);
+        if let Some(body) = node.zone_mut() {
+            walk_all_nodes_mut(body, f);
+        }
+    }
+}

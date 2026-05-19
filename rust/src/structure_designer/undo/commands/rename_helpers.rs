@@ -26,13 +26,16 @@ pub fn apply_rename_core(
         *active_name = Some(new_name.to_string());
     }
 
-    // Update all nodes in all networks that reference the old type name
+    // Update all nodes in all networks that reference the old type name.
+    // Recurse into HOF zone bodies — a body-internal instance of the renamed
+    // network needs the same name update, otherwise its `node_type_name`
+    // dangles after the rename.
     for network in registry.node_networks.values_mut() {
-        for node in network.nodes.values_mut() {
+        crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
             if node.node_type_name == old_name {
                 node.node_type_name = new_name.to_string();
             }
-        }
+        });
     }
 
     // Update backtick references in comment nodes and network metadata
@@ -51,7 +54,7 @@ pub fn apply_rename_core(
             }
         }
 
-        for node in network.nodes.values_mut() {
+        crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
             if node.node_type_name == "Comment" {
                 if let Some(comment_data) =
                     node.data
@@ -66,6 +69,6 @@ pub fn apply_rename_core(
                     }
                 }
             }
-        }
+        });
     }
 }

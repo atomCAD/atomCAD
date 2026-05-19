@@ -161,6 +161,19 @@ Body errors land on `body.validation_errors` with `node_id == Some(body_internal
 
 **Repair.** When an HOF's zone-input pin type changes (e.g. `map.input_type` flipped `Int → Crystal`), `repair_node_network::repair_zone_body` walks the body and disconnects any wire whose source/destination types are no longer compatible — same shape as the existing `arguments` repair, just scoped to one body. Uses the borrow-split pattern (snapshot `zone_output_wires`, then `.zone.take()` to repair, then re-insert).
 
+**Walking a network's nodes — `walk_all_nodes` / `walk_all_nodes_mut`.** When a function needs to do per-node work over an entire `NodeNetwork` — populate per-node caches, look up references to named types/networks, rewrite `node_type_name` or per-node `DataType` fields on a rename, count or collect references for a dependency closure — use the recursive helpers in `node_network.rs`:
+
+```rust
+walk_all_nodes(network, &mut |node| { ... });
+walk_all_nodes_mut(network, &mut |node| { ... });
+```
+
+instead of a bare `for node in network.nodes.values()` loop. The helpers descend into every `Node.zone` body at every depth, so body-internal nodes get the same treatment as top-level ones. Mutable access goes through `Node::zone_mut`, which CoW-clones the `Arc<NodeNetwork>` on first mutation.
+
+A bare `network.nodes.values()` walk silently skips every node inside every HOF body. The recurring bug shape it produces: after a `.cnnd` round-trip (or another state-refresh path) the body's nodes are missing whatever derived state the walk was supposed to produce, and the first downstream consumer panics or misbehaves. `initialize_custom_node_types_for_network` (body `expr` had no `custom_node_type`, parameter access panicked at load) was the precipitating bug; the post-fix sweep also routed dependency walks, rename/import cascades, delete-safety checks, and parameter-interface repair through the recursive helpers.
+
+The exceptions — places where a single-frame walk is intentional — are selection state, layout/sugiyama positioning, per-network camera, text-format editing of the active network, and similar UI-frame bookkeeping. When in doubt, prefer the helper.
+
 Design docs: `doc/design_zones.md` (Rust side, phases 1–6) and `doc/design_zones_ui.md` (Flutter side, phases U1–U7).
 
 ## Execute action & effect nodes

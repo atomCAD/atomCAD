@@ -1102,11 +1102,16 @@ impl StructureDesigner {
             if targets.contains(current_network_name.as_str()) {
                 continue;
             }
-            for node in network.nodes.values() {
-                if targets.contains(node.node_type_name.as_str()) {
-                    referencing_networks.push(current_network_name.clone());
-                    break;
+            // Walk recursively into HOF zone bodies — a body-internal
+            // reference to a target still blocks the deletion.
+            let mut found = false;
+            crate::structure_designer::node_network::walk_all_nodes(network, &mut |node| {
+                if !found && targets.contains(node.node_type_name.as_str()) {
+                    found = true;
                 }
+            });
+            if found {
+                referencing_networks.push(current_network_name.clone());
             }
         }
 
