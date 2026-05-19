@@ -36,8 +36,17 @@ class NodeNetworkPainter extends CustomPainter {
   final Offset panOffset;
   final ZoomLevel zoomLevel;
 
+  /// When false (default), this painter sits at the BOTTOM of the canvas stack
+  /// and paints the grid + top-level wires only. When true, it sits at the
+  /// TOP of the canvas stack (above the node widgets) and paints body wires
+  /// + the dragged wire — both of which would otherwise be hidden by the HOF
+  /// node widget's opaque body Container background.
+  final bool overlay;
+
   NodeNetworkPainter(this.graphModel,
-      {this.panOffset = Offset.zero, this.zoomLevel = ZoomLevel.normal});
+      {this.panOffset = Offset.zero,
+      this.zoomLevel = ZoomLevel.normal,
+      this.overlay = false});
 
   /// Build a [ScopeResolver] for the current frame. Returns null when no
   /// network is active. Constructed once per `paint` and once per
@@ -132,22 +141,41 @@ class NodeNetworkPainter extends CustomPainter {
     final resolver = _makeResolver();
     if (resolver == null) return;
 
-    // Draw grid first so it's behind everything else
-    _drawGrid(canvas, size);
+    // Bottom layer: grid + top-level wires only. Top-level wires render under
+    // the node widgets so external pin circles visually cover the wire ends
+    // (the conventional look). Body wires and the dragged wire are deferred
+    // to the overlay pass because they'd otherwise be hidden behind the HOF
+    // node widget's opaque body Container.
+    if (!overlay) {
+      _drawGrid(canvas, size);
 
+      Paint paint = Paint()
+        ..color = Colors.black
+        ..strokeWidth = WIRE_WIDTH_NORMAL
+        ..style = PaintingStyle.stroke;
+
+      _drawWiresAtScope(
+          resolver, resolver.root.wires, const <BigInt>[], canvas, paint);
+      return;
+    }
+
+    // Overlay layer: body wires (recursively into every HOF) and the dragged
+    // wire. These need to paint *on top of* the node widgets so they're
+    // visible inside HOF body regions.
     Paint paint = Paint()
       ..color = Colors.black
       ..strokeWidth = WIRE_WIDTH_NORMAL
       ..style = PaintingStyle.stroke;
 
-    // Draw wires for the top-level network, and recursively for every body
-    // — the design specifies the outermost layer paints all wires so that
-    // pin endpoint resolution can reach into any scope. See
-    // `doc/design_zones_ui.md` §"Wire rendering across scopes".
-    _drawWiresForNetwork(
-        resolver, resolver.root, const <BigInt>[], canvas, paint);
+    for (final node in resolver.root.nodes.values) {
+      final zone = node.zone;
+      if (zone == null) continue;
+      final innerChain = <BigInt>[node.id];
+      if (resolver.isBodyCollapsed(innerChain)) continue;
+      _drawWiresInZone(resolver, zone, innerChain, canvas, paint);
+    }
 
-    // Draw dragged wire on top
+    // Draw dragged wire on top of body wires.
     if (graphModel.draggedWire != null) {
       final startPin = graphModel.draggedWire!.startPin;
       final wireStart = resolver.tryPinScreenPosition(startPin);
@@ -170,32 +198,15 @@ class NodeNetworkPainter extends CustomPainter {
     }
   }
 
-  /// Recursively paint every wire reachable from the top-level network.
-  /// Wires at body depth are painted using `pinScreenPosition` against the
-  /// body's `scopeChain` so cross-frame positions resolve through the
-  /// layout cache. See `doc/design_zones_ui.md` §"Wire rendering across scopes".
+  /// Walk every body reachable from the top-level network and paint each
+  /// body's interior wires via [_drawWiresAtScope]. Called from the overlay
+  /// pass — top-level wires are painted by the bottom-layer pass directly,
+  /// not here. See `doc/design_zones_ui.md` §"Wire rendering across scopes".
   ///
   /// Bodies that are collapsed (rendered too small to be readable per the
   /// U6 zoom-level rule) skip their content's wires; the HOF's chrome and
   /// any wires crossing into the body still render — capture wire endpoints
   /// land on the (still-positioned) zone-input/output pins on the HOF.
-  void _drawWiresForNetwork(
-    ScopeResolver resolver,
-    NodeNetworkView network,
-    List<BigInt> scopeChain,
-    Canvas canvas,
-    Paint paint,
-  ) {
-    _drawWiresAtScope(resolver, network.wires, scopeChain, canvas, paint);
-    for (final node in network.nodes.values) {
-      final zone = node.zone;
-      if (zone == null) continue;
-      final innerChain = [...scopeChain, node.id];
-      if (resolver.isBodyCollapsed(innerChain)) continue;
-      _drawWiresInZone(resolver, zone, innerChain, canvas, paint);
-    }
-  }
-
   void _drawWiresInZone(
     ScopeResolver resolver,
     ZoneView zone,

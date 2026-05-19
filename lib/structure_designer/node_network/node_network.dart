@@ -320,17 +320,29 @@ Color getDataTypeColor(String typeName) {
   return DEFAULT_DATA_TYPE_COLOR;
 }
 
-/// Wraps the NodeNetworkPainter to add interaction capabilities
+/// Wraps the NodeNetworkPainter to add interaction capabilities.
+///
+/// Two render modes:
+/// - [overlay] `false` (default): sits at the BOTTOM of the canvas stack and
+///   paints grid + top-level wires. Carries the wire-tap [GestureDetector]
+///   that selects top-level wires.
+/// - [overlay] `true`: sits at the TOP of the canvas stack (above the node
+///   widgets) and paints body wires + the dragged wire. Wrapped in
+///   [IgnorePointer] so it doesn't intercept node clicks. Body wires would
+///   otherwise be hidden behind the HOF widget's opaque body Container, and
+///   the dragged wire would vanish wherever it crosses an HOF's footprint.
 class NodeNetworkInteractionLayer extends StatelessWidget {
   final StructureDesignerModel model;
   final Offset panOffset;
   final ZoomLevel zoomLevel;
+  final bool overlay;
 
   const NodeNetworkInteractionLayer(
       {super.key,
       required this.model,
       required this.panOffset,
-      required this.zoomLevel});
+      required this.zoomLevel,
+      this.overlay = false});
 
   /// Handles tap on wires for selection, or clears selection if clicking empty space
   /// Supports modifier keys: Ctrl to toggle, Shift to add
@@ -377,6 +389,18 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (overlay) {
+      // Top layer: paints body wires + dragged wire. IgnorePointer so it
+      // doesn't intercept clicks meant for the node widgets that sit below
+      // it in the Stack.
+      return IgnorePointer(
+        child: CustomPaint(
+          painter: NodeNetworkPainter(model,
+              panOffset: panOffset, zoomLevel: zoomLevel, overlay: true),
+          child: Container(),
+        ),
+      );
+    }
     return CustomPaint(
       painter:
           NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel),
@@ -1073,10 +1097,10 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
 
     final List<Widget> children = [];
-    // Wire layer at the bottom: paints every wire reachable from the
-    // top-level network (including intra-body wires) so cross-scope wires
-    // and body wires all share one pass. See `doc/design_zones_ui.md`
-    // §"Wire rendering across scopes".
+    // Bottom wire layer: grid + top-level wires only. Top-level wires render
+    // *under* the node widgets so external pin circles cover the wire ends
+    // (the conventional look that preserves visual symmetry with the pre-zones
+    // editor).
     children.add(NodeNetworkInteractionLayer(
         model: model, panOffset: _panOffset, zoomLevel: _zoomLevel));
 
@@ -1090,6 +1114,16 @@ class NodeNetworkState extends State<NodeNetwork> {
       zoomLevel: _zoomLevel,
     );
     _appendNodesRecursive(children, view, const <BigInt>[], view, resolver);
+
+    // Top wire layer (overlay): body wires + dragged wire. These need to
+    // paint above the node widgets — the HOF's body Container has an opaque
+    // background that would otherwise hide wires drawn underneath it. See
+    // `doc/design_zones_ui.md` §"Wire rendering across scopes".
+    children.add(NodeNetworkInteractionLayer(
+        model: model,
+        panOffset: _panOffset,
+        zoomLevel: _zoomLevel,
+        overlay: true));
 
     children.add(_buildSelectionRectangle());
     return children;
