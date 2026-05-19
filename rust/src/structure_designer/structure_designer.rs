@@ -2159,6 +2159,9 @@ impl StructureDesigner {
             );
         }
         self.set_dirty(true);
+        // Re-validate so zone-rule errors raised by a previous pass clear once
+        // the user adds the wire that satisfies them.
+        self.validate_active_network();
     }
 
     /// Scope-aware variant of `connect_nodes` for cross-scope wires (captures
@@ -2233,6 +2236,9 @@ impl StructureDesigner {
             );
         }
         self.set_dirty(true);
+        // Re-validate so zone-rule errors raised by a previous pass clear once
+        // the user adds the wire that satisfies them.
+        self.validate_active_network();
     }
 
     /// Scope-aware predicate for cross-scope wires (Phase U5). Returns `true`
@@ -2400,6 +2406,12 @@ impl StructureDesigner {
         }
         argument.set_source(source_node_id, source_output_pin_index);
         self.set_dirty(true);
+        // Re-validate: this is the wire that satisfies zone validation rule 1
+        // ("every zone-output pin has at least one incoming wire"). Without
+        // re-running validation here the rule-1 error raised by a previous
+        // pass would persist on `validation_errors` even though the wire that
+        // satisfies it now exists.
+        self.validate_active_network();
     }
 
     /// Scope-aware variant of [`duplicate_node`]. Phase U4 — body-scope dup
