@@ -3944,26 +3944,26 @@ pub fn get_motif_data(node_id: u64) -> Option<APIMotifData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_int_data(node_id: u64, data: APIIntData) {
+pub fn set_int_data(scope_path: Vec<u64>, node_id: u64, data: APIIntData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let int_data = Box::new(IntData { value: data.value });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, int_data);
+                .set_node_network_data_scoped(&scope_path, node_id, int_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_string_data(node_id: u64, data: APIStringData) {
+pub fn set_string_data(scope_path: Vec<u64>, node_id: u64, data: APIStringData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let string_data = Box::new(StringData { value: data.value });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, string_data);
+                .set_node_network_data_scoped(&scope_path, node_id, string_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -3976,12 +3976,12 @@ pub fn set_string_data(node_id: u64, data: APIStringData) {
 /// `literal_values` — entries whose keys no longer match a current field of
 /// the new def are inert (see `RecordConstructData::literal_values`).
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_record_construct_data(node_id: u64, data: APIRecordSchemaData) {
+pub fn set_record_construct_data(scope_path: Vec<u64>, node_id: u64, data: APIRecordSchemaData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
                 .structure_designer
-                .get_active_node_network()
+                .get_scope_network(&scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
                 .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
                 .cloned()
@@ -3992,7 +3992,7 @@ pub fn set_record_construct_data(node_id: u64, data: APIRecordSchemaData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, record_data);
+                .set_node_network_data_scoped(&scope_path, node_id, record_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -4003,7 +4003,7 @@ pub fn set_record_construct_data(node_id: u64, data: APIRecordSchemaData) {
 /// re-derived from the chosen def, dangling references leave the node with
 /// a placeholder layout and broken downstream wires.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_record_destructure_data(node_id: u64, data: APIRecordSchemaData) {
+pub fn set_record_destructure_data(scope_path: Vec<u64>, node_id: u64, data: APIRecordSchemaData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let record_data = Box::new(RecordDestructureData {
@@ -4011,7 +4011,7 @@ pub fn set_record_destructure_data(node_id: u64, data: APIRecordSchemaData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, record_data);
+                .set_node_network_data_scoped(&scope_path, node_id, record_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -4023,7 +4023,7 @@ pub fn set_record_destructure_data(node_id: u64, data: APIRecordSchemaData) {
 /// `Array[FieldType]` input pins and the `Array[Record(Named(target))]`
 /// output pin from the chosen def.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_product_data(node_id: u64, data: APIRecordSchemaData) {
+pub fn set_product_data(scope_path: Vec<u64>, node_id: u64, data: APIRecordSchemaData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let product_data = Box::new(ProductData {
@@ -4031,27 +4031,27 @@ pub fn set_product_data(node_id: u64, data: APIRecordSchemaData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, product_data);
+                .set_node_network_data_scoped(&scope_path, node_id, product_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_bool_data(node_id: u64, data: APIBoolData) {
+pub fn set_bool_data(scope_path: Vec<u64>, node_id: u64, data: APIBoolData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let bool_data = Box::new(BoolData { value: data.value });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, bool_data);
+                .set_node_network_data_scoped(&scope_path, node_id, bool_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_print_data(node_id: u64, data: APIPrintData) {
+pub fn set_print_data(scope_path: Vec<u64>, node_id: u64, data: APIPrintData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let print_data = Box::new(PrintData {
@@ -4059,27 +4059,27 @@ pub fn set_print_data(node_id: u64, data: APIPrintData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, print_data);
+                .set_node_network_data_scoped(&scope_path, node_id, print_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_float_data(node_id: u64, data: APIFloatData) {
+pub fn set_float_data(scope_path: Vec<u64>, node_id: u64, data: APIFloatData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let float_data = Box::new(FloatData { value: data.value });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, float_data);
+                .set_node_network_data_scoped(&scope_path, node_id, float_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_vec2_data(node_id: u64, data: APIVec2Data) {
+pub fn set_vec2_data(scope_path: Vec<u64>, node_id: u64, data: APIVec2Data) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let vec2_data = Box::new(Vec2Data {
@@ -4087,14 +4087,14 @@ pub fn set_vec2_data(node_id: u64, data: APIVec2Data) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, vec2_data);
+                .set_node_network_data_scoped(&scope_path, node_id, vec2_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_vec3_data(node_id: u64, data: APIVec3Data) {
+pub fn set_vec3_data(scope_path: Vec<u64>, node_id: u64, data: APIVec3Data) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let vec3_data = Box::new(Vec3Data {
@@ -4102,14 +4102,14 @@ pub fn set_vec3_data(node_id: u64, data: APIVec3Data) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, vec3_data);
+                .set_node_network_data_scoped(&scope_path, node_id, vec3_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_ivec2_data(node_id: u64, data: APIIVec2Data) {
+pub fn set_ivec2_data(scope_path: Vec<u64>, node_id: u64, data: APIIVec2Data) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let ivec2_data = Box::new(IVec2Data {
@@ -4117,14 +4117,14 @@ pub fn set_ivec2_data(node_id: u64, data: APIIVec2Data) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, ivec2_data);
+                .set_node_network_data_scoped(&scope_path, node_id, ivec2_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_ivec3_data(node_id: u64, data: APIIVec3Data) {
+pub fn set_ivec3_data(scope_path: Vec<u64>, node_id: u64, data: APIIVec3Data) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let ivec3_data = Box::new(IVec3Data {
@@ -4132,14 +4132,14 @@ pub fn set_ivec3_data(node_id: u64, data: APIIVec3Data) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, ivec3_data);
+                .set_node_network_data_scoped(&scope_path, node_id, ivec3_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_supercell_data(node_id: u64, data: APISupercellData) {
+pub fn set_supercell_data(scope_path: Vec<u64>, node_id: u64, data: APISupercellData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let a = from_api_ivec3(&data.a);
@@ -4150,14 +4150,14 @@ pub fn set_supercell_data(node_id: u64, data: APISupercellData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, supercell_data);
+                .set_node_network_data_scoped(&scope_path, node_id, supercell_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_imat3_rows_data(node_id: u64, data: APIIMat3RowsData) {
+pub fn set_imat3_rows_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat3RowsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let a = from_api_ivec3(&data.a);
@@ -4168,14 +4168,14 @@ pub fn set_imat3_rows_data(node_id: u64, data: APIIMat3RowsData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, payload);
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_imat3_cols_data(node_id: u64, data: APIIMat3ColsData) {
+pub fn set_imat3_cols_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat3ColsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let a = from_api_ivec3(&data.a);
@@ -4186,14 +4186,14 @@ pub fn set_imat3_cols_data(node_id: u64, data: APIIMat3ColsData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, payload);
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_imat3_diag_data(node_id: u64, data: APIIMat3DiagData) {
+pub fn set_imat3_diag_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat3DiagData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let payload = Box::new(IMat3DiagData {
@@ -4201,14 +4201,14 @@ pub fn set_imat3_diag_data(node_id: u64, data: APIIMat3DiagData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, payload);
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_mat3_rows_data(node_id: u64, data: APIMat3RowsData) {
+pub fn set_mat3_rows_data(scope_path: Vec<u64>, node_id: u64, data: APIMat3RowsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let a = from_api_vec3(&data.a);
@@ -4219,14 +4219,14 @@ pub fn set_mat3_rows_data(node_id: u64, data: APIMat3RowsData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, payload);
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_mat3_cols_data(node_id: u64, data: APIMat3ColsData) {
+pub fn set_mat3_cols_data(scope_path: Vec<u64>, node_id: u64, data: APIMat3ColsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let a = from_api_vec3(&data.a);
@@ -4237,14 +4237,14 @@ pub fn set_mat3_cols_data(node_id: u64, data: APIMat3ColsData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, payload);
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_mat3_diag_data(node_id: u64, data: APIMat3DiagData) {
+pub fn set_mat3_diag_data(scope_path: Vec<u64>, node_id: u64, data: APIMat3DiagData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let payload = Box::new(Mat3DiagData {
@@ -4252,14 +4252,14 @@ pub fn set_mat3_diag_data(node_id: u64, data: APIMat3DiagData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, payload);
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_range_data(node_id: u64, data: APIRangeData) {
+pub fn set_range_data(scope_path: Vec<u64>, node_id: u64, data: APIRangeData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let range_data = Box::new(RangeData {
@@ -4269,14 +4269,14 @@ pub fn set_range_data(node_id: u64, data: APIRangeData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, range_data);
+                .set_node_network_data_scoped(&scope_path, node_id, range_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_rect_data(node_id: u64, data: APIRectData) {
+pub fn set_rect_data(scope_path: Vec<u64>, node_id: u64, data: APIRectData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let rect_data = Box::new(RectData {
@@ -4285,32 +4285,30 @@ pub fn set_rect_data(node_id: u64, data: APIRectData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, rect_data);
+                .set_node_network_data_scoped(&scope_path, node_id, rect_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_reg_poly_data(node_id: u64, data: APIRegPolyData) {
+pub fn set_reg_poly_data(scope_path: Vec<u64>, node_id: u64, data: APIRegPolyData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(node_data) = cad_instance
+            let reg_poly_data = Box::new(RegPolyData {
+                num_sides: data.num_sides,
+                radius: data.radius,
+            });
+            cad_instance
                 .structure_designer
-                .get_node_network_data_mut(node_id)
-            {
-                if let Some(reg_poly_data) = node_data.as_any_mut().downcast_mut::<RegPolyData>() {
-                    reg_poly_data.num_sides = data.num_sides;
-                    reg_poly_data.radius = data.radius;
-                    refresh_structure_designer_auto(cad_instance);
-                }
-            }
+                .set_node_network_data_scoped(&scope_path, node_id, reg_poly_data);
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_circle_data(node_id: u64, data: APICircleData) {
+pub fn set_circle_data(scope_path: Vec<u64>, node_id: u64, data: APICircleData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let circle_data = Box::new(CircleData {
@@ -4319,14 +4317,14 @@ pub fn set_circle_data(node_id: u64, data: APICircleData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, circle_data);
+                .set_node_network_data_scoped(&scope_path, node_id, circle_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_half_plane_data(node_id: u64, data: APIHalfPlaneData) {
+pub fn set_half_plane_data(scope_path: Vec<u64>, node_id: u64, data: APIHalfPlaneData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let half_plane_data = Box::new(HalfPlaneData {
@@ -4335,14 +4333,14 @@ pub fn set_half_plane_data(node_id: u64, data: APIHalfPlaneData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, half_plane_data);
+                .set_node_network_data_scoped(&scope_path, node_id, half_plane_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_extrude_data(node_id: u64, data: APIExtrudeData) {
+pub fn set_extrude_data(scope_path: Vec<u64>, node_id: u64, data: APIExtrudeData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let extrude_data = Box::new(ExtrudeData {
@@ -4353,14 +4351,14 @@ pub fn set_extrude_data(node_id: u64, data: APIExtrudeData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, extrude_data);
+                .set_node_network_data_scoped(&scope_path, node_id, extrude_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_cuboid_data(node_id: u64, data: APICuboidData) {
+pub fn set_cuboid_data(scope_path: Vec<u64>, node_id: u64, data: APICuboidData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let cuboid_data = Box::new(CuboidData {
@@ -4369,14 +4367,14 @@ pub fn set_cuboid_data(node_id: u64, data: APICuboidData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, cuboid_data);
+                .set_node_network_data_scoped(&scope_path, node_id, cuboid_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sphere_data(node_id: u64, data: APISphereData) {
+pub fn set_sphere_data(scope_path: Vec<u64>, node_id: u64, data: APISphereData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let sphere_data = Box::new(SphereData {
@@ -4385,14 +4383,14 @@ pub fn set_sphere_data(node_id: u64, data: APISphereData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, sphere_data);
+                .set_node_network_data_scoped(&scope_path, node_id, sphere_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
+pub fn set_half_space_data(scope_path: Vec<u64>, node_id: u64, data: APIHalfSpaceData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let half_space_data = Box::new(HalfSpaceData {
@@ -4404,14 +4402,14 @@ pub fn set_half_space_data(node_id: u64, data: APIHalfSpaceData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, half_space_data);
+                .set_node_network_data_scoped(&scope_path, node_id, half_space_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_drawing_plane_data(node_id: u64, data: APIDrawingPlaneData) {
+pub fn set_drawing_plane_data(scope_path: Vec<u64>, node_id: u64, data: APIDrawingPlaneData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let drawing_plane_data = Box::new(DrawingPlaneData {
@@ -4423,14 +4421,14 @@ pub fn set_drawing_plane_data(node_id: u64, data: APIDrawingPlaneData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, drawing_plane_data);
+                .set_node_network_data_scoped(&scope_path, node_id, drawing_plane_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_geo_trans_data(node_id: u64, data: APIGeoTransData) {
+pub fn set_geo_trans_data(scope_path: Vec<u64>, node_id: u64, data: APIGeoTransData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let geo_trans_data = Box::new(GeoTransData {
@@ -4440,14 +4438,14 @@ pub fn set_geo_trans_data(node_id: u64, data: APIGeoTransData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, geo_trans_data);
+                .set_node_network_data_scoped(&scope_path, node_id, geo_trans_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
+pub fn set_lattice_symop_data(scope_path: Vec<u64>, node_id: u64, data: APILatticeSymopData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let lattice_symop_data = Box::new(LatticeSymopData {
@@ -4458,14 +4456,14 @@ pub fn set_lattice_symop_data(node_id: u64, data: APILatticeSymopData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, lattice_symop_data);
+                .set_node_network_data_scoped(&scope_path, node_id, lattice_symop_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_structure_move_data(node_id: u64, data: APIStructureMoveData) {
+pub fn set_structure_move_data(scope_path: Vec<u64>, node_id: u64, data: APIStructureMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let structure_move_data = Box::new(StructureMoveData {
@@ -4474,14 +4472,14 @@ pub fn set_structure_move_data(node_id: u64, data: APIStructureMoveData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, structure_move_data);
+                .set_node_network_data_scoped(&scope_path, node_id, structure_move_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_structure_rot_data(node_id: u64, data: APIStructureRotData) {
+pub fn set_structure_rot_data(scope_path: Vec<u64>, node_id: u64, data: APIStructureRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let structure_rot_data = Box::new(StructureRotData {
@@ -4491,14 +4489,14 @@ pub fn set_structure_rot_data(node_id: u64, data: APIStructureRotData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, structure_rot_data);
+                .set_node_network_data_scoped(&scope_path, node_id, structure_rot_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_free_move_data(node_id: u64, data: APIFreeMoveData) {
+pub fn set_free_move_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeMoveData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let free_move_data = Box::new(FreeMoveData {
@@ -4506,14 +4504,14 @@ pub fn set_free_move_data(node_id: u64, data: APIFreeMoveData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, free_move_data);
+                .set_node_network_data_scoped(&scope_path, node_id, free_move_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_free_rot_data(node_id: u64, data: APIFreeRotData) {
+pub fn set_free_rot_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeRotData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let free_rot_data = Box::new(FreeRotData {
@@ -4523,14 +4521,14 @@ pub fn set_free_rot_data(node_id: u64, data: APIFreeRotData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, free_rot_data);
+                .set_node_network_data_scoped(&scope_path, node_id, free_rot_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_cut_data(node_id: u64, data: APIAtomCutData) {
+pub fn set_atom_cut_data(scope_path: Vec<u64>, node_id: u64, data: APIAtomCutData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let atom_cut_data = Box::new(AtomCutData {
@@ -4539,14 +4537,14 @@ pub fn set_atom_cut_data(node_id: u64, data: APIAtomCutData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, atom_cut_data);
+                .set_node_network_data_scoped(&scope_path, node_id, atom_cut_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_apply_diff_data(node_id: u64, data: APIApplyDiffData) {
+pub fn set_apply_diff_data(scope_path: Vec<u64>, node_id: u64, data: APIApplyDiffData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let apply_diff_data = Box::new(ApplyDiffData {
@@ -4555,14 +4553,14 @@ pub fn set_apply_diff_data(node_id: u64, data: APIApplyDiffData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, apply_diff_data);
+                .set_node_network_data_scoped(&scope_path, node_id, apply_diff_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_composediff_data(node_id: u64, data: APIAtomComposeDiffData) {
+pub fn set_atom_composediff_data(scope_path: Vec<u64>, node_id: u64, data: APIAtomComposeDiffData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let composediff_data = Box::new(AtomComposeDiffData {
@@ -4571,14 +4569,14 @@ pub fn set_atom_composediff_data(node_id: u64, data: APIAtomComposeDiffData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, composediff_data);
+                .set_node_network_data_scoped(&scope_path, node_id, composediff_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_import_xyz_data(node_id: u64, data: APIImportXYZData) {
+pub fn set_import_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIImportXYZData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let import_xyz_data = Box::new(ImportXYZData {
@@ -4587,7 +4585,7 @@ pub fn set_import_xyz_data(node_id: u64, data: APIImportXYZData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, import_xyz_data);
+                .set_node_network_data_scoped(&scope_path, node_id, import_xyz_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -4623,7 +4621,7 @@ pub fn get_import_cif_data(node_id: u64) -> Option<APIImportCIFData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_import_cif_data(node_id: u64, data: APIImportCIFData) {
+pub fn set_import_cif_data(scope_path: Vec<u64>, node_id: u64, data: APIImportCIFData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let import_cif_data = Box::new(ImportCifData {
@@ -4636,7 +4634,7 @@ pub fn set_import_cif_data(node_id: u64, data: APIImportCIFData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, import_cif_data);
+                .set_node_network_data_scoped(&scope_path, node_id, import_cif_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -4670,7 +4668,7 @@ pub fn get_infer_bonds_data(node_id: u64) -> Option<APIInferBondsData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_infer_bonds_data(node_id: u64, data: APIInferBondsData) {
+pub fn set_infer_bonds_data(scope_path: Vec<u64>, node_id: u64, data: APIInferBondsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let infer_bonds_data = Box::new(InferBondsData {
@@ -4679,7 +4677,7 @@ pub fn set_infer_bonds_data(node_id: u64, data: APIInferBondsData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, infer_bonds_data);
+                .set_node_network_data_scoped(&scope_path, node_id, infer_bonds_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -4719,7 +4717,7 @@ pub fn get_atom_replace_data(node_id: u64) -> Option<APIAtomReplaceData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_atom_replace_data(node_id: u64, data: APIAtomReplaceData) {
+pub fn set_atom_replace_data(scope_path: Vec<u64>, node_id: u64, data: APIAtomReplaceData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let atom_replace_data = Box::new(AtomReplaceData {
@@ -4731,14 +4729,14 @@ pub fn set_atom_replace_data(node_id: u64, data: APIAtomReplaceData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, atom_replace_data);
+                .set_node_network_data_scoped(&scope_path, node_id, atom_replace_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_export_xyz_data(node_id: u64, data: APIExportXYZData) {
+pub fn set_export_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIExportXYZData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let export_xyz_data = Box::new(ExportXYZData {
@@ -4746,14 +4744,14 @@ pub fn set_export_xyz_data(node_id: u64, data: APIExportXYZData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, export_xyz_data);
+                .set_node_network_data_scoped(&scope_path, node_id, export_xyz_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
+pub fn set_parameter_data(scope_path: Vec<u64>, node_id: u64, data: APIParameterData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let (data_type, data_type_str, error) =
@@ -4769,7 +4767,7 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
             // Preserve existing param_id from the current node data (for wire preservation across renames)
             let existing_param_id = cad_instance
                 .structure_designer
-                .get_active_node_network()
+                .get_scope_network(&scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
                 .and_then(|node| node.data.as_any_ref().downcast_ref::<ParameterData>())
                 .and_then(|param_data| param_data.param_id);
@@ -4786,7 +4784,7 @@ pub fn set_parameter_data(node_id: u64, data: APIParameterData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, parameter_data);
+                .set_node_network_data_scoped(&scope_path, node_id, parameter_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -5018,12 +5016,12 @@ pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APILiteralField>> {
 /// `set_node_network_data`, so it gets the existing `SetNodeData` undo command
 /// and `refresh_structure_designer_auto` for free.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_custom_node_literal(node_id: u64, param_name: String, value: APILiteralValue) {
+pub fn set_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name: String, value: APILiteralValue) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
                 .structure_designer
-                .get_active_node_network()
+                .get_scope_network(&scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
                 .and_then(|node| node.data.as_any_ref().downcast_ref::<CustomNodeData>())
                 .cloned();
@@ -5034,7 +5032,7 @@ pub fn set_custom_node_literal(node_id: u64, param_name: String, value: APILiter
                 .insert(param_name, api_literal_to_text_value(value));
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, Box::new(data));
+                .set_node_network_data_scoped(&scope_path, node_id, Box::new(data));
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -5043,12 +5041,12 @@ pub fn set_custom_node_literal(node_id: u64, param_name: String, value: APILiter
 /// Removes `literal_values[param_name]` from a custom node. Same
 /// `set_node_network_data` path as `set_custom_node_literal`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_custom_node_literal(node_id: u64, param_name: String) {
+pub fn clear_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name: String) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
                 .structure_designer
-                .get_active_node_network()
+                .get_scope_network(&scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
                 .and_then(|node| node.data.as_any_ref().downcast_ref::<CustomNodeData>())
                 .cloned();
@@ -5058,7 +5056,7 @@ pub fn clear_custom_node_literal(node_id: u64, param_name: String) {
             data.literal_values.remove(&param_name);
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, Box::new(data));
+                .set_node_network_data_scoped(&scope_path, node_id, Box::new(data));
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -5122,12 +5120,12 @@ pub fn get_record_construct_fields(node_id: u64) -> Option<Vec<APILiteralField>>
 /// through `set_node_network_data`, picking up the existing `SetNodeData`
 /// undo command and `refresh_structure_designer_auto` for free.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_record_construct_literal(node_id: u64, field_name: String, value: APILiteralValue) {
+pub fn set_record_construct_literal(scope_path: Vec<u64>, node_id: u64, field_name: String, value: APILiteralValue) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
                 .structure_designer
-                .get_active_node_network()
+                .get_scope_network(&scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
                 .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
                 .cloned();
@@ -5138,7 +5136,7 @@ pub fn set_record_construct_literal(node_id: u64, field_name: String, value: API
                 .insert(field_name, api_literal_to_text_value(value));
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, Box::new(data));
+                .set_node_network_data_scoped(&scope_path, node_id, Box::new(data));
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -5147,12 +5145,12 @@ pub fn set_record_construct_literal(node_id: u64, field_name: String, value: API
 /// Removes `RecordConstructData.literal_values[field_name]`. Same
 /// `set_node_network_data` path as `set_record_construct_literal`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_record_construct_literal(node_id: u64, field_name: String) {
+pub fn clear_record_construct_literal(scope_path: Vec<u64>, node_id: u64, field_name: String) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let existing = cad_instance
                 .structure_designer
-                .get_active_node_network()
+                .get_scope_network(&scope_path)
                 .and_then(|network| network.nodes.get(&node_id))
                 .and_then(|node| node.data.as_any_ref().downcast_ref::<RecordConstructData>())
                 .cloned();
@@ -5162,14 +5160,14 @@ pub fn clear_record_construct_literal(node_id: u64, field_name: String) {
             data.literal_values.remove(&field_name);
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, Box::new(data));
+                .set_node_network_data_scoped(&scope_path, node_id, Box::new(data));
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_map_data(node_id: u64, data: APIMapData) {
+pub fn set_map_data(scope_path: Vec<u64>, node_id: u64, data: APIMapData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let input_type = match api_data_type_to_data_type(&data.input_type) {
@@ -5189,14 +5187,14 @@ pub fn set_map_data(node_id: u64, data: APIMapData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, map_data);
+                .set_node_network_data_scoped(&scope_path, node_id, map_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_filter_data(node_id: u64, data: APIFilterData) {
+pub fn set_filter_data(scope_path: Vec<u64>, node_id: u64, data: APIFilterData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let element_type = match api_data_type_to_data_type(&data.element_type) {
@@ -5208,14 +5206,14 @@ pub fn set_filter_data(node_id: u64, data: APIFilterData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, filter_data);
+                .set_node_network_data_scoped(&scope_path, node_id, filter_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_foreach_data(node_id: u64, data: APIForeachData) {
+pub fn set_foreach_data(scope_path: Vec<u64>, node_id: u64, data: APIForeachData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let input_type = match api_data_type_to_data_type(&data.input_type) {
@@ -5227,14 +5225,14 @@ pub fn set_foreach_data(node_id: u64, data: APIForeachData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, foreach_data);
+                .set_node_network_data_scoped(&scope_path, node_id, foreach_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_collect_data(node_id: u64, data: APICollectData) {
+pub fn set_collect_data(scope_path: Vec<u64>, node_id: u64, data: APICollectData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let element_type = match api_data_type_to_data_type(&data.element_type) {
@@ -5250,14 +5248,14 @@ pub fn set_collect_data(node_id: u64, data: APICollectData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, collect_data);
+                .set_node_network_data_scoped(&scope_path, node_id, collect_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_array_at_data(node_id: u64, data: APIArrayAtData) {
+pub fn set_array_at_data(scope_path: Vec<u64>, node_id: u64, data: APIArrayAtData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let element_type = match api_data_type_to_data_type(&data.element_type) {
@@ -5272,14 +5270,14 @@ pub fn set_array_at_data(node_id: u64, data: APIArrayAtData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, array_at_data);
+                .set_node_network_data_scoped(&scope_path, node_id, array_at_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_fold_data(node_id: u64, data: APIFoldData) {
+pub fn set_fold_data(scope_path: Vec<u64>, node_id: u64, data: APIFoldData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let element_type = match api_data_type_to_data_type(&data.element_type) {
@@ -5299,14 +5297,14 @@ pub fn set_fold_data(node_id: u64, data: APIFoldData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, fold_data);
+                .set_node_network_data_scoped(&scope_path, node_id, fold_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sequence_data(node_id: u64, data: APISequenceData) {
+pub fn set_sequence_data(scope_path: Vec<u64>, node_id: u64, data: APISequenceData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let element_type = match api_data_type_to_data_type(&data.element_type) {
@@ -5323,14 +5321,14 @@ pub fn set_sequence_data(node_id: u64, data: APISequenceData) {
 
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, seq_data);
+                .set_node_network_data_scoped(&scope_path, node_id, seq_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
+pub fn set_expr_data(scope_path: Vec<u64>, node_id: u64, data: APIExprData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -5338,7 +5336,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
                 let existing_params: Vec<crate::structure_designer::nodes::expr::ExprParameter> =
                     cad_instance
                         .structure_designer
-                        .get_active_node_network()
+                        .get_scope_network(&scope_path)
                         .and_then(|network| network.nodes.get(&node_id))
                         .and_then(|node| node.data.as_any_ref().downcast_ref::<ExprData>())
                         .map(|expr_data| expr_data.parameters.clone())
@@ -5445,7 +5443,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
 
                 cad_instance
                     .structure_designer
-                    .set_node_network_data(node_id, expr_data);
+                    .set_node_network_data_scoped(&scope_path, node_id, expr_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {
@@ -5462,7 +5460,7 @@ pub fn set_expr_data(node_id: u64, data: APIExprData) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_motif_data(node_id: u64, data: APIMotifData) -> APIResult {
+pub fn set_motif_data(scope_path: Vec<u64>, node_id: u64, data: APIMotifData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -5475,7 +5473,7 @@ pub fn set_motif_data(node_id: u64, data: APIMotifData) -> APIResult {
                 motif_data.parse_and_validate(node_id);
                 cad_instance
                     .structure_designer
-                    .set_node_network_data(node_id, motif_data);
+                    .set_node_network_data_scoped(&scope_path, node_id, motif_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {
@@ -5539,7 +5537,7 @@ pub fn get_materialize_data(node_id: u64) -> Option<APIMaterializeData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_materialize_data(node_id: u64, data: APIMaterializeData) -> APIResult {
+pub fn set_materialize_data(scope_path: Vec<u64>, node_id: u64, data: APIMaterializeData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -5557,7 +5555,7 @@ pub fn set_materialize_data(node_id: u64, data: APIMaterializeData) -> APIResult
                 materialize_data.parse_and_validate(node_id);
                 cad_instance
                     .structure_designer
-                    .set_node_network_data(node_id, materialize_data);
+                    .set_node_network_data_scoped(&scope_path, node_id, materialize_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {
@@ -5616,7 +5614,7 @@ pub fn get_motif_sub_data(node_id: u64) -> Option<APIMotifSubData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_motif_sub_data(node_id: u64, data: APIMotifSubData) -> APIResult {
+pub fn set_motif_sub_data(scope_path: Vec<u64>, node_id: u64, data: APIMotifSubData) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -5629,7 +5627,7 @@ pub fn set_motif_sub_data(node_id: u64, data: APIMotifSubData) -> APIResult {
                 motif_sub_data.parse_and_validate(node_id);
                 cad_instance
                     .structure_designer
-                    .set_node_network_data(node_id, motif_sub_data);
+                    .set_node_network_data_scoped(&scope_path, node_id, motif_sub_data);
                 refresh_structure_designer_auto(cad_instance);
 
                 APIResult {
@@ -6023,7 +6021,7 @@ pub fn get_lattice_vecs_data(node_id: u64) -> Option<APILatticeVecsData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_lattice_vecs_data(node_id: u64, data: APILatticeVecsData) {
+pub fn set_lattice_vecs_data(scope_path: Vec<u64>, node_id: u64, data: APILatticeVecsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let lattice_vecs_data = Box::new(LatticeVecsData {
@@ -6036,7 +6034,7 @@ pub fn set_lattice_vecs_data(node_id: u64, data: APILatticeVecsData) {
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data(node_id, lattice_vecs_data);
+                .set_node_network_data_scoped(&scope_path, node_id, lattice_vecs_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

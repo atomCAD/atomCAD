@@ -33,6 +33,28 @@ impl<'a> UndoContext<'a> {
     pub fn network_mut(&mut self, name: &str) -> Option<&mut NodeNetwork> {
         self.node_type_registry.node_networks.get_mut(name)
     }
+
+    /// Get mutable reference to a body network nested inside the named
+    /// top-level network. `scope_path` is the chain of HOF node IDs from the
+    /// top-level down to the target body. Empty `scope_path` returns the
+    /// top-level network itself (same as `network_mut`).
+    ///
+    /// Walks via `Node::zone_mut`, which forces `Arc::make_mut` on each
+    /// `Arc<NodeNetwork>` along the way, so the returned reference is safe to
+    /// mutate without aliasing other clones. Returns `None` if any step of
+    /// the walk fails (network missing, HOF id missing, node has no zone).
+    pub fn network_in_scope_mut(
+        &mut self,
+        name: &str,
+        scope_path: &[u64],
+    ) -> Option<&mut NodeNetwork> {
+        let mut current = self.node_type_registry.node_networks.get_mut(name)?;
+        for hof_id in scope_path {
+            let node = current.nodes.get_mut(hof_id)?;
+            current = node.zone_mut()?;
+        }
+        Some(current)
+    }
 }
 
 /// Trait for undoable commands.

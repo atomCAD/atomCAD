@@ -5,9 +5,15 @@ use serde_json::Value;
 ///
 /// Covers all `set_*_data` API calls. Uses JSON snapshots via the
 /// registered `node_data_saver`/`node_data_loader` for each node type.
+///
+/// `scope_path` identifies the body the edited node lives in. Empty
+/// `scope_path` targets the top-level `network_name` network; a non-empty
+/// path walks down through HOF zones to the body (see Zones UI design,
+/// `doc/design_zones_ui.md` §"Mutation APIs grow a `scope_path` parameter").
 #[derive(Debug)]
 pub struct SetNodeDataCommand {
     pub network_name: String,
+    pub scope_path: Vec<u64>,
     pub node_id: u64,
     pub node_type_name: String,
     pub old_data_json: Value,
@@ -42,8 +48,9 @@ impl SetNodeDataCommand {
             Err(_) => return,
         };
 
-        // Set on the node
-        if let Some(network) = ctx.network_mut(&self.network_name) {
+        // Set on the node — walks into the body identified by scope_path.
+        // For empty scope_path this targets the top-level network directly.
+        if let Some(network) = ctx.network_in_scope_mut(&self.network_name, &self.scope_path) {
             network.set_node_network_data(self.node_id, data);
         }
     }

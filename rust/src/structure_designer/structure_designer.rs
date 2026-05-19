@@ -468,6 +468,56 @@ impl StructureDesigner {
         self.set_dirty(true);
     }
 
+    /// Scope-aware variant of [`snapshot_node_data`]. Walks `scope_path` from
+    /// `network_name` down through HOF `zone` networks to find the node, then
+    /// serializes its data via the registered `node_data_saver`. An empty
+    /// `scope_path` delegates to the existing top-level helper. Used by the
+    /// scope-aware `set_node_network_data_scoped` to capture before/after JSON
+    /// for the `SetNodeDataCommand` undo entry — see
+    /// `doc/design_zones_ui.md` §"Mutation APIs grow a `scope_path` parameter".
+    pub fn snapshot_node_data_scoped(
+        &mut self,
+        network_name: &str,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Option<serde_json::Value> {
+        if scope_path.is_empty() {
+            return self.snapshot_node_data(network_name, node_id);
+        }
+
+        // Look up the saver function via an immutable walk. `node_data_saver`
+        // is a fn pointer (Copy), so we can extract it before the mutable
+        // borrow below.
+        let saver = {
+            let mut current = self.node_type_registry.node_networks.get(network_name)?;
+            for hof_id in scope_path {
+                let node = current.nodes.get(hof_id)?;
+                current = node.zone.as_ref()?;
+            }
+            let node = current.nodes.get(&node_id)?;
+            let node_type_name = node.node_type_name.clone();
+
+            if let Some(node_type) = self
+                .node_type_registry
+                .built_in_node_types
+                .get(&node_type_name)
+            {
+                node_type.node_data_saver
+            } else if let Some(other_network) =
+                self.node_type_registry.node_networks.get(&node_type_name)
+            {
+                other_network.node_type.node_data_saver
+            } else {
+                return None;
+            }
+        };
+
+        // Now mutable walk to call the saver on the body node's data.
+        let network = self.get_scope_network_mut(scope_path)?;
+        let node = network.nodes.get_mut(&node_id)?;
+        saver(node.data.as_mut(), None).ok()
+    }
+
     /// Serialize a node's data to JSON using the registered node_data_saver.
     /// Returns None if the node or network doesn't exist.
     pub fn snapshot_node_data(
@@ -2621,24 +2671,53 @@ impl StructureDesigner {
         compatible_pins
     }
 
-    pub fn set_node_network_data(&mut self, node_id: u64, mut data: Box<dyn NodeData>) {
+    /// Top-level convenience wrapper. Equivalent to
+    /// [`set_node_network_data_scoped`] with an empty `scope_path`.
+    pub fn set_node_network_data(&mut self, node_id: u64, data: Box<dyn NodeData>) {
+        self.set_node_network_data_scoped(&[], node_id, data);
+    }
+
+    /// Set the per-node `NodeData` for a node identified by `(scope_path,
+    /// node_id)`. An empty `scope_path` targets the active top-level network
+    /// (today's behavior); a non-empty path walks the chain of HOF body
+    /// `zone`s down to the target body — see `doc/design_zones_ui.md`
+    /// §"Mutation APIs grow a `scope_path` parameter".
+    ///
+    /// Handles all the orchestration around a property edit in one place so
+    /// every `set_*_data` API can just call this and inherit:
+    /// * before/after JSON snapshots routed to the right body for undo,
+    /// * `expr` parse-and-validate on the new data,
+    /// * dirty-flag and per-node "data changed" pending-change tracking,
+    /// * one coalesced [`SetNodeDataCommand`] with the scope_path baked in,
+    /// * custom-node-type cache repopulation against the body's node,
+    /// * cascading network validation when the node owns a custom type.
+    ///
+    /// Validation runs through `validate_active_network_with_initial_errors`,
+    /// which validates the active top-level network *and recursively
+    /// validates every zone body it contains* via `validate_zones_recursive`
+    /// — so a body-node edit that breaks zone rules surfaces errors without
+    /// needing a body-scoped validator entry point.
+    pub fn set_node_network_data_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        mut data: Box<dyn NodeData>,
+    ) {
         // Early return if active_node_network_name is None, clone to avoid borrow conflicts
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
         };
 
-        // Check node type before modification
-        let (is_expr_node, node_type_name) =
-            if let Some(network) = self.node_type_registry.node_networks.get(&network_name) {
-                if let Some(node) = network.nodes.get(&node_id) {
-                    (node.node_type_name == "expr", node.node_type_name.clone())
-                } else {
-                    (false, String::new())
-                }
-            } else {
-                (false, String::new())
-            };
+        // Check node type before modification. `get_scope_network` handles
+        // both empty (top-level) and non-empty (body) scope paths uniformly.
+        let (is_expr_node, node_type_name) = match self
+            .get_scope_network(scope_path)
+            .and_then(|net| net.nodes.get(&node_id))
+        {
+            Some(node) => (node.node_type_name == "expr", node.node_type_name.clone()),
+            None => return,
+        };
 
         // Capture before-state for undo (skip for deprecated edit_atom and atom_edit nodes;
         // atom_edit has its own incremental undo commands)
@@ -2646,7 +2725,7 @@ impl StructureDesigner {
             && !crate::structure_designer::nodes::atom_edit::atom_edit::is_atom_edit_family(
                 &node_type_name,
             ) {
-            self.snapshot_node_data(&network_name, node_id)
+            self.snapshot_node_data_scoped(&network_name, scope_path, node_id)
         } else {
             None
         };
@@ -2662,21 +2741,32 @@ impl StructureDesigner {
             }
         }
 
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
-            network.set_node_network_data(node_id, data);
-            // Mark design as dirty since we modified node data
+        // Apply mutation in the resolved scope. The block scopes the
+        // `&mut self` borrow held by `get_scope_network_mut` so we can call
+        // `self.set_dirty` / `self.mark_node_data_changed` immediately after.
+        let mutated = {
+            if let Some(network) = self.get_scope_network_mut(scope_path) {
+                network.set_node_network_data(node_id, data);
+                true
+            } else {
+                false
+            }
+        };
+        if mutated {
             self.set_dirty(true);
-            // Track that this node's data changed
             self.mark_node_data_changed(node_id);
         }
 
         // Capture after-state and push undo command
         if let Some(old_json) = old_data_json {
-            if let Some(new_json) = self.snapshot_node_data(&network_name, node_id) {
+            if let Some(new_json) =
+                self.snapshot_node_data_scoped(&network_name, scope_path, node_id)
+            {
                 if old_json != new_json {
                     self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                         description: format!("Edit {}", node_type_name),
                         network_name: network_name.clone(),
+                        scope_path: scope_path.to_vec(),
                         node_id,
                         node_type_name,
                         old_data_json: old_json,
@@ -2686,32 +2776,41 @@ impl StructureDesigner {
             }
         }
 
-        // Cache custom NodeType if needed after data is set
+        // Cache custom NodeType if needed after data is set. Mirrors the
+        // split-borrow pattern used by `add_node_scoped` so the read-only
+        // type maps and the mutable `node_networks` are accessed as sibling
+        // fields of `node_type_registry`. Walks down `scope_path` manually
+        // because the helper `get_scope_network_mut` would borrow all of
+        // `self`, which would conflict with the read-only type maps.
         let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
             &self.node_type_registry.built_in_node_types,
             &self.node_type_registry.record_type_defs,
             &self.node_type_registry.built_in_record_type_defs,
             &mut self.node_type_registry.node_networks,
         );
-        let custom_node_type_populated = if let Some(network) = node_networks.get_mut(&network_name)
-        {
-            if let Some(node) = network.nodes.get_mut(&node_id) {
-                // Call the populate function with the split borrows
-                NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        let custom_node_type_populated = {
+            let mut current: Option<&mut NodeNetwork> = node_networks.get_mut(&network_name);
+            for hof_id in scope_path {
+                current = match current {
+                    Some(net) => net.nodes.get_mut(hof_id).and_then(|n| n.zone_mut()),
+                    None => None,
+                };
+            }
+            match current.and_then(|net| net.nodes.get_mut(&node_id)) {
+                Some(node) => NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                     built_in_types,
                     record_type_defs,
                     built_in_record_type_defs,
                     node,
                     true,
-                )
-            } else {
-                false
+                ),
+                None => false,
             }
-        } else {
-            false
         };
 
-        // Validate if this node has a custom node type
+        // Validate if this node has a custom node type. `validate_active_network`
+        // recursively walks zones via `validate_zones_recursive`, so body-node
+        // edits get the same validation cascade as top-level edits.
         if custom_node_type_populated {
             let initial_errors = if expr_validation_errors.is_empty() {
                 None
@@ -4514,6 +4613,7 @@ impl StructureDesigner {
                 self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                     description: format!("Edit {}", pending.node_type_name),
                     network_name: pending.network_name,
+                    scope_path: Vec::new(),
                     node_id: pending.node_id,
                     node_type_name: pending.node_type_name,
                     old_data_json: pending.old_data_json,
@@ -4562,6 +4662,7 @@ impl StructureDesigner {
                 self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                     description: format!("Edit {}", pending.node_type_name),
                     network_name: pending.network_name,
+                    scope_path: Vec::new(),
                     node_id: pending.node_id,
                     node_type_name: pending.node_type_name,
                     old_data_json: pending.old_data_json,

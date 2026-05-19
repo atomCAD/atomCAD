@@ -751,15 +751,21 @@ APISequenceData? getSequenceData({required BigInt nodeId}) =>
 APIMotifData? getMotifData({required BigInt nodeId}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetMotifData(nodeId: nodeId);
 
-void setIntData({required BigInt nodeId, required APIIntData data}) =>
+void setIntData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIntData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIntData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setStringData({required BigInt nodeId, required APIStringData data}) =>
+void setStringData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIStringData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetStringData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 /// Writes the `schema` property of a `record_construct` node. After the
 /// write, the node-network refresh re-runs the registry-aware cache
@@ -768,20 +774,24 @@ void setStringData({required BigInt nodeId, required APIStringData data}) =>
 /// `literal_values` — entries whose keys no longer match a current field of
 /// the new def are inert (see `RecordConstructData::literal_values`).
 void setRecordConstructData(
-        {required BigInt nodeId, required APIRecordSchemaData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRecordSchemaData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRecordConstructData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 /// Writes the `schema` property of a `record_destructure` node. Same
 /// post-write behavior as `set_record_construct_data` — pin layout is
 /// re-derived from the chosen def, dangling references leave the node with
 /// a placeholder layout and broken downstream wires.
 void setRecordDestructureData(
-        {required BigInt nodeId, required APIRecordSchemaData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRecordSchemaData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 /// Writes the `target` property of a `product` node. The API's `schema`
 /// field is mapped onto the underlying `ProductData.target`. After the
@@ -789,193 +799,284 @@ void setRecordDestructureData(
 /// `Array[FieldType]` input pins and the `Array[Record(Named(target))]`
 /// output pin from the chosen def.
 void setProductData(
-        {required BigInt nodeId, required APIRecordSchemaData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRecordSchemaData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetProductData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setBoolData({required BigInt nodeId, required APIBoolData data}) =>
+void setBoolData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIBoolData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetBoolData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setPrintData({required BigInt nodeId, required APIPrintData data}) =>
+void setPrintData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIPrintData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetPrintData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setFloatData({required BigInt nodeId, required APIFloatData data}) =>
+void setFloatData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFloatData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFloatData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setVec2Data({required BigInt nodeId, required APIVec2Data data}) =>
+void setVec2Data(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIVec2Data data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetVec2Data(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setVec3Data({required BigInt nodeId, required APIVec3Data data}) =>
+void setVec3Data(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIVec3Data data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetVec3Data(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setIvec2Data({required BigInt nodeId, required APIIVec2Data data}) =>
+void setIvec2Data(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIVec2Data data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIvec2Data(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setIvec3Data({required BigInt nodeId, required APIIVec3Data data}) =>
+void setIvec3Data(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIVec3Data data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetIvec3Data(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setSupercellData(
-        {required BigInt nodeId, required APISupercellData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APISupercellData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetSupercellData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setImat3RowsData(
-        {required BigInt nodeId, required APIIMat3RowsData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIMat3RowsData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImat3RowsData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setImat3ColsData(
-        {required BigInt nodeId, required APIIMat3ColsData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIMat3ColsData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImat3ColsData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setImat3DiagData(
-        {required BigInt nodeId, required APIIMat3DiagData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIMat3DiagData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImat3DiagData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setMat3RowsData({required BigInt nodeId, required APIMat3RowsData data}) =>
+void setMat3RowsData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMat3RowsData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMat3RowsData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setMat3ColsData({required BigInt nodeId, required APIMat3ColsData data}) =>
+void setMat3ColsData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMat3ColsData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMat3ColsData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setMat3DiagData({required BigInt nodeId, required APIMat3DiagData data}) =>
+void setMat3DiagData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMat3DiagData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMat3DiagData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setRangeData({required BigInt nodeId, required APIRangeData data}) =>
+void setRangeData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRangeData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRangeData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setRectData({required BigInt nodeId, required APIRectData data}) =>
+void setRectData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRectData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRectData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setRegPolyData({required BigInt nodeId, required APIRegPolyData data}) =>
+void setRegPolyData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRegPolyData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRegPolyData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setCircleData({required BigInt nodeId, required APICircleData data}) =>
+void setCircleData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APICircleData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetCircleData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setHalfPlaneData(
-        {required BigInt nodeId, required APIHalfPlaneData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIHalfPlaneData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetHalfPlaneData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setExtrudeData({required BigInt nodeId, required APIExtrudeData data}) =>
+void setExtrudeData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIExtrudeData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetExtrudeData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setCuboidData({required BigInt nodeId, required APICuboidData data}) =>
+void setCuboidData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APICuboidData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetCuboidData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setSphereData({required BigInt nodeId, required APISphereData data}) =>
+void setSphereData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APISphereData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetSphereData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setHalfSpaceData(
-        {required BigInt nodeId, required APIHalfSpaceData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIHalfSpaceData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetHalfSpaceData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setDrawingPlaneData(
-        {required BigInt nodeId, required APIDrawingPlaneData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIDrawingPlaneData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetDrawingPlaneData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setGeoTransData({required BigInt nodeId, required APIGeoTransData data}) =>
+void setGeoTransData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIGeoTransData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetGeoTransData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setLatticeSymopData(
-        {required BigInt nodeId, required APILatticeSymopData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APILatticeSymopData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetLatticeSymopData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setStructureMoveData(
-        {required BigInt nodeId, required APIStructureMoveData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIStructureMoveData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetStructureMoveData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setStructureRotData(
-        {required BigInt nodeId, required APIStructureRotData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIStructureRotData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetStructureRotData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setFreeMoveData({required BigInt nodeId, required APIFreeMoveData data}) =>
+void setFreeMoveData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFreeMoveData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFreeMoveData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setFreeRotData({required BigInt nodeId, required APIFreeRotData data}) =>
+void setFreeRotData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFreeRotData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFreeRotData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setAtomCutData({required BigInt nodeId, required APIAtomCutData data}) =>
+void setAtomCutData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIAtomCutData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetAtomCutData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setApplyDiffData(
-        {required BigInt nodeId, required APIApplyDiffData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIApplyDiffData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetApplyDiffData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setAtomComposediffData(
-        {required BigInt nodeId, required APIAtomComposeDiffData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIAtomComposeDiffData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetAtomComposediffData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setImportXyzData(
-        {required BigInt nodeId, required APIImportXYZData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIImportXYZData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImportXyzData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIImportCIFData? getImportCifData({required BigInt nodeId}) => RustLib
     .instance.api
@@ -983,10 +1084,12 @@ APIImportCIFData? getImportCifData({required BigInt nodeId}) => RustLib
         nodeId: nodeId);
 
 void setImportCifData(
-        {required BigInt nodeId, required APIImportCIFData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIImportCIFData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImportCifData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIInferBondsData? getInferBondsData({required BigInt nodeId}) =>
     RustLib.instance.api
@@ -994,10 +1097,12 @@ APIInferBondsData? getInferBondsData({required BigInt nodeId}) =>
             nodeId: nodeId);
 
 void setInferBondsData(
-        {required BigInt nodeId, required APIInferBondsData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIInferBondsData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetInferBondsData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIAtomReplaceData? getAtomReplaceData({required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1005,22 +1110,28 @@ APIAtomReplaceData? getAtomReplaceData({required BigInt nodeId}) =>
             nodeId: nodeId);
 
 void setAtomReplaceData(
-        {required BigInt nodeId, required APIAtomReplaceData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIAtomReplaceData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetAtomReplaceData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setExportXyzData(
-        {required BigInt nodeId, required APIExportXYZData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIExportXYZData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setParameterData(
-        {required BigInt nodeId, required APIParameterData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIParameterData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetParameterData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 /// Returns `None` if `node_id` is not a custom node (its `node_type_name` is
 /// not a key in `registry.node_networks`). Returns `Some(vec)` — possibly
@@ -1038,20 +1149,26 @@ List<APILiteralField>? getCustomNodeParams({required BigInt nodeId}) =>
 /// `set_node_network_data`, so it gets the existing `SetNodeData` undo command
 /// and `refresh_structure_designer_auto` for free.
 void setCustomNodeLiteral(
-        {required BigInt nodeId,
+        {required Uint64List scopePath,
+        required BigInt nodeId,
         required String paramName,
         required APILiteralValue value}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetCustomNodeLiteral(
-            nodeId: nodeId, paramName: paramName, value: value);
+            scopePath: scopePath,
+            nodeId: nodeId,
+            paramName: paramName,
+            value: value);
 
 /// Removes `literal_values[param_name]` from a custom node. Same
 /// `set_node_network_data` path as `set_custom_node_literal`.
 void clearCustomNodeLiteral(
-        {required BigInt nodeId, required String paramName}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String paramName}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteral(
-            nodeId: nodeId, paramName: paramName);
+            scopePath: scopePath, nodeId: nodeId, paramName: paramName);
 
 /// Returns `None` if `node_id` is not a `record_construct` node, or if its
 /// chosen `schema` is empty / not in the registry. Returns `Some(vec)` —
@@ -1069,65 +1186,98 @@ List<APILiteralField>? getRecordConstructFields({required BigInt nodeId}) =>
 /// through `set_node_network_data`, picking up the existing `SetNodeData`
 /// undo command and `refresh_structure_designer_auto` for free.
 void setRecordConstructLiteral(
-        {required BigInt nodeId,
+        {required Uint64List scopePath,
+        required BigInt nodeId,
         required String fieldName,
         required APILiteralValue value}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetRecordConstructLiteral(
-            nodeId: nodeId, fieldName: fieldName, value: value);
+            scopePath: scopePath,
+            nodeId: nodeId,
+            fieldName: fieldName,
+            value: value);
 
 /// Removes `RecordConstructData.literal_values[field_name]`. Same
 /// `set_node_network_data` path as `set_record_construct_literal`.
 void clearRecordConstructLiteral(
-        {required BigInt nodeId, required String fieldName}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String fieldName}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteral(
-            nodeId: nodeId, fieldName: fieldName);
+            scopePath: scopePath, nodeId: nodeId, fieldName: fieldName);
 
-void setMapData({required BigInt nodeId, required APIMapData data}) =>
+void setMapData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMapData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMapData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setFilterData({required BigInt nodeId, required APIFilterData data}) =>
+void setFilterData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFilterData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFilterData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setForeachData({required BigInt nodeId, required APIForeachData data}) =>
+void setForeachData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIForeachData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetForeachData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setCollectData({required BigInt nodeId, required APICollectData data}) =>
+void setCollectData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APICollectData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetCollectData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setArrayAtData({required BigInt nodeId, required APIArrayAtData data}) =>
+void setArrayAtData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIArrayAtData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetArrayAtData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setFoldData({required BigInt nodeId, required APIFoldData data}) =>
+void setFoldData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFoldData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFoldData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setSequenceData({required BigInt nodeId, required APISequenceData data}) =>
+void setSequenceData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APISequenceData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetSequenceData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-APIResult setExprData({required BigInt nodeId, required APIExprData data}) =>
+APIResult setExprData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIExprData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetExprData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
-APIResult setMotifData({required BigInt nodeId, required APIMotifData data}) =>
+APIResult setMotifData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMotifData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMotifData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIMaterializeData? getMaterializeData({required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1135,10 +1285,12 @@ APIMaterializeData? getMaterializeData({required BigInt nodeId}) =>
             nodeId: nodeId);
 
 APIResult setMaterializeData(
-        {required BigInt nodeId, required APIMaterializeData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMaterializeData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMaterializeData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIMotifSubData? getMotifSubData({required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1146,10 +1298,12 @@ APIMotifSubData? getMotifSubData({required BigInt nodeId}) =>
             nodeId: nodeId);
 
 APIResult setMotifSubData(
-        {required BigInt nodeId, required APIMotifSubData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIMotifSubData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetMotifSubData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void deleteSelected({required Uint64List scopePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteSelected(
@@ -1252,10 +1406,12 @@ APILatticeVecsData? getLatticeVecsData({required BigInt nodeId}) =>
             nodeId: nodeId);
 
 void setLatticeVecsData(
-        {required BigInt nodeId, required APILatticeVecsData data}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APILatticeVecsData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetLatticeVecsData(
-            nodeId: nodeId, data: data);
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void validateActiveNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiValidateActiveNetwork();

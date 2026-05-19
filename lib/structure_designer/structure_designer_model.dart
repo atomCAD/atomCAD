@@ -1609,42 +1609,42 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setIntData(BigInt nodeId, APIIntData data) {
-    structure_designer_api.setIntData(nodeId: nodeId, data: data);
+    structure_designer_api.setIntData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setStringData(BigInt nodeId, APIStringData data) {
-    structure_designer_api.setStringData(nodeId: nodeId, data: data);
+    structure_designer_api.setStringData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setRecordConstructData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setRecordConstructData(nodeId: nodeId, data: data);
+    structure_designer_api.setRecordConstructData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setRecordDestructureData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setRecordDestructureData(nodeId: nodeId, data: data);
+    structure_designer_api.setRecordDestructureData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setProductData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setProductData(nodeId: nodeId, data: data);
+    structure_designer_api.setProductData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setBoolData(BigInt nodeId, APIBoolData data) {
-    structure_designer_api.setBoolData(nodeId: nodeId, data: data);
+    structure_designer_api.setBoolData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setPrintData(BigInt nodeId, APIPrintData data) {
-    structure_designer_api.setPrintData(nodeId: nodeId, data: data);
+    structure_designer_api.setPrintData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setFloatData(BigInt nodeId, APIFloatData data) {
-    structure_designer_api.setFloatData(nodeId: nodeId, data: data);
+    structure_designer_api.setFloatData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1656,13 +1656,13 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setCustomNodeLiteral(
       BigInt nodeId, String paramName, APILiteralValue value) {
-    structure_designer_api.setCustomNodeLiteral(
+    structure_designer_api.setCustomNodeLiteral(scopePath: _scopeChainToBytes(activeScopeChain), 
         nodeId: nodeId, paramName: paramName, value: value);
     refreshFromKernel();
   }
 
   void clearCustomNodeLiteral(BigInt nodeId, String paramName) {
-    structure_designer_api.clearCustomNodeLiteral(
+    structure_designer_api.clearCustomNodeLiteral(scopePath: _scopeChainToBytes(activeScopeChain), 
         nodeId: nodeId, paramName: paramName);
     refreshFromKernel();
   }
@@ -1676,124 +1676,124 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setRecordConstructLiteral(
       BigInt nodeId, String fieldName, APILiteralValue value) {
-    structure_designer_api.setRecordConstructLiteral(
+    structure_designer_api.setRecordConstructLiteral(scopePath: _scopeChainToBytes(activeScopeChain), 
         nodeId: nodeId, fieldName: fieldName, value: value);
     refreshFromKernel();
   }
 
   void clearRecordConstructLiteral(BigInt nodeId, String fieldName) {
-    structure_designer_api.clearRecordConstructLiteral(
+    structure_designer_api.clearRecordConstructLiteral(scopePath: _scopeChainToBytes(activeScopeChain), 
         nodeId: nodeId, fieldName: fieldName);
     refreshFromKernel();
   }
 
   void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
-    structure_designer_api.setIvec2Data(nodeId: nodeId, data: data);
+    structure_designer_api.setIvec2Data(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setIvec3Data(BigInt nodeId, APIIVec3Data data) {
-    structure_designer_api.setIvec3Data(nodeId: nodeId, data: data);
+    structure_designer_api.setIvec3Data(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setSupercellData(BigInt nodeId, APISupercellData data) {
-    structure_designer_api.setSupercellData(nodeId: nodeId, data: data);
+    structure_designer_api.setSupercellData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setImat3RowsData(BigInt nodeId, APIIMat3RowsData data) {
-    structure_designer_api.setImat3RowsData(nodeId: nodeId, data: data);
+    structure_designer_api.setImat3RowsData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setImat3ColsData(BigInt nodeId, APIIMat3ColsData data) {
-    structure_designer_api.setImat3ColsData(nodeId: nodeId, data: data);
+    structure_designer_api.setImat3ColsData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setImat3DiagData(BigInt nodeId, APIIMat3DiagData data) {
-    structure_designer_api.setImat3DiagData(nodeId: nodeId, data: data);
+    structure_designer_api.setImat3DiagData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setMat3RowsData(BigInt nodeId, APIMat3RowsData data) {
-    structure_designer_api.setMat3RowsData(nodeId: nodeId, data: data);
+    structure_designer_api.setMat3RowsData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setMat3ColsData(BigInt nodeId, APIMat3ColsData data) {
-    structure_designer_api.setMat3ColsData(nodeId: nodeId, data: data);
+    structure_designer_api.setMat3ColsData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setMat3DiagData(BigInt nodeId, APIMat3DiagData data) {
-    structure_designer_api.setMat3DiagData(nodeId: nodeId, data: data);
+    structure_designer_api.setMat3DiagData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setRangeData(BigInt nodeId, APIRangeData data) {
-    structure_designer_api.setRangeData(nodeId: nodeId, data: data);
+    structure_designer_api.setRangeData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setVec2Data(BigInt nodeId, APIVec2Data data) {
-    structure_designer_api.setVec2Data(nodeId: nodeId, data: data);
+    structure_designer_api.setVec2Data(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setVec3Data(BigInt nodeId, APIVec3Data data) {
-    structure_designer_api.setVec3Data(nodeId: nodeId, data: data);
+    structure_designer_api.setVec3Data(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setCuboidData(BigInt nodeId, APICuboidData data) {
-    structure_designer_api.setCuboidData(nodeId: nodeId, data: data);
+    structure_designer_api.setCuboidData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setSphereData(BigInt nodeId, APISphereData data) {
-    structure_designer_api.setSphereData(nodeId: nodeId, data: data);
+    structure_designer_api.setSphereData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setExtrudeData(BigInt nodeId, APIExtrudeData data) {
-    structure_designer_api.setExtrudeData(nodeId: nodeId, data: data);
+    structure_designer_api.setExtrudeData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setHalfSpaceData(BigInt nodeId, APIHalfSpaceData data) {
-    structure_designer_api.setHalfSpaceData(nodeId: nodeId, data: data);
+    structure_designer_api.setHalfSpaceData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setDrawingPlaneData(BigInt nodeId, APIDrawingPlaneData data) {
-    structure_designer_api.setDrawingPlaneData(nodeId: nodeId, data: data);
+    structure_designer_api.setDrawingPlaneData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setRectData(BigInt nodeId, APIRectData data) {
-    structure_designer_api.setRectData(nodeId: nodeId, data: data);
+    structure_designer_api.setRectData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setCircleData(BigInt nodeId, APICircleData data) {
-    structure_designer_api.setCircleData(nodeId: nodeId, data: data);
+    structure_designer_api.setCircleData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setHalfPlaneData(BigInt nodeId, APIHalfPlaneData data) {
-    structure_designer_api.setHalfPlaneData(nodeId: nodeId, data: data);
+    structure_designer_api.setHalfPlaneData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setRegPolyData(BigInt nodeId, APIRegPolyData data) {
-    structure_designer_api.setRegPolyData(nodeId: nodeId, data: data);
+    structure_designer_api.setRegPolyData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setGeoTransData(BigInt nodeId, APIGeoTransData data) {
-    structure_designer_api.setGeoTransData(nodeId: nodeId, data: data);
+    structure_designer_api.setGeoTransData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1802,7 +1802,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setLatticeSymopData(BigInt nodeId, APILatticeSymopData data) {
-    structure_designer_api.setLatticeSymopData(nodeId: nodeId, data: data);
+    structure_designer_api.setLatticeSymopData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1811,7 +1811,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setStructureMoveData(BigInt nodeId, APIStructureMoveData data) {
-    structure_designer_api.setStructureMoveData(nodeId: nodeId, data: data);
+    structure_designer_api.setStructureMoveData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1820,52 +1820,52 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setStructureRotData(BigInt nodeId, APIStructureRotData data) {
-    structure_designer_api.setStructureRotData(nodeId: nodeId, data: data);
+    structure_designer_api.setStructureRotData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setFreeMoveData(BigInt nodeId, APIFreeMoveData data) {
-    structure_designer_api.setFreeMoveData(nodeId: nodeId, data: data);
+    structure_designer_api.setFreeMoveData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setFreeRotData(BigInt nodeId, APIFreeRotData data) {
-    structure_designer_api.setFreeRotData(nodeId: nodeId, data: data);
+    structure_designer_api.setFreeRotData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setParameterData(BigInt nodeId, APIParameterData data) {
-    structure_designer_api.setParameterData(nodeId: nodeId, data: data);
+    structure_designer_api.setParameterData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setMApData(BigInt nodeId, APIMapData data) {
-    structure_designer_api.setMapData(nodeId: nodeId, data: data);
+    structure_designer_api.setMapData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setFilterData(BigInt nodeId, APIFilterData data) {
-    structure_designer_api.setFilterData(nodeId: nodeId, data: data);
+    structure_designer_api.setFilterData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setForeachData(BigInt nodeId, APIForeachData data) {
-    structure_designer_api.setForeachData(nodeId: nodeId, data: data);
+    structure_designer_api.setForeachData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setCollectData(BigInt nodeId, APICollectData data) {
-    structure_designer_api.setCollectData(nodeId: nodeId, data: data);
+    structure_designer_api.setCollectData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setArrayAtData(BigInt nodeId, APIArrayAtData data) {
-    structure_designer_api.setArrayAtData(nodeId: nodeId, data: data);
+    structure_designer_api.setArrayAtData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setFoldData(BigInt nodeId, APIFoldData data) {
-    structure_designer_api.setFoldData(nodeId: nodeId, data: data);
+    structure_designer_api.setFoldData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1874,19 +1874,19 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setSequenceData(BigInt nodeId, APISequenceData data) {
-    structure_designer_api.setSequenceData(nodeId: nodeId, data: data);
+    structure_designer_api.setSequenceData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   APIResult setExprData(BigInt nodeId, APIExprData data) {
     final result =
-        structure_designer_api.setExprData(nodeId: nodeId, data: data);
+        structure_designer_api.setExprData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
     return result;
   }
 
   void setMotifData(BigInt nodeId, APIMotifData data) {
-    structure_designer_api.setMotifData(nodeId: nodeId, data: data);
+    structure_designer_api.setMotifData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1895,7 +1895,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setMaterializeData(BigInt nodeId, APIMaterializeData data) {
-    structure_designer_api.setMaterializeData(nodeId: nodeId, data: data);
+    structure_designer_api.setMaterializeData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1904,7 +1904,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setMotifSubData(BigInt nodeId, APIMotifSubData data) {
-    structure_designer_api.setMotifSubData(nodeId: nodeId, data: data);
+    structure_designer_api.setMotifSubData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1921,7 +1921,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setImportXyzData(BigInt nodeId, APIImportXYZData data) {
-    structure_designer_api.setImportXyzData(nodeId: nodeId, data: data);
+    structure_designer_api.setImportXyzData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1930,7 +1930,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setExportXyzData(BigInt nodeId, APIExportXYZData data) {
-    structure_designer_api.setExportXyzData(nodeId: nodeId, data: data);
+    structure_designer_api.setExportXyzData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1945,7 +1945,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setImportCifData(BigInt nodeId, APIImportCIFData data) {
-    structure_designer_api.setImportCifData(nodeId: nodeId, data: data);
+    structure_designer_api.setImportCifData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1960,7 +1960,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setInferBondsData(BigInt nodeId, APIInferBondsData data) {
-    structure_designer_api.setInferBondsData(nodeId: nodeId, data: data);
+    structure_designer_api.setInferBondsData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1969,7 +1969,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setAtomReplaceData(BigInt nodeId, APIAtomReplaceData data) {
-    structure_designer_api.setAtomReplaceData(nodeId: nodeId, data: data);
+    structure_designer_api.setAtomReplaceData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
@@ -1978,22 +1978,22 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setApplyDiffData(BigInt nodeId, APIApplyDiffData data) {
-    structure_designer_api.setApplyDiffData(nodeId: nodeId, data: data);
+    structure_designer_api.setApplyDiffData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setAtomComposeDiffData(BigInt nodeId, APIAtomComposeDiffData data) {
-    structure_designer_api.setAtomComposediffData(nodeId: nodeId, data: data);
+    structure_designer_api.setAtomComposediffData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setAtomCutData(BigInt nodeId, APIAtomCutData data) {
-    structure_designer_api.setAtomCutData(nodeId: nodeId, data: data);
+    structure_designer_api.setAtomCutData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 
   void setLatticeVecsData(BigInt nodeId, APILatticeVecsData data) {
-    structure_designer_api.setLatticeVecsData(nodeId: nodeId, data: data);
+    structure_designer_api.setLatticeVecsData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
     refreshFromKernel();
   }
 

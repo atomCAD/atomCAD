@@ -342,7 +342,9 @@ abstract class RustLibApi extends BaseApi {
       {required int newOrder});
 
   void crateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteral(
-      {required BigInt nodeId, required String paramName});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required String paramName});
 
   bool crateApiStructureDesignerFacetShellApiClearFacets(
       {required BigInt nodeId});
@@ -352,7 +354,9 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerStructureDesignerApiClearPrintLog();
 
   void crateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteral(
-      {required BigInt nodeId, required String fieldName});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required String fieldName});
 
   void crateApiStructureDesignerStructureDesignerApiClearSelection(
       {required Uint64List scopePath});
@@ -985,25 +989,37 @@ abstract class RustLibApi extends BaseApi {
       {required int order});
 
   void crateApiStructureDesignerStructureDesignerApiSetApplyDiffData(
-      {required BigInt nodeId, required APIApplyDiffData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIApplyDiffData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetArrayAtData(
-      {required BigInt nodeId, required APIArrayAtData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIArrayAtData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetAtomComposediffData(
-      {required BigInt nodeId, required APIAtomComposeDiffData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIAtomComposeDiffData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetAtomCutData(
-      {required BigInt nodeId, required APIAtomCutData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIAtomCutData data});
 
   void crateApiStructureDesignerAtomEditApiSetAtomEditSelectedElement(
       {required int atomicNumber});
 
   void crateApiStructureDesignerStructureDesignerApiSetAtomReplaceData(
-      {required BigInt nodeId, required APIAtomReplaceData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIAtomReplaceData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetBoolData(
-      {required BigInt nodeId, required APIBoolData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIBoolData data});
 
   void crateApiCommonApiSetCameraCanonicalView(
       {required APICameraCanonicalView view});
@@ -1011,19 +1027,26 @@ abstract class RustLibApi extends BaseApi {
   void crateApiCommonApiSetCameraTransform({required APITransform transform});
 
   void crateApiStructureDesignerStructureDesignerApiSetCircleData(
-      {required BigInt nodeId, required APICircleData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APICircleData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetCliAccess(
       {required String name, required bool allowed});
 
   void crateApiStructureDesignerStructureDesignerApiSetCollectData(
-      {required BigInt nodeId, required APICollectData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APICollectData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetCuboidData(
-      {required BigInt nodeId, required APICuboidData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APICuboidData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetCustomNodeLiteral(
-      {required BigInt nodeId,
+      {required Uint64List scopePath,
+      required BigInt nodeId,
       required String paramName,
       required APILiteralValue value});
 
@@ -1031,19 +1054,27 @@ abstract class RustLibApi extends BaseApi {
       {required bool mode});
 
   void crateApiStructureDesignerStructureDesignerApiSetDrawingPlaneData(
-      {required BigInt nodeId, required APIDrawingPlaneData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIDrawingPlaneData data});
 
   void crateApiStructureDesignerEditAtomApiSetEditAtomSelectedElement(
       {required int atomicNumber});
 
   void crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
-      {required BigInt nodeId, required APIExportXYZData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIExportXYZData data});
 
   APIResult crateApiStructureDesignerStructureDesignerApiSetExprData(
-      {required BigInt nodeId, required APIExprData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIExprData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetExtrudeData(
-      {required BigInt nodeId, required APIExtrudeData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIExtrudeData data});
 
   bool crateApiStructureDesignerFacetShellApiSetFacetShellCenter(
       {required BigInt nodeId,
@@ -1051,85 +1082,139 @@ abstract class RustLibApi extends BaseApi {
       required int maxMillerIndex});
 
   void crateApiStructureDesignerStructureDesignerApiSetFilterData(
-      {required BigInt nodeId, required APIFilterData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFilterData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetFloatData(
-      {required BigInt nodeId, required APIFloatData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFloatData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetFoldData(
-      {required BigInt nodeId, required APIFoldData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFoldData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetForeachData(
-      {required BigInt nodeId, required APIForeachData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIForeachData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetFreeMoveData(
-      {required BigInt nodeId, required APIFreeMoveData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFreeMoveData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetFreeRotData(
-      {required BigInt nodeId, required APIFreeRotData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFreeRotData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetGeoTransData(
-      {required BigInt nodeId, required APIGeoTransData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIGeoTransData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetHalfPlaneData(
-      {required BigInt nodeId, required APIHalfPlaneData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIHalfPlaneData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetHalfSpaceData(
-      {required BigInt nodeId, required APIHalfSpaceData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIHalfSpaceData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetImat3ColsData(
-      {required BigInt nodeId, required APIIMat3ColsData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIMat3ColsData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetImat3DiagData(
-      {required BigInt nodeId, required APIIMat3DiagData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIMat3DiagData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetImat3RowsData(
-      {required BigInt nodeId, required APIIMat3RowsData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIMat3RowsData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetImportCifData(
-      {required BigInt nodeId, required APIImportCIFData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIImportCIFData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetImportXyzData(
-      {required BigInt nodeId, required APIImportXYZData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIImportXYZData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetInferBondsData(
-      {required BigInt nodeId, required APIInferBondsData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIInferBondsData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetIntData(
-      {required BigInt nodeId, required APIIntData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIntData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetIvec2Data(
-      {required BigInt nodeId, required APIIVec2Data data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIVec2Data data});
 
   void crateApiStructureDesignerStructureDesignerApiSetIvec3Data(
-      {required BigInt nodeId, required APIIVec3Data data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIVec3Data data});
 
   void crateApiStructureDesignerStructureDesignerApiSetLatticeSymopData(
-      {required BigInt nodeId, required APILatticeSymopData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APILatticeSymopData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetLatticeVecsData(
-      {required BigInt nodeId, required APILatticeVecsData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APILatticeVecsData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetMapData(
-      {required BigInt nodeId, required APIMapData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMapData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetMat3ColsData(
-      {required BigInt nodeId, required APIMat3ColsData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMat3ColsData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetMat3DiagData(
-      {required BigInt nodeId, required APIMat3DiagData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMat3DiagData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetMat3RowsData(
-      {required BigInt nodeId, required APIMat3RowsData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMat3RowsData data});
 
   APIResult crateApiStructureDesignerStructureDesignerApiSetMaterializeData(
-      {required BigInt nodeId, required APIMaterializeData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMaterializeData data});
 
   APIResult crateApiStructureDesignerStructureDesignerApiSetMotifData(
-      {required BigInt nodeId, required APIMotifData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMotifData data});
 
   APIResult crateApiStructureDesignerStructureDesignerApiSetMotifSubData(
-      {required BigInt nodeId, required APIMotifSubData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMotifSubData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetNodeDisplay(
       {required Uint64List scopePath,
@@ -1141,64 +1226,97 @@ abstract class RustLibApi extends BaseApi {
   void crateApiCommonApiSetOrthographicMode({required bool orthographic});
 
   void crateApiStructureDesignerStructureDesignerApiSetParameterData(
-      {required BigInt nodeId, required APIParameterData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIParameterData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetPrintData(
-      {required BigInt nodeId, required APIPrintData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIPrintData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetProductData(
-      {required BigInt nodeId, required APIRecordSchemaData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRecordSchemaData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetRangeData(
-      {required BigInt nodeId, required APIRangeData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRangeData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetRecordConstructData(
-      {required BigInt nodeId, required APIRecordSchemaData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRecordSchemaData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetRecordConstructLiteral(
-      {required BigInt nodeId,
+      {required Uint64List scopePath,
+      required BigInt nodeId,
       required String fieldName,
       required APILiteralValue value});
 
   void crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
-      {required BigInt nodeId, required APIRecordSchemaData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRecordSchemaData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetRectData(
-      {required BigInt nodeId, required APIRectData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRectData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetRegPolyData(
-      {required BigInt nodeId, required APIRegPolyData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRegPolyData data});
 
   bool crateApiStructureDesignerStructureDesignerApiSetReturnNodeId(
       {required Uint64List scopePath, BigInt? nodeId});
 
   void crateApiStructureDesignerStructureDesignerApiSetSequenceData(
-      {required BigInt nodeId, required APISequenceData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APISequenceData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetSphereData(
-      {required BigInt nodeId, required APISphereData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APISphereData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetStringData(
-      {required BigInt nodeId, required APIStringData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIStringData data});
 
   void
       crateApiStructureDesignerStructureDesignerApiSetStructureDesignerPreferences(
           {required StructureDesignerPreferences preferences});
 
   void crateApiStructureDesignerStructureDesignerApiSetStructureMoveData(
-      {required BigInt nodeId, required APIStructureMoveData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIStructureMoveData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetStructureRotData(
-      {required BigInt nodeId, required APIStructureRotData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIStructureRotData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetSupercellData(
-      {required BigInt nodeId, required APISupercellData data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APISupercellData data});
 
   void crateApiStructureDesignerStructureDesignerApiSetVec2Data(
-      {required BigInt nodeId, required APIVec2Data data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIVec2Data data});
 
   void crateApiStructureDesignerStructureDesignerApiSetVec3Data(
-      {required BigInt nodeId, required APIVec3Data data});
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIVec3Data data});
 
   void crateApiCommonApiSetViewportSize(
       {required int width, required int height});
@@ -3405,10 +3523,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteral(
-      {required BigInt nodeId, required String paramName}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required String paramName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_String(paramName, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 75)!;
@@ -3419,7 +3540,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteralConstMeta,
-      argValues: [nodeId, paramName],
+      argValues: [scopePath, nodeId, paramName],
       apiImpl: this,
     ));
   }
@@ -3428,7 +3549,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiClearCustomNodeLiteralConstMeta =>
           const TaskConstMeta(
             debugName: "clear_custom_node_literal",
-            argNames: ["nodeId", "paramName"],
+            argNames: ["scopePath", "nodeId", "paramName"],
           );
 
   @override
@@ -3508,10 +3629,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteral(
-      {required BigInt nodeId, required String fieldName}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required String fieldName}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_String(fieldName, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79)!;
@@ -3522,7 +3646,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteralConstMeta,
-      argValues: [nodeId, fieldName],
+      argValues: [scopePath, nodeId, fieldName],
       apiImpl: this,
     ));
   }
@@ -3531,7 +3655,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteralConstMeta =>
           const TaskConstMeta(
             debugName: "clear_record_construct_literal",
-            argNames: ["nodeId", "fieldName"],
+            argNames: ["scopePath", "nodeId", "fieldName"],
           );
 
   @override
@@ -8938,10 +9062,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetApplyDiffData(
-      {required BigInt nodeId, required APIApplyDiffData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIApplyDiffData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_apply_diff_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 276)!;
@@ -8952,7 +9079,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetApplyDiffDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -8961,15 +9088,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetApplyDiffDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_apply_diff_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetArrayAtData(
-      {required BigInt nodeId, required APIArrayAtData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIArrayAtData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_array_at_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 277)!;
@@ -8980,7 +9110,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetArrayAtDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -8989,15 +9119,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetArrayAtDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_array_at_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetAtomComposediffData(
-      {required BigInt nodeId, required APIAtomComposeDiffData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIAtomComposeDiffData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_atom_compose_diff_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 278)!;
@@ -9008,7 +9141,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetAtomComposediffDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9017,15 +9150,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetAtomComposediffDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_atom_composediff_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetAtomCutData(
-      {required BigInt nodeId, required APIAtomCutData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIAtomCutData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_atom_cut_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 279)!;
@@ -9036,7 +9172,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetAtomCutDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9045,7 +9181,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetAtomCutDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_atom_cut_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -9077,10 +9213,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetAtomReplaceData(
-      {required BigInt nodeId, required APIAtomReplaceData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIAtomReplaceData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_atom_replace_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 281)!;
@@ -9091,7 +9230,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetAtomReplaceDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9100,15 +9239,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetAtomReplaceDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_atom_replace_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetBoolData(
-      {required BigInt nodeId, required APIBoolData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIBoolData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_bool_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 282)!;
@@ -9119,7 +9261,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetBoolDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9128,7 +9270,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetBoolDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_bool_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -9182,10 +9324,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetCircleData(
-      {required BigInt nodeId, required APICircleData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APICircleData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_circle_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 285)!;
@@ -9196,7 +9341,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetCircleDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9205,7 +9350,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetCircleDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_circle_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -9238,10 +9383,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetCollectData(
-      {required BigInt nodeId, required APICollectData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APICollectData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_collect_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 287)!;
@@ -9252,7 +9400,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetCollectDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9261,15 +9409,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetCollectDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_collect_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetCuboidData(
-      {required BigInt nodeId, required APICuboidData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APICuboidData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_cuboid_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 288)!;
@@ -9280,7 +9431,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetCuboidDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9289,17 +9440,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetCuboidDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_cuboid_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetCustomNodeLiteral(
-      {required BigInt nodeId,
+      {required Uint64List scopePath,
+      required BigInt nodeId,
       required String paramName,
       required APILiteralValue value}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_String(paramName, serializer);
         sse_encode_box_autoadd_api_literal_value(value, serializer);
@@ -9311,7 +9464,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetCustomNodeLiteralConstMeta,
-      argValues: [nodeId, paramName, value],
+      argValues: [scopePath, nodeId, paramName, value],
       apiImpl: this,
     ));
   }
@@ -9320,7 +9473,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetCustomNodeLiteralConstMeta =>
           const TaskConstMeta(
             debugName: "set_custom_node_literal",
-            argNames: ["nodeId", "paramName", "value"],
+            argNames: ["scopePath", "nodeId", "paramName", "value"],
           );
 
   @override
@@ -9352,10 +9505,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetDrawingPlaneData(
-      {required BigInt nodeId, required APIDrawingPlaneData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIDrawingPlaneData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_drawing_plane_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 291)!;
@@ -9366,7 +9522,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetDrawingPlaneDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9375,7 +9531,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetDrawingPlaneDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_drawing_plane_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -9407,10 +9563,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
-      {required BigInt nodeId, required APIExportXYZData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIExportXYZData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_export_xyz_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 293)!;
@@ -9421,7 +9580,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetExportXyzDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9430,15 +9589,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetExportXyzDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_export_xyz_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   APIResult crateApiStructureDesignerStructureDesignerApiSetExprData(
-      {required BigInt nodeId, required APIExprData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIExprData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_expr_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 294)!;
@@ -9449,7 +9611,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetExprDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9458,15 +9620,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetExprDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_expr_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetExtrudeData(
-      {required BigInt nodeId, required APIExtrudeData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIExtrudeData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_extrude_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 295)!;
@@ -9477,7 +9642,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetExtrudeDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9486,7 +9651,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetExtrudeDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_extrude_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -9522,10 +9687,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetFilterData(
-      {required BigInt nodeId, required APIFilterData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFilterData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_filter_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 297)!;
@@ -9536,7 +9704,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetFilterDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9545,15 +9713,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetFilterDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_filter_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetFloatData(
-      {required BigInt nodeId, required APIFloatData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFloatData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_float_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 298)!;
@@ -9564,7 +9735,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetFloatDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9573,15 +9744,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetFloatDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_float_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetFoldData(
-      {required BigInt nodeId, required APIFoldData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFoldData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_fold_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 299)!;
@@ -9592,7 +9766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetFoldDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9601,15 +9775,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetFoldDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_fold_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetForeachData(
-      {required BigInt nodeId, required APIForeachData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIForeachData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_foreach_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 300)!;
@@ -9620,7 +9797,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetForeachDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9629,15 +9806,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetForeachDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_foreach_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetFreeMoveData(
-      {required BigInt nodeId, required APIFreeMoveData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFreeMoveData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_free_move_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 301)!;
@@ -9648,7 +9828,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetFreeMoveDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9657,15 +9837,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetFreeMoveDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_free_move_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetFreeRotData(
-      {required BigInt nodeId, required APIFreeRotData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIFreeRotData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_free_rot_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 302)!;
@@ -9676,7 +9859,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetFreeRotDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9685,15 +9868,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetFreeRotDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_free_rot_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetGeoTransData(
-      {required BigInt nodeId, required APIGeoTransData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIGeoTransData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_geo_trans_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 303)!;
@@ -9704,7 +9890,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetGeoTransDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9713,15 +9899,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetGeoTransDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_geo_trans_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetHalfPlaneData(
-      {required BigInt nodeId, required APIHalfPlaneData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIHalfPlaneData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_half_plane_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 304)!;
@@ -9732,7 +9921,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetHalfPlaneDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9741,15 +9930,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetHalfPlaneDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_half_plane_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetHalfSpaceData(
-      {required BigInt nodeId, required APIHalfSpaceData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIHalfSpaceData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_half_space_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 305)!;
@@ -9760,7 +9952,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetHalfSpaceDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9769,15 +9961,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetHalfSpaceDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_half_space_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetImat3ColsData(
-      {required BigInt nodeId, required APIIMat3ColsData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIMat3ColsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_apii_mat_3_cols_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 306)!;
@@ -9788,7 +9983,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetImat3ColsDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9797,15 +9992,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetImat3ColsDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_imat3_cols_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetImat3DiagData(
-      {required BigInt nodeId, required APIIMat3DiagData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIMat3DiagData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_apii_mat_3_diag_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 307)!;
@@ -9816,7 +10014,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetImat3DiagDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9825,15 +10023,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetImat3DiagDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_imat3_diag_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetImat3RowsData(
-      {required BigInt nodeId, required APIIMat3RowsData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIMat3RowsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_apii_mat_3_rows_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 308)!;
@@ -9844,7 +10045,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetImat3RowsDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9853,15 +10054,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetImat3RowsDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_imat3_rows_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetImportCifData(
-      {required BigInt nodeId, required APIImportCIFData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIImportCIFData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_import_cif_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 309)!;
@@ -9872,7 +10076,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetImportCifDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9881,15 +10085,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetImportCifDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_import_cif_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetImportXyzData(
-      {required BigInt nodeId, required APIImportXYZData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIImportXYZData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_import_xyz_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 310)!;
@@ -9900,7 +10107,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetImportXyzDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9909,15 +10116,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetImportXyzDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_import_xyz_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetInferBondsData(
-      {required BigInt nodeId, required APIInferBondsData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIInferBondsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_infer_bonds_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 311)!;
@@ -9928,7 +10138,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetInferBondsDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9937,15 +10147,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetInferBondsDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_infer_bonds_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetIntData(
-      {required BigInt nodeId, required APIIntData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIntData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_int_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 312)!;
@@ -9956,7 +10169,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetIntDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9965,15 +10178,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetIntDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_int_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetIvec2Data(
-      {required BigInt nodeId, required APIIVec2Data data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIVec2Data data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_apii_vec_2_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 313)!;
@@ -9984,7 +10200,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetIvec2DataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -9993,15 +10209,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetIvec2DataConstMeta =>
           const TaskConstMeta(
             debugName: "set_ivec2_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetIvec3Data(
-      {required BigInt nodeId, required APIIVec3Data data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIIVec3Data data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_apii_vec_3_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 314)!;
@@ -10012,7 +10231,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetIvec3DataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10021,15 +10240,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetIvec3DataConstMeta =>
           const TaskConstMeta(
             debugName: "set_ivec3_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetLatticeSymopData(
-      {required BigInt nodeId, required APILatticeSymopData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APILatticeSymopData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_lattice_symop_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 315)!;
@@ -10040,7 +10262,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetLatticeSymopDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10049,15 +10271,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetLatticeSymopDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_lattice_symop_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetLatticeVecsData(
-      {required BigInt nodeId, required APILatticeVecsData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APILatticeVecsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_lattice_vecs_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 316)!;
@@ -10068,7 +10293,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetLatticeVecsDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10077,15 +10302,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetLatticeVecsDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_lattice_vecs_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetMapData(
-      {required BigInt nodeId, required APIMapData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMapData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_map_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 317)!;
@@ -10096,7 +10324,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMapDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10105,15 +10333,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMapDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_map_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetMat3ColsData(
-      {required BigInt nodeId, required APIMat3ColsData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMat3ColsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_mat_3_cols_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 318)!;
@@ -10124,7 +10355,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMat3ColsDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10133,15 +10364,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMat3ColsDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_mat3_cols_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetMat3DiagData(
-      {required BigInt nodeId, required APIMat3DiagData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMat3DiagData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_mat_3_diag_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 319)!;
@@ -10152,7 +10386,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMat3DiagDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10161,15 +10395,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMat3DiagDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_mat3_diag_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetMat3RowsData(
-      {required BigInt nodeId, required APIMat3RowsData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMat3RowsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_mat_3_rows_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 320)!;
@@ -10180,7 +10417,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMat3RowsDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10189,15 +10426,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMat3RowsDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_mat3_rows_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   APIResult crateApiStructureDesignerStructureDesignerApiSetMaterializeData(
-      {required BigInt nodeId, required APIMaterializeData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMaterializeData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_materialize_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 321)!;
@@ -10208,7 +10448,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMaterializeDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10217,15 +10457,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMaterializeDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_materialize_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   APIResult crateApiStructureDesignerStructureDesignerApiSetMotifData(
-      {required BigInt nodeId, required APIMotifData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMotifData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_motif_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 322)!;
@@ -10236,7 +10479,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMotifDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10245,15 +10488,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMotifDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_motif_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   APIResult crateApiStructureDesignerStructureDesignerApiSetMotifSubData(
-      {required BigInt nodeId, required APIMotifSubData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIMotifSubData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_motif_sub_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 323)!;
@@ -10264,7 +10510,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetMotifSubDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10273,7 +10519,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetMotifSubDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_motif_sub_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -10357,10 +10603,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetParameterData(
-      {required BigInt nodeId, required APIParameterData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIParameterData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_parameter_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 327)!;
@@ -10371,7 +10620,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetParameterDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10380,15 +10629,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetParameterDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_parameter_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetPrintData(
-      {required BigInt nodeId, required APIPrintData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIPrintData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_print_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 328)!;
@@ -10399,7 +10651,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetPrintDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10408,15 +10660,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetPrintDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_print_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetProductData(
-      {required BigInt nodeId, required APIRecordSchemaData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRecordSchemaData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_record_schema_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 329)!;
@@ -10427,7 +10682,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetProductDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10436,15 +10691,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetProductDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_product_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetRangeData(
-      {required BigInt nodeId, required APIRangeData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRangeData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_range_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 330)!;
@@ -10455,7 +10713,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetRangeDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10464,15 +10722,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRangeDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_range_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetRecordConstructData(
-      {required BigInt nodeId, required APIRecordSchemaData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRecordSchemaData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_record_schema_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 331)!;
@@ -10483,7 +10744,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetRecordConstructDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10492,17 +10753,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRecordConstructDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_record_construct_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetRecordConstructLiteral(
-      {required BigInt nodeId,
+      {required Uint64List scopePath,
+      required BigInt nodeId,
       required String fieldName,
       required APILiteralValue value}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_String(fieldName, serializer);
         sse_encode_box_autoadd_api_literal_value(value, serializer);
@@ -10514,7 +10777,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetRecordConstructLiteralConstMeta,
-      argValues: [nodeId, fieldName, value],
+      argValues: [scopePath, nodeId, fieldName, value],
       apiImpl: this,
     ));
   }
@@ -10523,15 +10786,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRecordConstructLiteralConstMeta =>
           const TaskConstMeta(
             debugName: "set_record_construct_literal",
-            argNames: ["nodeId", "fieldName", "value"],
+            argNames: ["scopePath", "nodeId", "fieldName", "value"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetRecordDestructureData(
-      {required BigInt nodeId, required APIRecordSchemaData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRecordSchemaData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_record_schema_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 333)!;
@@ -10542,7 +10808,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetRecordDestructureDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10551,15 +10817,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRecordDestructureDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_record_destructure_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetRectData(
-      {required BigInt nodeId, required APIRectData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRectData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_rect_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 334)!;
@@ -10570,7 +10839,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetRectDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10579,15 +10848,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRectDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_rect_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetRegPolyData(
-      {required BigInt nodeId, required APIRegPolyData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIRegPolyData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_reg_poly_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 335)!;
@@ -10598,7 +10870,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetRegPolyDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10607,7 +10879,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetRegPolyDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_reg_poly_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -10640,10 +10912,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetSequenceData(
-      {required BigInt nodeId, required APISequenceData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APISequenceData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_sequence_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 337)!;
@@ -10654,7 +10929,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetSequenceDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10663,15 +10938,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetSequenceDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_sequence_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetSphereData(
-      {required BigInt nodeId, required APISphereData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APISphereData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_sphere_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 338)!;
@@ -10682,7 +10960,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetSphereDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10691,15 +10969,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetSphereDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_sphere_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetStringData(
-      {required BigInt nodeId, required APIStringData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIStringData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_string_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 339)!;
@@ -10710,7 +10991,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetStringDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10719,7 +11000,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetStringDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_string_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
@@ -10753,10 +11034,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetStructureMoveData(
-      {required BigInt nodeId, required APIStructureMoveData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIStructureMoveData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_structure_move_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 341)!;
@@ -10767,7 +11051,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetStructureMoveDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10776,15 +11060,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetStructureMoveDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_structure_move_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetStructureRotData(
-      {required BigInt nodeId, required APIStructureRotData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIStructureRotData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_structure_rot_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 342)!;
@@ -10795,7 +11082,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetStructureRotDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10804,15 +11091,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetStructureRotDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_structure_rot_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetSupercellData(
-      {required BigInt nodeId, required APISupercellData data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APISupercellData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_supercell_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 343)!;
@@ -10823,7 +11113,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetSupercellDataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10832,15 +11122,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetSupercellDataConstMeta =>
           const TaskConstMeta(
             debugName: "set_supercell_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetVec2Data(
-      {required BigInt nodeId, required APIVec2Data data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIVec2Data data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_vec_2_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 344)!;
@@ -10851,7 +11144,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetVec2DataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10860,15 +11153,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetVec2DataConstMeta =>
           const TaskConstMeta(
             debugName: "set_vec2_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSetVec3Data(
-      {required BigInt nodeId, required APIVec3Data data}) {
+      {required Uint64List scopePath,
+      required BigInt nodeId,
+      required APIVec3Data data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_box_autoadd_api_vec_3_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 345)!;
@@ -10879,7 +11175,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSetVec3DataConstMeta,
-      argValues: [nodeId, data],
+      argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
@@ -10888,7 +11184,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSetVec3DataConstMeta =>
           const TaskConstMeta(
             debugName: "set_vec3_data",
-            argNames: ["nodeId", "data"],
+            argNames: ["scopePath", "nodeId", "data"],
           );
 
   @override
