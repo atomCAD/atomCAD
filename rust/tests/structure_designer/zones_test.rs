@@ -612,12 +612,19 @@ fn map_zone_empty_body_yields_error_at_eval() {
 fn map_registers_zone_pins() {
     let registry = NodeTypeRegistry::new();
     let nt = registry.get_node_type("map").unwrap();
+    // Closures Phase 3 added the optional `f` (function value) input pin
+    // alongside `xs`.
     assert_eq!(
         nt.parameters.len(),
-        1,
-        "map should have only `xs` externally"
+        2,
+        "map should have `xs` and the optional `f` pin externally"
     );
     assert_eq!(nt.parameters[0].name, "xs");
+    assert_eq!(nt.parameters[1].name, "f");
+    assert!(
+        matches!(nt.parameters[1].data_type, DataType::Function(_)),
+        "the `f` pin must be a Function type"
+    );
     assert_eq!(nt.zone_input_pins.len(), 1);
     assert_eq!(nt.zone_input_pins[0].name, "element");
     assert_eq!(nt.zone_output_pins.len(), 1);
@@ -635,10 +642,19 @@ fn map_calculate_custom_node_type_int_to_float() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
-    assert_eq!(custom.parameters.len(), 1);
+    // `xs` plus the optional `f` function pin (closures Phase 3).
+    assert_eq!(custom.parameters.len(), 2);
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
+    );
+    assert_eq!(custom.parameters[1].name, "f");
+    assert_eq!(
+        custom.parameters[1].data_type,
+        DataType::Function(rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
+            parameter_types: vec![DataType::Int],
+            output_type: Box::new(DataType::Float),
+        })
     );
     assert_eq!(
         *custom.output_type(),

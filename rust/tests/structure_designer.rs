@@ -283,5 +283,8 @@ mod record_construct_property_panel_test;
 #[path = "structure_designer/zones_test.rs"]
 mod zones_test;
 
+#[path = "structure_designer/closures_test.rs"]
+mod closures_test;
+
 #[path = "structure_designer/scope_dispatch_test.rs"]
 mod scope_dispatch_test;

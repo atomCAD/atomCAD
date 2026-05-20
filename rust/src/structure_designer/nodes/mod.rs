@@ -1,4 +1,5 @@
 pub mod add_hydrogen;
+pub mod apply;
 pub mod apply_diff;
 pub mod array_append;
 pub mod array_at;
@@ -11,6 +12,7 @@ pub mod atom_replace;
 pub mod atom_union;
 pub mod bool;
 pub mod circle;
+pub mod closure;
 pub mod collect;
 pub mod comment;
 pub mod cuboid;

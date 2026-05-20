@@ -167,6 +167,46 @@ pub fn build_inline_closure<'a>(
     })
 }
 
+/// Yield the [`ZoneClosure`] an HOF should run for this evaluation.
+///
+/// If the node's `f` pin (at `f_param_index`) is wired, evaluate it and take
+/// the carried function value. Otherwise — `f` disconnected — fall back to the
+/// node's own inline zone via [`build_inline_closure`]. This is what lets the
+/// four HOFs accept *either* a wired-in function value or their own inline
+/// body, with one branch. An `apply` node, which has no inline body, never
+/// reaches the fallback (its `f` is required) and so does not use this helper.
+///
+/// `label` prefixes eval-time error strings, matching [`build_inline_closure`].
+///
+/// `NetworkResult` is a large enum, so the `Err` variant trips
+/// `clippy::result_large_err`; we keep the un-boxed error so callers can
+/// `return EvalOutput::single(e)` directly.
+#[allow(clippy::result_large_err)]
+pub fn obtain_closure<'a>(
+    evaluator: &NetworkEvaluator,
+    network_stack: &[NetworkStackElement<'a>],
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    f_param_index: usize,
+    label: &str,
+) -> Result<ZoneClosure, NetworkResult> {
+    match evaluator.evaluate_arg(network_stack, node_id, registry, context, f_param_index) {
+        // `f` is wired and carries a function value — run that.
+        NetworkResult::Function(zc) => Ok(zc),
+        // An error resolving `f` propagates as this node's error.
+        e @ NetworkResult::Error(_) => Err(e),
+        // `f` not connected — fall back to this node's own inline zone body.
+        NetworkResult::None => {
+            build_inline_closure(evaluator, network_stack, node_id, registry, context, label)
+        }
+        other => Err(NetworkResult::Error(format!(
+            "{label}: f is not a function (got {})",
+            other.to_display_string()
+        ))),
+    }
+}
+
 /// Run a closure once on a single argument frame — the per-element step shared
 /// by the lazy walkers (`MapZone`, `FilterZone`) and the eager HOFs (`fold`,
 /// `foreach`); later phases (`apply`, the `f`-driven HOFs) reuse it verbatim.

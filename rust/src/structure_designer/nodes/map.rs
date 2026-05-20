@@ -1,11 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::zone_closure::build_inline_closure;
+use crate::structure_designer::evaluator::zone_closure::obtain_closure;
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -34,9 +34,15 @@ impl NodeData for MapData {
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         let mut custom_node_type = base_node_type.clone();
 
-        // External: only `xs` remains. The body lives inside the zone.
+        // External: `xs` (the stream) and the optional `f` (a function value
+        // that, when wired, overrides the inline body). The inline body lives
+        // inside the zone.
         custom_node_type.parameters[0].data_type =
             DataType::Iterator(Box::new(self.input_type.clone()));
+        custom_node_type.parameters[1].data_type = DataType::Function(FunctionType {
+            parameter_types: vec![self.input_type.clone()],
+            output_type: Box::new(self.output_type.clone()),
+        });
         custom_node_type.output_pins =
             OutputPinDefinition::single(DataType::Iterator(Box::new(self.output_type.clone())));
 
@@ -82,14 +88,16 @@ impl NodeData for MapData {
             }
         };
 
-        // b. Build the closure from this node's own inline zone: grab the
-        // body, freeze captures once, and collect the zone-output wire(s).
-        let closure = match build_inline_closure(
+        // b. Obtain the closure to run: the function wired into `f` if
+        // connected, otherwise one built from this node's own inline zone
+        // (grab the body, freeze captures once, collect the zone-output wires).
+        let closure = match obtain_closure(
             network_evaluator,
             network_stack,
             node_id,
             registry,
             context,
+            1, // `f` pin index
             "map",
         ) {
             Ok(c) => c,
@@ -145,6 +153,8 @@ impl NodeData for MapData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("xs".to_string(), (true, None)); // required
+        // `f` is optional: when disconnected, the inline zone body drives map.
+        m.insert("f".to_string(), (false, None));
         m
     }
 
@@ -176,6 +186,16 @@ pub fn get_node_type() -> NodeType {
           id: None,
           name: "xs".to_string(),
           data_type: DataType::Iterator(Box::new(DataType::Float)), // will change based on  ParameterData::data_type.
+        },
+        Parameter {
+          id: None,
+          name: "f".to_string(),
+          // Optional function value. When wired, it overrides the inline zone
+          // body. Type tracks input/output via `calculate_custom_node_type`.
+          data_type: DataType::Function(FunctionType {
+            parameter_types: vec![DataType::Float],
+            output_type: Box::new(DataType::Float),
+          }),
         },
       ],
       output_pins: OutputPinDefinition::single(DataType::Iterator(Box::new(DataType::Float))), // will change based on the output type

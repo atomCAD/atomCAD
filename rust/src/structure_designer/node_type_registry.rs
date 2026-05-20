@@ -1,5 +1,6 @@
 use super::node_type::{NodeType, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
+use super::nodes::apply::get_node_type as apply_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
 use super::nodes::array_append::get_node_type as array_append_get_node_type;
 use super::nodes::array_at::get_node_type as array_at_get_node_type;
@@ -13,6 +14,7 @@ use super::nodes::atom_replace::get_node_type as atom_replace_get_node_type;
 use super::nodes::atom_union::get_node_type as atom_union_get_node_type;
 use super::nodes::bool::get_node_type as bool_get_node_type;
 use super::nodes::circle::get_node_type as circle_get_node_type;
+use super::nodes::closure::get_node_type as closure_get_node_type;
 use super::nodes::collect::get_node_type as collect_get_node_type;
 use super::nodes::comment::get_node_type as comment_get_node_type;
 use super::nodes::cuboid::get_node_type as cuboid_get_node_type;
@@ -199,6 +201,8 @@ impl NodeTypeRegistry {
         ret.add_node_type(filter_get_node_type());
         ret.add_node_type(fold_get_node_type());
         ret.add_node_type(foreach_get_node_type());
+        ret.add_node_type(closure_get_node_type());
+        ret.add_node_type(apply_get_node_type());
         ret.add_node_type(print_get_node_type());
         ret.add_node_type(sequence_get_node_type());
         ret.add_node_type(string_get_node_type());
