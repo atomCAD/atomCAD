@@ -1,8 +1,10 @@
-use crate::structure_designer::data_type::{DataType, contains_iterator};
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::{
-    Argument, IncomingWire, NodeNetwork, SourcePin, ValidationError,
+    Argument, IncomingWire, Node, NodeNetwork, SourcePin, ValidationError,
 };
-use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
+use crate::structure_designer::node_type::{
+    NodeType, OutputPinDefinition, Parameter, PinOutputType,
+};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
@@ -316,9 +318,6 @@ fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeT
                     // zone-aware validation (Phase 6).
                     return true;
                 };
-                if output_pin_index == -1 {
-                    return true; // Function pin is always valid
-                }
                 if let Some(&count) = pin_counts.get(&source_node_id) {
                     (output_pin_index as usize) < count
                 } else {
@@ -477,36 +476,6 @@ fn validate_wires(
                     None => continue,
                 };
 
-                // Closure-capture restriction (`doc/design_iterators.md`):
-                // a function pin captures upstream value-pin types into the
-                // closure. If any captured type contains `Iter[T]`, the
-                // closure would alias a single walker across every
-                // invocation and corrupt under repeated use. Reject the wire
-                // and point the user at `collect`.
-                if *output_pin_index == -1 {
-                    let source_node = network.nodes.get(source_node_id).unwrap();
-                    if let Some(source_node_type) =
-                        node_type_registry.get_node_type_for_node(source_node)
-                    {
-                        if let Some(bad_param) = source_node_type
-                            .parameters
-                            .iter()
-                            .find(|p| contains_iterator(&p.data_type))
-                        {
-                            network.validation_errors.push(ValidationError::new(
-                                format!(
-                                    "Function pin captures `Iter[T]` value via parameter '{}' \
-                                     of source node '{}'. Iterator values cannot be captured \
-                                     into closures — wire `collect` upstream of the value-pin \
-                                     and capture the resulting array.",
-                                    bad_param.name, source_node.node_type_name
-                                ),
-                                Some(*dest_node_id),
-                            ));
-                            return false;
-                        }
-                    }
-                }
                 let dest_data_type =
                     node_type_registry.get_node_param_data_type(dest_node, arg_index);
                 if !DataType::can_be_converted_to(
@@ -646,6 +615,24 @@ pub fn validate_network(
     }
 }
 
+/// Returns true if `node` has an input pin named `f` of `Function` type that
+/// carries at least one incoming wire.
+///
+/// HOFs gain an optional `f: Function` pin which, when wired, drives evaluation
+/// in place of the inline body (so the "zone-output pin must have a wire" rule
+/// is suspended for that HOF). `apply` has a *required* `f` pin (rule 4). The
+/// `closure` node has no `f` *input* pin (it exposes a `Function` *output*), so
+/// this is always false for it. See `doc/design_closures.md` §"Validation".
+fn function_input_pin_connected(node: &Node, node_type: &NodeType) -> bool {
+    node_type
+        .parameters
+        .iter()
+        .position(|p| p.name == "f" && matches!(p.data_type, DataType::Function(_)))
+        .and_then(|idx| node.arguments.get(idx))
+        .map(|arg| !arg.incoming_wires.is_empty())
+        .unwrap_or(false)
+}
+
 /// Recursively validate zone-related rules in `network` and every nested
 /// zone body. Reports errors directly on the network whose node the violation
 /// belongs to (body errors land on the body's `validation_errors`; the owning
@@ -682,7 +669,13 @@ fn validate_zones_recursive(
         };
 
         // Rule 1: every zone-output pin must have at least one incoming wire.
-        if node_type.has_zone() {
+        //
+        // Suspended for an HOF whose `f` (Function) pin is connected: the
+        // wired-in closure drives evaluation and the inline body is ignored,
+        // so an empty body is fine (closures `doc/design_closures.md`,
+        // §"Validation" check 1). The `closure` node has no `f` *input* pin, so
+        // this never suspends its own "body is complete" check (check 2).
+        if node_type.has_zone() && !function_input_pin_connected(node, node_type) {
             for (i, pin) in node_type.zone_output_pins.iter().enumerate() {
                 let has_wire = node
                     .zone_output_arguments
@@ -697,6 +690,20 @@ fn validate_zones_recursive(
                     ));
                 }
             }
+        }
+
+        // Rule 4 (closures `doc/design_closures.md`, §"Validation" check 4):
+        // `apply` owns no inline body to fall back to, so its required `f`
+        // (Function) pin must be connected. (An HOF with a disconnected `f`
+        // uses its inline body and is fine; `apply` cannot.) The `f`-source's
+        // function-type/shape is checked by `validate_wires` via
+        // `can_be_converted_to`, like any other typed wire.
+        if node.node_type_name == "apply" && !function_input_pin_connected(node, node_type) {
+            ok = false;
+            network.validation_errors.push(ValidationError::new(
+                "apply: required `f` (Function) pin is not connected".to_string(),
+                Some(node_id),
+            ));
         }
 
         // Wires in `arguments` are in this network's frame — depth = 0
@@ -852,32 +859,28 @@ fn check_zone_wire(
                     Some(dest_node_id),
                 ));
             };
-            // Confirm the named source pin exists. pin_index = -1 is the
-            // legacy function pin and is always considered present (matches
-            // the existing wire-validation path).
-            if pin_index != -1 {
-                let Some(source_node_type) = registry.get_node_type_for_node(source_node) else {
-                    return Some(ValidationError::new(
-                        format!(
-                            "Capture wire's source node {} (depth {}) has \
-                             unknown node type '{}'",
-                            incoming.source_node_id, depth, source_node.node_type_name
-                        ),
-                        Some(dest_node_id),
-                    ));
-                };
-                let pin_count = source_node_type.output_pin_count();
-                if (pin_index as usize) >= pin_count {
-                    return Some(ValidationError::new(
-                        format!(
-                            "Capture wire references output pin index {} on \
-                             source node {} (depth {}) but that node has only \
-                             {} output pin(s)",
-                            pin_index, incoming.source_node_id, depth, pin_count
-                        ),
-                        Some(dest_node_id),
-                    ));
-                }
+            // Confirm the named source pin exists on the ancestor source node.
+            let Some(source_node_type) = registry.get_node_type_for_node(source_node) else {
+                return Some(ValidationError::new(
+                    format!(
+                        "Capture wire's source node {} (depth {}) has \
+                         unknown node type '{}'",
+                        incoming.source_node_id, depth, source_node.node_type_name
+                    ),
+                    Some(dest_node_id),
+                ));
+            };
+            let pin_count = source_node_type.output_pin_count();
+            if (pin_index as usize) >= pin_count {
+                return Some(ValidationError::new(
+                    format!(
+                        "Capture wire references output pin index {} on \
+                         source node {} (depth {}) but that node has only \
+                         {} output pin(s)",
+                        pin_index, incoming.source_node_id, depth, pin_count
+                    ),
+                    Some(dest_node_id),
+                ));
             }
             None
         }

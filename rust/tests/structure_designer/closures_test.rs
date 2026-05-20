@@ -1510,3 +1510,218 @@ fn owner_node_id_collision_lazy_escaping_closure() {
         "escaping inner closures must read the frozen outer element, not a live colliding frame"
     );
 }
+
+// ============================================================================
+// Phase 5 — validation rules
+// ============================================================================
+
+/// Recursively collect every validation-error text from `network` and every
+/// nested zone body (body errors live on the body's `validation_errors`).
+fn collect_all_errors(network: &NodeNetwork) -> Vec<String> {
+    let mut out: Vec<String> = network
+        .validation_errors
+        .iter()
+        .map(|e| e.error_text.clone())
+        .collect();
+    for node in network.nodes.values() {
+        if let Some(body) = node.zone.as_ref() {
+            out.extend(collect_all_errors(body));
+        }
+    }
+    out
+}
+
+/// Validate the active network and return `(valid, all_error_texts)`.
+fn validate_and_collect_errors(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+) -> (bool, Vec<String>) {
+    designer.validate_active_network();
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    (network.valid, collect_all_errors(network))
+}
+
+/// Check 1: when an HOF's `f` pin is connected, the inline zone is ignored, so
+/// the "every zone-output pin needs an incoming wire" rule is **suspended** —
+/// a `map` with `f` wired and an empty inline body must validate cleanly.
+#[test]
+fn validation_hof_f_connected_suspends_zone_output_rule() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let closure_id = add_int_map_closure(&mut designer, "main", "x + 1", "x", None, -120.0);
+
+    let map_id = designer.add_node("map", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(closure_id, 0, map_id, 1); // f
+    // The map has NO inline body wired; with `f` connected the empty inline
+    // body must not make the network invalid.
+
+    let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(
+        valid,
+        "map with `f` connected and an empty inline body should be valid; got errors: {:?}",
+        errors
+    );
+}
+
+/// Check 2: a `closure` node whose `result` zone-output pin has no incoming
+/// wire is invalid — the closure doesn't deliver its result. (The closure has
+/// no `f` *input* pin, so the suspension above never applies to it.)
+#[test]
+fn validation_closure_body_incomplete_rejected() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = designer.add_node("closure", DVec2::new(150.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+        }),
+    );
+    // No body wiring — the closure's `result` zone-output pin has no incoming
+    // wire.
+
+    let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(!valid, "a closure with no zone-output wire must be invalid");
+    assert!(
+        errors.iter().any(|e| {
+            let l = e.to_lowercase();
+            l.contains("zone-output") && l.contains("no incoming wire")
+        }),
+        "expected a missing-zone-output-wire error on the closure; got: {:?}",
+        errors
+    );
+}
+
+/// Check 4: unlike an HOF (whose disconnected `f` falls back to the inline
+/// body), `apply` has no body, so a disconnected required `f` pin is a
+/// validation error attributed to the `apply` node.
+#[test]
+fn validation_apply_disconnected_f_rejected() {
+    let mut designer = setup_designer_with_network("main");
+
+    let arg_id = add_int(&mut designer, "main", 10, 0.0);
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+        }),
+    );
+    designer.connect_nodes(arg_id, 0, apply_id, 1); // element only; `f` left open
+
+    let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(!valid, "apply with a disconnected `f` must be invalid");
+    assert!(
+        errors.iter().any(|e| {
+            let l = e.to_lowercase();
+            l.contains("apply") && l.contains("f") && l.contains("not connected")
+        }),
+        "expected an apply-`f`-not-connected error; got: {:?}",
+        errors
+    );
+}
+
+/// Check 3 (arity): a wrong-arity closure wired into `f` is rejected by the
+/// ordinary wire type-compatibility check (the revived `Function` arm of
+/// `can_be_converted_to`). A fold-kind closure `(Int, Int) -> Int` does not
+/// fit `map`'s `(Int) -> Int` `f` pin.
+#[test]
+fn validation_wrong_arity_closure_into_f_rejected() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let fold_closure_id = add_int_fold_closure(
+        &mut designer,
+        "main",
+        "acc + element",
+        "acc",
+        "element",
+        None,
+        -150.0,
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(fold_closure_id, 0, map_id, 1); // f — arity 2 vs expected 1
+
+    let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(
+        !valid,
+        "a wrong-arity closure wired into `f` must be rejected"
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_lowercase().contains("data type mismatch")),
+        "expected a data-type-mismatch error for the wrong-arity `f` wire; got: {:?}",
+        errors
+    );
+}
+
+/// Check 3 (leaf type): a closure whose return type is incompatible with the
+/// HOF's expected return is rejected. A filter-kind closure `(Int) -> Bool`
+/// does not fit `map`'s `(Int) -> Int` `f` pin (`Bool` ≠ `Int`).
+#[test]
+fn validation_type_incompatible_closure_into_f_rejected() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 6, 0.0);
+    let filter_closure_id =
+        add_int_filter_closure(&mut designer, "main", "x % 2 == 0", "x", -150.0);
+
+    let map_id = designer.add_node("map", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(filter_closure_id, 0, map_id, 1); // f — returns Bool, not Int
+
+    let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    assert!(
+        !valid,
+        "a closure with an incompatible return type wired into `f` must be rejected"
+    );
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.to_lowercase().contains("data type mismatch")),
+        "expected a data-type-mismatch error for the incompatible `f` wire; got: {:?}",
+        errors
+    );
+}
