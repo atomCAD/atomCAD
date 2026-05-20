@@ -2,11 +2,11 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
-    CaptureKey, NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::zone_closure::build_inline_closure;
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
-use crate::structure_designer::node_network::{IncomingWire, NodeNetwork, SourcePin};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -15,8 +15,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FilterData {
@@ -89,62 +88,23 @@ impl NodeData for FilterData {
             }
         };
 
-        // b. Grab the body. A `filter` node without a populated zone is
-        // ill-formed — populate runs at add_node time.
-        let node = NetworkStackElement::get_top_node(network_stack, node_id);
-        let body = match node.zone.as_ref() {
-            Some(b) => Arc::clone(b),
-            None => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "filter: missing zone body".to_string(),
-                ));
-            }
-        };
-
-        // The zone-output pin must have at least one incoming wire — otherwise
-        // the body cannot deliver a per-iteration Bool. Reports as eval-time
-        // error; Phase 6 will surface this at validation time as well.
-        let zone_output_arg_wires: Vec<IncomingWire> = match node.zone_output_arguments.first() {
-            Some(arg) if !arg.incoming_wires.is_empty() => arg.incoming_wires.clone(),
-            _ => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "filter: body has no incoming wire on `keep` zone-output pin".to_string(),
-                ));
-            }
-        };
-
-        // c. Pre-evaluate captures. Push the body so source_scope_depth walks
-        // land correctly, pre-evaluate, then pop.
-        let mut body_stack = network_stack.to_vec();
-        body_stack.push(NetworkStackElement {
-            node_network: body.as_ref(),
-            node_id,
-        });
-
-        let captures = match build_captures(
+        // b. Build the closure from this node's own inline zone: grab the
+        // body, freeze captures once, and collect the zone-output wire(s).
+        let closure = match build_inline_closure(
             network_evaluator,
-            &body_stack,
+            network_stack,
+            node_id,
             registry,
             context,
-            body.as_ref(),
-            &zone_output_arg_wires,
+            "filter",
         ) {
             Ok(c) => c,
-            Err(err) => {
-                return EvalOutput::single(NetworkResult::Error(format!("filter: {}", err)));
-            }
+            Err(e) => return EvalOutput::single(e),
         };
 
-        // d. Construct the walker. Body, captures, and the zone-output wires
-        // travel via the walker; subsequent iterations re-build the body
-        // stack in `next()` and use the cached captures.
-        let walker = Walker::filter_zone(
-            xs_walker,
-            body,
-            captures,
-            Arc::new(zone_output_arg_wires),
-            node_id,
-        );
+        // c. Construct the walker. The closure travels via the walker;
+        // subsequent iterations run it once per element via `run_closure_once`.
+        let walker = Walker::filter_zone(xs_walker, closure);
         EvalOutput::single(NetworkResult::Iterator(walker))
     }
 
@@ -191,95 +151,6 @@ impl NodeData for FilterData {
         // filter preserves type — both directions extract the same way.
         let elem = source_type.drag_element_type_from_output()?;
         Some(Box::new(FilterData { element_type: elem }))
-    }
-}
-
-/// Walk the body for capture wires and pre-evaluate them once at body entry.
-/// Mirrors `map.rs::build_captures` — see that file for the discipline.
-#[allow(clippy::arc_with_non_send_sync)]
-fn build_captures<'a>(
-    evaluator: &NetworkEvaluator,
-    body_stack: &[NetworkStackElement<'a>],
-    registry: &NodeTypeRegistry,
-    context: &mut NetworkEvaluationContext,
-    body: &NodeNetwork,
-    zone_output_wires: &[IncomingWire],
-) -> Result<Arc<HashMap<CaptureKey, NetworkResult>>, String> {
-    let mut seen: HashSet<CaptureKey> = HashSet::new();
-    let mut captures: HashMap<CaptureKey, NetworkResult> = HashMap::new();
-
-    let mut body_node_ids: Vec<u64> = body.nodes.keys().copied().collect();
-    body_node_ids.sort();
-
-    let mut wires_to_check: Vec<IncomingWire> = Vec::new();
-    for nid in body_node_ids {
-        if let Some(node) = body.nodes.get(&nid) {
-            for arg in &node.arguments {
-                for w in &arg.incoming_wires {
-                    wires_to_check.push(w.clone());
-                }
-            }
-        }
-    }
-    for w in zone_output_wires {
-        wires_to_check.push(w.clone());
-    }
-
-    for incoming in &wires_to_check {
-        if !is_capture(incoming) {
-            continue;
-        }
-        let key = CaptureKey::from_incoming(incoming);
-        if !seen.insert(key.clone()) {
-            continue;
-        }
-        let value = resolve_capture_source(evaluator, body_stack, registry, context, incoming);
-        if let NetworkResult::Error(e) = &value {
-            return Err(format!("failed to pre-evaluate capture: {}", e));
-        }
-        captures.insert(key, value);
-    }
-
-    Ok(Arc::new(captures))
-}
-
-/// A wire is a capture iff its source is outside the body that contains its
-/// destination.
-fn is_capture(w: &IncomingWire) -> bool {
-    match w.source_pin {
-        SourcePin::NodeOutput { .. } => w.source_scope_depth > 0,
-        // `ZoneInput { depth = 1 }` references the immediately-enclosing
-        // HOF's iteration values — per-iteration, not a capture. Deeper
-        // references go through the cache.
-        SourcePin::ZoneInput { .. } => w.source_scope_depth > 1,
-    }
-}
-
-fn resolve_capture_source<'a>(
-    evaluator: &NetworkEvaluator,
-    body_stack: &[NetworkStackElement<'a>],
-    registry: &NodeTypeRegistry,
-    context: &mut NetworkEvaluationContext,
-    incoming: &IncomingWire,
-) -> NetworkResult {
-    let depth = incoming.source_scope_depth as usize;
-    let stack_len = body_stack.len();
-    match incoming.source_pin {
-        SourcePin::NodeOutput { pin_index } => {
-            let source_frame_idx = stack_len.saturating_sub(1 + depth);
-            let source_slice = &body_stack[..=source_frame_idx];
-            evaluator.evaluate(
-                source_slice,
-                incoming.source_node_id,
-                pin_index,
-                registry,
-                false,
-                context,
-            )
-        }
-        SourcePin::ZoneInput { pin_index } => context
-            .current_zone_input(incoming.source_node_id, pin_index)
-            .clone(),
     }
 }
 

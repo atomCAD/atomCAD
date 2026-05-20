@@ -1364,8 +1364,13 @@ impl NetworkEvaluator {
     /// resolution flows through the normal local-source path inside
     /// `resolve_incoming_wire`.
     ///
-    /// Phase 3 lands the helper for HOF eval to call in later phases — no
-    /// existing code path invokes it yet.
+    /// **Dead as of the closures Phase 1 refactor.** The eager HOFs (`fold`,
+    /// `foreach`) — its only callers — now resolve the body's zone-output via
+    /// the carried-wires path (`zone_closure::run_closure_once` →
+    /// `eval_step`), uniform with the lazy walkers. Kept behind
+    /// `#[allow(dead_code)]` and slated for deletion in closures Phase 2 with
+    /// the rest of the `FunctionEvaluator` cleanup. See
+    /// `doc/design_closures.md`.
     #[allow(dead_code)]
     pub fn evaluate_zone_output<'a>(
         &self,

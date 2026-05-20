@@ -2,11 +2,11 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
-    CaptureKey, NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::zone_closure::{build_inline_closure, run_closure_once};
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
-use crate::structure_designer::node_network::{IncomingWire, NodeNetwork, SourcePin};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -15,8 +15,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::HashMap;
 
 /// Side-effect counterpart of `map`: iterates `xs`, evaluates the inline zone
 /// body for each element purely for its side effects, and returns `Unit`.
@@ -105,72 +104,40 @@ impl NodeData for ForeachData {
             }
         };
 
-        // b. Grab the body.
-        let node = NetworkStackElement::get_top_node(network_stack, node_id);
-        let body = match node.zone.as_ref() {
-            Some(b) => Arc::clone(b),
-            None => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "foreach: missing zone body".to_string(),
-                ));
-            }
-        };
-
-        // The zone-output pin must have at least one incoming wire — otherwise
-        // the body produces no side effect.
-        let zone_output_arg_wires: Vec<IncomingWire> = match node.zone_output_arguments.first() {
-            Some(arg) if !arg.incoming_wires.is_empty() => arg.incoming_wires.clone(),
-            _ => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "foreach: body has no incoming wire on `out` zone-output pin".to_string(),
-                ));
-            }
-        };
-
-        // c. Push the body and pre-evaluate captures.
-        let mut body_stack = network_stack.to_vec();
-        body_stack.push(NetworkStackElement {
-            node_network: body.as_ref(),
-            node_id,
-        });
-
-        let captures = match build_captures(
+        // b. Build the closure (body + frozen captures + zone-output wire(s) +
+        // type metadata).
+        let closure = match build_inline_closure(
             network_evaluator,
-            &body_stack,
+            network_stack,
+            node_id,
             registry,
             context,
-            body.as_ref(),
-            &zone_output_arg_wires,
+            "foreach",
         ) {
             Ok(c) => c,
-            Err(err) => {
-                return EvalOutput::single(NetworkResult::Error(format!("foreach: {}", err)));
-            }
+            Err(e) => return EvalOutput::single(e),
         };
 
-        // d. Build inner context for the body's iterations. Inherits
+        // c. Build inner context for the body's iterations. Inherits
         // `execute` (true here by construction — see the comment at the top
         // of this function) so nested `export_xyz`/`print` actually fire.
         let mut inner_ctx = context.fresh_inner_for_eager_body();
-        inner_ctx.captured_source_values = captures;
 
-        // e. Push one frame for this foreach call; rewrite the element slot
-        // per iteration.
-        let placeholder = NetworkResult::None;
-        inner_ctx.push_zone_input_frame(node_id, vec![placeholder]);
-
+        // d. Drain the source walker eagerly; run the closure once per element
+        // via `run_closure_once` for its side effects, discarding the body's
+        // `out` value (universal `T → Unit` widening).
         let result = loop {
             match walker.next(network_evaluator, registry, &mut inner_ctx) {
                 None => break Ok(()),
                 Some(NetworkResult::Error(e)) => break Err(NetworkResult::Error(e)),
                 Some(elem) => {
-                    inner_ctx.write_zone_input_pin(node_id, 0, elem);
-                    let out = network_evaluator.evaluate_zone_output(
-                        &body_stack,
-                        node_id,
-                        0,
+                    let out = run_closure_once(
+                        network_evaluator,
+                        network_stack,
                         registry,
                         &mut inner_ctx,
+                        &closure,
+                        vec![elem],
                     );
                     if let NetworkResult::Error(_) = out {
                         // Fail-fast: surface the first body error as
@@ -186,7 +153,6 @@ impl NodeData for ForeachData {
             }
         };
 
-        inner_ctx.pop_zone_input_frame(node_id);
         context.drain_inner_context(inner_ctx);
 
         EvalOutput::single(match result {
@@ -240,90 +206,6 @@ impl NodeData for ForeachData {
         // verification, so adapters can be loose.
         let elem = source_type.drag_element_type_from_output()?;
         Some(Box::new(ForeachData { input_type: elem }))
-    }
-}
-
-/// Walk the body for capture wires and pre-evaluate them once at body entry.
-/// Mirrors `map.rs::build_captures` — see that file for the discipline.
-#[allow(clippy::arc_with_non_send_sync)]
-fn build_captures<'a>(
-    evaluator: &NetworkEvaluator,
-    body_stack: &[NetworkStackElement<'a>],
-    registry: &NodeTypeRegistry,
-    context: &mut NetworkEvaluationContext,
-    body: &NodeNetwork,
-    zone_output_wires: &[IncomingWire],
-) -> Result<Arc<HashMap<CaptureKey, NetworkResult>>, String> {
-    let mut seen: HashSet<CaptureKey> = HashSet::new();
-    let mut captures: HashMap<CaptureKey, NetworkResult> = HashMap::new();
-
-    let mut body_node_ids: Vec<u64> = body.nodes.keys().copied().collect();
-    body_node_ids.sort();
-
-    let mut wires_to_check: Vec<IncomingWire> = Vec::new();
-    for nid in body_node_ids {
-        if let Some(node) = body.nodes.get(&nid) {
-            for arg in &node.arguments {
-                for w in &arg.incoming_wires {
-                    wires_to_check.push(w.clone());
-                }
-            }
-        }
-    }
-    for w in zone_output_wires {
-        wires_to_check.push(w.clone());
-    }
-
-    for incoming in &wires_to_check {
-        if !is_capture(incoming) {
-            continue;
-        }
-        let key = CaptureKey::from_incoming(incoming);
-        if !seen.insert(key.clone()) {
-            continue;
-        }
-        let value = resolve_capture_source(evaluator, body_stack, registry, context, incoming);
-        if let NetworkResult::Error(e) = &value {
-            return Err(format!("failed to pre-evaluate capture: {}", e));
-        }
-        captures.insert(key, value);
-    }
-
-    Ok(Arc::new(captures))
-}
-
-fn is_capture(w: &IncomingWire) -> bool {
-    match w.source_pin {
-        SourcePin::NodeOutput { .. } => w.source_scope_depth > 0,
-        SourcePin::ZoneInput { .. } => w.source_scope_depth > 1,
-    }
-}
-
-fn resolve_capture_source<'a>(
-    evaluator: &NetworkEvaluator,
-    body_stack: &[NetworkStackElement<'a>],
-    registry: &NodeTypeRegistry,
-    context: &mut NetworkEvaluationContext,
-    incoming: &IncomingWire,
-) -> NetworkResult {
-    let depth = incoming.source_scope_depth as usize;
-    let stack_len = body_stack.len();
-    match incoming.source_pin {
-        SourcePin::NodeOutput { pin_index } => {
-            let source_frame_idx = stack_len.saturating_sub(1 + depth);
-            let source_slice = &body_stack[..=source_frame_idx];
-            evaluator.evaluate(
-                source_slice,
-                incoming.source_node_id,
-                pin_index,
-                registry,
-                false,
-                context,
-            )
-        }
-        SourcePin::ZoneInput { pin_index } => context
-            .current_zone_input(incoming.source_node_id, pin_index)
-            .clone(),
     }
 }
 
