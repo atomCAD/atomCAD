@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -92,6 +92,30 @@ enum APIAlignment {
   motifUnaligned,
   latticeUnaligned,
   ;
+}
+
+/// Stored shape of an `apply` node — identical data to `APIClosureData`,
+/// expanded *outward* (a required `Function` input pin `f`, one ordinary arg
+/// pin per parameter, and a value output of the return type).
+class APIApplyData {
+  final APIClosureKind kind;
+  final List<APIDataType> typeArgs;
+
+  const APIApplyData({
+    required this.kind,
+    required this.typeArgs,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ typeArgs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIApplyData &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          typeArgs == other.typeArgs;
 }
 
 class APIApplyDiffData {
@@ -451,6 +475,51 @@ class APICircleData {
           runtimeType == other.runtimeType &&
           center == other.center &&
           radius == other.radius;
+}
+
+/// Stored shape of a `closure` node: the kind plus the free type args that
+/// fill it (1 or 2 entries, by kind). The `closure` node expands this *inward*
+/// (zone-input pins for the params, one zone-output pin, and a `Function`
+/// output pin); `APIApplyData` carries the same data expanded *outward*.
+class APIClosureData {
+  final APIClosureKind kind;
+  final List<APIDataType> typeArgs;
+
+  const APIClosureData({
+    required this.kind,
+    required this.typeArgs,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ typeArgs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIClosureData &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          typeArgs == other.typeArgs;
+}
+
+/// Shape template for a `closure` / `apply` node, mirroring the Rust
+/// `ClosureKind`. Fixes the arity and which pin types are free vs. fixed; the
+/// four kinds are exactly the four HOF body shapes, so a closure of a given
+/// kind drops into the matching HOF's `f` pin by construction. See
+/// `doc/design_closures.md`.
+enum APIClosureKind {
+  /// `(T) -> U` — map-like. `type_args`: `[T, U]`.
+  map,
+
+  /// `(T) -> Bool` — filter-like. `type_args`: `[T]`.
+  filter,
+
+  /// `(A, T) -> A` — fold-like. `type_args`: `[A, T]`.
+  fold,
+
+  /// `(T) -> Unit` — foreach-like. `type_args`: `[T]`.
+  foreach,
+  ;
 }
 
 class APICollectData {

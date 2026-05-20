@@ -119,6 +119,15 @@ Design doc: `doc/design_record_types.md`.
 - **Wire rendering:** output pin y-offset is per-pin (same formula as input pins). `getNodeSize()` / `estimate_node_height()` use `max(inputs, outputs, minHeight)`.
 - **`OutputPinView { name, data_type, index }`** API type for each output pin.
 
+## Closures (function values)
+
+The `closure` and `apply` nodes (plus the four HOFs' optional `f` input pin) expose first-class function values to the UI. See `doc/design_closures.md`.
+
+- **API types:** `APIClosureKind` (`map` / `filter` / `fold` / `foreach` — the four shape templates), `APIClosureData` and `APIApplyData` (both `{ kind, type_args }`). `Function` data types surface through the existing `APIDataType` machinery and render amber.
+- **Model / API:** `setClosureData` / `setApplyData` are model methods (they forward `activeScopeChain` as `scope_path` to the Rust API); `getClosureData` / `getApplyData` are direct generated-API calls. The shared `ClosureShapeEditor` is wired to them through `node_data_widget.dart`'s `'closure'` / `'apply'` cases.
+- **Editor:** the shared shape editor and the inline-body/`f`-pin toggle are documented in `node_data/AGENTS.md` and `node_network/AGENTS.md` respectively. Body rendering is inherited from the zones UI — no closure-specific rendering code.
+- **Add Node popup** is registry-driven, so `closure` and `apply` appear automatically once registered in Rust; no Flutter list edit was needed.
+
 ## Undo/Redo Integration
 
 Keyboard shortcuts in `node_network/node_network.dart`:

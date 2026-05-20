@@ -10,7 +10,7 @@ A **node network** is a collection of nodes. A node may be either a built-in nod
 
 A **node** may have zero or more *named input pins* (also called the node’s *parameters*) on the left side, and one or more *named output pins* on the right side. Most nodes have exactly one output pin (the "result"); a few nodes are **multi-output** — they expose more than one named output pin, each independently connectable and displayable. The clearest example is `atom_edit`, which exposes both a `result` pin (the applied edit) and a `diff` pin (the raw diff structure).
 
-Most nodes also have one *function pin* in the upper-right corner — a legacy artifact that lets a node be used as a first-class function value (used historically by the higher-order-function nodes). It is suppressed on the higher-order-function nodes themselves (`map`, `filter`, `fold`, `foreach`) — those nodes now carry their per-element computation as an *inline body region* instead of consuming a function value through a pin. See the [Higher-order functions](#higher-order-functions-and-inline-bodies) section.
+Most nodes also have one *function pin* in the upper-right corner — a legacy artifact that lets a node be used as a first-class function value. It is suppressed on the higher-order-function nodes themselves (`map`, `filter`, `fold`, `foreach`), which author their per-element computation as an *inline body region* by default and accept a reusable function value through an ordinary `f` *input* pin (see [Function values: closures and the `f` pin](#function-values-closures-and-the-f-pin)) rather than through this legacy corner pin. See the [Higher-order functions](#higher-order-functions-and-inline-bodies) section.
 
 Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
 
@@ -205,7 +205,7 @@ One of the key nodes to make an atomCAD node network more dynamic is the `expr` 
 
 To go beyond a single expression and write **per-element computations** that run across a stream of values, atomCAD provides four **higher-order function** nodes — `map`, `filter`, `fold`, and `foreach`. Each one takes an input stream (`xs: Iter[T]`) and applies the same per-element computation to every element.
 
-The way you supply that per-element computation is the inline-body model:
+The default way you supply that per-element computation is the inline-body model:
 
 - Each higher-order-function node carries an **inline body region** inside the node — a small editable canvas of its own. You add nodes and wires *inside* the HOF the same way you do at the top level.
 - The body region has **zone-input pins** on its inner-left edge (sources that supply per-iteration values to the body — `element`, `acc`) and a **zone-output pin** on its inner-right edge (the body's per-iteration return value — `result`, `new_acc`, `out`).
@@ -242,8 +242,16 @@ Keyboard shortcuts (Delete, Ctrl+C / X / V / D) operate on whichever body you mo
 
 Body regions grow automatically to fit their content and can be dragged larger from the bottom-right corner handle. The stored size is the minimum size; live content additions and node drags grow the body in real time. Bodies don't shrink below their content.
 
-### Legacy function pin
+### Function values: closures and the `f` pin
 
-Pre-zones HOF nodes had a separate `f` input pin that received a function value, with extra function parameters pre-bound through a partial-application mechanism. The inline-body / capture model replaces that path entirely: there is no longer an `f` pin on `map`, `filter`, `fold`, or `foreach`. The legacy function pin survives in the title bar of *non-HOF* nodes — it lets a node be used as a first-class function value in code paths that still expect one — but it is suppressed on the HOFs themselves.
+The inline body is the *default* way to author an HOF's per-element computation, but on its own it fuses that computation to a single call site. To **reuse** one computation across several HOFs — or to compute and pass around a function — atomCAD provides function values, built with the `closure` node and consumed through an HOF's optional `f` pin or the `apply` node:
+
+- A **`closure`** node owns an inline body exactly like an HOF, but instead of consuming the body inline it exposes it on a `Function`-typed output pin (rendered amber). You pick its shape — a *kind*: `(T) -> U`, `(T) -> Bool`, `(A, T) -> A`, or `(T) -> Unit`, which are the four HOF body shapes — from the Node Properties panel.
+- Each HOF has an optional **`f` input pin**. Wire a `closure` output of the matching kind into it and that function drives the HOF instead of its own inline body — the body is hidden in the editor while `f` is connected, and reappears when you disconnect it.
+- The **`apply`** node calls a function value *once*, on a single argument set, rather than across a stream. This is what makes a `Function` a genuinely callable value — for example, calling a function-factory subnetwork's `Function` output on a single input.
+
+A subnetwork can also *return* a `closure` as its `Function` output, giving you a **function factory**: a subnetwork whose result is a function configured by its inputs.
+
+See the [`closure`](./nodes/math_programming.md#closure), [`apply`](./nodes/math_programming.md#apply), and [Function values and closures](./nodes/math_programming.md#function-values-and-closures) sections of the nodes reference for the full details.
 
 To see higher-order functions in atomCAD in action please check out the *Pattern* demo [in the demos document](../../samples/demo_description.md).

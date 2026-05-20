@@ -31,6 +31,15 @@ class LayoutCache {
   /// (a collapsed outer body subsumes its inner bodies).
   final List<List<BigInt>> collapsedBodies = [];
 
+  /// Scope chains whose owner HOF has its `f` (function) input pin wired, so
+  /// the inline body is ignored at eval time (the wired closure drives it
+  /// instead). Such bodies are hidden — their content is skipped and the HOF
+  /// renders a "driven by `f`" placeholder. These chains are *also* added to
+  /// [collapsedBodies] so the existing body-skip checks in the node walk and
+  /// painter hide the content with no extra conditions. See
+  /// `doc/design_closures.md` §"Editor (Flutter) changes" item 1.
+  final List<List<BigInt>> functionOverriddenBodies = [];
+
   Size? lookupSize(List<BigInt> bodyChain) {
     for (final entry in bodySizes.entries) {
       if (_listEq(entry.key, bodyChain)) return entry.value;
@@ -47,6 +56,13 @@ class LayoutCache {
 
   bool isCollapsed(List<BigInt> bodyChain) {
     for (final entry in collapsedBodies) {
+      if (_listEq(entry, bodyChain)) return true;
+    }
+    return false;
+  }
+
+  bool isFunctionOverridden(List<BigInt> bodyChain) {
+    for (final entry in functionOverriddenBodies) {
       if (_listEq(entry, bodyChain)) return true;
     }
     return false;
@@ -118,6 +134,7 @@ class ScopeResolver {
     layout.bodySizes.clear();
     layout.bodyOrigins.clear();
     layout.collapsedBodies.clear();
+    layout.functionOverriddenBodies.clear();
     // Phase 1: bottom-up sizes.
     for (final node in root.nodes.values) {
       final zone = node.zone;
@@ -147,6 +164,63 @@ class ScopeResolver {
         layout.collapsedBodies.add(List<BigInt>.from(chain));
       }
     }
+    // Phase 4: function-pin override. An HOF whose `f` input pin is wired
+    // ignores its inline body (the wired closure drives it), so hide the
+    // body's content — treat it like a collapse so the node walk and painter
+    // skip it — and flag it separately so the HOF can render a distinct
+    // "driven by `f`" placeholder. Only the four HOF types declare an `f`
+    // pin, so `closure` bodies are never flagged here.
+    for (final chain in layout.bodySizes.keys) {
+      if (!_isFunctionPinConnected(chain)) continue;
+      layout.functionOverriddenBodies.add(List<BigInt>.from(chain));
+      if (!layout.isCollapsed(chain)) {
+        layout.collapsedBodies.add(List<BigInt>.from(chain));
+      }
+    }
+  }
+
+  /// Wires of the network that directly contains the body identified by
+  /// [scopeChain] (the network the HOF at the chain's tail lives in). Returns
+  /// `root.wires` for the top level; walks into nested bodies otherwise.
+  List<WireView> _containingWires(List<BigInt> scopeChain) {
+    if (scopeChain.isEmpty) return root.wires;
+    Map<BigInt, NodeView> nodes = root.nodes;
+    ZoneView? zone;
+    for (final hofId in scopeChain) {
+      zone = nodes[hofId]?.zone;
+      if (zone == null) return const [];
+      nodes = zone.nodes;
+    }
+    return zone!.wires;
+  }
+
+  /// True when the HOF owning the body at [bodyChain] (`[...parent, hofId]`)
+  /// has its `f` (function) input pin wired. The `f` pin is an ordinary
+  /// external input, so a wire to it lives in the HOF's containing-network
+  /// wires regardless of the source's scope depth.
+  bool _isFunctionPinConnected(List<BigInt> bodyChain) {
+    if (bodyChain.isEmpty) return false;
+    final hofId = bodyChain.last;
+    final parentChain = bodyChain.sublist(0, bodyChain.length - 1);
+    final hof = _resolveNode(parentChain, hofId);
+    if (hof == null) return false;
+    int fIndex = -1;
+    for (int i = 0; i < hof.inputPins.length; i++) {
+      if (hof.inputPins[i].name == 'f') {
+        fIndex = i;
+        break;
+      }
+    }
+    if (fIndex < 0) return false;
+    final fParam = BigInt.from(fIndex);
+    for (final wire in _containingWires(parentChain)) {
+      if (wire.destNodeId == hofId &&
+          wire.destParamIndex == fParam &&
+          wire.destinationArgumentKind == APIArgumentKind.external_) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Effective body size for [node]'s zone, in logical pixels. Reads from the
@@ -218,6 +292,15 @@ class ScopeResolver {
       if (layout.isCollapsed(bodyScopeChain.sublist(0, i))) return true;
     }
     return false;
+  }
+
+  /// True when the body at [bodyScopeChain] (`[...parent, hofId]`) is hidden
+  /// because its owner HOF's `f` pin is wired. Exact-match (unlike
+  /// [isBodyCollapsed], which cascades from ancestors): the HOF widget only
+  /// consults this for its own body, to choose the "driven by `f`"
+  /// placeholder over the generic collapse placeholder.
+  bool isBodyFunctionOverridden(List<BigInt> bodyScopeChain) {
+    return layout.isFunctionOverridden(bodyScopeChain);
   }
 
   /// Recursive bottom-up size computation. After this returns, `layout

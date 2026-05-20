@@ -50,6 +50,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAlignment dco_decode_api_alignment(dynamic raw);
 
   @protected
+  APIApplyData dco_decode_api_apply_data(dynamic raw);
+
+  @protected
   APIApplyDiffData dco_decode_api_apply_diff_data(dynamic raw);
 
   @protected
@@ -96,6 +99,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
+
+  @protected
+  APIClosureData dco_decode_api_closure_data(dynamic raw);
+
+  @protected
+  APIClosureKind dco_decode_api_closure_kind(dynamic raw);
 
   @protected
   APICollectData dco_decode_api_collect_data(dynamic raw);
@@ -381,6 +390,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAlignment dco_decode_box_autoadd_api_alignment(dynamic raw);
 
   @protected
+  APIApplyData dco_decode_box_autoadd_api_apply_data(dynamic raw);
+
+  @protected
   APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
@@ -410,6 +422,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData dco_decode_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
+  APIClosureData dco_decode_box_autoadd_api_closure_data(dynamic raw);
 
   @protected
   APICollectData dco_decode_box_autoadd_api_collect_data(dynamic raw);
@@ -712,6 +727,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
 
   @protected
+  List<APIDataType> dco_decode_list_api_data_type(dynamic raw);
+
+  @protected
   List<APIExprParameter> dco_decode_list_api_expr_parameter(dynamic raw);
 
   @protected
@@ -821,6 +839,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAlignment? dco_decode_opt_box_autoadd_api_alignment(dynamic raw);
 
   @protected
+  APIApplyData? dco_decode_opt_box_autoadd_api_apply_data(dynamic raw);
+
+  @protected
   APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
@@ -851,6 +872,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData? dco_decode_opt_box_autoadd_api_circle_data(dynamic raw);
+
+  @protected
+  APIClosureData? dco_decode_opt_box_autoadd_api_closure_data(dynamic raw);
 
   @protected
   APICollectData? dco_decode_opt_box_autoadd_api_collect_data(dynamic raw);
@@ -1186,6 +1210,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAlignment sse_decode_api_alignment(SseDeserializer deserializer);
 
   @protected
+  APIApplyData sse_decode_api_apply_data(SseDeserializer deserializer);
+
+  @protected
   APIApplyDiffData sse_decode_api_apply_diff_data(SseDeserializer deserializer);
 
   @protected
@@ -1237,6 +1264,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
+
+  @protected
+  APIClosureData sse_decode_api_closure_data(SseDeserializer deserializer);
+
+  @protected
+  APIClosureKind sse_decode_api_closure_kind(SseDeserializer deserializer);
 
   @protected
   APICollectData sse_decode_api_collect_data(SseDeserializer deserializer);
@@ -1549,6 +1582,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIApplyData sse_decode_box_autoadd_api_apply_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIApplyDiffData sse_decode_box_autoadd_api_apply_diff_data(
       SseDeserializer deserializer);
 
@@ -1585,6 +1622,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData sse_decode_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIClosureData sse_decode_box_autoadd_api_closure_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1952,6 +1993,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APIDataType> sse_decode_list_api_data_type(SseDeserializer deserializer);
+
+  @protected
   List<APIExprParameter> sse_decode_list_api_expr_parameter(
       SseDeserializer deserializer);
 
@@ -2082,6 +2126,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIApplyData? sse_decode_opt_box_autoadd_api_apply_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIApplyDiffData? sse_decode_opt_box_autoadd_api_apply_diff_data(
       SseDeserializer deserializer);
 
@@ -2119,6 +2167,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICircleData? sse_decode_opt_box_autoadd_api_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIClosureData? sse_decode_opt_box_autoadd_api_closure_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2513,6 +2565,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_alignment(APIAlignment self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_apply_data(APIApplyData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_apply_diff_data(
       APIApplyDiffData self, SseSerializer serializer);
 
@@ -2571,6 +2626,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_closure_data(
+      APIClosureData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_closure_kind(
+      APIClosureKind self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_collect_data(
@@ -2915,6 +2978,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAlignment self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_apply_data(
+      APIApplyData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_apply_diff_data(
       APIApplyDiffData self, SseSerializer serializer);
 
@@ -2953,6 +3020,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_circle_data(
       APICircleData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_closure_data(
+      APIClosureData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_collect_data(
@@ -3327,6 +3398,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APICandidateNode> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_data_type(
+      List<APIDataType> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_expr_parameter(
       List<APIExprParameter> self, SseSerializer serializer);
 
@@ -3462,6 +3537,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIAlignment? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_apply_data(
+      APIApplyData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_apply_diff_data(
       APIApplyDiffData? self, SseSerializer serializer);
 
@@ -3500,6 +3579,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_circle_data(
       APICircleData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_closure_data(
+      APIClosureData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_collect_data(

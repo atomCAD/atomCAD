@@ -97,6 +97,8 @@ A node's **scope chain** is the `List<BigInt>` of HOF node ids identifying the b
 
 `PinReference.pinKind` is one of `externalInput`, `externalOutput`, `functionPin` (legacy, suppressed on HOFs by `node_widget.dart`'s title-bar conditional), `zoneInput` (inner-left source on an HOF body), `zoneOutput` (inner-right destination on an HOF body). Wire creation routes through `canConnectPins`/`connectPins` which compute `source_scope_depth = effectiveDestScope.length - source.scopeChain.length` where `effectiveDestScope = dest.scopeChain ++ [dest.nodeId]` for `ZoneOutput` destinations.
 
+Note that closures' `Function`-typed pins (the `closure` node's output, the HOFs' optional `f` input, the `apply` node's `f` input) are **ordinary** `externalInput` / `externalOutput` pins that happen to carry a `Function` data type (amber color) — they are *not* the legacy `functionPin` kind. Dragging a `closure` output into an `f` input flows through the normal pin-to-pin path; Rust's `can_be_converted_to` does the structural compatibility check. See `doc/design_closures.md`.
+
 ### Active scope chain
 
 `StructureDesignerModel.activeScopeChain: List<BigInt>` is the body that keyboard shortcuts (Delete, Ctrl+C / V / X / D) operate on. Clicking on a body's interior, on a body-internal node, or right-clicking inside a body sets the active scope. Clicking on the top-level canvas resets it to `const []`. The Rust side does not mirror this — every mutation API receives `scope_path` explicitly from the call site.
@@ -105,4 +107,12 @@ A node's **scope chain** is the `List<BigInt>` of HOF node ids identifying the b
 
 Selection rectangles are scope-confined: the scope is captured at pointer-down (whatever scope the drag started in) and the final node/wire overlap test is restricted to that scope's nodes. The rendered rectangle is also clipped to the body's screen rect (U7 polish) so it doesn't visually escape the body region.
 
-Design doc: `doc/design_zones_ui.md`.
+### Closures: the `f`-pin override and shared shape editor
+
+The four HOFs gained an optional `f: Function` input pin and there are two new function-value nodes: `closure` (zone-bearing, exposes its body as a `Function` output) and `apply` (bodyless, calls a `Function` once). The `closure` node's body **renders and edits for free** through the generic zone machinery above — it is `has_zone()`, so the body region, inner zone pins, recursive body nodes, resize handle, collapse, and hit-testing are all inherited with no closure-specific rendering code.
+
+The one new rendering rule is the **inline-body / `f`-pin toggle**: when an HOF's `f` pin is wired, its inline body is ignored at eval, so the editor hides it. `ScopeResolver.runLayoutPass` collects every such body chain into `LayoutCache.functionOverriddenBodies` (Phase 4 of the layout pass, via `_isFunctionPinConnected`) and *also* adds it to `collapsedBodies`, so the existing body-skip checks in the node walk and painter hide the content with no extra conditions. The HOF then renders a distinct `_ZoneFunctionOverridePlaceholder` ("driven by `f`") instead of the `[N nodes]` collapse placeholder — `node_widget.dart` checks `ScopeResolver.isFunctionOverridden(chain)`. Only the four HOF types declare an `f` pin, so `closure` bodies are never flagged. Disconnecting `f` restores the inline body.
+
+The shared shape property editor (`ClosureShapeEditor`) for both `closure` and `apply` lives on the `node_data` side — see `node_data/AGENTS.md`.
+
+Design doc: `doc/design_zones_ui.md`, `doc/design_closures.md`.

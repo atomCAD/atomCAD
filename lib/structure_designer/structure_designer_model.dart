@@ -1869,6 +1869,16 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setClosureData(BigInt nodeId, APIClosureData data) {
+    structure_designer_api.setClosureData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
+  void setApplyData(BigInt nodeId, APIApplyData data) {
+    structure_designer_api.setApplyData(scopePath: _scopeChainToBytes(activeScopeChain), nodeId: nodeId, data: data);
+    refreshFromKernel();
+  }
+
   APISequenceData? getSequenceData(BigInt nodeId) {
     return structure_designer_api.getSequenceData(nodeId: nodeId);
   }

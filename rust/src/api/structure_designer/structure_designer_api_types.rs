@@ -956,6 +956,40 @@ pub struct APIFoldData {
     pub accumulator_type: APIDataType,
 }
 
+/// Shape template for a `closure` / `apply` node, mirroring the Rust
+/// `ClosureKind`. Fixes the arity and which pin types are free vs. fixed; the
+/// four kinds are exactly the four HOF body shapes, so a closure of a given
+/// kind drops into the matching HOF's `f` pin by construction. See
+/// `doc/design_closures.md`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APIClosureKind {
+    /// `(T) -> U` — map-like. `type_args`: `[T, U]`.
+    Map,
+    /// `(T) -> Bool` — filter-like. `type_args`: `[T]`.
+    Filter,
+    /// `(A, T) -> A` — fold-like. `type_args`: `[A, T]`.
+    Fold,
+    /// `(T) -> Unit` — foreach-like. `type_args`: `[T]`.
+    Foreach,
+}
+
+/// Stored shape of a `closure` node: the kind plus the free type args that
+/// fill it (1 or 2 entries, by kind). The `closure` node expands this *inward*
+/// (zone-input pins for the params, one zone-output pin, and a `Function`
+/// output pin); `APIApplyData` carries the same data expanded *outward*.
+pub struct APIClosureData {
+    pub kind: APIClosureKind,
+    pub type_args: Vec<APIDataType>,
+}
+
+/// Stored shape of an `apply` node — identical data to `APIClosureData`,
+/// expanded *outward* (a required `Function` input pin `f`, one ordinary arg
+/// pin per parameter, and a value output of the return type).
+pub struct APIApplyData {
+    pub kind: APIClosureKind,
+    pub type_args: Vec<APIDataType>,
+}
+
 pub struct APIArrayAtData {
     pub element_type: APIDataType,
     /// Stored index used when the `index` input pin is not connected. `0`

@@ -14,6 +14,9 @@ use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
+use super::structure_designer_api_types::APIApplyData;
+use super::structure_designer_api_types::APIClosureData;
+use super::structure_designer_api_types::APIClosureKind;
 use super::structure_designer_api_types::APIFilterData;
 use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIForeachData;
@@ -118,6 +121,7 @@ use crate::structure_designer::evaluator::network_result::{
 };
 use crate::structure_designer::layout;
 use crate::structure_designer::node_data::CustomNodeData;
+use crate::structure_designer::nodes::apply::ApplyData;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::array_at::ArrayAtData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
@@ -128,6 +132,7 @@ use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
 use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
 use crate::structure_designer::nodes::bool::BoolData;
 use crate::structure_designer::nodes::circle::CircleData;
+use crate::structure_designer::nodes::closure::{ClosureData, ClosureKind};
 use crate::structure_designer::nodes::collect::CollectData;
 use crate::structure_designer::nodes::comment::CommentData;
 use crate::structure_designer::nodes::cuboid::CuboidData;
@@ -306,6 +311,39 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         custom_data_type,
         array: is_array,
     }
+}
+
+fn api_closure_kind_to_closure_kind(kind: &APIClosureKind) -> ClosureKind {
+    match kind {
+        APIClosureKind::Map => ClosureKind::Map,
+        APIClosureKind::Filter => ClosureKind::Filter,
+        APIClosureKind::Fold => ClosureKind::Fold,
+        APIClosureKind::Foreach => ClosureKind::Foreach,
+    }
+}
+
+fn closure_kind_to_api_closure_kind(kind: &ClosureKind) -> APIClosureKind {
+    match kind {
+        ClosureKind::Map => APIClosureKind::Map,
+        ClosureKind::Filter => APIClosureKind::Filter,
+        ClosureKind::Fold => APIClosureKind::Fold,
+        ClosureKind::Foreach => APIClosureKind::Foreach,
+    }
+}
+
+/// Convert a stored `Vec<DataType>` of closure type-args to the API form.
+fn type_args_to_api(type_args: &[DataType]) -> Vec<APIDataType> {
+    type_args.iter().map(data_type_to_api_data_type).collect()
+}
+
+/// Convert API closure type-args back to `Vec<DataType>`, defaulting any
+/// unparseable entry to `DataType::None` (the same fallback the per-type
+/// setters use for transient editing states).
+fn api_to_type_args(type_args: &[APIDataType]) -> Vec<DataType> {
+    type_args
+        .iter()
+        .map(|t| api_data_type_to_data_type(t).unwrap_or(DataType::None))
+        .collect()
 }
 
 /// Build a [`ZoneView`] for an HOF node's body.
@@ -3903,6 +3941,46 @@ pub fn get_fold_data(node_id: u64) -> Option<APIFoldData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_closure_data(node_id: u64) -> Option<APIClosureData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let closure_data = node_data.as_any_ref().downcast_ref::<ClosureData>()?;
+
+                Some(APIClosureData {
+                    kind: closure_kind_to_api_closure_kind(&closure_data.kind),
+                    type_args: type_args_to_api(&closure_data.type_args),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_apply_data(node_id: u64) -> Option<APIApplyData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data(node_id)?;
+                let apply_data = node_data.as_any_ref().downcast_ref::<ApplyData>()?;
+
+                Some(APIApplyData {
+                    kind: closure_kind_to_api_closure_kind(&apply_data.kind),
+                    type_args: type_args_to_api(&apply_data.type_args),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_sequence_data(node_id: u64) -> Option<APISequenceData> {
     unsafe {
         with_cad_instance_or(
@@ -5308,6 +5386,40 @@ pub fn set_fold_data(scope_path: Vec<u64>, node_id: u64, data: APIFoldData) {
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, fold_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_closure_data(scope_path: Vec<u64>, node_id: u64, data: APIClosureData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let closure_data = Box::new(ClosureData {
+                kind: api_closure_kind_to_closure_kind(&data.kind),
+                type_args: api_to_type_args(&data.type_args),
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, closure_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_apply_data(scope_path: Vec<u64>, node_id: u64, data: APIApplyData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let apply_data = Box::new(ApplyData {
+                kind: api_closure_kind_to_closure_kind(&data.kind),
+                type_args: api_to_type_args(&data.type_args),
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, apply_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

@@ -10,6 +10,7 @@ Per-node-type property editor widgets. Each node type has a corresponding editor
 - `network_description_editor.dart` - Editor for network-level description/summary
 - `matrix_cell.dart` - Shared `IntMatrixCell` / `FloatMatrixCell` widgets (compact numeric input + scroll-to-step) used by the 3x3 matrix editors (`imat3_*_editor.dart`, `mat3_*_editor.dart`)
 - `record_def_dropdown.dart` - Shared `RecordDefDropdown` widget: name-only dropdown of project record defs + "Edit definition…" affordance. Used by `record_construct_editor.dart`, `record_destructure_editor.dart`, `product_editor.dart` to bind their `schema` / `target` `String` properties.
+- `closure_editor.dart` - Shared `ClosureShapeEditor` widget for **both** the `closure` and `apply` nodes (they store the same `{ kind, type_args }` data and differ only in inward/outward pin expansion). A `Kind` dropdown (the four HOF-shape templates) over 1–2 `DataTypeInput` rows for the free type slots, plus a read-only result line for fixed/derived results. `node_data_widget.dart` routes both `'closure'` and `'apply'` to it, wrapping `onChanged` into `model.setClosureData` / `setApplyData` (read back via `getClosureData` / `getApplyData`). See `doc/design_closures.md`.
 - `*_editor.dart` - One file per node type (40+ editors)
 
 ## Adding a New Node Editor

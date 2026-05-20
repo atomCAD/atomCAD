@@ -954,6 +954,7 @@ class NodeWidget extends StatelessWidget {
     final cachedSize = resolver.layout.lookupSize(bodyChain);
     final effectiveSize = cachedSize ?? Size(zone.storedWidth, zone.storedHeight);
     final collapsed = resolver.isBodyCollapsed(bodyChain);
+    final fOverridden = resolver.isBodyFunctionOverridden(bodyChain);
     return SizedBox(
       width: BASE_HOF_BODY_LEFT_OFFSET +
           effectiveSize.width +
@@ -989,7 +990,15 @@ class NodeWidget extends StatelessWidget {
           // Translucent body region. Falls back to a minimal placeholder
           // when the body is collapsed — its content is hidden elsewhere by
           // the recursive walks in node_network.dart / node_network_painter.
-          if (collapsed)
+          //
+          // When the HOF's `f` pin is wired the inline body is ignored at
+          // eval time, so we render a distinct "driven by `f`" placeholder
+          // (the scope resolver also flags it collapsed so the body content
+          // is skipped, giving one obvious source of truth). See
+          // `doc/design_closures.md`.
+          if (fOverridden)
+            _ZoneFunctionOverridePlaceholder(effectiveSize: effectiveSize)
+          else if (collapsed)
             _ZoneCollapsedPlaceholder(
               nodeCount: zone.nodes.length,
               effectiveSize: effectiveSize,
@@ -1727,6 +1736,49 @@ class _ZoneCollapsedPlaceholder extends StatelessWidget {
             fontStyle: FontStyle.italic,
           ),
           textAlign: TextAlign.center,
+        ),
+      ),
+    );
+  }
+}
+
+/// Placeholder shown in place of an HOF's body region when its `f` (function)
+/// input pin is wired: the inline body is ignored at eval time, so it is
+/// hidden and this note makes the wired closure the one obvious source of
+/// truth. The body content is skipped by the recursive walks (the scope
+/// resolver flags such bodies collapsed). See `doc/design_closures.md`.
+class _ZoneFunctionOverridePlaceholder extends StatelessWidget {
+  final Size effectiveSize;
+
+  const _ZoneFunctionOverridePlaceholder({required this.effectiveSize});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: effectiveSize.width,
+      height: effectiveSize.height,
+      margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        border: Border.all(
+          // Amber-tinted to echo the Function wire color.
+          color: const Color(0xFFFFA726).withValues(alpha: 0.45),
+          width: 1.0,
+        ),
+        borderRadius: BorderRadius.circular(6.0),
+      ),
+      child: const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6),
+          child: Text(
+            'body ignored\n— driven by `f` —',
+            style: TextStyle(
+              color: Colors.white54,
+              fontSize: 11,
+              fontStyle: FontStyle.italic,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );

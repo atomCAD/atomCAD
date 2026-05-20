@@ -30,6 +30,7 @@ import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/foreach_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/fold_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/closure_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sequence_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec2_editor.dart';
@@ -484,6 +485,32 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: foldData,
           model: model,
+        );
+      case 'closure':
+        final closureData = getClosureData(nodeId: selectedNode.id);
+        return ClosureShapeEditor(
+          title: 'Closure Properties',
+          nodeTypeName: 'closure',
+          kind: closureData?.kind ?? APIClosureKind.map,
+          typeArgs: closureData?.typeArgs ?? const [],
+          loading: closureData == null,
+          onChanged: (kind, typeArgs) => model.setClosureData(
+            selectedNode.id,
+            APIClosureData(kind: kind, typeArgs: typeArgs),
+          ),
+        );
+      case 'apply':
+        final applyData = getApplyData(nodeId: selectedNode.id);
+        return ClosureShapeEditor(
+          title: 'Apply Properties',
+          nodeTypeName: 'apply',
+          kind: applyData?.kind ?? APIClosureKind.map,
+          typeArgs: applyData?.typeArgs ?? const [],
+          loading: applyData == null,
+          onChanged: (kind, typeArgs) => model.setApplyData(
+            selectedNode.id,
+            APIApplyData(kind: kind, typeArgs: typeArgs),
+          ),
         );
       case 'sequence':
         final sequenceData = model.getSequenceData(selectedNode.id);
