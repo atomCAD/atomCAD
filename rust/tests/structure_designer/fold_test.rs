@@ -69,11 +69,14 @@ fn test_fold_registered_in_registry() {
     let nt = node_type.unwrap();
     assert_eq!(nt.name, "fold");
     assert!(nt.public);
-    // Phase 5: `f` is gone — only external inputs are `xs` and `init`. The
-    // combining body lives inside the zone.
-    assert_eq!(nt.parameters.len(), 2);
+    // Closures Phase 4 re-added an optional `f` (function value) pin after `xs`
+    // and `init`; the combining body still lives inside the zone (used when `f`
+    // is disconnected).
+    assert_eq!(nt.parameters.len(), 3);
     assert_eq!(nt.parameters[0].name, "xs");
     assert_eq!(nt.parameters[1].name, "init");
+    assert_eq!(nt.parameters[2].name, "f");
+    assert!(matches!(nt.parameters[2].data_type, DataType::Function(_)));
     assert_eq!(nt.output_pins.len(), 1);
     assert_eq!(*nt.output_type(), DataType::Float);
 
@@ -99,12 +102,20 @@ fn test_fold_custom_type_int_int() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
-    assert_eq!(custom.parameters.len(), 2);
+    assert_eq!(custom.parameters.len(), 3);
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
     );
     assert_eq!(custom.parameters[1].data_type, DataType::Int);
+    // `f`: (accumulator_type, element_type) -> accumulator_type.
+    assert_eq!(
+        custom.parameters[2].data_type,
+        DataType::Function(rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
+            parameter_types: vec![DataType::Int, DataType::Int],
+            output_type: Box::new(DataType::Int),
+        })
+    );
     assert_eq!(*custom.output_type(), DataType::Int);
 
     assert_eq!(custom.zone_input_pins.len(), 2);

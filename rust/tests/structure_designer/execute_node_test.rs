@@ -118,10 +118,12 @@ fn foreach_is_registered_in_registry() {
         .expect("foreach should be registered");
     assert_eq!(nt.name, "foreach");
     assert!(nt.public);
-    // Phase 5: `f` is gone — only external input is `xs`. The body lives
-    // inside the zone.
-    assert_eq!(nt.parameters.len(), 1);
+    // Closures Phase 4 re-added an optional `f` (function value) pin alongside
+    // `xs`; the body still lives inside the zone (used when `f` is disconnected).
+    assert_eq!(nt.parameters.len(), 2);
     assert_eq!(nt.parameters[0].name, "xs");
+    assert_eq!(nt.parameters[1].name, "f");
+    assert!(matches!(nt.parameters[1].data_type, DataType::Function(_)));
     assert_eq!(nt.output_pins.len(), 1);
     assert_eq!(*nt.output_type(), DataType::Unit);
 
@@ -143,11 +145,13 @@ fn foreach_calculate_custom_node_type_uses_unit_output_and_zone_pins() {
         input_type: DataType::Int,
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
-    assert_eq!(custom.parameters.len(), 1);
+    assert_eq!(custom.parameters.len(), 2);
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
     );
+    assert_eq!(custom.parameters[1].name, "f");
+    assert!(matches!(custom.parameters[1].data_type, DataType::Function(_)));
     assert_eq!(*custom.output_type(), DataType::Unit);
 
     assert_eq!(custom.zone_input_pins.len(), 1);

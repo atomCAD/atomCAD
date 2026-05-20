@@ -1,11 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::zone_closure::{build_inline_closure, run_closure_once};
+use crate::structure_designer::evaluator::zone_closure::{obtain_closure, run_closure_once};
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -50,9 +50,14 @@ impl NodeData for ForeachData {
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         let mut custom = base_node_type.clone();
 
-        // External: only `xs` remains. The side-effecting body lives inside
-        // the zone.
+        // External: `xs` (the stream) and the optional `f` (a side-effecting
+        // function value that, when wired, overrides the inline body). The
+        // inline side-effecting body lives inside the zone.
         custom.parameters[0].data_type = DataType::Iterator(Box::new(self.input_type.clone()));
+        custom.parameters[1].data_type = DataType::Function(FunctionType {
+            parameter_types: vec![self.input_type.clone()],
+            output_type: Box::new(DataType::Unit),
+        });
         custom.output_pins = OutputPinDefinition::single_fixed(DataType::Unit);
 
         // Inside-facing pins: one element source, one Unit destination. The
@@ -104,14 +109,16 @@ impl NodeData for ForeachData {
             }
         };
 
-        // b. Build the closure (body + frozen captures + zone-output wire(s) +
-        // type metadata).
-        let closure = match build_inline_closure(
+        // b. Obtain the closure to run: the function wired into `f` if
+        // connected, otherwise one built from this node's own inline zone
+        // (body + frozen captures + zone-output wire(s) + type metadata).
+        let closure = match obtain_closure(
             network_evaluator,
             network_stack,
             node_id,
             registry,
             context,
+            1, // `f` pin index
             "foreach",
         ) {
             Ok(c) => c,
@@ -192,6 +199,8 @@ impl NodeData for ForeachData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("xs".to_string(), (true, None));
+        // `f` is optional: when disconnected, the inline zone body drives foreach.
+        m.insert("f".to_string(), (false, None));
         m
     }
 
@@ -215,11 +224,24 @@ pub fn get_node_type() -> NodeType {
         description: "Iterates `xs` and evaluates the inline zone body on every element for its side effects, returning `Unit`. The body delivers a value to the inside-facing `out` destination pin — the universal `T → Unit` widening discards it. On normal display passes the whole pipeline is skipped — `foreach` only iterates when the user invokes Execute on it (or one of its descendants in the evaluation tree).".to_string(),
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
-        parameters: vec![Parameter {
-            id: None,
-            name: "xs".to_string(),
-            data_type: DataType::Iterator(Box::new(DataType::Float)),
-        }],
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "xs".to_string(),
+                data_type: DataType::Iterator(Box::new(DataType::Float)),
+            },
+            Parameter {
+                id: None,
+                name: "f".to_string(),
+                // Optional side-effecting function value. When wired, it
+                // overrides the inline zone body. Type tracks input_type via
+                // `calculate_custom_node_type`.
+                data_type: DataType::Function(FunctionType {
+                    parameter_types: vec![DataType::Float],
+                    output_type: Box::new(DataType::Unit),
+                }),
+            },
+        ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Unit),
         zone_input_pins: vec![OutputPinDefinition::fixed("element", DataType::Float)],
         zone_output_pins: vec![Parameter {

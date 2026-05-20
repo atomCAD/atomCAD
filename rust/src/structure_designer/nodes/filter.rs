@@ -1,11 +1,11 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::zone_closure::build_inline_closure;
+use crate::structure_designer::evaluator::zone_closure::obtain_closure;
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -42,8 +42,14 @@ impl NodeData for FilterData {
         let mut custom = base_node_type.clone();
         let iter_ty = DataType::Iterator(Box::new(self.element_type.clone()));
 
-        // External: only `xs` remains. The predicate body lives inside the zone.
+        // External: `xs` (the stream) and the optional `f` (a predicate function
+        // value that, when wired, overrides the inline body). The inline
+        // predicate body lives inside the zone.
         custom.parameters[0].data_type = iter_ty.clone();
+        custom.parameters[1].data_type = DataType::Function(FunctionType {
+            parameter_types: vec![self.element_type.clone()],
+            output_type: Box::new(DataType::Bool),
+        });
         custom.output_pins = OutputPinDefinition::single_fixed(iter_ty);
 
         // Inside-facing pins: one element source, one Bool destination.
@@ -88,14 +94,16 @@ impl NodeData for FilterData {
             }
         };
 
-        // b. Build the closure from this node's own inline zone: grab the
-        // body, freeze captures once, and collect the zone-output wire(s).
-        let closure = match build_inline_closure(
+        // b. Obtain the closure to run: the function wired into `f` if
+        // connected, otherwise one built from this node's own inline zone
+        // (grab the body, freeze captures once, collect the zone-output wires).
+        let closure = match obtain_closure(
             network_evaluator,
             network_stack,
             node_id,
             registry,
             context,
+            1, // `f` pin index
             "filter",
         ) {
             Ok(c) => c,
@@ -139,6 +147,8 @@ impl NodeData for FilterData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("xs".to_string(), (true, None));
+        // `f` is optional: when disconnected, the inline zone body drives filter.
+        m.insert("f".to_string(), (false, None));
         m
     }
 
@@ -162,11 +172,24 @@ pub fn get_node_type() -> NodeType {
                 .to_string(),
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
-        parameters: vec![Parameter {
-            id: None,
-            name: "xs".to_string(),
-            data_type: DataType::Iterator(Box::new(DataType::Float)),
-        }],
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "xs".to_string(),
+                data_type: DataType::Iterator(Box::new(DataType::Float)),
+            },
+            Parameter {
+                id: None,
+                name: "f".to_string(),
+                // Optional predicate function value. When wired, it overrides
+                // the inline zone body. Type tracks element_type via
+                // `calculate_custom_node_type`.
+                data_type: DataType::Function(FunctionType {
+                    parameter_types: vec![DataType::Float],
+                    output_type: Box::new(DataType::Bool),
+                }),
+            },
+        ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(
             DataType::Float,
         ))),

@@ -826,12 +826,19 @@ fn filter_zone_capture_outer_threshold() {
 fn filter_registers_zone_pins() {
     let registry = NodeTypeRegistry::new();
     let nt = registry.get_node_type("filter").unwrap();
+    // Closures Phase 4 added the optional `f` (function value) input pin
+    // alongside `xs`.
     assert_eq!(
         nt.parameters.len(),
-        1,
-        "filter should have only `xs` externally"
+        2,
+        "filter should have `xs` and the optional `f` pin externally"
     );
     assert_eq!(nt.parameters[0].name, "xs");
+    assert_eq!(nt.parameters[1].name, "f");
+    assert!(
+        matches!(nt.parameters[1].data_type, DataType::Function(_)),
+        "the `f` pin must be a Function type"
+    );
     assert_eq!(nt.zone_input_pins.len(), 1);
     assert_eq!(nt.zone_input_pins[0].name, "element");
     assert_eq!(nt.zone_output_pins.len(), 1);
@@ -1034,9 +1041,16 @@ fn fold_zone_empty_stream_returns_init() {
 fn fold_registers_zone_pins() {
     let registry = NodeTypeRegistry::new();
     let nt = registry.get_node_type("fold").unwrap();
-    assert_eq!(nt.parameters.len(), 2);
+    // Closures Phase 4 added the optional `f` (function value) input pin after
+    // `xs` and `init`.
+    assert_eq!(nt.parameters.len(), 3);
     assert_eq!(nt.parameters[0].name, "xs");
     assert_eq!(nt.parameters[1].name, "init");
+    assert_eq!(nt.parameters[2].name, "f");
+    assert!(
+        matches!(nt.parameters[2].data_type, DataType::Function(_)),
+        "the `f` pin must be a Function type"
+    );
     assert_eq!(nt.zone_input_pins.len(), 2);
     assert_eq!(nt.zone_input_pins[0].name, "acc");
     assert_eq!(nt.zone_input_pins[1].name, "element");
@@ -1146,8 +1160,15 @@ fn foreach_zone_execute_drains_all() {
 fn foreach_registers_zone_pins() {
     let registry = NodeTypeRegistry::new();
     let nt = registry.get_node_type("foreach").unwrap();
-    assert_eq!(nt.parameters.len(), 1);
+    // Closures Phase 4 added the optional `f` (function value) input pin
+    // alongside `xs`.
+    assert_eq!(nt.parameters.len(), 2);
     assert_eq!(nt.parameters[0].name, "xs");
+    assert_eq!(nt.parameters[1].name, "f");
+    assert!(
+        matches!(nt.parameters[1].data_type, DataType::Function(_)),
+        "the `f` pin must be a Function type"
+    );
     assert_eq!(nt.zone_input_pins.len(), 1);
     assert_eq!(nt.zone_input_pins[0].name, "element");
     assert_eq!(nt.zone_output_pins.len(), 1);

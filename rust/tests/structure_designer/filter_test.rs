@@ -68,10 +68,13 @@ fn test_filter_registered_in_registry() {
     let nt = node_type.unwrap();
     assert_eq!(nt.name, "filter");
     assert!(nt.public);
-    // Phase 5: `f` is gone — only external input is `xs`. The predicate body
-    // lives inside the zone.
-    assert_eq!(nt.parameters.len(), 1);
+    // Closures Phase 4 re-added an optional `f` (predicate function value) pin
+    // alongside `xs`; the predicate body still lives inside the zone (used when
+    // `f` is disconnected).
+    assert_eq!(nt.parameters.len(), 2);
     assert_eq!(nt.parameters[0].name, "xs");
+    assert_eq!(nt.parameters[1].name, "f");
+    assert!(matches!(nt.parameters[1].data_type, DataType::Function(_)));
     assert_eq!(nt.output_pins.len(), 1);
     assert_eq!(
         *nt.output_type(),
@@ -99,10 +102,18 @@ fn test_filter_custom_type_int() {
     };
     let custom = data.calculate_custom_node_type(base).unwrap();
 
-    assert_eq!(custom.parameters.len(), 1);
+    assert_eq!(custom.parameters.len(), 2);
     assert_eq!(
         custom.parameters[0].data_type,
         DataType::Iterator(Box::new(DataType::Int))
+    );
+    // `f`: (element_type) -> Bool.
+    assert_eq!(
+        custom.parameters[1].data_type,
+        DataType::Function(rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
+            parameter_types: vec![DataType::Int],
+            output_type: Box::new(DataType::Bool),
+        })
     );
     assert_eq!(
         *custom.output_type(),
