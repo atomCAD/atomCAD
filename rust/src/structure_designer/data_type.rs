@@ -375,15 +375,19 @@ impl DataType {
             }
         }
 
-        // Check function type conversions for partial evaluation
-        // Function F can be converted to function G if:
-        // 1. F and G have the same return type
-        // 2. F contains all parameters of G as its first parameters
-        // 3. F may have additional parameters after G's parameters
+        // Function type compatibility is a structural match: same arity, and
+        // each parameter plus the return type pairwise convertible (keeping
+        // the usual leaf conversions like `Int → Float`). The old
+        // partial-application "prefix" rule (source may carry extra trailing
+        // parameters) is gone — partial application is now expressed by
+        // *captures* in a `closure` body, not by the type rule. See
+        // `doc/design_closures.md` (§"Type system").
         if let (DataType::Function(source_func), DataType::Function(dest_func)) =
             (source_type, dest_type)
         {
-            // Check if return types are compatible
+            if source_func.parameter_types.len() != dest_func.parameter_types.len() {
+                return false;
+            }
             if !DataType::can_be_converted_to(
                 &source_func.output_type,
                 &dest_func.output_type,
@@ -391,25 +395,15 @@ impl DataType {
             ) {
                 return false;
             }
-
-            // Check if source function has at least as many parameters as destination
-            if source_func.parameter_types.len() < dest_func.parameter_types.len() {
-                return false;
-            }
-
-            // Check if the first N parameters of source match destination parameters
-            // where N is the number of parameters in destination function
-            for (i, dest_param) in dest_func.parameter_types.iter().enumerate() {
-                if !DataType::can_be_converted_to(
-                    &source_func.parameter_types[i],
-                    dest_param,
-                    registry,
-                ) {
+            for (source_param, dest_param) in source_func
+                .parameter_types
+                .iter()
+                .zip(dest_func.parameter_types.iter())
+            {
+                if !DataType::can_be_converted_to(source_param, dest_param, registry) {
                     return false;
                 }
             }
-
-            // If we get here, F can be converted to G by partial evaluation
             return true;
         }
 
@@ -458,7 +452,8 @@ impl DataType {
     /// Keeps: identity, discard-to-`Unit`, record subtyping (field path is
     /// already strict via `can_be_structurally_converted_to`),
     /// `Array[S] → Iter[T]` eager wrap, `Array[S] → Array[T]` element-wise,
-    /// function partial-application, `Int↔Float`/`IVec*↔Vec*`/`IMat3↔Mat3`,
+    /// structural function compatibility (same arity, params + return pairwise
+    /// convertible), `Int↔Float`/`IVec*↔Vec*`/`IMat3↔Mat3`,
     /// `LatticeVecs→DrawingPlane`, and tag-only phase upcasts. All recursive
     /// descents call this strict variant, not `can_be_converted_to`, so
     /// broadcast cannot leak in through a nested element type.
@@ -523,12 +518,16 @@ impl DataType {
             return false;
         }
 
-        // Function partial-application: same shape as permissive but
-        // recurses strictly, so broadcast can't sneak in via parameter or
-        // return types.
+        // Function structural match: same arity, return + parameters pairwise
+        // convertible, recursing strictly so broadcast can't sneak in via a
+        // parameter or return type. Mirrors the permissive arm (the old
+        // partial-application prefix rule is gone — see `can_be_converted_to`).
         if let (DataType::Function(source_func), DataType::Function(dest_func)) =
             (source_type, dest_type)
         {
+            if source_func.parameter_types.len() != dest_func.parameter_types.len() {
+                return false;
+            }
             if !DataType::can_be_converted_to_strict_no_broadcast(
                 &source_func.output_type,
                 &dest_func.output_type,
@@ -536,12 +535,13 @@ impl DataType {
             ) {
                 return false;
             }
-            if source_func.parameter_types.len() < dest_func.parameter_types.len() {
-                return false;
-            }
-            for (i, dest_param) in dest_func.parameter_types.iter().enumerate() {
+            for (source_param, dest_param) in source_func
+                .parameter_types
+                .iter()
+                .zip(dest_func.parameter_types.iter())
+            {
                 if !DataType::can_be_converted_to_strict_no_broadcast(
-                    &source_func.parameter_types[i],
+                    source_param,
                     dest_param,
                     registry,
                 ) {

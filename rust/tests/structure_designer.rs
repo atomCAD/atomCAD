@@ -229,9 +229,6 @@ mod expr_template_literal_test;
 #[path = "structure_designer/expr_array_index_test.rs"]
 mod expr_array_index_test;
 
-#[path = "structure_designer/function_evaluator_test.rs"]
-mod function_evaluator_test;
-
 #[path = "structure_designer/record_types_phase1_test.rs"]
 mod record_types_phase1_test;
 
@@ -255,6 +252,9 @@ mod atom_replace_rules_phase_b_test;
 
 #[path = "structure_designer/iterator_walker_test.rs"]
 mod iterator_walker_test;
+
+#[path = "structure_designer/function_value_test.rs"]
+mod function_value_test;
 
 #[path = "structure_designer/iter_type_test.rs"]
 mod iter_type_test;

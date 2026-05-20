@@ -9,10 +9,10 @@
 //!  - `StructureDesigner::execute_node` triggers an Execute pass on a single
 //!    node, setting `context.execute = true` for that pass.
 //!
-//! The Phase 2 `CounterUnitNode` fixture is **not** reused here. Phase 2
-//! covers FunctionEvaluator + Walker context propagation in isolation; this
-//! file exercises the integration with the real `export_xyz` and `foreach`
-//! built-ins, plus the orchestrator API.
+//! The `CounterUnitNode` fixture from `execute_flag_test.rs` is **not** reused
+//! here. That file covers the central skip rule and Walker context propagation
+//! in isolation; this file exercises the integration with the real
+//! `export_xyz` and `foreach` built-ins, plus the orchestrator API.
 
 use std::path::PathBuf;
 

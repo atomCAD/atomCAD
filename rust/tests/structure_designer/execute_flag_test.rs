@@ -1,12 +1,13 @@
 //! Phase 2 tests for the node-execution design (`doc/design_node_execution.md`).
 //!
 //! Phase 2 lands the eval-time mechanism behind the Execute action — the
-//! `execute` field on `NetworkEvaluationContext`, the FunctionEvaluator and
-//! Walker context-propagation changes, and the central skip rule for
-//! Unit-returning nodes — but no built-in node yet returns Unit, so the rule
-//! is dormant for users. These tests register two synthetic test-only node
-//! types (`counter_unit` and `mixed_output`) directly into a per-test
-//! `NodeTypeRegistry` to exercise the rule end-to-end.
+//! `execute` field on `NetworkEvaluationContext`, the Walker / zone-closure
+//! context-propagation, and the central skip rule for Unit-returning nodes —
+//! but no built-in node yet returns Unit, so the rule is dormant for users.
+//! These tests register two synthetic test-only node types (`counter_unit` and
+//! `mixed_output`) directly into a per-test `NodeTypeRegistry` to exercise the
+//! rule end-to-end. (The FE-driven walker-propagation tests that once lived
+//! here were removed in closures Phase 2 along with `FunctionEvaluator`.)
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -109,7 +110,7 @@ fn counter_unit_node_type() -> NodeType {
     use rust_lib_flutter_cad::structure_designer::node_type::Parameter;
     NodeType {
         name: "counter_unit".to_string(),
-        description: "Test-only: increments a counter and returns Unit. Takes one ignored Int input so that this node can also be used as the body of a `map`/`filter`/`fold` (whose `FunctionEvaluator` requires at least one captured arg).".to_string(),
+        description: "Test-only: increments a counter and returns Unit. Takes one ignored Int input so that this node can also be used as the body of a `map`/`filter`/`fold`.".to_string(),
         summary: None,
         category: NodeTypeCategory::OtherBuiltin,
         parameters: vec![Parameter {
@@ -361,197 +362,5 @@ fn central_skip_rule_does_not_skip_mixed_output_node_on_display_pass() {
     assert!(
         counter.load(Ordering::SeqCst) >= 1,
         "mixed-output node must run eval on display passes"
-    );
-}
-
-// ============================================================================
-// FunctionEvaluator propagation — execute flag flows into closure bodies
-// ============================================================================
-
-/// Helper that builds a `map` node whose body calls a `counter_unit` node, and
-/// drives the resulting `Iter[Unit]` walker. The counter records how many
-/// times the body's `eval` actually ran. Returns the counter at end-of-drain.
-///
-/// We exercise the walker directly (not through `collect`) so the test does
-/// not depend on registering custom networks — closure construction is what
-/// the FE-propagation property hinges on, and `Walker::map` plus a
-/// hand-built `FunctionEvaluator` capture exactly that path.
-fn run_map_walker_over_counter(execute: bool) -> usize {
-    use rust_lib_flutter_cad::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
-    use rust_lib_flutter_cad::structure_designer::evaluator::iterator_walker::Walker;
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Closure;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-
-    // Build a registry where `counter_unit` is registered as a built-in node.
-    // We start from a fresh `StructureDesigner` so all the standard built-in
-    // nodes (parameter, value, expr, …) are present too — needed for closure
-    // construction below.
-    let mut sd = StructureDesigner::new();
-    sd.node_type_registry
-        .built_in_node_types
-        .insert("counter_unit".to_string(), counter_unit_node_type());
-
-    // Build a tiny user-defined network whose body is a single
-    // `counter_unit` node. Its function-output pin is what the closure
-    // captures.
-    let network_name = "body";
-    sd.add_node_network(network_name);
-    sd.set_active_node_network_name(Some(network_name.to_string()));
-    let body_node_id = sd.add_node("counter_unit", DVec2::ZERO);
-
-    let counter = Arc::new(AtomicUsize::new(0));
-    let result = with_counter(counter.clone(), || {
-        // Build the closure manually: the function-output pin of the body
-        // node, with no captured arguments (counter_unit takes none).
-        // The closure captures the body node's parameter shape — one arg
-        // for `counter_unit`. The walker will overwrite arg 0 per element via
-        // `set_argument_value(0, elem)`.
-        let closure = Closure {
-            node_network_name: network_name.to_string(),
-            node_id: body_node_id,
-            captured_argument_values: vec![NetworkResult::None],
-        };
-        let fe = FunctionEvaluator::try_build(closure, &sd.node_type_registry).unwrap();
-        let source = Walker::from_array(vec![
-            NetworkResult::Int(0),
-            NetworkResult::Int(1),
-            NetworkResult::Int(2),
-        ]);
-        let mut walker = Walker::map(source, fe);
-
-        let evaluator = NetworkEvaluator::new();
-        let mut ctx = NetworkEvaluationContext::new();
-        ctx.execute = execute;
-
-        let mut count = 0;
-        while let Some(value) = walker.next(&evaluator, &sd.node_type_registry, &mut ctx) {
-            // Sanity: every yielded element should be Unit (the body returns
-            // Unit either via central-skip or via direct eval).
-            assert!(
-                matches!(value, NetworkResult::Unit),
-                "expected Unit per element, got {}",
-                value.to_display_string()
-            );
-            count += 1;
-        }
-        assert_eq!(count, 3, "walker should yield exactly 3 elements");
-        counter.load(Ordering::SeqCst)
-    });
-
-    result
-}
-
-#[test]
-fn function_evaluator_propagates_execute_flag_into_closure_body() {
-    // Execute pass: body's `eval` should run for every element.
-    let count = run_map_walker_over_counter(/*execute=*/ true);
-    assert_eq!(
-        count, 3,
-        "execute=true must run the closure body's eval per element (3 elements ⇒ 3 calls)"
-    );
-}
-
-#[test]
-fn function_evaluator_inherits_display_pass_and_central_rule_skips_body() {
-    // Display pass: the central rule must skip the body's `eval` for each
-    // element because the body returns Unit. The walker still yields N Unit
-    // values — the synthesized result, not real eval calls.
-    let count = run_map_walker_over_counter(/*execute=*/ false);
-    assert_eq!(
-        count, 0,
-        "execute=false must skip the body's eval (the central rule applies inside the FE call)"
-    );
-}
-
-// ============================================================================
-// Walker propagation — context flows through nested Map walkers
-// ============================================================================
-
-/// Build a `Walker::Map(Walker::Map(source, fe_inner), fe_outer)` and drive
-/// it with the given execute flag. Each FE wraps `counter_unit` so the test
-/// can observe whether either body's `eval` actually ran. Returns the
-/// observed counter at end-of-drain.
-///
-/// This exercises the "Walker::Map forwards `&mut context` to its enclosed
-/// FE" wiring fix: if a chained walker dropped the context, the inner
-/// walker's FE call would synthesise a fresh context with the default
-/// `execute=false`, causing the central rule to skip the body even on an
-/// execute pass.
-fn run_chained_map_walker(execute: bool) -> usize {
-    use rust_lib_flutter_cad::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
-    use rust_lib_flutter_cad::structure_designer::evaluator::iterator_walker::Walker;
-    use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Closure;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-
-    let mut sd = StructureDesigner::new();
-    sd.node_type_registry
-        .built_in_node_types
-        .insert("counter_unit".to_string(), counter_unit_node_type());
-
-    let inner_network = "inner";
-    let outer_network = "outer";
-    sd.add_node_network(inner_network);
-    sd.set_active_node_network_name(Some(inner_network.to_string()));
-    let inner_body_id = sd.add_node("counter_unit", DVec2::ZERO);
-    sd.add_node_network(outer_network);
-    sd.set_active_node_network_name(Some(outer_network.to_string()));
-    let outer_body_id = sd.add_node("counter_unit", DVec2::ZERO);
-
-    let counter = Arc::new(AtomicUsize::new(0));
-    with_counter(counter.clone(), || {
-        let inner_closure = Closure {
-            node_network_name: inner_network.to_string(),
-            node_id: inner_body_id,
-            captured_argument_values: vec![NetworkResult::None],
-        };
-        let outer_closure = Closure {
-            node_network_name: outer_network.to_string(),
-            node_id: outer_body_id,
-            captured_argument_values: vec![NetworkResult::None],
-        };
-        let fe_inner = FunctionEvaluator::try_build(inner_closure, &sd.node_type_registry).unwrap();
-        let fe_outer = FunctionEvaluator::try_build(outer_closure, &sd.node_type_registry).unwrap();
-
-        let source = Walker::from_array(vec![NetworkResult::Int(1), NetworkResult::Int(2)]);
-        let mid = Walker::map(source, fe_inner);
-        let mut walker = Walker::map(mid, fe_outer);
-
-        let evaluator = NetworkEvaluator::new();
-        let mut ctx = NetworkEvaluationContext::new();
-        ctx.execute = execute;
-
-        let mut yielded = 0;
-        while let Some(_v) = walker.next(&evaluator, &sd.node_type_registry, &mut ctx) {
-            yielded += 1;
-        }
-        assert_eq!(yielded, 2, "two-element source should yield two elements");
-    });
-    counter.load(Ordering::SeqCst)
-}
-
-#[test]
-fn walker_propagates_execute_through_chained_map_walkers_under_execute() {
-    // Each element drives both FE bodies — the inner body once, the outer
-    // body once — giving 2 elements * 2 bodies = 4 eval calls.
-    let count = run_chained_map_walker(/*execute=*/ true);
-    assert_eq!(
-        count, 4,
-        "execute=true must propagate through both nested Map walkers (2 elements * 2 bodies)"
-    );
-}
-
-#[test]
-fn walker_propagates_display_pass_through_chained_map_walkers() {
-    // On a display pass the central rule skips both bodies — neither inner
-    // nor outer FE actually invokes eval. Without the `&mut context` wiring
-    // through `Walker::next`, the inner walker would have built a fresh
-    // context with `execute=false` (the default), but that's the same
-    // result we'd see with proper propagation; this test guards against
-    // the *opposite* regression — accidentally defaulting the inner context
-    // to `execute=true`, which would cause spurious eval calls.
-    let count = run_chained_map_walker(/*execute=*/ false);
-    assert_eq!(
-        count, 0,
-        "execute=false must skip both nested bodies via the central rule"
     );
 }

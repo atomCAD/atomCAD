@@ -1,19 +1,19 @@
 //! Unit tests for the `Walker` lazy-iterator runtime introduced in Phase 1
 //! of the iterators design (`doc/design_iterators.md`).
 //!
-//! The Map/Filter rows construct `FunctionEvaluator`s by building tiny
-//! networks via the text-format editor and capturing closures from `expr`
-//! nodes — the same approach used by `function_evaluator_test.rs`.
+//! Covers the source/structural walker variants (`FromArray`, `Range`,
+//! `Product`). The `map`/`filter` walkers are now zone-closure driven
+//! (`MapZone` / `FilterZone`) and are exercised end-to-end through the HOF
+//! node tests (`map_test`, `filter_test`, `closures_test`) rather than by
+//! hand-built walkers here. The legacy FE-driven `Walker::map`/`Walker::filter`
+//! constructors were removed in closures Phase 2 (`doc/design_closures.md`).
 
-use rust_lib_flutter_cad::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
 use rust_lib_flutter_cad::structure_designer::evaluator::iterator_walker::Walker;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{Closure, NetworkResult};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-use rust_lib_flutter_cad::structure_designer::text_format::edit_network;
 
 // ============================================================================
 // Helpers
@@ -32,9 +32,9 @@ fn empty_registry() -> NodeTypeRegistry {
 ///
 /// The walker no longer self-supplies its evaluation context — Phase 2 of the
 /// node-execution design threads the outer-pass context through `Walker::next`
-/// so closures inside `Map`/`Filter` walkers inherit `execute` and so prints
-/// drain back into the per-pass log. Tests that don't care about either flag
-/// just construct an empty context here.
+/// so closures inside zone walkers inherit `execute` and so prints drain back
+/// into the per-pass log. Tests that don't care about either flag just
+/// construct an empty context here.
 fn drain(
     walker: &mut Walker,
     evaluator: &NetworkEvaluator,
@@ -68,82 +68,6 @@ fn assert_int_results(actual: &[NetworkResult], expected: &[i32]) {
         })
         .collect();
     assert_eq!(got, expected);
-}
-
-// ----------------------------------------------------------------------------
-// Designer / FunctionEvaluator helpers (used by Map / Filter rows)
-// ----------------------------------------------------------------------------
-
-fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
-    let mut designer = StructureDesigner::new();
-    designer.add_node_network(network_name);
-    designer.set_active_node_network_name(Some(network_name.to_string()));
-    designer
-}
-
-fn edit_designer_network(
-    designer: &mut StructureDesigner,
-    network_name: &str,
-    code: &str,
-) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
-    let mut network = designer
-        .node_type_registry
-        .node_networks
-        .remove(network_name)
-        .unwrap();
-    let result = edit_network(&mut network, &designer.node_type_registry, code, true);
-    designer
-        .node_type_registry
-        .node_networks
-        .insert(network_name.to_string(), network);
-    designer.validate_active_network();
-    result
-}
-
-fn find_node_id(designer: &StructureDesigner, network_name: &str, node_type_name: &str) -> u64 {
-    let network = designer
-        .node_type_registry
-        .node_networks
-        .get(network_name)
-        .unwrap();
-    *network
-        .nodes
-        .iter()
-        .find(|(_, n)| n.node_type_name == node_type_name)
-        .unwrap_or_else(|| panic!("expected a `{}` node in `{}`", node_type_name, network_name))
-        .0
-}
-
-/// Build a `FunctionEvaluator` for an `expr` node defined inside a freshly
-/// edited network. The expr node is named `f` by convention, takes a single
-/// `Int` parameter `x`, and returns whatever `expression` evaluates to.
-fn build_expr_fe(
-    network_name: &str,
-    expression: &str,
-    output_type: &str,
-) -> (StructureDesigner, FunctionEvaluator) {
-    let mut designer = setup_designer_with_network(network_name);
-    let code = format!(
-        r#"
-            f = expr {{
-                expression: "{expr}",
-                parameters: [{{ name: "x", data_type: Int }}],
-                output_type: {out}
-            }}
-        "#,
-        expr = expression,
-        out = output_type,
-    );
-    let result = edit_designer_network(&mut designer, network_name, &code);
-    assert!(result.success, "edit_network failed: {:?}", result.errors);
-    let f_id = find_node_id(&designer, network_name, "expr");
-    let closure = Closure {
-        node_network_name: network_name.to_string(),
-        node_id: f_id,
-        captured_argument_values: vec![NetworkResult::None],
-    };
-    let fe = FunctionEvaluator::new(closure, &designer.node_type_registry);
-    (designer, fe)
 }
 
 // ============================================================================
@@ -289,184 +213,6 @@ fn range_reset_replays_sequence() {
     let second = drain(&mut w, &evaluator, &registry);
     assert_int_results(&first, &[0, 1, 2, 3, 4]);
     assert_int_results(&second, &[0, 1, 2, 3, 4]);
-}
-
-// ============================================================================
-// Map
-// ============================================================================
-
-#[test]
-fn map_drain_doubles_elements() {
-    let (designer, fe) = build_expr_fe("net_map_double", "x * 2", "Int");
-    let evaluator = make_evaluator();
-    let mut w = Walker::map(Walker::range(0, 1, 5), fe);
-    let out = drain(&mut w, &evaluator, &designer.node_type_registry);
-    assert_int_results(&out, &[0, 2, 4, 6, 8]);
-}
-
-#[test]
-fn map_reset_replays_sequence() {
-    let (designer, fe) = build_expr_fe("net_map_reset", "x * 2", "Int");
-    let evaluator = make_evaluator();
-    let mut w = Walker::map(Walker::range(0, 1, 5), fe);
-    let first = drain(&mut w, &evaluator, &designer.node_type_registry);
-    w.reset();
-    let second = drain(&mut w, &evaluator, &designer.node_type_registry);
-    assert_int_results(&first, &[0, 2, 4, 6, 8]);
-    assert_int_results(&second, &[0, 2, 4, 6, 8]);
-}
-
-#[test]
-fn map_clone_advances_independently() {
-    let (designer, fe) = build_expr_fe("net_map_clone", "x * 2", "Int");
-    let evaluator = make_evaluator();
-    let mut w = Walker::map(Walker::range(0, 1, 5), fe);
-    // Advance original by 2 (consumes 0 and 1 from underlying range; emits 0, 2).
-    assert!(matches!(
-        w.next(
-            &evaluator,
-            &designer.node_type_registry,
-            &mut NetworkEvaluationContext::new()
-        ),
-        Some(NetworkResult::Int(0))
-    ));
-    assert!(matches!(
-        w.next(
-            &evaluator,
-            &designer.node_type_registry,
-            &mut NetworkEvaluationContext::new()
-        ),
-        Some(NetworkResult::Int(2))
-    ));
-    let mut clone = w.clone();
-    // Advance clone by 2 — it should pick up where the original left off.
-    let clone_step1 = clone.next(
-        &evaluator,
-        &designer.node_type_registry,
-        &mut NetworkEvaluationContext::new(),
-    );
-    let clone_step2 = clone.next(
-        &evaluator,
-        &designer.node_type_registry,
-        &mut NetworkEvaluationContext::new(),
-    );
-    assert!(matches!(clone_step1, Some(NetworkResult::Int(4))));
-    assert!(matches!(clone_step2, Some(NetworkResult::Int(6))));
-    // Original is unaffected by clone's advancement — it still yields its
-    // own next-in-sequence (which is also 4 because clone is independent).
-    assert!(matches!(
-        w.next(
-            &evaluator,
-            &designer.node_type_registry,
-            &mut NetworkEvaluationContext::new()
-        ),
-        Some(NetworkResult::Int(4))
-    ));
-}
-
-// ============================================================================
-// Filter
-// ============================================================================
-
-#[test]
-fn filter_keeps_even_elements() {
-    let (designer, fe) = build_expr_fe("net_filter_even", "x % 2 == 0", "Bool");
-    let evaluator = make_evaluator();
-    let mut w = Walker::filter(Walker::range(0, 1, 10), fe);
-    let out = drain(&mut w, &evaluator, &designer.node_type_registry);
-    assert_int_results(&out, &[0, 2, 4, 6, 8]);
-}
-
-#[test]
-fn filter_all_false_drains_to_none_immediately() {
-    let (designer, fe) = build_expr_fe("net_filter_all_false", "false", "Bool");
-    let evaluator = make_evaluator();
-    let mut w = Walker::filter(Walker::range(0, 1, 5), fe);
-    let out = drain(&mut w, &evaluator, &designer.node_type_registry);
-    assert!(out.is_empty(), "expected no elements, got {:?}", out.len());
-}
-
-#[test]
-fn filter_non_bool_predicate_yields_error() {
-    // Predicate returns Int — runtime should yield an Error and then None.
-    let (designer, fe) = build_expr_fe("net_filter_nonbool", "x", "Int");
-    let evaluator = make_evaluator();
-    let mut w = Walker::filter(Walker::range(0, 1, 3), fe);
-    let first = w.next(
-        &evaluator,
-        &designer.node_type_registry,
-        &mut NetworkEvaluationContext::new(),
-    );
-    match first {
-        Some(NetworkResult::Error(msg)) => {
-            assert!(
-                msg.contains("non-Bool"),
-                "error message should reference non-Bool, got: {}",
-                msg
-            );
-        }
-        other => panic!(
-            "expected Error from filter with non-Bool predicate, got: {:?}",
-            other.map(|r| r.to_display_string())
-        ),
-    }
-    // Outer fuse: subsequent calls return None, not another error.
-    assert!(
-        w.next(
-            &evaluator,
-            &designer.node_type_registry,
-            &mut NetworkEvaluationContext::new()
-        )
-        .is_none(),
-        "outer fuse should have tripped"
-    );
-    assert!(w.is_fused());
-}
-
-// ============================================================================
-// Map error propagation + outer-fuse stickiness
-// ============================================================================
-
-#[test]
-fn map_error_propagates_then_fuses() {
-    // Expression that errors when x == 3: divide by (3 - x), so element 3
-    // triggers "division by zero".
-    let (designer, fe) = build_expr_fe("net_map_err", "10 / (3 - x)", "Int");
-    let evaluator = make_evaluator();
-    let mut w = Walker::map(Walker::range(0, 1, 6), fe);
-    // Elements 0, 1, 2 should be 10/3=3, 10/2=5, 10/1=10 — but this depends on
-    // Int division semantics in expr. Drain until we see the error.
-    let mut got_values = Vec::new();
-    let mut got_error = false;
-    for _ in 0..10 {
-        match w.next(
-            &evaluator,
-            &designer.node_type_registry,
-            &mut NetworkEvaluationContext::new(),
-        ) {
-            None => break,
-            Some(NetworkResult::Error(_)) => {
-                got_error = true;
-                break;
-            }
-            Some(other) => got_values.push(other),
-        }
-    }
-    assert!(
-        got_error,
-        "expected an Error mid-stream, got values: {:?}",
-        got_values.len()
-    );
-    // After error: subsequent calls return None (outer fuse).
-    assert!(
-        w.next(
-            &evaluator,
-            &designer.node_type_registry,
-            &mut NetworkEvaluationContext::new()
-        )
-        .is_none()
-    );
-    assert!(w.is_fused());
 }
 
 // ============================================================================
@@ -670,25 +416,4 @@ fn product_clone_advances_independently() {
     // remaining 3 records.
     let original_drain = drain(&mut w, &evaluator, &registry);
     assert_eq!(original_drain.len(), 3);
-}
-
-// ============================================================================
-// Composite: Map { Filter { Range } }
-// ============================================================================
-
-#[test]
-fn nested_map_filter_range() {
-    let (designer_filter, fe_filter) = build_expr_fe("net_nested_filter", "x % 2 == 0", "Bool");
-    // Need a separate FE for the outer map since each FE owns its own network.
-    let (designer_map, fe_map) = build_expr_fe("net_nested_map", "x * x", "Int");
-    let evaluator = make_evaluator();
-    // Build a registry that contains both networks so both FEs resolve.
-    // The walker calls FE.evaluate(evaluator, registry); each FE has its own
-    // internal network and looks up only built-in node types from the registry,
-    // so either designer's registry works for both FEs as long as it has the
-    // built-ins (the default registry always does).
-    let _ = designer_filter; // keep alive
-    let mut w = Walker::map(Walker::filter(Walker::range(0, 1, 10), fe_filter), fe_map);
-    let out = drain(&mut w, &evaluator, &designer_map.node_type_registry);
-    assert_int_results(&out, &[0, 4, 16, 36, 64]);
 }

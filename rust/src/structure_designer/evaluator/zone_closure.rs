@@ -8,14 +8,15 @@
 //! into an HOF's `f` pin are three sources of the *same* bundle, all consumed by
 //! the same substrate. See `doc/design_closures.md`.
 //!
-//! Phase 1 introduces the bundle and routes the four existing HOFs through it
-//! with no user-visible change. The struct is not yet a `NetworkResult` value;
-//! Phase 2 makes `NetworkResult::Function` carry it.
+//! Phase 1 introduced the bundle and routed the four existing HOFs through it
+//! with no user-visible change. As of Phase 2 the bundle is also the payload of
+//! `NetworkResult::Function` — a first-class (but not yet user-constructible)
+//! function value.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::network_evaluator::{
     CaptureKey, NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -52,6 +53,18 @@ pub struct ZoneClosure {
     /// becomes a typed `NetworkResult::Function`.
     pub param_types: Vec<DataType>,
     pub return_type: DataType,
+}
+
+impl ZoneClosure {
+    /// The function type this closure value carries, derived from its
+    /// arity/return metadata. Used to infer the `DataType::Function` of a
+    /// `NetworkResult::Function(ZoneClosure)` value and for its display string.
+    pub fn function_type(&self) -> FunctionType {
+        FunctionType {
+            parameter_types: self.param_types.clone(),
+            output_type: Box::new(self.return_type.clone()),
+        }
+    }
 }
 
 /// Build a [`ZoneClosure`] from an HOF node's own inline zone body.

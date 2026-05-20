@@ -10,6 +10,7 @@ use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
+use crate::structure_designer::evaluator::zone_closure::ZoneClosure;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::util::transform::Transform2D;
 use glam::f64::DMat3;
@@ -212,13 +213,6 @@ pub struct MoleculeData {
     pub geo_tree_root: Option<GeoNode>,
 }
 
-#[derive(Clone)]
-pub struct Closure {
-    pub node_network_name: String,
-    pub node_id: u64,
-    pub captured_argument_values: Vec<NetworkResult>,
-}
-
 #[derive(Clone, Default)]
 pub enum NetworkResult {
     #[default]
@@ -252,7 +246,14 @@ pub enum NetworkResult {
     /// path. `Walker::clone()` produces an independent walker — see Invariant
     /// 2 in `doc/design_iterators.md` and the `Walker` doc comment.
     Iterator(Walker),
-    Function(Closure),
+    /// A first-class function value: a detached zone body bundled with its
+    /// frozen captures, the wire(s) delivering its result, the scope-stack key
+    /// for iteration frames, and its arity/return types. This is the same
+    /// [`ZoneClosure`] bundle an inline HOF body carries, handed around as a
+    /// value. In Phase 2 no node yet *produces* this variant — it is
+    /// valid-but-unconstructed until the `closure` node lands in Phase 3. See
+    /// `doc/design_closures.md`.
+    Function(ZoneClosure),
     /// Record value: a list of `(field_name, value)` pairs. Stored in
     /// **canonical (sorted-by-name)** order. Construct via
     /// `NetworkResult::record(...)` to enforce the invariant. Carries no type
@@ -289,7 +290,9 @@ impl NetworkResult {
     }
 
     /// Returns the DataType corresponding to this result's variant,
-    /// or None for variants without a clear single type (None, Error, Function, Array).
+    /// or None for variants without a clear single type (None, Error, Array).
+    /// A `Function(ZoneClosure)` reports its `DataType::Function` from the
+    /// closure's carried arity/return metadata.
     /// For `Record(fields)`, returns `DataType::Record(RecordType::Anonymous(...))`
     /// reflecting each field's inferred type. Returns `None` if any field's
     /// type cannot be inferred (matching the existing rule for arrays).
@@ -313,6 +316,7 @@ impl NetworkResult {
             NetworkResult::Molecule(_) => Some(DataType::Molecule),
             NetworkResult::Motif(_) => Some(DataType::Motif),
             NetworkResult::Structure(_) => Some(DataType::Structure),
+            NetworkResult::Function(closure) => Some(DataType::Function(closure.function_type())),
             NetworkResult::Unit => Some(DataType::Unit),
             NetworkResult::Record(fields) => {
                 let mut inferred = Vec::with_capacity(fields.len());
@@ -773,10 +777,9 @@ impl NetworkResult {
                 format!("[{}]", element_strings.join(", "))
             }
             NetworkResult::Iterator(_) => "Iterator".to_string(),
-            NetworkResult::Function(closure) => format!(
-                "network: {} node: {}",
-                closure.node_network_name, closure.node_id
-            ),
+            NetworkResult::Function(closure) => {
+                format!("Function {}", DataType::Function(closure.function_type()))
+            }
             NetworkResult::LatticeVecs(unit_cell) => {
                 format!(
                     "LatticeVecs:\n  a: ({:.6}, {:.6}, {:.6})\n  b: ({:.6}, {:.6}, {:.6})\n  c: ({:.6}, {:.6}, {:.6})",

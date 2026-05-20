@@ -113,8 +113,8 @@ impl NodeData for FoldData {
             Err(e) => return EvalOutput::single(e),
         };
 
-        // c. Build an inner context for the body's iterations (mirrors the
-        // FunctionEvaluator inherit-vs-fresh policy). Inherits `execute`,
+        // c. Build an inner context for the body's iterations (the eager-body
+        // inherit-vs-fresh policy). Inherits `execute`,
         // `use_vdw_cutoff`, and `current_zone_input_values` (so ancestor
         // HOFs' iteration frames remain visible to nested captures); gets
         // fresh per-pass scratch state; prints drain back at end of call.

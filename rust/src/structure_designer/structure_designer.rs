@@ -156,13 +156,14 @@ impl StructureDesigner {
     /// context, so eval-driving call sites do not need to construct a
     /// context inline.
     ///
-    /// **This is the only legitimate construction site for a
-    /// `NetworkEvaluationContext` inside `rust/src/structure_designer/`,
-    /// alongside `FunctionEvaluator::evaluate`'s inner-body context (which
-    /// drains its `print_buffer` back into its outer caller).** Reviewers
-    /// grepping for `NetworkEvaluationContext::new(` outside those two
-    /// sites — and outside test crates, which are exempt — have a one-shot
-    /// audit. Centralising the construct + drain pair eliminates the
+    /// **This is the only `NetworkEvaluationContext::new()` caller inside
+    /// `rust/src/structure_designer/`.** The eager HOFs (`fold`/`foreach`)
+    /// build their per-iteration body context via `fresh_inner_for_eager_body`
+    /// (a struct literal, outside the `::new()` audit) and drain it back; the
+    /// old `FunctionEvaluator::evaluate` inner-body context was removed in
+    /// closures Phase 2. Reviewers grepping for `NetworkEvaluationContext::new(`
+    /// outside this site — and outside test crates, which are exempt — have a
+    /// one-shot audit. Centralising the construct + drain pair eliminates the
     /// foot-gun where a missed call site silently swallows prints. See
     /// `doc/design_node_execution.md` (Centralized drain — no per-call-site
     /// boilerplate).

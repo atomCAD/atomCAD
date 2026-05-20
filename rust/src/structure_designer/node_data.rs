@@ -99,12 +99,14 @@ impl EvalOutput {
 }
 
 /// Forward `Clone for Box<dyn NodeData>` to `clone_box`. This makes `Node` and
-/// `NodeNetwork` derivable as `Clone`, which is needed so `FunctionEvaluator`
-/// (which owns a `NodeNetwork`) can derive `Clone` — required by the iterator
-/// runtime: `Walker::Map`/`Walker::Filter` carry an FE that is cloned every
-/// time the enclosing `NetworkResult::Iterator(_)` is cloned (Invariant 2 in
-/// `doc/design_iterators.md`). The wrapped `dyn NodeData` is local to this
-/// crate, so this `impl` does not run afoul of orphan rules.
+/// `NodeNetwork` derivable as `Clone`, which the iterator runtime relies on: a
+/// `ZoneClosure` (carried by `Walker::MapZone`/`FilterZone` and by
+/// `NetworkResult::Function`) holds an `Arc<NodeNetwork>` body, and the CoW
+/// `Node::zone_mut` path clones a `NodeNetwork` on first mutation. Cloning a
+/// `NetworkResult::Iterator(_)` must remain cheap and independent (Invariant 2
+/// in `doc/design_iterators.md`); the `ZoneClosure` is entirely `Arc`-backed so
+/// that holds. The wrapped `dyn NodeData` is local to this crate, so this
+/// `impl` does not run afoul of orphan rules.
 impl Clone for Box<dyn NodeData> {
     fn clone(&self) -> Box<dyn NodeData> {
         self.clone_box()

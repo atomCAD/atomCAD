@@ -26,7 +26,6 @@ use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,
 };
 
-use super::network_result::Closure;
 use super::network_result::input_missing_error;
 use super::network_result::{
     Alignment, BlueprintData, GeometrySummary2D, propagate_alignment_with_reason,
@@ -103,7 +102,7 @@ impl CaptureKey {
 /// allocation per context construction.
 ///
 /// (`NetworkResult` is not `Sync` — it contains `Box<dyn NodeData>` through
-/// `Closure` and `Walker` — so a `static LazyLock<Arc<…>>` shared sentinel
+/// `ZoneClosure` and `Walker` — so a `static LazyLock<Arc<…>>` shared sentinel
 /// can't be expressed. The per-context allocation is cheap enough that the
 /// "share one empty allocation" optimization from the design doc isn't worth
 /// chasing.)
@@ -121,7 +120,7 @@ fn empty_captures() -> Arc<HashMap<CaptureKey, NetworkResult>> {
 /// One entry in the per-pass print log. Produced by the `print` node (Phase 4)
 /// and by any future node that wants to surface text to the in-app Console
 /// panel. The field shape lands now (Phase 2) so the eval layer can carry the
-/// buffer through `FunctionEvaluator` / `Walker` propagation without later
+/// buffer through `Walker` / zone-closure propagation without later
 /// re-touching every signature. See `doc/design_node_execution.md` (Console
 /// panel section).
 #[derive(Debug, Clone)]
@@ -150,17 +149,20 @@ pub struct NetworkEvaluationContext {
     /// / scene-generation evaluations. The flag is consulted in exactly one
     /// place in the evaluator — the central skip rule in
     /// `evaluate_all_outputs` — plus the `print` node's per-node opt-in.
-    /// Propagated by `FunctionEvaluator::evaluate` and `Walker::next` into
-    /// inner-body evaluations so effects nested inside `map`/`filter`/`fold`/
-    /// `foreach` chains fire correctly under Execute. See
+    /// Flows into inner-body evaluations: the lazy zone walkers
+    /// (`MapZone`/`FilterZone`) run the body against this same context, and the
+    /// eager HOFs (`fold`/`foreach`) copy it into a `fresh_inner_for_eager_body`
+    /// context — so effects nested inside `map`/`filter`/`fold`/`foreach`
+    /// chains fire correctly under Execute. See
     /// `doc/design_node_execution.md` (Phase 2).
     pub execute: bool,
     /// Per-pass print buffer. Each `print` node `eval` (Phase 4) appends to
     /// this; the orchestrator drains it into `StructureDesigner.print_log`
-    /// at end-of-pass via the `with_eval_context` helper.
-    /// `FunctionEvaluator::evaluate` drains its inner context's buffer back
-    /// into the outer context's buffer at end-of-call so prints from inner
-    /// bodies aggregate into the single per-pass log.
+    /// at end-of-pass via the `with_eval_context` helper. The lazy zone walkers
+    /// run bodies against this same context directly; the eager HOFs use a
+    /// `fresh_inner_for_eager_body` context and `drain_inner_context` its
+    /// buffer back here at end-of-call, so prints from inner bodies aggregate
+    /// into the single per-pass log either way.
     pub print_buffer: Vec<PrintLogEntry>,
     /// HOF id ↦ stack of per-iteration frames (each frame is one
     /// `Vec<NetworkResult>` indexed by zone-input pin). Reads always consult
@@ -204,11 +206,12 @@ impl NetworkEvaluationContext {
     /// actions.
     ///
     /// In production code paths inside `rust/src/structure_designer/`, the
-    /// only legitimate callers are `StructureDesigner::with_eval_context` and
-    /// `FunctionEvaluator::evaluate` (the inner-body context, which drains
-    /// its prints back into the outer context before being dropped). Every
-    /// other eval-driving site goes through `with_eval_context` so the
-    /// per-pass print drain happens in exactly one place. Tests are exempt.
+    /// only legitimate `::new()` caller is `StructureDesigner::with_eval_context`.
+    /// The eager HOFs (`fold`/`foreach`) build their per-iteration body context
+    /// via `fresh_inner_for_eager_body` (a struct literal, outside this `::new()`
+    /// audit) and drain it back with `drain_inner_context`; the old
+    /// `FunctionEvaluator::evaluate` inner-body caller was removed in closures
+    /// Phase 2. Tests are exempt.
     pub fn new() -> Self {
         Self {
             node_errors: HashMap::new(),
@@ -298,8 +301,7 @@ impl NetworkEvaluationContext {
     }
 
     /// Build an inner context for an eager HOF body's iterations
-    /// (`fold`, `foreach`). Mirrors `FunctionEvaluator::evaluate`'s
-    /// inherit-vs-fresh policy:
+    /// (`fold`, `foreach`). Inherit-vs-fresh policy:
     ///
     /// **Inherited from the caller:**
     /// - `execute`, `use_vdw_cutoff` — effects nested inside the body must
@@ -1357,76 +1359,6 @@ impl NetworkEvaluator {
         }
     }
 
-    /// Evaluate one of an HOF's zone-output destination pins. The body sits at
-    /// the top of `network_stack`; the HOF whose `zone_output_arguments` we
-    /// read lives one frame below. The wire's source is a body-internal node
-    /// (its `source_scope_depth` is `0` relative to the body's scope), so
-    /// resolution flows through the normal local-source path inside
-    /// `resolve_incoming_wire`.
-    ///
-    /// **Dead as of the closures Phase 1 refactor.** The eager HOFs (`fold`,
-    /// `foreach`) — its only callers — now resolve the body's zone-output via
-    /// the carried-wires path (`zone_closure::run_closure_once` →
-    /// `eval_step`), uniform with the lazy walkers. Kept behind
-    /// `#[allow(dead_code)]` and slated for deletion in closures Phase 2 with
-    /// the rest of the `FunctionEvaluator` cleanup. See
-    /// `doc/design_closures.md`.
-    #[allow(dead_code)]
-    pub fn evaluate_zone_output<'a>(
-        &self,
-        network_stack: &[NetworkStackElement<'a>],
-        hof_node_id: u64,
-        zone_output_index: usize,
-        registry: &NodeTypeRegistry,
-        context: &mut NetworkEvaluationContext,
-    ) -> NetworkResult {
-        debug_assert!(
-            network_stack.len() >= 2,
-            "evaluate_zone_output: network_stack must have at least the HOF's containing network and the body frame on top",
-        );
-        let hof_frame_idx = network_stack.len() - 2;
-        let hof_network = network_stack[hof_frame_idx].node_network;
-        let hof_node = match hof_network.nodes.get(&hof_node_id) {
-            Some(n) => n,
-            None => {
-                return NetworkResult::Error(format!(
-                    "evaluate_zone_output: HOF node {} not found in containing network",
-                    hof_node_id
-                ));
-            }
-        };
-        let incoming_wires: Vec<IncomingWire> =
-            match hof_node.zone_output_arguments.get(zone_output_index) {
-                Some(arg) => arg.incoming_wires.clone(),
-                None => {
-                    return NetworkResult::Error(format!(
-                        "evaluate_zone_output: zone_output_index {} out of range on HOF node {}",
-                        zone_output_index, hof_node_id
-                    ));
-                }
-            };
-        let incoming = match incoming_wires.first() {
-            Some(w) => w,
-            None => {
-                return NetworkResult::Error(format!(
-                    "evaluate_zone_output: zone-output pin {} on HOF node {} has no incoming wire",
-                    zone_output_index, hof_node_id
-                ));
-            }
-        };
-        // The body frame is the top of the stack. The wire's source is a
-        // body-internal node by construction.
-        let (result, _source_type) =
-            self.resolve_incoming_wire(network_stack, registry, context, incoming);
-        // Note: type conversion to the zone-output pin's declared type is
-        // left to the HOF's `eval` (later phases) — different HOFs have
-        // different semantics (e.g. `filter`'s `keep: Bool`, `foreach`'s
-        // `out: Unit` discard widening), so the conversion target isn't
-        // uniform here. This helper returns the raw body-side result and
-        // lets the caller decide.
-        result
-    }
-
     /// Evaluate a node and return all output pin results.
     /// Used by generate_scene() to avoid redundant evaluation when
     /// displaying multiple output pins of the same node.
@@ -1596,17 +1528,14 @@ impl NetworkEvaluator {
         // selecting a freshly-added expr node — see network_evaluator.rs:1591
         // in the bug report. Even if a follow-up fix removes the underlying
         // cause, this guard keeps the evaluator robust to similar issues.
-        let node = match network_stack
+        if !network_stack
             .last()
-            .and_then(|frame| frame.node_network.nodes.get(&node_id))
+            .is_some_and(|frame| frame.node_network.nodes.contains_key(&node_id))
         {
-            Some(node) => node,
-            None => {
-                let msg = format!("evaluate: node {} not found in active frame", node_id);
-                context.node_errors.insert(node_id, msg.clone());
-                return NetworkResult::Error(msg);
-            }
-        };
+            let msg = format!("evaluate: node {} not found in active frame", node_id);
+            context.node_errors.insert(node_id, msg.clone());
+            return NetworkResult::Error(msg);
+        }
 
         // Subtitle override published by `NodeData::eval` via
         // `EvalOutput::pin_subtitles` for the requested pin. The outer
@@ -1614,28 +1543,7 @@ impl NetworkEvaluator {
         // of the result's `to_display_string()`.
         let mut pin_subtitle_override: Option<String> = None;
 
-        let result = if output_pin_index == (-1) {
-            let node_type = registry.get_node_type_for_node(node);
-            let num_of_params = node_type.unwrap().parameters.len();
-            let mut captured_argument_values: Vec<NetworkResult> = Vec::new();
-
-            for i in 0..num_of_params {
-                let result = self.evaluate_arg(network_stack, node_id, registry, context, i);
-                captured_argument_values.push(result);
-            }
-
-            NetworkResult::Function(Closure {
-                node_network_name: network_stack
-                    .last()
-                    .unwrap()
-                    .node_network
-                    .node_type
-                    .name
-                    .clone(),
-                node_id,
-                captured_argument_values,
-            })
-        } else {
+        let result = {
             let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
             // Central skip rule for `Unit`-returning nodes (mirrors

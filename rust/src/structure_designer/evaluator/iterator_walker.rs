@@ -15,7 +15,6 @@
 
 use std::sync::Arc;
 
-use crate::structure_designer::evaluator::function_evaluator::FunctionEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
@@ -67,25 +66,6 @@ enum WalkerKind {
     MapZone {
         source: Box<Walker>,
         closure: ZoneClosure,
-    },
-    /// Legacy FE-driven `map`. No production node constructs this variant
-    /// after Phase 4 — `map` flips to `MapZone` — but the path is kept alive
-    /// as dead weight so unit tests targeting the FE walker plumbing keep
-    /// working until Phase 5 retires `FunctionEvaluator` and `Closure`
-    /// outright. See `doc/design_zones.md` (Phase 4 "Gotchas" — FE remains).
-    Map {
-        source: Box<Walker>,
-        fe: FunctionEvaluator,
-    },
-    /// Legacy FE-driven `filter`. No production node constructs this variant
-    /// after Phase 5 — `filter` flips to `FilterZone` — but the path is kept
-    /// alive as dead weight so unit tests targeting the FE walker plumbing
-    /// keep working until `FunctionEvaluator` and `Closure` are retired
-    /// outright (deferred). See `doc/design_zones.md` (Phase 5 "Gotchas" —
-    /// FE remains).
-    Filter {
-        source: Box<Walker>,
-        fe: FunctionEvaluator,
     },
     /// `filter` driven by a zone closure. Per `next()` the walker runs the
     /// closure once on the pulled element via [`run_closure_once`] (same
@@ -155,29 +135,6 @@ impl Walker {
         }
     }
 
-    /// Legacy FE-driven `map` constructor. No production code builds this
-    /// after Phase 4; kept alive so unit tests targeting the FE walker
-    /// plumbing continue to compile until Phase 5 retires FE entirely.
-    pub fn map(source: Walker, fe: FunctionEvaluator) -> Self {
-        Self {
-            kind: WalkerKind::Map {
-                source: Box::new(source),
-                fe,
-            },
-            fused: false,
-        }
-    }
-
-    pub fn filter(source: Walker, fe: FunctionEvaluator) -> Self {
-        Self {
-            kind: WalkerKind::Filter {
-                source: Box::new(source),
-                fe,
-            },
-            fused: false,
-        }
-    }
-
     /// Construct a `filter` walker driven by a zone closure. See
     /// `WalkerKind::FilterZone` for the per-`next()` discipline.
     pub fn filter_zone(source: Walker, closure: ZoneClosure) -> Self {
@@ -216,14 +173,15 @@ impl Walker {
     ///   once for the lifetime of this walker; subsequent calls return `None`).
     /// - `Some(other)` — next element.
     ///
-    /// `context` is the outer pass's evaluation context. Walker variants that
-    /// embed a `FunctionEvaluator` (`Filter`) forward the same `&mut`
-    /// context to `FunctionEvaluator::evaluate`, which is what propagates
-    /// `context.execute` into per-element body evaluations and drains the
-    /// inner body's `print_buffer` back into the outer context. `MapZone` runs
-    /// directly against the caller's context under a `CapturesGuard` swap
-    /// plus push/pop discipline on `current_zone_input_values[hof_node_id]` —
-    /// see `doc/design_zones.md` (§"Sub-context pattern for body evaluation").
+    /// `context` is the outer pass's evaluation context. The zone-closure
+    /// variants (`MapZone` / `FilterZone`) run their closure against the
+    /// caller's context via [`run_closure_once`], which swaps the frozen
+    /// captures in and brackets a push/pop on
+    /// `current_zone_input_values[owner_node_id]` — this is what propagates
+    /// `context.execute` into per-element body evaluations and drains the inner
+    /// body's `print_buffer` back into the outer context. See
+    /// `doc/design_zones.md` (§"Sub-context pattern for body evaluation") and
+    /// `doc/design_closures.md`.
     pub fn next(
         &mut self,
         evaluator: &NetworkEvaluator,
@@ -312,34 +270,6 @@ impl WalkerKind {
                     )),
                 }
             }
-            WalkerKind::Map { source, fe } => match source.next(evaluator, registry, context) {
-                None => None,
-                Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
-                Some(elem) => {
-                    fe.set_argument_value(0, elem);
-                    Some(fe.evaluate(evaluator, registry, context))
-                }
-            },
-            WalkerKind::Filter { source, fe } => loop {
-                match source.next(evaluator, registry, context) {
-                    None => return None,
-                    Some(NetworkResult::Error(e)) => return Some(NetworkResult::Error(e)),
-                    Some(elem) => {
-                        fe.set_argument_value(0, elem.clone());
-                        let predicate = fe.evaluate(evaluator, registry, context);
-                        match predicate {
-                            NetworkResult::Bool(true) => return Some(elem),
-                            NetworkResult::Bool(false) => continue,
-                            NetworkResult::Error(e) => return Some(NetworkResult::Error(e)),
-                            _ => {
-                                return Some(NetworkResult::Error(
-                                    "filter: f returned non-Bool".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                }
-            },
             WalkerKind::FilterZone { source, closure } => loop {
                 match source.next(evaluator, registry, context) {
                     None => return None,
@@ -454,8 +384,6 @@ impl WalkerKind {
             WalkerKind::FromArray { idx, .. } => *idx = 0,
             WalkerKind::Range { emitted, .. } => *emitted = 0,
             WalkerKind::MapZone { source, .. } => source.reset(),
-            WalkerKind::Map { source, .. } => source.reset(),
-            WalkerKind::Filter { source, .. } => source.reset(),
             WalkerKind::FilterZone { source, .. } => source.reset(),
             WalkerKind::Product {
                 axes,

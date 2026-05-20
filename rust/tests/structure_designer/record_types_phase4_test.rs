@@ -529,24 +529,29 @@ fn extra_fields_on_source_are_ignored_under_width_subtyping() {
 }
 
 #[test]
-fn record_arm_does_not_admit_function_partial_application_inside_field() {
-    // Function partial application is admitted by `can_be_converted_to` at
-    // the top level but must not leak into a record field via the strict
-    // variant. (Functions never carry abstract phase types, so the strict
-    // form's leaf rule rejects all non-identity function pairs.)
+fn record_arm_does_not_admit_function_value_conversion_inside_field() {
+    // Function compatibility is now a structural match: same arity, each
+    // parameter and the return type pairwise convertible. (The old
+    // partial-application "prefix" rule was dropped in closures Phase 2 —
+    // partial application is expressed by closure captures, not the type rule;
+    // see `doc/design_closures.md`.) At the top level the permissive rule still
+    // admits value-converting leaf widenings *inside* the function (here the
+    // `Float → Int` return), but that must NOT leak into a record field: the
+    // field-level strict check accepts only tag-only widenings, so any
+    // non-identical function pair is rejected.
     use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
     let r = examples_registry();
     let f1 = DataType::Function(FunctionType {
-        parameter_types: vec![DataType::Int, DataType::Int],
-        output_type: Box::new(DataType::Int),
+        parameter_types: vec![DataType::Int],
+        output_type: Box::new(DataType::Float),
     });
     let f2 = DataType::Function(FunctionType {
         parameter_types: vec![DataType::Int],
         output_type: Box::new(DataType::Int),
     });
-    // Top-level: partial application allowed.
+    // Top-level: the value-converting return (Float → Int) is allowed.
     assert!(DataType::can_be_converted_to(&f1, &f2, &r));
-    // Inside a record field: rejected by the strict variant.
+    // Inside a record field: rejected by the strict (tag-only) field check.
     let src = rec_anon(vec![("f", f1)]);
     let dst = rec_anon(vec![("f", f2)]);
     assert!(!DataType::can_be_converted_to(&src, &dst, &r));
