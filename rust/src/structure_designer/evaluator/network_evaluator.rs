@@ -21,6 +21,7 @@ use crate::structure_designer::node_network::{
     IncomingWire, Node, NodeDisplayType, NodeNetwork, SourcePin,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::evaluator::zone_closure::build_node_function_closure;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,
@@ -1535,6 +1536,19 @@ impl NetworkEvaluator {
             let msg = format!("evaluate: node {} not found in active frame", node_id);
             context.node_errors.insert(node_id, msg.clone());
             return NetworkResult::Error(msg);
+        }
+
+        // Function pin (`output_pin_index == -1`): synthesize a `Function`
+        // value from this node viewed as a function of all its inputs. It runs
+        // no `eval`, is never `Unit`, and has no display string — so it
+        // short-circuits ahead of the central skip rule and the
+        // built-in/custom dispatch below. The returned `Function(zc)` flows
+        // into an HOF `f` pin / `apply` exactly like a `closure` node's output.
+        // See `doc/design_function_pins.md`.
+        if output_pin_index == -1 {
+            return build_node_function_closure(self, network_stack, node_id, registry)
+                .map(NetworkResult::Function)
+                .unwrap_or_else(|e| e); // e is already NetworkResult::Error(_)
         }
 
         // Subtitle override published by `NodeData::eval` via

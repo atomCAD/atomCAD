@@ -291,3 +291,6 @@ mod scope_dispatch_test;
 
 #[path = "structure_designer/hof_collapse_test.rs"]
 mod hof_collapse_test;
+
+#[path = "structure_designer/function_pin_test.rs"]
+mod function_pin_test;

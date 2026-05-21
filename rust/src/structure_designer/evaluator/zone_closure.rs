@@ -21,7 +21,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
     CaptureKey, NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_network::{IncomingWire, NodeNetwork, SourcePin};
+use crate::structure_designer::node_network::{Argument, IncomingWire, NodeNetwork, SourcePin};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 
 /// A detached zone body bundled with everything needed to run it: the body
@@ -162,6 +162,113 @@ pub fn build_inline_closure<'a>(
         captures,
         zone_output_wires: Arc::new(zone_output_wires),
         owner_node_id: node_id,
+        param_types,
+        return_type,
+    })
+}
+
+/// Build a [`ZoneClosure`] from a non-HOF node viewed as a function of *all*
+/// its inputs — the "function pin" producer (`output_pin_index == -1`).
+///
+/// The synthesized closure's body is a one-node synthetic network holding a
+/// clone of `N`, with **every** input pin fed from a zone-input parameter and
+/// **no captures**. Per element the consumer pushes the iteration values as the
+/// parameter frame and resolves the result wire — exactly the existing
+/// [`run_closure_once`] step, so a function-pin wire drops into an HOF's `f`
+/// pin / `apply` identically to a `closure` node's output. See
+/// `doc/design_function_pins.md`.
+///
+/// The synthesized function type is `(all input pins) -> output pin 0` —
+/// exactly `NodeType::get_function_type()`. We read its parts directly so the
+/// body wiring and the carried `param_types` / `return_type` stay in lock-step.
+///
+/// Rejects (`Err(NetworkResult::Error(_))`):
+/// - a node with **zero inputs** — a `() -> T` function matches no HOF; and
+/// - a node with an **unresolved / polymorphic** pin-0 output type
+///   (`SameAsInput` / `SameAsArrayElements` read as `DataType::None` here): its
+///   function-type return is unknowable, since the function-mode rule keeps
+///   every input disconnected. See design Open Question 2.
+///
+/// `_evaluator` is unused (a no-capture closure needs no pre-evaluation) but
+/// kept for signature symmetry with [`build_inline_closure`] and the design's
+/// `evaluate` call site.
+///
+/// `NetworkResult` is a large enum, so the `Err` variant trips
+/// `clippy::result_large_err`; we keep the un-boxed error so the `evaluate`
+/// `-1` branch can forward it directly.
+#[allow(clippy::result_large_err)]
+#[allow(clippy::arc_with_non_send_sync)]
+pub fn build_node_function_closure<'a>(
+    _evaluator: &NetworkEvaluator,
+    network_stack: &[NetworkStackElement<'a>],
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+) -> Result<ZoneClosure, NetworkResult> {
+    let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+    let node_type = match registry.get_node_type_for_node(node) {
+        Some(nt) => nt,
+        None => {
+            return Err(NetworkResult::Error(format!(
+                "function pin: unknown node type '{}'",
+                node.node_type_name
+            )));
+        }
+    };
+
+    let param_types: Vec<DataType> = node_type
+        .parameters
+        .iter()
+        .map(|p| p.data_type.clone())
+        .collect();
+    let return_type = node_type.output_type().clone();
+
+    if param_types.is_empty() {
+        return Err(NetworkResult::Error(format!(
+            "function pin: '{}' has no inputs, so its function type () -> _ matches no consumer",
+            node.node_type_name
+        )));
+    }
+    if return_type == DataType::None {
+        return Err(NetworkResult::Error(format!(
+            "function pin: '{}' has an unresolved (polymorphic) output type",
+            node.node_type_name
+        )));
+    }
+
+    // The body node: a clone of N with a fresh body-local id, every input pin
+    // fed from a zone-input parameter (depth 1, keyed by N's id). N's inputs
+    // are guaranteed empty by the function-mode rule, so these fill empty slots
+    // — no live wire is discarded. N is non-HOF, so its `zone` /
+    // `zone_output_arguments` are already empty and come along inert.
+    const BODY_NODE_ID: u64 = 1;
+    let owner_key = node_id; // scope-frame key; distinct in role from BODY_NODE_ID
+
+    let mut body_node = node.clone();
+    body_node.id = BODY_NODE_ID;
+    body_node.arguments = (0..param_types.len())
+        .map(|i| {
+            let mut arg = Argument::new();
+            arg.set_source_full(owner_key, SourcePin::ZoneInput { pin_index: i }, 1);
+            arg
+        })
+        .collect();
+
+    // The synthetic one-node body network (mirrors `NodeNetwork::new_empty()`
+    // shape, `next_node_id` ahead of the body node id).
+    let mut body_network = NodeNetwork::new_empty();
+    body_network.nodes.insert(BODY_NODE_ID, body_node);
+    body_network.next_node_id = BODY_NODE_ID + 1;
+
+    Ok(ZoneClosure {
+        body: Arc::new(body_network),
+        captures: Arc::new(HashMap::new()),
+        zone_output_wires: Arc::new(vec![IncomingWire {
+            source_node_id: BODY_NODE_ID,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 0,
+        }]),
+        owner_node_id: owner_key,
         param_types,
         return_type,
     })
