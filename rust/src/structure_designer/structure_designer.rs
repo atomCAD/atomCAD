@@ -2131,7 +2131,7 @@ impl StructureDesigner {
             None => return,
         };
         // First validate the connection
-        let dest_param_is_multi = {
+        let (dest_param_is_multi, dest_is_function_pin) = {
             // Get the network
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
@@ -2150,11 +2150,30 @@ impl StructureDesigner {
                     if dest_param_index >= node_type.parameters.len() {
                         return;
                     }
-                    node_type.parameters[dest_param_index].data_type.is_array()
+                    let dt = &node_type.parameters[dest_param_index].data_type;
+                    (
+                        dt.is_array(),
+                        matches!(
+                            dt,
+                            crate::structure_designer::data_type::DataType::Function(_)
+                        ),
+                    )
                 }
                 None => return,
             }
         };
+
+        // A wire that carries a *function value* toggles structural rules that
+        // the connect-time type gate (`can_connect_nodes`) does not evaluate:
+        // an HOF's `f` pin suspends the "zone-output pin needs a wire" rule, the
+        // `apply` node requires its `f`, and a consumed function pin (`-1`)
+        // forces the source into function-mode. The partial refresh that follows
+        // re-evaluates but does not validate, so without an explicit re-validate
+        // those errors would go stale (e.g. the zone-output error lingering on a
+        // `map` whose `f` was just wired). We gate the re-validate on function
+        // wires only — re-validating *every* connect is both unnecessary and
+        // changes long-standing behavior for ordinary value wires.
+        let revalidate = dest_is_function_pin || source_output_pin_index < 0;
 
         // Capture the existing wire on this pin before connecting (for undo)
         let replaced_wire = if !dest_param_is_multi {
@@ -2215,6 +2234,13 @@ impl StructureDesigner {
 
             // Apply display policy considering only these nodes as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+
+        // Re-validate when a function wire was added (see `revalidate` above) so
+        // a stale structural error from a previous pass clears now that the wire
+        // satisfies the rule.
+        if revalidate {
+            self.validate_active_network();
         }
 
         // Push undo command
@@ -4228,6 +4254,29 @@ impl StructureDesigner {
                 for wire in &node_network.selected_wires {
                     dirty_nodes.insert(wire.source_node_id);
                     dirty_nodes.insert(wire.destination_node_id);
+
+                    // Removing a *function* wire un-suspends the structural rule
+                    // it satisfied — an HOF's `f` pin re-enables the "zone-output
+                    // pin needs a wire" rule, `apply` needs its `f`, and a freed
+                    // function pin (`-1`) leaves function-mode. The connect-time
+                    // gate doesn't evaluate those rules and the full refresh
+                    // below doesn't validate, so request an explicit re-validate
+                    // (the mirror of the function-wire case in `connect_nodes`).
+                    let source_is_function_pin = wire.source_pin_index().is_some_and(|p| p < 0);
+                    let dest_is_function_pin = node_network
+                        .nodes
+                        .get(&wire.destination_node_id)
+                        .and_then(|n| self.node_type_registry.get_node_type_for_node(n))
+                        .and_then(|nt| nt.parameters.get(wire.destination_argument_index))
+                        .is_some_and(|p| {
+                            matches!(
+                                p.data_type,
+                                crate::structure_designer::data_type::DataType::Function(_)
+                            )
+                        });
+                    if source_is_function_pin || dest_is_function_pin {
+                        should_validate = true;
+                    }
                 }
             }
         }

@@ -520,6 +520,13 @@ fn add_fold_int(designer: &mut StructureDesigner, network: &str, y: f64) -> u64 
 /// offending top-level node, so its text lands on `network.validation_errors`.
 fn validate_and_errors(designer: &mut StructureDesigner, network: &str) -> (bool, Vec<String>) {
     designer.validate_active_network();
+    read_validity(designer, network)
+}
+
+/// Read the *stored* validity + error texts of a network **without** triggering
+/// a fresh validation pass. Used to assert that a mutation method re-validated
+/// on its own (rather than leaving a stale error behind).
+fn read_validity(designer: &StructureDesigner, network: &str) -> (bool, Vec<String>) {
     let net = designer
         .node_type_registry
         .node_networks
@@ -781,5 +788,104 @@ fn scene_skip_function_mode_node() {
     assert!(
         !matches!(out, NodeOutput::None),
         "removing the consumer must restore the node's scene output"
+    );
+}
+
+/// Regression: connecting a function-pin source into a *top-level* HOF's `f`
+/// pin must re-validate so the "zone-output pin has no incoming wire" error the
+/// HOF carried while its inline body was empty is cleared.
+///
+/// `StructureDesigner::connect_nodes` (the top-level entry point the UI's
+/// `connect_nodes`/`connect_nodes_scoped(empty path)` resolves to) marks a
+/// `Partial` refresh, which re-evaluates but does **not** re-validate. The
+/// scoped/body connect path calls `validate_active_network()` explicitly for
+/// exactly this reason; the top-level path was missing it for function wires, so
+/// a `map` driven by a freshly-wired `f` pin kept showing a stale zone-output
+/// error in the editor (while its body correctly collapsed, since collapse *is*
+/// recomputed every view build). This reads the *stored* validity (no explicit
+/// re-validate) to prove `connect_nodes` cleared it on its own.
+#[test]
+fn connecting_f_pin_revalidates_and_clears_stale_zone_output_error() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+
+    // Before `f`: the empty inline body trips the zone-output rule.
+    designer.validate_active_network();
+    let (valid_before, errors_before) = read_validity(&designer, "main");
+    assert!(
+        !valid_before,
+        "an empty-body map should be invalid before `f` is wired; got {errors_before:?}"
+    );
+    assert!(
+        errors_before.iter().any(|e| {
+            let l = e.to_lowercase();
+            l.contains("zone-output") && l.contains("no incoming wire")
+        }),
+        "expected the zone-output rule error before `f`; got {errors_before:?}"
+    );
+
+    // Connect the function pin through the same entry point the UI uses. No
+    // explicit `validate_active_network()` afterward — the method must do it.
+    designer.connect_nodes(expr_id, -1, map_id, 1); // f ← expr.fn
+
+    let (valid_after, errors_after) = read_validity(&designer, "main");
+    assert!(
+        valid_after,
+        "connecting `f` must re-validate and clear the stale zone-output error; got {errors_after:?}"
+    );
+}
+
+/// Mirror of the connect case: *disconnecting* the `f` wire from a top-level HOF
+/// with an empty inline body must re-validate so the zone-output rule fires
+/// again. The wire-deletion branch of `delete_selected` skips validation for
+/// ordinary value wires, but a function wire (here, a `-1` source feeding `f`)
+/// requests a re-validate so the network doesn't stay wrongly marked valid.
+#[test]
+fn disconnecting_f_pin_revalidates_and_restores_zone_output_error() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(expr_id, -1, map_id, 1); // f ← expr.fn (now valid)
+
+    let (valid_wired, errors_wired) = read_validity(&designer, "main");
+    assert!(
+        valid_wired,
+        "map with `f` wired and an empty body should be valid; got {errors_wired:?}"
+    );
+
+    // Select and delete the `f` wire through the same entry point the UI uses.
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        assert!(
+            net.select_wire(expr_id, -1, map_id, 1),
+            "failed to select the f wire"
+        );
+    }
+    designer.delete_selected();
+
+    let (valid_after, errors_after) = read_validity(&designer, "main");
+    assert!(
+        !valid_after,
+        "disconnecting `f` must re-validate and restore the zone-output error"
+    );
+    assert!(
+        errors_after.iter().any(|e| {
+            let l = e.to_lowercase();
+            l.contains("zone-output") && l.contains("no incoming wire")
+        }),
+        "expected the zone-output rule error after disconnecting `f`; got {errors_after:?}"
     );
 }
