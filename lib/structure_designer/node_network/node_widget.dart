@@ -800,6 +800,14 @@ class NodeWidget extends StatelessWidget {
   /// resolver mid-build.
   Widget _buildNormalNodeContent(BuildContext context, ScopeResolver resolver) {
     final isHof = node.zone != null;
+    // An effectively-collapsed (compact) HOF renders its body as an ordinary
+    // node — input column (xs, f, …) + output column — instead of the body
+    // region. `_buildRegularMainBody` already lays out the external input pins
+    // (including `f`, an ordinary `parameters` entry) and output pins, so the
+    // compact HOF gets correct, fully interactive pins with no new pin code.
+    // The title-bar Row is unchanged: it still suppresses the legacy function
+    // pin on every HOF. See `doc/design_hof_node_collapse.md`.
+    final bool compactHof = isHof && node.zone!.collapsable && node.zone!.collapsed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -862,9 +870,12 @@ class NodeWidget extends StatelessWidget {
             ),
           ),
         ),
-        // Main Body — different layout for HOFs (body region between
-        // input/output columns) vs. regular nodes (just input/output columns).
-        if (isHof)
+        // Main Body — different layout for expanded HOFs (body region between
+        // input/output columns) vs. regular nodes and compact HOFs (just
+        // input/output columns).
+        if (compactHof)
+          _buildRegularMainBody(context)
+        else if (isHof)
           _buildHofMainBody(context, resolver)
         else
           _buildRegularMainBody(context),
@@ -1274,7 +1285,16 @@ class NodeWidget extends StatelessWidget {
     final factorInfo = getFactorSelectionInfo();
     final bool canFactor = factorInfo.canFactor;
 
-    showMenu(
+    // The Body collapse-mode group is offered only for collapsable HOFs
+    // (`map`/`filter`/`fold`/`foreach`); `closure` and every non-HOF leave
+    // `collapsable` false. See `doc/design_hof_node_collapse.md`.
+    final bool isCollapsableHof = node.zone != null && node.zone!.collapsable;
+
+    // Explicit `<String>` so the heterogeneous items list (the value-bearing
+    // items, the disabled "Body" header, and the `PopupMenuDivider`) infers
+    // `List<PopupMenuEntry<String>>` rather than collapsing to a `StatefulWidget`
+    // LUB — needed once the divider/header are mixed in.
+    showMenu<String>(
       context: context,
       position: position,
       items: [
@@ -1320,6 +1340,20 @@ class NodeWidget extends StatelessWidget {
             value: 'factor_into_subnetwork',
             child: Text('Factor out to Subnetwork...'),
           ),
+        // Body collapse-mode radio group (collapsable HOFs only). The
+        // check-mark sits on the current `collapseMode`; picking "Auto" is the
+        // "stop overriding" path. No dialog/submenu — the flat `showMenu` has
+        // no native cascade and view state doesn't warrant a dialog.
+        if (isCollapsableHof) ...[
+          const PopupMenuDivider(),
+          const PopupMenuItem<String>(enabled: false, child: Text('Body')),
+          _collapseModeItem(
+              'collapse_auto', 'Auto (follow f)', node.zone!.collapseMode),
+          _collapseModeItem('collapse_expanded', 'Always expanded',
+              node.zone!.collapseMode),
+          _collapseModeItem('collapse_collapsed', 'Always collapsed',
+              node.zone!.collapseMode),
+        ],
       ],
     ).then((value) {
       if (!context.mounted) return;
@@ -1368,8 +1402,53 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         showFactorIntoSubnetworkDialog(context, model);
+      } else if (value == 'collapse_auto') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.setCollapseMode(scopeChain, node.id, APICollapseMode.auto);
+      } else if (value == 'collapse_expanded') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.setCollapseMode(scopeChain, node.id, APICollapseMode.expanded);
+      } else if (value == 'collapse_collapsed') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.setCollapseMode(scopeChain, node.id, APICollapseMode.collapsed);
       }
     });
+  }
+
+  /// One radio-style item in the Body collapse-mode group. The check-mark is
+  /// shown (via a transparent placeholder icon when inactive, so labels stay
+  /// aligned) when [value] corresponds to [current].
+  PopupMenuItem<String> _collapseModeItem(
+      String value, String label, APICollapseMode current) {
+    final bool active = _valueMatchesMode(value, current);
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check,
+              size: 16, color: active ? null : Colors.transparent),
+          const SizedBox(width: 8),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
+  /// Whether a Body menu item's [value] denotes the currently active
+  /// [APICollapseMode].
+  bool _valueMatchesMode(String value, APICollapseMode current) {
+    switch (current) {
+      case APICollapseMode.auto:
+        return value == 'collapse_auto';
+      case APICollapseMode.collapsed:
+        return value == 'collapse_collapsed';
+      case APICollapseMode.expanded:
+        return value == 'collapse_expanded';
+    }
   }
 }
 

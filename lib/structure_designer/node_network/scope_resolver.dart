@@ -40,6 +40,19 @@ class LayoutCache {
   /// `doc/design_closures.md` §"Editor (Flutter) changes" item 1.
   final List<List<BigInt>> functionOverriddenBodies = [];
 
+  /// Scope chains whose owner HOF resolves to *compact* — its body region is
+  /// hidden AND the node shrinks to a regular-node footprint. Driven by the
+  /// Rust-resolved `zone.collapsed` bool (which already folds in the
+  /// Auto/Collapsed/Expanded mode and `f`-connection). Unlike
+  /// [collapsedBodies] / [functionOverriddenBodies], which keep the full body
+  /// footprint and swap in a same-size placeholder, a compact HOF renders no
+  /// body region at all. These chains are *also* added to [collapsedBodies] so
+  /// the existing content/wire-skip + cascade machinery hides the interior for
+  /// free. "Compact" — not "manually collapsed" — because the trigger includes
+  /// Auto-derived collapse, not only an explicit override. See
+  /// `doc/design_hof_node_collapse.md`.
+  final List<List<BigInt>> compactBodies = [];
+
   Size? lookupSize(List<BigInt> bodyChain) {
     for (final entry in bodySizes.entries) {
       if (_listEq(entry.key, bodyChain)) return entry.value;
@@ -63,6 +76,13 @@ class LayoutCache {
 
   bool isFunctionOverridden(List<BigInt> bodyChain) {
     for (final entry in functionOverriddenBodies) {
+      if (_listEq(entry, bodyChain)) return true;
+    }
+    return false;
+  }
+
+  bool isCompact(List<BigInt> bodyChain) {
+    for (final entry in compactBodies) {
       if (_listEq(entry, bodyChain)) return true;
     }
     return false;
@@ -135,6 +155,7 @@ class ScopeResolver {
     layout.bodyOrigins.clear();
     layout.collapsedBodies.clear();
     layout.functionOverriddenBodies.clear();
+    layout.compactBodies.clear();
     // Phase 1: bottom-up sizes.
     for (final node in root.nodes.values) {
       final zone = node.zone;
@@ -164,14 +185,35 @@ class ScopeResolver {
         layout.collapsedBodies.add(List<BigInt>.from(chain));
       }
     }
-    // Phase 4: function-pin override. An HOF whose `f` input pin is wired
+    // Phase 4: compact resolution. An HOF whose Rust-resolved `zone.collapsed`
+    // is true renders compact — body hidden AND footprint shrunk to a regular
+    // node. Record it in `compactBodies` (drives the size / pin-position /
+    // hit-test gating) and *also* in `collapsedBodies` so the existing
+    // content/wire-skip + cascade hides the body interior with no extra
+    // conditions. `zone.collapsed` already folds in the Auto/Collapsed/
+    // Expanded mode and the `f`-connection (resolved in Rust), so it is the
+    // single source of truth here. See `doc/design_hof_node_collapse.md`.
+    for (final chain in layout.bodySizes.keys) {
+      final hofId = chain.last;
+      final parentChain = chain.sublist(0, chain.length - 1);
+      final zone = _resolveNode(parentChain, hofId)?.zone;
+      if (zone == null || !zone.collapsed) continue;
+      layout.compactBodies.add(List<BigInt>.from(chain));
+      if (!layout.isCollapsed(chain)) {
+        layout.collapsedBodies.add(List<BigInt>.from(chain));
+      }
+    }
+    // Phase 5: function-pin override. An HOF whose `f` input pin is wired
     // ignores its inline body (the wired closure drives it), so hide the
     // body's content — treat it like a collapse so the node walk and painter
     // skip it — and flag it separately so the HOF can render a distinct
     // "driven by `f`" placeholder. Only the four HOF types declare an `f`
-    // pin, so `closure` bodies are never flagged here.
+    // pin, so `closure` bodies are never flagged here. **Compact wins:** a
+    // compact HOF shows no body region at all, so it never gets the "driven
+    // by `f`" placeholder — skip chains already marked compact.
     for (final chain in layout.bodySizes.keys) {
       if (!_isFunctionPinConnected(chain)) continue;
+      if (layout.isCompact(chain)) continue;
       layout.functionOverriddenBodies.add(List<BigInt>.from(chain));
       if (!layout.isCollapsed(chain)) {
         layout.collapsedBodies.add(List<BigInt>.from(chain));
@@ -243,7 +285,12 @@ class ScopeResolver {
   /// `doc/design_zones_ui.md` §"Body sizing — Layout pass".
   Size effectiveNodeSizeLogical(NodeView node, List<BigInt> nodeScopeChain) {
     final zone = node.zone;
-    if (zone == null) {
+    // A compact HOF reports a regular-node footprint so a parent body's
+    // `content_bbox` shrinks around it (size cascade). Read `zone.collapsed`
+    // directly from the view — not `layout.isCompact`, which isn't populated
+    // until after the bottom-up size pass that calls this. `getNodeSize`
+    // applies the same compact branch, so the two stay consistent.
+    if (zone == null || (zone.collapsable && zone.collapsed)) {
       final s = getNodeSize(node, zoomLevel);
       return Size(s.width / scale, s.height / scale);
     }
@@ -418,6 +465,12 @@ class ScopeResolver {
       final zone = node.zone;
       if (zone == null) continue;
       final bodyChain = [...scopeChain, node.id];
+      // A compact HOF has no body region: its cached origin/size still exist,
+      // but nothing is drawn there, so it must not claim containment of clicks
+      // that should hit the compact node itself. (A zoom-collapsed or
+      // `f`-overridden HOF keeps its footprint, so `isCompact` — not
+      // `isBodyCollapsed` — is the right predicate.)
+      if (layout.isCompact(bodyChain)) continue;
       final bodyOrigin = layout.lookupOrigin(bodyChain);
       final bodySize = layout.lookupSize(bodyChain);
       if (bodyOrigin == null || bodySize == null) continue;
@@ -452,11 +505,18 @@ class ScopeResolver {
     Offset screenPos,
   ) {
     // First recurse into any HOF bodies — body content layers on top of its
-    // HOF, so deeper hits win.
+    // HOF, so deeper hits win. Skip the recursion whenever the body's content
+    // is hidden: a compact HOF (no body region), a zoom-collapsed body, or an
+    // `f`-overridden body all have body nodes whose cached origins/sizes still
+    // place them over the owner node's rect, so without this guard those
+    // hidden nodes would be returned in preference to the HOF itself. Use
+    // `isBodyCollapsed` — true for all three hidden states (compact, zoom,
+    // function-override) — so hit-testing matches the render and wire walks.
     for (final node in nodes) {
       final zone = node.zone;
       if (zone == null) continue;
       final bodyChain = [...scopeChain, node.id];
+      if (isBodyCollapsed(bodyChain)) continue;
       final hit = _findNodeAt(zone.nodes.values, bodyChain, screenPos);
       if (hit != null) return hit;
     }
@@ -492,21 +552,32 @@ class ScopeResolver {
       // selection-rect drag in parallel with the pin's wire-drag Draggable,
       // and the rect overlay obscures the dragged wire. Report it as a hit
       // on the HOF.
+      //
+      // Gated on `!isCompact`: a compact HOF has no body region, so it must
+      // fall through to `return (scopeChain, node)` and hit-test as an
+      // ordinary node across its whole width. A zoom-collapsed or
+      // `f`-overridden HOF keeps its full body footprint and must still treat
+      // clicks there as body empty-space / zone-pin hits, so `isCompact`
+      // (not `isBodyCollapsed`) is the right predicate. The compact rect is
+      // already reflected in the `nodeRect` tested above via
+      // `effectiveNodeSizeScreen`.
       if (node.zone != null) {
         final bodyChain = [...scopeChain, node.id];
-        final bodyOrigin = layout.lookupOrigin(bodyChain);
-        final bodySize = layout.lookupSize(bodyChain);
-        if (bodyOrigin != null && bodySize != null) {
-          final bodyRect = bodyOrigin & (bodySize * scale);
-          if (bodyRect.contains(screenPos)) {
-            if (_isPositionOnZonePin(node, scopeChain, screenPos)) {
-              return (scopeChain: scopeChain, node: node);
+        if (!layout.isCompact(bodyChain)) {
+          final bodyOrigin = layout.lookupOrigin(bodyChain);
+          final bodySize = layout.lookupSize(bodyChain);
+          if (bodyOrigin != null && bodySize != null) {
+            final bodyRect = bodyOrigin & (bodySize * scale);
+            if (bodyRect.contains(screenPos)) {
+              if (_isPositionOnZonePin(node, scopeChain, screenPos)) {
+                return (scopeChain: scopeChain, node: node);
+              }
+              // Click is in body empty space — fall through to the next node
+              // (the HOF is reported as "not hit"). Caller's right-click
+              // handler will then see this as empty space and open Add Node
+              // popup parameterized by the body's scope.
+              continue;
             }
-            // Click is in body empty space — fall through to the next node
-            // (the HOF is reported as "not hit"). Caller's right-click
-            // handler will then see this as empty space and open Add Node
-            // popup parameterized by the body's scope.
-            continue;
           }
         }
       }
@@ -624,6 +695,11 @@ class ScopeResolver {
   (Offset, String) _pinPositionNormal(NodeView node, PinReference pin) {
     final nodePos = apiVec2ToOffset(node.position);
     final zone = node.zone;
+    // A compact HOF has no body region, so its outer right edge sits at the
+    // regular `NODE_WIDTH` (not the body-width formula). The `externalInput`
+    // arm is at `x = 0` regardless; the zone pin arms are unreachable for a
+    // compact body (its pins aren't rendered and its wires are skipped).
+    final bool compact = zone != null && zone.collapsable && zone.collapsed;
     switch (pin.pinKind) {
       case PinKind.functionPin:
         // Function pin sits at the HOF's outer right edge for symmetry with
@@ -631,7 +707,7 @@ class ScopeResolver {
         // Use the cached effective body width so the pin tracks the rendered
         // right edge (which grows when the body cascades past its stored
         // size).
-        final nodeWidth = zone != null
+        final nodeWidth = (zone != null && !compact)
             ? BASE_HOF_BODY_LEFT_OFFSET +
                 effectiveBodySize(node, pin.scopeChain).width +
                 BASE_HOF_BODY_RIGHT_GUTTER
@@ -644,10 +720,10 @@ class ScopeResolver {
         );
       case PinKind.externalOutput:
         // External output pins live on the HOF's outer right edge — past the
-        // body region. For non-HOFs the right edge is `NODE_WIDTH` as before.
-        // Use cached effective body width (same cascade reasoning as the
-        // functionPin arm above).
-        final nodeWidth = zone != null
+        // body region. For non-HOFs (and compact HOFs) the right edge is
+        // `NODE_WIDTH` as before. Use cached effective body width otherwise
+        // (same cascade reasoning as the functionPin arm above).
+        final nodeWidth = (zone != null && !compact)
             ? BASE_HOF_BODY_LEFT_OFFSET +
                 effectiveBodySize(node, pin.scopeChain).width +
                 BASE_HOF_BODY_RIGHT_GUTTER

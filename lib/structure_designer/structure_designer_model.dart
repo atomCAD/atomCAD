@@ -246,6 +246,20 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Set a collapsable HOF node's collapse mode (Auto / Collapsed / Expanded).
+  /// Forwards [scopeChain] as `scope_path` so the (possibly nested) body's HOF
+  /// is resolved. No-op Rust-side for non-collapsable nodes. See
+  /// `doc/design_hof_node_collapse.md`.
+  void setCollapseMode(
+      List<BigInt> scopeChain, BigInt hofNodeId, APICollapseMode mode) {
+    structure_designer_api.setCollapseMode(
+      scopePath: _scopeChainToBytes(scopeChain),
+      hofNodeId: hofNodeId,
+      mode: mode,
+    );
+    refreshFromKernel();
+  }
+
   void setCameraTransform(APITransform transform) {
     common_api.setCameraTransform(transform: transform);
     refreshFromKernel();

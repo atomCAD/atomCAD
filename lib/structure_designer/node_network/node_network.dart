@@ -189,10 +189,16 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   // so the body-content row height must be at least the larger of the two
   // zone pin counts. Non-HOF nodes have empty zone-pin lists ⇒ no effect.
   final zone = node.zone;
-  final zoneInputPinsHeight = zone != null
+  // A compact HOF renders as an ordinary node (no body region): drop its
+  // zone-pin and stored-height contributions and use the regular base width,
+  // so its footprint is driven by the external input/output pins. `collapsed`
+  // is the Rust-resolved effective state (folds in Auto/Collapsed/Expanded
+  // and `f`-connection). Matches `effectiveNodeSizeLogical`'s compact branch.
+  final bool compactHof = zone != null && zone.collapsable && zone.collapsed;
+  final zoneInputPinsHeight = (zone != null && !compactHof)
       ? zone.zoneInputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM
       : 0.0;
-  final zoneOutputPinsHeight = zone != null
+  final zoneOutputPinsHeight = (zone != null && !compactHof)
       ? zone.zoneOutputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM
       : 0.0;
   final inputPinsHeight =
@@ -203,7 +209,7 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   // For HOF nodes the body region itself contributes to the row height. In
   // U3 the body always renders at its stored size (no content_bbox computed
   // yet — U4 brings that in via the layout pass).
-  final bodyContentHeight = zone != null ? zone.storedHeight : 0.0;
+  final bodyContentHeight = (zone != null && !compactHof) ? zone.storedHeight : 0.0;
   final mainBodyHeight = [
     inputPinsHeight,
     outputPinsHeight,
@@ -218,8 +224,9 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
 
   final normalHeight = titleHeight + mainBodyHeight + subtitleHeight + padding;
 
-  // Base width for the standard node; HOFs add the body region plus gutters.
-  final baseWidth = zone != null
+  // Base width for the standard node; expanded HOFs add the body region plus
+  // gutters, a compact HOF uses the regular node width.
+  final baseWidth = (zone != null && !compactHof)
       ? BASE_HOF_BODY_LEFT_OFFSET +
           zone.storedWidth +
           BASE_HOF_BODY_RIGHT_GUTTER
