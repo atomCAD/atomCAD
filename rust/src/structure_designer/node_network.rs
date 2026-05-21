@@ -557,6 +557,16 @@ impl Node {
         self.zone.as_mut().map(|arc| Arc::make_mut(arc))
     }
 
+    /// True if any of this node's input pins (arguments) carries an incoming
+    /// wire. The function-mode rule (`doc/design_function_pins.md` §"Function
+    /// mode") uses this: a node whose function pin (`-1`) is wired as a function
+    /// value must leave **every** input pin disconnected, because every input is
+    /// a parameter — a wired input would be a dead wire the synthesizer never
+    /// reads.
+    pub fn has_any_wired_input_pin(&self) -> bool {
+        self.arguments.iter().any(|arg| !arg.is_empty())
+    }
+
     /// In debug builds, panic if this node's zone state is inconsistent with
     /// its declared `NodeType`: non-HOF types (no zone pins) must have
     /// `zone == None` and an empty `zone_output_arguments`. Phase 2 lands the
@@ -1148,6 +1158,29 @@ impl NodeNetwork {
         }
     }
 
+    /// True if some node in this network consumes `node_id`'s function pin (its
+    /// `-1` output) via an ordinary same-scope incoming wire (an HOF `f` pin or
+    /// `apply.f`). This is the derived "function mode" predicate
+    /// (`doc/design_function_pins.md` §"Display in function mode"): when true the
+    /// node acts purely as a function value, so the scene builder skips it and
+    /// its pin-0 eye is disabled. It is also the destination-side check in
+    /// [`can_connect_nodes`] (an input pin may not be wired on a node whose
+    /// function pin is already consumed) and half of the function-mode
+    /// validation rule. Function-pin wires are always same-scope
+    /// (`source_scope_depth == 0`); captures are expressed through the `closure`
+    /// node, not the function pin.
+    pub fn function_pin_consumed(&self, node_id: u64) -> bool {
+        self.nodes.values().any(|consumer| {
+            consumer.arguments.iter().any(|arg| {
+                arg.incoming_wires.iter().any(|w| {
+                    w.source_scope_depth == 0
+                        && w.source_node_id == node_id
+                        && matches!(w.source_pin, SourcePin::NodeOutput { pin_index: -1 })
+                })
+            })
+        })
+    }
+
     pub fn can_connect_nodes(
         &self,
         source_node_id: u64,
@@ -1169,6 +1202,22 @@ impl NodeNetwork {
 
         // Check if the destination parameter index is valid
         if dest_param_index >= dest_node.arguments.len() {
+            return false;
+        }
+
+        // Function-mode mutual exclusion (doc/design_function_pins.md
+        // §"Function mode"). Enforced in both directions:
+        //   (1) A function-pin (`-1`) source is only wireable when the source
+        //       node has no wired input pin — every input is a parameter, so a
+        //       wired input would be a dead wire the synthesizer never reads.
+        //   (2) An input pin may not be wired on a node whose function pin is
+        //       already consumed (the dual of rule 1, destination side).
+        // The type match itself is handled below by `resolve_output_type`
+        // (which maps `-1` to `get_function_type()`) + `can_be_converted_to`.
+        if source_output_pin_index == -1 && source_node.has_any_wired_input_pin() {
+            return false;
+        }
+        if self.function_pin_consumed(dest_node_id) {
             return false;
         }
 

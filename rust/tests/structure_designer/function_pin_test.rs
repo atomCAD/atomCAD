@@ -10,13 +10,18 @@
 //! straight onto the consumer's `f` argument.
 
 use glam::f64::DVec2;
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
+    GeometryVisualization, GeometryVisualizationPreferences,
+};
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
-use rust_lib_flutter_cad::structure_designer::node_network::{IncomingWire, SourcePin};
+use rust_lib_flutter_cad::structure_designer::node_network::{
+    IncomingWire, NodeDisplayType, SourcePin,
+};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::apply::ApplyData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_len::ArrayLenData;
@@ -27,6 +32,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
 use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use rust_lib_flutter_cad::structure_designer::structure_designer_scene::NodeOutput;
 
 // ============================================================================
 // Helpers (mirrors of the closures_test.rs set, trimmed to what's needed here)
@@ -485,4 +491,295 @@ fn function_pin_polymorphic_output_node_errors() {
             other.to_display_string()
         ),
     }
+}
+
+// ============================================================================
+// Phase 2 — connection gating, validation, display suppression
+// (design_function_pins.md §"Validation & connection gating" / §"Display in
+//  function mode")
+// ============================================================================
+
+/// Build a `fold(Int, Int)` node (`f` at arg index 2, typed `(Int,Int) -> Int`)
+/// and return its id.
+fn add_fold_int(designer: &mut StructureDesigner, network: &str, y: f64) -> u64 {
+    let id = designer.add_node("fold", DVec2::new(350.0, y));
+    set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(FoldData {
+            element_type: DataType::Int,
+            accumulator_type: DataType::Int,
+        }),
+    );
+    id
+}
+
+/// Validate the active network and return `(valid, error_texts)` for the named
+/// top-level network. The function-mode rule attributes its error to the
+/// offending top-level node, so its text lands on `network.validation_errors`.
+fn validate_and_errors(designer: &mut StructureDesigner, network: &str) -> (bool, Vec<String>) {
+    designer.validate_active_network();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    let errors = net
+        .validation_errors
+        .iter()
+        .map(|e| e.error_text.clone())
+        .collect();
+    (net.valid, errors)
+}
+
+/// Clear every incoming wire on `node_id`'s argument at `arg_index`. Used to
+/// disconnect a wire directly (no disconnect API needed in tests).
+fn clear_argument(designer: &mut StructureDesigner, network: &str, node_id: u64, arg_index: usize) {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap();
+    net.nodes
+        .get_mut(&node_id)
+        .unwrap()
+        .arguments[arg_index]
+        .clear();
+}
+
+/// Remove `node_id` from `network` (drops it and any wires stored on its
+/// arguments, including a function-pin wire it consumed).
+fn remove_node(designer: &mut StructureDesigner, network: &str, node_id: u64) {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap();
+    net.nodes.remove(&node_id);
+}
+
+/// Run `generate_scene` for `node_id` in `network` and return its pin-0
+/// `NodeOutput`. Uses `SurfaceSplatting` so a Blueprint result reliably yields a
+/// (non-`None`) `SurfacePointCloud` regardless of sampling density.
+fn scene_output(designer: &StructureDesigner, network: &str, node_id: u64) -> NodeOutput {
+    let registry = &designer.node_type_registry;
+    let mut evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let prefs = GeometryVisualizationPreferences {
+        geometry_visualization: GeometryVisualization::SurfaceSplatting,
+        ..Default::default()
+    };
+    evaluator
+        .generate_scene(
+            network,
+            node_id,
+            NodeDisplayType::Normal,
+            registry,
+            &prefs,
+            &mut context,
+        )
+        .output
+}
+
+/// `can_connect_nodes` accepts/rejects function-pin sources by structural type
+/// match: `(Int)->Int` fits `map.f` but not (by arity) a 2-ary `fold.f`, and
+/// `(Int,Int)->Int` fits `fold.f` but not `map.f`.
+#[test]
+fn can_connect_function_pin_type_match() {
+    let mut designer = setup_designer_with_network("main");
+
+    let expr1 = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -200.0);
+    let expr2 = add_expr(
+        &mut designer,
+        "main",
+        "a + b",
+        vec![("a", DataType::Int), ("b", DataType::Int)],
+        -80.0,
+    );
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    let fold_id = add_fold_int(&mut designer, "main", 200.0);
+
+    // (Int) -> Int  ✓ map.f (arg 1)   ✗ fold.f (arg 2, arity 2)
+    assert!(designer.can_connect_nodes(expr1, -1, map_id, 1));
+    assert!(!designer.can_connect_nodes(expr1, -1, fold_id, 2));
+
+    // (Int,Int) -> Int  ✗ map.f (arity 1)   ✓ fold.f
+    assert!(!designer.can_connect_nodes(expr2, -1, map_id, 1));
+    assert!(designer.can_connect_nodes(expr2, -1, fold_id, 2));
+}
+
+/// Function-mode mutual exclusion is enforced in both directions at connect
+/// time: a function-pin source with a wired input is rejected, and an input
+/// pin on a node whose function pin is already consumed is rejected.
+#[test]
+fn can_connect_function_mode_mutual_exclusion() {
+    let mut designer = setup_designer_with_network("main");
+
+    let expr1 = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    let arg_int = add_int(&mut designer, "main", 5, 120.0);
+
+    // Source side: with no wired input the function pin connects; once an input
+    // pin is wired, dragging the function pin is rejected (it would be a dead
+    // wire — every input is a parameter).
+    assert!(designer.can_connect_nodes(expr1, -1, map_id, 1));
+    designer.connect_nodes(arg_int, 0, expr1, 0); // wire x
+    assert!(
+        !designer.can_connect_nodes(expr1, -1, map_id, 1),
+        "function pin must be unwireable while an input is connected"
+    );
+
+    // Destination side: a fresh node accepts an input wire; once its function
+    // pin is consumed, the input pin no longer accepts a wire.
+    let expr2 = add_expr(&mut designer, "main", "y + 1", vec![("y", DataType::Int)], 240.0);
+    assert!(designer.can_connect_nodes(arg_int, 0, expr2, 0));
+    wire_function_pin(&mut designer, "main", expr2, map_id, 1); // expr2.fn → map.f
+    assert!(
+        !designer.can_connect_nodes(arg_int, 0, expr2, 0),
+        "an input pin must be unwireable while the function pin is consumed"
+    );
+}
+
+/// A stored function-pin wire that bypasses the drag gate (`.cnnd` load /
+/// text edit) is caught by validation when the function-pinned node also has a
+/// wired input; disconnecting the input clears the error.
+#[test]
+fn validation_function_mode_both_wired() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let arg_int = add_int(&mut designer, "main", 7, 120.0);
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    wire_function_pin(&mut designer, "main", expr_id, map_id, 1); // expr.fn → map.f
+    designer.connect_nodes(arg_int, 0, expr_id, 0); // dead wire: expr.x
+
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(!valid, "function pin + wired input must be invalid");
+    assert!(
+        errors.iter().any(|e| e.contains("used as a function value")),
+        "expected the function-mode error, got {errors:?}"
+    );
+
+    // Disconnecting the dead input wire clears the violation.
+    clear_argument(&mut designer, "main", expr_id, 0);
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(
+        valid,
+        "clearing the input wire should restore validity, got {errors:?}"
+    );
+    assert!(!errors.iter().any(|e| e.contains("used as a function value")));
+}
+
+/// A matched function-pin wire validates clean (and an HOF driven by it with an
+/// empty inline body is fine — rule-1 suspension); an arity/type-mismatched one
+/// surfaces a wire type error via `get_function_type()` resolution.
+#[test]
+fn validation_function_pin_type_match_and_mismatch() {
+    // Matched: (Int)->Int into map.f, empty body — valid.
+    {
+        let mut designer = setup_designer_with_network("main");
+        let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+        let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+        let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+        designer.connect_nodes(range_id, 0, map_id, 0);
+        wire_function_pin(&mut designer, "main", expr_id, map_id, 1);
+
+        let (valid, errors) = validate_and_errors(&mut designer, "main");
+        assert!(valid, "matched function pin should validate clean: {errors:?}");
+    }
+
+    // Mismatched: (Int,Int)->Int into map.f (expects (Int)->Int) — invalid.
+    {
+        let mut designer = setup_designer_with_network("main");
+        let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+        let expr_id = add_expr(
+            &mut designer,
+            "main",
+            "a + b",
+            vec![("a", DataType::Int), ("b", DataType::Int)],
+            -120.0,
+        );
+        let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+        designer.connect_nodes(range_id, 0, map_id, 0);
+        wire_function_pin(&mut designer, "main", expr_id, map_id, 1);
+
+        let (valid, errors) = validate_and_errors(&mut designer, "main");
+        assert!(!valid, "arity-mismatched function pin must be invalid");
+        assert!(
+            errors.iter().any(|e| e.contains("mismatch")),
+            "expected a wire type-mismatch error, got {errors:?}"
+        );
+    }
+}
+
+/// `apply`'s required `f` pin is still enforced after the function-pin work:
+/// an `apply` with a disconnected `f` is invalid (closures rule 4 untouched).
+#[test]
+fn validation_apply_requires_f_unchanged() {
+    let mut designer = setup_designer_with_network("main");
+    let apply_id = designer.add_node("apply", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+        }),
+    );
+
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(!valid, "apply with disconnected f must be invalid");
+    assert!(
+        errors.iter().any(|e| e.contains("apply")),
+        "expected the apply-requires-f error, got {errors:?}"
+    );
+}
+
+/// A node whose function pin is consumed emits no scene output even though it
+/// has a displayable (Blueprint) pin 0 — the scene-skip overrides the display
+/// path. Removing the consuming wire restores its output.
+#[test]
+fn scene_skip_function_mode_node() {
+    // const_sphere(unused: Int) -> Blueprint: an arity-1 custom network whose
+    // body ignores its parameter, so it both fits `map.f` and renders standalone.
+    let mut designer = setup_designer_with_network("const_sphere");
+    let param_id = designer.add_node("parameter", DVec2::new(0.0, 0.0));
+    configure_parameter(&mut designer, "const_sphere", param_id, "unused", DataType::Int);
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    designer.set_return_node_id(Some(sphere_id));
+    designer.validate_active_network();
+
+    // main: range → map.xs; const_sphere.fn → map.f.
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let range_id = add_range(&mut designer, "main", 1, 1, 3, 0.0);
+    let maker_id = designer.add_node("const_sphere", DVec2::new(150.0, -120.0));
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Blueprint, 0.0);
+    designer.connect_nodes(range_id, 0, map_id, 0);
+    wire_function_pin(&mut designer, "main", maker_id, map_id, 1);
+    designer.validate_active_network();
+
+    // Display the maker's pin 0 explicitly, then confirm it still renders
+    // nothing because its function pin is consumed (skip overrides display).
+    designer.set_node_display(maker_id, true);
+    let out = scene_output(&designer, "main", maker_id);
+    assert!(
+        matches!(out, NodeOutput::None),
+        "a function-mode node must emit no scene output"
+    );
+
+    // Remove the consumer; the maker is no longer in function mode and renders
+    // its Blueprint again.
+    remove_node(&mut designer, "main", map_id);
+    designer.validate_active_network();
+    let out = scene_output(&designer, "main", maker_id);
+    assert!(
+        !matches!(out, NodeOutput::None),
+        "removing the consumer must restore the node's scene output"
+    );
 }

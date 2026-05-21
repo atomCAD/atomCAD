@@ -316,6 +316,16 @@ fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeT
                     // zone-aware validation (Phase 6).
                     return true;
                 };
+                // The function pin (`-1`) is not a regular result pin and is
+                // not counted by `output_pin_count()`; it always exists on a
+                // non-HOF node. Preserve it here and let `validate_wires`
+                // type-check it via `get_function_type()`
+                // (doc/design_function_pins.md). Without this guard `-1 as
+                // usize` is a huge value `>= count`, so the wire would be
+                // silently stripped on every `.cnnd` load / validation pass.
+                if output_pin_index < 0 {
+                    return true;
+                }
                 if let Some(&count) = pin_counts.get(&source_node_id) {
                     (output_pin_index as usize) < count
                 } else {
@@ -682,6 +692,25 @@ fn validate_zones_recursive(
             ok = false;
             network.validation_errors.push(ValidationError::new(
                 "apply: required `f` (Function) pin is not connected".to_string(),
+                Some(node_id),
+            ));
+        }
+
+        // Function-mode rule (doc/design_function_pins.md §"Function mode"): a
+        // node's function pin (`-1`) and its input pins are mutually exclusive —
+        // every input is a parameter, so a wired input on a function-pinned node
+        // is a dead wire. The drag gate (`can_connect_nodes`) blocks this in the
+        // editor; this catches the paths that bypass it (`.cnnd` loads,
+        // text-format edits). The matching wire-type check for a `-1` source is
+        // already handled by `validate_wires` (which resolves the source via
+        // `get_function_type()`), so only the mutual-exclusion needs flagging.
+        let has_wired_input = node.has_any_wired_input_pin();
+        if has_wired_input && network.function_pin_consumed(node_id) {
+            ok = false;
+            network.validation_errors.push(ValidationError::new(
+                "Node's function pin is used as a function value, so all of its \
+                 input pins must be left disconnected (every input is a parameter)"
+                    .to_string(),
                 Some(node_id),
             ));
         }
