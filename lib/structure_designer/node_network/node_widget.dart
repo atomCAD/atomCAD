@@ -835,6 +835,14 @@ class NodeWidget extends StatelessWidget {
     // The title-bar Row is unchanged: it still suppresses the legacy function
     // pin on every HOF. See `doc/design_hof_node_collapse.md`.
     final bool compactHof = isHof && node.zone!.collapsable && node.zone!.collapsed;
+    // Closure: its single Function output pin renders in the title bar (the
+    // legacy function-pin slot) instead of a right-edge output column, and the
+    // body extends into the freed gutter. Only when the body is actually shown
+    // (never compact — `closure` isn't collapsable). Kept in lockstep with the
+    // `externalOutput` endpoint math via `hofOutputPinInTitleBar`. See
+    // `doc/design_closures.md` Proposal 2.
+    final bool outputInTitleBar =
+        isHof && !compactHof && hofOutputPinInTitleBar(node);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -858,41 +866,116 @@ class NodeWidget extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Expanded(
-                  child: Tooltip(
-                    message: node.nodeTypeName,
-                    waitDuration: const Duration(milliseconds: 500),
-                    preferBelow: false,
-                    child: Text(
-                      getSimpleName(node.nodeTypeName),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                if (outputInTitleBar) ...[
+                  // No node-type label for a closure — its distinctive shape
+                  // (output pin in the title bar, wide body, no input column)
+                  // already identifies it, and the function type is the
+                  // instance-specific headline, so it takes the title's place
+                  // and gets the full width. "closure" stays recoverable via
+                  // the hover tooltip and the zoomed-out compact view. The
+                  // Expanded pushes the output pin to the node's right edge —
+                  // matching the title-bar `externalOutput` endpoint math in
+                  // scope_resolver (x == nodeWidth).
+                  Expanded(
+                    child: Tooltip(
+                      message: node.nodeTypeName,
+                      waitDuration: const Duration(milliseconds: 500),
+                      preferBelow: false,
+                      child: node.outputPins.isNotEmpty
+                          ? Text.rich(
+                              TextSpan(children: [
+                                TextSpan(
+                                  text: 'ƒ ',
+                                  // Amber Function color, tying the glyph to
+                                  // the output pin and its wires. Falls back to
+                                  // white on the orange selected/active title
+                                  // bar, where amber would lose contrast.
+                                  style: TextStyle(
+                                    color: (node.active || node.selected)
+                                        ? Colors.white
+                                        : getDataTypeColor(node
+                                            .outputPins.first.effectiveDataType),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text:
+                                      node.outputPins.first.effectiveDataType,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ]),
+                              overflow: TextOverflow.ellipsis,
+                            )
+                          : Text(
+                              getSimpleName(node.nodeTypeName),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // The closure's single Function output pin. No eye toggle —
+                  // a Function value has no viewport display. Endpoint resolved
+                  // by scope_resolver's `externalOutput` arm at the title-bar
+                  // vertical offset.
+                  if (node.outputPins.isNotEmpty)
+                    PinWidget(
+                      pinReference: PinReference(
+                        nodeId: node.id,
+                        scopeChain: scopeChain,
+                        pinKind: PinKind.externalOutput,
+                        pinIndex: node.outputPins.first.index,
+                        dataType: node.outputPins.first.effectiveDataType,
                       ),
-                      overflow: TextOverflow.ellipsis,
+                      multi: false,
+                    ),
+                ] else ...[
+                  Expanded(
+                    child: Tooltip(
+                      message: node.nodeTypeName,
+                      waitDuration: const Duration(milliseconds: 500),
+                      preferBelow: false,
+                      child: Text(
+                        getSimpleName(node.nodeTypeName),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 4),
-                // Function pin — suppressed on HOFs. The legacy function pin
-                // is never wired meaningfully on zone-owning nodes (their
-                // body replaces the closure abstraction), and showing it
-                // confuses users into wiring closures into HOFs. Full
-                // function-pin removal lives in the parent Rust design's
-                // cleanup phase per `doc/design_zones_ui.md` §U7. Until then
-                // we render it only on non-HOF nodes.
-                if (!isHof)
-                  PinWidget(
-                    pinReference: PinReference(
-                      nodeId: node.id,
-                      scopeChain: scopeChain,
-                      pinKind: PinKind.functionPin,
-                      pinIndex: -1,
-                      dataType: node.functionType,
+                  const SizedBox(width: 4),
+                  // Function pin — suppressed on HOFs. The legacy function pin
+                  // is never wired meaningfully on zone-owning nodes (their
+                  // body replaces the closure abstraction), and showing it
+                  // confuses users into wiring closures into HOFs. Full
+                  // function-pin removal lives in the parent Rust design's
+                  // cleanup phase per `doc/design_zones_ui.md` §U7. Until then
+                  // we render it only on non-HOF nodes.
+                  if (!isHof)
+                    PinWidget(
+                      pinReference: PinReference(
+                        nodeId: node.id,
+                        scopeChain: scopeChain,
+                        pinKind: PinKind.functionPin,
+                        pinIndex: -1,
+                        dataType: node.functionType,
+                      ),
+                      multi: false,
                     ),
-                    multi: false,
-                  ),
+                ],
               ],
             ),
           ),
@@ -993,17 +1076,23 @@ class NodeWidget extends StatelessWidget {
     final effectiveSize = cachedSize ?? Size(zone.storedWidth, zone.storedHeight);
     final collapsed = resolver.isBodyCollapsed(bodyChain);
     final fOverridden = resolver.isBodyFunctionOverridden(bodyChain);
+    // Closure trims its chrome: no external input column to reserve (it has no
+    // input pins) and its Function output renders in the title bar, so the
+    // right gutter holds nothing. Both gutters shrink to small pads via the
+    // shared helpers, letting the body span the freed width. See
+    // `doc/design_closures.md` Proposal 2.
+    final bool outputInTitleBar = hofOutputPinInTitleBar(node);
     return SizedBox(
-      width: BASE_HOF_BODY_LEFT_OFFSET +
+      width: hofBodyLeftOffset(node) +
           effectiveSize.width +
-          BASE_HOF_BODY_RIGHT_GUTTER,
+          hofBodyRightGutter(node),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // External input column. Width matched to BASE_HOF_BODY_LEFT_OFFSET
-          // so its right edge meets the body region's left edge.
+          // External input column. Width matched to the left offset so its
+          // right edge meets the body region's left edge.
           SizedBox(
-            width: BASE_HOF_BODY_LEFT_OFFSET,
+            width: hofBodyLeftOffset(node),
             child: Padding(
               padding: const EdgeInsets.only(left: 2, top: 2),
               child: Column(
@@ -1062,19 +1151,24 @@ class NodeWidget extends StatelessWidget {
                     .endZoneResize();
               },
             ),
-          // External output column.
-          SizedBox(
-            width: BASE_HOF_BODY_RIGHT_GUTTER,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 2, top: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: node.outputPins
-                    .map((pin) => _buildOutputPin(context, pin))
-                    .toList(),
+          // External output column. For a closure the single Function output
+          // lives in the title bar, so the gutter is just a small pad with no
+          // output pins; the other HOFs render their result pin(s) here.
+          if (outputInTitleBar)
+            SizedBox(width: hofBodyRightGutter(node))
+          else
+            SizedBox(
+              width: hofBodyRightGutter(node),
+              child: Padding(
+                padding: const EdgeInsets.only(right: 2, top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: node.outputPins
+                      .map((pin) => _buildOutputPin(context, pin))
+                      .toList(),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

@@ -73,6 +73,44 @@ const double BASE_HOF_BODY_LEFT_OFFSET = 70.0;
 const double BASE_HOF_BODY_RIGHT_GUTTER = 70.0;
 const double BASE_HOF_BODY_BOTTOM_PADDING = 8.0;
 
+// Trimmed body chrome for the `closure` node. A closure has no external input
+// pins (captures arrive as ordinary capture wires drawn into the body) and its
+// single `Function` output pin renders in the title bar (not a right-edge
+// output column), so the wide left column and right gutter the four HOFs need
+// are wasted on it. These small pads give the body maximal width while leaving
+// room for the rounded border and the inner-edge zone pins. See
+// `doc/design_closures.md` §"Editor (Flutter) changes" / Proposal 2.
+const double CLOSURE_BODY_LEFT_PAD = 16.0;
+const double CLOSURE_BODY_RIGHT_PAD = 16.0;
+
+/// External input column width to the left of an HOF's body region. The four
+/// HOFs reserve [BASE_HOF_BODY_LEFT_OFFSET] for their `xs` / `init` / `f` pins;
+/// the `closure` node, which has no external inputs, uses a small pad so the
+/// body extends left. Both the rendering ([NodeWidget]) and the wire-endpoint
+/// math ([ScopeResolver]) read this single helper so the two never drift.
+double hofBodyLeftOffset(NodeView node) =>
+    node.nodeTypeName == 'closure'
+        ? CLOSURE_BODY_LEFT_PAD
+        : BASE_HOF_BODY_LEFT_OFFSET;
+
+/// External output column width to the right of an HOF's body region. The four
+/// HOFs reserve [BASE_HOF_BODY_RIGHT_GUTTER] for their result output pin; the
+/// `closure` node renders its `Function` output in the title bar instead, so it
+/// uses a small pad. See [hofBodyLeftOffset].
+double hofBodyRightGutter(NodeView node) =>
+    node.nodeTypeName == 'closure'
+        ? CLOSURE_BODY_RIGHT_PAD
+        : BASE_HOF_BODY_RIGHT_GUTTER;
+
+/// True for an HOF whose single external output pin renders in the title bar
+/// (the slot non-HOF nodes use for the legacy function pin) rather than in a
+/// right-edge output column. Only the `closure` node qualifies: its lone output
+/// is a `Function` value with no displayable viewport output, so the eye toggle
+/// and the output column are pointless. Routing this through one predicate keeps
+/// the title-bar rendering and the `externalOutput` wire-endpoint math in
+/// lockstep.
+bool hofOutputPinInTitleBar(NodeView node) => node.nodeTypeName == 'closure';
+
 // Legacy constants for backward compatibility (normal zoom)
 const double NODE_WIDTH = BASE_NODE_WIDTH;
 const double NODE_VERT_WIRE_OFFSET = BASE_NODE_VERT_WIRE_OFFSET;
@@ -227,9 +265,9 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   // Base width for the standard node; expanded HOFs add the body region plus
   // gutters, a compact HOF uses the regular node width.
   final baseWidth = (zone != null && !compactHof)
-      ? BASE_HOF_BODY_LEFT_OFFSET +
+      ? hofBodyLeftOffset(node) +
           zone.storedWidth +
-          BASE_HOF_BODY_RIGHT_GUTTER
+          hofBodyRightGutter(node)
       : BASE_NODE_WIDTH;
 
   if (zoomLevel == ZoomLevel.normal) {

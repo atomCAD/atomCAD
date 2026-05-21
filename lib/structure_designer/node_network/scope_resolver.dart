@@ -169,7 +169,7 @@ class ScopeResolver {
       final chain = [node.id];
       final hofPos = apiVec2ToOffset(node.position);
       final bodyTopLeftLogical = hofPos +
-          const Offset(BASE_HOF_BODY_LEFT_OFFSET, BASE_HOF_BODY_TOP_OFFSET);
+          Offset(hofBodyLeftOffset(node), BASE_HOF_BODY_TOP_OFFSET);
       final origin = logicalToScreen(bodyTopLeftLogical, panOffset, scale);
       layout.bodyOrigins[chain] = origin;
       _placeChildBodies(zone, chain, origin);
@@ -296,7 +296,7 @@ class ScopeResolver {
     }
     final body = effectiveBodySize(node, nodeScopeChain);
     final width =
-        BASE_HOF_BODY_LEFT_OFFSET + body.width + BASE_HOF_BODY_RIGHT_GUTTER;
+        hofBodyLeftOffset(node) + body.width + hofBodyRightGutter(node);
     const titleHeight = 30.0;
     final inputPinsHeight =
         node.inputPins.length * BASE_NODE_VERT_WIRE_OFFSET_PER_PARAM;
@@ -399,7 +399,7 @@ class ScopeResolver {
       final innerChain = [...parentChain, innerNode.id];
       final hofPos = apiVec2ToOffset(innerNode.position);
       final bodyTopLeftLocal = hofPos +
-          const Offset(BASE_HOF_BODY_LEFT_OFFSET, BASE_HOF_BODY_TOP_OFFSET);
+          Offset(hofBodyLeftOffset(innerNode), BASE_HOF_BODY_TOP_OFFSET);
       final origin = parentOrigin + bodyTopLeftLocal * scale;
       layout.bodyOrigins[innerChain] = origin;
       _placeChildBodies(innerZone, innerChain, origin);
@@ -708,9 +708,9 @@ class ScopeResolver {
         // right edge (which grows when the body cascades past its stored
         // size).
         final nodeWidth = (zone != null && !compact)
-            ? BASE_HOF_BODY_LEFT_OFFSET +
+            ? hofBodyLeftOffset(node) +
                 effectiveBodySize(node, pin.scopeChain).width +
-                BASE_HOF_BODY_RIGHT_GUTTER
+                hofBodyRightGutter(node)
             : NODE_WIDTH;
         final logicalPos =
             nodePos + Offset(nodeWidth, NODE_VERT_WIRE_OFFSET_FUNCTION_PIN);
@@ -724,12 +724,21 @@ class ScopeResolver {
         // `NODE_WIDTH` as before. Use cached effective body width otherwise
         // (same cascade reasoning as the functionPin arm above).
         final nodeWidth = (zone != null && !compact)
-            ? BASE_HOF_BODY_LEFT_OFFSET +
+            ? hofBodyLeftOffset(node) +
                 effectiveBodySize(node, pin.scopeChain).width +
-                BASE_HOF_BODY_RIGHT_GUTTER
+                hofBodyRightGutter(node)
             : NODE_WIDTH;
-        final vertOffset = NODE_VERT_WIRE_OFFSET +
-            (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+        // Closure: its single Function output renders in the title bar (the
+        // legacy function-pin slot), so the endpoint sits at the title-bar
+        // vertical offset, not in a right-edge output column. Mirrors the
+        // `functionPin` arm above and the title-bar render in node_widget.
+        final double vertOffset;
+        if (zone != null && !compact && hofOutputPinInTitleBar(node)) {
+          vertOffset = NODE_VERT_WIRE_OFFSET_FUNCTION_PIN;
+        } else {
+          vertOffset = NODE_VERT_WIRE_OFFSET +
+              (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
+        }
         final String dataType;
         if (pin.pinIndex >= 0 && pin.pinIndex < node.outputPins.length) {
           dataType = node.outputPins[pin.pinIndex].effectiveDataType;
@@ -757,7 +766,7 @@ class ScopeResolver {
         final vertOffset = NODE_VERT_WIRE_OFFSET +
             (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
         final logicalPos = nodePos +
-            Offset(BASE_HOF_BODY_LEFT_OFFSET + PIN_HIT_AREA_WIDTH / 2,
+            Offset(hofBodyLeftOffset(node) + PIN_HIT_AREA_WIDTH / 2,
                 vertOffset);
         final dataType = pin.pinIndex < z.zoneInputPins.length
             ? z.zoneInputPins[pin.pinIndex].effectiveDataType
@@ -777,7 +786,7 @@ class ScopeResolver {
             (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
         final logicalPos = nodePos +
             Offset(
-                BASE_HOF_BODY_LEFT_OFFSET +
+                hofBodyLeftOffset(node) +
                     bodySize.width -
                     PIN_HIT_AREA_WIDTH / 2,
                 vertOffset);
