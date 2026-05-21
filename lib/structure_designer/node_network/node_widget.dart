@@ -13,6 +13,12 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart'
+    show
+        GRID_MINOR_SPACING,
+        GRID_MAJOR_SPACING,
+        GRID_MINOR_COLOR,
+        GRID_MAJOR_COLOR;
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dart';
@@ -61,6 +67,27 @@ const double NODE_BORDER_RADIUS = 8.0;
 const Color NODE_TITLE_COLOR_NORMAL = Color(0xFF37474F); // Colors.blueGrey[800]
 const Color NODE_TITLE_COLOR_RETURN = Color(0xFF0D47A1); // Dark blue
 const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
+
+// HOF / closure body region appearance. The body renders as a light "canvas"
+// surface matching the main network background, so the embedding hierarchy
+// reads consistently — the top level and every nested body share the same
+// figure/ground instead of inverting to dark from level 2 down. Body nodes
+// stay dark-on-light (identical to the top-level look), and the inner-edge
+// decorations below are dark-on-light so they survive on the light fill.
+//
+// The fill itself is read at build time from `Theme.of(context).colorScheme
+// .surface` (the same color the Scaffold paints behind the main canvas — M3
+// baseline `#FEF7FF`, deterministic from the theme), so the body matches the
+// canvas exactly under any theme. The live body region also paints a grid
+// (see `_BodyGridPainter`) to complete the "this is a sub-canvas" parity with
+// the top level; collapsed / `f`-driven placeholders stay flat (a closed body
+// shouldn't read as an active canvas).
+const Color HOF_BODY_BORDER_COLOR = Color(0x4D000000); // black @ ~0.30
+// Amber-tinted border for the "driven by `f`" placeholder, echoing the
+// Function wire color; opaque enough to read against the light body fill.
+const Color HOF_BODY_FUNCTION_OVERRIDE_BORDER_COLOR = Color(0xB3FFA726); // amber @ ~0.70
+// Italic note text on the collapsed / function-override placeholders.
+const Color HOF_BODY_PLACEHOLDER_TEXT_COLOR = Colors.black54;
 
 const double WIRE_GLOW_BLUR_RADIUS = 8.0;
 const double WIRE_GLOW_SPREAD_RADIUS = 2.0;
@@ -1617,13 +1644,16 @@ class _ZoneBodyRegion extends StatelessWidget {
       height: height,
       margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
       decoration: BoxDecoration(
-        // Distinct from the dark node background so the body region reads as
-        // its own "canvas-like" surface. Slightly lighter than the node body
-        // and with a more visible border. See `doc/design_zones_ui.md`
+        // Light "canvas-like" surface matching the main network background, so
+        // the body reads as the same kind of space as the top level rather
+        // than inverting to dark from level 2 down. The fill is the theme's
+        // surface color (what the Scaffold paints behind the main canvas), so
+        // it matches exactly under any theme. The border delineates the region
+        // against the (also light) parent canvas. See `doc/design_zones_ui.md`
         // §"Visual model".
-        color: const Color(0xFF1A1A1A),
+        color: Theme.of(context).colorScheme.surface,
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.35),
+          color: HOF_BODY_BORDER_COLOR,
           width: 1.0,
         ),
         borderRadius: BorderRadius.circular(6.0),
@@ -1631,6 +1661,22 @@ class _ZoneBodyRegion extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
+          // Grid backdrop — the same minor/major grid the main canvas draws,
+          // so the body reads as a sub-canvas (level-1/level-2 parity). Drawn
+          // first so it sits behind the zone pins, resize handle, and (via the
+          // top-level Stack) the body nodes and wires. Clipped to the rounded
+          // body rect; `IgnorePointer` so it never competes for pointer events.
+          // Only ever rendered at normal zoom (scale 1.0), so no scale math.
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6.0),
+                child: CustomPaint(
+                  painter: const _BodyGridPainter(),
+                ),
+              ),
+            ),
+          ),
           // Click-to-activate-body layer. A `Listener` (not a GestureDetector)
           // so it doesn't enter the gesture arena and compete with inner pins'
           // Draggable. We mark the body scope active on pointer-down and clear
@@ -1743,11 +1789,11 @@ class _BodyResizeHandleState extends State<_BodyResizeHandle> {
     // `doc/design_zones_ui.md` §"Phase U7" → resize handle polish.
     final bool highlight = _hovered || _dragging;
     final Color fillColor = highlight
-        ? Colors.white.withValues(alpha: 0.35)
-        : Colors.white.withValues(alpha: 0.15);
+        ? Colors.black.withValues(alpha: 0.30)
+        : Colors.black.withValues(alpha: 0.12);
     final Color borderColor = highlight
-        ? Colors.white.withValues(alpha: 0.85)
-        : Colors.white.withValues(alpha: 0.4);
+        ? Colors.black.withValues(alpha: 0.70)
+        : Colors.black.withValues(alpha: 0.35);
     final double borderWidth = highlight ? 1.5 : 1.0;
 
     return MouseRegion(
@@ -1822,9 +1868,9 @@ class _ZoneCollapsedPlaceholder extends StatelessWidget {
       height: effectiveSize.height,
       margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: Theme.of(context).colorScheme.surface,
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.25),
+          color: HOF_BODY_BORDER_COLOR,
           width: 1.0,
         ),
         borderRadius: BorderRadius.circular(6.0),
@@ -1833,7 +1879,7 @@ class _ZoneCollapsedPlaceholder extends StatelessWidget {
         child: Text(
           '[$nodeCount nodes]',
           style: const TextStyle(
-            color: Colors.white54,
+            color: HOF_BODY_PLACEHOLDER_TEXT_COLOR,
             fontSize: 11,
             fontStyle: FontStyle.italic,
           ),
@@ -1861,10 +1907,10 @@ class _ZoneFunctionOverridePlaceholder extends StatelessWidget {
       height: effectiveSize.height,
       margin: const EdgeInsets.only(top: BASE_HOF_BODY_TOP_OFFSET - 30),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: Theme.of(context).colorScheme.surface,
         border: Border.all(
           // Amber-tinted to echo the Function wire color.
-          color: const Color(0xFFFFA726).withValues(alpha: 0.45),
+          color: HOF_BODY_FUNCTION_OVERRIDE_BORDER_COLOR,
           width: 1.0,
         ),
         borderRadius: BorderRadius.circular(6.0),
@@ -1875,7 +1921,7 @@ class _ZoneFunctionOverridePlaceholder extends StatelessWidget {
           child: Text(
             'body ignored\n— driven by `f` —',
             style: TextStyle(
-              color: Colors.white54,
+              color: HOF_BODY_PLACEHOLDER_TEXT_COLOR,
               fontSize: 11,
               fontStyle: FontStyle.italic,
             ),
@@ -1885,4 +1931,39 @@ class _ZoneFunctionOverridePlaceholder extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Paints the minor/major grid inside an HOF body region so the body reads as
+/// a sub-canvas, matching the main network grid (`node_network_painter.dart`'s
+/// `_drawGrid`). Drawn in the body's local coordinate frame starting at its
+/// top-left; phase alignment with the global canvas grid is irrelevant (the
+/// body is its own coordinate space) and invisible. The body region only
+/// renders at normal zoom (scale 1.0), so spacings are used as-is with no
+/// scaling. Reuses the canvas grid constants for an exact color/spacing match.
+class _BodyGridPainter extends CustomPainter {
+  const _BodyGridPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final minorPaint = Paint()
+      ..color = GRID_MINOR_COLOR
+      ..strokeWidth = 1.0;
+    final majorPaint = Paint()
+      ..color = GRID_MAJOR_COLOR
+      ..strokeWidth = 1.0;
+
+    bool isMajor(double v) => (v % GRID_MAJOR_SPACING).abs() < 0.01;
+
+    for (double x = 0; x <= size.width; x += GRID_MINOR_SPACING) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height),
+          isMajor(x) ? majorPaint : minorPaint);
+    }
+    for (double y = 0; y <= size.height; y += GRID_MINOR_SPACING) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y),
+          isMajor(y) ? majorPaint : minorPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BodyGridPainter oldDelegate) => false;
 }
