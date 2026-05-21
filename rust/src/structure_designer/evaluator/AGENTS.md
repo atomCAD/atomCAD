@@ -9,7 +9,7 @@ Network evaluation engine. Processes the node DAG to produce displayable output.
 | `network_evaluator.rs` | Main evaluator: traverses DAG, evaluates nodes, builds scene |
 | `network_result.rs` | `NetworkResult` enum: all possible node output values |
 | `iterator_walker.rs` | `Walker` tree: lazy stream runtime for `Iter[T]` (carried by `NetworkResult::Iterator`) |
-| `zone_closure.rs` | `ZoneClosure` bundle + the shared per-element `run_closure_once` / `build_inline_closure` (powers the HOF zone bodies and the `NetworkResult::Function` value) |
+| `zone_closure.rs` | `ZoneClosure` bundle + the shared per-element `run_closure_once` / `build_inline_closure` / `build_node_function_closure` (powers the HOF zone bodies, the `closure` node, the function pin, and the `NetworkResult::Function` value) |
 
 ## NetworkEvaluator
 
@@ -100,8 +100,9 @@ Iterator(Walker), Function(ZoneClosure), Unit, Error(String)
 
 The `network_stack` parameter is load-bearing: the **eager** HOFs pass their real containing-network stack, so a *nested* HOF inside the body can resolve captures reaching past the immediate body (e.g. a grandparent constant at `source_scope_depth == 2`). The **lazy** walkers pass `&[]` (body-only) because `next` doesn't hold the outer stack — their bodies' deep captures are pre-frozen at the producing HOF's `eval`, so body-only is sufficient. The `apply` node is also an eager consumer and passes its real stack.
 
-Two more helpers live alongside `run_closure_once`:
+Three more helpers live alongside `run_closure_once`:
 - `zone_closure::build_inline_closure` — builds a `ZoneClosure` from a node's *own* inline zone body (grab `node.zone`, freeze captures via `build_captures`, collect the `zone_output_arguments` wires, fill type metadata). Used by the four HOFs (inline-body path) and by the `closure` node's `eval` (which wraps the result as `NetworkResult::Function`).
+- `zone_closure::build_node_function_closure` — the **function-pin** synthesizer (`doc/design_function_pins.md`): builds a *capture-free* `ZoneClosure` from "the whole node viewed as a function of all its inputs" — clones the node into a one-node synthetic body, feeds each input pin from a `ZoneInput` parameter, and returns output pin 0. Reached from the revived `output_pin_index == -1` branch in `NetworkEvaluator::evaluate`, so the title-bar `-1` pin produces a `NetworkResult::Function` consumed by the HOF `f` pins / `apply` like any other closure. Rejects zero-input and polymorphic-output (`DataType::None`) nodes.
 - `zone_closure::obtain_closure` — the HOF dispatcher: if the node's `f` (Function) pin is wired, evaluate it and take the carried `ZoneClosure`; otherwise fall back to `build_inline_closure`. This is the single branch that lets `map`/`filter`/`fold`/`foreach` accept *either* a wired-in function value or their own inline body. The `apply` node does **not** use it — its `f` pin is required and read directly.
 
 The legacy `network_evaluator::evaluate_zone_output` was deleted in closures Phase 2 — its only callers (`fold`/`foreach`) had already moved to `run_closure_once`.

@@ -117,6 +117,14 @@ pub struct NodeView {
     pub output_pins: Vec<OutputPinView>,
     pub displayed_pins: Vec<i32>,
     pub function_type: String,
+    /// Derived "function mode" flag: some node in the same network consumes this
+    /// node's function pin (`-1` output) via an HOF `f` pin or `apply.f`. When
+    /// `true` the node acts purely as a function value — the scene builder skips
+    /// it and the Flutter editor disables its output-pin eye(s) (the redirect is
+    /// the `apply` node). Mirrors `NodeNetwork::function_pin_consumed`; derived
+    /// per refresh, never stored. See `doc/design_function_pins.md`
+    /// §"Display in function mode".
+    pub function_pin_consumed: bool,
     pub selected: bool,
     pub active: bool, // True if this is the active node (for properties panel/gadget)
     pub displayed: bool,

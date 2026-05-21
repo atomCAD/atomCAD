@@ -3046,6 +3046,15 @@ class NodeView {
   final List<OutputPinView> outputPins;
   final Int32List displayedPins;
   final String functionType;
+
+  /// Derived "function mode" flag: some node in the same network consumes this
+  /// node's function pin (`-1` output) via an HOF `f` pin or `apply.f`. When
+  /// `true` the node acts purely as a function value — the scene builder skips
+  /// it and the Flutter editor disables its output-pin eye(s) (the redirect is
+  /// the `apply` node). Mirrors `NodeNetwork::function_pin_consumed`; derived
+  /// per refresh, never stored. See `doc/design_function_pins.md`
+  /// §"Display in function mode".
+  final bool functionPinConsumed;
   final bool selected;
   final bool active;
   final bool displayed;
@@ -3075,6 +3084,7 @@ class NodeView {
     required this.outputPins,
     required this.displayedPins,
     required this.functionType,
+    required this.functionPinConsumed,
     required this.selected,
     required this.active,
     required this.displayed,
@@ -3100,6 +3110,7 @@ class NodeView {
       outputPins.hashCode ^
       displayedPins.hashCode ^
       functionType.hashCode ^
+      functionPinConsumed.hashCode ^
       selected.hashCode ^
       active.hashCode ^
       displayed.hashCode ^
@@ -3127,6 +3138,7 @@ class NodeView {
           outputPins == other.outputPins &&
           displayedPins == other.displayedPins &&
           functionType == other.functionType &&
+          functionPinConsumed == other.functionPinConsumed &&
           selected == other.selected &&
           active == other.active &&
           displayed == other.displayed &&

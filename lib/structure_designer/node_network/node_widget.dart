@@ -1200,11 +1200,29 @@ class NodeWidget extends StatelessWidget {
     // pin for hit testing either. See `doc/design_node_execution.md`
     // ("Display semantics" of the Unit type).
     final bool isUnitPin = pin.effectiveDataType == 'Unit';
+    // Function-mode display suppression. When this node's function pin is
+    // consumed (wired into an HOF `f` or `apply.f`) the node is a function
+    // value, not a value source: the Rust scene builder skips it entirely
+    // (`function_pin_consumed`), so its output pins can never render. Disable
+    // the eye toggle (non-interactive, greyed) and redirect the user to `apply`
+    // for a sampled preview. Derived — disconnecting `f` restores the eye for
+    // free. See `doc/design_function_pins.md` §"Display in function mode".
+    final bool functionConsumed = node.functionPinConsumed;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (!isUnitPin)
+        if (!isUnitPin && functionConsumed)
+          Tooltip(
+            message: 'Used as a function — wire into `apply` to preview it.',
+            preferBelow: false,
+            child: const Icon(
+              Icons.visibility_off,
+              color: Colors.white24,
+              size: 16,
+            ),
+          )
+        else if (!isUnitPin)
           GestureDetector(
             key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
             onTap: () {

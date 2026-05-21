@@ -14579,8 +14579,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 21)
-      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
+    if (arr.length != 22)
+      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -14591,18 +14591,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       outputPins: dco_decode_list_output_pin_view(arr[6]),
       displayedPins: dco_decode_list_prim_i_32_strict(arr[7]),
       functionType: dco_decode_String(arr[8]),
-      selected: dco_decode_bool(arr[9]),
-      active: dco_decode_bool(arr[10]),
-      displayed: dco_decode_bool(arr[11]),
-      returnNode: dco_decode_bool(arr[12]),
-      error: dco_decode_opt_String(arr[13]),
-      outputPinStrings: dco_decode_list_String(arr[14]),
-      subtitle: dco_decode_opt_String(arr[15]),
-      commentLabel: dco_decode_opt_String(arr[16]),
-      commentText: dco_decode_opt_String(arr[17]),
-      commentWidth: dco_decode_opt_box_autoadd_f_64(arr[18]),
-      commentHeight: dco_decode_opt_box_autoadd_f_64(arr[19]),
-      zone: dco_decode_opt_box_autoadd_zone_view(arr[20]),
+      functionPinConsumed: dco_decode_bool(arr[9]),
+      selected: dco_decode_bool(arr[10]),
+      active: dco_decode_bool(arr[11]),
+      displayed: dco_decode_bool(arr[12]),
+      returnNode: dco_decode_bool(arr[13]),
+      error: dco_decode_opt_String(arr[14]),
+      outputPinStrings: dco_decode_list_String(arr[15]),
+      subtitle: dco_decode_opt_String(arr[16]),
+      commentLabel: dco_decode_opt_String(arr[17]),
+      commentText: dco_decode_opt_String(arr[18]),
+      commentWidth: dco_decode_opt_box_autoadd_f_64(arr[19]),
+      commentHeight: dco_decode_opt_box_autoadd_f_64(arr[20]),
+      zone: dco_decode_opt_box_autoadd_zone_view(arr[21]),
     );
   }
 
@@ -18165,6 +18166,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_outputPins = sse_decode_list_output_pin_view(deserializer);
     var var_displayedPins = sse_decode_list_prim_i_32_strict(deserializer);
     var var_functionType = sse_decode_String(deserializer);
+    var var_functionPinConsumed = sse_decode_bool(deserializer);
     var var_selected = sse_decode_bool(deserializer);
     var var_active = sse_decode_bool(deserializer);
     var var_displayed = sse_decode_bool(deserializer);
@@ -18187,6 +18189,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         outputPins: var_outputPins,
         displayedPins: var_displayedPins,
         functionType: var_functionType,
+        functionPinConsumed: var_functionPinConsumed,
         selected: var_selected,
         active: var_active,
         displayed: var_displayed,
@@ -21818,6 +21821,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_output_pin_view(self.outputPins, serializer);
     sse_encode_list_prim_i_32_strict(self.displayedPins, serializer);
     sse_encode_String(self.functionType, serializer);
+    sse_encode_bool(self.functionPinConsumed, serializer);
     sse_encode_bool(self.selected, serializer);
     sse_encode_bool(self.active, serializer);
     sse_encode_bool(self.displayed, serializer);

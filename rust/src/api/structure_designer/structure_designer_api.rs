@@ -592,6 +592,7 @@ fn build_node_view(
         output_pins,
         displayed_pins,
         function_type: function_type.to_string(),
+        function_pin_consumed: node_network.function_pin_consumed(node.id),
         selected: node_network.is_node_selected(node.id),
         active: node_network.is_node_active(node.id),
         displayed: node_network.is_node_displayed(node.id),

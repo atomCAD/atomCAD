@@ -12766,6 +12766,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         >>::sse_decode(deserializer);
         let mut var_displayedPins = <Vec<i32>>::sse_decode(deserializer);
         let mut var_functionType = <String>::sse_decode(deserializer);
+        let mut var_functionPinConsumed = <bool>::sse_decode(deserializer);
         let mut var_selected = <bool>::sse_decode(deserializer);
         let mut var_active = <bool>::sse_decode(deserializer);
         let mut var_displayed = <bool>::sse_decode(deserializer);
@@ -12790,6 +12791,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             output_pins: var_outputPins,
             displayed_pins: var_displayedPins,
             function_type: var_functionType,
+            function_pin_consumed: var_functionPinConsumed,
             selected: var_selected,
             active: var_active,
             displayed: var_displayed,
@@ -18313,6 +18315,7 @@ impl flutter_rust_bridge::IntoDart
             self.output_pins.into_into_dart().into_dart(),
             self.displayed_pins.into_into_dart().into_dart(),
             self.function_type.into_into_dart().into_dart(),
+            self.function_pin_consumed.into_into_dart().into_dart(),
             self.selected.into_into_dart().into_dart(),
             self.active.into_into_dart().into_dart(),
             self.displayed.into_into_dart().into_dart(),
@@ -20638,6 +20641,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <Vec<crate::api::structure_designer::structure_designer_api_types::OutputPinView>>::sse_encode(self.output_pins, serializer);
         <Vec<i32>>::sse_encode(self.displayed_pins, serializer);
         <String>::sse_encode(self.function_type, serializer);
+        <bool>::sse_encode(self.function_pin_consumed, serializer);
         <bool>::sse_encode(self.selected, serializer);
         <bool>::sse_encode(self.active, serializer);
         <bool>::sse_encode(self.displayed, serializer);
