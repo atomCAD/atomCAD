@@ -2,7 +2,7 @@ use super::super::camera_settings::CameraSettings;
 use super::super::node_data::CustomNodeData;
 use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
-use super::super::node_network::{Argument, Node, NodeNetwork};
+use super::super::node_network::{Argument, CollapseMode, Node, NodeNetwork};
 use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
@@ -163,6 +163,12 @@ pub struct SerializableNode {
     /// Stored body height for HOF nodes (logical pixels). See [`body_width`].
     #[serde(default = "default_body_height")]
     pub body_height: f64,
+    /// User's collapse-mode choice for HOF nodes. `Auto` (the default) follows
+    /// the `f` pin; the two overrides force it. Defaulted on load so older
+    /// `.cnnd` files deserialize. Inert on non-HOF nodes. See
+    /// `doc/design_hof_node_collapse.md`.
+    #[serde(default)]
+    pub collapse_mode: CollapseMode,
 }
 
 fn default_body_width() -> f64 {
@@ -427,6 +433,7 @@ pub fn node_to_serializable(
         zone_output_arguments: node.zone_output_arguments.clone(),
         body_width: node.body_width,
         body_height: node.body_height,
+        collapse_mode: node.collapse_mode,
     })
 }
 
@@ -480,6 +487,7 @@ pub fn serializable_to_node(
         zone_output_arguments: serializable.zone_output_arguments.clone(),
         body_width: serializable.body_width,
         body_height: serializable.body_height,
+        collapse_mode: serializable.collapse_mode,
     })
 }
 

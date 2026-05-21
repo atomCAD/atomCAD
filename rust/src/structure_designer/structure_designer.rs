@@ -6,7 +6,7 @@ use super::evaluator::network_result::NetworkResult;
 use super::navigation_history::NavigationHistory;
 use super::network_validator::{NetworkValidationResult, validate_network};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
-use super::node_network::{NodeNetwork, NodeRef};
+use super::node_network::{CollapseMode, NodeNetwork, NodeRef, collapsable_type_name};
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
@@ -446,6 +446,46 @@ impl StructureDesigner {
         self.undo_stack.push(Box::new(command));
     }
 
+    /// Set an HOF node's collapse mode, capturing the before-state and pushing
+    /// an undoable command. Guarded so only collapsable HOFs honor the mode;
+    /// a no-op change pushes nothing. `scope_path` resolves the (possibly
+    /// nested) body the HOF lives in. See `doc/design_hof_node_collapse.md`.
+    pub fn set_collapse_mode(&mut self, scope_path: &[u64], hof_node_id: u64, mode: CollapseMode) {
+        let network_name = match &self.active_node_network_name {
+            Some(n) => n.clone(),
+            None => return,
+        };
+        // Resolve the (possibly nested) body and read the old value, guarding so
+        // only collapsable HOFs honor the mode.
+        let old = {
+            let Some(network) = self.get_scope_network_mut(scope_path) else {
+                return;
+            };
+            let Some(node) = network.nodes.get_mut(&hof_node_id) else {
+                return;
+            };
+            if !collapsable_type_name(&node.node_type_name) {
+                return;
+            }
+            let old = node.collapse_mode;
+            node.collapse_mode = mode;
+            old
+        };
+        if old == mode {
+            return; // no-op; don't push an empty command
+        }
+        self.push_command(
+            super::undo::commands::set_collapse_mode::SetCollapseModeCommand {
+                network_name,
+                scope_path: scope_path.to_vec(),
+                node_id: hof_node_id,
+                old_mode: old,
+                new_mode: mode,
+                description: "Set HOF collapse mode".to_string(),
+            },
+        );
+    }
+
     /// Apply the appropriate refresh after an undo/redo operation.
     fn apply_undo_refresh_mode(&mut self, mode: UndoRefreshMode) {
         match mode {
@@ -813,9 +853,7 @@ impl StructureDesigner {
         // lifted to its enclosing top-level HOF by the synthetic edge in
         // `build_scope_reverse_dependency_map`.
         for node_ref in &affected_by_data_changes {
-            if node_ref.is_top_level()
-                && network.displayed_nodes.contains_key(&node_ref.node_id)
-            {
+            if node_ref.is_top_level() && network.displayed_nodes.contains_key(&node_ref.node_id) {
                 nodes_needing_evaluation.insert(node_ref.node_id);
             }
         }

@@ -4,6 +4,7 @@ use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use crate::structure_designer::evaluator::network_evaluator::PrintLogEntry;
+use crate::structure_designer::node_network::CollapseMode;
 use flutter_rust_bridge::frb;
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
@@ -160,6 +161,46 @@ pub struct ZoneView {
     pub stored_width: f64,
     /// Stored body height in logical pixels.
     pub stored_height: f64,
+    /// The raw stored mode, for the context menu's check-mark. `APICollapseMode`
+    /// mirrors `CollapseMode`. See `doc/design_hof_node_collapse.md`.
+    pub collapse_mode: APICollapseMode,
+    /// Effective "body hidden, node rendered compact" — already resolved
+    /// Rust-side (`Auto` reads `f`-connection). The renderer/layout reads only
+    /// this, never re-deriving it.
+    pub collapsed: bool,
+    /// Whether this node type supports the collapse override (true for the four
+    /// HOFs, false for `closure`). Gates the context-menu group.
+    pub collapsable: bool,
+}
+
+/// Flutter-facing mirror of [`CollapseMode`]. The user's choice for whether a
+/// collapsable HOF's inline body is shown; `Auto` (default) derives the
+/// effective state from the `f` pin. See `doc/design_hof_node_collapse.md`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum APICollapseMode {
+    Auto,
+    Collapsed,
+    Expanded,
+}
+
+impl From<CollapseMode> for APICollapseMode {
+    fn from(mode: CollapseMode) -> Self {
+        match mode {
+            CollapseMode::Auto => APICollapseMode::Auto,
+            CollapseMode::Collapsed => APICollapseMode::Collapsed,
+            CollapseMode::Expanded => APICollapseMode::Expanded,
+        }
+    }
+}
+
+impl From<APICollapseMode> for CollapseMode {
+    fn from(mode: APICollapseMode) -> Self {
+        match mode {
+            APICollapseMode::Auto => CollapseMode::Auto,
+            APICollapseMode::Collapsed => CollapseMode::Collapsed,
+            APICollapseMode::Expanded => CollapseMode::Expanded,
+        }
+    }
 }
 
 pub struct WireView {

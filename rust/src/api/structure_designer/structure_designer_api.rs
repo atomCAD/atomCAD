@@ -1,10 +1,14 @@
 use super::structure_designer_api_types::APIAlignment;
+use super::structure_designer_api_types::APIApplyData;
 use super::structure_designer_api_types::APIArgumentKind;
 use super::structure_designer_api_types::APIArrayAtData;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APICandidateNode;
 use super::structure_designer_api_types::APICircleData;
+use super::structure_designer_api_types::APIClosureData;
+use super::structure_designer_api_types::APIClosureKind;
+use super::structure_designer_api_types::APICollapseMode;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
@@ -14,9 +18,6 @@ use super::structure_designer_api_types::APIExportXYZData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
-use super::structure_designer_api_types::APIApplyData;
-use super::structure_designer_api_types::APIClosureData;
-use super::structure_designer_api_types::APIClosureKind;
 use super::structure_designer_api_types::APIFilterData;
 use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIForeachData;
@@ -435,6 +436,11 @@ fn build_zone_view(
         wires,
         stored_width: node.body_width,
         stored_height: node.body_height,
+        collapse_mode: node.collapse_mode.into(),
+        collapsed: crate::structure_designer::node_network::resolve_body_collapsed(node, node_type),
+        collapsable: crate::structure_designer::node_network::collapsable_type_name(
+            &node.node_type_name,
+        ),
     })
 }
 
@@ -6258,6 +6264,23 @@ pub fn set_zone_size(scope_path: Vec<u64>, hof_node_id: u64, width: f64, height:
                     }
                 }
             }
+        });
+    }
+}
+
+/// Set an HOF node's collapse mode (Auto / Collapsed / Expanded). Thin wrapper;
+/// the mutation + undo command live on `StructureDesigner::set_collapse_mode`.
+/// `scope_path` identifies the (possibly nested) body the HOF lives in. No-op
+/// for non-collapsable nodes. See `doc/design_hof_node_collapse.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_collapse_mode(scope_path: Vec<u64>, hof_node_id: u64, mode: APICollapseMode) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.set_collapse_mode(
+                &scope_path,
+                hof_node_id,
+                mode.into(),
+            );
         });
     }
 }

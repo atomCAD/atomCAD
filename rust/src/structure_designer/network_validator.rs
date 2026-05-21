@@ -1,10 +1,8 @@
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::{
-    Argument, IncomingWire, Node, NodeNetwork, SourcePin, ValidationError,
+    Argument, IncomingWire, NodeNetwork, SourcePin, ValidationError, function_input_pin_connected,
 };
-use crate::structure_designer::node_type::{
-    NodeType, OutputPinDefinition, Parameter, PinOutputType,
-};
+use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
@@ -613,24 +611,6 @@ pub fn validate_network(
         valid: network.valid,
         interface_changed: interface_changed || output_type_changed,
     }
-}
-
-/// Returns true if `node` has an input pin named `f` of `Function` type that
-/// carries at least one incoming wire.
-///
-/// HOFs gain an optional `f: Function` pin which, when wired, drives evaluation
-/// in place of the inline body (so the "zone-output pin must have a wire" rule
-/// is suspended for that HOF). `apply` has a *required* `f` pin (rule 4). The
-/// `closure` node has no `f` *input* pin (it exposes a `Function` *output*), so
-/// this is always false for it. See `doc/design_closures.md` §"Validation".
-fn function_input_pin_connected(node: &Node, node_type: &NodeType) -> bool {
-    node_type
-        .parameters
-        .iter()
-        .position(|p| p.name == "f" && matches!(p.data_type, DataType::Function(_)))
-        .and_then(|idx| node.arguments.get(idx))
-        .map(|arg| !arg.incoming_wires.is_empty())
-        .unwrap_or(false)
 }
 
 /// Recursively validate zone-related rules in `network` and every nested

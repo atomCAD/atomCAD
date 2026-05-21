@@ -1,4 +1,5 @@
 use glam::{DVec2, DVec3, IVec3};
+use rust_lib_flutter_cad::structure_designer::node_network::CollapseMode;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
@@ -2100,4 +2101,96 @@ fn undo_delete_namespace_restores_active_network() {
 
     designer.redo();
     assert_eq!(designer.active_node_network_name, None);
+}
+
+// --- HOF collapse mode (doc/design_hof_node_collapse.md) ---
+
+#[test]
+fn undo_redo_set_collapse_mode_top_level() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.set_collapse_mode(&[], map_id, CollapseMode::Collapsed);
+    assert_eq!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .nodes
+            .get(&map_id)
+            .unwrap()
+            .collapse_mode,
+        CollapseMode::Collapsed
+    );
+
+    assert!(designer.undo());
+    assert_eq!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .nodes
+            .get(&map_id)
+            .unwrap()
+            .collapse_mode,
+        CollapseMode::Auto
+    );
+
+    assert!(designer.redo());
+    assert_eq!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .nodes
+            .get(&map_id)
+            .unwrap()
+            .collapse_mode,
+        CollapseMode::Collapsed
+    );
+}
+
+#[test]
+fn undo_redo_set_collapse_mode_nested_scope() {
+    let mut designer = setup_designer_with_network("main");
+    // Outer HOF at top level; inner HOF inside the outer's body.
+    let outer = designer.add_node("map", DVec2::ZERO);
+    let inner = designer.add_node_scoped(&[outer], "map", DVec2::ZERO, None);
+    assert_ne!(inner, 0, "nested add_node should succeed");
+    designer.undo_stack.clear();
+
+    let scope = [outer];
+    designer.set_collapse_mode(&scope, inner, CollapseMode::Expanded);
+    assert_eq!(
+        designer
+            .get_scope_network(&scope)
+            .unwrap()
+            .nodes
+            .get(&inner)
+            .unwrap()
+            .collapse_mode,
+        CollapseMode::Expanded
+    );
+
+    assert!(designer.undo());
+    assert_eq!(
+        designer
+            .get_scope_network(&scope)
+            .unwrap()
+            .nodes
+            .get(&inner)
+            .unwrap()
+            .collapse_mode,
+        CollapseMode::Auto
+    );
+
+    assert!(designer.redo());
+    assert_eq!(
+        designer
+            .get_scope_network(&scope)
+            .unwrap()
+            .nodes
+            .get(&inner)
+            .unwrap()
+            .collapse_mode,
+        CollapseMode::Expanded
+    );
 }

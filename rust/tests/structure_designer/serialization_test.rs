@@ -37,6 +37,7 @@ fn create_serializable_node(
         zone_output_arguments: vec![],
         body_width: rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_WIDTH,
         body_height: rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_HEIGHT,
+        collapse_mode: rust_lib_flutter_cad::structure_designer::node_network::CollapseMode::Auto,
     }
 }
 

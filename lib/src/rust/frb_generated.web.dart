@@ -109,6 +109,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIClosureKind dco_decode_api_closure_kind(dynamic raw);
 
   @protected
+  APICollapseMode dco_decode_api_collapse_mode(dynamic raw);
+
+  @protected
   APICollectData dco_decode_api_collect_data(dynamic raw);
 
   @protected
@@ -1272,6 +1275,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIClosureKind sse_decode_api_closure_kind(SseDeserializer deserializer);
+
+  @protected
+  APICollapseMode sse_decode_api_collapse_mode(SseDeserializer deserializer);
 
   @protected
   APICollectData sse_decode_api_collect_data(SseDeserializer deserializer);
@@ -2636,6 +2642,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_closure_kind(
       APIClosureKind self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_collapse_mode(
+      APICollapseMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_collect_data(

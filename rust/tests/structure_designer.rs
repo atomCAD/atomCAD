@@ -288,3 +288,6 @@ mod closures_test;
 
 #[path = "structure_designer/scope_dispatch_test.rs"]
 mod scope_dispatch_test;
+
+#[path = "structure_designer/hof_collapse_test.rs"]
+mod hof_collapse_test;

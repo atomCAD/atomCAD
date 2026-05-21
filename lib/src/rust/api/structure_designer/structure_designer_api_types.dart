@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -519,6 +519,16 @@ enum APIClosureKind {
 
   /// `(T) -> Unit` — foreach-like. `type_args`: `[T]`.
   foreach,
+  ;
+}
+
+/// Flutter-facing mirror of [`CollapseMode`]. The user's choice for whether a
+/// collapsable HOF's inline body is shown; `Auto` (default) derives the
+/// effective state from the `f` pin. See `doc/design_hof_node_collapse.md`.
+enum APICollapseMode {
+  auto,
+  collapsed,
+  expanded,
   ;
 }
 
@@ -3442,6 +3452,19 @@ class ZoneView {
   /// Stored body height in logical pixels.
   final double storedHeight;
 
+  /// The raw stored mode, for the context menu's check-mark. `APICollapseMode`
+  /// mirrors `CollapseMode`. See `doc/design_hof_node_collapse.md`.
+  final APICollapseMode collapseMode;
+
+  /// Effective "body hidden, node rendered compact" — already resolved
+  /// Rust-side (`Auto` reads `f`-connection). The renderer/layout reads only
+  /// this, never re-deriving it.
+  final bool collapsed;
+
+  /// Whether this node type supports the collapse override (true for the four
+  /// HOFs, false for `closure`). Gates the context-menu group.
+  final bool collapsable;
+
   const ZoneView({
     required this.zoneInputPins,
     required this.zoneOutputPins,
@@ -3449,6 +3472,9 @@ class ZoneView {
     required this.wires,
     required this.storedWidth,
     required this.storedHeight,
+    required this.collapseMode,
+    required this.collapsed,
+    required this.collapsable,
   });
 
   @override
@@ -3458,7 +3484,10 @@ class ZoneView {
       nodes.hashCode ^
       wires.hashCode ^
       storedWidth.hashCode ^
-      storedHeight.hashCode;
+      storedHeight.hashCode ^
+      collapseMode.hashCode ^
+      collapsed.hashCode ^
+      collapsable.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3470,5 +3499,8 @@ class ZoneView {
           nodes == other.nodes &&
           wires == other.wires &&
           storedWidth == other.storedWidth &&
-          storedHeight == other.storedHeight;
+          storedHeight == other.storedHeight &&
+          collapseMode == other.collapseMode &&
+          collapsed == other.collapsed &&
+          collapsable == other.collapsable;
 }

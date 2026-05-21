@@ -1474,6 +1474,18 @@ void setZoneSize(
             width: width,
             height: height);
 
+/// Set an HOF node's collapse mode (Auto / Collapsed / Expanded). Thin wrapper;
+/// the mutation + undo command live on `StructureDesigner::set_collapse_mode`.
+/// `scope_path` identifies the (possibly nested) body the HOF lives in. No-op
+/// for non-collapsable nodes. See `doc/design_hof_node_collapse.md`.
+void setCollapseMode(
+        {required Uint64List scopePath,
+        required BigInt hofNodeId,
+        required APICollapseMode mode}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCollapseMode(
+            scopePath: scopePath, hofNodeId: hofNodeId, mode: mode);
+
 /// Resize a comment node.
 /// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
 /// around the resize drag to get a single coalesced undo entry.

@@ -446,6 +446,20 @@ pub struct DeletionInfo {
     pub is_node_deletion: bool,
 }
 
+/// The user's choice for whether a collapsable HOF's inline body region is
+/// shown. `Auto` (the default) derives the effective state from whether the
+/// `f` pin is wired (compact when wired — the body is dead — expanded
+/// otherwise); the two overrides force it. Meaningful only for collapsable
+/// HOFs; inert (`Auto`) on every other node. See
+/// `doc/design_hof_node_collapse.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CollapseMode {
+    #[default]
+    Auto,
+    Collapsed,
+    Expanded,
+}
+
 #[derive(Clone)]
 pub struct Node {
     pub id: u64,
@@ -474,6 +488,11 @@ pub struct Node {
     pub body_width: f64,
     /// Stored body height in logical pixels for HOF nodes. See [`body_width`].
     pub body_height: f64,
+    /// The user's collapse choice for this node. Only meaningful for
+    /// collapsable HOFs (`map`/`filter`/`fold`/`foreach`); `Auto` (the default)
+    /// on every other node and inert there. See
+    /// `doc/design_hof_node_collapse.md`.
+    pub collapse_mode: CollapseMode,
 }
 
 /// Default stored body width for newly created HOF nodes (logical pixels).
@@ -482,6 +501,51 @@ pub const DEFAULT_BODY_WIDTH: f64 = 320.0;
 
 /// Default stored body height for newly created HOF nodes (logical pixels).
 pub const DEFAULT_BODY_HEIGHT: f64 = 180.0;
+
+/// Built-in HOF type names that are collapsable. Equivalent to "has a zone and
+/// declares an `f` parameter"; kept as a name list so the load path (which only
+/// has the type name) and the runtime path (which has the `NodeType`) agree.
+/// See `doc/design_hof_node_collapse.md`.
+pub const COLLAPSABLE_HOF_TYPE_NAMES: &[&str] = &["map", "filter", "fold", "foreach"];
+
+/// True iff `name` is one of the four collapsable HOF type names.
+pub fn collapsable_type_name(name: &str) -> bool {
+    COLLAPSABLE_HOF_TYPE_NAMES.contains(&name)
+}
+
+/// Returns true if `node` has an input pin named `f` of `Function` type that
+/// carries at least one incoming wire.
+///
+/// HOFs gain an optional `f: Function` pin which, when wired, drives evaluation
+/// in place of the inline body (so the "zone-output pin must have a wire" rule
+/// is suspended for that HOF). `apply` has a *required* `f` pin. The `closure`
+/// node has no `f` *input* pin (it exposes a `Function` *output*), so this is
+/// always false for it. See `doc/design_closures.md` §"Validation".
+pub fn function_input_pin_connected(node: &Node, node_type: &NodeType) -> bool {
+    node_type
+        .parameters
+        .iter()
+        .position(|p| p.name == "f" && matches!(p.data_type, DataType::Function(_)))
+        .and_then(|idx| node.arguments.get(idx))
+        .map(|arg| !arg.incoming_wires.is_empty())
+        .unwrap_or(false)
+}
+
+/// Resolve a node's [`CollapseMode`] to the effective "body hidden + node
+/// compact" bool. Always false for non-collapsable nodes (so a stray override
+/// on a `closure` or a hand-edited file can never compact it). For collapsable
+/// HOFs, `Auto` reads the `f`-connection; the two overrides force the result.
+/// See `doc/design_hof_node_collapse.md`.
+pub fn resolve_body_collapsed(node: &Node, node_type: &NodeType) -> bool {
+    if !collapsable_type_name(&node.node_type_name) {
+        return false;
+    }
+    match node.collapse_mode {
+        CollapseMode::Auto => function_input_pin_connected(node, node_type),
+        CollapseMode::Collapsed => true,
+        CollapseMode::Expanded => false,
+    }
+}
 
 impl Node {
     /// Mutable access to this node's owned zone body, lazily cloning under
@@ -772,9 +836,12 @@ impl NodeNetwork {
             // (1) and (2): intra-scope wires + captures + zone-input references.
             for arg in &node.arguments {
                 for wire in &arg.incoming_wires {
-                    if let Some(source_ref) =
-                        resolve_wire_source(scope_path, wire.source_scope_depth, wire.source_pin, wire.source_node_id)
-                    {
+                    if let Some(source_ref) = resolve_wire_source(
+                        scope_path,
+                        wire.source_scope_depth,
+                        wire.source_pin,
+                        wire.source_node_id,
+                    ) {
                         reverse_map
                             .entry(source_ref)
                             .or_default()
@@ -948,6 +1015,7 @@ impl NodeNetwork {
                 zone_output_arguments: cloned_zone_output_arguments,
                 body_width: source_node.body_width,
                 body_height: source_node.body_height,
+                collapse_mode: source_node.collapse_mode,
             };
 
             self.nodes.insert(new_id, new_node);
@@ -1025,6 +1093,7 @@ impl NodeNetwork {
             zone_output_arguments: Vec::new(),
             body_width: DEFAULT_BODY_WIDTH,
             body_height: DEFAULT_BODY_HEIGHT,
+            collapse_mode: CollapseMode::Auto,
         };
 
         self.next_node_id += 1;
@@ -1061,6 +1130,7 @@ impl NodeNetwork {
             zone_output_arguments: Vec::new(),
             body_width: DEFAULT_BODY_WIDTH,
             body_height: DEFAULT_BODY_HEIGHT,
+            collapse_mode: CollapseMode::Auto,
         };
 
         // Ensure next_node_id stays ahead of any manually assigned ID
@@ -1852,6 +1922,7 @@ impl NodeNetwork {
             zone_output_arguments: cloned_zone_output_arguments,
             body_width: original_node.body_width,
             body_height: original_node.body_height,
+            collapse_mode: original_node.collapse_mode,
         };
 
         // Insert the duplicated node into the network
