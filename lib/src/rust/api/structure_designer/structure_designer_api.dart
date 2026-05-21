@@ -422,14 +422,16 @@ void moveSelectedNodes(
             scopePath: scopePath, deltaX: deltaX, deltaY: deltaY);
 
 /// Called by Flutter when a node drag begins. Captures current positions for
-/// undo coalescing. `scope_path` is plumbed per `doc/design_zones_ui.md`; in
-/// U2 only the top-level path (empty `scope_path`) creates a `PendingMove`,
-/// since body-scope drag coalescing lands in U4.
+/// undo coalescing. `scope_path` identifies the body whose nodes are being
+/// dragged (empty = top-level); body-scope drags coalesce into a single
+/// scope-aware `MoveNodesCommand`. See `doc/design_zones_ui.md` §"Undo/redo".
 void beginMoveNodes({required Uint64List scopePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiBeginMoveNodes(
         scopePath: scopePath);
 
 /// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
+/// The target scope is recorded in the pending move captured by
+/// `begin_move_nodes`, so `scope_path` here is informational only.
 void endMoveNodes({required Uint64List scopePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiEndMoveNodes(
         scopePath: scopePath);
@@ -1473,6 +1475,21 @@ void setZoneSize(
             hofNodeId: hofNodeId,
             width: width,
             height: height);
+
+/// Called when an HOF body resize drag begins. Captures the body's pre-drag
+/// dimensions so the matching `end_zone_resize` records a single coalesced
+/// `SetZoneSizeCommand` (mirrors `begin_move_nodes`). See
+/// `doc/design_zones_ui.md` §"Resize handles".
+void beginZoneResize(
+        {required Uint64List scopePath, required BigInt hofNodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiBeginZoneResize(
+            scopePath: scopePath, hofNodeId: hofNodeId);
+
+/// Called when an HOF body resize drag ends. Pushes one undoable
+/// `SetZoneSizeCommand` if the body changed size.
+void endZoneResize() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndZoneResize();
 
 /// Set an HOF node's collapse mode (Auto / Collapsed / Expanded). Thin wrapper;
 /// the mutation + undo command live on `StructureDesigner::set_collapse_mode`.

@@ -1026,6 +1026,14 @@ class NodeWidget extends StatelessWidget {
                 model.setZoneSize(
                     scopeChain, node.id, newSize.width, newSize.height);
               },
+              onResizeStart: () {
+                Provider.of<StructureDesignerModel>(context, listen: false)
+                    .beginZoneResize(scopeChain, node.id);
+              },
+              onResizeEnd: () {
+                Provider.of<StructureDesignerModel>(context, listen: false)
+                    .endZoneResize();
+              },
             ),
           // External output column.
           SizedBox(
@@ -1570,12 +1578,19 @@ class _ZoneBodyRegion extends StatelessWidget {
   /// updates this in real time and commits at drag end.
   final ValueChanged<Size> onResize;
 
+  /// Called at the start / end of a resize drag so the model can coalesce the
+  /// live `onResize` updates into a single undo command.
+  final VoidCallback onResizeStart;
+  final VoidCallback onResizeEnd;
+
   const _ZoneBodyRegion({
     required this.nodeId,
     required this.scopeChain,
     required this.zone,
     required this.effectiveSize,
     required this.onResize,
+    required this.onResizeStart,
+    required this.onResizeEnd,
   });
 
   /// Scope chain of the body's interior — the HOF's containing-network chain
@@ -1683,6 +1698,8 @@ class _ZoneBodyRegion extends StatelessWidget {
             child: _BodyResizeHandle(
               initialSize: effectiveSize,
               onResize: onResize,
+              onResizeStart: onResizeStart,
+              onResizeEnd: onResizeEnd,
             ),
           ),
         ],
@@ -1699,10 +1716,14 @@ class _ZoneBodyRegion extends StatelessWidget {
 class _BodyResizeHandle extends StatefulWidget {
   final Size initialSize;
   final ValueChanged<Size> onResize;
+  final VoidCallback onResizeStart;
+  final VoidCallback onResizeEnd;
 
   const _BodyResizeHandle({
     required this.initialSize,
     required this.onResize,
+    required this.onResizeStart,
+    required this.onResizeEnd,
   });
 
   @override
@@ -1736,6 +1757,7 @@ class _BodyResizeHandleState extends State<_BodyResizeHandle> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onPanStart: (_) {
+          widget.onResizeStart();
           setState(() {
             _dragging = true;
             _dragSize = widget.initialSize;
@@ -1754,6 +1776,7 @@ class _BodyResizeHandleState extends State<_BodyResizeHandle> {
           widget.onResize(next);
         },
         onPanEnd: (_) {
+          widget.onResizeEnd();
           setState(() {
             _dragging = false;
             _dragSize = null;

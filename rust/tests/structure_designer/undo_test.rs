@@ -1,5 +1,5 @@
 use glam::{DVec2, DVec3, IVec3};
-use rust_lib_flutter_cad::structure_designer::node_network::CollapseMode;
+use rust_lib_flutter_cad::structure_designer::node_network::{CollapseMode, SourcePin};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
@@ -2193,4 +2193,207 @@ fn undo_redo_set_collapse_mode_nested_scope() {
             .collapse_mode,
         CollapseMode::Expanded
     );
+}
+
+// ===== Zones / Closures: body-scoped edit undo (Groups A + B) =====
+//
+// All body-scoped structural edits (add / move / delete / duplicate / connect)
+// are recorded by a whole-body `EditZoneBodyCommand`; HOF body resize by
+// `SetZoneSizeCommand` with begin/end coalescing. These tests exercise the
+// scope-aware mutation methods through `assert_undo_redo_roundtrip`, which
+// compares full serialized network state (bodies included) before/after.
+
+/// Add a `map` HOF at the top level; it auto-creates an empty body whose scope
+/// path is `[map_id]`. Returns the HOF's id.
+fn add_map_with_body(designer: &mut StructureDesigner) -> u64 {
+    designer.add_node("map", DVec2::ZERO)
+}
+
+#[test]
+fn undo_add_node_in_body() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        let id = d.add_node_scoped(&[map_id], "int", DVec2::new(10.0, 10.0), None);
+        assert_ne!(id, 0, "body add should succeed");
+    });
+}
+
+#[test]
+fn undo_move_node_in_body() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.select_node_scoped(&scope, int_id);
+    designer.undo_stack.clear();
+
+    // begin/end coalesces the intermediate drags into one command.
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.begin_move_nodes_scoped(&scope);
+        d.move_selected_nodes_scoped(&scope, DVec2::new(25.0, 0.0));
+        d.move_selected_nodes_scoped(&scope, DVec2::new(25.0, 0.0));
+        d.end_move_nodes();
+    });
+}
+
+#[test]
+fn move_in_body_without_movement_creates_no_command() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.select_node_scoped(&scope, int_id);
+    designer.undo_stack.clear();
+
+    designer.begin_move_nodes_scoped(&scope);
+    designer.end_move_nodes();
+    assert!(!designer.undo(), "click-without-drag should create no command");
+}
+
+#[test]
+fn undo_delete_node_in_body() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.select_node_scoped(&scope, int_id);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected_scoped(&scope);
+    });
+}
+
+#[test]
+fn delete_in_body_with_empty_selection_creates_no_command() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    designer.undo_stack.clear();
+
+    designer.delete_selected_scoped(&scope); // nothing selected in the body
+    assert!(!designer.undo(), "no-op delete should create no command");
+}
+
+#[test]
+fn undo_duplicate_node_in_body() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        let new_id = d.duplicate_node_scoped(&scope, int_id);
+        assert_ne!(new_id, 0, "body duplicate should succeed");
+    });
+}
+
+#[test]
+fn undo_intra_body_wire() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(0.0, 0.0), None);
+    let collect_id = designer.add_node_scoped(&scope, "collect", DVec2::new(100.0, 0.0), None);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.connect_nodes_scoped(&scope, int_id, 0, collect_id, 0);
+    });
+}
+
+#[test]
+fn undo_capture_wire_into_body() {
+    let mut designer = setup_designer_with_network("test");
+    // Top-level source captured into the body (source_scope_depth == 1).
+    let k_id = designer.add_node("int", DVec2::new(-100.0, 0.0));
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let collect_id = designer.add_node_scoped(&scope, "collect", DVec2::new(100.0, 0.0), None);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.connect_wire_scoped(
+            &scope,
+            k_id,
+            SourcePin::NodeOutput { pin_index: 0 },
+            1,
+            collect_id,
+            0,
+        );
+    });
+}
+
+#[test]
+fn undo_body_return_wire() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(0.0, 0.0), None);
+    designer.undo_stack.clear();
+
+    // Wire the body node into the HOF's zone-output ("result") pin.
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.connect_zone_output_wire(&scope, int_id, 0, 0);
+    });
+}
+
+#[test]
+fn undo_edit_in_nested_body() {
+    let mut designer = setup_designer_with_network("test");
+    let outer = designer.add_node("map", DVec2::ZERO);
+    let inner = designer.add_node_scoped(&[outer], "map", DVec2::ZERO, None);
+    assert_ne!(inner, 0, "nested HOF add should succeed");
+    let scope = [outer, inner];
+    designer.undo_stack.clear();
+
+    // Adding a node two bodies deep cascades the snapshot through the chain.
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        let id = d.add_node_scoped(&scope, "int", DVec2::new(5.0, 5.0), None);
+        assert_ne!(id, 0, "depth-2 body add should succeed");
+    });
+}
+
+#[test]
+fn undo_set_zone_size() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.begin_zone_resize(&[], map_id);
+        d.set_zone_size(&[], map_id, 500.0, 300.0);
+        d.end_zone_resize();
+    });
+}
+
+#[test]
+fn undo_set_zone_size_nested_scope() {
+    let mut designer = setup_designer_with_network("test");
+    let outer = designer.add_node("map", DVec2::ZERO);
+    let inner = designer.add_node_scoped(&[outer], "map", DVec2::ZERO, None);
+    let scope = [outer];
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.begin_zone_resize(&scope, inner);
+        d.set_zone_size(&scope, inner, 480.0, 260.0);
+        d.end_zone_resize();
+    });
+}
+
+#[test]
+fn set_zone_size_without_change_creates_no_command() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    designer.undo_stack.clear();
+
+    designer.begin_zone_resize(&[], map_id);
+    // no set_zone_size call between begin and end
+    designer.end_zone_resize();
+    assert!(!designer.undo(), "no-op resize should create no command");
 }

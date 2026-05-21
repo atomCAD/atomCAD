@@ -1807,29 +1807,26 @@ pub fn move_selected_nodes(scope_path: Vec<u64>, delta_x: f64, delta_y: f64) {
 }
 
 /// Called by Flutter when a node drag begins. Captures current positions for
-/// undo coalescing. `scope_path` is plumbed per `doc/design_zones_ui.md`; in
-/// U2 only the top-level path (empty `scope_path`) creates a `PendingMove`,
-/// since body-scope drag coalescing lands in U4.
+/// undo coalescing. `scope_path` identifies the body whose nodes are being
+/// dragged (empty = top-level); body-scope drags coalesce into a single
+/// scope-aware `MoveNodesCommand`. See `doc/design_zones_ui.md` §"Undo/redo".
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_move_nodes(scope_path: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            if !scope_path.is_empty() {
-                return;
-            }
-            instance.structure_designer.begin_move_nodes();
+            instance.structure_designer.begin_move_nodes_scoped(&scope_path);
         });
     }
 }
 
 /// Called by Flutter when a node drag ends. Creates a single MoveNodesCommand.
+/// The target scope is recorded in the pending move captured by
+/// `begin_move_nodes`, so `scope_path` here is informational only.
 #[flutter_rust_bridge::frb(sync)]
 pub fn end_move_nodes(scope_path: Vec<u64>) {
+    let _ = scope_path;
     unsafe {
         with_mut_cad_instance(|instance| {
-            if !scope_path.is_empty() {
-                return;
-            }
             instance.structure_designer.end_move_nodes();
         });
     }
@@ -6253,17 +6250,35 @@ pub fn run_cli_batch(config: super::structure_designer_api_types::BatchCliConfig
 pub fn set_zone_size(scope_path: Vec<u64>, hof_node_id: u64, width: f64, height: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(network) = cad_instance
+            cad_instance
                 .structure_designer
-                .get_scope_network_mut(&scope_path)
-            {
-                if let Some(node) = network.nodes.get_mut(&hof_node_id) {
-                    if node.zone.is_some() {
-                        node.body_width = width.max(100.0);
-                        node.body_height = height.max(60.0);
-                    }
-                }
-            }
+                .set_zone_size(&scope_path, hof_node_id, width, height);
+        });
+    }
+}
+
+/// Called when an HOF body resize drag begins. Captures the body's pre-drag
+/// dimensions so the matching `end_zone_resize` records a single coalesced
+/// `SetZoneSizeCommand` (mirrors `begin_move_nodes`). See
+/// `doc/design_zones_ui.md` §"Resize handles".
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_zone_resize(scope_path: Vec<u64>, hof_node_id: u64) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance
+                .structure_designer
+                .begin_zone_resize(&scope_path, hof_node_id);
+        });
+    }
+}
+
+/// Called when an HOF body resize drag ends. Pushes one undoable
+/// `SetZoneSizeCommand` if the body changed size.
+#[flutter_rust_bridge::frb(sync)]
+pub fn end_zone_resize() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.end_zone_resize();
         });
     }
 }

@@ -16,6 +16,9 @@ undo/
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs
+    ├── edit_zone_body.rs           # Body-scoped structural edits (whole-body snapshot)
+    ├── set_zone_size.rs            # HOF body resize (begin/end coalesced)
+    ├── set_collapse_mode.rs        # HOF body collapse mode
     ├── add_record_type_def.rs, delete_record_type_def.rs,
     │   rename_record_type_def.rs, update_record_type_def.rs  # Record type def lifecycle
     ├── atom_edit_mutation.rs      # Incremental diff deltas (includes flag changes)
@@ -60,6 +63,14 @@ Node drags use `begin_move_nodes()`/`end_move_nodes()` to coalesce many `move_se
 ### Node ID Stability
 
 `NodeNetwork::add_node_with_id()` allows redo to recreate nodes with the same ID. Commands that add nodes must save/restore `next_node_id` on undo.
+
+### Body-Scoped Undo (zones / closures)
+
+Edits *inside* an HOF body (`Node.zone`) are addressed by a `scope_path: Vec<u64>` (chain of HOF node ids, `[parent.., hof_id]`). Commands that touch a body carry that path and resolve through `UndoContext::network_in_scope_mut(name, scope_path)` (walks `Node::zone_mut` down the chain). `SetNodeDataCommand`, `SetCollapseModeCommand`, `SetZoneSizeCommand`, and `MoveNodesCommand` all carry a `scope_path`.
+
+All body-scoped **structural** edits (add / delete / duplicate, and connect of every wire shape: intra-body, capture, zone-input, body-return) funnel through a single `EditZoneBodyCommand`: it stores a before/after `ZoneBodySnapshot` (the body `SerializableNodeNetwork` + the HOF's `zone_output_arguments` wires) and restores it wholesale. Body networks are small, and this covers every wire shape and nested bodies uniformly without per-operation surgery. Helpers `StructureDesigner::snapshot_zone_body` / `push_zone_body_command` capture before/after and push only if the body actually changed. Restore re-runs `initialize_custom_node_types_for_network` on the deserialized body so body-node caches are repopulated.
+
+Moves are the exception — they use the lighter scope-aware `MoveNodesCommand` via `begin_move_nodes_scoped` / `end_move_nodes` coalescing (one command per drag). Body resize uses `SetZoneSizeCommand` via `begin_zone_resize` / `end_zone_resize` coalescing (Flutter calls these on the resize handle's pan start/end).
 
 ### Selection Is Not Undoable
 

@@ -246,6 +246,23 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Called when an HOF body resize drag begins. Captures the body's pre-drag
+  /// dimensions so the matching [endZoneResize] records one coalesced undo
+  /// command (mirrors [beginMoveNodes] / comment-node resize). No refresh — the
+  /// per-frame [setZoneSize] calls drive the live update.
+  void beginZoneResize(List<BigInt> scopeChain, BigInt hofNodeId) {
+    structure_designer_api.beginZoneResize(
+      scopePath: _scopeChainToBytes(scopeChain),
+      hofNodeId: hofNodeId,
+    );
+  }
+
+  /// Called when an HOF body resize drag ends. Pushes a single
+  /// `SetZoneSizeCommand` if the body changed size.
+  void endZoneResize() {
+    structure_designer_api.endZoneResize();
+  }
+
   /// Set a collapsable HOF node's collapse mode (Auto / Collapsed / Expanded).
   /// Forwards [scopeChain] as `scope_path` so the (possibly nested) body's HOF
   /// is resolved. No-op Rust-side for non-collapsable nodes. See

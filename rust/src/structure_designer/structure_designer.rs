@@ -92,6 +92,8 @@ pub struct StructureDesigner {
     pub pending_gadget_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
     // Temporary state during comment node editing (text typing or resize drag)
     pub pending_comment_edit: Option<super::undo::snapshot::PendingGadgetDrag>,
+    // Temporary state during an HOF body resize drag (for undo coalescing)
+    pub pending_zone_resize: Option<super::undo::snapshot::PendingZoneResize>,
     // Direct editing mode: simplified UI focused on a single atom_edit node
     pub direct_editing_mode: bool,
     // CLI access rules: sparse map of namespace/network prefixes to allowed (true) / denied (false).
@@ -141,6 +143,7 @@ impl StructureDesigner {
             pending_atom_edit_drag: None,
             pending_gadget_drag: None,
             pending_comment_edit: None,
+            pending_zone_resize: None,
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
             print_log: Vec::new(),
@@ -644,6 +647,83 @@ impl StructureDesigner {
 
         let network = node_networks.get_mut(network_name)?;
         node_network_to_serializable(network, built_in_types, None).ok()
+    }
+
+    /// Snapshot an HOF body for body-scoped undo: the body network at
+    /// `scope_path` plus the owning HOF's `zone_output_arguments`. `scope_path`
+    /// must be non-empty (`[parent.., hof_id]`); returns `None` for the empty
+    /// path or any broken step of the walk. Pairs with
+    /// [`push_zone_body_command`]. See `doc/design_zones_ui.md` §"Undo/redo".
+    pub fn snapshot_zone_body(
+        &mut self,
+        scope_path: &[u64],
+    ) -> Option<super::undo::commands::edit_zone_body::ZoneBodySnapshot> {
+        use super::serialization::node_networks_serialization::node_network_to_serializable;
+        use super::undo::commands::edit_zone_body::ZoneBodySnapshot;
+
+        let (hof_id, parent_path) = scope_path.split_last()?;
+        let network_name = self.active_node_network_name.as_ref()?.clone();
+
+        let (built_in_types, node_networks) = (
+            &self.node_type_registry.built_in_node_types,
+            &mut self.node_type_registry.node_networks,
+        );
+
+        // Walk down to the HOF node that owns the body.
+        let mut current = node_networks.get_mut(&network_name)?;
+        for id in parent_path {
+            current = current.nodes.get_mut(id)?.zone_mut()?;
+        }
+        let hof = current.nodes.get_mut(hof_id)?;
+
+        // Body-return wires live on the HOF's zone_output_arguments.
+        let zone_output_wires = hof
+            .zone_output_arguments
+            .iter()
+            .map(|arg| arg.incoming_wires.clone())
+            .collect();
+
+        // Body-internal state lives in the HOF's owned zone network.
+        let body = hof.zone_mut()?;
+        let serialized = node_network_to_serializable(body, built_in_types, None).ok()?;
+
+        Some(ZoneBodySnapshot {
+            body: serialized,
+            zone_output_wires,
+        })
+    }
+
+    /// Finalize a body-scoped structural edit by snapshotting the body's
+    /// after-state and pushing an [`EditZoneBodyCommand`] iff it differs from
+    /// `before`. `before` is the snapshot captured before the mutation (a `None`
+    /// before, e.g. a broken scope path, suppresses the command).
+    pub fn push_zone_body_command(
+        &mut self,
+        scope_path: &[u64],
+        description: String,
+        before: Option<super::undo::commands::edit_zone_body::ZoneBodySnapshot>,
+    ) {
+        use super::undo::commands::edit_zone_body::EditZoneBodyCommand;
+
+        let Some(before) = before else {
+            return;
+        };
+        let Some(after) = self.snapshot_zone_body(scope_path) else {
+            return;
+        };
+        if !EditZoneBodyCommand::is_meaningful(&before, &after) {
+            return;
+        }
+        let Some(network_name) = self.active_node_network_name.clone() else {
+            return;
+        };
+        self.push_command(EditZoneBodyCommand {
+            network_name,
+            scope_path: scope_path.to_vec(),
+            before,
+            after,
+            description,
+        });
     }
 
     // Generates the scene to be rendered according to the displayed nodes of the active node network
@@ -1523,6 +1603,8 @@ impl StructureDesigner {
         if scope_path.is_empty() {
             return self.add_node_with_drag_source(node_type_name, position, drag_source);
         }
+        // Capture the body's before-state for undo (whole-body snapshot).
+        let before = self.snapshot_zone_body(scope_path);
         // Body scope: drag-source adaptation and per-node-type bookkeeping
         // (parameter `param_id` / param_name) are top-level concerns and not
         // exercised inside an HOF body in U2. Add the node with default data
@@ -1581,6 +1663,11 @@ impl StructureDesigner {
                 }
             }
             self.set_dirty(true);
+            self.push_zone_body_command(
+                scope_path,
+                format!("Add {} node", node_type_name),
+                before,
+            );
         }
         node_id
     }
@@ -2177,10 +2264,10 @@ impl StructureDesigner {
         )
     }
 
-    /// Scope-aware variant of [`connect_nodes`]. Phase U4 — intra-body wires
-    /// only. With a non-empty `scope_path` the wire is added to the named HOF
-    /// body without the top-level display-policy / undo orchestration; body-
-    /// scope undo lands when body authoring is fully reachable.
+    /// Scope-aware variant of [`connect_nodes`] — intra-body wires. With a
+    /// non-empty `scope_path` the wire is added to the named HOF body and the
+    /// edit is recorded via a whole-body `EditZoneBodyCommand` (no top-level
+    /// display-policy orchestration; body display is per-body).
     pub fn connect_nodes_scoped(
         &mut self,
         scope_path: &[u64],
@@ -2198,6 +2285,7 @@ impl StructureDesigner {
             );
             return;
         }
+        let before = self.snapshot_zone_body(scope_path);
         let dest_param_is_multi = {
             let network = match self.get_scope_network(scope_path) {
                 Some(n) => n,
@@ -2236,6 +2324,7 @@ impl StructureDesigner {
         // Re-validate so zone-rule errors raised by a previous pass clear once
         // the user adds the wire that satisfies them.
         self.validate_active_network();
+        self.push_zone_body_command(scope_path, "Connect wire".to_string(), before);
     }
 
     /// Scope-aware variant of `connect_nodes` for cross-scope wires (captures
@@ -2279,6 +2368,9 @@ impl StructureDesigner {
                 return;
             }
         }
+        // Cross-scope / ZoneInput wire — capture the destination body's
+        // before-state for undo (the wire is stored on a body-internal node).
+        let before = self.snapshot_zone_body(dest_scope_path);
         // Resolve dest pin's multi-ness against the dest node's type.
         let dest_param_is_multi = {
             let network = match self.get_scope_network(dest_scope_path) {
@@ -2318,6 +2410,7 @@ impl StructureDesigner {
         // Re-validate so zone-rule errors raised by a previous pass clear once
         // the user adds the wire that satisfies them.
         self.validate_active_network();
+        self.push_zone_body_command(dest_scope_path, "Connect wire".to_string(), before);
     }
 
     /// Scope-aware predicate for cross-scope wires (Phase U5). Returns `true`
@@ -2438,6 +2531,9 @@ impl StructureDesigner {
             // top level.
             return;
         }
+        // The body-return wire lives on the HOF's `zone_output_arguments`, which
+        // the body snapshot (keyed by the body scope path) captures.
+        let before = self.snapshot_zone_body(body_scope_path);
         let hof_id = *body_scope_path.last().unwrap();
         let parent_path = &body_scope_path[..body_scope_path.len() - 1];
         let dest_param_is_multi = {
@@ -2496,20 +2592,28 @@ impl StructureDesigner {
         // pass would persist on `validation_errors` even though the wire that
         // satisfies it now exists.
         self.validate_active_network();
+        self.push_zone_body_command(
+            body_scope_path,
+            "Connect body return wire".to_string(),
+            before,
+        );
     }
 
-    /// Scope-aware variant of [`duplicate_node`]. Phase U4 — body-scope dup
-    /// runs without top-level undo / display-policy orchestration.
+    /// Scope-aware variant of [`duplicate_node`]. Body-scope duplication is
+    /// recorded via a whole-body `EditZoneBodyCommand` (no top-level
+    /// display-policy orchestration).
     pub fn duplicate_node_scoped(&mut self, scope_path: &[u64], node_id: u64) -> u64 {
         if scope_path.is_empty() {
             return self.duplicate_node(node_id);
         }
+        let before = self.snapshot_zone_body(scope_path);
         let new_id = match self.get_scope_network_mut(scope_path) {
             Some(network) => network.duplicate_node(node_id).unwrap_or(0),
             None => return 0,
         };
         if new_id != 0 {
             self.set_dirty(true);
+            self.push_zone_body_command(scope_path, "Duplicate node".to_string(), before);
         }
         new_id
     }
@@ -3115,6 +3219,7 @@ impl StructureDesigner {
         self.pending_move = None;
         self.pending_gadget_drag = None;
         self.pending_comment_edit = None;
+        self.pending_zone_resize = None;
 
         // Clear evaluation cache
         self.network_evaluator.clear_csg_cache();
@@ -3764,13 +3869,18 @@ impl StructureDesigner {
         }
     }
 
-    /// Called when a node drag begins. Captures start positions for undo coalescing.
+    /// Called when a top-level node drag begins. Captures start positions for
+    /// undo coalescing.
     pub fn begin_move_nodes(&mut self) {
-        let network_name = match &self.active_node_network_name {
-            Some(name) => name,
-            None => return,
-        };
-        if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
+        self.begin_move_nodes_scoped(&[]);
+    }
+
+    /// Scope-aware variant of [`begin_move_nodes`]. Captures the start positions
+    /// of the selected nodes in the body identified by `scope_path` (empty =
+    /// top-level) so the matching [`end_move_nodes`] coalesces the drag into a
+    /// single scope-aware `MoveNodesCommand`.
+    pub fn begin_move_nodes_scoped(&mut self, scope_path: &[u64]) {
+        if let Some(network) = self.get_scope_network(scope_path) {
             let start_positions: Vec<(u64, glam::f64::DVec2)> = network
                 .get_selected_node_ids()
                 .iter()
@@ -3781,7 +3891,10 @@ impl StructureDesigner {
                         .map(|node| (node_id, node.position))
                 })
                 .collect();
-            self.pending_move = Some(super::undo::snapshot::PendingMove { start_positions });
+            self.pending_move = Some(super::undo::snapshot::PendingMove {
+                scope_path: scope_path.to_vec(),
+                start_positions,
+            });
         }
     }
 
@@ -3797,7 +3910,7 @@ impl StructureDesigner {
             None => return,
         };
 
-        let network = match self.node_type_registry.node_networks.get(&network_name) {
+        let network = match self.get_scope_network(&pending.scope_path) {
             Some(n) => n,
             None => return,
         };
@@ -3830,6 +3943,7 @@ impl StructureDesigner {
             };
             self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
                 network_name,
+                scope_path: pending.scope_path,
                 moves,
                 description,
             });
@@ -4051,14 +4165,25 @@ impl StructureDesigner {
     }
 
     /// Scope-aware variant of [`delete_selected`]. With a non-empty `scope_path`
-    /// the body's `delete_selected` runs without the top-level display-policy /
-    /// undo machinery — body-scope undo lands in U4 when body authoring is
-    /// reachable (`doc/design_zones_ui.md` §"Phase U4 → Gotchas").
+    /// the body's `delete_selected` runs (without the top-level display-policy
+    /// machinery) and the edit is recorded via a whole-body
+    /// `EditZoneBodyCommand`.
     pub fn delete_selected_scoped(&mut self, scope_path: &[u64]) {
         if !scope_path.is_empty() {
+            // Whole-body snapshot for undo. If nothing was selected the body is
+            // unchanged and `push_zone_body_command`'s diff check drops the
+            // no-op command.
+            let before = self.snapshot_zone_body(scope_path);
             if let Some(network) = self.get_scope_network_mut(scope_path) {
                 network.delete_selected();
             }
+            self.set_dirty(true);
+            // A body-internal delete changes what the enclosing HOF emits, so
+            // re-validate and re-evaluate from the top so downstream consumers
+            // refresh (the undo command itself uses a Full refresh).
+            self.mark_full_refresh();
+            self.validate_active_network();
+            self.push_zone_body_command(scope_path, "Delete".to_string(), before);
             return;
         }
 
@@ -4773,6 +4898,77 @@ impl StructureDesigner {
         }
     }
 
+    /// Set the stored body size of the HOF identified by (`scope_path`,
+    /// `node_id`). Direct mutation (no undo command) — wrap a resize drag in
+    /// [`begin_zone_resize`] / [`end_zone_resize`] to record a single coalesced
+    /// `SetZoneSizeCommand`. Clamps to the renderer minimum. No-op for non-HOF
+    /// nodes. See `doc/design_zones_ui.md` §"Resize handles".
+    pub fn set_zone_size(&mut self, scope_path: &[u64], node_id: u64, width: f64, height: f64) {
+        let width = width.max(100.0);
+        let height = height.max(60.0);
+        if let Some(network) = self.get_scope_network_mut(scope_path) {
+            if let Some(node) = network.nodes.get_mut(&node_id) {
+                if node.zone.is_some() {
+                    node.body_width = width;
+                    node.body_height = height;
+                }
+            }
+        }
+    }
+
+    /// Called when an HOF body resize drag begins. Captures the body's current
+    /// dimensions so [`end_zone_resize`] can push one coalesced command.
+    pub fn begin_zone_resize(&mut self, scope_path: &[u64], node_id: u64) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+        let dims = self
+            .get_scope_network(scope_path)
+            .and_then(|network| network.nodes.get(&node_id))
+            .filter(|node| node.zone.is_some())
+            .map(|node| (node.body_width, node.body_height));
+        if let Some((old_width, old_height)) = dims {
+            self.pending_zone_resize = Some(super::undo::snapshot::PendingZoneResize {
+                network_name,
+                scope_path: scope_path.to_vec(),
+                node_id,
+                old_width,
+                old_height,
+            });
+        }
+    }
+
+    /// Called when an HOF body resize drag ends. Pushes a single
+    /// `SetZoneSizeCommand` if the body actually changed size.
+    pub fn end_zone_resize(&mut self) {
+        let pending = match self.pending_zone_resize.take() {
+            Some(p) => p,
+            None => return,
+        };
+        let new_dims = self
+            .get_scope_network(&pending.scope_path)
+            .and_then(|network| network.nodes.get(&pending.node_id))
+            .map(|node| (node.body_width, node.body_height));
+        let (new_width, new_height) = match new_dims {
+            Some(d) => d,
+            None => return,
+        };
+        if new_width == pending.old_width && new_height == pending.old_height {
+            return; // no-op drag; don't pollute the undo stack
+        }
+        self.push_command(super::undo::commands::set_zone_size::SetZoneSizeCommand {
+            network_name: pending.network_name,
+            scope_path: pending.scope_path,
+            node_id: pending.node_id,
+            old_width: pending.old_width,
+            old_height: pending.old_height,
+            new_width,
+            new_height,
+            description: "Resize HOF body".to_string(),
+        });
+    }
+
     /// Sets a node as the return node for the active network.
     ///
     /// # Parameters
@@ -4966,6 +5162,8 @@ impl StructureDesigner {
         self.undo_stack.clear();
         self.pending_move = None;
         self.pending_gadget_drag = None;
+        self.pending_comment_edit = None;
+        self.pending_zone_resize = None;
 
         // Set active node network to the first network if available, otherwise None
         // Capture camera settings from the newly active network
