@@ -365,12 +365,15 @@ Color getDataTypeColor(String typeName) {
   return DEFAULT_DATA_TYPE_COLOR;
 }
 
-/// Wraps the NodeNetworkPainter to add interaction capabilities.
+/// Wraps the NodeNetworkPainter to paint the grid and wires.
 ///
 /// Two render modes:
 /// - [overlay] `false` (default): sits at the BOTTOM of the canvas stack and
-///   paints grid + top-level wires. Carries the wire-tap [GestureDetector]
-///   that selects top-level wires.
+///   paints grid + top-level wires. It does **not** handle pointer events —
+///   wire-tap selection is driven by [NodeNetworkState._handleCanvasTap] via
+///   the outer [Listener], which (unlike a GestureDetector buried below the HOF
+///   body regions in the Stack) receives taps in every scope, including inside
+///   bodies.
 /// - [overlay] `true`: sits at the TOP of the canvas stack (above the node
 ///   widgets) and paints body wires + the dragged wire. Wrapped in
 ///   [IgnorePointer] so it doesn't intercept node clicks. Body wires would
@@ -389,57 +392,6 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
       required this.zoomLevel,
       this.overlay = false});
 
-  /// Handles tap on wires for selection, or clears selection if clicking empty space
-  /// Supports modifier keys: Ctrl to toggle, Shift to add
-  void _handleWireTap(TapUpDetails details) {
-    final painter =
-        NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel);
-    final hit = painter.findWireAtPosition(details.localPosition);
-    if (hit != null) {
-      // A wire lives in a scope just like a node does. Make that scope active
-      // so subsequent keyboard ops (Delete) target it, and route the selection
-      // call through it. The Rust side enforces the single-scope invariant, so
-      // selecting a body wire clears any selection in other scopes.
-      model.setActiveScopeChain(hit.scopeChain);
-      if (HardwareKeyboard.instance.isControlPressed) {
-        // Ctrl+click: toggle wire selection
-        model.toggleWireSelection(
-          hit.sourceNodeId,
-          hit.sourcePinIndex.toInt(),
-          hit.destNodeId,
-          hit.destParamIndex,
-          scopeChain: hit.scopeChain,
-        );
-      } else if (HardwareKeyboard.instance.isShiftPressed) {
-        // Shift+click: add wire to selection
-        model.addWireToSelection(
-          hit.sourceNodeId,
-          hit.sourcePinIndex.toInt(),
-          hit.destNodeId,
-          hit.destParamIndex,
-          scopeChain: hit.scopeChain,
-        );
-      } else {
-        // Normal click: select only this wire
-        model.setSelectedWire(
-          hit.sourceNodeId,
-          hit.sourcePinIndex,
-          hit.destNodeId,
-          hit.destParamIndex,
-          scopeChain: hit.scopeChain,
-        );
-      }
-    } else {
-      // Clicked on empty top-level space. Reset the active scope back to the
-      // top level and clear selection at every scope so neither the top-level
-      // nor any body's selection visually lingers. Without the body-scope
-      // clears, an active body node (e.g. an expr inside a map's body) keeps
-      // its `.active` flag even though the user's intent is to deselect.
-      model.setActiveScopeChain(const <BigInt>[]);
-      model.clearSelectionAllScopes();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (overlay) {
@@ -457,11 +409,10 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
     return CustomPaint(
       painter:
           NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel),
-      child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTapUp: _handleWireTap,
-        child: Container(),
-      ),
+      // A plain Container (no gesture/opaque behavior) so the layer fills the
+      // Stack for painting but stays transparent to pointer events — taps are
+      // handled by the outer Listener (see `_handleCanvasTap`).
+      child: Container(),
     );
   }
 }
@@ -1340,9 +1291,73 @@ class NodeNetworkState extends State<NodeNetwork> {
         _lastPanPosition = null;
       });
     }
-    // Rectangle selection - compute and apply selection on release
+    // Left-button release that began on non-node space. Distinguish a *tap*
+    // (click — select/clear a wire) from a *drag* (rectangle selection). A
+    // tap leaves the rectangle at (near) zero size. Handling the tap here, in
+    // the outer Listener, is what makes wire selection work **inside HOF body
+    // regions**: the bottom-layer painter's old GestureDetector sat below the
+    // body region in the Stack and never received body-interior taps, whereas
+    // this Listener (an ancestor of the whole canvas) always does.
     else if (_selectionRectStart != null) {
-      _handleSelectionRectEnd(widget.graphModel);
+      final rect = _selectionRect;
+      final isTap =
+          rect == null || (rect.width <= _TAP_MAX_DRAG && rect.height <= _TAP_MAX_DRAG);
+      if (isTap) {
+        _handleCanvasTap(event.localPosition);
+        _clearSelectionRect();
+      } else {
+        _handleSelectionRectEnd(widget.graphModel);
+      }
+    }
+  }
+
+  /// Max screen-space drag extent (px) still treated as a click rather than a
+  /// rectangle selection. Tolerates pointer jitter on a tap.
+  static const double _TAP_MAX_DRAG = 4.0;
+
+  /// Handle a left-click that wasn't a drag, on non-node canvas, in **any
+  /// scope**. Hit-tests wires across all scopes (the painter resolves
+  /// cross-scope endpoints); on a hit, selects the wire in its own scope
+  /// (Ctrl toggles, Shift adds) and makes that scope active so keyboard ops
+  /// (Delete) target it. On a miss, resets to the top level and clears
+  /// selection everywhere. The Rust side enforces the single-scope invariant.
+  void _handleCanvasTap(Offset localPosition) {
+    final model = widget.graphModel;
+    final painter =
+        NodeNetworkPainter(model, panOffset: _panOffset, zoomLevel: _zoomLevel);
+    final hit = painter.findWireAtPosition(localPosition);
+    if (hit != null) {
+      model.setActiveScopeChain(hit.scopeChain);
+      if (HardwareKeyboard.instance.isControlPressed) {
+        model.toggleWireSelection(
+          hit.sourceNodeId,
+          hit.sourcePinIndex.toInt(),
+          hit.destNodeId,
+          hit.destParamIndex,
+          scopeChain: hit.scopeChain,
+        );
+      } else if (HardwareKeyboard.instance.isShiftPressed) {
+        model.addWireToSelection(
+          hit.sourceNodeId,
+          hit.sourcePinIndex.toInt(),
+          hit.destNodeId,
+          hit.destParamIndex,
+          scopeChain: hit.scopeChain,
+        );
+      } else {
+        model.setSelectedWire(
+          hit.sourceNodeId,
+          hit.sourcePinIndex,
+          hit.destNodeId,
+          hit.destParamIndex,
+          scopeChain: hit.scopeChain,
+        );
+      }
+    } else {
+      // Empty canvas: reset to the top level and clear selection everywhere so
+      // no body's selection visually lingers.
+      model.setActiveScopeChain(const <BigInt>[]);
+      model.clearSelectionAllScopes();
     }
   }
 
