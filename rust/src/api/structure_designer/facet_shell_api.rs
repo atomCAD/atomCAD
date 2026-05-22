@@ -15,13 +15,13 @@ use crate::structure_designer::nodes::facet_shell::FacetShellData;
 
 /// Gets the facet shell data for a node
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_facet_shell_data(node_id: u64) -> Option<APIFacetShellData> {
+pub fn get_facet_shell_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFacetShellData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -57,13 +57,13 @@ pub fn get_facet_shell_data(node_id: u64) -> Option<APIFacetShellData> {
 
 /// Sets the center and max miller index for a facet shell node
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_facet_shell_center(node_id: u64, center: APIIVec3, max_miller_index: i32) -> bool {
+pub fn set_facet_shell_center(scope_path: Vec<u64>, node_id: u64, center: APIIVec3, max_miller_index: i32) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,
@@ -90,13 +90,13 @@ pub fn set_facet_shell_center(node_id: u64, center: APIIVec3, max_miller_index: 
 
 /// Adds a new facet to the facet shell node
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
+pub fn add_facet(scope_path: Vec<u64>, node_id: u64, facet: APIFacet) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,
@@ -127,13 +127,13 @@ pub fn add_facet(node_id: u64, facet: APIFacet) -> bool {
 
 /// Updates a facet at the specified index
 #[flutter_rust_bridge::frb(sync)]
-pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
+pub fn update_facet(scope_path: Vec<u64>, node_id: u64, index: usize, facet: APIFacet) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,
@@ -168,13 +168,13 @@ pub fn update_facet(node_id: u64, index: usize, facet: APIFacet) -> bool {
 
 /// Removes a facet at the specified index
 #[flutter_rust_bridge::frb(sync)]
-pub fn remove_facet(node_id: u64, index: usize) -> bool {
+pub fn remove_facet(scope_path: Vec<u64>, node_id: u64, index: usize) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,
@@ -204,13 +204,13 @@ pub fn remove_facet(node_id: u64, index: usize) -> bool {
 
 /// Removes all facets from the facet shell
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_facets(node_id: u64) -> bool {
+pub fn clear_facets(scope_path: Vec<u64>, node_id: u64) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,
@@ -237,13 +237,13 @@ pub fn clear_facets(node_id: u64) -> bool {
 
 /// Selects a facet at the specified index
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_facet(node_id: u64, index: Option<usize>) -> bool {
+pub fn select_facet(scope_path: Vec<u64>, node_id: u64, index: Option<usize>) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,
@@ -293,13 +293,13 @@ pub fn select_facet_by_ray(ray_start: APIVec3, ray_dir: APIVec3) {
 
 /// Splits a symmetrized facet into its individual symmetric variants
 #[flutter_rust_bridge::frb(sync)]
-pub fn split_symmetry_members(node_id: u64, facet_index: usize) -> bool {
+pub fn split_symmetry_members(scope_path: Vec<u64>, node_id: u64, facet_index: usize) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data_mut(node_id)
+                    .get_node_network_data_mut_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return false,

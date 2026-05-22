@@ -1994,7 +1994,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   APIResult importXyz(BigInt nodeId) {
-    var result = import_xyz_api.importXyz(nodeId: nodeId);
+    var result = import_xyz_api.importXyz(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
     refreshFromKernel();
     return result;
   }
@@ -2009,7 +2010,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   APIResult importCif(BigInt nodeId) {
-    var result = import_cif_api.importCif(nodeId: nodeId);
+    var result = import_cif_api.importCif(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
     refreshFromKernel();
     return result;
   }
@@ -2109,15 +2111,19 @@ class StructureDesignerModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Facet Shell API wrapper methods
+  // Facet Shell API wrapper methods. These act on the node shown in the
+  // property panel, so they pass `propertyEditorScopePath` (which can be a body
+  // scope) rather than addressing by bare id.
   APIFacetShellData? getFacetShellData(BigInt nodeId) {
     if (nodeNetworkView == null) return null;
-    return facet_shell_api.getFacetShellData(nodeId: nodeId);
+    return facet_shell_api.getFacetShellData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   bool setFacetShellCenter(BigInt nodeId, APIIVec3 center, int maxMillerIndex) {
     if (nodeNetworkView == null) return false;
     final result = facet_shell_api.setFacetShellCenter(
+      scopePath: propertyEditorScopePath,
       nodeId: nodeId,
       center: center,
       maxMillerIndex: maxMillerIndex,
@@ -2129,6 +2135,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool addFacet(BigInt nodeId, APIFacet facet) {
     if (nodeNetworkView == null) return false;
     final result = facet_shell_api.addFacet(
+      scopePath: propertyEditorScopePath,
       nodeId: nodeId,
       facet: facet,
     );
@@ -2139,6 +2146,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool updateFacet(BigInt nodeId, BigInt index, APIFacet facet) {
     if (nodeNetworkView == null) return false;
     final result = facet_shell_api.updateFacet(
+      scopePath: propertyEditorScopePath,
       nodeId: nodeId,
       index: index,
       facet: facet,
@@ -2150,6 +2158,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool removeFacet(BigInt nodeId, BigInt index) {
     if (nodeNetworkView == null) return false;
     final result = facet_shell_api.removeFacet(
+      scopePath: propertyEditorScopePath,
       nodeId: nodeId,
       index: index,
     );
@@ -2159,7 +2168,8 @@ class StructureDesignerModel extends ChangeNotifier {
 
   bool clearFacets(BigInt nodeId) {
     if (nodeNetworkView == null) return false;
-    final result = facet_shell_api.clearFacets(nodeId: nodeId);
+    final result = facet_shell_api.clearFacets(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
     refreshFromKernel();
     return result;
   }
@@ -2167,6 +2177,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool selectFacet(BigInt nodeId, BigInt? index) {
     if (nodeNetworkView == null) return false;
     final result = facet_shell_api.selectFacet(
+      scopePath: propertyEditorScopePath,
       nodeId: nodeId,
       index: index,
     );
@@ -2177,6 +2188,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool splitSymmetryMembers(BigInt nodeId, BigInt facetIndex) {
     if (nodeNetworkView == null) return false;
     final result = facet_shell_api.splitSymmetryMembers(
+      scopePath: propertyEditorScopePath,
       nodeId: nodeId,
       facetIndex: facetIndex,
     );

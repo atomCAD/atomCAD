@@ -25,8 +25,17 @@ import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dar
 
 /// Key constants for node widget testing
 class NodeWidgetKeys {
-  /// Returns a Key for a node widget container by its ID
-  static Key nodeWidget(BigInt id) => Key('node_widget_$id');
+  /// Returns a Key for a node widget container by its scope chain + ID.
+  ///
+  /// The scope chain matters because body nodes render as **siblings** of
+  /// top-level nodes in the same `Stack`, and per-body `next_node_id` counters
+  /// mean a body node and a top-level node can share a numeric id. Keying by
+  /// bare id would produce duplicate keys among siblings — which Flutter
+  /// mis-reconciles (stale/orphaned widgets that linger across rebuilds,
+  /// network switches, and zoom). Empty scope keeps the original top-level key
+  /// format unchanged.
+  static Key nodeWidget(BigInt id, {List<BigInt> scopeChain = const []}) => Key(
+      'node_widget_${scopeChain.isEmpty ? '' : '${scopeChain.join('_')}_'}$id');
 
   /// Returns a Key for a node's visibility toggle button by its ID
   static Key visibilityButton(BigInt id) => Key('node_visibility_$id');
@@ -730,7 +739,7 @@ class NodeWidget extends StatelessWidget {
     required this.zoomLevel,
     required this.rootView,
     this.scopeChain = const [],
-  }) : super(key: NodeWidgetKeys.nodeWidget(node.id));
+  }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
 
   /// A resolver for this widget's current frame. Cheap to construct; the heavy
   /// layout pass lands in phase U3.

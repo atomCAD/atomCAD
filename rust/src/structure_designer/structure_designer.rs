@@ -3107,6 +3107,23 @@ impl StructureDesigner {
         network.get_node_network_data_mut(node_id)
     }
 
+    /// Scope-aware in-place mutable accessor (the `_mut` counterpart of
+    /// [`get_node_network_data_scoped`]). Marks the node dirty at its actual
+    /// scope and returns a mutable handle to its `NodeData`. Use for nodes that
+    /// mutate their data in place (e.g. `facet_shell`, or `import_xyz`/
+    /// `import_cif` loading a file) rather than replacing it wholesale via
+    /// [`set_node_network_data_scoped`].
+    pub fn get_node_network_data_mut_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Option<&mut dyn NodeData> {
+        self.pending_changes
+            .mark_node_data_changed_scoped(scope_path, node_id);
+        self.get_scope_network_mut(scope_path)?
+            .get_node_network_data_mut(node_id)
+    }
+
     pub fn get_network_evaluator(&self) -> &NetworkEvaluator {
         &self.network_evaluator
     }

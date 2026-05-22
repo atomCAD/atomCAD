@@ -9,45 +9,62 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
 /// Gets the facet shell data for a node
-APIFacetShellData? getFacetShellData({required BigInt nodeId}) => RustLib
-    .instance.api
-    .crateApiStructureDesignerFacetShellApiGetFacetShellData(nodeId: nodeId);
+APIFacetShellData? getFacetShellData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerFacetShellApiGetFacetShellData(
+            scopePath: scopePath, nodeId: nodeId);
 
 /// Sets the center and max miller index for a facet shell node
 bool setFacetShellCenter(
-        {required BigInt nodeId,
+        {required Uint64List scopePath,
+        required BigInt nodeId,
         required APIIVec3 center,
         required int maxMillerIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerFacetShellApiSetFacetShellCenter(
-            nodeId: nodeId, center: center, maxMillerIndex: maxMillerIndex);
+            scopePath: scopePath,
+            nodeId: nodeId,
+            center: center,
+            maxMillerIndex: maxMillerIndex);
 
 /// Adds a new facet to the facet shell node
-bool addFacet({required BigInt nodeId, required APIFacet facet}) =>
+bool addFacet(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFacet facet}) =>
     RustLib.instance.api.crateApiStructureDesignerFacetShellApiAddFacet(
-        nodeId: nodeId, facet: facet);
+        scopePath: scopePath, nodeId: nodeId, facet: facet);
 
 /// Updates a facet at the specified index
 bool updateFacet(
-        {required BigInt nodeId,
+        {required Uint64List scopePath,
+        required BigInt nodeId,
         required BigInt index,
         required APIFacet facet}) =>
     RustLib.instance.api.crateApiStructureDesignerFacetShellApiUpdateFacet(
-        nodeId: nodeId, index: index, facet: facet);
+        scopePath: scopePath, nodeId: nodeId, index: index, facet: facet);
 
 /// Removes a facet at the specified index
-bool removeFacet({required BigInt nodeId, required BigInt index}) =>
+bool removeFacet(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required BigInt index}) =>
     RustLib.instance.api.crateApiStructureDesignerFacetShellApiRemoveFacet(
-        nodeId: nodeId, index: index);
+        scopePath: scopePath, nodeId: nodeId, index: index);
 
 /// Removes all facets from the facet shell
-bool clearFacets({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerFacetShellApiClearFacets(nodeId: nodeId);
+bool clearFacets({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiStructureDesignerFacetShellApiClearFacets(
+        scopePath: scopePath, nodeId: nodeId);
 
 /// Selects a facet at the specified index
-bool selectFacet({required BigInt nodeId, BigInt? index}) =>
+bool selectFacet(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        BigInt? index}) =>
     RustLib.instance.api.crateApiStructureDesignerFacetShellApiSelectFacet(
-        nodeId: nodeId, index: index);
+        scopePath: scopePath, nodeId: nodeId, index: index);
 
 void selectFacetByRay({required APIVec3 rayStart, required APIVec3 rayDir}) =>
     RustLib.instance.api.crateApiStructureDesignerFacetShellApiSelectFacetByRay(
@@ -55,7 +72,9 @@ void selectFacetByRay({required APIVec3 rayStart, required APIVec3 rayDir}) =>
 
 /// Splits a symmetrized facet into its individual symmetric variants
 bool splitSymmetryMembers(
-        {required BigInt nodeId, required BigInt facetIndex}) =>
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required BigInt facetIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerFacetShellApiSplitSymmetryMembers(
-            nodeId: nodeId, facetIndex: facetIndex);
+            scopePath: scopePath, nodeId: nodeId, facetIndex: facetIndex);

@@ -5,7 +5,7 @@ use crate::structure_designer::nodes::import_cif::{ImportCifData, build_cif_impo
 use crate::util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn import_cif(node_id: u64) -> APIResult {
+pub fn import_cif(scope_path: Vec<u64>, node_id: u64) -> APIResult {
     unsafe {
         with_mut_cad_instance(|instance| {
             let design_file_dir = instance
@@ -17,7 +17,7 @@ pub fn import_cif(node_id: u64) -> APIResult {
 
             let node_data = match instance
                 .structure_designer
-                .get_node_network_data_mut(node_id)
+                .get_node_network_data_mut_scoped(&scope_path, node_id)
             {
                 Some(data) => data,
                 None => {

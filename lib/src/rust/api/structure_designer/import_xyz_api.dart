@@ -7,5 +7,6 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-APIResult importXyz({required BigInt nodeId}) => RustLib.instance.api
-    .crateApiStructureDesignerImportXyzApiImportXyz(nodeId: nodeId);
+APIResult importXyz({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiStructureDesignerImportXyzApiImportXyz(
+        scopePath: scopePath, nodeId: nodeId);

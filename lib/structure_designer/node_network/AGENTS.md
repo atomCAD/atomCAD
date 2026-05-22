@@ -74,6 +74,8 @@ Wires use cubic Bezier curves with data-type-based coloring:
 
 The four HOF nodes (`map`, `filter`, `fold`, `foreach`) render a **translucent body region** inside the node, between the external input and output columns (`_ZoneBodyRegion` in `node_widget.dart`). The body region carries the zone-input pins (inner-left) and zone-output pins (inner-right) plus a bottom-right resize handle. Body-internal nodes are *not* nested inside the HOF widget; they're added as siblings to the top-level `Stack` in `node_network.dart` via the recursive `_appendNodesRecursive` walk, then positioned via the `ScopeResolver` against their scope chain. This keeps the widget tree shallow and lets every node share the same pan/zoom transform.
 
+**Because body nodes and top-level nodes are siblings in one `Stack`, and per-body `next_node_id` counters let them share a numeric id, any widget key for a body-renderable widget MUST include the scope chain.** `NodeWidgetKeys.nodeWidget(id, scopeChain: …)` does this — a bare `Key('node_widget_$id')` produces duplicate keys among siblings, which Flutter mis-reconciles into stale/orphaned "ghost" widgets that survive rebuilds, network switches, and zoom. (Inner pin keys stay bare-id: they live in distinct per-node subtrees, so they only need sibling-uniqueness, which the scoped parent key guarantees.)
+
 ### Scope chains
 
 A node's **scope chain** is the `List<BigInt>` of HOF node ids identifying the body it lives in:

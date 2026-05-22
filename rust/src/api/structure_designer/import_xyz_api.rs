@@ -5,7 +5,7 @@ use crate::structure_designer::nodes::import_xyz::ImportXYZData;
 use crate::util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn import_xyz(node_id: u64) -> APIResult {
+pub fn import_xyz(scope_path: Vec<u64>, node_id: u64) -> APIResult {
     unsafe {
         with_mut_cad_instance(|instance| {
             // Get the design file directory before any mutable borrows
@@ -18,7 +18,7 @@ pub fn import_xyz(node_id: u64) -> APIResult {
 
             let node_data = match instance
                 .structure_designer
-                .get_node_network_data_mut(node_id)
+                .get_node_network_data_mut_scoped(&scope_path, node_id)
             {
                 Some(data) => data,
                 None => {
