@@ -2646,6 +2646,7 @@ impl StructureDesigner {
 
     /// Scope-aware variant of [`toggle_node_selection`]. Phase U4.
     pub fn toggle_node_selection_scoped(&mut self, scope_path: &[u64], node_id: u64) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
         if scope_path.is_empty() {
             return self.toggle_node_selection(node_id);
         }
@@ -2657,6 +2658,7 @@ impl StructureDesigner {
 
     /// Scope-aware variant of [`add_node_to_selection`]. Phase U4.
     pub fn add_node_to_selection_scoped(&mut self, scope_path: &[u64], node_id: u64) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
         if scope_path.is_empty() {
             return self.add_node_to_selection(node_id);
         }
@@ -2668,12 +2670,36 @@ impl StructureDesigner {
 
     /// Scope-aware variant of [`select_nodes`]. Phase U4.
     pub fn select_nodes_scoped(&mut self, scope_path: &[u64], node_ids: Vec<u64>) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
         if scope_path.is_empty() {
             return self.select_nodes(node_ids);
         }
         match self.get_scope_network_mut(scope_path) {
             Some(network) => network.select_nodes(node_ids),
             None => false,
+        }
+    }
+
+    /// Scope-aware variant of [`toggle_nodes_selection`] (Ctrl+rectangle).
+    /// Applies the single-scope invariant, then toggles within the target
+    /// scope. Replaces the inline scope-dispatch the API used to do.
+    pub fn toggle_nodes_selection_scoped(&mut self, scope_path: &[u64], node_ids: Vec<u64>) {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            self.toggle_nodes_selection(node_ids);
+        } else if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.toggle_nodes_selection(node_ids);
+        }
+    }
+
+    /// Scope-aware variant of [`add_nodes_to_selection`] (Shift+rectangle).
+    /// Applies the single-scope invariant, then adds within the target scope.
+    pub fn add_nodes_to_selection_scoped(&mut self, scope_path: &[u64], node_ids: Vec<u64>) {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            self.add_nodes_to_selection(node_ids);
+        } else if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.add_nodes_to_selection(node_ids);
         }
     }
 
@@ -3649,6 +3675,7 @@ impl StructureDesigner {
     /// problem); when called with a non-empty `scope_path` it sets the
     /// body's selection but skips the global policy refresh.
     pub fn select_node_scoped(&mut self, scope_path: &[u64], node_id: u64) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
         if scope_path.is_empty() {
             // Top-level: keep the existing behavior verbatim (display policy
             // + selection-change tracking apply to the top-level network).
@@ -3757,6 +3784,48 @@ impl StructureDesigner {
             let mut dirty_nodes = HashSet::new();
             dirty_nodes.insert(prev_id);
             self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+    }
+
+    /// Enforce the **single-scope selection invariant**: clear the selection
+    /// (selected nodes, selected wires, and active node) in every scope
+    /// reachable from the active top-level network *except* the scope addressed
+    /// by `keep_scope_path`.
+    ///
+    /// Every scoped selection mutator calls this first, so a selection action
+    /// in one scope wipes any selection lingering in another. It is
+    /// **modifier-agnostic**: a Shift/Ctrl click that crosses a scope boundary
+    /// collapses to a fresh single-scope selection, because the prior scope is
+    /// cleared here and the additive modifier then applies against the
+    /// now-empty target scope. Selection therefore lives in exactly one scope
+    /// at a time — the editor can never show two highlighted scopes whose
+    /// keyboard-delete target silently disagrees with what's highlighted.
+    ///
+    /// When the kept scope is a body (`keep_scope_path` non-empty) the
+    /// top-level network is among those cleared, so this runs the same
+    /// selection-change / display-policy bookkeeping that
+    /// [`clear_selection_all_scopes`] does (so a "Selected"/"Frontier" display
+    /// policy reacts to the top-level node losing its selection).
+    pub fn clear_selection_in_other_scopes(&mut self, keep_scope_path: &[u64]) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+        let previously_active_node_id = self
+            .node_type_registry
+            .node_networks
+            .get(&network_name)
+            .and_then(|n| n.active_node_id);
+        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
+            clear_selection_except_recursive(network, keep_scope_path);
+        }
+        if !keep_scope_path.is_empty() {
+            self.mark_selection_changed(previously_active_node_id, None);
+            if let Some(prev_id) = previously_active_node_id {
+                let mut dirty_nodes = HashSet::new();
+                dirty_nodes.insert(prev_id);
+                self.apply_node_display_policy(Some(&dirty_nodes));
+            }
         }
     }
 
@@ -4212,6 +4281,143 @@ impl StructureDesigner {
                 dirty_nodes.insert(prev_id);
             }
             self.apply_node_display_policy(Some(&dirty_nodes));
+        }
+    }
+
+    /// Scope-aware variant of [`select_wire`] (plain click). Selects a single
+    /// wire in the network identified by `scope_path` (empty = top-level),
+    /// after applying the single-scope invariant. Only same-scope regular
+    /// wires are addressable this way (the only shape `NodeNetwork::select_wire`
+    /// stores); captures, zone-input refs and zone-output wires are not
+    /// selectable.
+    pub fn select_wire_scoped(
+        &mut self,
+        scope_path: &[u64],
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        destination_node_id: u64,
+        destination_argument_index: usize,
+    ) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            return self.select_wire(
+                source_node_id,
+                source_output_pin_index,
+                destination_node_id,
+                destination_argument_index,
+            );
+        }
+        match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.select_wire(
+                source_node_id,
+                source_output_pin_index,
+                destination_node_id,
+                destination_argument_index,
+            ),
+            None => false,
+        }
+    }
+
+    /// Scope-aware variant of [`toggle_wire_selection`] (Ctrl+click).
+    pub fn toggle_wire_selection_scoped(
+        &mut self,
+        scope_path: &[u64],
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        destination_node_id: u64,
+        destination_argument_index: usize,
+    ) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            return self.toggle_wire_selection(
+                source_node_id,
+                source_output_pin_index,
+                destination_node_id,
+                destination_argument_index,
+            );
+        }
+        match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.toggle_wire_selection(
+                source_node_id,
+                source_output_pin_index,
+                destination_node_id,
+                destination_argument_index,
+            ),
+            None => false,
+        }
+    }
+
+    /// Scope-aware variant of [`add_wire_to_selection`] (Shift+click).
+    pub fn add_wire_to_selection_scoped(
+        &mut self,
+        scope_path: &[u64],
+        source_node_id: u64,
+        source_output_pin_index: i32,
+        destination_node_id: u64,
+        destination_argument_index: usize,
+    ) -> bool {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            return self.add_wire_to_selection(
+                source_node_id,
+                source_output_pin_index,
+                destination_node_id,
+                destination_argument_index,
+            );
+        }
+        match self.get_scope_network_mut(scope_path) {
+            Some(network) => network.add_wire_to_selection(
+                source_node_id,
+                source_output_pin_index,
+                destination_node_id,
+                destination_argument_index,
+            ),
+            None => false,
+        }
+    }
+
+    /// Scope-aware variant of [`select_nodes_and_wires`] (rectangle select).
+    pub fn select_nodes_and_wires_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_ids: Vec<u64>,
+        wires: Vec<crate::structure_designer::node_network::Wire>,
+    ) {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            self.select_nodes_and_wires(node_ids, wires);
+        } else if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.select_nodes_and_wires(node_ids, wires);
+        }
+    }
+
+    /// Scope-aware variant of [`add_nodes_and_wires_to_selection`].
+    pub fn add_nodes_and_wires_to_selection_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_ids: Vec<u64>,
+        wires: Vec<crate::structure_designer::node_network::Wire>,
+    ) {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            self.add_nodes_and_wires_to_selection(node_ids, wires);
+        } else if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.add_nodes_and_wires_to_selection(node_ids, wires);
+        }
+    }
+
+    /// Scope-aware variant of [`toggle_nodes_and_wires_selection`].
+    pub fn toggle_nodes_and_wires_selection_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_ids: Vec<u64>,
+        wires: Vec<crate::structure_designer::node_network::Wire>,
+    ) {
+        self.clear_selection_in_other_scopes(scope_path);
+        if scope_path.is_empty() {
+            self.toggle_nodes_and_wires_selection(node_ids, wires);
+        } else if let Some(network) = self.get_scope_network_mut(scope_path) {
+            network.toggle_nodes_and_wires_selection(node_ids, wires);
         }
     }
 
@@ -6114,6 +6320,40 @@ fn clear_selection_recursive(network: &mut NodeNetwork) {
     for node in network.nodes.values_mut() {
         if let Some(zone) = node.zone_mut() {
             clear_selection_recursive(zone);
+        }
+    }
+}
+
+/// Recursively clear selection on every network in the tree rooted at
+/// `network` **except** the one addressed by `keep_scope_path` (relative to
+/// `network`). The kept network keeps its own selection; every other network —
+/// the ancestors along the path and all bodies off the path — is cleared.
+/// Backs [`StructureDesigner::clear_selection_in_other_scopes`].
+fn clear_selection_except_recursive(network: &mut NodeNetwork, keep_scope_path: &[u64]) {
+    match keep_scope_path.split_first() {
+        None => {
+            // `network` is the kept scope: preserve its own selection, but
+            // clear any selection in its descendant bodies (defensive — the
+            // invariant means at most one scope is ever populated).
+            for node in network.nodes.values_mut() {
+                if let Some(zone) = node.zone_mut() {
+                    clear_selection_recursive(zone);
+                }
+            }
+        }
+        Some((head, tail)) => {
+            // `network` is an ancestor of the kept scope: clear its own
+            // selection, descend into the named child, clear every other body.
+            network.clear_selection();
+            for (id, node) in network.nodes.iter_mut() {
+                if let Some(zone) = node.zone_mut() {
+                    if *id == *head {
+                        clear_selection_except_recursive(zone, tail);
+                    } else {
+                        clear_selection_recursive(zone);
+                    }
+                }
+            }
         }
     }
 }

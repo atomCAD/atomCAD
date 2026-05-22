@@ -482,10 +482,14 @@ class StructureDesignerModel extends ChangeNotifier {
 
   // ===== MULTI-WIRE SELECTION METHODS =====
 
-  /// Toggle wire in selection (for Ctrl+click)
+  /// Toggle wire in selection (for Ctrl+click). [scopeChain] is the scope the
+  /// wire lives in (empty = top-level); see the single-scope selection
+  /// invariant in `structure_designer.rs::clear_selection_in_other_scopes`.
   bool toggleWireSelection(BigInt sourceNodeId, int sourceOutputPinIndex,
-      BigInt destNodeId, BigInt destParamIndex) {
+      BigInt destNodeId, BigInt destParamIndex,
+      {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.toggleWireSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
       sourceNodeId: sourceNodeId,
       sourceOutputPinIndex: sourceOutputPinIndex,
       destinationNodeId: destNodeId,
@@ -497,8 +501,10 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Add wire to selection without clearing existing selection (for Shift+click)
   bool addWireToSelection(BigInt sourceNodeId, int sourceOutputPinIndex,
-      BigInt destNodeId, BigInt destParamIndex) {
+      BigInt destNodeId, BigInt destParamIndex,
+      {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.addWireToSelection(
+      scopePath: _scopeChainToBytes(scopeChain),
       sourceNodeId: sourceNodeId,
       sourceOutputPinIndex: sourceOutputPinIndex,
       destinationNodeId: destNodeId,
@@ -553,7 +559,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Select nodes and wires together (for rectangle selection - replaces current selection)
-  void selectNodesAndWires(List<BigInt> nodeIds, List<WireView> wires) {
+  void selectNodesAndWires(List<BigInt> nodeIds, List<WireView> wires,
+      {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
@@ -567,12 +574,15 @@ class StructureDesignerModel extends ChangeNotifier {
             ))
         .toList();
     structure_designer_api.selectNodesAndWires(
-        nodeIds: uint64Ids, wires: wireIdentifiers);
+        scopePath: _scopeChainToBytes(scopeChain),
+        nodeIds: uint64Ids,
+        wires: wireIdentifiers);
     refreshFromKernel();
   }
 
   /// Add nodes and wires to existing selection (for Shift+rectangle)
-  void addNodesAndWiresToSelection(List<BigInt> nodeIds, List<WireView> wires) {
+  void addNodesAndWiresToSelection(List<BigInt> nodeIds, List<WireView> wires,
+      {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
@@ -586,13 +596,15 @@ class StructureDesignerModel extends ChangeNotifier {
             ))
         .toList();
     structure_designer_api.addNodesAndWiresToSelection(
-        nodeIds: uint64Ids, wires: wireIdentifiers);
+        scopePath: _scopeChainToBytes(scopeChain),
+        nodeIds: uint64Ids,
+        wires: wireIdentifiers);
     refreshFromKernel();
   }
 
   /// Toggle nodes and wires in selection (for Ctrl+rectangle)
-  void toggleNodesAndWiresSelection(
-      List<BigInt> nodeIds, List<WireView> wires) {
+  void toggleNodesAndWiresSelection(List<BigInt> nodeIds, List<WireView> wires,
+      {List<BigInt> scopeChain = const []}) {
     final uint64Ids = Uint64List(nodeIds.length);
     for (int i = 0; i < nodeIds.length; i++) {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
@@ -606,7 +618,9 @@ class StructureDesignerModel extends ChangeNotifier {
             ))
         .toList();
     structure_designer_api.toggleNodesAndWiresSelection(
-        nodeIds: uint64Ids, wires: wireIdentifiers);
+        scopePath: _scopeChainToBytes(scopeChain),
+        nodeIds: uint64Ids,
+        wires: wireIdentifiers);
     refreshFromKernel();
   }
 
@@ -1234,10 +1248,12 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setSelectedWire(BigInt sourceNodeId, BigInt sourceOutputPinIndex,
-      BigInt destNodeId, BigInt destParamIndex) {
+      BigInt destNodeId, BigInt destParamIndex,
+      {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     //TODO: only select a wire if not already selected.
     structure_designer_api.selectWire(
+        scopePath: _scopeChainToBytes(scopeChain),
         sourceNodeId: sourceNodeId,
         sourceOutputPinIndex: sourceOutputPinIndex.toInt(),
         destinationNodeId: destNodeId,

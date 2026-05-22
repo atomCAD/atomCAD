@@ -365,12 +365,14 @@ bool selectNode({required Uint64List scopePath, required BigInt nodeId}) =>
             scopePath: scopePath, nodeId: nodeId);
 
 bool selectWire(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourceOutputPinIndex,
         required BigInt destinationNodeId,
         required BigInt destinationArgumentIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSelectWire(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourceOutputPinIndex: sourceOutputPinIndex,
             destinationNodeId: destinationNodeId,
@@ -461,24 +463,28 @@ String? redoDescription() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiRedoDescription();
 
 bool toggleWireSelection(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourceOutputPinIndex,
         required BigInt destinationNodeId,
         required BigInt destinationArgumentIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourceOutputPinIndex: sourceOutputPinIndex,
             destinationNodeId: destinationNodeId,
             destinationArgumentIndex: destinationArgumentIndex);
 
 bool addWireToSelection(
-        {required BigInt sourceNodeId,
+        {required Uint64List scopePath,
+        required BigInt sourceNodeId,
         required int sourceOutputPinIndex,
         required BigInt destinationNodeId,
         required BigInt destinationArgumentIndex}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiAddWireToSelection(
+            scopePath: scopePath,
             sourceNodeId: sourceNodeId,
             sourceOutputPinIndex: sourceOutputPinIndex,
             destinationNodeId: destinationNodeId,
@@ -507,22 +513,28 @@ void toggleWiresSelection({required List<WireIdentifier> wires}) =>
             wires: wires);
 
 void selectNodesAndWires(
-        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+        {required Uint64List scopePath,
+        required Uint64List nodeIds,
+        required List<WireIdentifier> wires}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSelectNodesAndWires(
-            nodeIds: nodeIds, wires: wires);
+            scopePath: scopePath, nodeIds: nodeIds, wires: wires);
 
 void addNodesAndWiresToSelection(
-        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+        {required Uint64List scopePath,
+        required Uint64List nodeIds,
+        required List<WireIdentifier> wires}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelection(
-            nodeIds: nodeIds, wires: wires);
+            scopePath: scopePath, nodeIds: nodeIds, wires: wires);
 
 void toggleNodesAndWiresSelection(
-        {required Uint64List nodeIds, required List<WireIdentifier> wires}) =>
+        {required Uint64List scopePath,
+        required Uint64List nodeIds,
+        required List<WireIdentifier> wires}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelection(
-            nodeIds: nodeIds, wires: wires);
+            scopePath: scopePath, nodeIds: nodeIds, wires: wires);
 
 APIExtrudeData? getExtrudeData(
         {required Uint64List scopePath, required BigInt nodeId}) =>

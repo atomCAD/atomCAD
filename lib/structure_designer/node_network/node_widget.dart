@@ -1487,10 +1487,16 @@ class NodeWidget extends StatelessWidget {
           value: 'cut',
           child: Text('Cut (Ctrl+X)'),
         ),
-        PopupMenuItem(
-          value: 'promote_to_parameter',
-          child: Text('Promote to Parameter'),
-        ),
+        // Top-level only: "parameter" is a network-interface concept, and the
+        // Rust `promote_node_to_parameter` operates on the active top-level
+        // network by bare id. Offering it on a body node would mis-target a
+        // colliding top-level id (per-body id counters). Bodies expose zone
+        // inputs, not arbitrary parameters.
+        if (scopeChain.isEmpty)
+          PopupMenuItem(
+            value: 'promote_to_parameter',
+            child: Text('Promote to Parameter'),
+          ),
         if (canFactor)
           PopupMenuItem(
             value: 'factor_into_subnetwork',

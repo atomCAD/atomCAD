@@ -1674,6 +1674,7 @@ pub fn select_node(scope_path: Vec<u64>, node_id: u64) -> bool {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn select_wire(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_output_pin_index: i32,
     destination_node_id: u64,
@@ -1682,7 +1683,8 @@ pub fn select_wire(
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                let result = instance.structure_designer.select_wire(
+                let result = instance.structure_designer.select_wire_scoped(
+                    &scope_path,
                     source_node_id,
                     source_output_pin_index,
                     destination_node_id,
@@ -1773,14 +1775,9 @@ pub fn select_nodes(scope_path: Vec<u64>, node_ids: Vec<u64>) -> bool {
 pub fn toggle_nodes_selection(scope_path: Vec<u64>, node_ids: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            if scope_path.is_empty() {
-                instance.structure_designer.toggle_nodes_selection(node_ids);
-            } else if let Some(network) = instance
+            instance
                 .structure_designer
-                .get_scope_network_mut(&scope_path)
-            {
-                network.toggle_nodes_selection(node_ids);
-            }
+                .toggle_nodes_selection_scoped(&scope_path, node_ids);
             refresh_structure_designer_auto(instance);
         });
     }
@@ -1925,6 +1922,7 @@ pub fn redo_description() -> Option<String> {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn toggle_wire_selection(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_output_pin_index: i32,
     destination_node_id: u64,
@@ -1933,7 +1931,8 @@ pub fn toggle_wire_selection(
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                let result = instance.structure_designer.toggle_wire_selection(
+                let result = instance.structure_designer.toggle_wire_selection_scoped(
+                    &scope_path,
                     source_node_id,
                     source_output_pin_index,
                     destination_node_id,
@@ -1949,6 +1948,7 @@ pub fn toggle_wire_selection(
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn add_wire_to_selection(
+    scope_path: Vec<u64>,
     source_node_id: u64,
     source_output_pin_index: i32,
     destination_node_id: u64,
@@ -1957,7 +1957,8 @@ pub fn add_wire_to_selection(
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                let result = instance.structure_designer.add_wire_to_selection(
+                let result = instance.structure_designer.add_wire_to_selection_scoped(
+                    &scope_path,
                     source_node_id,
                     source_output_pin_index,
                     destination_node_id,
@@ -2004,10 +2005,9 @@ pub fn get_selected_wires() -> Vec<WireView> {
 pub fn add_nodes_to_selection(scope_path: Vec<u64>, node_ids: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            if !scope_path.is_empty() {
-                return;
-            }
-            instance.structure_designer.add_nodes_to_selection(node_ids);
+            instance
+                .structure_designer
+                .add_nodes_to_selection_scoped(&scope_path, node_ids);
             refresh_structure_designer_auto(instance);
         });
     }
@@ -2082,6 +2082,7 @@ pub fn toggle_wires_selection(wires: Vec<super::structure_designer_api_types::Wi
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn select_nodes_and_wires(
+    scope_path: Vec<u64>,
     node_ids: Vec<u64>,
     wires: Vec<super::structure_designer_api_types::WireIdentifier>,
 ) {
@@ -2100,7 +2101,7 @@ pub fn select_nodes_and_wires(
                 .collect();
             instance
                 .structure_designer
-                .select_nodes_and_wires(node_ids, wire_structs);
+                .select_nodes_and_wires_scoped(&scope_path, node_ids, wire_structs);
             refresh_structure_designer_auto(instance);
         });
     }
@@ -2108,6 +2109,7 @@ pub fn select_nodes_and_wires(
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn add_nodes_and_wires_to_selection(
+    scope_path: Vec<u64>,
     node_ids: Vec<u64>,
     wires: Vec<super::structure_designer_api_types::WireIdentifier>,
 ) {
@@ -2126,7 +2128,7 @@ pub fn add_nodes_and_wires_to_selection(
                 .collect();
             instance
                 .structure_designer
-                .add_nodes_and_wires_to_selection(node_ids, wire_structs);
+                .add_nodes_and_wires_to_selection_scoped(&scope_path, node_ids, wire_structs);
             refresh_structure_designer_auto(instance);
         });
     }
@@ -2134,6 +2136,7 @@ pub fn add_nodes_and_wires_to_selection(
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn toggle_nodes_and_wires_selection(
+    scope_path: Vec<u64>,
     node_ids: Vec<u64>,
     wires: Vec<super::structure_designer_api_types::WireIdentifier>,
 ) {
@@ -2152,7 +2155,7 @@ pub fn toggle_nodes_and_wires_selection(
                 .collect();
             instance
                 .structure_designer
-                .toggle_nodes_and_wires_selection(node_ids, wire_structs);
+                .toggle_nodes_and_wires_selection_scoped(&scope_path, node_ids, wire_structs);
             refresh_structure_designer_auto(instance);
         });
     }

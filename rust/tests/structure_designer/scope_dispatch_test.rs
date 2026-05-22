@@ -145,8 +145,8 @@ fn move_node_scoped_targets_the_body() {
 fn select_node_scoped_targets_the_body_selection() {
     let (mut designer, map_id) = setup_two_level_network();
 
-    // Two top-level siblings; the first becomes selected via the unscoped
-    // call so we can verify the body-scope path doesn't disturb it.
+    // Two top-level siblings; the first becomes selected so we can observe the
+    // single-scope invariant clear it when we select inside the body.
     let top_a = designer.add_node("int", DVec2::new(0.0, 0.0));
     let _top_b = designer.add_node("int", DVec2::new(100.0, 0.0));
     designer.select_node(top_a);
@@ -163,16 +163,25 @@ fn select_node_scoped_targets_the_body_selection() {
         "body.selected_node_ids should contain the inner node"
     );
 
-    // Top-level network's selection unaffected.
+    // Single-scope invariant: selecting inside the body clears the top-level
+    // network's selection (it lived in a different scope). The top-level node
+    // still *exists* — only its selection is gone.
     let main = designer
         .node_type_registry
         .node_networks
         .get("main")
         .unwrap();
     assert_eq!(
-        main.active_node_id,
-        Some(top_a),
-        "top-level active_node_id should still be the top-level node"
+        main.active_node_id, None,
+        "selecting in a body must clear the top-level selection (single-scope invariant)"
+    );
+    assert!(
+        main.selected_node_ids.is_empty(),
+        "top-level selected_node_ids must be empty after a body selection"
+    );
+    assert!(
+        main.nodes.contains_key(&top_a),
+        "the top-level node itself must survive (only its selection is cleared)"
     );
 }
 
@@ -180,11 +189,12 @@ fn select_node_scoped_targets_the_body_selection() {
 fn delete_selected_scoped_only_touches_the_body() {
     let (mut designer, map_id) = setup_two_level_network();
 
-    // Top-level has a selected node we must not delete.
+    // Top-level node we must not delete.
     let top_keep = designer.add_node("int", DVec2::new(0.0, 0.0));
     designer.select_node(top_keep);
 
-    // Body has its own selected node we *do* want to delete.
+    // Body has its own selected node we *do* want to delete. Selecting it
+    // moves the (single-scope) selection into the body, clearing top-level.
     let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
     designer.select_node_scoped(&[map_id], inner_id);
 
@@ -197,7 +207,9 @@ fn delete_selected_scoped_only_touches_the_body() {
         "body-scope delete must remove the body's selected node"
     );
 
-    // Top-level still has `top_keep` and it's still selected.
+    // The top-level node must survive a body-scope delete (the delete targets
+    // the body's selection only). Its top-level selection was already cleared
+    // by the body selection above, per the single-scope invariant.
     let main = designer
         .node_type_registry
         .node_networks
@@ -208,9 +220,8 @@ fn delete_selected_scoped_only_touches_the_body() {
         "top-level node must survive a body-scope delete"
     );
     assert_eq!(
-        main.active_node_id,
-        Some(top_keep),
-        "top-level selection must survive a body-scope delete"
+        main.active_node_id, None,
+        "top-level selection was cleared when the body selection was made"
     );
 }
 
@@ -387,5 +398,198 @@ fn empty_scope_path_preserves_top_level_behavior() {
     assert!(
         !main.nodes.contains_key(&node_a),
         "the selected top-level node should be deleted"
+    );
+}
+
+// ===== Single-scope selection invariant =====
+//
+// `clear_selection_in_other_scopes` (called by every scoped selection mutator)
+// guarantees the selection lives in exactly one scope at a time. These tests
+// drive the same `*_scoped` entry points the Flutter API calls.
+
+#[test]
+fn selecting_in_body_clears_top_level_selection() {
+    let (mut designer, map_id) = setup_two_level_network();
+    let top_a = designer.add_node("int", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], top_a);
+    assert!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .selected_node_ids
+            .contains(&top_a),
+        "precondition: top-level node selected"
+    );
+
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    designer.select_node_scoped(&[map_id], inner_id);
+
+    assert!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .selected_node_ids
+            .is_empty(),
+        "selecting in the body must clear the top-level selection"
+    );
+    assert!(
+        designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .selected_node_ids
+            .contains(&inner_id),
+        "the body now holds the selection"
+    );
+}
+
+#[test]
+fn selecting_at_top_level_clears_body_selection() {
+    let (mut designer, map_id) = setup_two_level_network();
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    designer.select_node_scoped(&[map_id], inner_id);
+    assert!(
+        designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .selected_node_ids
+            .contains(&inner_id),
+        "precondition: body node selected"
+    );
+
+    let top_a = designer.add_node("int", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], top_a);
+
+    assert!(
+        designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .selected_node_ids
+            .is_empty(),
+        "selecting at top level must clear the body selection"
+    );
+    assert!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .selected_node_ids
+            .contains(&top_a),
+        "the top level now holds the selection"
+    );
+}
+
+#[test]
+fn shift_select_across_scope_boundary_collapses_to_single_scope() {
+    // Shift-add (`add_node_to_selection_scoped`) is modifier-agnostic w.r.t. the
+    // invariant: crossing a scope boundary clears the prior scope, so the
+    // additive modifier ends up applied against the now-empty target scope and
+    // the result is a fresh single-node selection.
+    let (mut designer, map_id) = setup_two_level_network();
+    let inner_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    designer.select_node_scoped(&[map_id], inner_id);
+
+    let top_a = designer.add_node("int", DVec2::new(0.0, 0.0));
+    designer.add_node_to_selection_scoped(&[], top_a);
+
+    assert!(
+        designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .selected_node_ids
+            .is_empty(),
+        "Shift across a scope boundary must clear the prior (body) scope"
+    );
+    let top = designer.get_scope_network(&[]).unwrap();
+    assert_eq!(
+        top.selected_node_ids.len(),
+        1,
+        "the target scope holds exactly the shift-added node"
+    );
+    assert!(top.selected_node_ids.contains(&top_a));
+}
+
+#[test]
+fn shift_select_within_same_scope_extends_selection() {
+    // The invariant only clears *other* scopes — within a single scope, Shift
+    // still extends the selection as before.
+    let (mut designer, _map_id) = setup_two_level_network();
+    let a = designer.add_node("int", DVec2::new(0.0, 0.0));
+    let b = designer.add_node("int", DVec2::new(100.0, 0.0));
+    designer.select_node_scoped(&[], a);
+    designer.add_node_to_selection_scoped(&[], b);
+
+    let top = designer.get_scope_network(&[]).unwrap();
+    assert!(
+        top.selected_node_ids.contains(&a) && top.selected_node_ids.contains(&b),
+        "Shift within the same scope must keep both nodes selected"
+    );
+}
+
+// ===== Scope-aware wire selection =====
+
+#[test]
+fn select_wire_scoped_records_in_body_and_clears_other_scopes() {
+    let (mut designer, map_id) = setup_two_level_network();
+
+    // A top-level selection that selecting a body wire must clear.
+    let top_a = designer.add_node("int", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], top_a);
+
+    // Build a regular intra-body wire: int -> collect.
+    let int_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    let collect_id = designer.add_node_scoped(&[map_id], "collect", DVec2::new(100.0, 0.0), None);
+    designer.connect_nodes_scoped(&[map_id], int_id, 0, collect_id, 0);
+
+    let ok = designer.select_wire_scoped(&[map_id], int_id, 0, collect_id, 0);
+    assert!(ok, "selecting an existing body wire must succeed");
+
+    assert_eq!(
+        designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .selected_wires
+            .len(),
+        1,
+        "the body should carry exactly one selected wire"
+    );
+    assert!(
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .selected_node_ids
+            .is_empty(),
+        "selecting a body wire must clear the top-level selection"
+    );
+}
+
+#[test]
+fn delete_selected_scoped_removes_body_wire() {
+    let (mut designer, map_id) = setup_two_level_network();
+    let int_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    let collect_id = designer.add_node_scoped(&[map_id], "collect", DVec2::new(100.0, 0.0), None);
+    designer.connect_nodes_scoped(&[map_id], int_id, 0, collect_id, 0);
+
+    let connected = |d: &StructureDesigner| {
+        d.get_scope_network(&[map_id])
+            .unwrap()
+            .nodes
+            .get(&collect_id)
+            .unwrap()
+            .arguments
+            .iter()
+            .any(|a| !a.incoming_wires.is_empty())
+    };
+    assert!(connected(&designer), "precondition: collect has an incoming wire");
+
+    designer.select_wire_scoped(&[map_id], int_id, 0, collect_id, 0);
+    designer.delete_selected_scoped(&[map_id]);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(
+        body.nodes.contains_key(&int_id) && body.nodes.contains_key(&collect_id),
+        "deleting a wire must not delete the nodes"
+    );
+    assert!(
+        !connected(&designer),
+        "the body wire should be removed after a body-scope delete"
     );
 }

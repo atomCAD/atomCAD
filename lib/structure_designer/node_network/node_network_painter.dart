@@ -19,8 +19,14 @@ class WireHitResult {
   final BigInt destNodeId;
   final BigInt destParamIndex;
 
+  /// Scope the hit wire lives in (empty = top-level network). Drives the
+  /// scope-aware wire-selection API call and the active-scope update so a
+  /// click on a body wire selects it in the right body. See the single-scope
+  /// invariant in `structure_designer.rs::clear_selection_in_other_scopes`.
+  final List<BigInt> scopeChain;
+
   WireHitResult(this.sourceNodeId, this.sourcePinIndex, this.destNodeId,
-      this.destParamIndex);
+      this.destParamIndex, this.scopeChain);
 }
 
 // Grid appearance constants
@@ -378,35 +384,86 @@ class NodeNetworkPainter extends CustomPainter {
       ..close();
   }
 
+  /// Returns true for wires that the selection model can address: regular
+  /// same-scope output wires (and the function pin, `pin_index == -1`). These
+  /// are exactly the wires `NodeNetwork::select_wire` stores and that
+  /// `build_wires_for_network` reports a per-scope `selected` flag for.
+  /// Captures (`sourceScopeDepth > 0`), iteration-value references
+  /// (`ZoneInput` source), and zone-output (body-return) wires are excluded —
+  /// they remain non-selectable.
+  static bool _isSelectableWire(WireView wire) =>
+      wire.sourcePin is APISourcePin_NodeOutput &&
+      wire.sourceScopeDepth == 0 &&
+      wire.destinationArgumentKind == APIArgumentKind.external_;
+
+  /// Hit-test wires across every scope. `position` is in screen coordinates and
+  /// the resolver returns pin endpoints in screen coordinates, so no transform
+  /// is needed. Bodies are tested before the top level (deepest first), mirroring
+  /// the overlay painter's stacking — body wires render *on top of* node widgets
+  /// and the (hidden-under-widgets) top-level wires, so a click inside a body
+  /// must never select a top-level wire passing invisibly beneath it. Collapsed
+  /// bodies are skipped (their wires aren't visible, so aren't selectable).
   WireHitResult? findWireAtPosition(Offset position) {
     final resolver = _makeResolver();
     if (resolver == null) return null;
 
-    // `position` is already in screen coordinates and the resolver returns
-    // pin endpoints in screen coordinates, so no further transform is needed.
-    // Top-level wires only — U4 doesn't surface body-wire selection via the
-    // interaction-layer click. (Body wire selection from a click on the wire
-    // is a U5 polish item.)
-    for (var wire in resolver.root.wires) {
+    for (final node in resolver.root.nodes.values) {
+      final zone = node.zone;
+      if (zone == null) continue;
+      final innerChain = <BigInt>[node.id];
+      if (resolver.isBodyCollapsed(innerChain)) continue;
+      final hit = _hitWiresInZone(resolver, zone, innerChain, position);
+      if (hit != null) return hit;
+    }
+
+    // Top-level wires last.
+    return _hitWiresAtScope(
+        resolver, resolver.root.wires, const <BigInt>[], position);
+  }
+
+  /// Recursively hit-test a body's wires (deepest nested body first), then the
+  /// body's own wires. Mirrors [_drawWiresInZone].
+  WireHitResult? _hitWiresInZone(
+    ScopeResolver resolver,
+    ZoneView zone,
+    List<BigInt> scopeChain,
+    Offset position,
+  ) {
+    for (final node in zone.nodes.values) {
+      final inner = node.zone;
+      if (inner == null) continue;
+      final innerChain = [...scopeChain, node.id];
+      if (resolver.isBodyCollapsed(innerChain)) continue;
+      final deep = _hitWiresInZone(resolver, inner, innerChain, position);
+      if (deep != null) return deep;
+    }
+    return _hitWiresAtScope(resolver, zone.wires, scopeChain, position);
+  }
+
+  /// Hit-test the [wires] stored at [scopeChain] against [position].
+  WireHitResult? _hitWiresAtScope(
+    ScopeResolver resolver,
+    List<WireView> wires,
+    List<BigInt> scopeChain,
+    Offset position,
+  ) {
+    for (final wire in wires) {
+      if (!_isSelectableWire(wire)) continue;
       final source =
-          resolver.tryPinScreenPosition(_wireSourcePin(wire, const <BigInt>[]));
+          resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
       final dest =
-          resolver.tryPinScreenPosition(_wireDestPin(wire, const <BigInt>[]));
+          resolver.tryPinScreenPosition(_wireDestPin(wire, scopeChain));
+      if (source == null || dest == null) continue;
 
-      if (source == null || dest == null) {
-        continue;
-      }
-
-      final (sourcePos, _) = source;
-      final (destPos, _) = dest;
-
-      final hitTestPath = _getBand(sourcePos, destPos, HIT_TEST_WIRE_WIDTH);
+      final hitTestPath = _getBand(source.$1, dest.$1, HIT_TEST_WIRE_WIDTH);
       if (hitTestPath.contains(position)) {
         return WireHitResult(
-            wire.sourceNodeId,
-            BigInt.from(wire.sourceOutputPinIndex),
-            wire.destNodeId,
-            wire.destParamIndex);
+          wire.sourceNodeId,
+          BigInt.from(wire.sourceOutputPinIndex),
+          wire.destNodeId,
+          wire.destParamIndex,
+          scopeChain,
+        );
       }
     }
     return null;

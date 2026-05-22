@@ -396,6 +396,11 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
         NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel);
     final hit = painter.findWireAtPosition(details.localPosition);
     if (hit != null) {
+      // A wire lives in a scope just like a node does. Make that scope active
+      // so subsequent keyboard ops (Delete) target it, and route the selection
+      // call through it. The Rust side enforces the single-scope invariant, so
+      // selecting a body wire clears any selection in other scopes.
+      model.setActiveScopeChain(hit.scopeChain);
       if (HardwareKeyboard.instance.isControlPressed) {
         // Ctrl+click: toggle wire selection
         model.toggleWireSelection(
@@ -403,6 +408,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
           hit.sourcePinIndex.toInt(),
           hit.destNodeId,
           hit.destParamIndex,
+          scopeChain: hit.scopeChain,
         );
       } else if (HardwareKeyboard.instance.isShiftPressed) {
         // Shift+click: add wire to selection
@@ -411,6 +417,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
           hit.sourcePinIndex.toInt(),
           hit.destNodeId,
           hit.destParamIndex,
+          scopeChain: hit.scopeChain,
         );
       } else {
         // Normal click: select only this wire
@@ -419,6 +426,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
           hit.sourcePinIndex,
           hit.destNodeId,
           hit.destParamIndex,
+          scopeChain: hit.scopeChain,
         );
       }
     } else {
@@ -878,46 +886,65 @@ class NodeNetworkState extends State<NodeNetwork> {
       }
     }
 
-    // Wire selection via rectangle drag: top-level only for U4. Body-wire
-    // rectangle selection routes through scope-aware select APIs that don't
-    // yet exist for the wire-selection path; deferred to U5 polish.
-    List<WireView> wiresInRect = [];
-    if (scope.isEmpty) {
-      for (final wire in resolver.root.wires) {
-        if (_wireOverlapsRect(wire, rect, resolver)) {
-          wiresInRect.add(wire);
-        }
+    // Collect selectable wires in the same scope that overlap the rectangle.
+    // Only regular same-scope wires are addressable by the selection model
+    // (see `_wireSelectable`); captures, iteration-value refs and zone-output
+    // wires are skipped.
+    final scopeWires = _wiresForScope(resolver, scope);
+    final List<WireView> wiresInRect = [];
+    for (final wire in scopeWires) {
+      if (!_wireSelectable(wire)) continue;
+      if (_wireOverlapsRect(wire, rect, resolver, scope)) {
+        wiresInRect.add(wire);
       }
     }
 
-    // Apply selection based on modifier keys. For body-scope, route through
-    // scope-aware select APIs; the wire-selection batch APIs are top-level
-    // only in U4.
+    // Apply selection based on modifier keys. The combined node+wire batch
+    // APIs are scope-aware now, so the same path serves both top-level and
+    // body scopes. The Rust side enforces the single-scope invariant.
     final isCtrl = HardwareKeyboard.instance.isControlPressed;
     final isShift = HardwareKeyboard.instance.isShiftPressed;
 
-    if (scope.isEmpty) {
-      if (isCtrl) {
-        model.toggleNodesAndWiresSelection(nodesInRect, wiresInRect);
-      } else if (isShift) {
-        model.addNodesAndWiresToSelection(nodesInRect, wiresInRect);
-      } else {
-        model.selectNodesAndWires(nodesInRect, wiresInRect);
-      }
+    // Move the active scope to the drag's scope so subsequent keyboard
+    // shortcuts target it (a no-op for top-level).
+    model.setActiveScopeChain(scope);
+    if (isCtrl) {
+      model.toggleNodesAndWiresSelection(nodesInRect, wiresInRect,
+          scopeChain: scope);
+    } else if (isShift) {
+      model.addNodesAndWiresToSelection(nodesInRect, wiresInRect,
+          scopeChain: scope);
     } else {
-      // Body scope. Move active scope to this body so subsequent keyboard
-      // shortcuts target it.
-      model.setActiveScopeChain(scope);
-      if (isCtrl) {
-        model.toggleNodesSelection(nodesInRect, scopeChain: scope);
-      } else if (isShift) {
-        model.addNodesToSelection(nodesInRect, scopeChain: scope);
-      } else {
-        model.selectNodes(nodesInRect, scopeChain: scope);
-      }
+      model.selectNodesAndWires(nodesInRect, wiresInRect, scopeChain: scope);
     }
 
     _clearSelectionRect();
+  }
+
+  /// Whether [wire] can be addressed by the selection model: a regular
+  /// same-scope output wire (or the function pin). Mirrors the painter's
+  /// `_isSelectableWire` and the Rust `build_wires_for_network` `selected`
+  /// rule. Captures, iteration-value refs and zone-output wires are excluded.
+  bool _wireSelectable(WireView wire) =>
+      wire.sourcePin is APISourcePin_NodeOutput &&
+      wire.sourceScopeDepth == 0 &&
+      wire.destinationArgumentKind == APIArgumentKind.external_;
+
+  /// Walk [resolver]'s root to the body identified by [scopeChain] and return
+  /// its stored wire list (top-level wires for an empty chain). Returns an
+  /// empty list if the path can't be resolved.
+  List<WireView> _wiresForScope(
+      ScopeResolver resolver, List<BigInt> scopeChain) {
+    if (scopeChain.isEmpty) return resolver.root.wires;
+    Map<BigInt, NodeView> current = resolver.root.nodes;
+    for (int i = 0; i < scopeChain.length; i++) {
+      final hof = current[scopeChain[i]];
+      final zone = hof?.zone;
+      if (zone == null) return const [];
+      if (i == scopeChain.length - 1) return zone.wires;
+      current = zone.nodes;
+    }
+    return const [];
   }
 
   /// Walk [resolver]'s root to the body identified by [scopeChain] and
@@ -947,9 +974,13 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// pin endpoint resolution through [ScopeResolver] so source/dest endpoints
   /// match the painter's positions exactly (the duplicate pin-position math
   /// that used to live here is gone — see `doc/design_zones_ui.md` §R2).
-  bool _wireOverlapsRect(WireView wire, Rect rect, ScopeResolver resolver) {
+  bool _wireOverlapsRect(
+      WireView wire, Rect rect, ScopeResolver resolver, List<BigInt> scope) {
+    // Only regular same-scope wires reach here (filtered by `_wireSelectable`),
+    // so both endpoints live in `scope`.
     final sourcePin = PinReference(
       nodeId: wire.sourceNodeId,
+      scopeChain: scope,
       pinKind: wire.sourceOutputPinIndex == -1
           ? PinKind.functionPin
           : PinKind.externalOutput,
@@ -958,6 +989,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     );
     final destPin = PinReference(
       nodeId: wire.destNodeId,
+      scopeChain: scope,
       pinKind: PinKind.externalInput,
       pinIndex: wire.destParamIndex.toInt(),
       dataType: '',

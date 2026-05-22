@@ -133,7 +133,9 @@ abstract class RustLibApi extends BaseApi {
       {required Uint64List scopePath, required BigInt nodeId});
 
   void crateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelection(
-      {required Uint64List nodeIds, required List<WireIdentifier> wires});
+      {required Uint64List scopePath,
+      required Uint64List nodeIds,
+      required List<WireIdentifier> wires});
 
   void crateApiStructureDesignerStructureDesignerApiAddNodesToSelection(
       {required Uint64List scopePath, required Uint64List nodeIds});
@@ -142,7 +144,8 @@ abstract class RustLibApi extends BaseApi {
       {required String name});
 
   bool crateApiStructureDesignerStructureDesignerApiAddWireToSelection(
-      {required BigInt sourceNodeId,
+      {required Uint64List scopePath,
+      required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
@@ -976,10 +979,13 @@ abstract class RustLibApi extends BaseApi {
       {required Uint64List scopePath, required Uint64List nodeIds});
 
   void crateApiStructureDesignerStructureDesignerApiSelectNodesAndWires(
-      {required Uint64List nodeIds, required List<WireIdentifier> wires});
+      {required Uint64List scopePath,
+      required Uint64List nodeIds,
+      required List<WireIdentifier> wires});
 
   bool crateApiStructureDesignerStructureDesignerApiSelectWire(
-      {required BigInt sourceNodeId,
+      {required Uint64List scopePath,
+      required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
@@ -1391,7 +1397,9 @@ abstract class RustLibApi extends BaseApi {
 
   void
       crateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelection(
-          {required Uint64List nodeIds, required List<WireIdentifier> wires});
+          {required Uint64List scopePath,
+          required Uint64List nodeIds,
+          required List<WireIdentifier> wires});
 
   void crateApiStructureDesignerStructureDesignerApiToggleNodesSelection(
       {required Uint64List scopePath, required Uint64List nodeIds});
@@ -1402,7 +1410,8 @@ abstract class RustLibApi extends BaseApi {
       required int pinIndex});
 
   bool crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
-      {required BigInt sourceNodeId,
+      {required Uint64List scopePath,
+      required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex});
@@ -1736,10 +1745,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelection(
-      {required Uint64List nodeIds, required List<WireIdentifier> wires}) {
+      {required Uint64List scopePath,
+      required Uint64List nodeIds,
+      required List<WireIdentifier> wires}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_list_prim_u_64_strict(nodeIds, serializer);
         sse_encode_list_wire_identifier(wires, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
@@ -1750,7 +1762,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelectionConstMeta,
-      argValues: [nodeIds, wires],
+      argValues: [scopePath, nodeIds, wires],
       apiImpl: this,
     ));
   }
@@ -1759,7 +1771,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiAddNodesAndWiresToSelectionConstMeta =>
           const TaskConstMeta(
             debugName: "add_nodes_and_wires_to_selection",
-            argNames: ["nodeIds", "wires"],
+            argNames: ["scopePath", "nodeIds", "wires"],
           );
 
   @override
@@ -1819,13 +1831,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   bool crateApiStructureDesignerStructureDesignerApiAddWireToSelection(
-      {required BigInt sourceNodeId,
+      {required Uint64List scopePath,
+      required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(sourceNodeId, serializer);
         sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
@@ -1839,6 +1853,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiAddWireToSelectionConstMeta,
       argValues: [
+        scopePath,
         sourceNodeId,
         sourceOutputPinIndex,
         destinationNodeId,
@@ -1853,6 +1868,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           const TaskConstMeta(
             debugName: "add_wire_to_selection",
             argNames: [
+              "scopePath",
               "sourceNodeId",
               "sourceOutputPinIndex",
               "destinationNodeId",
@@ -9010,10 +9026,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   void crateApiStructureDesignerStructureDesignerApiSelectNodesAndWires(
-      {required Uint64List nodeIds, required List<WireIdentifier> wires}) {
+      {required Uint64List scopePath,
+      required Uint64List nodeIds,
+      required List<WireIdentifier> wires}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_list_prim_u_64_strict(nodeIds, serializer);
         sse_encode_list_wire_identifier(wires, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 270)!;
@@ -9024,7 +9043,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSelectNodesAndWiresConstMeta,
-      argValues: [nodeIds, wires],
+      argValues: [scopePath, nodeIds, wires],
       apiImpl: this,
     ));
   }
@@ -9033,18 +9052,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiSelectNodesAndWiresConstMeta =>
           const TaskConstMeta(
             debugName: "select_nodes_and_wires",
-            argNames: ["nodeIds", "wires"],
+            argNames: ["scopePath", "nodeIds", "wires"],
           );
 
   @override
   bool crateApiStructureDesignerStructureDesignerApiSelectWire(
-      {required BigInt sourceNodeId,
+      {required Uint64List scopePath,
+      required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(sourceNodeId, serializer);
         sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
@@ -9058,6 +9079,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiSelectWireConstMeta,
       argValues: [
+        scopePath,
         sourceNodeId,
         sourceOutputPinIndex,
         destinationNodeId,
@@ -9072,6 +9094,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           const TaskConstMeta(
             debugName: "select_wire",
             argNames: [
+              "scopePath",
               "sourceNodeId",
               "sourceOutputPinIndex",
               "destinationNodeId",
@@ -11793,10 +11816,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   void
       crateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelection(
-          {required Uint64List nodeIds, required List<WireIdentifier> wires}) {
+          {required Uint64List scopePath,
+          required Uint64List nodeIds,
+          required List<WireIdentifier> wires}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_list_prim_u_64_strict(nodeIds, serializer);
         sse_encode_list_wire_identifier(wires, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 363)!;
@@ -11807,7 +11833,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       ),
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelectionConstMeta,
-      argValues: [nodeIds, wires],
+      argValues: [scopePath, nodeIds, wires],
       apiImpl: this,
     ));
   }
@@ -11816,7 +11842,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       get kCrateApiStructureDesignerStructureDesignerApiToggleNodesAndWiresSelectionConstMeta =>
           const TaskConstMeta(
             debugName: "toggle_nodes_and_wires_selection",
-            argNames: ["nodeIds", "wires"],
+            argNames: ["scopePath", "nodeIds", "wires"],
           );
 
   @override
@@ -11880,13 +11906,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   bool crateApiStructureDesignerStructureDesignerApiToggleWireSelection(
-      {required BigInt sourceNodeId,
+      {required Uint64List scopePath,
+      required BigInt sourceNodeId,
       required int sourceOutputPinIndex,
       required BigInt destinationNodeId,
       required BigInt destinationArgumentIndex}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(sourceNodeId, serializer);
         sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
@@ -11900,6 +11928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       constMeta:
           kCrateApiStructureDesignerStructureDesignerApiToggleWireSelectionConstMeta,
       argValues: [
+        scopePath,
         sourceNodeId,
         sourceOutputPinIndex,
         destinationNodeId,
@@ -11914,6 +11943,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           const TaskConstMeta(
             debugName: "toggle_wire_selection",
             argNames: [
+              "scopePath",
               "sourceNodeId",
               "sourceOutputPinIndex",
               "destinationNodeId",
