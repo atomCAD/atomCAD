@@ -135,9 +135,9 @@ class NodeDataWidget extends StatelessWidget {
           // anywhere in the scope tree. Body-scope selection drives the
           // property panel when the user clicked into a body. See
           // `doc/design_zones_ui.md` §"The active body".
-          final selectedNode = _findSelectedNode(model, nodeNetworkView);
+          final selected = _findSelectedNode(model, nodeNetworkView);
 
-          if (selectedNode == null) {
+          if (selected == null) {
             final description = getActiveNetworkDescription() ?? '';
             final summary = getActiveNetworkSummary() ?? '';
             return Padding(
@@ -152,11 +152,17 @@ class NodeDataWidget extends StatelessWidget {
             );
           }
 
+          // Record the selected node's resolved scope so property getters and
+          // setters address the right node even when a body node's id collides
+          // with a top-level id. A plain field assignment (no notifyListeners)
+          // during build is safe.
+          model.propertyEditorScopeChain = selected.scopeChain;
+
           // Wrap the editor widget in a SingleChildScrollView to handle tall editors
           return Padding(
             padding: const EdgeInsets.all(2.0),
             child: BlockingAwareSingleChildScrollView(
-              child: _buildNodeEditor(selectedNode, model),
+              child: _buildNodeEditor(selected.node, model),
             ),
           );
         },
@@ -166,7 +172,7 @@ class NodeDataWidget extends StatelessWidget {
 
   /// Find the selected node anywhere in the scope tree, preferring the
   /// active body's selection. Returns null if nothing is selected.
-  NodeView? _findSelectedNode(
+  ({NodeView node, List<BigInt> scopeChain})? _findSelectedNode(
     StructureDesignerModel model,
     NodeNetworkView rootView,
   ) {
@@ -186,22 +192,32 @@ class NodeDataWidget extends StatelessWidget {
       }
       if (valid) {
         for (final entry in current.entries) {
-          if (entry.value.selected) return entry.value;
+          if (entry.value.selected) {
+            return (node: entry.value, scopeChain: model.activeScopeChain);
+          }
         }
       }
     }
-    // Fall back: walk the whole tree.
-    return _findSelectedRecursive(rootView.nodes);
+    // Fall back: walk the whole tree, tracking the scope chain of the match.
+    return _findSelectedRecursive(rootView.nodes, const <BigInt>[]);
   }
 
-  NodeView? _findSelectedRecursive(Map<BigInt, NodeView> nodes) {
+  ({NodeView node, List<BigInt> scopeChain})? _findSelectedRecursive(
+    Map<BigInt, NodeView> nodes,
+    List<BigInt> scopeChain,
+  ) {
     for (final entry in nodes.entries) {
-      if (entry.value.selected) return entry.value;
+      if (entry.value.selected) {
+        return (node: entry.value, scopeChain: scopeChain);
+      }
     }
     for (final entry in nodes.entries) {
       final zone = entry.value.zone;
       if (zone == null) continue;
-      final inner = _findSelectedRecursive(zone.nodes);
+      final inner = _findSelectedRecursive(
+        zone.nodes,
+        [...scopeChain, entry.key],
+      );
       if (inner != null) return inner;
     }
     return null;
@@ -209,10 +225,14 @@ class NodeDataWidget extends StatelessWidget {
 
   // Helper method to build the appropriate editor based on node type
   Widget _buildNodeEditor(NodeView selectedNode, StructureDesignerModel model) {
+    // Scope of the node being edited (set in `build` from the resolved
+    // selection). Direct FRB getters below pass this so they resolve the right
+    // node in its body; model-routed getters read it from the model.
+    final scopePath = model.propertyEditorScopePath;
     // Based on the node type, show the appropriate editor
     switch (selectedNode.nodeTypeName) {
       case 'Comment':
-        final commentData = getCommentData(nodeId: selectedNode.id);
+        final commentData = getCommentData(scopePath: scopePath, nodeId: selectedNode.id);
         return CommentEditor(
           nodeId: selectedNode.id,
           data: commentData,
@@ -221,6 +241,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'cuboid':
         // Fetch the cuboid data here in the parent widget
         final cuboidData = getCuboidData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -232,6 +253,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'sphere':
         // Fetch the sphere data here in the parent widget
         final sphereData = getSphereData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
         return SphereEditor(
@@ -242,6 +264,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'half_space':
         // Fetch the half space data here in the parent widget
         final halfSpaceData = getHalfSpaceData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -253,6 +276,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'drawing_plane':
         // Fetch the drawing plane data here in the parent widget
         final drawingPlaneData = getDrawingPlaneData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -264,6 +288,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'geo_trans':
         // Fetch the geo transformation data here in the parent widget
         final geoTransData = getGeoTransData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -302,6 +327,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'free_move':
         // Fetch the free move data here in the parent widget
         final freeMoveData = getFreeMoveData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -313,6 +339,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'free_rot':
         // Fetch the free rotation data here in the parent widget
         final freeRotData = getFreeRotData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -324,6 +351,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'edit_atom':
         // Fetch the edit atom data here in the parent widget
         final editAtomData = getEditAtomData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -335,6 +363,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'atom_edit':
       case 'motif_edit':
         final atomEditData = getAtomEditData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -347,6 +376,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'rect':
         // Fetch the rectangle data here in the parent widget
         final rectData = getRectData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -358,6 +388,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'circle':
         // Fetch the circle data here in the parent widget
         final circleData = getCircleData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -369,6 +400,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'extrude':
         // Fetch the extrude data here in the parent widget
         final extrudeData = getExtrudeData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -380,6 +412,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'half_plane':
         // Fetch the half plane data here in the parent widget
         final halfPlaneData = getHalfPlaneData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -391,6 +424,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'reg_poly':
         // Fetch the polygon data here in the parent widget
         final regPolyData = getRegPolyData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -428,6 +462,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'map':
         // Fetch the map data here in the parent widget
         final mapData = getMapData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -438,6 +473,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'filter':
         final filterData = getFilterData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -448,6 +484,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'foreach':
         final foreachData = getForeachData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -458,6 +495,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'collect':
         final collectData = getCollectData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -468,6 +506,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'array_at':
         final arrayAtData = getArrayAtData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -478,6 +517,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'fold':
         final foldData = getFoldData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -487,7 +527,7 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'closure':
-        final closureData = getClosureData(nodeId: selectedNode.id);
+        final closureData = getClosureData(scopePath: scopePath, nodeId: selectedNode.id);
         return ClosureShapeEditor(
           title: 'Closure Properties',
           nodeTypeName: 'closure',
@@ -500,7 +540,7 @@ class NodeDataWidget extends StatelessWidget {
           ),
         );
       case 'apply':
-        final applyData = getApplyData(nodeId: selectedNode.id);
+        final applyData = getApplyData(scopePath: scopePath, nodeId: selectedNode.id);
         return ClosureShapeEditor(
           title: 'Apply Properties',
           nodeTypeName: 'apply',
@@ -522,6 +562,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'ivec3':
         // Fetch the ivec3 data here in the parent widget
         final ivec3Data = getIvec3Data(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -533,6 +574,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'ivec2':
         // Fetch the ivec2 data here in the parent widget
         final ivec2Data = getIvec2Data(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -544,6 +586,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'vec3':
         // Fetch the vec3 data here in the parent widget
         final vec3Data = getVec3Data(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -555,6 +598,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'int':
         // Fetch the int data here in the parent widget
         final intData = getIntData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -566,6 +610,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'range':
         // Fetch the range data here in the parent widget
         final rangeData = getRangeData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -576,6 +621,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'record_construct':
         final recordConstructData = getRecordConstructData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
         return RecordConstructEditor(
@@ -585,6 +631,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'record_destructure':
         final recordDestructureData = getRecordDestructureData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
         return RecordDestructureEditor(
@@ -593,7 +640,7 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'product':
-        final productData = getProductData(nodeId: selectedNode.id);
+        final productData = getProductData(scopePath: scopePath, nodeId: selectedNode.id);
         return ProductEditor(
           nodeId: selectedNode.id,
           data: productData,
@@ -602,6 +649,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'string':
         // Fetch the string data here in the parent widget
         final stringData = getStringData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -613,6 +661,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'bool':
         // Fetch the bool data here in the parent widget
         final boolData = getBoolData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -622,7 +671,7 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'print':
-        final printData = getPrintData(nodeId: selectedNode.id);
+        final printData = getPrintData(scopePath: scopePath, nodeId: selectedNode.id);
         return PrintEditor(
           nodeId: selectedNode.id,
           data: printData,
@@ -631,6 +680,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'float':
         // Fetch the float data here in the parent widget
         final floatData = getFloatData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -642,6 +692,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'vec2':
         // Fetch the vec2 data here in the parent widget
         final vec2Data = getVec2Data(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -721,6 +772,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'export_xyz':
         // Fetch the export_xyz data here in the parent widget
         final exportXyzData = getExportXyzData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -731,6 +783,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'apply_diff':
         final applyDiffData = getApplyDiffData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -741,6 +794,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'atom_composediff':
         final composeDiffData = getAtomComposediffData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -752,6 +806,7 @@ class NodeDataWidget extends StatelessWidget {
       case 'atom_cut':
         // Fetch the atom_cut data here in the parent widget
         final atomCutData = getAtomCutData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -762,6 +817,7 @@ class NodeDataWidget extends StatelessWidget {
         );
       case 'lattice_vecs':
         final latticeVecsData = getLatticeVecsData(
+          scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
@@ -771,7 +827,7 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'supercell':
-        final supercellData = getSupercellData(nodeId: selectedNode.id);
+        final supercellData = getSupercellData(scopePath: scopePath, nodeId: selectedNode.id);
 
         return SupercellEditor(
           nodeId: selectedNode.id,
@@ -781,37 +837,37 @@ class NodeDataWidget extends StatelessWidget {
       case 'imat3_rows':
         return IMat3RowsEditor(
           nodeId: selectedNode.id,
-          data: getImat3RowsData(nodeId: selectedNode.id),
+          data: getImat3RowsData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'imat3_cols':
         return IMat3ColsEditor(
           nodeId: selectedNode.id,
-          data: getImat3ColsData(nodeId: selectedNode.id),
+          data: getImat3ColsData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'imat3_diag':
         return IMat3DiagEditor(
           nodeId: selectedNode.id,
-          data: getImat3DiagData(nodeId: selectedNode.id),
+          data: getImat3DiagData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'mat3_rows':
         return Mat3RowsEditor(
           nodeId: selectedNode.id,
-          data: getMat3RowsData(nodeId: selectedNode.id),
+          data: getMat3RowsData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'mat3_cols':
         return Mat3ColsEditor(
           nodeId: selectedNode.id,
-          data: getMat3ColsData(nodeId: selectedNode.id),
+          data: getMat3ColsData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'mat3_diag':
         return Mat3DiagEditor(
           nodeId: selectedNode.id,
-          data: getMat3DiagData(nodeId: selectedNode.id),
+          data: getMat3DiagData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       default:

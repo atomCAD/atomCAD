@@ -225,14 +225,14 @@ fn structure_designer_print_log_aggregates_across_passes() {
     designer.connect_nodes(s_id, 0, p_id, 0);
     // execute_only=false so display + execute both push.
 
-    let r1 = designer.execute_node("main", p_id).expect("execute_node");
+    let r1 = designer.execute_node("main", &[],p_id).expect("execute_node");
     assert!(r1.ok);
     assert_eq!(r1.logs.len(), 1, "first execute should report 1 entry");
     assert_eq!(r1.logs[0].text, "a");
     assert_eq!(r1.logs[0].node_id, p_id);
     assert!(r1.logs[0].from_execute);
 
-    let r2 = designer.execute_node("main", p_id).expect("execute_node");
+    let r2 = designer.execute_node("main", &[],p_id).expect("execute_node");
     assert!(r2.ok);
     assert_eq!(
         r2.logs.len(),
@@ -258,7 +258,7 @@ fn structure_designer_clear_print_log_empties_buffer() {
     let p_id = designer.add_node("print", DVec2::ZERO);
     designer.connect_nodes(s_id, 0, p_id, 0);
 
-    let _ = designer.execute_node("main", p_id).expect("execute_node");
+    let _ = designer.execute_node("main", &[],p_id).expect("execute_node");
     assert_eq!(designer.print_log.len(), 1);
 
     designer.clear_print_log();
@@ -272,7 +272,7 @@ fn print_log_entry_carries_network_name_and_node_label() {
     let p_id = designer.add_node("print", DVec2::ZERO);
     designer.connect_nodes(s_id, 0, p_id, 0);
 
-    let r = designer.execute_node("main", p_id).expect("execute_node");
+    let r = designer.execute_node("main", &[],p_id).expect("execute_node");
     assert!(r.ok);
     assert_eq!(r.logs.len(), 1);
     let entry = &r.logs[0];

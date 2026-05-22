@@ -2159,13 +2159,13 @@ pub fn toggle_nodes_and_wires_selection(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_extrude_data(node_id: u64) -> Option<APIExtrudeData> {
+pub fn get_extrude_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExtrudeData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2217,13 +2217,13 @@ pub fn get_extrude_drawing_plane_miller_direction(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_int_data(node_id: u64) -> Option<APIIntData> {
+pub fn get_int_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIntData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2246,13 +2246,13 @@ pub fn get_int_data(node_id: u64) -> Option<APIIntData> {
 /// "no schema chosen yet". Returns `None` if the node does not exist or is
 /// not a `record_construct`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_construct_data(node_id: u64) -> Option<APIRecordSchemaData> {
+pub fn get_record_construct_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRecordSchemaData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let data = node_data
                     .as_any_ref()
                     .downcast_ref::<RecordConstructData>()?;
@@ -2268,13 +2268,13 @@ pub fn get_record_construct_data(node_id: u64) -> Option<APIRecordSchemaData> {
 /// Reads the `schema` property of a `record_destructure` node — same shape
 /// and semantics as `get_record_construct_data`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_destructure_data(node_id: u64) -> Option<APIRecordSchemaData> {
+pub fn get_record_destructure_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRecordSchemaData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let data = node_data
                     .as_any_ref()
                     .downcast_ref::<RecordDestructureData>()?;
@@ -2291,13 +2291,13 @@ pub fn get_record_destructure_data(node_id: u64) -> Option<APIRecordSchemaData> 
 /// `APIRecordSchemaData` (the API's `schema` field carries the target's
 /// def-name, since the Flutter dropdown is the same widget).
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_product_data(node_id: u64) -> Option<APIRecordSchemaData> {
+pub fn get_product_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRecordSchemaData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let data = node_data.as_any_ref().downcast_ref::<ProductData>()?;
                 Some(APIRecordSchemaData {
                     schema: data.target.clone(),
@@ -2309,13 +2309,13 @@ pub fn get_product_data(node_id: u64) -> Option<APIRecordSchemaData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_string_data(node_id: u64) -> Option<APIStringData> {
+pub fn get_string_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIStringData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2334,13 +2334,13 @@ pub fn get_string_data(node_id: u64) -> Option<APIStringData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_bool_data(node_id: u64) -> Option<APIBoolData> {
+pub fn get_bool_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIBoolData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2359,13 +2359,13 @@ pub fn get_bool_data(node_id: u64) -> Option<APIBoolData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_print_data(node_id: u64) -> Option<APIPrintData> {
+pub fn get_print_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPrintData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let print_data = node_data.as_any_ref().downcast_ref::<PrintData>()?;
                 Some(APIPrintData {
                     execute_only: print_data.execute_only,
@@ -2377,13 +2377,13 @@ pub fn get_print_data(node_id: u64) -> Option<APIPrintData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_float_data(node_id: u64) -> Option<APIFloatData> {
+pub fn get_float_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFloatData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2402,13 +2402,13 @@ pub fn get_float_data(node_id: u64) -> Option<APIFloatData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_ivec2_data(node_id: u64) -> Option<APIIVec2Data> {
+pub fn get_ivec2_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIVec2Data> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2427,13 +2427,13 @@ pub fn get_ivec2_data(node_id: u64) -> Option<APIIVec2Data> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_ivec3_data(node_id: u64) -> Option<APIIVec3Data> {
+pub fn get_ivec3_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIVec3Data> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2452,13 +2452,13 @@ pub fn get_ivec3_data(node_id: u64) -> Option<APIIVec3Data> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_supercell_data(node_id: u64) -> Option<APISupercellData> {
+pub fn get_supercell_data(scope_path: Vec<u64>, node_id: u64) -> Option<APISupercellData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let supercell_data = node_data.as_any_ref().downcast_ref::<SupercellData>()?;
                 let m = supercell_data.matrix;
                 Some(APISupercellData {
@@ -2473,13 +2473,13 @@ pub fn get_supercell_data(node_id: u64) -> Option<APISupercellData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_imat3_rows_data(node_id: u64) -> Option<APIIMat3RowsData> {
+pub fn get_imat3_rows_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat3RowsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let d = node_data.as_any_ref().downcast_ref::<IMat3RowsData>()?;
                 let m = d.matrix;
                 Some(APIIMat3RowsData {
@@ -2494,13 +2494,13 @@ pub fn get_imat3_rows_data(node_id: u64) -> Option<APIIMat3RowsData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_imat3_cols_data(node_id: u64) -> Option<APIIMat3ColsData> {
+pub fn get_imat3_cols_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat3ColsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let d = node_data.as_any_ref().downcast_ref::<IMat3ColsData>()?;
                 let m = d.matrix;
                 Some(APIIMat3ColsData {
@@ -2515,13 +2515,13 @@ pub fn get_imat3_cols_data(node_id: u64) -> Option<APIIMat3ColsData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_imat3_diag_data(node_id: u64) -> Option<APIIMat3DiagData> {
+pub fn get_imat3_diag_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat3DiagData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let d = node_data.as_any_ref().downcast_ref::<IMat3DiagData>()?;
                 Some(APIIMat3DiagData {
                     v: to_api_ivec3(&d.v),
@@ -2533,13 +2533,13 @@ pub fn get_imat3_diag_data(node_id: u64) -> Option<APIIMat3DiagData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_mat3_rows_data(node_id: u64) -> Option<APIMat3RowsData> {
+pub fn get_mat3_rows_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMat3RowsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let d = node_data.as_any_ref().downcast_ref::<Mat3RowsData>()?;
                 let m = d.matrix;
                 Some(APIMat3RowsData {
@@ -2554,13 +2554,13 @@ pub fn get_mat3_rows_data(node_id: u64) -> Option<APIMat3RowsData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_mat3_cols_data(node_id: u64) -> Option<APIMat3ColsData> {
+pub fn get_mat3_cols_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMat3ColsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let d = node_data.as_any_ref().downcast_ref::<Mat3ColsData>()?;
                 let m = d.matrix;
                 Some(APIMat3ColsData {
@@ -2575,13 +2575,13 @@ pub fn get_mat3_cols_data(node_id: u64) -> Option<APIMat3ColsData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_mat3_diag_data(node_id: u64) -> Option<APIMat3DiagData> {
+pub fn get_mat3_diag_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMat3DiagData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let d = node_data.as_any_ref().downcast_ref::<Mat3DiagData>()?;
                 Some(APIMat3DiagData {
                     v: to_api_vec3(&d.v),
@@ -2593,13 +2593,13 @@ pub fn get_mat3_diag_data(node_id: u64) -> Option<APIMat3DiagData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_range_data(node_id: u64) -> Option<APIRangeData> {
+pub fn get_range_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRangeData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2620,13 +2620,13 @@ pub fn get_range_data(node_id: u64) -> Option<APIRangeData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_vec2_data(node_id: u64) -> Option<APIVec2Data> {
+pub fn get_vec2_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIVec2Data> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2645,13 +2645,13 @@ pub fn get_vec2_data(node_id: u64) -> Option<APIVec2Data> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_vec3_data(node_id: u64) -> Option<APIVec3Data> {
+pub fn get_vec3_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIVec3Data> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2670,13 +2670,13 @@ pub fn get_vec3_data(node_id: u64) -> Option<APIVec3Data> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_rect_data(node_id: u64) -> Option<APIRectData> {
+pub fn get_rect_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRectData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2696,13 +2696,13 @@ pub fn get_rect_data(node_id: u64) -> Option<APIRectData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_reg_poly_data(node_id: u64) -> Option<APIRegPolyData> {
+pub fn get_reg_poly_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRegPolyData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2722,13 +2722,13 @@ pub fn get_reg_poly_data(node_id: u64) -> Option<APIRegPolyData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_circle_data(node_id: u64) -> Option<APICircleData> {
+pub fn get_circle_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICircleData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2748,13 +2748,13 @@ pub fn get_circle_data(node_id: u64) -> Option<APICircleData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_half_plane_data(node_id: u64) -> Option<APIHalfPlaneData> {
+pub fn get_half_plane_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIHalfPlaneData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2774,13 +2774,13 @@ pub fn get_half_plane_data(node_id: u64) -> Option<APIHalfPlaneData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
+pub fn get_cuboid_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICuboidData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2800,13 +2800,13 @@ pub fn get_cuboid_data(node_id: u64) -> Option<APICuboidData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_cut_data(node_id: u64) -> Option<APIAtomCutData> {
+pub fn get_atom_cut_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomCutData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2826,13 +2826,13 @@ pub fn get_atom_cut_data(node_id: u64) -> Option<APIAtomCutData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_apply_diff_data(node_id: u64) -> Option<APIApplyDiffData> {
+pub fn get_apply_diff_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIApplyDiffData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2852,13 +2852,13 @@ pub fn get_apply_diff_data(node_id: u64) -> Option<APIApplyDiffData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_composediff_data(node_id: u64) -> Option<APIAtomComposeDiffData> {
+pub fn get_atom_composediff_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomComposeDiffData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2879,13 +2879,13 @@ pub fn get_atom_composediff_data(node_id: u64) -> Option<APIAtomComposeDiffData>
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_import_xyz_data(node_id: u64) -> Option<APIImportXYZData> {
+pub fn get_import_xyz_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIImportXYZData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2904,13 +2904,13 @@ pub fn get_import_xyz_data(node_id: u64) -> Option<APIImportXYZData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_export_xyz_data(node_id: u64) -> Option<APIExportXYZData> {
+pub fn get_export_xyz_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExportXYZData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2929,13 +2929,13 @@ pub fn get_export_xyz_data(node_id: u64) -> Option<APIExportXYZData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_sphere_data(node_id: u64) -> Option<APISphereData> {
+pub fn get_sphere_data(scope_path: Vec<u64>, node_id: u64) -> Option<APISphereData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2955,13 +2955,13 @@ pub fn get_sphere_data(node_id: u64) -> Option<APISphereData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
+pub fn get_half_space_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIHalfSpaceData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -2984,13 +2984,13 @@ pub fn get_half_space_data(node_id: u64) -> Option<APIHalfSpaceData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_drawing_plane_data(node_id: u64) -> Option<APIDrawingPlaneData> {
+pub fn get_drawing_plane_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIDrawingPlaneData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3014,13 +3014,13 @@ pub fn get_drawing_plane_data(node_id: u64) -> Option<APIDrawingPlaneData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_geo_trans_data(node_id: u64) -> Option<APIGeoTransData> {
+pub fn get_geo_trans_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIGeoTransData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3054,13 +3054,13 @@ fn crystal_system_to_string(crystal_system: CrystalSystem) -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
+pub fn get_lattice_symop_data(scope_path: Vec<u64>, node_id: u64) -> Option<APILatticeSymopData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3119,13 +3119,13 @@ pub fn get_lattice_symop_data(node_id: u64) -> Option<APILatticeSymopData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_structure_move_data(node_id: u64) -> Option<APIStructureMoveData> {
+pub fn get_structure_move_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIStructureMoveData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3147,13 +3147,13 @@ pub fn get_structure_move_data(node_id: u64) -> Option<APIStructureMoveData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_structure_rot_data(node_id: u64) -> Option<APIStructureRotData> {
+pub fn get_structure_rot_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIStructureRotData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3209,13 +3209,13 @@ pub fn get_structure_rot_data(node_id: u64) -> Option<APIStructureRotData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_free_move_data(node_id: u64) -> Option<APIFreeMoveData> {
+pub fn get_free_move_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeMoveData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3234,13 +3234,13 @@ pub fn get_free_move_data(node_id: u64) -> Option<APIFreeMoveData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_free_rot_data(node_id: u64) -> Option<APIFreeRotData> {
+pub fn get_free_rot_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeRotData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3261,13 +3261,13 @@ pub fn get_free_rot_data(node_id: u64) -> Option<APIFreeRotData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
+pub fn get_edit_atom_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIEditAtomData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3313,13 +3313,13 @@ pub fn get_edit_atom_data(node_id: u64) -> Option<APIEditAtomData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_edit_data(node_id: u64) -> Option<APIAtomEditData> {
+pub fn get_atom_edit_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomEditData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3729,13 +3729,13 @@ fn compute_last_selected_result_atom_id(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
+pub fn get_parameter_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIParameterData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let parameter_data = node_data.as_any_ref().downcast_ref::<ParameterData>()?;
 
                 let api_data_type = if parameter_data.data_type == DataType::None {
@@ -3769,13 +3769,13 @@ pub fn get_parameter_data(node_id: u64) -> Option<APIParameterData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
+pub fn get_expr_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExprData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -3826,13 +3826,13 @@ pub fn get_expr_data(node_id: u64) -> Option<APIExprData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_map_data(node_id: u64) -> Option<APIMapData> {
+pub fn get_map_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMapData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let map_data = node_data.as_any_ref().downcast_ref::<MapData>()?;
 
                 Some(APIMapData {
@@ -3846,13 +3846,13 @@ pub fn get_map_data(node_id: u64) -> Option<APIMapData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_filter_data(node_id: u64) -> Option<APIFilterData> {
+pub fn get_filter_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFilterData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let filter_data = node_data.as_any_ref().downcast_ref::<FilterData>()?;
 
                 Some(APIFilterData {
@@ -3865,13 +3865,13 @@ pub fn get_filter_data(node_id: u64) -> Option<APIFilterData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_foreach_data(node_id: u64) -> Option<APIForeachData> {
+pub fn get_foreach_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIForeachData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let foreach_data = node_data.as_any_ref().downcast_ref::<ForeachData>()?;
 
                 Some(APIForeachData {
@@ -3884,13 +3884,13 @@ pub fn get_foreach_data(node_id: u64) -> Option<APIForeachData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_collect_data(node_id: u64) -> Option<APICollectData> {
+pub fn get_collect_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICollectData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let collect_data = node_data.as_any_ref().downcast_ref::<CollectData>()?;
 
                 Some(APICollectData {
@@ -3905,13 +3905,13 @@ pub fn get_collect_data(node_id: u64) -> Option<APICollectData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_array_at_data(node_id: u64) -> Option<APIArrayAtData> {
+pub fn get_array_at_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayAtData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let array_at_data = node_data.as_any_ref().downcast_ref::<ArrayAtData>()?;
 
                 Some(APIArrayAtData {
@@ -3925,13 +3925,13 @@ pub fn get_array_at_data(node_id: u64) -> Option<APIArrayAtData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_fold_data(node_id: u64) -> Option<APIFoldData> {
+pub fn get_fold_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFoldData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let fold_data = node_data.as_any_ref().downcast_ref::<FoldData>()?;
 
                 Some(APIFoldData {
@@ -3945,13 +3945,13 @@ pub fn get_fold_data(node_id: u64) -> Option<APIFoldData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_closure_data(node_id: u64) -> Option<APIClosureData> {
+pub fn get_closure_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIClosureData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let closure_data = node_data.as_any_ref().downcast_ref::<ClosureData>()?;
 
                 Some(APIClosureData {
@@ -3965,13 +3965,13 @@ pub fn get_closure_data(node_id: u64) -> Option<APIClosureData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_apply_data(node_id: u64) -> Option<APIApplyData> {
+pub fn get_apply_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIApplyData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let apply_data = node_data.as_any_ref().downcast_ref::<ApplyData>()?;
 
                 Some(APIApplyData {
@@ -3985,13 +3985,13 @@ pub fn get_apply_data(node_id: u64) -> Option<APIApplyData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_sequence_data(node_id: u64) -> Option<APISequenceData> {
+pub fn get_sequence_data(scope_path: Vec<u64>, node_id: u64) -> Option<APISequenceData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let seq_data = node_data.as_any_ref().downcast_ref::<SequenceData>()?;
 
                 Some(APISequenceData {
@@ -4005,13 +4005,13 @@ pub fn get_sequence_data(node_id: u64) -> Option<APISequenceData> {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_motif_data(node_id: u64) -> Option<APIMotifData> {
+pub fn get_motif_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMotifData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let motif_data = node_data.as_any_ref().downcast_ref::<MotifData>()?;
 
                 Some(APIMotifData {
@@ -4674,13 +4674,13 @@ pub fn set_import_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIImportXY
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_import_cif_data(node_id: u64) -> Option<APIImportCIFData> {
+pub fn get_import_cif_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIImportCIFData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -4723,13 +4723,13 @@ pub fn set_import_cif_data(scope_path: Vec<u64>, node_id: u64, data: APIImportCI
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_infer_bonds_data(node_id: u64) -> Option<APIInferBondsData> {
+pub fn get_infer_bonds_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIInferBondsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -4766,13 +4766,13 @@ pub fn set_infer_bonds_data(scope_path: Vec<u64>, node_id: u64, data: APIInferBo
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_replace_data(node_id: u64) -> Option<APIAtomReplaceData> {
+pub fn get_atom_replace_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomReplaceData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -5024,7 +5024,7 @@ fn api_literal_to_text_value(value: APILiteralValue) -> TextValue {
 /// Runs through `with_mut_cad_instance`: resolving each parameter's default
 /// (`resolve_parameter_default`) evaluates the subnetwork and needs `&mut`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APILiteralField>> {
+pub fn get_custom_node_params(scope_path: Vec<u64>, node_id: u64) -> Option<Vec<APILiteralField>> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -5034,7 +5034,7 @@ pub fn get_custom_node_params(node_id: u64) -> Option<Vec<APILiteralField>> {
                 // with this block, before the `&mut self` default-resolution
                 // pass below.
                 let (subnetwork_name, params_info) = {
-                    let network = sd.get_active_node_network()?;
+                    let network = sd.get_scope_network(&scope_path)?;
                     let node = network.nodes.get(&node_id)?;
                     // A custom node's `node_type_name` is a key in `node_networks`.
                     if !sd
@@ -5157,12 +5157,12 @@ pub fn clear_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name:
 /// Pure read — `&self`, no subnetwork evaluation. Safe to call on every
 /// panel rebuild.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_construct_fields(node_id: u64) -> Option<Vec<APILiteralField>> {
+pub fn get_record_construct_fields(scope_path: Vec<u64>, node_id: u64) -> Option<Vec<APILiteralField>> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let sd = &cad_instance.structure_designer;
-                let network = sd.get_active_node_network()?;
+                let network = sd.get_scope_network(&scope_path)?;
                 let node = network.nodes.get(&node_id)?;
                 if node.node_type_name != "record_construct" {
                     return None;
@@ -5616,13 +5616,13 @@ pub fn set_motif_data(scope_path: Vec<u64>, node_id: u64, data: APIMotifData) ->
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_materialize_data(node_id: u64) -> Option<APIMaterializeData> {
+pub fn get_materialize_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMaterializeData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let materialize_data = node_data.as_any_ref().downcast_ref::<MaterializeData>()?;
 
                 use crate::crystolecule::atomic_constants::ATOM_INFO;
@@ -5702,13 +5702,13 @@ pub fn set_materialize_data(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_motif_sub_data(node_id: u64) -> Option<APIMotifSubData> {
+pub fn get_motif_sub_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMotifSubData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let data = node_data.as_any_ref().downcast_ref::<MotifSubData>()?;
 
                 use crate::crystolecule::atomic_constants::ATOM_INFO;
@@ -6114,13 +6114,13 @@ pub fn export_visible_atomic_structures(file_path: String) -> APIResult {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_lattice_vecs_data(node_id: u64) -> Option<APILatticeVecsData> {
+pub fn get_lattice_vecs_data(scope_path: Vec<u64>, node_id: u64) -> Option<APILatticeVecsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = match cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)
+                    .get_node_network_data_scoped(&scope_path, node_id)
                 {
                     Some(data) => data,
                     None => return None,
@@ -6305,27 +6305,18 @@ pub fn set_collapse_mode(scope_path: Vec<u64>, hof_node_id: u64, mode: APICollap
 /// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
 /// around the resize drag to get a single coalesced undo entry.
 #[flutter_rust_bridge::frb(sync)]
-pub fn resize_comment_node(node_id: u64, width: f64, height: f64) {
+pub fn resize_comment_node(scope_path: Vec<u64>, node_id: u64, width: f64, height: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(network_name) = &cad_instance
+            if let Some(network) = cad_instance
                 .structure_designer
-                .active_node_network_name
-                .clone()
+                .get_scope_network_mut(&scope_path)
             {
-                if let Some(network) = cad_instance
-                    .structure_designer
-                    .node_type_registry
-                    .node_networks
-                    .get_mut(network_name)
-                {
-                    if let Some(node) = network.nodes.get_mut(&node_id) {
-                        if let Some(comment_data) =
-                            node.data.as_any_mut().downcast_mut::<CommentData>()
-                        {
-                            comment_data.width = width.max(100.0);
-                            comment_data.height = height.max(60.0);
-                        }
+                if let Some(node) = network.nodes.get_mut(&node_id) {
+                    if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>()
+                    {
+                        comment_data.width = width.max(100.0);
+                        comment_data.height = height.max(60.0);
                     }
                 }
             }
@@ -6337,27 +6328,18 @@ pub fn resize_comment_node(node_id: u64, width: f64, height: f64) {
 /// This performs a direct mutation without undo — call begin_edit_comment_node/end_edit_comment_node
 /// around the editing session to get a single coalesced undo entry.
 #[flutter_rust_bridge::frb(sync)]
-pub fn update_comment_node(node_id: u64, label: String, text: String) {
+pub fn update_comment_node(scope_path: Vec<u64>, node_id: u64, label: String, text: String) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            if let Some(network_name) = &cad_instance
+            if let Some(network) = cad_instance
                 .structure_designer
-                .active_node_network_name
-                .clone()
+                .get_scope_network_mut(&scope_path)
             {
-                if let Some(network) = cad_instance
-                    .structure_designer
-                    .node_type_registry
-                    .node_networks
-                    .get_mut(network_name)
-                {
-                    if let Some(node) = network.nodes.get_mut(&node_id) {
-                        if let Some(comment_data) =
-                            node.data.as_any_mut().downcast_mut::<CommentData>()
-                        {
-                            comment_data.label = label;
-                            comment_data.text = text;
-                        }
+                if let Some(node) = network.nodes.get_mut(&node_id) {
+                    if let Some(comment_data) = node.data.as_any_mut().downcast_mut::<CommentData>()
+                    {
+                        comment_data.label = label;
+                        comment_data.text = text;
                     }
                 }
             }
@@ -6368,10 +6350,12 @@ pub fn update_comment_node(node_id: u64, label: String, text: String) {
 /// Called when a comment node text field gains focus or resize drag begins.
 /// Captures a snapshot for undo coalescing.
 #[flutter_rust_bridge::frb(sync)]
-pub fn begin_edit_comment_node(node_id: u64) {
+pub fn begin_edit_comment_node(scope_path: Vec<u64>, node_id: u64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            cad_instance.structure_designer.begin_comment_edit(node_id);
+            cad_instance
+                .structure_designer
+                .begin_comment_edit(scope_path, node_id);
         });
     }
 }
@@ -6389,13 +6373,13 @@ pub fn end_edit_comment_node() {
 
 /// Get comment node data for property panel editing
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_comment_data(node_id: u64) -> Option<APICommentData> {
+pub fn get_comment_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICommentData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
                 let node_data = cad_instance
                     .structure_designer
-                    .get_node_network_data(node_id)?;
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
                 let comment_data = node_data.as_any_ref().downcast_ref::<CommentData>()?;
 
                 Some(APICommentData {
@@ -6459,13 +6443,17 @@ pub fn evaluate_node(
 ///   the node itself produced an error)
 /// * `Err(String)` on structural problems (missing network/node, invalid network)
 #[flutter_rust_bridge::frb(sync)]
-pub fn execute_node(network_name: String, node_id: u64) -> Result<APIExecuteResult, String> {
+pub fn execute_node(
+    network_name: String,
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Result<APIExecuteResult, String> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
                 cad_instance
                     .structure_designer
-                    .execute_node(&network_name, node_id)
+                    .execute_node(&network_name, &scope_path, node_id)
             },
             Err("CAD instance not available".to_string()),
         )

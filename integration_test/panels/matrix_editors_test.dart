@@ -5,6 +5,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import '../helpers/test_utils.dart';
 
 /// Helper to right-click and open the add-node popup.
@@ -72,7 +74,7 @@ void main() {
       model.setSelectedNode(node.id);
       await tester.pumpAndSettle();
 
-      final data = sd_api.getImat3RowsData(nodeId: node.id);
+      final data = sd_api.getImat3RowsData(scopePath: Uint64List(0), nodeId: node.id);
       expect(data, isNotNull);
       expect(data!.a.x, 1);
       expect(data.a.y, 0);
@@ -105,7 +107,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      final data = sd_api.getImat3RowsData(nodeId: node.id);
+      final data = sd_api.getImat3RowsData(scopePath: Uint64List(0), nodeId: node.id);
       expect(data?.b.z, equals(7));
       // Other cells unchanged.
       expect(data?.a.x, equals(1));
@@ -127,7 +129,7 @@ void main() {
       model.setSelectedNode(node.id);
       await tester.pumpAndSettle();
 
-      final data = sd_api.getMat3RowsData(nodeId: node.id);
+      final data = sd_api.getMat3RowsData(scopePath: Uint64List(0), nodeId: node.id);
       expect(data, isNotNull);
       expect(data!.a.x, 1.0);
       expect(data.a.y, 0.0);
@@ -155,7 +157,7 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
 
-      final data = sd_api.getMat3RowsData(nodeId: node.id);
+      final data = sd_api.getMat3RowsData(scopePath: Uint64List(0), nodeId: node.id);
       expect(data?.a.y, equals(2.5));
       // Other cells unchanged (identity defaults).
       expect(data?.a.x, equals(1.0));

@@ -1511,7 +1511,7 @@ class NodeWidget extends StatelessWidget {
       } else if (value == 'execute') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
-        runExecuteWithPlacard(context, model, node.id);
+        runExecuteWithPlacard(context, model, node.id, scopeChain: scopeChain);
       } else if (value == 'return') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
@@ -1618,8 +1618,9 @@ class NodeWidget extends StatelessWidget {
 Future<void> runExecuteWithPlacard(
   BuildContext context,
   StructureDesignerModel model,
-  BigInt nodeId,
-) async {
+  BigInt nodeId, {
+  List<BigInt> scopeChain = const [],
+}) async {
   // Capture the messenger before we await — looking it up off `context`
   // afterward is racy (the context may be unmounted by the time we surface
   // the result).
@@ -1652,7 +1653,7 @@ Future<void> runExecuteWithPlacard(
   APIExecuteResult? result;
   Object? thrown;
   try {
-    result = model.executeNode(nodeId);
+    result = model.executeNode(nodeId, scopeChain: scopeChain);
   } catch (e) {
     thrown = e;
   } finally {

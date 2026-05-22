@@ -5,6 +5,8 @@ import 'package:integration_test/integration_test.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import '../helpers/test_utils.dart';
 
 /// Helper function to simulate a right-click (secondary tap) on a finder.
@@ -185,7 +187,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify the model was updated
-      final intData = sd_api.getIntData(nodeId: node.id);
+      final intData = sd_api.getIntData(scopePath: Uint64List(0), nodeId: node.id);
       expect(intData?.value, equals(42));
     });
   });
@@ -226,7 +228,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify the model was updated
-      final floatData = sd_api.getFloatData(nodeId: node.id);
+      final floatData = sd_api.getFloatData(scopePath: Uint64List(0), nodeId: node.id);
       expect(floatData?.value, closeTo(3.14, 0.001));
     });
   });
@@ -262,14 +264,14 @@ void main() {
       await tester.pumpAndSettle();
 
       // Get initial value
-      final initialValue = sd_api.getBoolData(nodeId: node.id)?.value ?? false;
+      final initialValue = sd_api.getBoolData(scopePath: Uint64List(0), nodeId: node.id)?.value ?? false;
 
       // Click the checkbox to toggle
       await tester.tap(TestFinders.boolValueCheckbox);
       await tester.pumpAndSettle();
 
       // Verify value was toggled
-      final newValue = sd_api.getBoolData(nodeId: node.id)?.value;
+      final newValue = sd_api.getBoolData(scopePath: Uint64List(0), nodeId: node.id)?.value;
       expect(newValue, equals(!initialValue));
     });
   });
@@ -310,7 +312,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify the model was updated
-      final stringData = sd_api.getStringData(nodeId: node.id);
+      final stringData = sd_api.getStringData(scopePath: Uint64List(0), nodeId: node.id);
       expect(stringData?.value, equals('Hello World'));
     });
   });
@@ -369,7 +371,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify the model was updated
-      final vec3Data = sd_api.getVec3Data(nodeId: node.id);
+      final vec3Data = sd_api.getVec3Data(scopePath: Uint64List(0), nodeId: node.id);
       expect(vec3Data?.value.x, closeTo(1.5, 0.001));
     });
   });

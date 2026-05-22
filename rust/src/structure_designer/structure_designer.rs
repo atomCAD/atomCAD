@@ -3069,17 +3069,29 @@ impl StructureDesigner {
         }
     }
 
+    /// Resolve `node_id` against the **top-level active network only** (no
+    /// recursion into HOF zone bodies). Body-scope nodes have their own
+    /// per-body id counters, so a bare id is only unambiguous at the top level.
+    /// This is the right lookup for interactive subsystems that act on the
+    /// top-level *active* node (atom_edit / edit_atom / facet_shell / import).
+    /// The property panel, which can target a node in any scope, must use
+    /// [`get_node_network_data_scoped`] instead.
     pub fn get_node_network_data(&self, node_id: u64) -> Option<&dyn NodeData> {
-        // Search the whole scope tree under the active top-level network so
-        // body-scope per-node-type data getters (called by the property panel
-        // when a body node is selected) find their target. The lookup is
-        // ambiguous in principle — top-level and body networks each have
-        // their own id counter — but it always finds *some* node with the
-        // matching id, and the property panel's active-id flow takes care
-        // not to ask about colliding ids. Phase U4 of `doc/design_zones_ui.md`.
-        let network_name = self.active_node_network_name.as_ref()?;
-        let network = self.node_type_registry.node_networks.get(network_name)?;
-        find_node_data_recursive(network, node_id)
+        self.get_active_node_network()?
+            .get_node_network_data(node_id)
+    }
+
+    /// Scope-aware read: resolve `node_id` against the network identified by
+    /// `scope_path` (empty = top-level active network). Used by the per-node
+    /// property getters so a body node whose id collides with a top-level id is
+    /// addressed unambiguously.
+    pub fn get_node_network_data_scoped(
+        &self,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Option<&dyn NodeData> {
+        self.get_scope_network(scope_path)?
+            .get_node_network_data(node_id)
     }
 
     pub fn get_node_network_data_mut(&mut self, node_id: u64) -> Option<&mut dyn NodeData> {
@@ -3092,7 +3104,7 @@ impl StructureDesigner {
             .node_type_registry
             .node_networks
             .get_mut(&network_name)?;
-        find_node_data_mut_recursive(network, node_id)
+        network.get_node_network_data_mut(node_id)
     }
 
     pub fn get_network_evaluator(&self) -> &NetworkEvaluator {
@@ -4867,6 +4879,7 @@ impl StructureDesigner {
         if let Some(old_data_json) = self.snapshot_node_data(&network_name, node_id) {
             self.pending_gadget_drag = Some(super::undo::snapshot::PendingGadgetDrag {
                 network_name,
+                scope_path: Vec::new(),
                 node_id,
                 node_type_name,
                 old_data_json,
@@ -4888,7 +4901,7 @@ impl StructureDesigner {
                 self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                     description: format!("Edit {}", pending.node_type_name),
                     network_name: pending.network_name,
-                    scope_path: Vec::new(),
+                    scope_path: pending.scope_path,
                     node_id: pending.node_id,
                     node_type_name: pending.node_type_name,
                     old_data_json: pending.old_data_json,
@@ -4900,12 +4913,12 @@ impl StructureDesigner {
 
     /// Called when a comment node text field gains focus or resize drag begins.
     /// Captures a snapshot of the comment data before editing starts.
-    pub fn begin_comment_edit(&mut self, node_id: u64) {
+    pub fn begin_comment_edit(&mut self, scope_path: Vec<u64>, node_id: u64) {
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
         };
-        let node_type_name = match self.node_type_registry.node_networks.get(&network_name) {
+        let node_type_name = match self.get_scope_network(&scope_path) {
             Some(network) => match network.nodes.get(&node_id) {
                 Some(node) => node.node_type_name.clone(),
                 None => return,
@@ -4913,9 +4926,12 @@ impl StructureDesigner {
             None => return,
         };
 
-        if let Some(old_data_json) = self.snapshot_node_data(&network_name, node_id) {
+        if let Some(old_data_json) =
+            self.snapshot_node_data_scoped(&network_name, &scope_path, node_id)
+        {
             self.pending_comment_edit = Some(super::undo::snapshot::PendingGadgetDrag {
                 network_name,
+                scope_path,
                 node_id,
                 node_type_name,
                 old_data_json,
@@ -4931,13 +4947,16 @@ impl StructureDesigner {
             None => return,
         };
 
-        if let Some(new_data_json) = self.snapshot_node_data(&pending.network_name, pending.node_id)
-        {
+        if let Some(new_data_json) = self.snapshot_node_data_scoped(
+            &pending.network_name,
+            &pending.scope_path,
+            pending.node_id,
+        ) {
             if pending.old_data_json != new_data_json {
                 self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                     description: format!("Edit {}", pending.node_type_name),
                     network_name: pending.network_name,
-                    scope_path: Vec::new(),
+                    scope_path: pending.scope_path,
                     node_id: pending.node_id,
                     node_type_name: pending.node_type_name,
                     old_data_json: pending.old_data_json,
@@ -5504,6 +5523,7 @@ impl StructureDesigner {
     pub fn execute_node(
         &mut self,
         network_name: &str,
+        scope_path: &[u64],
         node_id: u64,
     ) -> Result<APIExecuteResult, String> {
         // Verify the network and node exist before launching the pass — keeps
@@ -5519,11 +5539,28 @@ impl StructureDesigner {
                 network_name
             ));
         }
-        if !network.nodes.contains_key(&node_id) {
+        // Resolve the target within its scope so a body node's id (which can
+        // collide with a top-level id under per-body id counters) is never
+        // matched against the wrong network.
+        let node_exists = self
+            .get_scope_network(scope_path)
+            .is_some_and(|n| n.nodes.contains_key(&node_id));
+        if !node_exists {
             return Err(format!(
                 "Node {} not found in network '{}'",
                 node_id, network_name
             ));
+        }
+        if !scope_path.is_empty() {
+            // A node inside an HOF zone body depends on per-iteration zone
+            // inputs (element / acc) that don't exist outside an iteration, so
+            // executing it in isolation is not well defined. Effect nodes
+            // nested in a body still fire via the enclosing node's Execute pass.
+            return Err(
+                "Cannot execute a node inside a higher-order-function body directly; \
+                 execute the enclosing node instead."
+                    .to_string(),
+            );
         }
 
         let network_name_owned = network_name.to_string();
@@ -6081,40 +6118,3 @@ fn find_node_data_at_scope<'a>(
     current.get_node_network_data(node_ref.node_id)
 }
 
-/// Walk [network] and every HOF body reachable from it, returning the first
-/// node with id == [node_id]. Used by `get_node_network_data` so per-node-type
-/// data getters work for body nodes in U4. The walk is depth-first; the
-/// first match wins.
-fn find_node_data_recursive(network: &NodeNetwork, node_id: u64) -> Option<&dyn NodeData> {
-    if let Some(data) = network.get_node_network_data(node_id) {
-        return Some(data);
-    }
-    for node in network.nodes.values() {
-        if let Some(zone) = node.zone.as_ref() {
-            if let Some(data) = find_node_data_recursive(zone, node_id) {
-                return Some(data);
-            }
-        }
-    }
-    None
-}
-
-/// Mutable variant of [`find_node_data_recursive`]. Each step calls
-/// `Node::zone_mut` so the `Arc<NodeNetwork>` is uniquely owned (CoW) before
-/// recursion continues.
-fn find_node_data_mut_recursive(
-    network: &mut NodeNetwork,
-    node_id: u64,
-) -> Option<&mut dyn NodeData> {
-    if network.nodes.contains_key(&node_id) {
-        return network.get_node_network_data_mut(node_id);
-    }
-    for node in network.nodes.values_mut() {
-        if let Some(zone) = node.zone_mut() {
-            if let Some(data) = find_node_data_mut_recursive(zone, node_id) {
-                return Some(data);
-            }
-        }
-    }
-    None
-}

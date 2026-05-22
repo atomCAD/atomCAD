@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -223,7 +225,9 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   }
 
   void _startResize(DragStartDetails details) {
-    sd_api.beginEditCommentNode(nodeId: widget.node.id);
+    // Comment node widgets render only at the top level (see
+    // `node_network.dart` `_appendNodesRecursive`), so the scope is empty.
+    sd_api.beginEditCommentNode(scopePath: Uint64List(0), nodeId: widget.node.id);
     setState(() {
       _isResizing = true;
       _resizeStartWidth = _width;
@@ -244,6 +248,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
         .clamp(COMMENT_MIN_HEIGHT, 1000.0);
 
     sd_api.resizeCommentNode(
+      scopePath: Uint64List(0),
       nodeId: widget.node.id,
       width: newWidth,
       height: newHeight,

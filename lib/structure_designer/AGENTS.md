@@ -51,6 +51,14 @@ Access via `Provider.of<StructureDesignerModel>(context)` or `Consumer<Structure
 
 All Rust state is fetched into `NodeNetworkView` (the model's snapshot of current network state).
 
+## Property Panel Scope (zones)
+
+A node id is **not** unique across the network: HOF zone bodies have per-body id counters, so a body node and a top-level node can share a numeric id (see `rust/AGENTS.md` → "Addressing Nodes Across Scopes"). Every Rust API that addresses a node takes a `scope_path`, so the Flutter side must always pass the **right** scope or it reads/writes the wrong node (this caused the original zones bug — clicking a body `expr` showed the outer one / spun on a null forever).
+
+- **`StructureDesignerModel.propertyEditorScopeChain`** is the scope of the node currently shown in the property panel. `NodeDataWidget.build` sets it from the *resolved selection* (`_findSelectedNode` returns `(node, scopeChain)`). All property `get*Data` / `set*Data` model methods key off `propertyEditorScopeChain` / `propertyEditorScopePath` — **not** `activeScopeChain`. The two diverge: clicking a body interior changes `activeScopeChain` (used by keyboard ops: delete / copy / paste) without changing the selection, so an ancestor node can stay selected while a different body is active.
+- A **new node property editor** that fetches data via a direct FRB `getXxxData(...)` call inside `node_data_widget.dart` must pass `scopePath: model.propertyEditorScopePath` (or `scopePath: scopePath`, the local already declared in `_buildNodeEditor`). New `model.setXxxData` / `getXxxData` wrappers must forward `propertyEditorScopeChain`, mirroring the existing ones.
+- FRB's `Uint64List` is `package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart show Uint64List`, **not** `dart:typed_data` — the analyzer treats them as distinct types at API call sites. Prefer `_scopeChainToBytes(...)` / `propertyEditorScopePath` over constructing one directly.
+
 ## Layout
 
 Three-panel layout:

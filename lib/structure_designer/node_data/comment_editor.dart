@@ -36,14 +36,18 @@ class _CommentEditorState extends State<CommentEditor> {
     _textFocusNode = FocusNode();
     _labelFocusNode.addListener(() {
       if (_labelFocusNode.hasFocus) {
-        sd_api.beginEditCommentNode(nodeId: widget.nodeId);
+        sd_api.beginEditCommentNode(
+            scopePath: widget.model.propertyEditorScopePath,
+            nodeId: widget.nodeId);
       } else {
         sd_api.endEditCommentNode();
       }
     });
     _textFocusNode.addListener(() {
       if (_textFocusNode.hasFocus) {
-        sd_api.beginEditCommentNode(nodeId: widget.nodeId);
+        sd_api.beginEditCommentNode(
+            scopePath: widget.model.propertyEditorScopePath,
+            nodeId: widget.nodeId);
       } else {
         sd_api.endEditCommentNode();
       }
@@ -61,6 +65,7 @@ class _CommentEditorState extends State<CommentEditor> {
 
   void _updateComment() {
     sd_api.updateCommentNode(
+      scopePath: widget.model.propertyEditorScopePath,
       nodeId: widget.nodeId,
       label: _labelController.text,
       text: _textController.text,

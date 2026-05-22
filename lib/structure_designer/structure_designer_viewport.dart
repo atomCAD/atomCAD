@@ -538,7 +538,8 @@ class _StructureDesignerViewportState
               .firstOrNull;
           if (selectedNode != null) {
             final data =
-                structure_designer_api.getAtomEditData(nodeId: selectedNode.id);
+                structure_designer_api.getAtomEditData(
+                    scopePath: Uint64List(0), nodeId: selectedNode.id);
             if (data != null && data.hasSelectedBonds) {
               atom_edit_api.changeSelectedBondsOrder(newOrder: bondOrder);
               widget.graphModel.refreshFromKernel();
@@ -666,8 +667,8 @@ class _StructureDesignerViewportState
           .map((entry) => entry.value)
           .firstOrNull;
       if (selectedNode != null) {
-        final data =
-            structure_designer_api.getAtomEditData(nodeId: selectedNode.id);
+        final data = structure_designer_api.getAtomEditData(
+            scopePath: Uint64List(0), nodeId: selectedNode.id);
         if (data != null && data.hasSelectedAtoms) {
           widget.graphModel.atomEditReplaceSelected(atomicNumber);
           renderingNeeded();
@@ -928,6 +929,7 @@ class _StructureDesignerViewportState
 
     if (activeAtomEditTool == APIAtomEditTool.addAtom) {
       final atomEditData = structure_designer_api.getAtomEditData(
+        scopePath: Uint64List(0),
         nodeId: selectedNode?.id ?? BigInt.zero,
       );
 
@@ -1015,6 +1017,7 @@ class _StructureDesignerViewportState
     if (activeEditAtomTool == APIEditAtomTool.addAtom) {
       // Get the atomic number from the current edit atom data
       final editAtomData = structure_designer_api.getEditAtomData(
+        scopePath: Uint64List(0),
         nodeId: selectedNode?.id ?? BigInt.zero,
       );
 

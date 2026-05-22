@@ -228,7 +228,9 @@
       "Bash(dart compile *)",
       "Bash(/c/Python311/python *)",
       "Bash(rustfmt --edition 2024 tests/structure_designer/closures_test.rs)",
-      "PowerShell(flutter analyze *)"
+      "PowerShell(flutter analyze *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\" -Recurse -Filter \"*.dart\")",
+      "Bash(Select-Object FullName)"
     ]
   }
 }

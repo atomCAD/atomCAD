@@ -225,7 +225,7 @@ fn execute_node_orchestrator_writes_file_for_export_xyz() {
     set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
 
     let api_result = designer
-        .execute_node("main", export_id)
+        .execute_node("main", &[],export_id)
         .expect("execute_node should succeed structurally");
     assert!(
         api_result.ok,
@@ -243,7 +243,7 @@ fn execute_node_orchestrator_writes_file_for_export_xyz() {
 #[test]
 fn execute_node_returns_err_for_missing_node() {
     let mut designer = setup_designer_with_network("main");
-    let result = designer.execute_node("main", 999_999);
+    let result = designer.execute_node("main", &[],999_999);
     assert!(result.is_err(), "missing node should surface as Err(_)");
 }
 

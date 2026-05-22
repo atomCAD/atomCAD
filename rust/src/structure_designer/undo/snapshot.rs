@@ -61,6 +61,9 @@ pub struct PendingZoneResize {
 #[derive(Debug, Clone)]
 pub struct PendingGadgetDrag {
     pub network_name: String,
+    /// Scope of the edited node (empty = top-level). Comment nodes can live
+    /// inside HOF zone bodies; the gadget-drag user is always top-level.
+    pub scope_path: Vec<u64>,
     pub node_id: u64,
     pub node_type_name: String,
     pub old_data_json: Value,
