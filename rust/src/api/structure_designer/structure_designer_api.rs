@@ -632,17 +632,13 @@ fn build_wires_for_network(
                         },
                     ),
                 };
-                // `is_wire_selected` only knows about same-scope NodeOutput
-                // wires — cross-scope and ZoneInput wires aren't selectable
-                // until later UI polish, so we report `false` for them.
-                let selected = matches!(incoming.source_pin, SourcePin::NodeOutput { .. })
-                    && incoming.source_scope_depth == 0
-                    && node_network.is_wire_selected(
-                        incoming.source_node_id,
-                        source_output_pin_index,
-                        node.id,
-                        index,
-                    );
+                // Full-identity match: captures (`source_scope_depth ≥ 1`) and
+                // iteration-value references (`ZoneInput` source) are selectable
+                // too, so report their `selected` flag the same as regular
+                // wires. `is_incoming_wire_selected` canonicalizes the stored
+                // identity, so any `External`-destination wire is covered.
+                let selected =
+                    node_network.is_incoming_wire_selected(incoming.source_node_id, node.id, index);
                 wires.push(WireView {
                     source_node_id: incoming.source_node_id,
                     source_output_pin_index,

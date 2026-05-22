@@ -10,6 +10,7 @@
 //! and exercises a representative subset of the new `*_scoped` mutations.
 
 use glam::f64::DVec2;
+use rust_lib_flutter_cad::structure_designer::node_network::{IncomingWire, SourcePin};
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
 fn setup_two_level_network() -> (StructureDesigner, u64) {
@@ -591,5 +592,72 @@ fn delete_selected_scoped_removes_body_wire() {
     assert!(
         !connected(&designer),
         "the body wire should be removed after a body-scope delete"
+    );
+}
+
+#[test]
+fn capture_wire_is_selectable_and_deletable_in_its_body() {
+    // The load-bearing test for "capture wires can be selected and deleted":
+    // a wire from a top-level node into a body node (source_scope_depth = 1) is
+    // stored on the body node's argument, so its selection belongs in the body
+    // and `delete_selected_scoped` on the body removes it.
+    let (mut designer, map_id) = setup_two_level_network();
+
+    // Top-level source the body will capture.
+    let k_id = designer.add_node("int", DVec2::new(0.0, 0.0));
+    // Body node with an input pin (`collect` takes an input at arg 0).
+    let body_node = designer.add_node_scoped(&[map_id], "collect", DVec2::new(10.0, 10.0), None);
+
+    // Author the capture wire by hand (depth 1, source = the top-level node).
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        let body = net.nodes.get_mut(&map_id).unwrap().zone_mut().unwrap();
+        body.nodes.get_mut(&body_node).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: k_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+    }
+
+    // Select the capture wire through the scoped API; identity is canonicalized
+    // from storage, so the depth-1 / capture shape is preserved.
+    let ok = designer.select_wire_scoped(&[map_id], k_id, 0, body_node, 0);
+    assert!(ok, "selecting a capture wire must succeed");
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert_eq!(body.selected_wires.len(), 1, "the capture wire is selected");
+    assert_eq!(
+        body.selected_wires[0].source_scope_depth, 1,
+        "the capture identity (depth 1) is preserved in the selection"
+    );
+    assert_eq!(body.selected_wires[0].source_node_id, k_id);
+    assert!(
+        body.is_incoming_wire_selected(k_id, body_node, 0),
+        "the view builder's selected-flag predicate must report the capture wire selected"
+    );
+
+    // Delete it via the body scope: the capture wire is removed, the body node
+    // and the top-level source both survive.
+    designer.delete_selected_scoped(&[map_id]);
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(
+        body.nodes.contains_key(&body_node),
+        "deleting a capture wire must not delete the body node"
+    );
+    assert!(
+        body.nodes.get(&body_node).unwrap().arguments[0]
+            .incoming_wires
+            .is_empty(),
+        "the capture wire should be removed after delete"
+    );
+    assert!(
+        designer.get_scope_network(&[]).unwrap().nodes.contains_key(&k_id),
+        "the captured top-level source node must survive"
     );
 }

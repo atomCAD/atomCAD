@@ -886,14 +886,17 @@ class NodeNetworkState extends State<NodeNetwork> {
       }
     }
 
-    // Collect selectable wires in the same scope that overlap the rectangle.
-    // Only regular same-scope wires are addressable by the selection model
-    // (see `_wireSelectable`); captures, iteration-value refs and zone-output
-    // wires are skipped.
+    // Collect wires in the same scope that overlap the rectangle. Rectangle
+    // select is limited to *regular same-scope* wires (see `_wireRectSelectable`)
+    // because `_wireOverlapsRect` resolves both endpoints in `scope`. Captures
+    // and iteration-value references (whose source lives in an ancestor scope)
+    // are still selectable by clicking directly on the wire — the click path's
+    // hit-test (`findWireAtPosition`) resolves cross-scope endpoints. Zone-output
+    // wires are never selectable.
     final scopeWires = _wiresForScope(resolver, scope);
     final List<WireView> wiresInRect = [];
     for (final wire in scopeWires) {
-      if (!_wireSelectable(wire)) continue;
+      if (!_wireRectSelectable(wire)) continue;
       if (_wireOverlapsRect(wire, rect, resolver, scope)) {
         wiresInRect.add(wire);
       }
@@ -921,11 +924,13 @@ class NodeNetworkState extends State<NodeNetwork> {
     _clearSelectionRect();
   }
 
-  /// Whether [wire] can be addressed by the selection model: a regular
-  /// same-scope output wire (or the function pin). Mirrors the painter's
-  /// `_isSelectableWire` and the Rust `build_wires_for_network` `selected`
-  /// rule. Captures, iteration-value refs and zone-output wires are excluded.
-  bool _wireSelectable(WireView wire) =>
+  /// Whether [wire] can be picked up by a *rectangle* drag: a regular
+  /// same-scope output wire (or the function pin). This is intentionally
+  /// narrower than the click path (the painter's `_isSelectableWire`, which also
+  /// accepts captures and iteration-value references): `_wireOverlapsRect`
+  /// resolves both endpoints in the drag's scope, so it can only place
+  /// same-scope wires. Cross-scope wires are selectable by clicking the wire.
+  bool _wireRectSelectable(WireView wire) =>
       wire.sourcePin is APISourcePin_NodeOutput &&
       wire.sourceScopeDepth == 0 &&
       wire.destinationArgumentKind == APIArgumentKind.external_;

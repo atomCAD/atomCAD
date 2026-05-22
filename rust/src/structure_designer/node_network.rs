@@ -1498,8 +1498,69 @@ impl NodeNetwork {
 
     // ===== WIRE SELECTION =====
 
-    /// Select a single wire (clears existing selection including nodes)
-    /// Returns true if both nodes exist and the wire was selected, false otherwise.
+    /// Resolve the legacy `(source_node_id, destination_node_id,
+    /// destination_argument_index)` key into the **full** stored [`Wire`]
+    /// identity, or `None` if no such wire is stored on that destination
+    /// argument.
+    ///
+    /// This is the single point that lets the selection model address every
+    /// `arguments`-stored wire shape — regular intra-scope wires, **captures**
+    /// (`source_scope_depth ≥ 1`, `NodeOutput` source), and **iteration-value
+    /// references** (`ZoneInput` source) — uniformly: the identity (source pin
+    /// kind, scope depth) is read back from storage rather than reconstructed
+    /// from a caller-supplied shape. The key is unambiguous because an argument
+    /// holds at most one incoming wire per `source_node_id` (the uniqueness
+    /// invariant maintained by `set_source` / `set_source_full`), so the source
+    /// pin index the caller passes is redundant for identification.
+    ///
+    /// Only `External`-destination wires live in `arguments`; zone-output
+    /// (body-return) wires are stored on the HOF's `zone_output_arguments` and
+    /// are deliberately **not** addressable here.
+    fn canonicalize_wire(
+        &self,
+        source_node_id: u64,
+        destination_node_id: u64,
+        destination_argument_index: usize,
+    ) -> Option<Wire> {
+        let dest = self.nodes.get(&destination_node_id)?;
+        let arg = dest.arguments.get(destination_argument_index)?;
+        let incoming = arg
+            .incoming_wires
+            .iter()
+            .find(|w| w.source_node_id == source_node_id)?;
+        Some(Wire {
+            source_node_id,
+            source_pin: incoming.source_pin,
+            source_scope_depth: incoming.source_scope_depth,
+            destination_node_id,
+            destination_argument_index,
+            destination_argument_kind: ArgumentKind::External,
+        })
+    }
+
+    /// True if the `External` wire incoming on `destination_node_id`'s argument
+    /// `destination_argument_index` from `source_node_id` is currently
+    /// selected. Matches the full stored identity, so captures and
+    /// iteration-value references report correctly (not just regular wires).
+    /// Backs the per-wire `selected` flag the view builder surfaces.
+    pub fn is_incoming_wire_selected(
+        &self,
+        source_node_id: u64,
+        destination_node_id: u64,
+        destination_argument_index: usize,
+    ) -> bool {
+        match self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
+        {
+            Some(wire) => self.selected_wires.contains(&wire),
+            None => false,
+        }
+    }
+
+    /// Select a single wire (clears existing selection including nodes).
+    /// Returns true if a wire with that identity is stored on the destination
+    /// argument, false otherwise. Works for regular, capture, and
+    /// iteration-value wires — the identity is canonicalized from storage
+    /// ([`canonicalize_wire`]), so `source_output_pin_index` is informational.
     pub fn select_wire(
         &mut self,
         source_node_id: u64,
@@ -1507,25 +1568,22 @@ impl NodeNetwork {
         destination_node_id: u64,
         destination_argument_index: usize,
     ) -> bool {
-        if self.nodes.contains_key(&source_node_id) && self.nodes.contains_key(&destination_node_id)
-        {
-            self.selected_node_ids.clear();
-            self.active_node_id = None;
-            self.selected_wires.clear();
-            self.selected_wires.push(Wire::node_output(
-                source_node_id,
-                source_output_pin_index,
-                destination_node_id,
-                destination_argument_index,
-            ));
-            true
-        } else {
-            false
-        }
+        let _ = source_output_pin_index;
+        let Some(wire) =
+            self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
+        else {
+            return false;
+        };
+        self.selected_node_ids.clear();
+        self.active_node_id = None;
+        self.selected_wires.clear();
+        self.selected_wires.push(wire);
+        true
     }
 
-    /// Toggle wire in selection (for Ctrl+click)
-    /// Returns true if both nodes exist, false otherwise.
+    /// Toggle wire in selection (for Ctrl+click). Returns true if a wire with
+    /// that identity is stored, false otherwise. Identity is canonicalized from
+    /// storage so captures / iteration-value references toggle correctly.
     /// Does not clear node selection to allow mixed node+wire selections.
     pub fn toggle_wire_selection(
         &mut self,
@@ -1534,20 +1592,13 @@ impl NodeNetwork {
         destination_node_id: u64,
         destination_argument_index: usize,
     ) -> bool {
-        if !self.nodes.contains_key(&source_node_id)
-            || !self.nodes.contains_key(&destination_node_id)
-        {
+        let _ = source_output_pin_index;
+        let Some(wire) =
+            self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
+        else {
             return false;
-        }
+        };
 
-        let wire = Wire::node_output(
-            source_node_id,
-            source_output_pin_index,
-            destination_node_id,
-            destination_argument_index,
-        );
-
-        // Check if wire already selected
         if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
             self.selected_wires.remove(idx);
         } else {
@@ -1556,8 +1607,9 @@ impl NodeNetwork {
         true
     }
 
-    /// Add wire to selection (for Shift+click)
-    /// Returns true if both nodes exist, false otherwise.
+    /// Add wire to selection (for Shift+click). Returns true if a wire with
+    /// that identity is stored, false otherwise. Identity is canonicalized from
+    /// storage so captures / iteration-value references add correctly.
     /// Does not clear node selection to allow mixed node+wire selections.
     pub fn add_wire_to_selection(
         &mut self,
@@ -1566,20 +1618,13 @@ impl NodeNetwork {
         destination_node_id: u64,
         destination_argument_index: usize,
     ) -> bool {
-        if !self.nodes.contains_key(&source_node_id)
-            || !self.nodes.contains_key(&destination_node_id)
-        {
+        let _ = source_output_pin_index;
+        let Some(wire) =
+            self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
+        else {
             return false;
-        }
+        };
 
-        let wire = Wire::node_output(
-            source_node_id,
-            source_output_pin_index,
-            destination_node_id,
-            destination_argument_index,
-        );
-
-        // Only add if not already selected
         if !self.selected_wires.contains(&wire) {
             self.selected_wires.push(wire);
         }
@@ -1608,44 +1653,54 @@ impl NodeNetwork {
         &self.selected_wires
     }
 
-    /// Select multiple wires (replaces current selection)
+    /// Select multiple wires (replaces current selection). Each input wire is
+    /// canonicalized from storage by its `(source, dest, arg)` key, so captures
+    /// and iteration-value references resolve to their true identity.
     pub fn select_wires(&mut self, wires: Vec<Wire>) {
         self.selected_node_ids.clear();
         self.active_node_id = None;
         self.selected_wires.clear();
-        for wire in wires {
-            if self.nodes.contains_key(&wire.source_node_id)
-                && self.nodes.contains_key(&wire.destination_node_id)
-                && !self.selected_wires.contains(&wire)
-            {
-                self.selected_wires.push(wire);
+        for w in wires {
+            if let Some(wire) = self.canonicalize_wire(
+                w.source_node_id,
+                w.destination_node_id,
+                w.destination_argument_index,
+            ) {
+                if !self.selected_wires.contains(&wire) {
+                    self.selected_wires.push(wire);
+                }
             }
         }
     }
 
-    /// Add multiple wires to selection (for Shift+rectangle)
+    /// Add multiple wires to selection (for Shift+rectangle).
     pub fn add_wires_to_selection(&mut self, wires: Vec<Wire>) {
         self.selected_node_ids.clear();
         self.active_node_id = None;
-        for wire in wires {
-            if self.nodes.contains_key(&wire.source_node_id)
-                && self.nodes.contains_key(&wire.destination_node_id)
-                && !self.selected_wires.contains(&wire)
-            {
-                self.selected_wires.push(wire);
+        for w in wires {
+            if let Some(wire) = self.canonicalize_wire(
+                w.source_node_id,
+                w.destination_node_id,
+                w.destination_argument_index,
+            ) {
+                if !self.selected_wires.contains(&wire) {
+                    self.selected_wires.push(wire);
+                }
             }
         }
     }
 
-    /// Toggle multiple wires in selection (for Ctrl+rectangle)
+    /// Toggle multiple wires in selection (for Ctrl+rectangle).
     pub fn toggle_wires_selection(&mut self, wires: Vec<Wire>) {
         self.selected_node_ids.clear();
         self.active_node_id = None;
-        for wire in wires {
-            if self.nodes.contains_key(&wire.source_node_id)
-                && self.nodes.contains_key(&wire.destination_node_id)
-            {
-                if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
+        for w in wires {
+            if let Some(wire) = self.canonicalize_wire(
+                w.source_node_id,
+                w.destination_node_id,
+                w.destination_argument_index,
+            ) {
+                if let Some(idx) = self.selected_wires.iter().position(|x| *x == wire) {
                     self.selected_wires.remove(idx);
                 } else {
                     self.selected_wires.push(wire);
@@ -1674,13 +1729,16 @@ impl NodeNetwork {
             }
         }
 
-        // Add wires
-        for wire in wires {
-            if self.nodes.contains_key(&wire.source_node_id)
-                && self.nodes.contains_key(&wire.destination_node_id)
-                && !self.selected_wires.contains(&wire)
-            {
-                self.selected_wires.push(wire);
+        // Add wires (canonicalized from storage)
+        for w in wires {
+            if let Some(wire) = self.canonicalize_wire(
+                w.source_node_id,
+                w.destination_node_id,
+                w.destination_argument_index,
+            ) {
+                if !self.selected_wires.contains(&wire) {
+                    self.selected_wires.push(wire);
+                }
             }
         }
     }
@@ -1700,13 +1758,16 @@ impl NodeNetwork {
             }
         }
 
-        // Add wires without clearing existing selection
-        for wire in wires {
-            if self.nodes.contains_key(&wire.source_node_id)
-                && self.nodes.contains_key(&wire.destination_node_id)
-                && !self.selected_wires.contains(&wire)
-            {
-                self.selected_wires.push(wire);
+        // Add wires without clearing existing selection (canonicalized)
+        for w in wires {
+            if let Some(wire) = self.canonicalize_wire(
+                w.source_node_id,
+                w.destination_node_id,
+                w.destination_argument_index,
+            ) {
+                if !self.selected_wires.contains(&wire) {
+                    self.selected_wires.push(wire);
+                }
             }
         }
     }
@@ -1731,12 +1792,14 @@ impl NodeNetwork {
             }
         }
 
-        // Toggle wires
-        for wire in wires {
-            if self.nodes.contains_key(&wire.source_node_id)
-                && self.nodes.contains_key(&wire.destination_node_id)
-            {
-                if let Some(idx) = self.selected_wires.iter().position(|w| *w == wire) {
+        // Toggle wires (canonicalized from storage)
+        for w in wires {
+            if let Some(wire) = self.canonicalize_wire(
+                w.source_node_id,
+                w.destination_node_id,
+                w.destination_argument_index,
+            ) {
+                if let Some(idx) = self.selected_wires.iter().position(|x| *x == wire) {
                     self.selected_wires.remove(idx);
                 } else {
                     self.selected_wires.push(wire);

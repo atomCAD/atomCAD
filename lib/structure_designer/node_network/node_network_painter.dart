@@ -384,16 +384,15 @@ class NodeNetworkPainter extends CustomPainter {
       ..close();
   }
 
-  /// Returns true for wires that the selection model can address: regular
-  /// same-scope output wires (and the function pin, `pin_index == -1`). These
-  /// are exactly the wires `NodeNetwork::select_wire` stores and that
-  /// `build_wires_for_network` reports a per-scope `selected` flag for.
-  /// Captures (`sourceScopeDepth > 0`), iteration-value references
-  /// (`ZoneInput` source), and zone-output (body-return) wires are excluded —
-  /// they remain non-selectable.
+  /// Returns true for wires the selection model can address by a click: any
+  /// `External`-destination wire — regular same-scope wires, the function pin
+  /// (`pin_index == -1`), **captures** (`sourceScopeDepth ≥ 1`), and
+  /// **iteration-value references** (`ZoneInput` source). All of these are
+  /// stored on a destination node's `arguments`, so the Rust side can
+  /// canonicalize their identity from storage and `delete_selected` can remove
+  /// them. Only zone-output (body-return) wires are excluded — they live on the
+  /// HOF's `zone_output_arguments`, not addressable through the selection model.
   static bool _isSelectableWire(WireView wire) =>
-      wire.sourcePin is APISourcePin_NodeOutput &&
-      wire.sourceScopeDepth == 0 &&
       wire.destinationArgumentKind == APIArgumentKind.external_;
 
   /// Hit-test wires across every scope. `position` is in screen coordinates and

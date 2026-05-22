@@ -575,8 +575,11 @@ fn test_add_wire_to_selection() {
     let float1 = designer.add_node("float", DVec2::new(0.0, 0.0));
     let float2 = designer.add_node("float", DVec2::new(0.0, 100.0));
     let union_id = designer.add_node("union", DVec2::new(200.0, 0.0));
+    // `union.shapes` is a single multi (array) pin at param index 0, so both
+    // wires land on argument 0 and are distinguished by source node id. (A
+    // second connect at index 1 would be a no-op — union has one parameter.)
     designer.connect_nodes(float1, 0, union_id, 0);
-    designer.connect_nodes(float2, 0, union_id, 1);
+    designer.connect_nodes(float2, 0, union_id, 0);
 
     let network = designer
         .node_type_registry
@@ -588,11 +591,12 @@ fn test_add_wire_to_selection() {
     network.select_wire(float1, 0, union_id, 0);
     assert_eq!(network.selected_wires.len(), 1);
 
-    // Add second wire to selection
-    assert!(network.add_wire_to_selection(float2, 0, union_id, 1));
+    // Add second wire to selection. Selection identity is canonicalized from
+    // storage, so both wires must actually exist on the destination argument.
+    assert!(network.add_wire_to_selection(float2, 0, union_id, 0));
     assert_eq!(network.selected_wires.len(), 2);
     assert!(network.is_wire_selected(float1, 0, union_id, 0));
-    assert!(network.is_wire_selected(float2, 0, union_id, 1));
+    assert!(network.is_wire_selected(float2, 0, union_id, 0));
 }
 
 #[test]
