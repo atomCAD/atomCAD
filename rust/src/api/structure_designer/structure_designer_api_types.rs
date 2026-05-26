@@ -49,6 +49,13 @@ pub enum APIDataTypeBase {
     /// with a dropdown of named defs; anonymous record types are not
     /// reachable from the UI in v1 and round-trip through `Custom` instead.
     Record,
+    /// `Iter[T]`: `children = [T]`.
+    /// See `doc/design_structural_function_and_iter_types.md`.
+    Iter,
+    /// `Function((p0, p1, ..., pN-1) -> R)`:
+    /// `children = [p0, p1, ..., pN-1, R]` (rightmost slot is the return
+    /// type). See `doc/design_structural_function_and_iter_types.md`.
+    Function,
     Custom,
 }
 
@@ -59,6 +66,11 @@ pub struct APIDataType {
     /// one of those two; `None` otherwise.
     pub custom_data_type: Option<String>,
     pub array: bool, // combined with built_in_data_type, but only redundant with custom_data_type as the outermost array is within the string in that case.
+    /// Recursive children, interpretation driven by `data_type_base`. Empty
+    /// for every base except `Iter` (one child, the element type) and
+    /// `Function` (N+1 children: params then return). See
+    /// `doc/design_structural_function_and_iter_types.md`.
+    pub children: Vec<APIDataType>,
 }
 
 pub struct InputPinView {

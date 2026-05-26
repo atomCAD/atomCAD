@@ -634,15 +634,25 @@ class APIDataType {
   final String? customDataType;
   final bool array;
 
+  /// Recursive children, interpretation driven by `data_type_base`. Empty
+  /// for every base except `Iter` (one child, the element type) and
+  /// `Function` (N+1 children: params then return). See
+  /// `doc/design_structural_function_and_iter_types.md`.
+  final List<APIDataType> children;
+
   const APIDataType({
     required this.dataTypeBase,
     this.customDataType,
     required this.array,
+    required this.children,
   });
 
   @override
   int get hashCode =>
-      dataTypeBase.hashCode ^ customDataType.hashCode ^ array.hashCode;
+      dataTypeBase.hashCode ^
+      customDataType.hashCode ^
+      array.hashCode ^
+      children.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -651,7 +661,8 @@ class APIDataType {
           runtimeType == other.runtimeType &&
           dataTypeBase == other.dataTypeBase &&
           customDataType == other.customDataType &&
-          array == other.array;
+          array == other.array &&
+          children == other.children;
 }
 
 enum APIDataTypeBase {
@@ -688,6 +699,15 @@ enum APIDataTypeBase {
   /// with a dropdown of named defs; anonymous record types are not
   /// reachable from the UI in v1 and round-trip through `Custom` instead.
   record,
+
+  /// `Iter[T]`: `children = [T]`.
+  /// See `doc/design_structural_function_and_iter_types.md`.
+  iter,
+
+  /// `Function((p0, p1, ..., pN-1) -> R)`:
+  /// `children = [p0, p1, ..., pN-1, R]` (rightmost slot is the return
+  /// type). See `doc/design_structural_function_and_iter_types.md`.
+  function,
   custom,
   ;
 }

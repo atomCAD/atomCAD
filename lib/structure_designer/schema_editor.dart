@@ -147,6 +147,7 @@ class _SchemaEditorState extends State<SchemaEditor> {
         dataTypeBase: APIDataTypeBase.int,
         customDataType: null,
         array: false,
+        children: [],
       ),
     );
     setState(() {

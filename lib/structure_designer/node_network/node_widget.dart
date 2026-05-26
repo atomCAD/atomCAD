@@ -451,6 +451,26 @@ String _apiDataTypeToString(APIDataType dt) {
     case APIDataTypeBase.record:
       base = 'Record(${dt.customDataType ?? ''})';
       break;
+    case APIDataTypeBase.iter:
+      // `children[0]` is the element type — see
+      // `doc/design_structural_function_and_iter_types.md`.
+      final element =
+          dt.children.isNotEmpty ? _apiDataTypeToString(dt.children[0]) : '?';
+      base = 'Iter[$element]';
+      break;
+    case APIDataTypeBase.function:
+      // `children = [p0, ..., pN-1, R]` — rightmost is the return type.
+      if (dt.children.isEmpty) {
+        base = 'Function';
+      } else {
+        final params = dt.children
+            .sublist(0, dt.children.length - 1)
+            .map(_apiDataTypeToString)
+            .join(', ');
+        final ret = _apiDataTypeToString(dt.children.last);
+        base = '($params) -> $ret';
+      }
+      break;
     case APIDataTypeBase.custom:
       // Custom carries the full type string in customDataType (already
       // includes any array brackets). Return it verbatim and ignore the

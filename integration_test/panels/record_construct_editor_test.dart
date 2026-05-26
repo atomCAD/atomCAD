@@ -25,6 +25,7 @@ Future<BigInt?> _setupRecordConstructWithField(
       dataType: APIDataType(
         dataTypeBase: APIDataTypeBase.float,
         array: false,
+        children: [],
       ),
     ),
   ]);

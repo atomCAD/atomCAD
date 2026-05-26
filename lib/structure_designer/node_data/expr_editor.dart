@@ -130,7 +130,8 @@ class ExprEditorState extends State<ExprEditor> {
         dataType: const APIDataType(
             dataTypeBase: APIDataTypeBase.float,
             customDataType: null,
-            array: false),
+            array: false,
+            children: []),
       ));
     _updateExprData(newParameters);
   }

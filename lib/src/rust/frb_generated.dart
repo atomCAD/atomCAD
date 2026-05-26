@@ -12527,12 +12527,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIDataType dco_decode_api_data_type(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIDataType(
       dataTypeBase: dco_decode_api_data_type_base(arr[0]),
       customDataType: dco_decode_opt_String(arr[1]),
       array: dco_decode_bool(arr[2]),
+      children: dco_decode_list_api_data_type(arr[3]),
     );
   }
 
@@ -15948,10 +15949,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_dataTypeBase = sse_decode_api_data_type_base(deserializer);
     var var_customDataType = sse_decode_opt_String(deserializer);
     var var_array = sse_decode_bool(deserializer);
+    var var_children = sse_decode_list_api_data_type(deserializer);
     return APIDataType(
         dataTypeBase: var_dataTypeBase,
         customDataType: var_customDataType,
-        array: var_array);
+        array: var_array,
+        children: var_children);
   }
 
   @protected
@@ -19951,6 +19954,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_data_type_base(self.dataTypeBase, serializer);
     sse_encode_opt_String(self.customDataType, serializer);
     sse_encode_bool(self.array, serializer);
+    sse_encode_list_api_data_type(self.children, serializer);
   }
 
   @protected

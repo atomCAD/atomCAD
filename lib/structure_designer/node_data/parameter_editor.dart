@@ -61,7 +61,8 @@ class ParameterEditorState extends State<ParameterEditor> {
                       const APIDataType(
                           dataTypeBase: APIDataTypeBase.none,
                           customDataType: null,
-                          array: false),
+                          array: false,
+                          children: []),
                   sortOrder: widget.data?.sortOrder ?? 0,
                   error: widget.data?.error,
                 ),

@@ -199,7 +199,7 @@ fn alignment_to_api(alignment: Alignment) -> APIAlignment {
     }
 }
 
-fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
+pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
     let base_type = match api_data_type.data_type_base {
         APIDataTypeBase::None => DataType::None,
         APIDataTypeBase::Bool => DataType::Bool,
@@ -240,6 +240,41 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
                 record
             });
         }
+        APIDataTypeBase::Iter => {
+            let element = api_data_type
+                .children
+                .first()
+                .ok_or_else(|| "Iter type requires one child".to_string())?;
+            let inner = api_data_type_to_data_type(element)?;
+            let base = DataType::Iterator(Box::new(inner));
+            return Ok(if api_data_type.array {
+                DataType::Array(Box::new(base))
+            } else {
+                base
+            });
+        }
+        APIDataTypeBase::Function => {
+            if api_data_type.children.is_empty() {
+                return Err(
+                    "Function type requires at least one child (the return type)".into(),
+                );
+            }
+            let n = api_data_type.children.len() - 1;
+            let parameter_types: Result<Vec<_>, _> = api_data_type.children[..n]
+                .iter()
+                .map(api_data_type_to_data_type)
+                .collect();
+            let output_type = api_data_type_to_data_type(&api_data_type.children[n])?;
+            let base = DataType::Function(crate::structure_designer::data_type::FunctionType {
+                parameter_types: parameter_types?,
+                output_type: Box::new(output_type),
+            });
+            return Ok(if api_data_type.array {
+                DataType::Array(Box::new(base))
+            } else {
+                base
+            });
+        }
         APIDataTypeBase::Custom => {
             if let Some(custom_str) = &api_data_type.custom_data_type {
                 return DataType::from_string(custom_str);
@@ -256,7 +291,7 @@ fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, S
     }
 }
 
-fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
+pub fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
     let (base_data_type, is_array) = if let DataType::Array(element_type) = data_type {
         (element_type.as_ref(), true)
     } else {
@@ -271,6 +306,34 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
             data_type_base: APIDataTypeBase::Record,
             custom_data_type: Some(name.clone()),
             array: is_array,
+            children: vec![],
+        };
+    }
+
+    // Iter[T] and Function((p..) -> R) get first-class structural variants;
+    // they must run *before* the `_ => Custom` fallback below so the UI gets
+    // the structural form rather than a free-form text string. See
+    // `doc/design_structural_function_and_iter_types.md`.
+    if let DataType::Iterator(element) = base_data_type {
+        return APIDataType {
+            data_type_base: APIDataTypeBase::Iter,
+            custom_data_type: None,
+            array: is_array,
+            children: vec![data_type_to_api_data_type(element.as_ref())],
+        };
+    }
+    if let DataType::Function(func) = base_data_type {
+        let mut children: Vec<APIDataType> = func
+            .parameter_types
+            .iter()
+            .map(data_type_to_api_data_type)
+            .collect();
+        children.push(data_type_to_api_data_type(func.output_type.as_ref()));
+        return APIDataType {
+            data_type_base: APIDataTypeBase::Function,
+            custom_data_type: None,
+            array: is_array,
+            children,
         };
     }
 
@@ -311,6 +374,7 @@ fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         data_type_base,
         custom_data_type,
         array: is_array,
+        children: vec![],
     }
 }
 
@@ -3746,6 +3810,7 @@ pub fn get_parameter_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIParam
                             data_type_base: APIDataTypeBase::Custom,
                             custom_data_type: Some(dt_str.clone()),
                             array: false, // This is inferred from the custom string itself
+                            children: vec![],
                         }
                     } else {
                         // Fallback for safety
@@ -3797,6 +3862,7 @@ pub fn get_expr_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExprData> 
                                         data_type_base: APIDataTypeBase::Custom,
                                         custom_data_type: Some(dt_str.clone()),
                                         array: false, // This is inferred from the custom string itself
+                                        children: vec![],
                                     }
                                 } else {
                                     // Fallback for safety, though this case should ideally not happen

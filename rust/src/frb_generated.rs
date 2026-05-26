@@ -10758,10 +10758,14 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_dataTypeBase = <crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase>::sse_decode(deserializer);
         let mut var_customDataType = <Option<String>>::sse_decode(deserializer);
         let mut var_array = <bool>::sse_decode(deserializer);
+        let mut var_children = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APIDataType,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIDataType {
             data_type_base: var_dataTypeBase,
             custom_data_type: var_customDataType,
             array: var_array,
+            children: var_children,
         };
     }
 }
@@ -10795,7 +10799,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 21 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure,
 22 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit,
 23 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record,
-24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter,
+25 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
+26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -15557,6 +15563,7 @@ impl flutter_rust_bridge::IntoDart
             self.data_type_base.into_into_dart().into_dart(),
             self.custom_data_type.into_into_dart().into_dart(),
             self.array.into_into_dart().into_dart(),
+            self.children.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15606,7 +15613,9 @@ impl flutter_rust_bridge::IntoDart
             Self::Structure => 21.into_dart(),
             Self::Unit => 22.into_dart(),
             Self::Record => 23.into_dart(),
-            Self::Custom => 24.into_dart(),
+            Self::Iter => 24.into_dart(),
+            Self::Function => 25.into_dart(),
+            Self::Custom => 26.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -19236,6 +19245,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         );
         <Option<String>>::sse_encode(self.custom_data_type, serializer);
         <bool>::sse_encode(self.array, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APIDataType>>::sse_encode(self.children, serializer);
     }
 }
 
@@ -19266,7 +19276,9 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::M
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure => { 21 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit => { 22 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record => { 23 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 24 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter => { 24 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 25 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 26 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

@@ -74,6 +74,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
         dataTypeBase: APIDataTypeBase.float,
         customDataType: null,
         array: false,
+        children: [],
       );
 
   /// Labels for the free type-argument slots, one per `type_args` entry
@@ -238,6 +239,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
           dataTypeBase: APIDataTypeBase.bool,
           customDataType: null,
           array: false,
+          children: [],
         );
       case APIClosureKind.fold:
         return at(0); // derived = A
@@ -246,6 +248,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
           dataTypeBase: APIDataTypeBase.unit,
           customDataType: null,
           array: false,
+          children: [],
         );
       case APIClosureKind.custom:
         return _defaultArg();

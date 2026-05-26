@@ -63,6 +63,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
                 array: newValue == APIDataTypeBase.custom
                     ? false
                     : widget.value.array,
+                children: const [],
               ));
             }
           },
@@ -81,6 +82,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
                   customDataType: newCustomType,
                   array:
                       false, // Custom types handle their own array logic via string parsing
+                  children: const [],
                 ));
               },
             ),
@@ -99,6 +101,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
                   dataTypeBase: APIDataTypeBase.record,
                   customDataType: newName,
                   array: widget.value.array,
+                  children: const [],
                 ));
               },
             ),
@@ -115,6 +118,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
                   dataTypeBase: widget.value.dataTypeBase,
                   customDataType: widget.value.customDataType,
                   array: newArrayValue,
+                  children: const [],
                 ));
               }
             },
@@ -176,6 +180,10 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Unit';
       case APIDataTypeBase.record:
         return 'Record';
+      case APIDataTypeBase.iter:
+        return 'Iter[T]';
+      case APIDataTypeBase.function:
+        return 'Function(args…) → R';
       case APIDataTypeBase.custom:
         return 'Custom...';
     }

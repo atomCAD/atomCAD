@@ -1,4 +1,10 @@
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api::{
+    api_data_type_to_data_type, data_type_to_api_data_type,
+};
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
+    APIDataType, APIDataTypeBase,
+};
+use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
 /// All phase types plus a non-phase control (Float). Used to construct the
@@ -194,4 +200,117 @@ fn new_type_names_roundtrip_through_string() {
         let parsed = DataType::from_string(name).expect("parse");
         assert_eq!(parsed.to_string(), name);
     }
+}
+
+// --- Structural Function/Iter API round-trip tests ---
+// See doc/design_structural_function_and_iter_types.md.
+
+fn roundtrip(original: DataType) -> DataType {
+    let api = data_type_to_api_data_type(&original);
+    api_data_type_to_data_type(&api).expect("API → Rust conversion succeeded")
+}
+
+#[test]
+fn iter_int_roundtrip() {
+    let original = DataType::Iterator(Box::new(DataType::Int));
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Iter);
+    assert!(!api.array);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Int);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn function_arity1_roundtrip() {
+    let original = DataType::Function(FunctionType {
+        parameter_types: vec![DataType::Int],
+        output_type: Box::new(DataType::Float),
+    });
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Function);
+    assert_eq!(api.children.len(), 2);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Int);
+    assert!(api.children[1].data_type_base == APIDataTypeBase::Float);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn function_arity0_roundtrip() {
+    // A thunk: `() -> Float`. `children = [Float]` (just the return type).
+    let original = DataType::Function(FunctionType {
+        parameter_types: vec![],
+        output_type: Box::new(DataType::Float),
+    });
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Function);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Float);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn function_arity3_roundtrip() {
+    let original = DataType::Function(FunctionType {
+        parameter_types: vec![DataType::Int, DataType::Bool, DataType::Vec3],
+        output_type: Box::new(DataType::String),
+    });
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Function);
+    assert_eq!(api.children.len(), 4);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Int);
+    assert!(api.children[1].data_type_base == APIDataTypeBase::Bool);
+    assert!(api.children[2].data_type_base == APIDataTypeBase::Vec3);
+    assert!(api.children[3].data_type_base == APIDataTypeBase::String);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn nested_iter_of_function_roundtrip() {
+    // `Iter[(Int) -> Float]` — exercises children-of-children recursion.
+    let inner_fn = DataType::Function(FunctionType {
+        parameter_types: vec![DataType::Int],
+        output_type: Box::new(DataType::Float),
+    });
+    let original = DataType::Iterator(Box::new(inner_fn));
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Iter);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Function);
+    assert_eq!(api.children[0].children.len(), 2);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn array_of_iter_roundtrip() {
+    // `Array[Iter[Int]]` — outer `array: true` on the API form combines
+    // with the structural Iter base.
+    let original = DataType::Array(Box::new(DataType::Iterator(Box::new(DataType::Int))));
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Iter);
+    assert!(api.array);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Int);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn custom_text_iter_promotes_on_back_conversion() {
+    // Start from a `Custom`-base APIDataType carrying the text `"Iter[Int]"`
+    // (the legacy escape hatch). After API → Rust → API, the structural
+    // Iter variant should win, not `Custom`. This is the "next-paint
+    // upgrade" path from §"Custom..." escape hatch interaction" in
+    // doc/design_structural_function_and_iter_types.md.
+    let starting = APIDataType {
+        data_type_base: APIDataTypeBase::Custom,
+        custom_data_type: Some("Iter[Int]".to_string()),
+        array: false,
+        children: vec![],
+    };
+    let rust = api_data_type_to_data_type(&starting).expect("parses Iter[Int]");
+    let promoted = data_type_to_api_data_type(&rust);
+    assert!(promoted.data_type_base == APIDataTypeBase::Iter);
+    assert!(promoted.custom_data_type.is_none());
+    assert_eq!(promoted.children.len(), 1);
+    assert!(promoted.children[0].data_type_base == APIDataTypeBase::Int);
 }
