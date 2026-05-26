@@ -72,6 +72,11 @@ const double BASE_HOF_BODY_TOP_OFFSET = 36.0;
 const double BASE_HOF_BODY_LEFT_OFFSET = 70.0;
 const double BASE_HOF_BODY_RIGHT_GUTTER = 70.0;
 const double BASE_HOF_BODY_BOTTOM_PADDING = 8.0;
+// Side length (logical px) of the body's bottom-right resize-handle square.
+// Used both by `_BodyResizeHandle` (the widget) and by `_findNodeAt` (so a
+// click on the handle hit-tests as "on the HOF" and doesn't start a parallel
+// rectangle-selection drag from the outer Listener).
+const double BASE_HOF_BODY_RESIZE_HANDLE_SIZE = 14.0;
 
 // Trimmed body chrome for the `closure` node. A closure has no external input
 // pins (captures arrive as ordinary capture wires drawn into the body) and its

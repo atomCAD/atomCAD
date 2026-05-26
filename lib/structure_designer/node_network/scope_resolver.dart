@@ -572,6 +572,22 @@ class ScopeResolver {
               if (_isPositionOnZonePin(node, scopeChain, screenPos)) {
                 return (scopeChain: scopeChain, node: node);
               }
+              // Bottom-right resize handle. Geometrically inside `bodyRect`,
+              // so without this check the click would fall through to "body
+              // empty space" — and the outer Listener's pointer-down handler
+              // (in `node_network.dart`) would start a rectangle-selection
+              // drag in parallel with the handle's own pan gesture, leaving
+              // a stray selection rect visible while the body resizes.
+              //
+              // The handle is only rendered when the body region is fully
+              // shown — a zoom-collapsed or `f`-overridden body has its
+              // content (incl. the handle) hidden but keeps its footprint,
+              // so guard on `!isBodyCollapsed` (which folds in compact + zoom
+              // + f-override).
+              if (!isBodyCollapsed(bodyChain) &&
+                  _isPositionOnResizeHandle(bodyRect, screenPos)) {
+                return (scopeChain: scopeChain, node: node);
+              }
               // Click is in body empty space — fall through to the next node
               // (the HOF is reported as "not hit"). Caller's right-click
               // handler will then see this as empty space and open Add Node
@@ -621,6 +637,19 @@ class ScopeResolver {
       if (hitsPin(PinKind.zoneOutput, i)) return true;
     }
     return false;
+  }
+
+  /// True if [screenPos] lands within the body's bottom-right resize handle.
+  /// Mirrors the handle's `Positioned(right: 0, bottom: 0)` placement and
+  /// `BASE_HOF_BODY_RESIZE_HANDLE_SIZE` square in `_BodyResizeHandle`
+  /// (`node_widget.dart`) — must stay in lockstep with that widget or this
+  /// hit area drifts off the visible handle.
+  bool _isPositionOnResizeHandle(Rect bodyRect, Offset screenPos) {
+    final double handleScreen = BASE_HOF_BODY_RESIZE_HANDLE_SIZE * scale;
+    return screenPos.dx >= bodyRect.right - handleScreen &&
+        screenPos.dx <= bodyRect.right &&
+        screenPos.dy >= bodyRect.bottom - handleScreen &&
+        screenPos.dy <= bodyRect.bottom;
   }
 
   /// Resolve a pin to its on-screen position and the data type the pin

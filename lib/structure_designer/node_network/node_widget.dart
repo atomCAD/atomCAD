@@ -1957,8 +1957,8 @@ class _BodyResizeHandleState extends State<_BodyResizeHandle> {
           });
         },
         child: Container(
-          width: 14,
-          height: 14,
+          width: BASE_HOF_BODY_RESIZE_HANDLE_SIZE,
+          height: BASE_HOF_BODY_RESIZE_HANDLE_SIZE,
           decoration: BoxDecoration(
             color: fillColor,
             border: Border.all(color: borderColor, width: borderWidth),
