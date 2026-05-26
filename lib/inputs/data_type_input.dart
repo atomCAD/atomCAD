@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/ui_common.dart';
-import 'package:flutter_cad/inputs/function_type_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
+import 'package:flutter_cad/inputs/type_editor_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -32,37 +32,6 @@ class _DataTypeInputState extends State<DataTypeInput> {
         array: false,
         children: [],
       );
-
-  /// Read `children[i]` with a Float fallback. Inner branches rely on the
-  /// dropdown-change handler having seeded `children` to the right shape, so
-  /// this is defensive — covers the transient case where a value arrives from
-  /// somewhere other than this widget's own writes.
-  APIDataType _childAt(int i) => (i < widget.value.children.length)
-      ? widget.value.children[i]
-      : _defaultFloat();
-
-  /// Build a new APIDataType keeping base/customDataType/array, replacing
-  /// `children`.
-  APIDataType _withChildren(List<APIDataType> children) => APIDataType(
-        dataTypeBase: widget.value.dataTypeBase,
-        customDataType: widget.value.customDataType,
-        array: widget.value.array,
-        children: children,
-      );
-
-  /// `children[0..N-1]` (the parameter types) for a Function base.
-  List<APIDataType> _functionParams() {
-    final c = widget.value.children;
-    if (c.isEmpty) return const [];
-    return c.sublist(0, c.length - 1);
-  }
-
-  /// `children[N]` (the return type) for a Function base.
-  APIDataType _functionReturn() {
-    final c = widget.value.children;
-    if (c.isEmpty) return _defaultFloat();
-    return c.last;
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,9 +71,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
               // for arity 1 (matching the closure-editor default). Switching
               // *away* from these bases drops children back to const [];
               // switching between Iter and Function replaces the seed (no
-              // carry-over). This single seeding point is what lets the inner
-              // branches treat _childAt / _functionParams / _functionReturn
-              // as total functions.
+              // carry-over). The structural editor dialog relies on
+              // `children` being well-shaped for the current base.
               final List<APIDataType> seededChildren;
               if (newValue == APIDataTypeBase.iter) {
                 seededChildren = [_defaultFloat()];
@@ -165,27 +133,17 @@ class _DataTypeInputState extends State<DataTypeInput> {
             ),
           ),
 
-        // Iter[T] branch — one nested DataTypeInput for the element type.
-        if (widget.value.dataTypeBase == APIDataTypeBase.iter)
+        // Structural Iter / Function branches: a compact summary + Edit button
+        // that pops a `DraggableDialog` hosting the full structural editor.
+        // Inline editing inside the parent column got cramped fast at depth ≥ 1
+        // (see doc/design_structural_function_and_iter_types.md §"Editor").
+        if (widget.value.dataTypeBase == APIDataTypeBase.iter ||
+            widget.value.dataTypeBase == APIDataTypeBase.function)
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
-            child: DataTypeInput(
-              label: 'Element Type',
-              value: _childAt(0),
-              onChanged: (newElement) =>
-                  widget.onChanged(_withChildren([newElement])),
-            ),
-          ),
-
-        // Function((p0,...,pN-1) -> R) branch.
-        if (widget.value.dataTypeBase == APIDataTypeBase.function)
-          Padding(
-            padding: const EdgeInsets.only(top: 8.0),
-            child: FunctionTypeInput(
-              parameterTypes: _functionParams(),
-              outputType: _functionReturn(),
-              onChanged: (params, ret) =>
-                  widget.onChanged(_withChildren([...params, ret])),
+            child: _StructuralTypeSummary(
+              value: widget.value,
+              onEdit: _openTypeEditor,
             ),
           ),
 
@@ -209,6 +167,18 @@ class _DataTypeInputState extends State<DataTypeInput> {
             dense: true,
           ),
       ],
+    );
+  }
+
+  /// Opens the structural-type editor dialog. Edits commit live through
+  /// `widget.onChanged`; the dialog closes via the X / Close button. Nested
+  /// structural types open further dialogs (each inner `DataTypeInput`
+  /// uses this same affordance).
+  void _openTypeEditor() {
+    showTypeEditorDialog(
+      context: context,
+      initialValue: widget.value,
+      onChanged: widget.onChanged,
     );
   }
 
@@ -269,6 +239,56 @@ class _DataTypeInputState extends State<DataTypeInput> {
       case APIDataTypeBase.custom:
         return 'Custom...';
     }
+  }
+}
+
+/// Compact "signature + Edit" row used by `DataTypeInput` when the base is
+/// `Iter` or `Function`. The full structural editor lives behind the Edit
+/// button (a `DraggableDialog`), keeping the parent column thin even at
+/// deep nesting. The signature is rendered by `apiDataTypeToString`.
+class _StructuralTypeSummary extends StatelessWidget {
+  final APIDataType value;
+  final VoidCallback onEdit;
+
+  const _StructuralTypeSummary({
+    required this.value,
+    required this.onEdit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: Border.all(color: theme.dividerColor),
+        borderRadius: BorderRadius.circular(4.0),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              apiDataTypeToString(value),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontFamily: 'monospace',
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          TextButton.icon(
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Edit'),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            onPressed: onEdit,
+          ),
+        ],
+      ),
+    );
   }
 }
 
