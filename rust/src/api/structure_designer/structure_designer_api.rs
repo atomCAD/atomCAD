@@ -199,6 +199,7 @@ fn alignment_to_api(alignment: Alignment) -> APIAlignment {
     }
 }
 
+#[flutter_rust_bridge::frb(ignore)]
 pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataType, String> {
     let base_type = match api_data_type.data_type_base {
         APIDataTypeBase::None => DataType::None,
@@ -291,6 +292,7 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
     }
 }
 
+#[flutter_rust_bridge::frb(ignore)]
 pub fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
     let (base_data_type, is_array) = if let DataType::Array(element_type) = data_type {
         (element_type.as_ref(), true)
@@ -591,6 +593,12 @@ fn build_node_view(
             (None, None, None, None)
         };
 
+    let closure_custom_label = node
+        .data
+        .as_any_ref()
+        .downcast_ref::<ClosureData>()
+        .and_then(|d| d.custom_label.clone());
+
     let output_type = node_type.output_type().clone();
     let function_type = node_type.get_function_type();
 
@@ -670,6 +678,7 @@ fn build_node_view(
         comment_text,
         comment_width,
         comment_height,
+        closure_custom_label,
         zone,
     })
 }
@@ -4025,6 +4034,7 @@ pub fn get_closure_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIClosure
                     kind: closure_kind_to_api_closure_kind(&closure_data.kind),
                     type_args: type_args_to_api(&closure_data.type_args),
                     param_names: closure_data.param_names.clone(),
+                    custom_label: closure_data.custom_label.clone(),
                 })
             },
             None,
@@ -5472,6 +5482,7 @@ pub fn set_closure_data(scope_path: Vec<u64>, node_id: u64, data: APIClosureData
                 kind: api_closure_kind_to_closure_kind(&data.kind),
                 type_args: api_to_type_args(&data.type_args),
                 param_names: data.param_names.clone(),
+                custom_label: data.custom_label.clone(),
             });
 
             cad_instance

@@ -534,13 +534,17 @@ class NodeDataWidget extends StatelessWidget {
           kind: closureData?.kind ?? APIClosureKind.map,
           typeArgs: closureData?.typeArgs ?? const [],
           paramNames: closureData?.paramNames ?? const [],
+          customLabel: closureData?.customLabel,
+          labelEnabled: true,
           loading: closureData == null,
-          onChanged: (kind, typeArgs, paramNames) => model.setClosureData(
+          onChanged: (kind, typeArgs, paramNames, customLabel) =>
+              model.setClosureData(
             selectedNode.id,
             APIClosureData(
               kind: kind,
               typeArgs: typeArgs,
               paramNames: paramNames,
+              customLabel: customLabel,
             ),
           ),
         );
@@ -553,7 +557,7 @@ class NodeDataWidget extends StatelessWidget {
           typeArgs: applyData?.typeArgs ?? const [],
           paramNames: applyData?.paramNames ?? const [],
           loading: applyData == null,
-          onChanged: (kind, typeArgs, paramNames) => model.setApplyData(
+          onChanged: (kind, typeArgs, paramNames, _) => model.setApplyData(
             selectedNode.id,
             APIApplyData(
               kind: kind,

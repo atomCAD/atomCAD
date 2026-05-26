@@ -828,7 +828,11 @@ class NodeWidget extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Text(
-            getSimpleName(node.nodeTypeName),
+            // A closure's user-supplied label, when present, is a much better
+            // identifier at zoomed-out scale than the bare type name "closure".
+            (node.closureCustomLabel ?? '').isNotEmpty
+                ? node.closureCustomLabel!
+                : getSimpleName(node.nodeTypeName),
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -905,6 +909,12 @@ class NodeWidget extends StatelessWidget {
                   // Expanded pushes the output pin to the node's right edge —
                   // matching the title-bar `externalOutput` endpoint math in
                   // scope_resolver (x == nodeWidth).
+                  //
+                  // A non-empty `closureCustomLabel` on the NodeView prepends a
+                  // user-supplied display label as `<label> · ƒ <sig>`. The
+                  // label is free-form (no identifier restrictions) and lives
+                  // on `ClosureData.custom_label`; absence falls back to the
+                  // signature-only title.
                   Expanded(
                     child: Tooltip(
                       message: node.nodeTypeName,
@@ -913,6 +923,24 @@ class NodeWidget extends StatelessWidget {
                       child: node.outputPins.isNotEmpty
                           ? Text.rich(
                               TextSpan(children: [
+                                if ((node.closureCustomLabel ?? '').isNotEmpty) ...[
+                                  TextSpan(
+                                    text: node.closureCustomLabel!,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: ' · ',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
                                 TextSpan(
                                   text: 'ƒ ',
                                   // Amber Function color, tying the glyph to

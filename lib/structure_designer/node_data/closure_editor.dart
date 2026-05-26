@@ -41,17 +41,28 @@ class ClosureShapeEditor extends StatefulWidget {
   /// Authored parameter names. Empty for preset kinds; length-N for `Custom`.
   final List<String> paramNames;
 
+  /// Optional user-supplied free-form display label. Only meaningful for the
+  /// `closure` node (the `apply` node passes `null` here and the editor hides
+  /// the label row). No format restrictions — distinct from the
+  /// identifier-only `Node.custom_name` used by the text format.
+  final String? customLabel;
+
   /// `true` while the backing data is still loading (shows a spinner).
   final bool loading;
 
-  /// Invoked with a fully-formed `(kind, typeArgs, paramNames)` on any edit.
-  /// The caller wraps it into the right node-data struct and pushes it
-  /// through the model.
+  /// Invoked with a fully-formed `(kind, typeArgs, paramNames, customLabel)`
+  /// on any edit. The caller wraps it into the right node-data struct and
+  /// pushes it through the model. `customLabel` is forwarded for `closure`
+  /// nodes and ignored for `apply` (which passes `null` and never reads it).
   final void Function(
     APIClosureKind kind,
     List<APIDataType> typeArgs,
     List<String> paramNames,
+    String? customLabel,
   ) onChanged;
+
+  /// `true` to render the optional label TextField (closure only).
+  final bool labelEnabled;
 
   const ClosureShapeEditor({
     super.key,
@@ -62,6 +73,8 @@ class ClosureShapeEditor extends StatefulWidget {
     required this.paramNames,
     required this.loading,
     required this.onChanged,
+    this.customLabel,
+    this.labelEnabled = false,
   });
 
   @override
@@ -170,7 +183,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
       final paramTypes = _presetParamTypes(widget.kind, widget.typeArgs);
       final ret = _presetReturnType(widget.kind, widget.typeArgs);
       final newArgs = [...paramTypes, ret];
-      widget.onChanged(newKind, newArgs, names);
+      widget.onChanged(newKind, newArgs, names, widget.customLabel);
     } else if (widget.kind == APIClosureKind.custom) {
       // Custom → preset: take the first N free slots, drop param_names and
       // any extra type_args entries. Lossy by design — undo handles the
@@ -180,7 +193,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
         for (int i = 0; i < newCount; i++)
           (i < widget.typeArgs.length) ? widget.typeArgs[i] : _defaultArg(),
       ];
-      widget.onChanged(newKind, newArgs, const <String>[]);
+      widget.onChanged(newKind, newArgs, const <String>[], widget.customLabel);
     } else {
       // Preset → preset: same overlap rule as before.
       final newCount = _argLabels(newKind).length;
@@ -188,7 +201,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
         for (int i = 0; i < newCount; i++)
           (i < widget.typeArgs.length) ? widget.typeArgs[i] : _defaultArg(),
       ];
-      widget.onChanged(newKind, newArgs, const <String>[]);
+      widget.onChanged(newKind, newArgs, const <String>[], widget.customLabel);
     }
   }
 
@@ -261,7 +274,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
     final newArgs = <APIDataType>[
       for (int j = 0; j < count; j++) (j == i) ? value : _argAt(j),
     ];
-    widget.onChanged(widget.kind, newArgs, widget.paramNames);
+    widget.onChanged(widget.kind, newArgs, widget.paramNames, widget.customLabel);
   }
 
   // ------- Custom-kind helpers -------
@@ -272,7 +285,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
     final newArgs = <APIDataType>[
       for (int j = 0; j <= n; j++) (j == i) ? value : _argAt(j),
     ];
-    widget.onChanged(widget.kind, newArgs, widget.paramNames);
+    widget.onChanged(widget.kind, newArgs, widget.paramNames, widget.customLabel);
   }
 
   /// Replace the name at param index `i`.
@@ -281,7 +294,7 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
       for (int j = 0; j < widget.paramNames.length; j++)
         (j == i) ? name : widget.paramNames[j],
     ];
-    widget.onChanged(widget.kind, widget.typeArgs, newNames);
+    widget.onChanged(widget.kind, widget.typeArgs, newNames, widget.customLabel);
   }
 
   /// Append a new parameter row with a default name and `Float` type.
@@ -295,13 +308,14 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
       returnSlot,
     ];
     final newNames = <String>[...widget.paramNames, newName];
-    widget.onChanged(widget.kind, newArgs, newNames);
+    widget.onChanged(widget.kind, newArgs, newNames, widget.customLabel);
   }
 
-  /// Remove the parameter row at index `i`.
+  /// Remove the parameter row at index `i`. Arity 0 (a thunk `() -> R`) is
+  /// legal — the substrate supports zero-arg closures and the function-type
+  /// picker has always allowed `() -> R`.
   void _removeCustomParam(int i) {
     final n = widget.paramNames.length;
-    if (n <= 1) return; // v1: arity >= 1
     final returnSlot = _argAt(n);
     final newArgs = <APIDataType>[
       for (int j = 0; j < n; j++)
@@ -312,7 +326,20 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
       for (int j = 0; j < n; j++)
         if (j != i) widget.paramNames[j],
     ];
-    widget.onChanged(widget.kind, newArgs, newNames);
+    widget.onChanged(widget.kind, newArgs, newNames, widget.customLabel);
+  }
+
+  /// Push a new label to the parent. Empty / whitespace-only strings are
+  /// normalized to `null` so the title bar falls back to signature-only.
+  void _changeCustomLabel(String raw) {
+    final trimmed = raw.trim();
+    final normalized = trimmed.isEmpty ? null : trimmed;
+    widget.onChanged(
+      widget.kind,
+      widget.typeArgs,
+      widget.paramNames,
+      normalized,
+    );
   }
 
   @override
@@ -331,6 +358,14 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
             nodeTypeName: widget.nodeTypeName,
           ),
           const SizedBox(height: 8),
+
+          if (widget.labelEnabled) ...[
+            _ClosureLabelField(
+              value: widget.customLabel ?? '',
+              onChanged: _changeCustomLabel,
+            ),
+            const SizedBox(height: 8),
+          ],
 
           // Kind selector (the shape template).
           DropdownButtonFormField<APIClosureKind>(
@@ -423,7 +458,6 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
             name: widget.paramNames[i],
             type: _argAt(i),
             duplicate: isDuplicate[i],
-            canDelete: n > 1,
             onNameChanged: (newName) => _changeCustomParamName(i, newName),
             onTypeChanged: (newType) => _changeCustomTypeArg(i, newType),
             onDelete: () => _removeCustomParam(i),
@@ -464,9 +498,6 @@ class _CustomParamRow extends StatefulWidget {
   /// `true` when this name is a duplicate of an earlier row's name.
   final bool duplicate;
 
-  /// `false` when the row is the last one (we don't allow zero-arg closures).
-  final bool canDelete;
-
   final ValueChanged<String> onNameChanged;
   final ValueChanged<APIDataType> onTypeChanged;
   final VoidCallback onDelete;
@@ -475,7 +506,6 @@ class _CustomParamRow extends StatefulWidget {
     required this.name,
     required this.type,
     required this.duplicate,
-    required this.canDelete,
     required this.onNameChanged,
     required this.onTypeChanged,
     required this.onDelete,
@@ -561,10 +591,83 @@ class _CustomParamRowState extends State<_CustomParamRow> {
         ),
         IconButton(
           icon: const Icon(Icons.delete_outline),
-          tooltip: widget.canDelete ? 'Remove parameter' : 'At least one parameter is required',
-          onPressed: widget.canDelete ? widget.onDelete : null,
+          tooltip: 'Remove parameter',
+          onPressed: widget.onDelete,
         ),
       ],
+    );
+  }
+}
+
+/// Free-form display-label TextField for the `closure` node. Commits on blur
+/// and on Enter (matches the lossy-commit cadence of the `_CustomParamRow`
+/// name field). Empty/whitespace input clears the label so the title bar
+/// falls back to signature-only.
+class _ClosureLabelField extends StatefulWidget {
+  final String value;
+  final ValueChanged<String> onChanged;
+
+  const _ClosureLabelField({
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  State<_ClosureLabelField> createState() => _ClosureLabelFieldState();
+}
+
+class _ClosureLabelFieldState extends State<_ClosureLabelField> {
+  late TextEditingController _controller;
+  late FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value);
+    _focusNode = FocusNode();
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus && _controller.text != widget.value) {
+        widget.onChanged(_controller.text);
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ClosureLabelField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && _controller.text != widget.value) {
+      final selection = _controller.selection;
+      _controller.text = widget.value;
+      if (selection.isValid && selection.end <= widget.value.length) {
+        _controller.selection = selection;
+      } else {
+        _controller.selection =
+            TextSelection.collapsed(offset: widget.value.length);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: _controller,
+      focusNode: _focusNode,
+      decoration: const InputDecoration(
+        labelText: 'Label (optional)',
+        helperText: 'Shown in the title bar before the signature',
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      onSubmitted: (value) {
+        if (value != widget.value) widget.onChanged(value);
+      },
     );
   }
 }

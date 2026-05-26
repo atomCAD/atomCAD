@@ -143,6 +143,13 @@ pub struct ClosureData {
     /// `.cnnd` files (which lack this field) loadable.
     #[serde(default)]
     pub param_names: Vec<String>,
+    /// Optional user-supplied free-form label shown in the closure's title bar
+    /// as `<label> · ƒ <signature>`. No format restrictions (spaces, unicode,
+    /// punctuation all welcome). `None` falls back to a signature-only title.
+    /// Distinct from the generic, identifier-only `Node.custom_name` used by
+    /// the text format.
+    #[serde(default)]
+    pub custom_label: Option<String>,
 }
 
 impl Default for ClosureData {
@@ -152,6 +159,7 @@ impl Default for ClosureData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Float, DataType::Float],
             param_names: vec![],
+            custom_label: None,
         }
     }
 }

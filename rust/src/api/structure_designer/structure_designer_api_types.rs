@@ -149,6 +149,11 @@ pub struct NodeView {
     pub comment_text: Option<String>,
     pub comment_width: Option<f64>,
     pub comment_height: Option<f64>,
+    /// User-supplied free-form label for `closure` nodes (populated from
+    /// `ClosureData::custom_label`). `None` for all other node types and for
+    /// closures without a label. Drives the title-bar `<label> · ƒ <sig>`
+    /// rendering.
+    pub closure_custom_label: Option<String>,
     /// Present iff this node is an HOF (the node type declares zone pins).
     /// Carries the entire body as a nested view. `None` for non-HOF nodes.
     /// Phase U3 surfaces zone-pin definitions and the body's `stored_width`/
@@ -1048,6 +1053,9 @@ pub struct APIClosureData {
     pub kind: APIClosureKind,
     pub type_args: Vec<APIDataType>,
     pub param_names: Vec<String>,
+    /// Optional free-form display label shown in the closure node's title bar.
+    /// `None` (or `Some("")`) renders the title bar as today (signature only).
+    pub custom_label: Option<String>,
 }
 
 /// Stored shape of an `apply` node — identical data to `APIClosureData`,

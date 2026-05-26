@@ -312,6 +312,7 @@ fn add_int_map_closure(
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
             param_names: vec![],
+            custom_label: None,
         }),
     );
 
@@ -607,6 +608,7 @@ fn add_int_filter_closure(
             kind: ClosureKind::Filter,
             type_args: vec![DataType::Int],
             param_names: vec![],
+            custom_label: None,
         }),
     );
 
@@ -647,6 +649,7 @@ fn add_int_fold_closure(
             kind: ClosureKind::Fold,
             type_args: vec![DataType::Int, DataType::Int],
             param_names: vec![],
+            custom_label: None,
         }),
     );
 
@@ -729,6 +732,7 @@ fn add_print_foreach_closure(designer: &mut StructureDesigner, network: &str, y:
             kind: ClosureKind::Foreach,
             type_args: vec![DataType::Int],
             param_names: vec![],
+            custom_label: None,
         }),
     );
 
@@ -1080,6 +1084,7 @@ fn closure_inside_fold_body_refreezes_capture_per_iteration() {
                 kind: ClosureKind::Map,
                 type_args: vec![DataType::Int, DataType::Int],
                 param_names: vec![],
+                custom_label: None,
             }),
         );
         let a_id = fold_body.add_node(
@@ -1327,6 +1332,7 @@ fn owner_node_id_collision_lazy_escaping_closure() {
                 kind: ClosureKind::Map,
                 type_args: vec![DataType::Int, DataType::Int],
                 param_names: vec![],
+                custom_label: None,
             }),
         );
         assert_eq!(
@@ -1605,6 +1611,7 @@ fn validation_closure_body_incomplete_rejected() {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
             param_names: vec![],
+            custom_label: None,
         }),
     );
     // No body wiring — the closure's `result` zone-output pin has no incoming
@@ -1760,6 +1767,7 @@ fn custom_kind_closure_calculate_node_type_arity3() {
             DataType::Vec3,
         ],
         param_names: vec!["x".into(), "n".into(), "flag".into()],
+        custom_label: None,
     };
     let base: NodeType = get_node_type();
     let custom = data
@@ -1812,6 +1820,7 @@ fn custom_kind_closure_calculate_node_type_arity1() {
         kind: ClosureKind::Custom,
         type_args: vec![DataType::Int, DataType::Float],
         param_names: vec!["only".into()],
+        custom_label: None,
     };
     let base: NodeType = get_node_type();
     let custom = data.calculate_custom_node_type(&base).unwrap();
@@ -1880,6 +1889,7 @@ fn custom_kind_apply_runs_custom_closure_once() {
             kind: ClosureKind::Custom,
             type_args: vec![DataType::Int, DataType::Int],
             param_names: vec!["x".into()],
+            custom_label: None,
         }),
     );
     let expr_id = add_expr_to_body(
@@ -1931,6 +1941,7 @@ fn custom_kind_repair_on_param_remove() {
             kind: ClosureKind::Custom,
             type_args: vec![DataType::Int, DataType::Int, DataType::Int],
             param_names: vec!["a".into(), "b".into()],
+            custom_label: None,
         }),
     );
     let expr_id = add_expr_to_body(
@@ -1973,6 +1984,7 @@ fn custom_kind_repair_on_param_remove() {
             kind: ClosureKind::Custom,
             type_args: vec![DataType::Int, DataType::Int],
             param_names: vec!["a".into()],
+            custom_label: None,
         }),
     );
     // Trigger the repair pass directly. (The production refresh path runs
@@ -2020,6 +2032,7 @@ fn custom_kind_cnnd_roundtrip() {
         kind: ClosureKind::Custom,
         type_args: vec![DataType::Float, DataType::Int, DataType::Bool],
         param_names: vec!["alpha".into(), "beta".into()],
+        custom_label: None,
     };
     let v = serde_json::to_value(&orig).unwrap();
     let back: ClosureData = serde_json::from_value(v).unwrap();

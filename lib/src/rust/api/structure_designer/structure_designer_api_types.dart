@@ -491,14 +491,23 @@ class APIClosureData {
   final List<APIDataType> typeArgs;
   final List<String> paramNames;
 
+  /// Optional free-form display label shown in the closure node's title bar.
+  /// `None` (or `Some("")`) renders the title bar as today (signature only).
+  final String? customLabel;
+
   const APIClosureData({
     required this.kind,
     required this.typeArgs,
     required this.paramNames,
+    this.customLabel,
   });
 
   @override
-  int get hashCode => kind.hashCode ^ typeArgs.hashCode ^ paramNames.hashCode;
+  int get hashCode =>
+      kind.hashCode ^
+      typeArgs.hashCode ^
+      paramNames.hashCode ^
+      customLabel.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -507,7 +516,8 @@ class APIClosureData {
           runtimeType == other.runtimeType &&
           kind == other.kind &&
           typeArgs == other.typeArgs &&
-          paramNames == other.paramNames;
+          paramNames == other.paramNames &&
+          customLabel == other.customLabel;
 }
 
 /// Shape template for a `closure` / `apply` node, mirroring the Rust
@@ -3100,6 +3110,12 @@ class NodeView {
   final double? commentWidth;
   final double? commentHeight;
 
+  /// User-supplied free-form label for `closure` nodes (populated from
+  /// `ClosureData::custom_label`). `None` for all other node types and for
+  /// closures without a label. Drives the title-bar `<label> · ƒ <sig>`
+  /// rendering.
+  final String? closureCustomLabel;
+
   /// Present iff this node is an HOF (the node type declares zone pins).
   /// Carries the entire body as a nested view. `None` for non-HOF nodes.
   /// Phase U3 surfaces zone-pin definitions and the body's `stored_width`/
@@ -3129,6 +3145,7 @@ class NodeView {
     this.commentText,
     this.commentWidth,
     this.commentHeight,
+    this.closureCustomLabel,
     this.zone,
   });
 
@@ -3155,6 +3172,7 @@ class NodeView {
       commentText.hashCode ^
       commentWidth.hashCode ^
       commentHeight.hashCode ^
+      closureCustomLabel.hashCode ^
       zone.hashCode;
 
   @override
@@ -3183,6 +3201,7 @@ class NodeView {
           commentText == other.commentText &&
           commentWidth == other.commentWidth &&
           commentHeight == other.commentHeight &&
+          closureCustomLabel == other.closureCustomLabel &&
           zone == other.zone;
 }
 

@@ -12463,12 +12463,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIClosureData dco_decode_api_closure_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIClosureData(
       kind: dco_decode_api_closure_kind(arr[0]),
       typeArgs: dco_decode_list_api_data_type(arr[1]),
       paramNames: dco_decode_list_String(arr[2]),
+      customLabel: dco_decode_opt_String(arr[3]),
     );
   }
 
@@ -14723,8 +14724,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 22)
-      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
+    if (arr.length != 23)
+      throw Exception('unexpected arr length: expect 23 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -14747,7 +14748,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       commentText: dco_decode_opt_String(arr[18]),
       commentWidth: dco_decode_opt_box_autoadd_f_64(arr[19]),
       commentHeight: dco_decode_opt_box_autoadd_f_64(arr[20]),
-      zone: dco_decode_opt_box_autoadd_zone_view(arr[21]),
+      closureCustomLabel: dco_decode_opt_String(arr[21]),
+      zone: dco_decode_opt_box_autoadd_zone_view(arr[22]),
     );
   }
 
@@ -15896,8 +15898,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_kind = sse_decode_api_closure_kind(deserializer);
     var var_typeArgs = sse_decode_list_api_data_type(deserializer);
     var var_paramNames = sse_decode_list_String(deserializer);
+    var var_customLabel = sse_decode_opt_String(deserializer);
     return APIClosureData(
-        kind: var_kind, typeArgs: var_typeArgs, paramNames: var_paramNames);
+        kind: var_kind,
+        typeArgs: var_typeArgs,
+        paramNames: var_paramNames,
+        customLabel: var_customLabel);
   }
 
   @protected
@@ -18328,6 +18334,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_commentText = sse_decode_opt_String(deserializer);
     var var_commentWidth = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_commentHeight = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_closureCustomLabel = sse_decode_opt_String(deserializer);
     var var_zone = sse_decode_opt_box_autoadd_zone_view(deserializer);
     return NodeView(
         id: var_id,
@@ -18351,6 +18358,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         commentText: var_commentText,
         commentWidth: var_commentWidth,
         commentHeight: var_commentHeight,
+        closureCustomLabel: var_closureCustomLabel,
         zone: var_zone);
   }
 
@@ -19905,6 +19913,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_closure_kind(self.kind, serializer);
     sse_encode_list_api_data_type(self.typeArgs, serializer);
     sse_encode_list_String(self.paramNames, serializer);
+    sse_encode_opt_String(self.customLabel, serializer);
   }
 
   @protected
@@ -21986,6 +21995,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.commentText, serializer);
     sse_encode_opt_box_autoadd_f_64(self.commentWidth, serializer);
     sse_encode_opt_box_autoadd_f_64(self.commentHeight, serializer);
+    sse_encode_opt_String(self.closureCustomLabel, serializer);
     sse_encode_opt_box_autoadd_zone_view(self.zone, serializer);
   }
 

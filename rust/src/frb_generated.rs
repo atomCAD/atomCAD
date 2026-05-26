@@ -10671,10 +10671,12 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             crate::api::structure_designer::structure_designer_api_types::APIDataType,
         >>::sse_decode(deserializer);
         let mut var_paramNames = <Vec<String>>::sse_decode(deserializer);
+        let mut var_customLabel = <Option<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIClosureData {
             kind: var_kind,
             type_args: var_typeArgs,
             param_names: var_paramNames,
+            custom_label: var_customLabel,
         };
     }
 }
@@ -12953,6 +12955,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_commentText = <Option<String>>::sse_decode(deserializer);
         let mut var_commentWidth = <Option<f64>>::sse_decode(deserializer);
         let mut var_commentHeight = <Option<f64>>::sse_decode(deserializer);
+        let mut var_closureCustomLabel = <Option<String>>::sse_decode(deserializer);
         let mut var_zone = <Option<
             crate::api::structure_designer::structure_designer_api_types::ZoneView,
         >>::sse_decode(deserializer);
@@ -12978,6 +12981,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             comment_text: var_commentText,
             comment_width: var_commentWidth,
             comment_height: var_commentHeight,
+            closure_custom_label: var_closureCustomLabel,
             zone: var_zone,
         };
     }
@@ -15393,6 +15397,7 @@ impl flutter_rust_bridge::IntoDart
             self.kind.into_into_dart().into_dart(),
             self.type_args.into_into_dart().into_dart(),
             self.param_names.into_into_dart().into_dart(),
+            self.custom_label.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -18508,6 +18513,7 @@ impl flutter_rust_bridge::IntoDart
             self.comment_text.into_into_dart().into_dart(),
             self.comment_width.into_into_dart().into_dart(),
             self.comment_height.into_into_dart().into_dart(),
+            self.closure_custom_label.into_into_dart().into_dart(),
             self.zone.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -19181,6 +19187,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         );
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIDataType>>::sse_encode(self.type_args, serializer);
         <Vec<String>>::sse_encode(self.param_names, serializer);
+        <Option<String>>::sse_encode(self.custom_label, serializer);
     }
 }
 
@@ -20840,6 +20847,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <Option<String>>::sse_encode(self.comment_text, serializer);
         <Option<f64>>::sse_encode(self.comment_width, serializer);
         <Option<f64>>::sse_encode(self.comment_height, serializer);
+        <Option<String>>::sse_encode(self.closure_custom_label, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::ZoneView>>::sse_encode(self.zone, serializer);
     }
 }

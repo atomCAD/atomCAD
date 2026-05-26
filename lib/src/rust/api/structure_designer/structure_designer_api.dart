@@ -9,7 +9,8 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_data_type_to_data_type`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_api_data_type`, `data_type_to_simple_param_type`, `network_result_to_api_literal`, `param_element_color_u32`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `text_value_to_api_literal`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`
+// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `network_result_to_api_literal`, `param_element_color_u32`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `text_value_to_api_literal`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `api_data_type_to_data_type`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
