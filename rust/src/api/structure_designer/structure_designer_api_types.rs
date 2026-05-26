@@ -1020,15 +1020,22 @@ pub enum APIClosureKind {
     Fold,
     /// `(T) -> Unit` — foreach-like. `type_args`: `[T]`.
     Foreach,
+    /// Arbitrary `(p0, p1, ..., pN-1) -> R`. Arity N is derived from the
+    /// parallel `param_names` length; param types live at `type_args[0..N]`,
+    /// return type at `type_args[N]`.
+    Custom,
 }
 
 /// Stored shape of a `closure` node: the kind plus the free type args that
-/// fill it (1 or 2 entries, by kind). The `closure` node expands this *inward*
-/// (zone-input pins for the params, one zone-output pin, and a `Function`
-/// output pin); `APIApplyData` carries the same data expanded *outward*.
+/// fill it. The `closure` node expands this *inward* (zone-input pins for
+/// the params, one zone-output pin, and a `Function` output pin);
+/// `APIApplyData` carries the same data expanded *outward*. For preset
+/// kinds `param_names` is empty (names come from the kind's static table);
+/// for `Custom` it carries the authored parameter names.
 pub struct APIClosureData {
     pub kind: APIClosureKind,
     pub type_args: Vec<APIDataType>,
+    pub param_names: Vec<String>,
 }
 
 /// Stored shape of an `apply` node — identical data to `APIClosureData`,
@@ -1037,6 +1044,7 @@ pub struct APIClosureData {
 pub struct APIApplyData {
     pub kind: APIClosureKind,
     pub type_args: Vec<APIDataType>,
+    pub param_names: Vec<String>,
 }
 
 pub struct APIArrayAtData {

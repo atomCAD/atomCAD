@@ -320,6 +320,7 @@ fn api_closure_kind_to_closure_kind(kind: &APIClosureKind) -> ClosureKind {
         APIClosureKind::Filter => ClosureKind::Filter,
         APIClosureKind::Fold => ClosureKind::Fold,
         APIClosureKind::Foreach => ClosureKind::Foreach,
+        APIClosureKind::Custom => ClosureKind::Custom,
     }
 }
 
@@ -329,6 +330,7 @@ fn closure_kind_to_api_closure_kind(kind: &ClosureKind) -> APIClosureKind {
         ClosureKind::Filter => APIClosureKind::Filter,
         ClosureKind::Fold => APIClosureKind::Fold,
         ClosureKind::Foreach => APIClosureKind::Foreach,
+        ClosureKind::Custom => APIClosureKind::Custom,
     }
 }
 
@@ -3956,6 +3958,7 @@ pub fn get_closure_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIClosure
                 Some(APIClosureData {
                     kind: closure_kind_to_api_closure_kind(&closure_data.kind),
                     type_args: type_args_to_api(&closure_data.type_args),
+                    param_names: closure_data.param_names.clone(),
                 })
             },
             None,
@@ -3976,6 +3979,7 @@ pub fn get_apply_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIApplyData
                 Some(APIApplyData {
                     kind: closure_kind_to_api_closure_kind(&apply_data.kind),
                     type_args: type_args_to_api(&apply_data.type_args),
+                    param_names: apply_data.param_names.clone(),
                 })
             },
             None,
@@ -5401,6 +5405,7 @@ pub fn set_closure_data(scope_path: Vec<u64>, node_id: u64, data: APIClosureData
             let closure_data = Box::new(ClosureData {
                 kind: api_closure_kind_to_closure_kind(&data.kind),
                 type_args: api_to_type_args(&data.type_args),
+                param_names: data.param_names.clone(),
             });
 
             cad_instance
@@ -5418,6 +5423,7 @@ pub fn set_apply_data(scope_path: Vec<u64>, node_id: u64, data: APIApplyData) {
             let apply_data = Box::new(ApplyData {
                 kind: api_closure_kind_to_closure_kind(&data.kind),
                 type_args: api_to_type_args(&data.type_args),
+                param_names: data.param_names.clone(),
             });
 
             cad_instance

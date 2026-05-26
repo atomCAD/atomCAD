@@ -10383,9 +10383,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_typeArgs = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIDataType,
         >>::sse_decode(deserializer);
+        let mut var_paramNames = <Vec<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIApplyData {
             kind: var_kind,
             type_args: var_typeArgs,
+            param_names: var_paramNames,
         };
     }
 }
@@ -10668,9 +10670,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_typeArgs = <Vec<
             crate::api::structure_designer::structure_designer_api_types::APIDataType,
         >>::sse_decode(deserializer);
+        let mut var_paramNames = <Vec<String>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIClosureData {
             kind: var_kind,
             type_args: var_typeArgs,
+            param_names: var_paramNames,
         };
     }
 }
@@ -10684,6 +10688,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 1 => crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Filter,
 2 => crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Fold,
 3 => crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Foreach,
+4 => crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Custom,
             _ => unreachable!("Invalid variant for APIClosureKind: {}", inner),
         };
     }
@@ -14902,6 +14907,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.kind.into_into_dart().into_dart(),
             self.type_args.into_into_dart().into_dart(),
+            self.param_names.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15380,6 +15386,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.kind.into_into_dart().into_dart(),
             self.type_args.into_into_dart().into_dart(),
+            self.param_names.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -15409,6 +15416,7 @@ impl flutter_rust_bridge::IntoDart
             Self::Filter => 1.into_dart(),
             Self::Fold => 2.into_dart(),
             Self::Foreach => 3.into_dart(),
+            Self::Custom => 4.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -18959,6 +18967,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
             self.kind, serializer,
         );
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIDataType>>::sse_encode(self.type_args, serializer);
+        <Vec<String>>::sse_encode(self.param_names, serializer);
     }
 }
 
@@ -19162,6 +19171,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
             self.kind, serializer,
         );
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIDataType>>::sse_encode(self.type_args, serializer);
+        <Vec<String>>::sse_encode(self.param_names, serializer);
     }
 }
 
@@ -19172,6 +19182,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Filter => { 1 }
 crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Fold => { 2 }
 crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Foreach => { 3 }
+crate::api::structure_designer::structure_designer_api_types::APIClosureKind::Custom => { 4 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

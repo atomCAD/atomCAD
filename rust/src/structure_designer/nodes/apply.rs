@@ -33,11 +33,16 @@ use std::collections::HashMap;
 
 /// Stored state for an `apply` node. Identical in shape to `ClosureData`: the
 /// shape template (which fixes arity and which slots are free) plus the free
-/// type arguments. See `nodes/closure.rs` for the kind semantics.
+/// type arguments and authored parameter names (used only by the `Custom`
+/// kind). See `nodes/closure.rs` for the kind semantics.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApplyData {
     pub kind: ClosureKind,
     pub type_args: Vec<DataType>,
+    /// Authored parameter names. **Empty for preset kinds** and length-N
+    /// for `Custom`. `#[serde(default)]` keeps older `.cnnd` files loadable.
+    #[serde(default)]
+    pub param_names: Vec<String>,
 }
 
 impl Default for ApplyData {
@@ -46,6 +51,7 @@ impl Default for ApplyData {
         Self {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Float, DataType::Float],
+            param_names: vec![],
         }
     }
 }
@@ -61,9 +67,9 @@ impl NodeData for ApplyData {
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         let mut custom = base_node_type.clone();
 
-        let params = self.kind.param_types(&self.type_args);
-        let ret = self.kind.return_type(&self.type_args);
-        let param_names = self.kind.param_names();
+        let params = self.kind.param_types(&self.type_args, &self.param_names);
+        let ret = self.kind.return_type(&self.type_args, &self.param_names);
+        let param_names = self.kind.param_names(&self.param_names);
 
         // External pins: a required `f: Function(...)` followed by one ordinary
         // input pin per function parameter. `apply` owns no zone.
@@ -76,10 +82,13 @@ impl NodeData for ApplyData {
             }),
         }];
         for (i, t) in params.iter().enumerate() {
-            let name = param_names.get(i).copied().unwrap_or("element");
+            let name = param_names
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| "element".to_string());
             parameters.push(Parameter {
                 id: None,
-                name: name.to_string(),
+                name,
                 data_type: t.clone(),
             });
         }
@@ -119,7 +128,10 @@ impl NodeData for ApplyData {
 
         // b. Resolve the argument pins (indices 1..1+arity) against the outer
         // context, before the body is pushed.
-        let arity = self.kind.param_types(&self.type_args).len();
+        let arity = self
+            .kind
+            .param_types(&self.type_args, &self.param_names)
+            .len();
         let mut args = Vec::with_capacity(arity);
         for i in 0..arity {
             let v = network_evaluator
@@ -165,8 +177,8 @@ impl NodeData for ApplyData {
         // and no per-parameter defaults.
         let mut m = HashMap::new();
         m.insert("f".to_string(), (true, None));
-        for name in self.kind.param_names() {
-            m.insert((*name).to_string(), (true, None));
+        for name in self.kind.param_names(&self.param_names) {
+            m.insert(name, (true, None));
         }
         m
     }

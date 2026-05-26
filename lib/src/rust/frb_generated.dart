@@ -12259,11 +12259,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIApplyData dco_decode_api_apply_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIApplyData(
       kind: dco_decode_api_closure_kind(arr[0]),
       typeArgs: dco_decode_list_api_data_type(arr[1]),
+      paramNames: dco_decode_list_String(arr[2]),
     );
   }
 
@@ -12462,11 +12463,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIClosureData dco_decode_api_closure_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIClosureData(
       kind: dco_decode_api_closure_kind(arr[0]),
       typeArgs: dco_decode_list_api_data_type(arr[1]),
+      paramNames: dco_decode_list_String(arr[2]),
     );
   }
 
@@ -15680,7 +15682,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_kind = sse_decode_api_closure_kind(deserializer);
     var var_typeArgs = sse_decode_list_api_data_type(deserializer);
-    return APIApplyData(kind: var_kind, typeArgs: var_typeArgs);
+    var var_paramNames = sse_decode_list_String(deserializer);
+    return APIApplyData(
+        kind: var_kind, typeArgs: var_typeArgs, paramNames: var_paramNames);
   }
 
   @protected
@@ -15890,7 +15894,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_kind = sse_decode_api_closure_kind(deserializer);
     var var_typeArgs = sse_decode_list_api_data_type(deserializer);
-    return APIClosureData(kind: var_kind, typeArgs: var_typeArgs);
+    var var_paramNames = sse_decode_list_String(deserializer);
+    return APIClosureData(
+        kind: var_kind, typeArgs: var_typeArgs, paramNames: var_paramNames);
   }
 
   @protected
@@ -19736,6 +19742,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_closure_kind(self.kind, serializer);
     sse_encode_list_api_data_type(self.typeArgs, serializer);
+    sse_encode_list_String(self.paramNames, serializer);
   }
 
   @protected
@@ -19894,6 +19901,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_closure_kind(self.kind, serializer);
     sse_encode_list_api_data_type(self.typeArgs, serializer);
+    sse_encode_list_String(self.paramNames, serializer);
   }
 
   @protected

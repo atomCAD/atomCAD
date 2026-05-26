@@ -34,8 +34,10 @@ use serde::{Deserialize, Serialize};
 
 /// A shape template for a function value. Fixes the arity and decides, per pin,
 /// whether the type is **free** (the user picks a `DataType`) or **fixed**
-/// (the system supplies it). The four v1 kinds are exactly the four HOF body
-/// shapes; the carried `type_args` fill the free slots.
+/// (the system supplies it). The four preset kinds are exactly the four HOF
+/// body shapes; the carried `type_args` fill the free slots. `Custom` is the
+/// escape hatch — arbitrary arity, every type free, parameter names authored
+/// separately on `ClosureData::param_names`. See `doc/design_custom_closure_kind.md`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ClosureKind {
     /// `(T) -> U` — map-like. `type_args`: `[T, U]`.
@@ -46,6 +48,12 @@ pub enum ClosureKind {
     Fold,
     /// `(T) -> Unit` — foreach-like. `type_args`: `[T]`.
     Foreach,
+    /// Arbitrary `(p0, p1, ..., pN-1) -> R`. Param types live at
+    /// `ClosureData::type_args[0..N]`, the return type at `type_args[N]`.
+    /// Arity N is derived from the parallel `ClosureData::param_names`
+    /// length, **not** from `type_args` length (which can be transiently
+    /// shorter or longer during editing — same convention as presets).
+    Custom,
 }
 
 /// Read `type_args[i]`, defaulting to `DataType::None` when the stored vector
@@ -55,42 +63,51 @@ fn arg(type_args: &[DataType], i: usize) -> DataType {
 }
 
 impl ClosureKind {
-    /// Number of free type arguments the user supplies for this kind.
-    pub fn num_type_args(&self) -> usize {
+    /// Number of `type_args` entries the kind expects. Preset arms are
+    /// constant; `Custom` reads its arity from `param_names.len()`, so the
+    /// answer depends on the caller's data — hence the `param_names` slice.
+    pub fn num_type_args(&self, param_names: &[String]) -> usize {
         match self {
-            ClosureKind::Map => 2,     // T, U
-            ClosureKind::Filter => 1,  // T
-            ClosureKind::Fold => 2,    // A, T
-            ClosureKind::Foreach => 1, // T
+            ClosureKind::Map | ClosureKind::Fold => 2,
+            ClosureKind::Filter | ClosureKind::Foreach => 1,
+            ClosureKind::Custom => param_names.len() + 1,
         }
     }
 
     /// The parameter types — i.e. the closure's zone-input pin types.
-    pub fn param_types(&self, type_args: &[DataType]) -> Vec<DataType> {
+    pub fn param_types(&self, type_args: &[DataType], param_names: &[String]) -> Vec<DataType> {
         match self {
             ClosureKind::Map | ClosureKind::Filter | ClosureKind::Foreach => {
                 vec![arg(type_args, 0)]
             }
             ClosureKind::Fold => vec![arg(type_args, 0), arg(type_args, 1)],
+            ClosureKind::Custom => (0..param_names.len()).map(|i| arg(type_args, i)).collect(),
         }
     }
 
     /// The return type — i.e. the closure's single zone-output pin type.
-    pub fn return_type(&self, type_args: &[DataType]) -> DataType {
+    pub fn return_type(&self, type_args: &[DataType], param_names: &[String]) -> DataType {
         match self {
             ClosureKind::Map => arg(type_args, 1), // free U
             ClosureKind::Filter => DataType::Bool, // fixed
             ClosureKind::Fold => arg(type_args, 0), // derived = A
             ClosureKind::Foreach => DataType::Unit, // fixed
+            ClosureKind::Custom => arg(type_args, param_names.len()),
         }
     }
 
-    /// Names for the parameter (zone-input) pins, mirroring the matching HOF so
-    /// authored bodies read naturally.
-    pub fn param_names(&self) -> &'static [&'static str] {
+    /// Names used as zone-input pin labels (closure) or arg-pin labels
+    /// (apply). Local UI concern only — **never read by the function type**.
+    /// Returns an owned `Vec<String>` so the `Custom` arm can return its
+    /// authored names; this is called once per node update, not in a hot
+    /// loop, so the allocation is irrelevant.
+    pub fn param_names(&self, param_names: &[String]) -> Vec<String> {
         match self {
-            ClosureKind::Fold => &["acc", "element"],
-            _ => &["element"],
+            ClosureKind::Fold => vec!["acc".into(), "element".into()],
+            ClosureKind::Map | ClosureKind::Filter | ClosureKind::Foreach => {
+                vec!["element".into()]
+            }
+            ClosureKind::Custom => param_names.to_vec(),
         }
     }
 
@@ -104,10 +121,10 @@ impl ClosureKind {
     }
 
     /// The `DataType::Function` a value of this shape carries.
-    pub fn function_type(&self, type_args: &[DataType]) -> FunctionType {
+    pub fn function_type(&self, type_args: &[DataType], param_names: &[String]) -> FunctionType {
         FunctionType {
-            parameter_types: self.param_types(type_args),
-            output_type: Box::new(self.return_type(type_args)),
+            parameter_types: self.param_types(type_args, param_names),
+            output_type: Box::new(self.return_type(type_args, param_names)),
         }
     }
 }
@@ -120,6 +137,12 @@ impl ClosureKind {
 pub struct ClosureData {
     pub kind: ClosureKind,
     pub type_args: Vec<DataType>,
+    /// Authored parameter names. **Empty for preset kinds** (which read names
+    /// from the static `ClosureKind::param_names` table) and length-N for
+    /// `Custom` (where N is the arity). `#[serde(default)]` keeps older
+    /// `.cnnd` files (which lack this field) loadable.
+    #[serde(default)]
+    pub param_names: Vec<String>,
 }
 
 impl Default for ClosureData {
@@ -128,6 +151,7 @@ impl Default for ClosureData {
         Self {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Float, DataType::Float],
+            param_names: vec![],
         }
     }
 }
@@ -143,9 +167,9 @@ impl NodeData for ClosureData {
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         let mut custom = base_node_type.clone();
 
-        let params = self.kind.param_types(&self.type_args);
-        let ret = self.kind.return_type(&self.type_args);
-        let param_names = self.kind.param_names();
+        let params = self.kind.param_types(&self.type_args, &self.param_names);
+        let ret = self.kind.return_type(&self.type_args, &self.param_names);
+        let param_names = self.kind.param_names(&self.param_names);
 
         // External: no input pins — captures arrive as ordinary capture wires
         // drawn into the body. One output pin: the function value itself.
@@ -161,7 +185,10 @@ impl NodeData for ClosureData {
             .iter()
             .enumerate()
             .map(|(i, t)| {
-                let name = param_names.get(i).copied().unwrap_or("element");
+                let name = param_names
+                    .get(i)
+                    .map(String::as_str)
+                    .unwrap_or("element");
                 OutputPinDefinition::fixed(name, t.clone())
             })
             .collect();

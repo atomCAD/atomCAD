@@ -100,14 +100,16 @@ enum APIAlignment {
 class APIApplyData {
   final APIClosureKind kind;
   final List<APIDataType> typeArgs;
+  final List<String> paramNames;
 
   const APIApplyData({
     required this.kind,
     required this.typeArgs,
+    required this.paramNames,
   });
 
   @override
-  int get hashCode => kind.hashCode ^ typeArgs.hashCode;
+  int get hashCode => kind.hashCode ^ typeArgs.hashCode ^ paramNames.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -115,7 +117,8 @@ class APIApplyData {
       other is APIApplyData &&
           runtimeType == other.runtimeType &&
           kind == other.kind &&
-          typeArgs == other.typeArgs;
+          typeArgs == other.typeArgs &&
+          paramNames == other.paramNames;
 }
 
 class APIApplyDiffData {
@@ -478,20 +481,24 @@ class APICircleData {
 }
 
 /// Stored shape of a `closure` node: the kind plus the free type args that
-/// fill it (1 or 2 entries, by kind). The `closure` node expands this *inward*
-/// (zone-input pins for the params, one zone-output pin, and a `Function`
-/// output pin); `APIApplyData` carries the same data expanded *outward*.
+/// fill it. The `closure` node expands this *inward* (zone-input pins for
+/// the params, one zone-output pin, and a `Function` output pin);
+/// `APIApplyData` carries the same data expanded *outward*. For preset
+/// kinds `param_names` is empty (names come from the kind's static table);
+/// for `Custom` it carries the authored parameter names.
 class APIClosureData {
   final APIClosureKind kind;
   final List<APIDataType> typeArgs;
+  final List<String> paramNames;
 
   const APIClosureData({
     required this.kind,
     required this.typeArgs,
+    required this.paramNames,
   });
 
   @override
-  int get hashCode => kind.hashCode ^ typeArgs.hashCode;
+  int get hashCode => kind.hashCode ^ typeArgs.hashCode ^ paramNames.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -499,7 +506,8 @@ class APIClosureData {
       other is APIClosureData &&
           runtimeType == other.runtimeType &&
           kind == other.kind &&
-          typeArgs == other.typeArgs;
+          typeArgs == other.typeArgs &&
+          paramNames == other.paramNames;
 }
 
 /// Shape template for a `closure` / `apply` node, mirroring the Rust
@@ -519,6 +527,11 @@ enum APIClosureKind {
 
   /// `(T) -> Unit` — foreach-like. `type_args`: `[T]`.
   foreach,
+
+  /// Arbitrary `(p0, p1, ..., pN-1) -> R`. Arity N is derived from the
+  /// parallel `param_names` length; param types live at `type_args[0..N]`,
+  /// return type at `type_args[N]`.
+  custom,
   ;
 }
 

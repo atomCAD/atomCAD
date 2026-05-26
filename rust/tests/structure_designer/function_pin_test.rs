@@ -340,6 +340,7 @@ fn apply_function_pin_expr_double() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     wire_function_pin(&mut designer, "main", expr_id, apply_id, 0); // f
@@ -736,6 +737,7 @@ fn validation_apply_requires_f_unchanged() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
 

@@ -533,10 +533,15 @@ class NodeDataWidget extends StatelessWidget {
           nodeTypeName: 'closure',
           kind: closureData?.kind ?? APIClosureKind.map,
           typeArgs: closureData?.typeArgs ?? const [],
+          paramNames: closureData?.paramNames ?? const [],
           loading: closureData == null,
-          onChanged: (kind, typeArgs) => model.setClosureData(
+          onChanged: (kind, typeArgs, paramNames) => model.setClosureData(
             selectedNode.id,
-            APIClosureData(kind: kind, typeArgs: typeArgs),
+            APIClosureData(
+              kind: kind,
+              typeArgs: typeArgs,
+              paramNames: paramNames,
+            ),
           ),
         );
       case 'apply':
@@ -546,10 +551,15 @@ class NodeDataWidget extends StatelessWidget {
           nodeTypeName: 'apply',
           kind: applyData?.kind ?? APIClosureKind.map,
           typeArgs: applyData?.typeArgs ?? const [],
+          paramNames: applyData?.paramNames ?? const [],
           loading: applyData == null,
-          onChanged: (kind, typeArgs) => model.setApplyData(
+          onChanged: (kind, typeArgs, paramNames) => model.setApplyData(
             selectedNode.id,
-            APIApplyData(kind: kind, typeArgs: typeArgs),
+            APIApplyData(
+              kind: kind,
+              typeArgs: typeArgs,
+              paramNames: paramNames,
+            ),
           ),
         );
       case 'sequence':

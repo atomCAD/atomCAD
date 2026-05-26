@@ -311,6 +311,7 @@ fn add_int_map_closure(
         Box::new(ClosureData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
 
@@ -508,6 +509,7 @@ fn apply_calls_closure_once() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     designer.connect_nodes(closure_id, 0, apply_id, 0); // f
@@ -542,6 +544,7 @@ fn apply_honors_closure_capture() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     designer.connect_nodes(closure_id, 0, apply_id, 0); // f
@@ -566,6 +569,7 @@ fn apply_with_disconnected_f_errors() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     designer.connect_nodes(arg_id, 0, apply_id, 1); // element only; f left open
@@ -602,6 +606,7 @@ fn add_int_filter_closure(
         Box::new(ClosureData {
             kind: ClosureKind::Filter,
             type_args: vec![DataType::Int],
+            param_names: vec![],
         }),
     );
 
@@ -641,6 +646,7 @@ fn add_int_fold_closure(
         Box::new(ClosureData {
             kind: ClosureKind::Fold,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
 
@@ -722,6 +728,7 @@ fn add_print_foreach_closure(designer: &mut StructureDesigner, network: &str, y:
         Box::new(ClosureData {
             kind: ClosureKind::Foreach,
             type_args: vec![DataType::Int],
+            param_names: vec![],
         }),
     );
 
@@ -973,6 +980,7 @@ fn function_factory_returns_closure_applied_in_parent() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     designer.connect_nodes(factory_call_id, 0, apply_id, 0); // f = factory(5)
@@ -1071,6 +1079,7 @@ fn closure_inside_fold_body_refreezes_capture_per_iteration() {
             Box::new(ClosureData {
                 kind: ClosureKind::Map,
                 type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
             }),
         );
         let a_id = fold_body.add_node(
@@ -1080,6 +1089,7 @@ fn closure_inside_fold_body_refreezes_capture_per_iteration() {
             Box::new(ApplyData {
                 kind: ClosureKind::Map,
                 type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
             }),
         );
         (c_id, a_id)
@@ -1316,6 +1326,7 @@ fn owner_node_id_collision_lazy_escaping_closure() {
             Box::new(ClosureData {
                 kind: ClosureKind::Map,
                 type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
             }),
         );
         assert_eq!(
@@ -1593,6 +1604,7 @@ fn validation_closure_body_incomplete_rejected() {
         Box::new(ClosureData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     // No body wiring — the closure's `result` zone-output pin has no incoming
@@ -1626,6 +1638,7 @@ fn validation_apply_disconnected_f_rejected() {
         Box::new(ApplyData {
             kind: ClosureKind::Map,
             type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
         }),
     );
     designer.connect_nodes(arg_id, 0, apply_id, 1); // element only; `f` left open
@@ -1724,4 +1737,397 @@ fn validation_type_incompatible_closure_into_f_rejected() {
         "expected a data-type-mismatch error for the incompatible `f` wire; got: {:?}",
         errors
     );
+}
+
+// ============================================================================
+// `ClosureKind::Custom` — user-authored function signatures
+// ============================================================================
+
+/// `Custom` closure: arity-3 `(Float, Int, Bool) -> Vec3` round-trips through
+/// `calculate_custom_node_type` to the expected zone pins / external output.
+#[test]
+fn custom_kind_closure_calculate_node_type_arity3() {
+    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::nodes::closure::get_node_type;
+
+    let data = ClosureData {
+        kind: ClosureKind::Custom,
+        type_args: vec![
+            DataType::Float,
+            DataType::Int,
+            DataType::Bool,
+            DataType::Vec3,
+        ],
+        param_names: vec!["x".into(), "n".into(), "flag".into()],
+    };
+    let base: NodeType = get_node_type();
+    let custom = data
+        .calculate_custom_node_type(&base)
+        .expect("Custom kind must produce a custom NodeType");
+
+    // External: zero ordinary input pins, one Function output pin.
+    assert_eq!(custom.parameters.len(), 0);
+    assert_eq!(custom.output_pins.len(), 1);
+    assert_eq!(
+        custom.output_type(),
+        &DataType::Function(FunctionType {
+            parameter_types: vec![
+                DataType::Float,
+                DataType::Int,
+                DataType::Bool,
+            ],
+            output_type: Box::new(DataType::Vec3),
+        }),
+    );
+
+    // Zone-input pins: one per authored parameter, with authored name + type.
+    assert_eq!(custom.zone_input_pins.len(), 3);
+    assert_eq!(custom.zone_input_pins[0].name, "x");
+    assert_eq!(custom.zone_input_pins[1].name, "n");
+    assert_eq!(custom.zone_input_pins[2].name, "flag");
+    assert_eq!(
+        custom.zone_input_pins[0].fixed_type(),
+        Some(&DataType::Float)
+    );
+    assert_eq!(custom.zone_input_pins[1].fixed_type(), Some(&DataType::Int));
+    assert_eq!(
+        custom.zone_input_pins[2].fixed_type(),
+        Some(&DataType::Bool)
+    );
+
+    // Zone-output: a single `result` pin with the authored return type.
+    assert_eq!(custom.zone_output_pins.len(), 1);
+    assert_eq!(custom.zone_output_pins[0].name, "result");
+    assert_eq!(custom.zone_output_pins[0].data_type, DataType::Vec3);
+}
+
+/// `Custom` closure with arity 1.
+#[test]
+fn custom_kind_closure_calculate_node_type_arity1() {
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::nodes::closure::get_node_type;
+
+    let data = ClosureData {
+        kind: ClosureKind::Custom,
+        type_args: vec![DataType::Int, DataType::Float],
+        param_names: vec!["only".into()],
+    };
+    let base: NodeType = get_node_type();
+    let custom = data.calculate_custom_node_type(&base).unwrap();
+
+    assert_eq!(custom.zone_input_pins.len(), 1);
+    assert_eq!(custom.zone_input_pins[0].name, "only");
+    assert_eq!(custom.zone_input_pins[0].fixed_type(), Some(&DataType::Int));
+    assert_eq!(custom.zone_output_pins.len(), 1);
+    assert_eq!(custom.zone_output_pins[0].data_type, DataType::Float);
+}
+
+/// `Custom` `apply`: arity-2 `(Int, Float) -> Bool` produces a required `f`
+/// pin plus two arg pins, all with authored names.
+#[test]
+fn custom_kind_apply_calculate_node_type_arity2() {
+    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
+    use rust_lib_flutter_cad::structure_designer::nodes::apply::get_node_type;
+
+    let data = ApplyData {
+        kind: ClosureKind::Custom,
+        type_args: vec![DataType::Int, DataType::Float, DataType::Bool],
+        param_names: vec!["lhs".into(), "rhs".into()],
+    };
+    let base: NodeType = get_node_type();
+    let custom = data.calculate_custom_node_type(&base).unwrap();
+
+    // External: `f` + 2 arg pins.
+    assert_eq!(custom.parameters.len(), 3);
+    assert_eq!(custom.parameters[0].name, "f");
+    assert_eq!(
+        custom.parameters[0].data_type,
+        DataType::Function(FunctionType {
+            parameter_types: vec![DataType::Int, DataType::Float],
+            output_type: Box::new(DataType::Bool),
+        }),
+    );
+    assert_eq!(custom.parameters[1].name, "lhs");
+    assert_eq!(custom.parameters[1].data_type, DataType::Int);
+    assert_eq!(custom.parameters[2].name, "rhs");
+    assert_eq!(custom.parameters[2].data_type, DataType::Float);
+
+    // Output: the authored return type.
+    assert_eq!(custom.output_pins.len(), 1);
+    assert_eq!(custom.output_type(), &DataType::Bool);
+
+    // No zone pins on `apply`.
+    assert_eq!(custom.zone_input_pins.len(), 0);
+    assert_eq!(custom.zone_output_pins.len(), 0);
+}
+
+/// End-to-end Custom-kind: a `closure` of `Custom (Int) -> Int` wired into an
+/// `apply` of the same `Custom` shape runs the body once. This exercises the
+/// shared `ZoneClosure` payload through Custom-kind nodes.
+#[test]
+fn custom_kind_apply_runs_custom_closure_once() {
+    let mut designer = setup_designer_with_network("main");
+
+    // closure: Custom (Int) -> Int, body x + 1, with element-name "x".
+    let closure_id = designer.add_node("closure", DVec2::new(150.0, -120.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec!["x".into()],
+        }),
+    );
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        closure_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", closure_id, 0, expr_id, 0);
+    wire_body_node_to_zone_output(&mut designer, "main", closure_id, expr_id);
+
+    let arg_id = add_int(&mut designer, "main", 10, 0.0);
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec!["x".into()],
+        }),
+    );
+    designer.connect_nodes(closure_id, 0, apply_id, 0); // f
+    designer.connect_nodes(arg_id, 0, apply_id, 1); // x
+
+    let result = evaluate_node(&designer, "main", apply_id);
+    assert_eq!(extract_int(result), 11);
+}
+
+/// `Custom` closure body wires that no longer make sense after a param is
+/// removed are disconnected by `repair_node_network`. We start with a 2-param
+/// Custom closure whose body uses both zone-input pins, then drop the second
+/// param (arity 2 → 1) and re-validate / repair.
+#[test]
+fn custom_kind_repair_on_param_remove() {
+    use rust_lib_flutter_cad::structure_designer::node_network::SourcePin;
+
+    let mut designer = setup_designer_with_network("main");
+
+    // closure: Custom (Int, Int) -> Int.
+    let closure_id = designer.add_node("closure", DVec2::new(150.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::Int, DataType::Int],
+            param_names: vec!["a".into(), "b".into()],
+        }),
+    );
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        closure_id,
+        "a + b",
+        vec![("a".to_string(), DataType::Int), ("b".to_string(), DataType::Int)],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", closure_id, 0, expr_id, 0);
+    wire_zone_input_to_body_node(&mut designer, "main", closure_id, 1, expr_id, 1);
+    wire_body_node_to_zone_output(&mut designer, "main", closure_id, expr_id);
+
+    // Sanity: body has a wire from zone-input pin 1.
+    {
+        let registry = &designer.node_type_registry;
+        let body = registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .nodes
+            .get(&closure_id)
+            .unwrap()
+            .zone
+            .as_ref()
+            .unwrap();
+        let body_expr = body.nodes.get(&expr_id).unwrap();
+        assert!(body_expr.arguments[1].incoming_wires.iter().any(|w| matches!(
+            w.source_pin,
+            SourcePin::ZoneInput { pin_index: 1 }
+        )));
+    }
+
+    // Drop the second param: arity 2 → 1.
+    set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec!["a".into()],
+        }),
+    );
+    // Trigger the repair pass directly. (The production refresh path runs
+    // `repair_node_network` on every mutator; these tests build by hand so we
+    // invoke it explicitly.)
+    {
+        let registry = &mut designer.node_type_registry;
+        let mut network = registry.node_networks.remove("main").unwrap();
+        registry.repair_node_network(&mut network);
+        registry.node_networks.insert("main".to_string(), network);
+    }
+
+    // Now the body wire from the (gone) zone-input pin 1 must be removed.
+    let registry = &designer.node_type_registry;
+    let body = registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .nodes
+        .get(&closure_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap();
+    let body_expr = body.nodes.get(&expr_id).unwrap();
+    let has_stale_wire = body_expr.arguments.iter().any(|arg| {
+        arg.incoming_wires.iter().any(|w| matches!(
+            w.source_pin,
+            SourcePin::ZoneInput { pin_index } if pin_index >= 1,
+        ))
+    });
+    assert!(
+        !has_stale_wire,
+        "body wires from removed zone-input pin 1 must be repaired away"
+    );
+}
+
+/// Serde round-trip: `ClosureData` (and `ApplyData`) with `Custom` kind keep
+/// their `param_names` through `serde_json::to_value`/`from_value`.
+#[test]
+fn custom_kind_cnnd_roundtrip() {
+    use serde_json;
+
+    let orig = ClosureData {
+        kind: ClosureKind::Custom,
+        type_args: vec![DataType::Float, DataType::Int, DataType::Bool],
+        param_names: vec!["alpha".into(), "beta".into()],
+    };
+    let v = serde_json::to_value(&orig).unwrap();
+    let back: ClosureData = serde_json::from_value(v).unwrap();
+    assert!(matches!(back.kind, ClosureKind::Custom));
+    assert_eq!(back.type_args, orig.type_args);
+    assert_eq!(back.param_names, orig.param_names);
+
+    let orig_apply = ApplyData {
+        kind: ClosureKind::Custom,
+        type_args: vec![DataType::Int, DataType::Float],
+        param_names: vec!["only".into()],
+    };
+    let v = serde_json::to_value(&orig_apply).unwrap();
+    let back: ApplyData = serde_json::from_value(v).unwrap();
+    assert!(matches!(back.kind, ClosureKind::Custom));
+    assert_eq!(back.type_args, orig_apply.type_args);
+    assert_eq!(back.param_names, orig_apply.param_names);
+}
+
+/// `#[serde(default)]` keeps older `.cnnd` files (which lack `param_names`)
+/// loadable: a JSON value with only `kind` + `type_args` deserializes to a
+/// preset-shape `ClosureData` / `ApplyData` with `param_names == vec![]`.
+#[test]
+fn cnnd_back_compat_loads_old_closure_data() {
+    use serde_json::json;
+
+    // The exact encoding of `DataType` is opaque to this test, so build the
+    // type_args sub-value through serde itself rather than spelling it out.
+    let closure_type_args = serde_json::to_value(vec![DataType::Int, DataType::Float]).unwrap();
+    let old_closure = json!({
+        "kind": "Map",
+        "type_args": closure_type_args,
+    });
+    let back: ClosureData = serde_json::from_value(old_closure).unwrap();
+    assert!(matches!(back.kind, ClosureKind::Map));
+    assert_eq!(back.type_args, vec![DataType::Int, DataType::Float]);
+    assert!(back.param_names.is_empty());
+
+    let apply_type_args = serde_json::to_value(vec![DataType::Bool]).unwrap();
+    let old_apply = json!({
+        "kind": "Filter",
+        "type_args": apply_type_args,
+    });
+    let back: ApplyData = serde_json::from_value(old_apply).unwrap();
+    assert!(matches!(back.kind, ClosureKind::Filter));
+    assert_eq!(back.type_args, vec![DataType::Bool]);
+    assert!(back.param_names.is_empty());
+}
+
+/// Helper-method shape: switching a preset's `type_args` into a `Custom`
+/// shape via `[params..., return]` reproduces the same param/return types
+/// the preset would compute.
+#[test]
+fn preset_to_custom_data_preservation() {
+    // From `Fold` `[A, T]` (return derived = A), the Custom encoding is
+    // `[A, T, A]` with names `["acc", "element"]`. Both kinds should yield
+    // the same param types and return type when fed their respective args.
+    let names = vec!["acc".to_string(), "element".to_string()];
+    let preset_args = vec![DataType::Float, DataType::Int];
+    let preset_params = ClosureKind::Fold.param_types(&preset_args, &[]);
+    let preset_ret = ClosureKind::Fold.return_type(&preset_args, &[]);
+
+    let custom_args = vec![
+        preset_params[0].clone(),
+        preset_params[1].clone(),
+        preset_ret.clone(),
+    ];
+    let custom_params = ClosureKind::Custom.param_types(&custom_args, &names);
+    let custom_ret = ClosureKind::Custom.return_type(&custom_args, &names);
+
+    assert_eq!(preset_params, custom_params);
+    assert_eq!(preset_ret, custom_ret);
+    assert_eq!(custom_params, vec![DataType::Float, DataType::Int]);
+    assert_eq!(custom_ret, DataType::Float);
+
+    // From `Map` `[T, U]`: params `[T]`, return `U` (free), Custom encoding
+    // `[T, U]` with name `["element"]`.
+    let names = vec!["element".to_string()];
+    let preset_args = vec![DataType::Int, DataType::Float];
+    let preset_params = ClosureKind::Map.param_types(&preset_args, &[]);
+    let preset_ret = ClosureKind::Map.return_type(&preset_args, &[]);
+    let custom_args = vec![preset_params[0].clone(), preset_ret.clone()];
+    let custom_params = ClosureKind::Custom.param_types(&custom_args, &names);
+    let custom_ret = ClosureKind::Custom.return_type(&custom_args, &names);
+    assert_eq!(preset_params, custom_params);
+    assert_eq!(preset_ret, custom_ret);
+
+    // From `Filter` `[T]` (fixed `Bool` return): Custom encoding `[T, Bool]`.
+    let names = vec!["element".to_string()];
+    let preset_args = vec![DataType::Int];
+    let preset_params = ClosureKind::Filter.param_types(&preset_args, &[]);
+    let preset_ret = ClosureKind::Filter.return_type(&preset_args, &[]);
+    let custom_args = vec![preset_params[0].clone(), preset_ret.clone()];
+    let custom_params = ClosureKind::Custom.param_types(&custom_args, &names);
+    let custom_ret = ClosureKind::Custom.return_type(&custom_args, &names);
+    assert_eq!(preset_params, custom_params);
+    assert_eq!(preset_ret, custom_ret);
+    assert_eq!(custom_ret, DataType::Bool);
+
+    // From `Foreach` `[T]` (fixed `Unit` return): Custom encoding `[T, Unit]`.
+    let names = vec!["element".to_string()];
+    let preset_args = vec![DataType::Int];
+    let preset_params = ClosureKind::Foreach.param_types(&preset_args, &[]);
+    let preset_ret = ClosureKind::Foreach.return_type(&preset_args, &[]);
+    let custom_args = vec![preset_params[0].clone(), preset_ret.clone()];
+    let custom_params = ClosureKind::Custom.param_types(&custom_args, &names);
+    let custom_ret = ClosureKind::Custom.return_type(&custom_args, &names);
+    assert_eq!(preset_params, custom_params);
+    assert_eq!(preset_ret, custom_ret);
+    assert_eq!(custom_ret, DataType::Unit);
 }
