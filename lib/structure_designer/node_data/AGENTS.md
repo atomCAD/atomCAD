@@ -54,3 +54,16 @@ For nodes whose stored property is overridden when an input pin is wired (`imat3
 5. **Never call the model's setter** to clear stored values when connecting. The Rust eval side handles "wired replaces stored"; the editor only owns the UI affordance.
 
 The matching backend convention is documented in `rust/src/structure_designer/nodes/AGENTS.md` (matrix nodes' "wired input pin overrides the corresponding row/column/diagonal at eval"); the corresponding Rust subtitle drop is `get_subtitle()` returning `None` when `connected_input_pins.contains("<pin_name>")`.
+
+## Structural Function / Iter types in `DataTypeInput`
+
+`lib/inputs/data_type_input.dart` exposes `Iter[T]` and `Function((args…) → R)` as first-class dropdown branches alongside the existing `Custom...` text escape hatch. Iter is rendered as an inner `DataTypeInput` for the element type; Function delegates to the new sibling widget `lib/inputs/function_type_input.dart` (a parameter list with add/remove + a return-type `DataTypeInput`). `children` defaults are seeded at the single dropdown-change boundary, so inner branches can rely on the encoding from `doc/design_structural_function_and_iter_types.md` §"Children encoding" (Iter ⇒ 1 child; Function ⇒ N+1 children with the return type last). The Array checkbox now preserves `children` across toggles so `Array[Iter[T]]` stays well-formed.
+
+Manual smoke walkthrough (Phase 2 of the design doc):
+
+1. Drop a `parameter` node, open its type picker, switch to `Iter[T]`. The inner element-type picker should appear with `Float` defaulted; flip it to `Iter[Float]` end-to-end with no text typing.
+2. On the same `parameter`, switch the type to `Function(args… → R)`. The inline `FunctionTypeInput` should appear with one `Float` param + `Float` return. Add a parameter, change types to produce `(Int, Bool) → String`, and connect a matching wire.
+3. Drop a `closure` node and switch its kind to `Custom`. Each `_CustomParamRow`'s type slot is a `DataTypeInput` and inherits the new branches for free — confirm that picking `Iter[Float]` or `Function((Int) → Float)` in a param row produces a healthy graph.
+4. Open an old `.cnnd` that contains a `Custom: Iter[Int]` type. On next paint the picker should render the structural `Iter[T]` branch with `Int` inside — no migration step required (the Rust→API converter promotes Iter/Function automatically).
+
+See `doc/design_structural_function_and_iter_types.md` for the full design.

@@ -113,7 +113,7 @@ The user-types panel and main content area handle two kinds of user-defined type
 - **`StructureDesignerModel.activeRecordDefName: String?`** — when non-null, `MainContentArea` swaps the network editor out for `SchemaEditor` (the record-def field list editor). Activating a network clears it; activating a record def sets it.
 - **API types:** `APIDataTypeBase::Record` + `APIRecordSchemaData` carry record-typed pin info to the UI; `APIRecordTypeDef` / `APIRecordTypeDefField` carry schema definitions. Model methods: `addRecordTypeDef`, `deleteRecordTypeDef`, `renameRecordTypeDef`, `updateRecordTypeDef`, plus `setActiveRecordDefName`.
 - **Per-node editors** for `record_construct`, `record_destructure`, `product` use the shared `RecordDefDropdown` (`node_data/record_def_dropdown.dart`) — a name-only dropdown bound to the node's `schema` / `target` `String` property, with an "Edit definition…" affordance that activates the bound def and switches to the schema editor.
-- **DataTypeInput** (`lib/inputs/data_type_input.dart`) gains a Record branch that lists named record defs only. Anonymous record types exist in the type system (via `expr` literals) but are never authored from the Flutter UI.
+- **DataTypeInput** (`lib/inputs/data_type_input.dart`) gains a Record branch that lists named record defs only. Anonymous record types exist in the type system (via `expr` literals) but are never authored from the Flutter UI. (`DataTypeInput` also gained structural `Iter[T]` and `Function((args…) → R)` branches — see "Structural Function / Iter types" below.)
 - The user-types panel rejects names that collide across networks, record defs, or built-ins (single namespace).
 
 Design doc: `doc/design_record_types.md`.
@@ -135,6 +135,17 @@ The `closure` and `apply` nodes (plus the four HOFs' optional `f` input pin) exp
 - **Model / API:** `setClosureData` / `setApplyData` are model methods (they forward `activeScopeChain` as `scope_path` to the Rust API); `getClosureData` / `getApplyData` are direct generated-API calls. The shared `ClosureShapeEditor` is wired to them through `node_data_widget.dart`'s `'closure'` / `'apply'` cases.
 - **Editor:** the shared shape editor and the inline-body/`f`-pin toggle are documented in `node_data/AGENTS.md` and `node_network/AGENTS.md` respectively. Body rendering is inherited from the zones UI — no closure-specific rendering code.
 - **Add Node popup** is registry-driven, so `closure` and `apply` appear automatically once registered in Rust; no Flutter list edit was needed.
+
+## Structural Function / Iter types
+
+`APIDataTypeBase` carries first-class `Iter` and `Function` variants alongside `Custom`, with one shared `children: List<APIDataType>` field on `APIDataType` whose meaning is interpreted locally to the base (`Iter` ⇒ 1 child: the element type; `Function` ⇒ N+1 children: params then return). Phase-1 commit migrated every existing literal site to `children: const []`; flat bases never use the field.
+
+- **Authoring:** `DataTypeInput` (`lib/inputs/data_type_input.dart`) renders `Iter[T]` as a nested `DataTypeInput` for the element type, and `Function((p0,…,pN-1) → R)` via the new sibling widget `FunctionTypeInput` (`lib/inputs/function_type_input.dart`) — a parameter-list with add/remove + a return-type `DataTypeInput`. `FunctionTypeInput` knows nothing about closures (function types have no parameter names).
+- **Default seeding:** the dropdown-change handler in `DataTypeInput` is the single point that seeds `children` — `Iter` ⇒ `[Float]`, `Function` ⇒ `[Float, Float]` (arity 1), everything else ⇒ `const []`. Inner branches can therefore treat `_childAt(0)` / `_functionParams()` / `_functionReturn()` as total. Switching away from Iter/Function drops `children` back to `const []`.
+- **Custom… text fallback** stays for the long tail (anonymous records and any future types without first-class API surface). The Rust→API converter prefers the structural variants, so previously-typed `Custom: Iter[Int]` UI silently upgrades to the structural form on next paint — no migration needed.
+- **Array semantics:** the array checkbox preserves `children`, so `Array[Iter[T]]` stays well-formed across toggles.
+
+Design doc: `doc/design_structural_function_and_iter_types.md`. Per-editor smoke walkthrough is in `node_data/AGENTS.md`.
 
 ## Undo/Redo Integration
 

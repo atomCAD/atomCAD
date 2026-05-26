@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/ui_common.dart';
+import 'package:flutter_cad/inputs/function_type_input.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as sd_api;
@@ -23,6 +24,46 @@ class DataTypeInput extends StatefulWidget {
 }
 
 class _DataTypeInputState extends State<DataTypeInput> {
+  /// Default APIDataType for a freshly-seeded slot — matches the
+  /// closure-editor / parameter-node "free slot defaults to Float" convention.
+  static APIDataType _defaultFloat() => const APIDataType(
+        dataTypeBase: APIDataTypeBase.float,
+        customDataType: null,
+        array: false,
+        children: [],
+      );
+
+  /// Read `children[i]` with a Float fallback. Inner branches rely on the
+  /// dropdown-change handler having seeded `children` to the right shape, so
+  /// this is defensive — covers the transient case where a value arrives from
+  /// somewhere other than this widget's own writes.
+  APIDataType _childAt(int i) => (i < widget.value.children.length)
+      ? widget.value.children[i]
+      : _defaultFloat();
+
+  /// Build a new APIDataType keeping base/customDataType/array, replacing
+  /// `children`.
+  APIDataType _withChildren(List<APIDataType> children) => APIDataType(
+        dataTypeBase: widget.value.dataTypeBase,
+        customDataType: widget.value.customDataType,
+        array: widget.value.array,
+        children: children,
+      );
+
+  /// `children[0..N-1]` (the parameter types) for a Function base.
+  List<APIDataType> _functionParams() {
+    final c = widget.value.children;
+    if (c.isEmpty) return const [];
+    return c.sublist(0, c.length - 1);
+  }
+
+  /// `children[N]` (the return type) for a Function base.
+  APIDataType _functionReturn() {
+    final c = widget.value.children;
+    if (c.isEmpty) return _defaultFloat();
+    return c.last;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -55,6 +96,23 @@ class _DataTypeInputState extends State<DataTypeInput> {
                         ? widget.value.customDataType ?? ''
                         : '';
               }
+              // Seed `children` per
+              // doc/design_structural_function_and_iter_types.md §"Defaults".
+              // Iter ⇒ one child (the element type); Function ⇒ [param, return]
+              // for arity 1 (matching the closure-editor default). Switching
+              // *away* from these bases drops children back to const [];
+              // switching between Iter and Function replaces the seed (no
+              // carry-over). This single seeding point is what lets the inner
+              // branches treat _childAt / _functionParams / _functionReturn
+              // as total functions.
+              final List<APIDataType> seededChildren;
+              if (newValue == APIDataTypeBase.iter) {
+                seededChildren = [_defaultFloat()];
+              } else if (newValue == APIDataTypeBase.function) {
+                seededChildren = [_defaultFloat(), _defaultFloat()];
+              } else {
+                seededChildren = const [];
+              }
               widget.onChanged(APIDataType(
                 dataTypeBase: newValue,
                 customDataType: customDataType,
@@ -63,7 +121,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
                 array: newValue == APIDataTypeBase.custom
                     ? false
                     : widget.value.array,
-                children: const [],
+                children: seededChildren,
               ));
             }
           },
@@ -107,6 +165,30 @@ class _DataTypeInputState extends State<DataTypeInput> {
             ),
           ),
 
+        // Iter[T] branch — one nested DataTypeInput for the element type.
+        if (widget.value.dataTypeBase == APIDataTypeBase.iter)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: DataTypeInput(
+              label: 'Element Type',
+              value: _childAt(0),
+              onChanged: (newElement) =>
+                  widget.onChanged(_withChildren([newElement])),
+            ),
+          ),
+
+        // Function((p0,...,pN-1) -> R) branch.
+        if (widget.value.dataTypeBase == APIDataTypeBase.function)
+          Padding(
+            padding: const EdgeInsets.only(top: 8.0),
+            child: FunctionTypeInput(
+              parameterTypes: _functionParams(),
+              outputType: _functionReturn(),
+              onChanged: (params, ret) =>
+                  widget.onChanged(_withChildren([...params, ret])),
+            ),
+          ),
+
         // Conditional array checkbox
         if (widget.value.dataTypeBase != APIDataTypeBase.custom)
           CheckboxListTile(
@@ -118,7 +200,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
                   dataTypeBase: widget.value.dataTypeBase,
                   customDataType: widget.value.customDataType,
                   array: newArrayValue,
-                  children: const [],
+                  children: widget.value.children,
                 ));
               }
             },
