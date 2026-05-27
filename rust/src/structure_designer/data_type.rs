@@ -99,6 +99,11 @@ pub fn canonicalize_data_type(t: &mut DataType) {
         DataType::Array(inner) | DataType::Iterator(inner) => {
             canonicalize_data_type(inner);
         }
+        DataType::AnyFunction { leading_params } => {
+            for p in leading_params {
+                canonicalize_data_type(p);
+            }
+        }
         DataType::Record(RecordType::Anonymous(fields)) => {
             for (_, ty) in fields {
                 canonicalize_data_type(ty);
@@ -148,6 +153,17 @@ pub enum DataType {
     /// `doc/design_iterators.md`.
     Iterator(Box<DataType>),
     Function(FunctionType),
+    /// A pin that accepts any `Function(_)` value whose parameter list begins
+    /// with `leading_params`. An empty `leading_params` accepts any function
+    /// regardless of shape (used by `apply.f`); a non-empty `leading_params`
+    /// enforces a starts-with prefix constraint (used by `map.f` to require
+    /// the first param matches `element_type`).
+    ///
+    /// `AnyFunction` is an INPUT-PIN-ONLY type. Sources never resolve to
+    /// `AnyFunction` — every concrete `Function` value carries a fully-specified
+    /// `FunctionType`. The validator rejects `AnyFunction` appearing as a
+    /// resolved output type. See `doc/design_function_pin_unification.md`.
+    AnyFunction { leading_params: Vec<DataType> },
     Record(RecordType),
 }
 
@@ -186,6 +202,11 @@ where
                 walk_data_type_record_names_mut(p, f);
             }
             walk_data_type_record_names_mut(&mut func.output_type, f);
+        }
+        DataType::AnyFunction { leading_params } => {
+            for p in leading_params {
+                walk_data_type_record_names_mut(p, f);
+            }
         }
         DataType::Record(RecordType::Named(name)) => f(name),
         DataType::Record(RecordType::Anonymous(fields)) => {
@@ -283,6 +304,22 @@ impl fmt::Display for DataType {
                     write!(f, "({}) -> {}", params, func_type.output_type)
                 }
             }
+            DataType::AnyFunction { leading_params } => {
+                // `Function*` for an unconstrained-shape pin (`apply.f`);
+                // `Function(T1, T2, *)` for a starts-with constraint
+                // (`map.f`). The trailing `*` token marks "any tail
+                // allowed"; the lexer recognises it as `DataTypeToken::Star`.
+                if leading_params.is_empty() {
+                    write!(f, "Function*")
+                } else {
+                    let params = leading_params
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    write!(f, "Function({},*)", params)
+                }
+            }
             DataType::Record(record_type) => match record_type {
                 // Named records are emitted as `Record(Name)` so the string
                 // round-trips through `DataType::from_string` without colliding
@@ -333,7 +370,7 @@ impl DataType {
     pub fn drag_element_type_from_output(&self) -> Option<DataType> {
         match self {
             DataType::Iterator(t) | DataType::Array(t) => Some((**t).clone()),
-            DataType::Function(_) => None,
+            DataType::Function(_) | DataType::AnyFunction { .. } => None,
             t if t.is_abstract() => None,
             t => Some(t.clone()),
         }
@@ -482,6 +519,36 @@ impl DataType {
             }
         }
 
+        // `AnyFunction` destination: any concrete `Function(_)` whose
+        // parameter list starts with `leading_params` (pairwise convertible)
+        // flows in. An empty `leading_params` accepts any function shape
+        // (used by `apply.f`); a non-empty one enforces a starts-with prefix
+        // (used by `map.f`). Direction is one-way: `AnyFunction` is never
+        // valid as a *source* type — every concrete function value carries a
+        // fully-specified `FunctionType`. See
+        // `doc/design_function_pin_unification.md` (Phase A).
+        if let (DataType::Function(src_ft), DataType::AnyFunction { leading_params }) =
+            (source_type, dest_type)
+        {
+            if src_ft.parameter_types.len() < leading_params.len() {
+                return false;
+            }
+            for (src_param, dest_param) in
+                src_ft.parameter_types.iter().zip(leading_params.iter())
+            {
+                if !DataType::can_be_converted_to(src_param, dest_param, registry) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // `AnyFunction` is INPUT-ONLY: reject it appearing as a source type
+        // against any destination other than identity (handled by the top
+        // short-circuit) or `Unit` (handled by the discard rule above).
+        if matches!(source_type, DataType::AnyFunction { .. }) {
+            return false;
+        }
+
         // Function type compatibility is a structural match: same arity, and
         // each parameter plus the return type pairwise convertible (keeping
         // the usual leaf conversions like `Int → Float`). The old
@@ -625,6 +692,31 @@ impl DataType {
             return false;
         }
 
+        // `AnyFunction` destination: structural starts-with check, same as
+        // the permissive arm — no broadcast is involved in the
+        // `Function → AnyFunction` case, so the rule is identical (just
+        // recurses strictly so element types don't allow broadcast either).
+        if let (DataType::Function(src_ft), DataType::AnyFunction { leading_params }) =
+            (source_type, dest_type)
+        {
+            if src_ft.parameter_types.len() < leading_params.len() {
+                return false;
+            }
+            for (src_param, dest_param) in
+                src_ft.parameter_types.iter().zip(leading_params.iter())
+            {
+                if !DataType::can_be_converted_to_strict_no_broadcast(
+                    src_param, dest_param, registry,
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if matches!(source_type, DataType::AnyFunction { .. }) {
+            return false;
+        }
+
         // Function structural match: same arity, return + parameters pairwise
         // convertible, recursing strictly so broadcast can't sneak in via a
         // parameter or return type. Mirrors the permissive arm (the old
@@ -683,6 +775,9 @@ pub fn contains_iterator(t: &DataType) -> bool {
         DataType::Function(func) => {
             func.parameter_types.iter().any(contains_iterator)
                 || contains_iterator(&func.output_type)
+        }
+        DataType::AnyFunction { leading_params } => {
+            leading_params.iter().any(contains_iterator)
         }
         DataType::Record(RecordType::Anonymous(fields)) => {
             fields.iter().any(|(_, ty)| contains_iterator(ty))
@@ -758,6 +853,10 @@ enum DataTypeToken {
     Arrow,        // ->
     FatArrow,     // =>
     Comma,        // ,
+    /// `*` — the "any tail allowed" marker used by `AnyFunction`. Reserved
+    /// for `Function*` and `Function(T1, .., *)` syntax; never appears
+    /// elsewhere in the data-type grammar.
+    Star,
     Eof,
 }
 
@@ -986,6 +1085,56 @@ impl DataTypeParser {
                     self.expect(DataTypeToken::RightBracket)?;
                     return Ok(DataType::Iterator(Box::new(element_type)));
                 }
+                // `AnyFunction` syntax (see `doc/design_function_pin_unification.md`).
+                // Mirrors the Display impl:
+                //   `Function*`              → AnyFunction { leading_params: [] }
+                //   `Function(T1, ..., *)`   → AnyFunction { leading_params: [T1, ...] }
+                // No conflict with concrete function syntax: a real function
+                // type written by Display is either `() -> R`, `T -> R`, or
+                // `(T1, ..., Tn) -> R` — the bare identifier `Function` itself
+                // never appears outside `AnyFunction` form.
+                if name == "Function" {
+                    if self.peek() == &DataTypeToken::Star {
+                        self.bump();
+                        return Ok(DataType::AnyFunction {
+                            leading_params: vec![],
+                        });
+                    }
+                    self.expect(DataTypeToken::LeftParen)?;
+                    let mut leading_params: Vec<DataType> = Vec::new();
+                    loop {
+                        if self.peek() == &DataTypeToken::Star {
+                            self.bump();
+                            break;
+                        }
+                        let ty = self.parse_data_type()?;
+                        // Canonicalize any nested Function returns in
+                        // `leading_params` entries (mirrors the constructor
+                        // discipline FunctionType::new enforces for
+                        // Function values).
+                        let mut ty = ty;
+                        canonicalize_data_type(&mut ty);
+                        leading_params.push(ty);
+                        match self.peek() {
+                            DataTypeToken::Comma => {
+                                self.bump();
+                            }
+                            DataTypeToken::Star => {
+                                self.bump();
+                                break;
+                            }
+                            other => {
+                                return Err(format!(
+                                    "Expected ',' or '*' inside AnyFunction \
+                                     leading params, found {:?}",
+                                    other
+                                ));
+                            }
+                        }
+                    }
+                    self.expect(DataTypeToken::RightParen)?;
+                    return Ok(DataType::AnyFunction { leading_params });
+                }
                 match name.as_str() {
                     "None" => Ok(DataType::None),
                     "Bool" => Ok(DataType::Bool),
@@ -1162,6 +1311,10 @@ impl DataTypeLexer {
             Some(',') => {
                 self.advance();
                 Ok(DataTypeToken::Comma)
+            }
+            Some('*') => {
+                self.advance();
+                Ok(DataTypeToken::Star)
             }
             Some('-') => {
                 self.advance();

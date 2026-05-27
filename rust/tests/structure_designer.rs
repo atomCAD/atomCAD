@@ -303,3 +303,6 @@ mod debug_load_test;
 
 #[path = "structure_designer/currying_test.rs"]
 mod currying_test;
+
+#[path = "structure_designer/function_pin_unification_test.rs"]
+mod function_pin_unification_test;

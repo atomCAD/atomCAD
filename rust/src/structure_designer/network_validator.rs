@@ -343,6 +343,13 @@ fn contains_abstract(t: &DataType) -> bool {
     match t {
         _ if t.is_abstract() => true,
         DataType::Array(inner) => contains_abstract(inner),
+        // `AnyFunction` is a structural acceptance constraint on input pins,
+        // not an abstract phase type — match the `DataType::is_abstract`
+        // policy and return false uniformly. (Built-in nodes use
+        // `AnyFunction` for `apply.f` / `map.f`; user-declared parameter
+        // types cannot select it through the UI.) See
+        // `doc/design_function_pin_unification.md` Phase A.
+        DataType::AnyFunction { .. } => false,
         _ => false,
     }
 }
@@ -536,6 +543,33 @@ fn validate_wires(
                     Some(*dest_node_id),
                 ));
                 return false;
+            }
+        }
+
+        // Defensive rule: an output pin's resolved type must never be
+        // `AnyFunction`. Built-in nodes don't declare it on outputs
+        // (the registry-build-time debug assertion in `NodeTypeRegistry::add_node_type`
+        // catches authoring mistakes), and no `SameAsInput` / `SameAsArrayElements`
+        // pin can resolve to `AnyFunction` either (sources always carry a fully
+        // -specified `Function`). This is here so a stray hand-edited fixture
+        // can't sneak it past the type checker. See
+        // `doc/design_function_pin_unification.md` Phase A.
+        for pin_index_usize in 0..dest_node_type.output_pin_count() {
+            let pin_index = pin_index_usize as i32;
+            let resolved = ctx.resolve(network, node_type_registry, *dest_node_id, pin_index);
+            if let Some(t) = resolved {
+                if matches!(t, DataType::AnyFunction { .. }) {
+                    let pin = &dest_node_type.output_pins[pin_index_usize];
+                    network.validation_errors.push(ValidationError::new(
+                        format!(
+                            "Output pin '{}' resolves to `AnyFunction`; \
+                             `AnyFunction` is an input-pin-only type",
+                            pin.name
+                        ),
+                        Some(*dest_node_id),
+                    ));
+                    return false;
+                }
             }
         }
     }

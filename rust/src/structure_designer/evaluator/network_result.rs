@@ -589,6 +589,19 @@ impl NetworkResult {
             if let (DataType::Function(_), DataType::Function(_)) = (source_type, target_type) {
                 return self;
             }
+            // Identity-passthrough for `Function → AnyFunction`. A concrete
+            // `Function(ZoneClosure)` flowing into an `AnyFunction`-typed slot
+            // (e.g. `apply.f`, `map.f`) is the same runtime value, unchanged.
+            // Without this arm the conversion would fall through to the
+            // trailing `(original, _)` arm — which would still return `self`
+            // today, but the explicit branch documents the intent and guards
+            // against future changes to that fallthrough. See
+            // `doc/design_function_pin_unification.md` Phase A.
+            if let (DataType::Function(_), DataType::AnyFunction { .. }) =
+                (source_type, target_type)
+            {
+                return self;
+            }
         }
 
         // Handle Error and None cases - they cannot be converted

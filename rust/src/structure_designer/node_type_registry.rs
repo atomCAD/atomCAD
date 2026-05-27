@@ -991,6 +991,39 @@ impl NodeTypeRegistry {
     }
 
     fn add_node_type(&mut self, node_type: NodeType) {
+        // Debug-only: a built-in node type must never declare `AnyFunction`
+        // as the `Fixed` type on any output pin (or on any `SameAsInput`
+        // pin's `fallback_if_disconnected`). `AnyFunction` is an
+        // input-pin-only acceptance constraint — sources always carry a
+        // concrete `Function`. See
+        // `doc/design_function_pin_unification.md` Phase A.
+        #[cfg(debug_assertions)]
+        for pin in &node_type.output_pins {
+            match &pin.data_type {
+                PinOutputType::Fixed(t) => {
+                    assert!(
+                        !matches!(t, DataType::AnyFunction { .. }),
+                        "Node type '{}' output pin '{}' declares AnyFunction; \
+                         AnyFunction is input-only",
+                        node_type.name,
+                        pin.name,
+                    );
+                }
+                PinOutputType::SameAsInput {
+                    fallback_if_disconnected: Some(t),
+                    ..
+                } => {
+                    assert!(
+                        !matches!(t, DataType::AnyFunction { .. }),
+                        "Node type '{}' output pin '{}' has AnyFunction in \
+                         fallback_if_disconnected; AnyFunction is input-only",
+                        node_type.name,
+                        pin.name,
+                    );
+                }
+                _ => {}
+            }
+        }
         self.built_in_node_types
             .insert(node_type.name.clone(), node_type);
     }
@@ -1772,6 +1805,11 @@ fn collect_named_record_refs_in_type(t: &DataType, out: &mut Vec<String>) {
                 collect_named_record_refs_in_type(p, out);
             }
             collect_named_record_refs_in_type(&func.output_type, out);
+        }
+        DataType::AnyFunction { leading_params } => {
+            for p in leading_params {
+                collect_named_record_refs_in_type(p, out);
+            }
         }
         DataType::Record(RecordType::Named(name)) => out.push(name.clone()),
         DataType::Record(RecordType::Anonymous(fs)) => {

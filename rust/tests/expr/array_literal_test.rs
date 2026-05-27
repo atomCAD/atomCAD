@@ -501,6 +501,9 @@ mod element_type_eligibility_tests {
                     output_type: Box::new(DataType::Int),
                 },
             ),
+            DataType::AnyFunction {
+                leading_params: vec![DataType::Int],
+            },
             DataType::Record(
                 rust_lib_flutter_cad::structure_designer::data_type::RecordType::anonymous(vec![(
                     "x".to_string(),
@@ -539,12 +542,14 @@ mod element_type_eligibility_tests {
                 | DataType::Array(_)
                 | DataType::Iterator(_)
                 | DataType::Function(_)
+                | DataType::AnyFunction { .. }
                 | DataType::Record(_) => {}
             }
         }
 
         // Documented rejection set: None, the three abstract supertypes,
-        // any function type, and `Iter[T]` (eager-only `expr` language —
+        // any function type (incl. AnyFunction — it is input-pin-only, not
+        // a valid element shape), and `Iter[T]` (eager-only `expr` language —
         // see `doc/design_iterators.md`).
         let is_rejected = |dt: &DataType| -> bool {
             matches!(
@@ -554,6 +559,7 @@ mod element_type_eligibility_tests {
                     | DataType::HasStructure
                     | DataType::HasFreeLinOps
                     | DataType::Function(_)
+                    | DataType::AnyFunction { .. }
                     | DataType::Iterator(_)
                     | DataType::Unit
             )
@@ -569,7 +575,10 @@ mod element_type_eligibility_tests {
         for v in &variants {
             if matches!(
                 v,
-                DataType::Array(_) | DataType::Function(_) | DataType::Record(_)
+                DataType::Array(_)
+                    | DataType::Function(_)
+                    | DataType::AnyFunction { .. }
+                    | DataType::Record(_)
             ) {
                 continue;
             }
