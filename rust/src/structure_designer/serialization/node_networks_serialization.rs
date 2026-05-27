@@ -282,7 +282,10 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
                 let data_type = DataType::from_string(&p.data_type).map_err(|e| {
                     io::Error::new(
                         io::ErrorKind::InvalidData,
-                        format!("Invalid output pin type: {}", e),
+                        format!(
+                            "Invalid output pin type for pin '{}' (type_str={:?}): {}",
+                            p.name, p.data_type, e
+                        ),
                     )
                 })?;
                 Ok(OutputPinDefinition::fixed(&p.name, data_type))
@@ -293,7 +296,10 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
         let output_type = DataType::from_string(output_type_str).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid output type: {}", e),
+                format!(
+                    "Invalid output type (type_str={:?}): {}",
+                    output_type_str, e
+                ),
             )
         })?;
         OutputPinDefinition::single(output_type)
@@ -311,7 +317,10 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
             let data_type = DataType::from_string(&serializable_param.data_type).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("Invalid parameter data type: {}", e),
+                    format!(
+                        "Invalid parameter data type for parameter '{}' (type_str={:?}): {}",
+                        serializable_param.name, serializable_param.data_type, e
+                    ),
                 )
             })?;
 
@@ -335,7 +344,10 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
             let data_type = DataType::from_string(&p.data_type).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("Invalid zone-input pin type: {}", e),
+                    format!(
+                        "Invalid zone-input pin type for pin '{}' (type_str={:?}): {}",
+                        p.name, p.data_type, e
+                    ),
                 )
             })?;
             Ok(OutputPinDefinition::fixed(&p.name, data_type))
@@ -349,7 +361,10 @@ pub fn serializable_to_node_type(serializable: &SerializableNodeType) -> io::Res
             let data_type = DataType::from_string(&p.data_type).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("Invalid zone-output pin type: {}", e),
+                    format!(
+                        "Invalid zone-output pin type for pin '{}' (type_str={:?}): {}",
+                        p.name, p.data_type, e
+                    ),
                 )
             })?;
             Ok(Parameter {
@@ -864,7 +879,13 @@ pub fn load_node_networks_from_file(
             &serializable_network,
             &registry.built_in_node_types,
             design_dir,
-        )?;
+        )
+        .map_err(|e| {
+            io::Error::new(
+                e.kind(),
+                format!("In network '{}': {}", name, e),
+            )
+        })?;
         registry.initialize_custom_node_types_for_network(&mut network);
 
         registry.repair_node_network(&mut network);

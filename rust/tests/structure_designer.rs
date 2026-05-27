@@ -297,3 +297,6 @@ mod function_pin_test;
 
 #[path = "structure_designer/zones_migration_test.rs"]
 mod zones_migration_test;
+
+#[path = "structure_designer/debug_load_test.rs"]
+mod debug_load_test;
