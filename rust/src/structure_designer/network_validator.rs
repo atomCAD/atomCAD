@@ -593,6 +593,16 @@ pub fn validate_network(
     // REPAIR PHASE: Remove wires to output pins that no longer exist
     repair_output_pin_wires(network, node_type_registry);
 
+    // REPAIR PHASE: Currying Phase 3 (`doc/design_currying.md`). For every
+    // `apply` node whose `f` pin is wired, override the node's
+    // `custom_node_type` from the wired source's declared (canonical, flat)
+    // function type — so the f pin's type matches the source, the arg pin
+    // count equals `N` (the source's flat arity), and the output pin type
+    // reflects partial application (`k < N`) or full evaluation (`k == N`).
+    // Must run BEFORE `validate_wires` so the type checks see the up-to-date
+    // pin types; idempotent so re-running on a steady state is a no-op.
+    node_type_registry.update_apply_pin_layouts_for_network(network);
+
     // VALIDATION PHASE: Check wire validity and resolve polymorphic output pins.
     let mut ctx = ValidationContext::new();
     let wires_valid = validate_wires(network, node_type_registry, &mut ctx);
@@ -694,6 +704,36 @@ fn validate_zones_recursive(
                 "apply: required `f` (Function) pin is not connected".to_string(),
                 Some(node_id),
             ));
+        }
+
+        // Currying Phase 3 (`doc/design_currying.md`, §"Validation" check 1):
+        // `apply`'s arg pins must be wired as a contiguous prefix — wiring
+        // `arg_j` while some `arg_i` (i < j) is unwired is rejected. This is
+        // what makes "k = number of wired arg pins" unambiguous at eval time,
+        // and is the rule the editor enforces interactively. The function-pin
+        // input lives at pin 0; arg pins are 1..N.
+        if node.node_type_name == "apply" {
+            let mut seen_unwired = false;
+            let mut bad_pin: Option<usize> = None;
+            for (i, arg) in node.arguments.iter().enumerate().skip(1) {
+                if arg.incoming_wires.is_empty() {
+                    seen_unwired = true;
+                } else if seen_unwired {
+                    bad_pin = Some(i - 1); // 0-based arg pin index
+                    break;
+                }
+            }
+            if let Some(j) = bad_pin {
+                ok = false;
+                network.validation_errors.push(ValidationError::new(
+                    format!(
+                        "apply: arg pins must be wired as a contiguous prefix \
+                         (arg{} is wired while an earlier pin is unwired)",
+                        j
+                    ),
+                    Some(node_id),
+                ));
+            }
         }
 
         // Function-mode rule (doc/design_function_pins.md §"Function mode"): a

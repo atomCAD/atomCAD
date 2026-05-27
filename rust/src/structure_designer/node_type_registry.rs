@@ -1,4 +1,4 @@
-use super::node_type::{NodeType, PinOutputType};
+use super::node_type::{NodeType, Parameter, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply::get_node_type as apply_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
@@ -1028,6 +1028,175 @@ impl NodeTypeRegistry {
         parent_networks
     }
 
+    /// Top-level driver for the Currying Phase 3 apply post-pass: for every
+    /// `apply` node in `network` whose `f` pin is wired to a resolvable
+    /// `Function` source, override the node's `custom_node_type` from the
+    /// wired source's declared (canonical, flat) function type and the count
+    /// of wired arg pins on this apply.
+    ///
+    /// Called from `repair_node_network` (heavyweight repair entry, e.g.
+    /// `.cnnd` load) and from `network_validator::validate_network` (every
+    /// validate pass — so the pin layout is current when `validate_wires`
+    /// type-checks the f wire and the arg wires). Idempotent: running it
+    /// repeatedly with the same wires produces the same custom_node_type.
+    ///
+    /// Body-internal apply nodes are intentionally not handled here. They
+    /// surface via `repair_node_network`'s zone-body recursion if needed.
+    pub fn update_apply_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
+        // Snapshot pass (immutable read).
+        let apply_ids: Vec<u64> = network
+            .nodes
+            .iter()
+            .filter_map(|(&id, n)| (n.node_type_name == "apply").then_some(id))
+            .collect();
+        let mut overrides: Vec<(u64, NodeType)> = Vec::new();
+        for id in apply_ids {
+            let Some(node) = network.nodes.get(&id) else {
+                continue;
+            };
+            if let Some(custom) = self.compute_apply_custom_type_from_wired_f(node, network) {
+                overrides.push((id, custom));
+            }
+        }
+        // Install pass (mutation).
+        for (id, custom) in overrides {
+            if let Some(node) = network.nodes.get_mut(&id) {
+                node.set_custom_node_type(Some(custom), true);
+            }
+        }
+    }
+
+    /// Computes the dynamic `custom_node_type` for an `apply` node whose `f`
+    /// pin is wired, derived from the wired source's declared (canonical, flat)
+    /// function type and the count of wired arg pins on this apply.
+    ///
+    /// Returns `Some(custom_type)` to install when:
+    /// 1. The apply's `f` pin (argument index 0) carries an incoming wire.
+    /// 2. The wired source's output pin resolves to a `Function(_)`.
+    ///
+    /// Returns `None` to fall back to today's `ApplyData`-driven layout when:
+    /// - `f` is disconnected, or
+    /// - the source type doesn't resolve (unresolved polymorphic upstream,
+    ///   stale wire, etc.), or
+    /// - the source type is not a `Function`.
+    ///
+    /// Currying Phase 3, `doc/design_currying.md` §"`apply` semantics":
+    /// - Number of arg pins `N = source's flat parameter_types.len()`.
+    /// - Output pin type: `R` when all N args are wired (full evaluation),
+    ///   else `Function(declared_params[k..], R)` canonicalized (partial).
+    /// - Arg pin names: read from the source's pin names when available
+    ///   (closure node's `zone_input_pins`; function-pin's `parameters`),
+    ///   else generic `"arg0", "arg1", …`.
+    ///
+    /// The k-aware output type means the apply's output pin retypes as the
+    /// user wires/unwires arg pins. Validation only allows a contiguous
+    /// prefix of arg pins to be wired (see
+    /// `network_validator::validate_zones_recursive`'s apply rule), so `k`
+    /// is unambiguous; non-prefix wiring is an error but we still compute
+    /// based on count to keep the output pin's type sensible while the user
+    /// resolves the violation.
+    fn compute_apply_custom_type_from_wired_f(
+        &self,
+        apply_node: &Node,
+        network: &NodeNetwork,
+    ) -> Option<NodeType> {
+        use crate::structure_designer::data_type::FunctionType;
+        use crate::structure_designer::node_type::OutputPinDefinition;
+
+        let base = self.built_in_node_types.get("apply")?;
+        let f_arg = apply_node.arguments.first()?;
+        let f_wire = f_arg.incoming_wires.first()?;
+        // Only handle local-scope NodeOutput wires here — captures and zone
+        // inputs (`source_scope_depth > 0` or `ZoneInput { .. }`) for an
+        // apply.f live cross-scope and aren't repairable from this network
+        // alone. They round-trip through validation which surfaces any
+        // shape errors.
+        if f_wire.source_scope_depth != 0 {
+            return None;
+        }
+        let (src_node_id, src_pin_index) = f_wire.as_legacy_pair()?;
+        let src_node = network.nodes.get(&src_node_id)?;
+        let src_type = self.resolve_output_type(src_node, network, src_pin_index)?;
+        let DataType::Function(src_ft) = src_type else {
+            return None;
+        };
+
+        let total_arity = src_ft.parameter_types.len();
+        let return_type = (*src_ft.output_type).clone();
+
+        // Pin-name policy: preserve the *existing* parameter names of this
+        // apply at overlapping indices, so `set_custom_node_type`'s by-name
+        // wire preservation does not drop wires when the post-pass overrides
+        // an ApplyData-driven layout (e.g. Map kind's "element" or Custom
+        // kind's authored "x"/"lhs"). New pin slots that didn't exist in
+        // the OLD layout get a stable `arg{i}` fallback.
+        //
+        // Source-derived names (read from `closure.zone_input_pins` /
+        // function-pin source's parameters) are intentionally *not* used
+        // here — they would be the right UX choice if we had stable
+        // parameter IDs for wire preservation, but with `id: None` the
+        // name change would drop a freshly wired arg every time. Keeping
+        // OLD names is the conservative trade-off; the editor can show
+        // source-authored names in a label overlay (Phase 5 UI work).
+        let current_params: &[Parameter] = apply_node
+            .custom_node_type
+            .as_ref()
+            .map(|nt| nt.parameters.as_slice())
+            .unwrap_or(&base.parameters);
+
+        let mut custom = base.clone();
+
+        // External pins: f + N arg pins.
+        let mut parameters = Vec::with_capacity(1 + total_arity);
+        parameters.push(Parameter {
+            id: None,
+            name: "f".to_string(),
+            data_type: DataType::Function(FunctionType::new(
+                src_ft.parameter_types.clone(),
+                return_type.clone(),
+            )),
+        });
+        for (i, param_ty) in src_ft.parameter_types.iter().enumerate() {
+            // OLD index for arg{i} is at parameter slot `1 + i` (after `f`).
+            let name = current_params
+                .get(1 + i)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| format!("arg{}", i));
+            parameters.push(Parameter {
+                id: None,
+                name,
+                data_type: param_ty.clone(),
+            });
+        }
+
+        // k = count of the contiguous prefix of wired arg pins on THIS apply.
+        // The prefix-only validation rule means k = total wired prefix; a
+        // bad wiring is flagged separately but doesn't break this calc.
+        let mut k: usize = 0;
+        for i in 0..total_arity {
+            let idx = 1 + i;
+            match apply_node.arguments.get(idx) {
+                Some(a) if !a.incoming_wires.is_empty() => k += 1,
+                _ => break,
+            }
+        }
+
+        // Output pin type: full eval ⇒ R; partial ⇒ Function(remaining, R).
+        let output_type = if k >= total_arity {
+            return_type
+        } else {
+            DataType::Function(FunctionType::new(
+                src_ft.parameter_types[k..].to_vec(),
+                return_type,
+            ))
+        };
+
+        custom.parameters = parameters;
+        custom.output_pins = OutputPinDefinition::single_fixed(output_type);
+
+        Some(custom)
+    }
+
     /// Repairs a node network by ensuring all nodes have the correct number of arguments
     /// to match their node type parameters. Adds empty arguments if a node has fewer
     /// arguments than its node type requires.
@@ -1072,6 +1241,15 @@ impl NodeTypeRegistry {
                 true,
             );
         }
+
+        // Currying Phase 3 (`doc/design_currying.md`): `apply` nodes whose
+        // `f` (Function) pin is wired derive their arg-pin enumeration and
+        // output pin type from the wired source's declared (canonical,
+        // flat) function type — overriding the ApplyData-driven layout
+        // produced by the populate loop above. See
+        // `update_apply_pin_layouts_for_network` for the borrow-split
+        // snapshot + install pattern.
+        self.update_apply_pin_layouts_for_network(network);
 
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
 

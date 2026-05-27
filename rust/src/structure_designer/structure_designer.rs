@@ -2131,7 +2131,7 @@ impl StructureDesigner {
             None => return,
         };
         // First validate the connection
-        let (dest_param_is_multi, dest_is_function_pin) = {
+        let (dest_param_is_multi, dest_is_function_pin, dest_is_apply) = {
             // Get the network
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
@@ -2157,6 +2157,7 @@ impl StructureDesigner {
                             dt,
                             crate::structure_designer::data_type::DataType::Function(_)
                         ),
+                        dest_node.node_type_name == "apply",
                     )
                 }
                 None => return,
@@ -2170,10 +2171,15 @@ impl StructureDesigner {
         // forces the source into function-mode. The partial refresh that follows
         // re-evaluates but does not validate, so without an explicit re-validate
         // those errors would go stale (e.g. the zone-output error lingering on a
-        // `map` whose `f` was just wired). We gate the re-validate on function
-        // wires only — re-validating *every* connect is both unnecessary and
-        // changes long-standing behavior for ordinary value wires.
-        let revalidate = dest_is_function_pin || source_output_pin_index < 0;
+        // `map` whose `f` was just wired).
+        //
+        // Currying Phase 3 (`doc/design_currying.md`): wiring an arg pin on an
+        // `apply` node also requires revalidation because the output pin type
+        // depends on `k` (the count of wired arg pins). Without this, a wire
+        // into `apply.arg0` would leave the output type stale at its previous
+        // partial/full shape and downstream consumers would type-check against
+        // the wrong type. Apply destinations therefore always revalidate.
+        let revalidate = dest_is_function_pin || source_output_pin_index < 0 || dest_is_apply;
 
         // Capture the existing wire on this pin before connecting (for undo)
         let replaced_wire = if !dest_param_is_multi {

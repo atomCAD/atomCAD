@@ -834,3 +834,449 @@ fn zone_closure_clone_shares_pre_supplied_args_arc() {
         &cloned.pre_supplied_args
     ));
 }
+
+// =============================================================================
+// Phase 3 — `apply` partial application + recursive consumption
+// =============================================================================
+//
+// Helpers mirror the Phase 2 pattern: build a Custom-kind closure with N int
+// params, wire it into an `apply`, optionally leave a prefix of arg pins
+// unwired to exercise partial application. See `doc/design_currying.md`
+// §"`apply` semantics".
+
+use rust_lib_flutter_cad::structure_designer::nodes::apply::ApplyData;
+
+/// Evaluate a node and return the result against the active registry.
+fn phase3_evaluate_node(
+    designer: &StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+) -> NetworkResult {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(network_name).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let stack = vec![NetworkStackElement {
+        node_network: network,
+        node_id: 0,
+    }];
+    evaluator.evaluate(&stack, node_id, 0, registry, false, &mut context)
+}
+
+/// Add an `int` constant.
+fn phase3_add_int(designer: &mut StructureDesigner, network: &str, value: i32, y: f64) -> u64 {
+    use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
+    let id = designer.add_node("int", DVec2::new(0.0, y));
+    phase2_set_node_data(designer, network, id, Box::new(IntData { value }));
+    id
+}
+
+/// Build an N-int-param `Custom` closure on the "main" network whose body
+/// computes the given expression over the params. Returns the closure node id.
+fn phase3_add_custom_int_closure(
+    designer: &mut StructureDesigner,
+    network: &str,
+    param_names: &[&str],
+    expression: &str,
+    y: f64,
+) -> u64 {
+    let mut type_args: Vec<DataType> = vec![DataType::Int; param_names.len()];
+    type_args.push(DataType::Int); // return type
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, y));
+    phase2_set_node_data(
+        designer,
+        network,
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args,
+            param_names: param_names.iter().map(|s| s.to_string()).collect(),
+            custom_label: None,
+        }),
+    );
+    let expr_id =
+        phase2_add_expr_to_body(designer, network, closure_id, expression, param_names);
+    for (i, _) in param_names.iter().enumerate() {
+        phase2_wire_zone_input_to_body_node(designer, network, closure_id, i, expr_id, i);
+    }
+    phase2_wire_body_node_to_zone_output(designer, network, closure_id, expr_id);
+    closure_id
+}
+
+/// Add an `apply` node with default ApplyData (irrelevant when `f` is wired
+/// — the repair post-pass overrides the layout from the wired source's flat
+/// function type).
+fn phase3_add_apply(designer: &mut StructureDesigner, network: &str, y: f64) -> u64 {
+    let apply_id = designer.add_node("apply", DVec2::new(0.0, y));
+    // Default ApplyData is map-like `(Float) -> Float`; overridden after we
+    // wire f. We don't need to pre-shape it.
+    phase2_set_node_data(designer, network, apply_id, Box::new(ApplyData::default()));
+    apply_id
+}
+
+fn phase3_extract_int(result: NetworkResult) -> i32 {
+    match result {
+        NetworkResult::Int(v) => v,
+        NetworkResult::Error(msg) => panic!("expected Int, got Error: {msg}"),
+        other => panic!("expected Int, got {}", other.to_display_string()),
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Test 1: full apply unchanged — N == k == n_body, single loop iteration.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_full_eval_three_args() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+    let a = phase3_add_int(&mut designer, "main", 2, -100.0);
+    let b = phase3_add_int(&mut designer, "main", 3, -50.0);
+    let c = phase3_add_int(&mut designer, "main", 4, 0.0);
+
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g, 0, app, 0); // f — triggers post-pass shape derivation
+    designer.connect_nodes(a, 0, app, 1);
+    designer.connect_nodes(b, 0, app, 2);
+    designer.connect_nodes(c, 0, app, 3);
+
+    let result = phase3_evaluate_node(&designer, "main", app);
+    assert_eq!(phase3_extract_int(result), 9);
+}
+
+// ----------------------------------------------------------------------------
+// Test 2: one-arg partial yields a 2-arg function; chain via another `apply`.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_partial_then_full_via_second_apply() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+    let a = phase3_add_int(&mut designer, "main", 10, -100.0);
+    let b = phase3_add_int(&mut designer, "main", 20, -50.0);
+    let c = phase3_add_int(&mut designer, "main", 30, 0.0);
+
+    // First apply: k=1, leaves a 2-arg function.
+    let app1 = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g, 0, app1, 0);
+    designer.connect_nodes(a, 0, app1, 1);
+    // arg1, arg2 left unwired
+
+    // Second apply: consume the remaining 2-arg function with both args.
+    let app2 = phase3_add_apply(&mut designer, "main", 100.0);
+    designer.connect_nodes(app1, 0, app2, 0); // f = partial
+    designer.connect_nodes(b, 0, app2, 1);
+    designer.connect_nodes(c, 0, app2, 2);
+
+    let result = phase3_evaluate_node(&designer, "main", app2);
+    assert_eq!(phase3_extract_int(result), 60);
+}
+
+// ----------------------------------------------------------------------------
+// Test 3: identity partial — k=0 with a non-thunk f returns f unchanged.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_identity_partial_returns_f_unchanged() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b"],
+        "a * b",
+        -100.0,
+    );
+    let app = phase3_add_apply(&mut designer, "main", 0.0);
+    designer.connect_nodes(g, 0, app, 0); // f only, no arg pins wired
+
+    let result = phase3_evaluate_node(&designer, "main", app);
+    // Identity partial: apply returns the wired closure as a Function value.
+    match result {
+        NetworkResult::Function(zc) => {
+            // The closure's declared canonical flat type stays `(Int, Int) -> Int`.
+            let ft = zc.function_type();
+            assert_eq!(ft.parameter_types, vec![DataType::Int, DataType::Int]);
+            assert_eq!(*ft.output_type, DataType::Int);
+            // Identity partial: no args were bound, so pre_supplied_args is empty.
+            assert!(zc.pre_supplied_args.is_empty());
+        }
+        other => panic!(
+            "expected Function (identity partial), got {}",
+            other.to_display_string()
+        ),
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Test 4: 0-arity thunk — declared params empty, identity guard does not fire,
+// loop runs once with n_body=0 and returns the body's value.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_zero_arity_thunk_is_forced() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // A 0-arity Custom closure: param_names = [], type_args = [Int],
+    // body is a single `int` constant wired to zone_output.
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, -100.0));
+    phase2_set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int],
+            param_names: vec![],
+            custom_label: None,
+        }),
+    );
+    // Add an int constant into the closure's body and wire to zone_output.
+    {
+        use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
+        let registry = &mut designer.node_type_registry;
+        let body = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&closure_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let int_id = body.add_node("int", DVec2::ZERO, 0, Box::new(IntData { value: 42 }));
+        if body
+            .nodes
+            .get(&closure_id)
+            .and_then(|n| n.zone_output_arguments.first())
+            .is_none()
+        {
+            // No-op; the population step ensured zone_output_arguments has one
+            // entry per declared zone-output pin.
+        }
+        let owner = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&closure_id)
+            .unwrap();
+        if owner.zone_output_arguments.is_empty() {
+            owner.zone_output_arguments.push(Argument::new());
+        }
+        owner.zone_output_arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: int_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(closure_id, 0, app, 0); // f only — no arg pins on apply
+
+    let result = phase3_evaluate_node(&designer, "main", app);
+    assert_eq!(
+        phase3_extract_int(result),
+        42,
+        "0-arity thunk must be forced: declared arity 0 ⇒ identity guard does not fire ⇒ body runs"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test 5: prefix-only validation — arg0 unwired, arg1 wired is rejected.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_prefix_only_validation_rejects_gap() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+    let b = phase3_add_int(&mut designer, "main", 5, -50.0);
+
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g, 0, app, 0); // f wired ⇒ apply shape derived
+    // Skip arg0; wire arg1 only — prefix-only rule should fire.
+    designer.connect_nodes(b, 0, app, 2);
+
+    let valid = designer
+        .validate_active_network()
+        .map(|r| r.valid)
+        .unwrap_or(false);
+    assert!(
+        !valid,
+        "apply with non-prefix wiring (arg0 unwired, arg1 wired) must be invalid"
+    );
+
+    let errors: Vec<String> = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .validation_errors
+        .iter()
+        .map(|e| e.error_text.clone())
+        .collect();
+    assert!(
+        errors
+            .iter()
+            .any(|s| s.contains("contiguous prefix") || s.contains("prefix")),
+        "expected a prefix-only error message; got: {:?}",
+        errors
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test 6: currying-equivalent acceptance — Phase 1 canonicalization means a
+// closure authored as `A -> ((B, C) -> D)` is stored as `(A, B, C) -> D`,
+// so an apply with three arg pins accepts it directly.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_canonical_flat_arity_drives_arg_pins() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Closure with stored type_args[-1] = Function((B, C), D), which Phase 1
+    // canonicalizes so the closure's declared output type is the flat
+    // (A, B, C) -> D. We use Ints throughout for body computability — the
+    // canonicalization itself is type-agnostic.
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+    // Verify the closure's declared output is canonical 3-arg.
+    let nt = {
+        let net = designer.node_type_registry.node_networks.get("main").unwrap();
+        let node = net.nodes.get(&g).unwrap();
+        designer
+            .node_type_registry
+            .get_node_type_for_node(node)
+            .unwrap()
+            .clone()
+    };
+    let out_ty = nt.output_type().clone();
+    let DataType::Function(ft) = out_ty else {
+        panic!("expected closure output type to be Function(_)");
+    };
+    assert_eq!(
+        ft.parameter_types.len(),
+        3,
+        "Custom (a, b, c) -> Int closure must declare a 3-parameter flat function type"
+    );
+    assert_eq!(*ft.output_type, DataType::Int);
+
+    // Wire into apply: post-pass derives 3 arg pins from the source's flat type.
+    let a = phase3_add_int(&mut designer, "main", 1, -100.0);
+    let b = phase3_add_int(&mut designer, "main", 2, -50.0);
+    let c = phase3_add_int(&mut designer, "main", 3, 0.0);
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g, 0, app, 0);
+    designer.connect_nodes(a, 0, app, 1);
+    designer.connect_nodes(b, 0, app, 2);
+    designer.connect_nodes(c, 0, app, 3);
+
+    // After connect_nodes (which revalidates because dest_is_function_pin and/or
+    // the f wire), apply's custom_node_type should have exactly 4 parameters
+    // (f + 3 arg pins).
+    let apply_param_count = {
+        let net = designer.node_type_registry.node_networks.get("main").unwrap();
+        let node = net.nodes.get(&app).unwrap();
+        designer
+            .node_type_registry
+            .get_node_type_for_node(node)
+            .unwrap()
+            .parameters
+            .len()
+    };
+    assert_eq!(
+        apply_param_count, 4,
+        "apply wired to a canonical 3-arg Function source must expose f + 3 arg pins"
+    );
+
+    let result = phase3_evaluate_node(&designer, "main", app);
+    assert_eq!(phase3_extract_int(result), 6);
+}
+
+// ----------------------------------------------------------------------------
+// Test 7: apply's output pin retypes to Function on partial wiring.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_output_pin_retypes_on_partial_wiring() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+    let a = phase3_add_int(&mut designer, "main", 1, -100.0);
+
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g, 0, app, 0);
+    designer.connect_nodes(a, 0, app, 1);
+    // arg1, arg2 left unwired ⇒ k=1, output type should be Function((Int, Int), Int)
+
+    let out_ty = {
+        let net = designer.node_type_registry.node_networks.get("main").unwrap();
+        let node = net.nodes.get(&app).unwrap();
+        designer
+            .node_type_registry
+            .get_node_type_for_node(node)
+            .unwrap()
+            .output_type()
+            .clone()
+    };
+    match out_ty {
+        DataType::Function(ft) => {
+            assert_eq!(
+                ft.parameter_types,
+                vec![DataType::Int, DataType::Int],
+                "partial apply with k=1/N=3 must expose a 2-arg remaining function on its output"
+            );
+            assert_eq!(*ft.output_type, DataType::Int);
+        }
+        other => panic!("expected Function output type, got {:?}", other),
+    }
+}
+
