@@ -35,6 +35,7 @@ fn make_function_value(param_types: Vec<DataType>, return_type: DataType) -> Net
         owner_node_id: 0,
         param_types,
         return_type,
+        pre_supplied_args: Arc::new(Vec::new()),
     })
 }
 

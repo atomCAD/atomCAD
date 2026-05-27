@@ -12,6 +12,13 @@
 //! with no user-visible change. As of Phase 2 the bundle is also the payload of
 //! `NetworkResult::Function` — a first-class (but not yet user-constructible)
 //! function value.
+//!
+//! Currying Phase 2 adds `pre_supplied_args` — an `Arc`-shared vector of
+//! arguments already bound by partial application, prepended to the
+//! caller-supplied frame inside [`run_closure_once`]. No node in the codebase
+//! yet produces a non-empty value (Phase 3's `apply` rewrite is what will), so
+//! every existing closure / HOF path continues to behave byte-identically. See
+//! `doc/design_currying.md` (Phase 2).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -51,8 +58,27 @@ pub struct ZoneClosure {
     /// can sanity-check shape and so the value's `DataType::Function` can be
     /// inferred. Unused in Phase 1 — populated for Phase 2+ where the bundle
     /// becomes a typed `NetworkResult::Function`.
+    ///
+    /// **Currying-phase semantics** (`doc/design_currying.md`, Phase 2): this
+    /// is the body's *remaining unbound* frame size — how many caller args one
+    /// [`run_closure_once`] consumes. It is decoupled from the closure's
+    /// declared (canonical, flat) function type, which can be wider when
+    /// `return_type` itself is a `Function`. The declared type is computed by
+    /// [`ZoneClosure::function_type`].
     pub param_types: Vec<DataType>,
     pub return_type: DataType,
+    /// Args already bound by partial application. Prepended to the
+    /// caller-supplied frame inside [`run_closure_once`], so the body's
+    /// `ZoneInput { pin_index }` resolution lines up positionally — pins are
+    /// unchanged, the frame is just longer than the caller's `args` vector.
+    /// Default empty (`Arc::new(Vec::new())` — a single shared zero-length
+    /// allocation across every freshly built closure). `Arc`-shared so cloning
+    /// a partially-applied closure stays a refcount bump (Walker Invariant 2,
+    /// see `evaluator/AGENTS.md`).
+    ///
+    /// No node yet *produces* a non-empty value in Phase 2; Phase 3's `apply`
+    /// rewrite is what will. See `doc/design_currying.md`.
+    pub pre_supplied_args: Arc<Vec<NetworkResult>>,
 }
 
 impl ZoneClosure {
@@ -82,6 +108,7 @@ impl ZoneClosure {
 /// (matching the design's `obtain_closure` signature and letting callers
 /// forward it without a deref) and silence the lint.
 #[allow(clippy::result_large_err)]
+#[allow(clippy::arc_with_non_send_sync)]
 pub fn build_inline_closure<'a>(
     evaluator: &NetworkEvaluator,
     network_stack: &[NetworkStackElement<'a>],
@@ -161,6 +188,7 @@ pub fn build_inline_closure<'a>(
         owner_node_id: node_id,
         param_types,
         return_type,
+        pre_supplied_args: Arc::new(Vec::new()),
     })
 }
 
@@ -268,6 +296,7 @@ pub fn build_node_function_closure<'a>(
         owner_node_id: owner_key,
         param_types,
         return_type,
+        pre_supplied_args: Arc::new(Vec::new()),
     })
 }
 
@@ -345,7 +374,20 @@ pub fn run_closure_once<'a>(
         Arc::clone(&closure.captures),
     );
 
-    context.push_zone_input_frame(closure.owner_node_id, args);
+    // Currying Phase 2: prepend any args already bound by partial application
+    // before the caller-supplied frame. For freshly-built closures
+    // (`pre_supplied_args` empty — every existing call site in Phase 2) this is
+    // an empty prepend, so the pushed frame is exactly `args`.
+    let frame = if closure.pre_supplied_args.is_empty() {
+        args
+    } else {
+        let mut frame =
+            Vec::with_capacity(closure.pre_supplied_args.len() + args.len());
+        frame.extend(closure.pre_supplied_args.iter().cloned());
+        frame.extend(args);
+        frame
+    };
+    context.push_zone_input_frame(closure.owner_node_id, frame);
 
     // Push the closure's body onto the base stack. For the lazy walkers
     // (`network_stack == &[]`) this is a body-only stack; for the eager HOFs
