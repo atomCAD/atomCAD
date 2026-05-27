@@ -1238,8 +1238,41 @@ impl NodeNetwork {
             None => return false,
         };
 
-        // Check if the data types are compatible using conversion rules
-        DataType::can_be_converted_to(&source_output_type, &dest_param_type, node_type_registry)
+        // Check if the data types are compatible using conversion rules.
+        if DataType::can_be_converted_to(
+            &source_output_type,
+            &dest_param_type,
+            node_type_registry,
+        ) {
+            return true;
+        }
+
+        // Currying Phase 4 (`doc/design_currying.md`, §"HOF auto-partialization
+        // (`map`)"): `map.f` accepts any `Function` source whose parameter list
+        // **starts with** `[element_type]`. The excess parameters become the
+        // partial-application tail at evaluation; `map`'s post-pass overrides
+        // the f-pin's declared type to match the source exactly so standard
+        // structural validation passes on every subsequent revalidate. This
+        // gate is what lets the user create the wire in the first place
+        // (before any post-pass has run).
+        //
+        // `map.f` lives at parameter index 1; the dest_param_type is the
+        // current `Function([element_type], _)` set by MapData-driven
+        // `calculate_custom_node_type`. We accept the wire when the source is
+        // a `Function` whose parameter list starts with that element_type.
+        if dest_node.node_type_name == "map" && dest_param_index == 1 {
+            if let (DataType::Function(dest_ft), DataType::Function(src_ft)) =
+                (&dest_param_type, &source_output_type)
+            {
+                if let Some(element_type) = dest_ft.parameter_types.first() {
+                    if src_ft.parameter_types.first() == Some(element_type) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     pub fn connect_nodes(

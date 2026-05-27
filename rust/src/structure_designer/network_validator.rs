@@ -603,6 +603,15 @@ pub fn validate_network(
     // pin types; idempotent so re-running on a steady state is a no-op.
     node_type_registry.update_apply_pin_layouts_for_network(network);
 
+    // REPAIR PHASE: Currying Phase 4 (`doc/design_currying.md`,
+    // §"HOF auto-partialization (`map`)"). For every `map` node whose `f`
+    // pin is wired with a starts-with-compatible source, override the map's
+    // `f` pin type to match the source exactly and derive `output_type` from
+    // `f`. Runs after the apply post-pass so an `apply` source feeding
+    // `map.f` has its output type resolved against its updated arg-pin
+    // layout first.
+    node_type_registry.update_map_pin_layouts_for_network(network);
+
     // VALIDATION PHASE: Check wire validity and resolve polymorphic output pins.
     let mut ctx = ValidationContext::new();
     let wires_valid = validate_wires(network, node_type_registry, &mut ctx);

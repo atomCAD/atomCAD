@@ -260,14 +260,47 @@ impl WalkerKind {
                 match source.next(evaluator, registry, context) {
                     None => None,
                     Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
-                    Some(elem) => Some(run_closure_once(
-                        evaluator,
-                        &[],
-                        registry,
-                        context,
-                        closure,
-                        vec![elem],
-                    )),
+                    Some(elem) => {
+                        // Currying Phase 4 (`doc/design_currying.md`,
+                        // §"HOF auto-partialization (`map`)"): when the
+                        // closure's body arity is > 1, the element fills only
+                        // the first slot — the remaining slots become the
+                        // partial-application tail. Bind the element into
+                        // `pre_supplied_args` and yield a partial `Function`
+                        // value carrying it; downstream consumers (`apply`,
+                        // another `map`, etc.) absorb the rest.
+                        //
+                        // Body arity 0 or 1 is the existing exact-arity path:
+                        // run the body once via `run_closure_once`. (Body
+                        // arity 0 is a thunk; the element is silently
+                        // discarded — pathological but well-defined.)
+                        if closure.param_types.len() > 1 {
+                            #[allow(clippy::arc_with_non_send_sync)]
+                            let extended = {
+                                let mut v = (*closure.pre_supplied_args).clone();
+                                v.push(elem);
+                                Arc::new(v)
+                            };
+                            Some(NetworkResult::Function(ZoneClosure {
+                                body: Arc::clone(&closure.body),
+                                captures: Arc::clone(&closure.captures),
+                                zone_output_wires: Arc::clone(&closure.zone_output_wires),
+                                owner_node_id: closure.owner_node_id,
+                                param_types: closure.param_types[1..].to_vec(),
+                                return_type: closure.return_type.clone(),
+                                pre_supplied_args: extended,
+                            }))
+                        } else {
+                            Some(run_closure_once(
+                                evaluator,
+                                &[],
+                                registry,
+                                context,
+                                closure,
+                                vec![elem],
+                            ))
+                        }
+                    }
                 }
             }
             WalkerKind::FilterZone { source, closure } => loop {

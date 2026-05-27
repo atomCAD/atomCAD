@@ -1197,6 +1197,158 @@ impl NodeTypeRegistry {
         Some(custom)
     }
 
+    /// Top-level driver for the Currying Phase 4 `map` post-pass: for every
+    /// `map` node in `network` whose `f` pin is wired to a resolvable `Function`
+    /// source whose declared (canonical, flat) parameter list **starts with**
+    /// the map's element type, override the node's `custom_node_type` so that:
+    /// 1. `map.f`'s declared pin type matches the wired source's exact function
+    ///    type (so the standard structural wire check passes).
+    /// 2. `map`'s output pin type becomes `Iter[derived_output]` where
+    ///    `derived_output` is either `*src.output_type` (when the source's
+    ///    parameter list is just `[element_type]`) or
+    ///    `Function(tail, *src.output_type)` (when the source has extra params
+    ///    that absorb as partial-application tail).
+    ///
+    /// The HOF auto-partialization rule from `doc/design_currying.md` Phase 4:
+    /// any `Function` source whose parameter list starts with `[element_type]`
+    /// can flow into `map.f`; the per-element evaluation produces a partially-
+    /// applied closure carrying that element and the remaining `tail`
+    /// parameters. The zone-body pins (`zone_input_pins`, `zone_output_pins`)
+    /// are intentionally left at `MapData`-driven values so that disconnecting
+    /// `f` restores the user's inline-body shape cleanly.
+    ///
+    /// Called from `repair_node_network` (heavyweight repair entry, e.g.
+    /// `.cnnd` load) and from `network_validator::validate_network` (every
+    /// validate pass). Idempotent: running it on a steady state is a no-op.
+    pub fn update_map_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
+        // Snapshot pass (immutable read). Recompute *every* map node's
+        // custom_node_type so disconnecting `f` restores the MapData-driven
+        // layout cleanly — without this, an override installed by a previous
+        // run would persist after the wire is gone. The MapData-driven default
+        // is identical to what `populate_custom_node_type_cache` would produce,
+        // so re-installing it on every revalidate is a no-op for nodes that
+        // weren't overridden (`set_custom_node_type`'s by-name parameter
+        // preservation keeps the existing arguments untouched).
+        let map_ids: Vec<u64> = network
+            .nodes
+            .iter()
+            .filter_map(|(&id, n)| (n.node_type_name == "map").then_some(id))
+            .collect();
+        let mut updates: Vec<(u64, NodeType)> = Vec::new();
+        for id in map_ids {
+            let Some(node) = network.nodes.get(&id) else {
+                continue;
+            };
+            if let Some(custom) = self.compute_map_custom_type(node, network) {
+                updates.push((id, custom));
+            }
+        }
+        // Install pass (mutation).
+        for (id, custom) in updates {
+            if let Some(node) = network.nodes.get_mut(&id) {
+                node.set_custom_node_type(Some(custom), true);
+            }
+        }
+    }
+
+    /// Resolves the custom_node_type for a `map` node: derived from the wired
+    /// `f` source when the starts-with rule matches, else the MapData-driven
+    /// default. Returns `None` only when the base `map` node type is missing
+    /// from the registry (shouldn't happen in a well-formed registry) or when
+    /// `calculate_custom_node_type` produces nothing.
+    fn compute_map_custom_type(&self, map_node: &Node, network: &NodeNetwork) -> Option<NodeType> {
+        let base = self.built_in_node_types.get("map")?;
+        // MapData-driven default (today's behavior) — the fallback when `f` is
+        // disconnected or starts-with doesn't match.
+        let map_data_default = map_node.data.calculate_custom_node_type(base)?;
+        // Try to derive from wired f; fall back to the MapData default.
+        Some(
+            self.compute_map_custom_type_from_wired_f(map_node, network, &map_data_default)
+                .unwrap_or(map_data_default),
+        )
+    }
+
+    /// Computes the dynamic `custom_node_type` for a `map` node whose `f` pin
+    /// is wired with a starts-with-compatible `Function` source. Returns
+    /// `None` to fall back to today's `MapData`-driven layout when:
+    /// - `f` is disconnected, or
+    /// - the source type doesn't resolve (unresolved polymorphic upstream,
+    ///   stale wire, etc.), or
+    /// - the source type is not a `Function`, or
+    /// - the source's parameter list does not start with `[element_type]`.
+    ///
+    /// Currying Phase 4, `doc/design_currying.md` §"HOF auto-partialization
+    /// (`map`)". The derived layout:
+    /// - `xs` pin: `Iter[element_type]` (unchanged from `MapData`-driven).
+    /// - `f` pin: `Function(src.parameter_types, src.output_type)` exactly —
+    ///   so the standard structural wire check in `can_be_converted_to`
+    ///   matches the source's flat type after this post-pass installs.
+    /// - Output pin: `Iter[derived_output]` where `derived_output` is
+    ///   `Function(tail, R)` for a non-empty tail (canonicalized) or `R` when
+    ///   the tail is empty.
+    /// - `zone_input_pins`/`zone_output_pins`: unchanged from the existing
+    ///   `MapData`-driven layout (so disconnecting `f` restores cleanly).
+    fn compute_map_custom_type_from_wired_f(
+        &self,
+        map_node: &Node,
+        network: &NodeNetwork,
+        map_data_default: &NodeType,
+    ) -> Option<NodeType> {
+        use crate::structure_designer::data_type::FunctionType;
+        use crate::structure_designer::node_type::OutputPinDefinition;
+
+        // map.f is parameter index 1.
+        let f_arg = map_node.arguments.get(1)?;
+        let f_wire = f_arg.incoming_wires.first()?;
+        if f_wire.source_scope_depth != 0 {
+            return None;
+        }
+        let (src_node_id, src_pin_index) = f_wire.as_legacy_pair()?;
+        let src_node = network.nodes.get(&src_node_id)?;
+        let src_type = self.resolve_output_type(src_node, network, src_pin_index)?;
+        let DataType::Function(src_ft) = src_type else {
+            return None;
+        };
+
+        // Starts-with rule: the source's parameter list must begin with
+        // `[element_type]`. element_type is whatever the MapData-driven f pin's
+        // declared first param is — that's what calculate_custom_node_type
+        // installs as `Function(vec![input_type], output_type)`.
+        let f_pin_type = &map_data_default.parameters.get(1)?.data_type;
+        let DataType::Function(f_ft) = f_pin_type else {
+            return None;
+        };
+        let element_type = f_ft.parameter_types.first()?.clone();
+        if src_ft.parameter_types.first() != Some(&element_type) {
+            return None;
+        }
+
+        // Derive the output type. Tail = params after the leading element_type.
+        let tail = &src_ft.parameter_types[1..];
+        let return_type = (*src_ft.output_type).clone();
+        let derived_output = if tail.is_empty() {
+            return_type
+        } else {
+            DataType::Function(FunctionType::new(tail.to_vec(), return_type))
+        };
+
+        // Build the override on top of the MapData-driven default.
+        let mut custom = map_data_default.clone();
+        // f pin: take the source's exact function type so the standard
+        // structural wire check matches.
+        if let Some(f_param) = custom.parameters.get_mut(1) {
+            f_param.data_type = DataType::Function(FunctionType::new(
+                src_ft.parameter_types.clone(),
+                (*src_ft.output_type).clone(),
+            ));
+        }
+        // Output pin: Iter[derived_output].
+        custom.output_pins =
+            OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(derived_output)));
+
+        Some(custom)
+    }
+
     /// Repairs a node network by ensuring all nodes have the correct number of arguments
     /// to match their node type parameters. Adds empty arguments if a node has fewer
     /// arguments than its node type requires.
@@ -1250,6 +1402,15 @@ impl NodeTypeRegistry {
         // `update_apply_pin_layouts_for_network` for the borrow-split
         // snapshot + install pattern.
         self.update_apply_pin_layouts_for_network(network);
+
+        // Currying Phase 4 (`doc/design_currying.md`, §"HOF auto-partialization
+        // (`map`)"): `map` nodes whose `f` (Function) pin is wired with a
+        // starts-with-compatible higher-arity source absorb the excess
+        // parameters as partial-application tail; `output_type` is derived
+        // from `f`. Must run AFTER the apply post-pass so an `apply` source
+        // feeding `map.f` has its output type resolved against its updated
+        // arg-pin layout first.
+        self.update_map_pin_layouts_for_network(network);
 
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
 

@@ -612,8 +612,10 @@ fn can_connect_function_pin_type_match() {
     assert!(designer.can_connect_nodes(expr1, -1, map_id, 1));
     assert!(!designer.can_connect_nodes(expr1, -1, fold_id, 2));
 
-    // (Int,Int) -> Int  ✗ map.f (arity 1)   ✓ fold.f
-    assert!(!designer.can_connect_nodes(expr2, -1, map_id, 1));
+    // (Int,Int) -> Int  ✓ map.f (auto-partial via Phase 4 starts-with rule;
+    // the excess Int param becomes a partial-application tail and map
+    // retypes to `Iter[Function((Int,), Int)]`)   ✓ fold.f (exact arity)
+    assert!(designer.can_connect_nodes(expr2, -1, map_id, 1));
     assert!(designer.can_connect_nodes(expr2, -1, fold_id, 2));
 }
 
@@ -700,15 +702,19 @@ fn validation_function_pin_type_match_and_mismatch() {
         assert!(valid, "matched function pin should validate clean: {errors:?}");
     }
 
-    // Mismatched: (Int,Int)->Int into map.f (expects (Int)->Int) — invalid.
+    // Mismatched: (Bool,Int)->Int into map.f (expects starts-with [Int]) —
+    // invalid. The first param doesn't match the element_type, so neither the
+    // standard structural check nor the Phase 4 starts-with rule admits the
+    // wire. (A `(Int,Int)->Int` source would *now* be accepted as auto-partial
+    // — that is the headline Phase 4 change.)
     {
         let mut designer = setup_designer_with_network("main");
         let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
         let expr_id = add_expr(
             &mut designer,
             "main",
-            "a + b",
-            vec![("a", DataType::Int), ("b", DataType::Int)],
+            "if a then b else 0",
+            vec![("a", DataType::Bool), ("b", DataType::Int)],
             -120.0,
         );
         let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
@@ -716,7 +722,10 @@ fn validation_function_pin_type_match_and_mismatch() {
         wire_function_pin(&mut designer, "main", expr_id, map_id, 1);
 
         let (valid, errors) = validate_and_errors(&mut designer, "main");
-        assert!(!valid, "arity-mismatched function pin must be invalid");
+        assert!(
+            !valid,
+            "element-type-mismatched function pin must be invalid"
+        );
         assert!(
             errors.iter().any(|e| e.contains("mismatch")),
             "expected a wire type-mismatch error, got {errors:?}"

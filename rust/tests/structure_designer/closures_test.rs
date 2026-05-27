@@ -1662,42 +1662,43 @@ fn validation_apply_disconnected_f_rejected() {
     );
 }
 
-/// Check 3 (arity): a wrong-arity closure wired into `f` is rejected by the
-/// ordinary wire type-compatibility check (the revived `Function` arm of
-/// `can_be_converted_to`). A fold-kind closure `(Int, Int) -> Int` does not
-/// fit `map`'s `(Int) -> Int` `f` pin.
+/// Check 3 (arity): a wrong-arity closure wired into the `f` pin of an
+/// exact-arity HOF (filter / fold / foreach) is rejected by the ordinary
+/// wire type-compatibility check. A map-kind closure `(Int) -> Int` does not
+/// fit `fold`'s `(Int, Int) -> Int` `f` pin.
+///
+/// Note: `map.f` *no longer* requires exact arity after Currying Phase 4
+/// (`doc/design_currying.md` §"HOF auto-partialization"). Higher-arity
+/// sources flow into `map.f` via the starts-with rule and the excess
+/// parameters become a partial-application tail. The other three HOFs keep
+/// exact-arity `f` pins because their output types are constrained.
 #[test]
 fn validation_wrong_arity_closure_into_f_rejected() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-    let fold_closure_id = add_int_fold_closure(
-        &mut designer,
-        "main",
-        "acc + element",
-        "acc",
-        "element",
-        None,
-        -150.0,
-    );
+    let init_id = add_int(&mut designer, "main", 0, -300.0);
+    let map_closure_id =
+        add_int_map_closure(&mut designer, "main", "x + 1", "x", None, -150.0);
 
-    let map_id = designer.add_node("map", DVec2::new(350.0, 0.0));
+    let fold_id = designer.add_node("fold", DVec2::new(350.0, 0.0));
     set_node_data(
         &mut designer,
         "main",
-        map_id,
-        Box::new(MapData {
-            input_type: DataType::Int,
-            output_type: DataType::Int,
+        fold_id,
+        Box::new(FoldData {
+            element_type: DataType::Int,
+            accumulator_type: DataType::Int,
         }),
     );
-    designer.connect_nodes(range_id, 0, map_id, 0); // xs
-    designer.connect_nodes(fold_closure_id, 0, map_id, 1); // f — arity 2 vs expected 1
+    designer.connect_nodes(range_id, 0, fold_id, 0); // xs
+    designer.connect_nodes(init_id, 0, fold_id, 1); // init
+    designer.connect_nodes(map_closure_id, 0, fold_id, 2); // f — arity 1 vs expected 2
 
     let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
     assert!(
         !valid,
-        "a wrong-arity closure wired into `f` must be rejected"
+        "a wrong-arity closure wired into fold.f must be rejected"
     );
     assert!(
         errors
@@ -1708,34 +1709,38 @@ fn validation_wrong_arity_closure_into_f_rejected() {
     );
 }
 
-/// Check 3 (leaf type): a closure whose return type is incompatible with the
-/// HOF's expected return is rejected. A filter-kind closure `(Int) -> Bool`
-/// does not fit `map`'s `(Int) -> Int` `f` pin (`Bool` ≠ `Int`).
+/// Check 3 (leaf type): a closure whose return type is incompatible with an
+/// exact-arity HOF's expected return is rejected. A map-kind closure
+/// `(Int) -> Int` does not fit `filter`'s `(Int) -> Bool` `f` pin.
+///
+/// Note: after Currying Phase 4, `map.output_type` derives from the wired
+/// `f` source, so a `(Int) -> Bool` source into `map.f` is *accepted* (map
+/// retypes to `Iter[Bool]`). The leaf-return constraint survives on the
+/// three exact-arity HOFs (`filter`/`fold`/`foreach`).
 #[test]
 fn validation_type_incompatible_closure_into_f_rejected() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 6, 0.0);
-    let filter_closure_id =
-        add_int_filter_closure(&mut designer, "main", "x % 2 == 0", "x", -150.0);
+    let map_closure_id =
+        add_int_map_closure(&mut designer, "main", "x + 1", "x", None, -150.0);
 
-    let map_id = designer.add_node("map", DVec2::new(350.0, 0.0));
+    let filter_id = designer.add_node("filter", DVec2::new(350.0, 0.0));
     set_node_data(
         &mut designer,
         "main",
-        map_id,
-        Box::new(MapData {
-            input_type: DataType::Int,
-            output_type: DataType::Int,
+        filter_id,
+        Box::new(rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData {
+            element_type: DataType::Int,
         }),
     );
-    designer.connect_nodes(range_id, 0, map_id, 0); // xs
-    designer.connect_nodes(filter_closure_id, 0, map_id, 1); // f — returns Bool, not Int
+    designer.connect_nodes(range_id, 0, filter_id, 0); // xs
+    designer.connect_nodes(map_closure_id, 0, filter_id, 1); // f — returns Int, not Bool
 
     let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
     assert!(
         !valid,
-        "a closure with an incompatible return type wired into `f` must be rejected"
+        "a closure with an incompatible return type wired into filter.f must be rejected"
     );
     assert!(
         errors

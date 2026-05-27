@@ -1280,3 +1280,391 @@ fn apply_phase3_output_pin_retypes_on_partial_wiring() {
     }
 }
 
+// =============================================================================
+// Phase 4 — HOF auto-partialization on `map`
+// =============================================================================
+//
+// When `map.f` is wired with a `Function` source whose parameter list starts
+// with `[element_type]`, the excess parameters become a partial-application
+// tail. `map.output_type` is derived from `f`: empty tail ⇒ `R`, non-empty
+// ⇒ `Function(tail, R)`. The post-pass in `update_map_pin_layouts_for_network`
+// overrides the map node's `custom_node_type` so the standard structural wire
+// check passes against the source's exact function type; the connect-time
+// gate uses a `starts_with([element_type])` rule to admit the first wire.
+// See `doc/design_currying.md` §"HOF auto-partialization (`map`)".
+
+use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
+use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+
+/// Add a `map` node with the given input/output type stored in `MapData`.
+/// The element type drives `xs`'s `Iter[T]` and the f-pin's
+/// `Function([T], output_type)`. `output_type` is the user-set fallback used
+/// when `f` is disconnected.
+fn phase4_add_map(
+    designer: &mut StructureDesigner,
+    network: &str,
+    input_type: DataType,
+    output_type: DataType,
+    y: f64,
+) -> u64 {
+    let id = designer.add_node("map", DVec2::new(0.0, y));
+    phase2_set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(MapData {
+            input_type,
+            output_type,
+        }),
+    );
+    id
+}
+
+/// Add a `range(start, step, count)` source yielding `Iter[Int]`.
+fn phase4_add_range(
+    designer: &mut StructureDesigner,
+    network: &str,
+    start: i32,
+    step: i32,
+    count: i32,
+    y: f64,
+) -> u64 {
+    let id = designer.add_node("range", DVec2::new(0.0, y));
+    phase2_set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(RangeData { start, step, count }),
+    );
+    id
+}
+
+/// Evaluate `map_node_id` against the active "main" network and drain the
+/// resulting `Iterator(Walker)` into a `Vec<NetworkResult>`. Panics if the
+/// node didn't emit an iterator (i.e. emitted an error or non-Iterator value).
+fn phase4_drain_map_walker(
+    designer: &StructureDesigner,
+    network_name: &str,
+    map_node_id: u64,
+) -> Vec<NetworkResult> {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(network_name).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let stack = vec![NetworkStackElement {
+        node_network: network,
+        node_id: 0,
+    }];
+    let result = evaluator.evaluate(&stack, map_node_id, 0, registry, false, &mut context);
+
+    let mut walker = match result {
+        NetworkResult::Iterator(w) => w,
+        NetworkResult::Error(msg) => panic!("map evaluation failed: {msg}"),
+        other => panic!(
+            "expected NetworkResult::Iterator from map, got {}",
+            other.to_display_string()
+        ),
+    };
+    let mut out = Vec::new();
+    while let Some(item) = walker.next(&evaluator, registry, &mut context) {
+        out.push(item);
+    }
+    out
+}
+
+/// Returns the *resolved* output type of `node_id`'s pin 0 (output) against
+/// the active network — what downstream consumers see, including the
+/// derivation our post-pass performs for `map`.
+fn phase4_output_type(
+    designer: &StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+) -> DataType {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    designer
+        .node_type_registry
+        .get_node_type_for_node(node)
+        .unwrap()
+        .output_type()
+        .clone()
+}
+
+// ----------------------------------------------------------------------------
+// Test 1 (headline scenario): a `(Int, Int) -> Int` source flows into map.f
+// over `Iter[Int]`. The map's output type derives to `Iter[Function((Int,), Int)]`.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase4_higher_arity_source_derives_output_type() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(&mut designer, "main", &["x", "y"], "x * y", -200.0);
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    // Wire closure to map.f. Connect must succeed via the starts-with rule:
+    // declared map.f is `Function([Int], Int)`, source is `Function([Int, Int], Int)`.
+    assert!(
+        designer.can_connect_nodes(g, 0, m, 1),
+        "starts-with rule must admit a (Int, Int) -> Int source into map.f over Iter[Int]"
+    );
+    designer.connect_nodes(g, 0, m, 1);
+
+    let out_ty = phase4_output_type(&designer, "main", m);
+    let DataType::Iterator(inner) = out_ty else {
+        panic!("expected map output to be Iter[_], got {:?}", out_ty);
+    };
+    let DataType::Function(ft) = *inner else {
+        panic!(
+            "expected map output element to be a partial Function((Int,), Int), got non-Function"
+        );
+    };
+    assert_eq!(
+        ft.parameter_types,
+        vec![DataType::Int],
+        "tail after consuming the leading element_type should be a single Int param"
+    );
+    assert_eq!(*ft.output_type, DataType::Int);
+}
+
+// ----------------------------------------------------------------------------
+// Test 2 (headline eval): each pulled element is a partially-applied closure
+// carrying the iteration value in `pre_supplied_args[0]`.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase4_partial_application_per_element() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(&mut designer, "main", &["x", "y"], "x * y", -200.0);
+    let r = phase4_add_range(&mut designer, "main", 10, 1, 3, -100.0);
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    designer.connect_nodes(r, 0, m, 0); // xs
+    designer.connect_nodes(g, 0, m, 1); // f
+
+    let items = phase4_drain_map_walker(&designer, "main", m);
+    assert_eq!(items.len(), 3, "range(10, 1, 3) yields three elements");
+
+    for (i, item) in items.into_iter().enumerate() {
+        let expected_x = 10 + i as i32;
+        let zc = match item {
+            NetworkResult::Function(zc) => zc,
+            other => panic!(
+                "expected each map element to be a partial Function value, got {}",
+                other.to_display_string()
+            ),
+        };
+        // The first slot was consumed by the iteration element; the partial
+        // closure declares the remaining one Int slot (y) as still callable.
+        // The body's actual frame stays size-2 because pre_supplied_args
+        // prepends the bound element when the partial is forced.
+        assert_eq!(zc.param_types, vec![DataType::Int]);
+        assert_eq!(zc.return_type, DataType::Int);
+        // The iteration element is bound into pre_supplied_args[0].
+        assert_eq!(zc.pre_supplied_args.len(), 1);
+        let bound = match &zc.pre_supplied_args[0] {
+            NetworkResult::Int(n) => *n,
+            other => panic!(
+                "expected pre_supplied_args[0] to be Int (the iteration element), got {}",
+                other.to_display_string()
+            ),
+        };
+        assert_eq!(
+            bound, expected_x,
+            "iteration element {} must travel via pre_supplied_args[0]",
+            expected_x
+        );
+
+        // Force the partial by applying the remaining Int param (y = 10) via
+        // run_closure_once. Result is x * 10.
+        let evaluator = NetworkEvaluator::new();
+        let mut context = NetworkEvaluationContext::new();
+        let result = run_closure_once(
+            &evaluator,
+            &[],
+            &designer.node_type_registry,
+            &mut context,
+            &zc,
+            vec![NetworkResult::Int(10)],
+        );
+        assert_eq!(phase3_extract_int(result), expected_x * 10);
+    }
+}
+
+// ----------------------------------------------------------------------------
+// Test 3 (exact arity): a `(Int) -> Int` source flows in normally; output is
+// `Iter[Int]` (no partial-application tail).
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase4_exact_arity_source_output_is_element_type() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(&mut designer, "main", &["x"], "x * x", -200.0);
+    let r = phase4_add_range(&mut designer, "main", 1, 1, 4, -100.0);
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    designer.connect_nodes(r, 0, m, 0);
+    designer.connect_nodes(g, 0, m, 1);
+
+    let out_ty = phase4_output_type(&designer, "main", m);
+    assert_eq!(
+        out_ty,
+        DataType::Iterator(Box::new(DataType::Int)),
+        "exact-arity (Int) -> Int source should leave map output as Iter[Int] (no partial tail)"
+    );
+
+    let items = phase4_drain_map_walker(&designer, "main", m);
+    let values: Vec<i32> = items
+        .into_iter()
+        .map(|r| match r {
+            NetworkResult::Int(n) => n,
+            other => panic!("expected Int, got {}", other.to_display_string()),
+        })
+        .collect();
+    assert_eq!(values, vec![1, 4, 9, 16]);
+}
+
+// ----------------------------------------------------------------------------
+// Test 4 (mismatch reject): a source whose first param doesn't match the
+// element_type is rejected at connect time.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase4_first_param_mismatch_rejected_at_connect_time() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Build a 2-arg closure with first param Bool — doesn't start with [Int],
+    // so the starts-with rule must reject it for a map over Iter[Int].
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, -100.0));
+    phase2_set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Bool, DataType::Int, DataType::Int],
+            param_names: vec!["b".into(), "x".into()],
+            custom_label: None,
+        }),
+    );
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    assert!(
+        !designer.can_connect_nodes(closure_id, 0, m, 1),
+        "a (Bool, Int) -> Int source must be rejected for map.f over Iter[Int] \
+         (starts-with rule fails — first param is Bool, not Int)"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test 5 (f disconnect restores stored output_type): a starts-with override
+// installed by a previous wire must be reverted when `f` is disconnected.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase4_f_disconnect_restores_stored_output_type() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Stored output_type = Bool. Connecting a (Int, Int) -> Int source should
+    // override it to Iter[Function((Int,), Int)]; disconnect must restore
+    // Iter[Bool] (today's behavior — the user-configured stored value).
+    let g = phase3_add_custom_int_closure(&mut designer, "main", &["x", "y"], "x * y", -200.0);
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Bool, 0.0);
+    designer.connect_nodes(g, 0, m, 1);
+
+    {
+        let out_ty = phase4_output_type(&designer, "main", m);
+        let DataType::Iterator(inner) = out_ty.clone() else {
+            panic!("expected Iter[_] after wire, got {:?}", out_ty);
+        };
+        assert!(
+            matches!(*inner, DataType::Function(_)),
+            "after wiring, map output should be Iter[Function(...)], got Iter[{:?}]",
+            *inner
+        );
+    }
+
+    // Disconnect by selecting and deleting the f wire.
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        net.selected_wires.clear();
+        net.selected_wires
+            .push(rust_lib_flutter_cad::structure_designer::node_network::Wire {
+                source_node_id: g,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+                destination_node_id: m,
+                destination_argument_index: 1,
+                destination_argument_kind:
+                    rust_lib_flutter_cad::structure_designer::node_network::ArgumentKind::External,
+            });
+    }
+    designer.delete_selected();
+
+    let out_ty = phase4_output_type(&designer, "main", m);
+    assert_eq!(
+        out_ty,
+        DataType::Iterator(Box::new(DataType::Bool)),
+        "after disconnecting f, map output_type must fall back to MapData's stored Bool"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test 6 (filter exact-arity unchanged): the auto-partial rule is only on
+// `map`. `filter.f` still requires exact-arity `(T) -> Bool`.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase4_filter_exact_arity_unchanged() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // 2-arg closure (Int, Int) -> Bool — does not match filter's `(Int) -> Bool`
+    // shape under same-arity rules. Filter is exact-arity, so this must be
+    // rejected even though the first param happens to match the element_type.
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, -100.0));
+    phase2_set_node_data(
+        &mut designer,
+        "main",
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::Int, DataType::Bool],
+            param_names: vec!["x".into(), "y".into()],
+            custom_label: None,
+        }),
+    );
+
+    let filt_id = designer.add_node("filter", DVec2::new(0.0, 0.0));
+    phase2_set_node_data(
+        &mut designer,
+        "main",
+        filt_id,
+        Box::new(FilterData {
+            element_type: DataType::Int,
+        }),
+    );
+
+    assert!(
+        !designer.can_connect_nodes(closure_id, 0, filt_id, 1),
+        "filter.f must keep exact-arity matching — a (Int, Int) -> Bool source must not satisfy a (Int) -> Bool pin"
+    );
+}
