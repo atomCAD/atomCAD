@@ -18,161 +18,225 @@ and where the result begins". As a consequence:
 
 - `(Float, Float) → Int` cannot flow into a pin expecting `(Float) →
   ((Float) → Int)` even though the two are isomorphic.
-- The `apply` node requires *every* argument pin to be wired; there is no way
-  to call a 3-arg function on one or two args and get the remaining function
-  back.
+- The `apply` node requires *every* argument pin to be wired; there is no
+  way to call a 3-arg function on one or two args and get the remaining
+  function back.
 - The only authoring path for partial application is **manually nesting
-  closure nodes** — for a 3-arg body, three frames deep, with capture wires
-  threaded between each layer (see the screenshots in the originating
-  discussion: a 3-arg `expr` body nested as `Float → (Float → (Float →
-  Float))` is six nodes for what an uncurried `expr` writes in one).
+  closure nodes** — for a 3-arg body, three frames deep, with capture
+  wires threaded between each layer (see the screenshots in the
+  originating discussion: a 3-arg `expr` body nested as `Float → (Float →
+  (Float → Float))` is six nodes for what an uncurried `expr` writes in
+  one).
+- `(Float, Float) → Int` cannot flow into `map.f: (Float) → U` to produce
+  `Iter[Function((Float,), Int)]`, because the type system rejects the
+  arity mismatch and `map` has no way to absorb extra params into a
+  partial result.
 
 Concretely, this branch adds:
 
-1. **Currying-equivalent function-type conversion.** `can_be_converted_to`
-   for `DataType::Function` flattens both sides before the structural
-   same-arity check. `Function((A,), Function((B,), C))` and `Function((A,
-   B), C)` become interchangeable wherever a function-typed pin is declared.
-2. **`ZoneClosure.pre_supplied_args`.** A small additional `Arc<Vec<…>>`
-   field on the runtime closure value, holding arguments already bound. The
-   shared `run_closure_once` prepends them to the caller-supplied frame; the
-   body's `ZoneInput { pin_index }` resolution is unchanged because positions
-   line up.
-3. **Partial application on `apply`.** The `apply` node derives its arg pins
-   from the connected `f` source's flattened arity. The user wires a
-   *contiguous prefix* of arg pins (`arg0…arg_{k-1}`) and leaves the rest
-   unwired; the output pin's type follows: full arity (`k == n`) ⇒ `R`,
-   partial (`k < n`) ⇒ `Function((remaining_params), R)`.
-4. **Editor support for partial `apply`.** When `f` is wired, the `apply`
-   shape panel becomes a read-only *derived display* of the wired source's
-   flat function type, and the existing `ClosureShapeEditor` (kind picker)
+1. **Canonical (flat) `FunctionType` storage.** `FunctionType` is stored
+   so that `output_type` is never itself a `Function`.
+   `FunctionType::new` is the single construction site and absorbs nested
+   `Function` returns into `parameter_types`. A one-shot recursive
+   normalization pass on `.cnnd` load canonicalizes existing data. After
+   Phase 1, `Function((A,), Function((B, C), D))` and `Function((A, B,
+   C), D)` are byte-identical in memory — they were semantically equal
+   types all along (the user's central thesis). Comparison reverts to
+   today's structural same-arity rule with no flatten helper.
+2. **`ZoneClosure.pre_supplied_args`.** A small additional
+   `Arc<Vec<NetworkResult>>` field on the runtime closure value, holding
+   arguments already bound. The shared `run_closure_once` prepends them
+   to the caller-supplied frame; the body's `ZoneInput { pin_index }`
+   resolution is unchanged because positions line up. **`param_types`
+   is the body's actual frame size** — how many caller args one
+   `run_closure_once` consumes. It is *decoupled* from the closure's
+   declared (canonical, flat) function type, which can be wider when
+   the body returns a `Function` value that absorbs more args
+   downstream.
+3. **Partial application on `apply`, with multi-step consumption.** The
+   `apply` node derives its arg pins from the connected `f` source's
+   canonical (flat) arity. The user wires a *contiguous prefix* of arg
+   pins (`arg0…arg_{k-1}`) and leaves the rest unwired. At runtime,
+   `apply.eval` consumes the underlying closure's *body* arity per
+   step; if more wired args remain, it recursively applies them to the
+   resulting `Function` value. This makes apply correct even when the
+   wired closure's body arity is smaller than its declared flat arity
+   (e.g. a 1-arg closure returning a 1-arg function, viewed as a 2-arg
+   function under canonicalization).
+4. **HOF auto-partialization on `map`.** `map.f` accepts any `Function`
+   source whose parameter list *starts with* `[element_type]`. Excess
+   parameters become the partial-application tail; `map.output_type`
+   is **derived** from `f` rather than user-set whenever `f` is
+   connected. A `(Float, Float) → Int` source flowing into `map.f`
+   over an `Iter[Float]` produces `Iter[Function((Float,), Int)]`
+   directly — no inline-body authoring required. `filter` / `fold` /
+   `foreach` keep exact-arity `f` pins; their output type is
+   constrained (Bool / Acc / Unit) so a partial result has nowhere to
+   go. Only `map`'s output is unconstrained, so only `map`
+   participates.
+5. **0-arity `Custom` closures.** The `Custom` `ClosureKind` accepts an
+   empty `param_names` list. The substrate already supports `args =
+   vec![]`; this lifts the editor's "at least one param" assumption.
+   The title bar renders `() → R`.
+6. **Editor support.** When `f` is wired on `apply`, the shape panel
+   becomes a read-only *derived display* of the wired source's flat
+   function type, and the existing `ClosureShapeEditor` (kind picker)
    is hidden. When `f` is unwired, the kind picker returns as the
-   intended-shape affordance. The `closure` node's kind picker is
-   unchanged — it still authors a body shape.
+   intended-shape affordance. On `map`, the `output_type` editor field
+   becomes a read-only derived display whenever `f` is connected.
 
 In scope:
 - Conceptual model and worked examples.
-- `DataType::Function` conversion rule changes.
+- Canonical `FunctionType` construction + `.cnnd` load-time normalization.
 - `ZoneClosure` field addition and `run_closure_once` prepend.
-- `apply` node rewrite (`calculate_custom_node_type`, `eval`, validation).
-- Editor changes for the `apply` shape editor and pin-derivation flow.
-- Implementation phases, each ending in `cargo test` green plus (Phase 4)
-  `flutter run` working.
+- `apply` node rewrite (`calculate_custom_node_type`, `eval` with
+  recursive consumption, validation).
+- `map`'s `calculate_custom_node_type` derives `output_type` from `f`;
+  `map.f` pin compatibility uses the "starts-with" rule.
+- 0-arity `Custom` closure editor relaxation.
+- Editor changes for the `apply` shape editor, `map` output-type
+  display, and pin-derivation flow.
+- Implementation phases, each ending in `cargo test` green plus (Phase
+  5) `flutter run` working.
 
 Out of scope:
-- **HOF auto-partialization.** Letting `(T, X…) → Y` flow into `map.f: (T) →
-  U` directly (with `map.output_type` inferred to `Function((X…,), Y)`)
-  needs `map.output_type` to be derived from `f` rather than user-configured.
-  That's a separate, additive change; for v1 users insert an `apply` to
-  pre-curry before `map`. See Open Question 1.
-- **Smarter shape inference when `f` is disconnected.** With nothing wired,
-  `apply` still needs *some* default shape to render arg pins against. v1
-  keeps the existing `ClosureKind` picker for this case (demoted to "shape
-  hint when `f` is absent"); anything cleverer — auto-inferring from
-  downstream consumers, or hiding the pins entirely until `f` is wired —
-  is deferred. See Open Question 2.
-- **0-arity functions / thunks.** The user mentioned "functions without
-  arguments still being functions that need evaluation". Adding a 0-arity
-  closure kind (or relaxing the "at least one arrow" assumption on closure
-  authoring) is a small follow-up that does not need any of the substrate
-  changes here. See Open Question 3.
-- **Composition / `flip` combinators.** Deferred per `design_closures.md`
-  open questions; this doc unblocks them by making partial application
-  cheap, but does not deliver them.
-- **`.cnnd` migration.** No version bump is required: `pre_supplied_args`
-  is a runtime-only field (not serialized — see Phase 2 Gotchas), and the
-  on-disk shape of `ApplyData` is unchanged. Existing closures load with
-  empty `pre_supplied_args` and existing `apply` nodes load with `kind` /
-  `type_args` exactly as today — both via `serde` defaults / verbatim
-  load. The follow-up file-format work (deprecating `ApplyData.kind` once
-  the derived shape lands fully) is filed as a polish task in §"Out of
-  phase plan".
+- **Auto-partialization on other HOFs.** `filter` / `fold` / `foreach`
+  have constrained output types (Bool / Acc / Unit) and cannot
+  meaningfully absorb extra args. A future "result HOF" with an
+  unconstrained output could adopt the `map` pattern verbatim.
+- **Non-prefix wiring on `apply`** ("skip arg1, supply arg0 and
+  arg2"). Requires permutation bookkeeping and breaks currying's
+  positional clarity. See Open Question 1.
+- **Smarter shape inference when `f` is disconnected on `apply`.** With
+  nothing wired, `apply` still needs *some* default shape to render arg
+  pins against. v1 keeps the existing `ClosureKind` picker for this
+  case; anything cleverer is deferred. See Open Question 2.
+- **Composition / `flip` combinators.** Deferred per
+  `design_closures.md` open questions; this doc unblocks them by
+  making partial application cheap, but does not deliver them.
+- **`.cnnd` migration version bump.** The normalization is *lossless*
+  (canonical and non-canonical forms are semantically equal types), so
+  no version bump is required: old files load, the walker normalizes
+  every stored `DataType` recursively, save writes canonical. The
+  on-disk schema of `ApplyData` / `ClosureData` / `MapData` is
+  unchanged; only the *content* of `DataType::Function` values is
+  normalized in place.
 
 ## Scope of this branch — build/test contract
 
-The verification gate is `cd rust && cargo test` green and `cargo clippy`
-clean for every Rust phase (1–3), plus `flutter run` launching a working
-editor at the end of Phase 4. Existing closure behavior is preserved
-byte-identically by every phase (empty `pre_supplied_args`, today's
-same-arity conversion is a *special case* of the new rule after flattening).
+The verification gate is `cd rust && cargo test` green and `cargo
+clippy` clean for every Rust phase (1–4), plus `flutter run`
+launching a working editor at the end of Phase 5. Existing closure
+behavior is preserved byte-identically by every phase (empty
+`pre_supplied_args`; canonicalization is the identity on already-flat
+types, and every `FunctionType` in the existing fixture set is already
+flat).
 
 | Must pass | When |
 |---|---|
 | `rust/` workspace (`cargo build`, `cargo clippy`, `cargo test`) | every phase |
 | `flutter_rust_bridge_codegen generate` succeeds | every phase |
-| Existing closure-/HOF-using tests, **byte-identical results** | Phase 1, 2, 3 |
-| `flutter run` launches; partial `apply` authoring works end-to-end | Phase 4 |
+| Existing closure-/HOF-using tests, **byte-identical results** | Phase 1, 2, 3, 4 |
+| Existing `.cnnd` fixtures load successfully (incl. canonicalization round-trip) | Phase 1 onward |
+| `flutter run` launches; partial `apply` and `map` auto-partial work end-to-end | Phase 5 |
 | Existing non-closure editing still works | every phase (regression) |
 
-The branch starts after the zones / closures / function-pins / migration
-docs have all landed. Baseline: the full Rust suite (3400+ tests) green,
-the four HOFs and `closure`/`apply` evaluating via the substrate in
-`evaluator/zone_closure.rs`, `DataType::Function` carrying a flat
-`parameter_types` + `output_type`.
+The branch starts after the zones / closures / function-pins /
+migration docs have all landed. Baseline: the full Rust suite (3400+
+tests) green, the four HOFs and `closure` / `apply` evaluating via
+the substrate in `evaluator/zone_closure.rs`, `DataType::Function`
+carrying a flat `parameter_types` + `output_type`.
 
 ## Motivation
 
-The user's complaint, condensed: *"Float → Float → Float → Float, (Float,
-Float) → (Float → Float), (Float, Float, Float) → Float — these are all the
-same thing. Where the argument ends and where the result begins depends on
-how many slots one fills when partially evaluating. With curried format being
-the go-to default there is no way to do partial evaluations. And setting up
-currying is bad UX ATM."*
+The user's complaint, condensed: *"Float → Float → Float → Float,
+(Float, Float) → (Float → Float), (Float, Float, Float) → Float —
+these are all the same thing. Where the argument ends and where the
+result begins depends on how many slots one fills when partially
+evaluating. With curried format being the go-to default there is no
+way to do partial evaluations. And setting up currying is bad UX
+ATM."*
 
 Symptoms in the editor today:
 
 - **The non-nested representation is unreachable from existing entry
-  points.** Authoring an N-arg body as a single `expr` inside one `closure`
-  produces a `Function((P0, …, P_{N-1}), R)` value. There is no way to
-  partially apply it: `apply` requires all N pins wired, and no HOF accepts
-  a multi-arg function on its `(T) → U` / `(T) → Bool` / `(A, T) → A` / `(T)
-  → Unit` `f` pin.
-- **The nested representation is brutal.** To express the same 3-arg body
-  with partial-application potential, the user has to draw three closure
-  frames deep, each capturing one arg of the next. Visual clutter scales
-  linearly with arity; the user reports it as "no user would do that".
-- **The asymmetry between authoring and consumption is forced by the type
-  system.** Internally the substrate is already arity-agnostic — frames are
-  `Vec<NetworkResult>`, `run_closure_once` pushes whatever the caller passes,
-  `ZoneInput { pin_index }` resolves positionally. The barrier between
-  parameters and result lives in `DataType::Function`'s structural
-  same-arity rule (`data_type.rs:391-414`) and in `apply`'s requirement that
-  every declared arg pin be wired (`apply.rs:131-143`).
+  points.** Authoring an N-arg body as a single `expr` inside one
+  `closure` produces a `Function((P0, …, P_{N-1}), R)` value. There is
+  no way to partially apply it: `apply` requires all N pins wired, and
+  no HOF accepts a multi-arg function on its `(T) → U` / `(T) → Bool`
+  / `(A, T) → A` / `(T) → Unit` `f` pin.
+- **The nested representation is brutal.** To express the same 3-arg
+  body with partial-application potential, the user has to draw three
+  closure frames deep, each capturing one arg of the next. Visual
+  clutter scales linearly with arity; the user reports it as "no user
+  would do that".
+- **The asymmetry between authoring and consumption is forced by the
+  type system.** Internally the substrate is already arity-agnostic —
+  frames are `Vec<NetworkResult>`, `run_closure_once` pushes whatever
+  the caller passes, `ZoneInput { pin_index }` resolves positionally.
+  The barrier between parameters and result lives in
+  `DataType::Function`'s structural same-arity rule
+  (`data_type.rs:391-414`) and in `apply`'s requirement that every
+  declared arg pin be wired (`apply.rs:131-143`).
 
-The fix: remove the barrier in the type system, add a tiny runtime field to
-carry pre-bound args, and let `apply` partially apply on the wired prefix.
-The rest of the substrate stays unchanged.
+The fix: collapse the type-system barrier by storing `FunctionType`
+in a canonical flat form, add a tiny runtime field to carry pre-bound
+args, let `apply` partially apply on the wired prefix (with recursive
+consumption for nested-body cases), and let `map` absorb excess
+source arity into a partial output.
 
 ## Concept
 
-### Currying equivalence
+### Canonical (flat) function types
 
-Two function types are **currying-equivalent** iff their *flattened*
-canonical forms are pairwise convertible. Flattening absorbs `Function`
-return types into the parameter list:
+`FunctionType` is stored so that `output_type` is never itself a
+`Function`. The canonical form is produced by a single constructor:
+
+```rust
+impl FunctionType {
+    pub fn new(parameter_types: Vec<DataType>, output_type: DataType) -> Self {
+        let mut params = parameter_types;
+        let mut output = output_type;
+        // Absorb nested Function returns into the parameter list.
+        while let DataType::Function(inner) = output {
+            params.extend(inner.parameter_types);
+            output = *inner.output_type;
+        }
+        Self { parameter_types: params, output_type: Box::new(output) }
+    }
+}
+```
+
+Every construction site routes through `FunctionType::new`. Serde
+`Deserialize` is wired to call `new` post-deserialization (custom
+`Deserialize` impl, or a `serde(from = "FunctionTypeRaw")` shim) so
+on-disk forms are canonicalized as they enter memory.
+
+A recursive `canonicalize_data_type` walker canonicalizes any
+`DataType::Function` nodes embedded inside container types
+(`Iter[Function(…)]`, `Array[Function(…)]`, `Option[Function(…)]`,
+record fields containing function types, etc.). The walker runs on
+`.cnnd` load before the loaded network is exposed to anything else,
+ensuring no non-canonical form ever reaches the validator or
+evaluator.
+
+After Phase 1, the type-comparison rule is plain structural same-arity
+(today's rule, unchanged in code, but now sound by construction):
 
 ```
-flatten(Function((P0, …, P_{n-1}), Function((Q0, …, Q_{m-1}), R)))
-    = flatten(Function((P0, …, P_{n-1}, Q0, …, Q_{m-1}), R))
-
-flatten(Function((P0, …, P_{n-1}), R))   where R is not a Function
-    = Function((P0, …, P_{n-1}), R)
+(A, B, C) → D  ≡  (A) → ((B, C) → D)  ≡  (A, B) → ((C) → D)  ≡  (A) → (B) → (C) → D
 ```
 
-After flattening, the return type is guaranteed non-`Function`. Comparison
-is then today's "same arity, pairwise convertible parameters + return"
-rule. So:
+All four are stored as `Function((A, B, C), D)`. Comparison is identity.
 
-- `(A, B, C) → D` ≡ `(A) → ((B, C) → D)` ≡ `(A, B) → ((C) → D)` ≡ `(A) →
-  (B) → (C) → D` — all flatten to `(A, B, C) → D`.
-- `(A, B) → Int` and `(A) → ((B) → Int)` — both flatten to `(A, B) → Int`,
-  so they unify.
-- `(A, B) → Int` vs. `(A) → Int` — flatten to different arities, still
-  rejected (no information loss).
-
-This is a pure relaxation: today's same-arity-after-no-flattening is the
-special case where neither side's return is a `Function`, which is the
-common case and stays identical.
+**Storage is canonical; runtime closure body arity is not.** A
+`ZoneClosure` constructed from a 1-arg `closure` node whose return
+type is `Function((B,), C)` still has `param_types = [A]` (the body's
+actual frame size) and `return_type = Function((B,), C)`. Its
+*declared function type*, used at the type-system level, is
+canonicalized to `Function((A, B), C)`. The two views are reconciled
+at runtime by `apply.eval`'s recursive consumption (see §"`apply`
+semantics").
 
 ### `pre_supplied_args` and partial application
 
@@ -185,18 +249,18 @@ pub struct ZoneClosure {
 }
 ```
 
-The semantics are: *when a consumer pushes its iteration frame, the actual
-frame becomes `[pre_supplied_args… ++ caller_args…]`.* The body's
-`ZoneInput { pin_index }` resolution is unchanged — pins are positional, the
-frame is just longer than the caller's `args` vector. `param_types`
-continues to be "the types of the slots a caller must fill" — i.e. the
-*remaining*, unbound positions. A freshly-built closure (from
-`build_inline_closure` or `build_node_function_closure`) has
-`pre_supplied_args = empty`, `param_types = full` — identical to today.
+The semantics: *when a consumer pushes its iteration frame, the
+actual frame becomes `[pre_supplied_args… ++ caller_args…]`.* The
+body's `ZoneInput { pin_index }` resolution is unchanged — pins are
+positional, the frame is just longer than the caller's `args` vector.
+`param_types` continues to be "the types of the slots a caller must
+fill in this body invocation" — the *remaining unbound* positions in
+the body's frame. A freshly-built closure has `pre_supplied_args =
+empty`, `param_types = full body arity`.
 
-**Partial application** is then the operation that, given a closure `C`
-with `param_types = [P_0, …, P_{n-1}]` and `k` arg values `a_0, …, a_{k-1}`,
-produces a new closure `C'`:
+**Partial application within a single body** is the operation that,
+given a closure `C` with body arity `n_body` and `k ≤ n_body` arg
+values, produces a new closure `C'`:
 
 ```
 C'.pre_supplied_args = Arc::new(C.pre_supplied_args ++ [a_0, …, a_{k-1}])
@@ -204,92 +268,208 @@ C'.param_types       = C.param_types[k..].to_vec()
 C'.body, captures, zone_output_wires, owner_node_id, return_type — unchanged
 ```
 
-(`++` is concatenation, expressed in Rust as `let mut v =
-(*C.pre_supplied_args).clone(); v.extend(new_args);`.) `C'` is exactly the
-function `(P_k, …, P_{n-1}) → R` that `C` *evaluated on its first k
-arguments* would have left behind. No body is rewritten; no captures are
-recomputed; no new node is materialized. The cost is one `Vec` clone +
-extend + one Arc allocation for the extended args vector — independent
-of body size.
+`C'` is exactly the function `(P_k, …, P_{n_body-1}) → return_type`
+that `C` *evaluated on its first k arguments* would have left behind.
+When `k == n_body`, we push the full frame and resolve the body,
+exactly as today's `run_closure_once`.
 
-When `k == n` (the consumer supplied every remaining arg), there is no
-"new closure" — we instead push the full frame and resolve the body, exactly
-as today's `run_closure_once`. This is the path every existing HOF and
-existing fully-wired `apply` already takes; the only difference is the
-prepended `pre_supplied_args` (empty in the existing cases).
+When the caller has *more* args than the body's arity (the canonical
+flat declared type was wider than the body), `apply.eval` runs the
+body to completion, expects the result to be
+`NetworkResult::Function(C_next)`, and recurses on `C_next` with the
+remaining args. See next section.
 
 ### `apply` semantics
 
-`apply` is the operator that *chooses k* — how many of the function's
-arguments are supplied at this call site. Today it implicitly fixes
-`k = n` (every arg pin required). After this design:
+`apply` chooses k — how many of the function's arguments are
+supplied at this call site. Today it implicitly fixes `k = N` (every
+arg pin required). After this design:
 
-- `apply` derives its argument pin shape from the wired `f`'s flattened
-  function type. Number of arg pins = `f.flat.param_types.len()`.
-- The user wires the **contiguous prefix** `arg0 … arg_{k-1}` and leaves
-  `arg_k … arg_{n-1}` unwired. `k = number of wired arg pins from arg0`.
+- `apply` derives its argument pin shape from the wired `f`'s
+  **declared** (canonical, flat) function type. Number of arg pins =
+  `f.declared_type.parameter_types.len()` (call it `N`).
+- The user wires the **contiguous prefix** `arg0 … arg_{k-1}` and
+  leaves `arg_k … arg_{N-1}` unwired. `k = number of wired arg pins`.
 - Output pin type is **dynamic in k**:
-  - `k == n` ⇒ `R` (full eval; equivalent to today's behavior).
-  - `k < n` ⇒ `Function(params[k..], R)` (partial; emits a new
-    `NetworkResult::Function`).
-  - `k > n` is impossible by construction (we declared exactly n arg pins).
-- Wiring `arg_j` while `arg_i` (i < j) is unwired is a **validation error**
-  attributed to `apply`. Prefix-only is the rule. (Allowing arbitrary holes
-  — "skip arg1, supply arg0 and arg2" — would require permutation
-  bookkeeping and effectively undo currying's positional clarity; see Open
-  Question 4.)
+  - `k == N` ⇒ `R` (full eval).
+  - `k < N` ⇒ `Function(declared_params[k..], R)`, canonicalized.
+- Wiring `arg_j` while `arg_i` (i < j) is unwired is a **validation
+  error** attributed to `apply`. Prefix-only is the rule (Open
+  Question 1).
+
+At runtime, `apply.eval` walks the closure value step-by-step,
+because the underlying body may have a smaller arity than the
+declared flat type. Pseudocode:
+
+```rust
+let k = count_wired_arg_prefix(self, node);
+let mut remaining: VecDeque<NetworkResult> = /* k resolved arg values */;
+
+// Identity-partial guard: caller supplied zero args to a non-thunk.
+// (Thunks — declared arity 0 — fall through and run their body below.)
+if k == 0 && !f_current.function_type().parameter_types.is_empty() {
+    return Function(f_current);
+}
+
+loop {
+    let n_body = f_current.param_types.len();
+
+    // Partial step: not enough args left to fill this body invocation.
+    if remaining.len() < n_body {
+        let drained: Vec<_> = remaining.drain(..).collect();
+        let drained_len = drained.len();
+        let mut extended = (*f_current.pre_supplied_args).clone();
+        extended.extend(drained);
+        return Function(ZoneClosure {
+            body: Arc::clone(&f_current.body),
+            captures: Arc::clone(&f_current.captures),
+            zone_output_wires: Arc::clone(&f_current.zone_output_wires),
+            owner_node_id: f_current.owner_node_id,
+            param_types: f_current.param_types[drained_len..].to_vec(),
+            return_type: f_current.return_type.clone(),
+            pre_supplied_args: Arc::new(extended),
+        });
+    }
+
+    // Full body step: consume n_body args, run the body.
+    let step_args: Vec<_> = remaining.drain(..n_body).collect();
+    let result = run_closure_once_in_inner_ctx(.., &f_current, step_args);
+
+    if remaining.is_empty() {
+        return result;
+    }
+
+    // More args to go — the result must be another Function value.
+    match result {
+        NetworkResult::Function(next) => f_current = next,
+        NetworkResult::Error(_)       => return result,
+        other => return Error("apply: expected Function for further application"),
+    }
+}
+```
+
+For the common case — `k == N == n_body`, declared arity matches body
+arity — this collapses to a single iteration that calls
+`run_closure_once` exactly as today's `apply`. The recursive branch
+fires only when the wired closure's body returns another `Function`
+value that further args must be applied to — which canonical storage
+explicitly *permits* (a 1-arg closure returning a 1-arg function is a
+valid runtime shape, even though its declared flat type is 2-arg).
+
+The 0-arity case (`N == 0`, `k == 0`) is the *thunk-force*: the
+identity-partial guard does not fire (declared params are empty), so
+the loop runs once with `n_body = 0`, `step_args = vec![]`, calls
+`run_closure_once` with no args, returns the result.
+
+### HOF auto-partialization (`map`)
+
+`map.f` accepts any `Function` source whose parameter list **starts
+with** `[element_type]`. The excess parameters become the
+partial-application tail; `map.output_type` is **derived** from `f`
+whenever `f` is connected.
+
+Compatibility rule on `map.f` (used by the validator and the drag-aware
+add-node popup):
+
+```
+src is Function
+  AND src.parameter_types.starts_with([element_type])
+```
+
+Derivation of `map.output_type` when `f` is connected:
+
+```
+let tail = &src.parameter_types[1..]; // params after the leading element_type
+if tail.is_empty() {
+    map.output_type = (*src.output_type).clone()
+} else {
+    map.output_type = DataType::Function(FunctionType::new(
+        tail.to_vec(),
+        (*src.output_type).clone(),
+    ))
+}
+```
+
+When `f` is disconnected, `map.output_type` falls back to its
+user-configured stored value (today's behavior).
+
+Filter / fold / foreach keep exact-arity `f` pins. Their output types
+are constrained (Bool, Acc, Unit), so they cannot absorb a partial
+result. The design does not lift this restriction.
 
 ### Worked examples
 
-**1. The user's screenshot, fixed.** A `closure` `g` of kind `Custom`
-with `param_names = ["x", "y"]`, `type_args = [Float, Float, Int]`, body
-`expr` evaluating `x * y` (the body's return type is `Int`, matching
-`type_args[2]`). Its output type is `Function((Float, Float), Int)`. The
-user wants to turn this into `Iter[Function((Float,), Int)]` by mapping
-over an `Iter[Float]`. With the new substrate:
+**1. The user's headline screenshot, fixed (via `map` auto-partial).**
+A `closure` `g` of kind `Custom` with `param_names = ["x", "y"]`,
+`type_args = [Float, Float, Int]`, body `expr` evaluating `x * y`.
+Its declared canonical type is `Function((Float, Float), Int)`. The
+user wants to turn this into `Iter[Function((Float,), Int)]` by
+mapping over an `Iter[Float]`.
 
 ```
-range(3)          --xs-->  map  --result-->  collect
-                            ^
-                         f = closure of shape (Float) → Function((Float,), Int)
-                             body: apply(g, element)
-                             (g captured from outer scope; element is the map's zone-input)
+range(3)  --xs-->  map  --result-->  collect
+                    ^
+                f = g   (g connected directly to map.f)
 ```
 
-The `map`'s body holds an `apply` node with `f = g` (captured) and
-`arg0 = element` (the map's zone-input). `apply` sees `g`'s flattened
-arity = 2, `k = 1` wired → output type `Function((Float,), Int)`. The
-walker yields one partially-applied function per `xs` element. No
-nesting required.
-
-Note `map.output_type` must still be **set by the user** to
-`Function((Float,), Int)` (or an equivalent curried form) for the
-top-level `map`'s output pin to type correctly — HOF auto-partialization
-is out of scope (Open Question 1). The body wiring above produces a
-correctly-typed `NetworkResult::Function` per element either way; this
-is purely about the `map`'s declared output type.
+`map`'s element type is `Float` (from `xs: Iter[Float]`). `g`'s
+declared type starts with `[Float]`. The tail is `(Float,)`,
+non-empty. `map.output_type` is derived as `Function((Float,), Int)`,
+so `map`'s output is `Iter[Function((Float,), Int)]`. The walker
+yields one partially-applied closure per `xs` element (each carrying
+that element in `pre_supplied_args`). No inline body required, no
+`apply` node, no nesting.
 
 **2. Direct partial chain.** Top-level: `g: (Float, Float, Float) →
 Float` with body `expr` evaluating `x + y + z`. Wire `apply(g,
-float(2.0))` — `n=3`, `k=1`, output `Function((Float, Float), Float)`.
-Wire *that* into a second `apply` with `arg0 = float(3.0)` — output
-`Function((Float,), Float)`. Wire *that* into a third `apply` with
-`arg0 = float(4.0)` — output `Float`, evaluating to `9.0`.
+float(2.0))` — `N=3`, `k=1`, output `Function((Float, Float),
+Float)`. Wire *that* into a second `apply` with `arg0 = float(3.0)`
+— output `Function((Float,), Float)`. Wire *that* into a third
+`apply` with `arg0 = float(4.0)` — output `Float`, evaluating to
+`9.0`.
 
 The user's "right side" reference shape (the chain of three `apply`
-nodes in the second screenshot) becomes the *flat* equivalent of their
-nested left-side ladder, and is the substrate's *primary* way to
-express partial application going forward.
+nodes in the second screenshot) is the flat equivalent of their
+nested left-side ladder.
 
-**3. Existing fully-wired apply.** Unchanged. `n = k`,
-`pre_supplied_args` is empty before and after — we go straight to the
-full-frame `run_closure_once` and emit `R`.
+**3. Existing fully-wired apply.** Unchanged. `N == k == n_body`,
+`pre_supplied_args` empty before and after. `apply.eval`'s loop runs
+exactly one iteration and returns the result.
+
+**4. Body arity less than declared flat arity (recursive
+consumption).** A `closure` `h` of kind `Custom` with `param_names =
+["x"]`, `type_args = [Float, Function((Float,), Float)]`, body
+returns an inner closure `inner_closure(y) = x + y` (`y` is the
+inner's zone input, `x` is the captured outer zone input). The outer
+closure's body arity is 1; its declared canonical type is
+`Function((Float, Float), Float)`. An `apply(h, float(2.0),
+float(3.0))` shows 2 arg pins (from the declared flat type), `k=2,
+N=2`. At runtime, `apply.eval`'s loop runs twice: first consumes
+`[2.0]` (body arity = 1) and gets back the inner closure with `x =
+2.0` captured; second consumes `[3.0]` on the inner closure (its
+body arity = 1, `remaining = 1`), full-evals to `5.0`.
+
+**5. `fold`-shaped function `(A, T) → A` wired into `map.f: (T) →
+U`.** Now *accepted* via `map` auto-partial: `map`'s element type is
+`T`, starts-with-`[T]` matches, tail `(A,)`, `map.output_type`
+derived as `Function((A,), A)`. (Whether the user intended a
+list-of-folders is up to them; the type system accepts it.) The same
+function wired into `fold.f` works exactly as today (exact arity).
+
+**6. 0-arity thunk forced via `apply`.** A `closure` `g` of kind
+`Custom` with `param_names = []`, `type_args = [Float]`, body `expr`
+evaluating `42.0`. Declared type: `Function((), Float)`. `apply` with
+`f = g` shows zero arg pins. The output pin type is `Float`. At
+runtime, `apply.eval`'s identity-partial guard does not fire
+(declared params are empty); the loop runs once with `n_body = 0`,
+calls the body with no args, returns `42.0`.
 
 ## Data model
 
-### `DataType::Function` — type is unchanged, conversion is curry-aware
+### `DataType::Function` — type unchanged, construction canonicalizes
 
-The `FunctionType` struct stays as it is (`data_type.rs:8-11`):
+The `FunctionType` struct stays as it is on the wire
+(`data_type.rs:8-11`):
 
 ```rust
 pub struct FunctionType {
@@ -298,14 +478,21 @@ pub struct FunctionType {
 }
 ```
 
-A `FunctionType` can be stored either *flattened* (return ≠ `Function`) or
-*nested* (return = `Function`). Both forms are valid storage; equality and
-conversion are decided on the flattened forms. We deliberately do **not**
-canonicalize on construction — storing a user's authored
-`Function((A,), Function((B,), C))` verbatim preserves the visual shape they
-chose to write. The cheap flattening happens lazily at comparison sites.
+What changes is the **invariant**: in canonical form, `output_type`
+is never itself a `Function`. The invariant is enforced by
+`FunctionType::new` (see §"Canonical (flat) function types"). All
+construction sites use `new`. Code review enforces this in new code;
+existing struct-literal sites are audited and rewritten in Phase 1.
+(Optionally, the fields could be made private and accessed via
+getters; this is a larger refactor and is left as a Phase 1 follow-up
+if it doesn't fit the budget.)
 
-### `ZoneClosure` — one new field
+The on-disk schema is unchanged; the only thing that changes on-disk
+is that the load-time canonicalization walker collapses any
+non-canonical form to its canonical equivalent. Save then writes
+canonical, so re-saving a loaded file yields a normalized file.
+
+### `ZoneClosure` — one new field, body arity decoupled from declared arity
 
 ```rust
 pub struct ZoneClosure {
@@ -323,19 +510,31 @@ pub struct ZoneClosure {
 }
 ```
 
-`ZoneClosure::function_type()` continues to report `FunctionType {
-parameter_types: self.param_types.clone(), output_type: …
-self.return_type.clone() }` — i.e. the type of the *remaining* function.
-That is the type the consumer wires against, which is what the type system
-needs to see.
+`param_types` is the **body's actual frame size** — how many caller
+args one `run_closure_once` consumes. It is *decoupled* from the
+closure's **declared (canonical, flat)** function type, which may be
+wider when `return_type` is itself a `Function`. The declared type is
+computed by a helper:
+
+```rust
+impl ZoneClosure {
+    pub fn function_type(&self) -> FunctionType {
+        FunctionType::new(self.param_types.clone(), self.return_type.clone())
+    }
+}
+```
+
+Since `FunctionType::new` canonicalizes, `function_type()` may return
+a flatter form than `param_types.len()` would suggest. The declared
+type is what `apply`'s pin layout and type-conversion checks see.
+Runtime body arity (`param_types.len()`) is what `apply.eval` actually
+consumes per loop iteration.
 
 Cloning cost: an empty `Arc<Vec<_>>` shares one allocation across all
-contexts (or use `Arc::new(Vec::new())` per construction site — both are
-fine for v1; the EMPTY_ARGS `LazyLock` micro-optimization is a follow-up
-only if profiling shows it). Partial-application clones bump the refcount
-of the extended args vec; no deep copy.
+contexts. Partial-application clones bump the refcount of the extended
+args vec; no deep copy.
 
-### `ApplyData` — stored shape unchanged; `kind` becomes a disconnected-`f` fallback
+### `ApplyData` — stored shape unchanged
 
 ```rust
 pub struct ApplyData {
@@ -348,46 +547,56 @@ pub struct ApplyData {
 
 Unchanged on the data model side. The semantic role shifts:
 
-- **`f` connected** (the new and increasingly common case): the wired
-  source's flattened function type drives `calculate_custom_node_type`'s
-  arg-pin enumeration and the output-pin type. `ApplyData.kind` /
-  `type_args` are ignored at evaluation, and the editor de-emphasizes the
-  kind picker.
+- **`f` connected**: the wired source's declared (canonical, flat)
+  function type drives `calculate_custom_node_type`'s arg-pin
+  enumeration and the output-pin type. `ApplyData.kind` / `type_args`
+  are ignored at evaluation and the editor de-emphasizes the kind
+  picker.
 - **`f` disconnected**: the kind picker still drives the default arg
-  layout, exactly as today — `f` must be connected before evaluation can
-  produce anything, so this is a "what shape does the user *intend*"
-  affordance, not an evaluation input.
+  layout, exactly as today.
 
-The stored data is therefore forward-compatible: every existing `apply`
-node loads as today, and any change is purely additive (the new "derived
-shape from connected `f`" view kicks in once a wire lands).
-
-### Editor view (`APIApplyView`, surfaced via `NodeView`)
-
-The Flutter side already receives `APIApplyData` (the `kind`/`type_args`/
-`param_names` stored shape). Phase 4 adds an `APIApplyView` field on the
-node view that carries the **resolved** shape — what the editor should
-actually render:
+### `MapData` — stored shape unchanged; `output_type` becomes derived when `f` connected
 
 ```rust
-pub struct APIApplyView {
-    /// Arity of the resolved function (n in §"apply semantics").
-    pub arity: usize,
-    /// Per-arg display name (from the closure source's pin names when
-    /// available, falling back to "arg0", "arg1", …).
-    pub arg_names: Vec<String>,
-    pub param_types: Vec<DataType>,
-    pub return_type: DataType,
-    /// True if the resolved shape came from a connected `f` source; false
-    /// if we fell back to the kind picker.
-    pub from_wired_f: bool,
+pub struct MapData {
+    pub element_type: DataType,    // derived from xs in calculate_custom_node_type
+    pub output_type: DataType,     // user-set fallback; derived from f when connected
+    // ... existing fields ...
 }
 ```
 
-The "what shape am I actually showing" is computed Rust-side, both because
-the wire-source's function type needs `NodeTypeRegistry::resolve_output_type`
-and because the same logic drives `calculate_custom_node_type` (the source
-of truth for pin layout). The Flutter side reads this view and renders.
+The stored `output_type` is now a fallback for when `f` is
+disconnected. When `f` is connected, `calculate_custom_node_type`
+overrides with the derived type (see §"HOF auto-partialization
+(`map`)"). On disconnect, the editor restores the stored value into
+the displayed field.
+
+### Editor view (`APIApplyView` + `APIMapView`, surfaced via `NodeView`)
+
+```rust
+pub struct APIApplyView {
+    /// Declared (canonical, flat) arity of the wired source.
+    pub arity: usize,
+    /// Per-arg display name (from source's pin names or "arg0", "arg1", …).
+    pub arg_names: Vec<String>,
+    pub param_types: Vec<DataType>,
+    pub return_type: DataType,
+    /// True if the resolved shape came from a connected `f`; false
+    /// if we fell back to the kind picker.
+    pub from_wired_f: bool,
+}
+
+pub struct APIMapView {
+    /// True if `output_type` was derived from a connected `f`;
+    /// false if from the stored `MapData.output_type`.
+    pub output_type_from_wired_f: bool,
+    pub effective_output_type: DataType,
+}
+```
+
+The "what shape am I actually showing" is computed Rust-side (needs
+`NodeTypeRegistry::resolve_output_type` for the wired source).
+Flutter reads these views and renders.
 
 ## Evaluator changes
 
@@ -395,18 +604,16 @@ of truth for pin layout). The Flutter side reads this view and renders.
 
 | Existing piece | Reused? |
 |---|---|
-| `build_inline_closure`, `build_node_function_closure` | Yes — emit closures with empty `pre_supplied_args` |
-| `obtain_closure` | Yes — the choice of inline-body vs. wired-`f` is orthogonal to currying |
-| `run_closure_once` | Yes, with one tiny prepend (next section) |
-| `Walker::MapZone`/`FilterZone::next` | Yes — they call `run_closure_once`; the prepend is inside that helper |
-| Eager `fold`/`foreach` drain loops | Yes — same path |
+| `build_inline_closure`, `build_node_function_closure` | Yes — emit closures with empty `pre_supplied_args`; `param_types` is body's actual arity (not declared flat arity) |
+| `obtain_closure` | Yes |
+| `run_closure_once` | Yes, with one tiny prepend |
+| `Walker::MapZone` / `FilterZone::next` | Yes — they call `run_closure_once`; partial-applied closures arriving via `map` auto-partial are evaluated per-element (the captured element becomes `pre_supplied_args`) |
+| Eager `fold` / `foreach` drain loops | Yes |
 | `evaluate_arg` / `evaluate_arg_required` | Yes |
 | `CapturesGuard` and the `current_zone_input_values` scope-stack | Yes |
-| Per-node `eval` implementations | Yes |
+| Per-node `eval` implementations | Yes, except `apply` |
 
 ### `run_closure_once` — prepend `pre_supplied_args`
-
-The only substrate change is one line in `zone_closure::run_closure_once`:
 
 ```rust
 // Today:
@@ -419,23 +626,16 @@ frame.extend(args);
 context.push_zone_input_frame(closure.owner_node_id, frame);
 ```
 
-For an empty `pre_supplied_args` (every callsite that exists today), this
-is one extra `Vec::with_capacity(args.len())` and two zero-length `extend`s
-folded into the existing single `extend(args)` — measurable cost: nil. The
-clone-per-element of `pre_supplied_args` is `NetworkResult::clone` per
-pre-bound argument; for the realistic case (1–3 partially-applied args,
-each a primitive or an `Arc`-backed structure value) this is negligible.
+For an empty `pre_supplied_args` (every existing call site), this is
+one `Vec::with_capacity(args.len())` and two zero-length `extend`s
+folded into the existing single `extend(args)` — nil cost.
 
-If profiling later shows the per-iteration clone is a real cost for
-large-payload pre-bound args, a `Cow`-style "share if read-only" path is
-straightforward but unnecessary for v1.
-
-### `apply.eval` — the partial branch
+### `apply.eval` — partial application + recursive consumption
 
 ```rust
 fn eval(...) -> EvalOutput {
-    // 1. Resolve f. (Errors and "not a function" cases match today's apply.)
-    let f_closure: ZoneClosure = match evaluator.evaluate_arg(.., f_idx) {
+    // 1. Resolve f.
+    let mut f_current: ZoneClosure = match evaluator.evaluate_arg(.., f_idx) {
         NetworkResult::Function(zc) => zc,
         NetworkResult::None => return EvalOutput::single(
             NetworkResult::Error("apply: f not connected".into())),
@@ -445,113 +645,215 @@ fn eval(...) -> EvalOutput {
                                           other.to_display_string()))),
     };
 
-    // 2. n = remaining-arity of the (already-curry-aware) closure value.
-    //    `param_types` is the unbound tail — pre-bound args are already
-    //    accounted for by the producing apply, so no further flattening
-    //    is required here.
-    let n = f_closure.param_types.len();
-    let k = count_wired_arg_prefix(self, node);  // contiguous prefix; arg pins are 1..1+n
-
-    // 3. Resolve the k wired arg pins, short-circuiting on the first error.
-    let mut new_args = Vec::with_capacity(k);
+    // 2. Resolve k wired arg pins (contiguous prefix).
+    let k = count_wired_arg_prefix(self, node);
+    let mut remaining: VecDeque<NetworkResult> = VecDeque::with_capacity(k);
     for i in 0..k {
         match evaluator.evaluate_arg_required(.., 1 + i) {
             v @ NetworkResult::Error(_) => return EvalOutput::single(v),
-            v => new_args.push(v),
+            v => remaining.push_back(v),
         }
     }
 
-    // 4. Dispatch on (k vs n).
-    if k == n {
-        // Full eval — identical to today's path (with empty
-        // pre_supplied_args this collapses to the existing code).
+    // 3. Identity-partial guard. k=0 with a non-thunk f is just `f`.
+    //    (Thunks — declared arity 0 — fall through to the loop and run.)
+    if k == 0 && !f_current.function_type().parameter_types.is_empty() {
+        return EvalOutput::single(NetworkResult::Function(f_current));
+    }
+
+    // 4. Walk the closure, consuming body-arity args per step.
+    loop {
+        let n_body = f_current.param_types.len();
+
+        // Partial: not enough args remaining to fill this body invocation.
+        if remaining.len() < n_body {
+            let drained: Vec<NetworkResult> = remaining.drain(..).collect();
+            let drained_len = drained.len();
+            let mut extended = (*f_current.pre_supplied_args).clone();
+            extended.extend(drained);
+            let partial = ZoneClosure {
+                body: Arc::clone(&f_current.body),
+                captures: Arc::clone(&f_current.captures),
+                zone_output_wires: Arc::clone(&f_current.zone_output_wires),
+                owner_node_id: f_current.owner_node_id,
+                param_types: f_current.param_types[drained_len..].to_vec(),
+                return_type: f_current.return_type.clone(),
+                pre_supplied_args: Arc::new(extended),
+            };
+            return EvalOutput::single(NetworkResult::Function(partial));
+        }
+
+        // Full body step: consume n_body args, run the body.
+        let step_args: Vec<NetworkResult> = remaining.drain(..n_body).collect();
         let mut inner_ctx = context.fresh_inner_for_eager_body();
-        let r = run_closure_once(.., &mut inner_ctx, &f_closure, new_args);
+        let result = run_closure_once(.., &mut inner_ctx, &f_current, step_args);
         context.drain_inner_context(inner_ctx);
-        EvalOutput::single(r)
-    } else {
-        // Partial — build a new closure with extended pre_supplied_args
-        // and sliced param_types. body / captures / zone_output_wires /
-        // owner_node_id / return_type are inherited unchanged via Arc share.
-        let mut extended = (*f_closure.pre_supplied_args).clone();
-        extended.extend(new_args);
-        let partial = ZoneClosure {
-            body: Arc::clone(&f_closure.body),
-            captures: Arc::clone(&f_closure.captures),
-            zone_output_wires: Arc::clone(&f_closure.zone_output_wires),
-            owner_node_id: f_closure.owner_node_id,
-            param_types: f_closure.param_types[k..].to_vec(),
-            return_type: f_closure.return_type.clone(),
-            pre_supplied_args: Arc::new(extended),
-        };
-        EvalOutput::single(NetworkResult::Function(partial))
+
+        if remaining.is_empty() {
+            return EvalOutput::single(result);
+        }
+
+        // More args to go — the result must be another Function value.
+        match result {
+            NetworkResult::Function(next) => f_current = next,
+            NetworkResult::Error(_) => return EvalOutput::single(result),
+            other => return EvalOutput::single(NetworkResult::Error(format!(
+                "apply: expected Function for further application, got {}",
+                other.to_display_string()))),
+        }
     }
 }
 ```
 
-A subtle point worth pinning down: step 2 reads `n` from
-`f_closure.param_types.len()` *without* re-flattening the function type.
-This is correct because `param_types` is already the "unbound tail" — if
-`f` came from another partial application, `param_types` has already
-been sliced once at that site. Flattening would only matter if the
-*upstream wire's type system* needed to accept a nested-return source
-for an arg pin declared with a flattened-out target, and that's handled
-by `can_be_converted_to`'s Function arm (§"Type system"), not here.
+For the common case (declared arity = body arity = `k`), the loop
+runs once. The recursive branch fires only when the wired closure's
+body returns another `Function` and there are still args to consume.
 
-Note that the body's `ZoneInput { pin_index }` references **continue to use
-the original pin indices** even after a partial. The frame `[pre_supplied…
-++ new_args…]` has the same total length and the same positional meaning as
-a single full-arity call would have; the body simply doesn't know whether
-its caller supplied arg0 "long ago" via a chain of partials or "just now".
-This is the same invariant the existing substrate maintains: positional
-parameter passing through a global scope-stack keyed by `owner_node_id`.
+The body's `ZoneInput { pin_index }` references continue to use the
+original pin indices — positional parameter passing through
+`owner_node_id`-keyed scope frames is unchanged.
+
+### `map.calculate_custom_node_type` — derive `output_type` from `f`
+
+```rust
+fn calculate_custom_node_type(.., wired_f_source_type: Option<&DataType>) {
+    // ... existing element_type derivation from xs ...
+
+    let derived_output = match wired_f_source_type {
+        Some(DataType::Function(ft)) if ft.parameter_types.starts_with(std::slice::from_ref(&element_type)) => {
+            let tail = &ft.parameter_types[1..];
+            if tail.is_empty() {
+                (*ft.output_type).clone()
+            } else {
+                DataType::Function(FunctionType::new(
+                    tail.to_vec(),
+                    (*ft.output_type).clone(),
+                ))
+            }
+        }
+        Some(_) => /* mismatch — leave incompatible; validator flags */,
+        None => self.data.output_type.clone(),  // fallback to stored
+    };
+
+    // map's output pin type is Iter[derived_output].
+    self.set_output_type(DataType::Iter(Box::new(derived_output)));
+}
+```
+
+The `from_wired_f` flag in `APIMapView` is true whenever `f` is
+connected with a compatible source.
 
 ### Edge cases
 
-- **Nested partials.** `apply(apply(g, x), y)` where `g: (A, B, C) → R`.
-  The inner `apply` sees `n=3, k=1`, emits a `NetworkResult::Function(C')`
-  with `C'.pre_supplied_args = [x]` and `C'.param_types = [B, C]`. The
-  outer `apply` sees `C'`'s remaining arity = 2, resolves `k=1`, builds
-  `C''` with `pre_supplied_args = [x, y]` and `param_types = [C]`. Each
-  level extends the args vector by one entry; no body duplication, no
-  capture re-evaluation.
+- **Nested partials via `apply` chaining.** `apply(apply(g, x), y)`
+  where `g: (A, B, C) → R`. The inner `apply` sees `N=3`, `k=1`,
+  returns `Function((B, C), R)`. The outer sees the result's declared
+  arity = 2, `k=1`, returns `Function((C,), R)`. Each step extends
+  the args vector; no body duplication, no capture re-evaluation.
 - **Partials of a 1-arg function.** `g: (A) → R`, `apply(g, a)`.
-  `n=1`, `k=1`, full-eval branch. The partial branch is never taken —
-  same code path as today.
-- **`k = 0` (the identity case).** An `apply` with `f` wired but no arg
-  pins wired hits `n > 0, k = 0`. The partial branch builds a `C'`
-  whose `pre_supplied_args` is unchanged (no new args) and whose
-  `param_types` is unchanged (no slicing) — `C'` is semantically equal
-  to `f_closure`. Allowed by the rule (it's a no-op pass-through of a
-  function value), but not useful in practice. An eager short-circuit
-  to "return `f_closure` unchanged" is possible but not worth the
-  branch; the redundant `Arc::new(Vec::new())` allocation costs
-  nanoseconds.
-- **`fold`-shaped function (`(A, T) → A`) wired into `map.f: (T) → U`.**
-  Rejected directly: both sides are already flat, arity 2 vs. 1 —
-  same-arity check fails after flattening. The user inserts one `apply`
-  inside `map`'s body to supply the `A` arg, getting `(T) → A`, then
-  feeds that result into the body's downstream computation. This is the
-  v1 ergonomic floor; lifting it (so a 2-arg function wires straight
-  into `map.f` and `map.output_type` is auto-inferred) needs HOF
-  auto-partialization (Open Question 1).
+  `N=1, k=1, n_body=1`, single iteration of the loop, full eval.
+- **`k = 0` on a non-thunk.** Identity-partial guard returns `f`
+  unchanged.
+- **0-arity thunk forced via `apply`.** Identity guard does not fire
+  (declared params empty); loop runs once with `n_body = 0`, calls
+  body with `vec![]`, returns the result.
+- **`fold`-shaped function `(A, T) → A` wired into `map.f: (T) →
+  U`.** Accepted via auto-partial: tail is `(A,)`, `map.output_type`
+  derives to `Function((A,), A)`. The same function wired into
+  `fold.f` works as today (exact arity).
+- **Pathological case: body arity 0 with result `Function` and more
+  args.** A 0-arity body that returns a `Function` is forced
+  immediately, and `f_current` advances to the returned closure on
+  the next loop iteration. Each loop iteration must make progress
+  either by draining args or by advancing `f_current`; the 0-arity
+  case advances `f_current` exactly once per iteration. To bound the
+  loop defensively, assert that an iteration with `n_body == 0` and
+  `remaining` non-empty either advances `f_current` to a different
+  `ZoneClosure` value or returns an error. (In practice, body arity
+  >= 1 in real networks unless someone explicitly chains a thunk.)
 
 ## Type system
 
-The single change is in `data_type.rs::can_be_converted_to`'s Function arm
-(currently `data_type.rs:391-414`):
+### Canonical storage + load-time migration
+
+The canonical-storage invariant is enforced at three points:
+
+1. **`FunctionType::new`** is the single in-code construction site.
+2. **`serde Deserialize`** routes through `new` (custom impl or
+   `serde(from = "FunctionTypeRaw")` shim).
+3. **`.cnnd` load** runs `canonicalize_network` over every stored
+   `DataType` in the deserialized network, before the network is
+   handed to the validator or evaluator.
+
+The walker:
 
 ```rust
-if let (DataType::Function(src), DataType::Function(dst)) = (source_type, dest_type) {
-    let src_flat = flatten_function_type(src);
-    let dst_flat = flatten_function_type(dst);
-    if src_flat.parameter_types.len() != dst_flat.parameter_types.len() {
+fn canonicalize_data_type(t: &mut DataType) {
+    match t {
+        DataType::Function(ft) => {
+            for p in &mut ft.parameter_types {
+                canonicalize_data_type(p);
+            }
+            canonicalize_data_type(&mut ft.output_type);
+            // Absorb nested Function return:
+            loop {
+                let replaced = std::mem::replace(
+                    ft.output_type.as_mut(),
+                    DataType::None,
+                );
+                match replaced {
+                    DataType::Function(inner) => {
+                        ft.parameter_types.extend(inner.parameter_types);
+                        *ft.output_type = *inner.output_type;
+                    }
+                    other => {
+                        *ft.output_type = other;
+                        break;
+                    }
+                }
+            }
+        }
+        DataType::Iter(inner) | DataType::Array(inner) | DataType::Option(inner) => {
+            canonicalize_data_type(inner);
+        }
+        // Records reference type defs by name; canonicalization of
+        // record-def field types is driven by the record-type-def
+        // walker, not here.
+        _ => {}
+    }
+}
+```
+
+Sites that store `DataType` values needing the walker, in v1:
+
+- `ClosureData.type_args: Vec<DataType>` — closure node param/return types.
+- `ApplyData.type_args: Vec<DataType>` — apply node fallback types.
+- `MapData.{element_type, output_type}` — and equivalents on
+  `FilterData`, `FoldData`, `ForeachData`.
+- `RecordTypeDef.fields[i].field_type` — record field types.
+- Custom-network return types if stored.
+- Any other node-data field carrying a `DataType` (audit per-node-type
+  in Phase 1).
+
+A central `fn canonicalize_network(net: &mut SerializableNodeNetwork)`
+walks every such field and recurses into nested bodies. The migration
+is **lossless** (canonical and non-canonical forms are semantically
+equal types), so no `.cnnd` version bump is required.
+
+The comparison rule (`can_be_converted_to`'s `Function` arm) is then
+plain structural same-arity — today's rule, unchanged in code:
+
+```rust
+if let (DataType::Function(src), DataType::Function(dst)) =
+    (source_type, dest_type)
+{
+    if src.parameter_types.len() != dst.parameter_types.len() {
         return false;
     }
-    if !DataType::can_be_converted_to(&src_flat.output_type, &dst_flat.output_type, registry) {
+    if !DataType::can_be_converted_to(&src.output_type, &dst.output_type, registry) {
         return false;
     }
-    for (s, d) in src_flat.parameter_types.iter().zip(dst_flat.parameter_types.iter()) {
+    for (s, d) in src.parameter_types.iter().zip(dst.parameter_types.iter()) {
         if !DataType::can_be_converted_to(s, d, registry) {
             return false;
         }
@@ -560,385 +862,458 @@ if let (DataType::Function(src), DataType::Function(dst)) = (source_type, dest_t
 }
 ```
 
-`flatten_function_type` is a small helper, side-effect-free, returning a
-fresh `FunctionType` whose `output_type` is guaranteed not to be a
-`Function`. Its recursion depth is the depth to which `Function` returns
-are nested inside the input type — in realistic networks, 1–3 levels
-(the user's screenshot shows two). Unrelated to network nesting depth;
-flattening a single `FunctionType` value never crosses a node boundary.
+The `strict_no_broadcast` variant likewise stays structural
+same-arity. No flatten helper is needed at compare time — the
+invariant is established at construction.
 
-The **strict-no-broadcast** variant (`can_be_converted_to_strict_no_broadcast`
-in `data_type.rs`, used by the drag-aware add-node popup) gets the same
-flattening treatment in its Function arm. No other type-system code
-needs to change.
+For `map.f` (Phase 4) the compatibility check uses the *starts-with*
+rule and is implemented at the HOF-pin-compatibility layer, not in
+`can_be_converted_to`. The type rule stays simple.
 
 ### Effect on existing wires
 
 - Every wire that exists today has source and destination types whose
-  flattened forms are *identical to themselves* (no nested `Function`
-  returns appear in any built-in pin signature). So flattening is the
-  identity for them, and the same-arity rule fires identically. **No
-  existing wires change validity.** Phase 1 should add a regression test
-  that this holds across the existing fixture set.
-- New wires that *do* exercise the relaxation (a `closure` of kind
-  `Custom` producing nested returns, or a partial `apply` emitting one)
-  start working from Phase 1 onward.
+  canonical forms are *identical to themselves* (no nested `Function`
+  returns appear in any built-in pin signature). Canonicalization is
+  the identity for the existing fixture set. **No existing wires
+  change validity.** Phase 1 should add a regression test that this
+  holds across the existing fixture set.
+- New wires that exercise canonical equivalence (a `closure` of kind
+  `Custom` whose stored `type_args[-1]` is a `Function`, or a partial
+  `apply` emitting one) work from Phase 1 onward.
 
 ## Validation
 
-Three small additions to `network_validator.rs`:
+Four small additions / changes to `network_validator.rs`:
 
-1. **Prefix-only wiring on `apply`.** If `apply.arguments[1+j]` is wired
-   while `apply.arguments[1+i]` for some `i < j` is unwired, attach an
-   error to the `apply` node ("argument pins must be wired as a contiguous
-   prefix").
-2. **`apply`-arity-vs-`f` consistency.** When `f` is wired and resolved,
-   `apply`'s declared arg-pin count equals the flattened arity of `f`'s
-   function type. The drift case is repaired by `repair_node_network`
-   following the existing "input type changes ⇒ disconnect now-incompatible
-   wires" pattern (`doc/design_zones.md` §"Repair") — when `f`'s source's
-   function type changes, the validator runs, `apply`'s
-   `calculate_custom_node_type` recomputes the arg-pin layout, and stale
-   wires beyond the new arity are dropped.
-3. **`apply` with `f` disconnected.** Today this is an immediate
-   validation error ("apply: f not connected"). After this design, it
-   stays an error — `apply` always requires `f`. Partial application is
-   not "make `f` optional"; it's "make some of the arg pins optional".
+1. **Prefix-only wiring on `apply`.** If `apply.arguments[1+j]` is
+   wired while `apply.arguments[1+i]` for some `i < j` is unwired,
+   attach an error to the `apply` node ("argument pins must be wired
+   as a contiguous prefix").
+2. **`apply`-arity-vs-`f` consistency.** When `f` is wired and
+   resolved, `apply`'s declared arg-pin count equals the canonical
+   (flat) arity of `f`'s source type. The drift case is repaired by
+   `repair_node_network` following the existing "input type changes
+   ⇒ disconnect now-incompatible wires" pattern.
+3. **`apply` with `f` disconnected.** Still an error — `apply` always
+   requires `f`.
+4. **`map.f` starts-with rule.** When `f` is wired, the source's
+   canonical function type must start with `[element_type]`. If not,
+   error on the wire (incompatible).
 
-The existing "every required input pin must be wired" rule is **relaxed
-selectively for `apply`'s arg pins**: only pin 0 (`f`) remains required.
-The arg pins are marked optional in `get_parameter_metadata`
-(`apply.rs:175-184`), and a count of wired arg pins drives the output
-type and partial/full dispatch. This is the only departure from the
-"required = required" convention; it is localized to `apply`.
+The existing "every required input pin must be wired" rule is
+**relaxed selectively for `apply`'s arg pins**: only pin 0 (`f`)
+remains required. Arg pins are marked optional in
+`get_parameter_metadata`.
 
 ## Editor (Flutter) changes
 
-The Flutter changes are small because the body-rendering, wire-drawing,
-and pin-position machinery is already generic. The new work is concentrated
-in the `apply` node's property panel and the dynamic typing of its output
-pin:
+The Flutter changes are concentrated in three node panels and two new
+view types:
 
-1. **`apply` shape panel re-skin.** When `f` is connected, hide the kind
-   dropdown and show a read-only summary instead: *"f: (A, B, C) → R —
-   derived from the wired source."* The summary shows per-arg pin labels
-   (sourced from the wired `closure`'s authored `param_names` when
-   available, else `arg0 … arg_{n-1}`). When `f` is disconnected, the
-   existing `ClosureShapeEditor` (shared with the `closure` node) returns
-   as the affordance for declaring the intended shape.
-2. **`APIApplyView`** plumbed through `NodeView`. The Flutter widget reads
-   `arity`, `arg_names`, `param_types`, `return_type`, `from_wired_f` and
-   renders accordingly.
-3. **Output pin typing.** The output pin's data-type indicator (color, hover
-   label) reflects either `R` (full) or `Function((remaining,), R)`
-   (partial). Today the output type is a `Fixed(ret)` value computed in
-   `apply.rs`'s `calculate_custom_node_type`; after this change it
-   becomes the resolved current-state type, recomputed when wiring
-   changes — same lifecycle as `record_destructure`'s schema-driven pin
-   types.
-4. **Per-arg-pin "unconnected = partial" affordance.** The arg pins
-   render with a different default-value placeholder than today (no
-   "default literal" hint, since there isn't one — an unwired arg
-   *defers* the application rather than supplying a default). A small
-   tooltip on each arg pin can read *"unwired ⇒ part of the resulting
-   function's parameter list"*.
-5. **No changes to wire creation or drag.** A `Function` value is still a
-   normal typed wire. The currying-equivalent conversion rule kicks in
-   inside `can_connect_nodes`'s existing pin-compat check; no Flutter-side
-   code change needed.
-6. **No changes to `closure`.** The `closure` node's kind picker keeps its
-   role as *body shape author*. Closures of kind `Custom` already exist
-   (see `nodes/closure.rs`), so an N-arg closure with `param_names = ["x",
-   "y", "z"]` and a single `expr` body is already authorable.
+1. **`apply` shape panel.** When `f` is connected, hide the kind
+   dropdown and show a read-only summary: *"f: (A, B, C) → R — derived
+   from the wired source."* Per-arg pin labels sourced from the wired
+   `closure`'s authored `param_names` when available, else `arg0 …
+   arg_{N-1}`. When `f` is disconnected, the existing
+   `ClosureShapeEditor` returns as the affordance for declaring the
+   intended shape.
+2. **`map` output-type display.** When `f` is connected, the
+   `output_type` editor field becomes a read-only display of the
+   derived type with a "derived from f" hint. When `f` is
+   disconnected, the field returns to user-editable, restored from
+   `MapData.output_type`.
+3. **0-arity Custom closures.** The `ClosureShapeEditor`'s Custom
+   branch must accept an empty param-name list. "Add param" works as
+   today; "Remove param" works down to zero rows. With zero params,
+   the title bar renders `() → R`. The corresponding `apply` shape
+   shows zero arg pins.
+4. **`APIApplyView` + `APIMapView`** plumbed through `NodeView`,
+   populated by `build_node_view`, FRB-regenerated for Flutter.
+5. **Output pin typing** on `apply` and `map` reflects either the
+   derived type or the fallback, recomputed when wiring changes —
+   same lifecycle as `record_destructure`'s schema-driven pin types.
+6. **Per-arg-pin "unconnected = partial" affordance.** Arg pins on
+   `apply` render with no default-value placeholder (unwired =
+   deferred, not defaulted). A small tooltip reads *"unwired ⇒ part
+   of the resulting function's parameter list"*.
+7. **No changes to wire creation or drag.** `Function` values are
+   still normal typed wires. Canonical storage makes type comparison
+   a one-line structural check.
+8. **No changes to `closure`** beyond the 0-arity Custom relaxation.
 
 ## Reuse map (summary)
 
 **Reused unchanged:**
-- `Walker::MapZone` / `FilterZone` — the walker carries a `ZoneClosure`,
-  the `pre_supplied_args` field travels with it via Arc-share.
-- `build_inline_closure`, `build_node_function_closure`, `obtain_closure`.
+- `Walker::MapZone` / `FilterZone` — partial-applied closures
+  produced by `map` auto-partial are evaluated per-element by the
+  standard `run_closure_once` (the captured element travels via
+  `pre_supplied_args`).
+- `obtain_closure`, `build_inline_closure`,
+  `build_node_function_closure`.
 - Every per-node `eval` implementation except `apply`.
-- `CapturesGuard`, `current_zone_input_values` scope-stack, `eval_step`.
-- The `closure` node and its `ClosureKind` (including `Custom`).
-- The four HOFs' `f` pin dispatch (`obtain_closure`).
+- `CapturesGuard`, `current_zone_input_values` scope-stack,
+  `eval_step`.
+- The `closure` node and its `ClosureKind` (incl. `Custom`).
 - `repair_node_network` machinery.
 
 **Reused with small extensions:**
-- `ZoneClosure` — one new field, `pre_supplied_args: Arc<Vec<NetworkResult>>`.
-- `run_closure_once` — prepends `pre_supplied_args` to the caller's args.
-- `DataType::can_be_converted_to` Function arm — flatten both sides, then
-  same-arity-pairwise as today.
-- `can_be_converted_to_strict_no_broadcast` Function arm — same flattening
-  treatment, kept symmetric.
-- `apply.eval` — the partial/full branch.
-- `apply.calculate_custom_node_type` — derive arg-pin layout from the wired
-  `f`'s flattened type when present, fall back to the kind picker.
-- `apply.get_parameter_metadata` — arg pins become optional (only `f`
-  required).
-- Validator — three new checks (prefix-only, arity consistency, `apply`
-  `f` required).
+- `ZoneClosure` — `pre_supplied_args: Arc<Vec<NetworkResult>>` field.
+- `run_closure_once` — prepend `pre_supplied_args`.
+- `DataType::can_be_converted_to`'s `Function` arm — structural
+  same-arity (today's rule, now sound by construction).
+- `apply.eval` — partial branch with recursive consumption loop.
+- `apply.calculate_custom_node_type` — derive arg-pin layout from
+  wired `f`'s declared (canonical, flat) type.
+- `apply.get_parameter_metadata` — arg pins become optional.
+- `map.calculate_custom_node_type` — derive `output_type` from `f`
+  via the starts-with rule when connected.
+- `MapData.output_type` — semantic shift to "fallback when `f`
+  disconnected."
+- `ClosureShapeEditor` — accept empty `param_names` for Custom kind.
+- Validator — four new/updated checks per §"Validation".
 
 **New from scratch:**
-- `flatten_function_type(&FunctionType) -> FunctionType` helper.
-- `APIApplyView` API type + Flutter widget glue.
-- One new property-panel skin for `apply` when `f` is connected.
+- `FunctionType::new` canonicalizing constructor + custom
+  `Deserialize` routing through it.
+- `canonicalize_data_type` walker + `canonicalize_network` driver.
+- `APIApplyView` + `APIMapView` API types + Flutter widget glue.
+- Property-panel skins for `apply` (connected `f`) and `map`
+  (connected `f`).
 
 **Deleted / removed:**
-- Nothing. `ApplyData.kind` is kept as a fallback for the disconnected `f`
-  case. Its eventual removal (once the editor exclusively renders the
-  derived shape) is a polish follow-up and is **not** part of this
-  branch.
+- Nothing. `ApplyData.kind` is kept as a fallback for the
+  disconnected-`f` case; `MapData.output_type` is kept as the
+  fallback for disconnected `f`. Eventual deprecations are polish
+  follow-ups, not part of this branch.
 
 ## Implementation phases
 
 Each phase ends with `cd rust && cargo test` green plus `cargo clippy`
-clean; Phase 4 additionally ends with `flutter run` launching a working
-editor. Phases are strictly sequential.
+clean; Phase 5 additionally ends with `flutter run` launching a
+working editor. Phases are strictly sequential.
 
-### Phase 1: Curry-equivalent function-type conversion
+### Phase 1: Canonical `FunctionType` storage + load-time migration
 
-**Goal.** Flatten function types before the structural-equality check.
-Every existing wire continues to validate; new wires using
-currying-equivalent shapes start working. No `apply` or `ZoneClosure`
-change yet.
+**Goal.** Establish canonical storage. Every `FunctionType` in memory
+is flat. `.cnnd` files load and normalize. Type comparison stays as
+today's structural same-arity. Every existing wire continues to
+validate.
 
 **Scope.**
-- `data_type.rs` — add `flatten_function_type` helper. Update the
-  Function arm of `can_be_converted_to` (and
-  `can_be_converted_to_strict_no_broadcast`) to flatten both sides first,
-  then run today's same-arity-pairwise check.
-- No node changes. No editor changes.
+- `data_type.rs`:
+  - Add `FunctionType::new(parameter_types, output_type) -> Self`
+    that canonicalizes by absorbing nested `Function` returns.
+  - Custom `Deserialize` impl (or `serde(from = "FunctionTypeRaw")`)
+    routes deserialization through `new`.
+  - Audit existing struct-literal construction sites and rewrite to
+    `FunctionType::new`.
+  - `can_be_converted_to`'s `Function` arm: leave as today's
+    structural same-arity (or revert if a flatten-on-compare patch
+    has been merged in advance).
+- New module `canonicalize.rs` (or alongside `data_type.rs`)
+  containing:
+  - `canonicalize_data_type(&mut DataType)` — recursive walker.
+  - `canonicalize_network(&mut SerializableNodeNetwork)` — driver
+    that walks every stored DataType across all node-data variants
+    and nested bodies, plus record type defs.
+- `.cnnd` load path: call `canonicalize_network` on the loaded
+  network before validation.
 
 **Tests.** New unit tests in `rust/tests/structure_designer/`:
-- `flatten_function_type` golden cases (nested `Function` in return →
-  flat; already-flat → identity; mixed-depth nested).
-- `can_be_converted_to` curry-equivalence: `(A) → ((B,) → C)` ↔ `(A, B)
-  → C`, both directions; with leaf conversions on params (`Int → Float`)
-  and return; rejection on arity mismatch after flattening.
-- A regression test that every existing fixture continues to validate
-  (the full fixture set under `rust/tests/fixtures/`).
+- `FunctionType::new` golden cases: nested `Function` in return →
+  flat; already-flat → identity; mixed-depth nested.
+- `canonicalize_data_type` recursion: nested `Function` inside
+  `Iter`, inside `Array`, inside `Option`.
+- `canonicalize_network` round-trip: build a fixture with a
+  non-canonical `ClosureData.type_args[-1] = Function(..)`, run,
+  verify the stored value is now flat. Same for `MapData.output_type`
+  and record field types.
+- Existing-fixture regression: every fixture in `rust/tests/fixtures/`
+  loads, canonicalizes (no-op since they're already flat), produces
+  the same in-memory network as today.
+- `.cnnd` migration round-trip: load → save → load → no changes.
 
 **Gotchas.**
-- `Box<DataType>` recursion. `flatten` builds a fresh `FunctionType` —
-  cloning leaf types only; param_types Vecs are extended once at the
-  outermost call. No reference cycles to worry about.
-- The strict-no-broadcast variant must get the same flattening
-  treatment, or the drag-aware add-node popup will silently mis-filter
-  currying-equivalent candidates.
+- `Box<DataType>` recursion in the absorb loop: use `std::mem::replace`
+  to mutate in place without cloning subtrees.
+- The strict-no-broadcast variant no longer needs special handling
+  beyond the same structural rule.
+- If a test directly constructs `FunctionType { ... }` via struct
+  literal, switch to `FunctionType::new`. Code review enforces
+  `new`-only construction in new code.
+- The walker must also recurse into nested HOF bodies (closure /
+  apply nodes inside `MapZone` etc. inside a custom-network
+  serialization). `canonicalize_network` driver enumerates these via
+  `walk_all_nodes_mut`.
 
 ### Phase 2: `ZoneClosure.pre_supplied_args` — substrate-only
 
-**Goal.** Add the field, plumb it through `run_closure_once`, ensure
-every closure constructor emits an empty value. No node yet *produces* a
-non-empty `pre_supplied_args`, so all existing tests pass byte-identically.
+**Goal.** Add the field, plumb through `run_closure_once`, ensure
+every constructor emits an empty value. No node yet produces a
+non-empty `pre_supplied_args`, so the existing closure / HOF suite
+passes byte-identically.
 
 **Scope.**
-- `evaluator/zone_closure.rs` — add the field to `ZoneClosure`. Update
-  `build_inline_closure` and `build_node_function_closure` to set
-  `pre_supplied_args: Arc::new(Vec::new())`. Update `run_closure_once`'s
-  push to prepend.
+- `evaluator/zone_closure.rs`:
+  - Add `pre_supplied_args: Arc<Vec<NetworkResult>>` to `ZoneClosure`.
+  - Update `build_inline_closure` and `build_node_function_closure`
+    to set `pre_supplied_args: Arc::new(Vec::new())`.
+  - Update `run_closure_once` to prepend.
+  - Add `ZoneClosure::function_type()` returning
+    `FunctionType::new(param_types.clone(), return_type.clone())` —
+    the canonical (flat) declared type used by `apply` in Phase 3.
 - Update any `ZoneClosure { … }` struct literals in tests.
 
-**Tests.** No new tests; the existing closure / HOF suite is the
-regression check. Add one unit test that hand-constructs a `ZoneClosure`
-with non-empty `pre_supplied_args` and verifies `run_closure_once`
-prepends correctly (against a synthetic two-param body).
+**Tests.** Hand-construct a `ZoneClosure` with non-empty
+`pre_supplied_args` and verify `run_closure_once` prepends correctly
+against a synthetic two-param body. Existing closure / HOF suite is
+the regression check.
 
 **Gotchas.**
-- The Walker `Clone` independence invariant (Invariant 2 in
-  `evaluator/AGENTS.md`): `pre_supplied_args` is `Arc<Vec<…>>`, so cloning
-  a walker that embeds a partially-applied closure stays a refcount bump
-  — the invariant continues to hold.
-- Serialization: `pre_supplied_args` is a runtime-only field
-  (`NetworkResult` is not `Serialize`); `ZoneClosure` is also not
-  serialized today (the body is — through `Node.zone` — and captures are
-  re-evaluated on load). Confirm by grep that no `Serialize` impl exists
-  for `ZoneClosure`; if it does, add `#[serde(skip)]`.
+- Walker `Clone` independence (Invariant 2): `pre_supplied_args` is
+  `Arc<Vec<…>>`, refcount-bump only.
+- Serialization: `pre_supplied_args` is runtime-only
+  (`NetworkResult` is not `Serialize`). Confirm by grep that no
+  `Serialize` impl exists for `ZoneClosure`; if one does, add
+  `#[serde(skip)]`.
 
-### Phase 3: `apply` becomes partial-application capable
+### Phase 3: `apply` partial application + recursive consumption
 
-**Goal.** The minimum viable partial-`apply`: derived arg-pin shape from
-connected `f`, dynamic output pin type, the partial/full branch in `eval`.
+**Goal.** The minimum viable partial-`apply`: derived arg-pin shape
+from connected `f`, dynamic output pin type, partial/full dispatch
+with recursive consumption in `eval`. Closes the §2 nested-body
+correctness gap and §"`apply` semantics"'s 0-arity thunk case.
 
 **Scope.**
 - `nodes/apply.rs`:
-  - `calculate_custom_node_type` — when the `f` source's function type
-    is resolvable, derive `params`/`ret` from the flattened wired source
-    instead of from `ApplyData.kind`. Fall back to the kind picker when
-    `f` is disconnected.
-  - `eval` — implement the partial/full dispatch in the prose above.
+  - `calculate_custom_node_type` — when `f`'s source's function type
+    is resolvable, derive `params` / `ret` from the source's
+    declared (canonical) type. Fall back to the kind picker when `f`
+    is disconnected.
+  - `eval` — implement the loop in §"`apply.eval`" with the
+    identity-partial guard and recursive consumption.
   - `get_parameter_metadata` — mark arg pins optional.
-- `network_validator.rs` — three checks per §"Validation".
-- `node_type_registry.rs::repair_node_network` — extend the wire-retention
+- `network_validator.rs` — checks 1–3 per §"Validation".
+- `node_type_registry.rs::repair_node_network` — extend wire-retention
   filter to handle "`f` source's function type changed ⇒ refresh
-  `apply`'s arg pin layout, disconnect stale wires past the new arity".
+  `apply`'s arg-pin layout, disconnect stale wires past the new
+  declared arity".
 
 **Tests.** New file `rust/tests/structure_designer/currying_test.rs`:
-- **Identity partial:** `apply(g, …)` on a 1-arg `g` with `k=0` wired
-  yields a `Function` semantically equal to `g`. Round-trip through
-  another `apply` with `k=1` ⇒ full result.
+- **Full apply unchanged:** `N = k`, behavior matches pre-branch.
 - **One-arg partial:** 3-arg `g`, partial with `k=1` yields a 2-arg
-  function. Wire into a second `apply` with `k=2` ⇒ full result. Compare
-  to a fully-wired single `apply`.
-- **Currying-equivalent acceptance:** an `apply` declaring `(A,B,C) → D`
-  accepts a source whose type is `(A) → ((B,C) → D)`, and vice versa.
-  Evaluation matches.
-- **The user's screenshot scenario:** a `Custom` closure producing
-  `(Float, Float) → Int` flows into a `map`'s body via an `apply(g,
-  element)` arrangement (per §"Worked examples" example 1). The test
-  fixture explicitly sets `map.output_type =
-  Function((Float,), Int)` — HOF auto-partialization is out of scope, so
-  the user (or the test author) must declare it. `collect` yields the
-  expected list of partially-applied functions; the test asserts
-  correctness by then applying each to a fixed second arg in a second
-  `map` pass and comparing to a hand-computed reference.
-- **Validation:** prefix-only rule rejects "arg0 unwired, arg1 wired";
-  `f` disconnected still errors; arity-drift after a kind change is
-  repaired by `repair_node_network`.
+  function. Wire into a second `apply` with `k=2` ⇒ full result.
+- **Recursive consumption (§2 case):** A 1-arg closure whose body
+  returns a 1-arg closure (canonical declared type: 2-arg). `apply(g,
+  a, b)` with both args wired evaluates correctly via two loop
+  iterations.
+- **Identity partial:** `apply(g, …)` with `k=0` and declared arity
+  > 0 returns `g` unchanged.
+- **0-arity thunk:** A 0-arity closure forced by `apply(g)` with no
+  arg pins runs the body and emits `R`.
+- **Currying-equivalent acceptance** (post-Phase 1): an `apply`
+  declaring `(A, B, C) → D` accepts a source whose authored type was
+  `(A) → ((B, C) → D)` and is stored canonical as `(A, B, C) → D`.
+- **Validation:** prefix-only rule rejects "arg0 unwired, arg1
+  wired"; `f` disconnected still errors; arity-drift after a kind
+  change is repaired by `repair_node_network`.
 - **Walker clone independence:** a partially-applied closure flowing
   through a `map → collect`-and-`map → collect` fanout produces
   independent walkers.
 
 **Gotchas.**
-- **Resolving `f`'s function type at `calculate_custom_node_type` time.**
-  `calculate_custom_node_type` runs during pin-layout updates and does not
-  have access to the full evaluator. It can, however, read the wired
-  source's declared output type via the registry — the same path
-  `record_destructure` uses to derive its per-field output pins from the
-  connected schema. Mirror that pattern.
-- **`ApplyData.kind` becomes vestigial when `f` is connected.** Until the
-  follow-up that removes it, the editor must take care not to *show* the
-  kind picker when `f` is wired (it would suggest the kind is editable,
-  which it isn't — the wired source dictates the shape). Phase 4
-  Flutter work handles the visual side.
-- **Empty `pre_supplied_args` after `k = 0` partial.** This is the
-  identity case. The eval path still allocates a fresh
-  `Arc::new(Vec::new())` for the "extended" args; that's two allocations
-  per identity partial. If it ever shows up in profiling, share a single
-  `EMPTY_ARGS` static. Almost certainly not worth it for v1.
+- **Resolving `f`'s declared type at `calculate_custom_node_type`
+  time.** Mirror `record_destructure`'s "derive pin layout from
+  connected schema" pattern.
+- **`ApplyData.kind` becomes vestigial when `f` is connected.** Phase
+  5 handles the visual side; in Phase 3, the editor still shows the
+  kind picker until that work lands. That's fine — it just becomes a
+  redundant control.
+- **Pathological 0-arity body returning a Function and consuming
+  args.** Each loop iteration must advance `f_current` if `n_body ==
+  0`. Defensive assert: if `n_body == 0 && remaining.len() > 0` and
+  the result is not a `Function`, error. The user must explicitly
+  chain thunks for this case to arise — vanishingly rare.
 
-### Phase 4: Editor (Flutter) — surface partial `apply` in the UI
+### Phase 4: HOF auto-partialization on `map`
 
-**Goal.** Author and use partial `apply` end-to-end in the editor. The
-shape panel reflects connected `f`; the output pin shows the dynamic
-type; arg pins indicate that "unwired ⇒ part of the result".
+**Goal.** `map.f` accepts higher-arity sources via the starts-with
+rule; `map.output_type` derives from `f` when connected. Headline
+screenshot scenario works.
 
 **Scope.**
-- `APIApplyView` — new API type carrying the resolved arity, arg names,
-  param types, return type, and a `from_wired_f` flag. Populated by
-  `build_node_view` for `apply` nodes; FRB-regenerated for Flutter.
+- `nodes/map.rs::calculate_custom_node_type`:
+  - When `f`'s source type is a `Function` whose `parameter_types`
+    starts with `[element_type]`, derive `output_type` per §"HOF
+    auto-partialization (`map`)".
+  - When `f` is disconnected, fall back to stored
+    `MapData.output_type` (today's behavior).
+  - When `f`'s source is a `Function` whose first param does not
+    match `element_type`, leave incompatibility for the validator.
+- `map.f`'s connection-compatibility check (in `network_validator.rs`
+  and any connect-time helper): use the starts-with rule instead of
+  structural same-arity.
+- `repair_node_network` — when `f`'s source's function type changes
+  shape (or `xs`'s element type changes), recompute derived
+  `output_type` and propagate downstream.
+- `APIMapView`: populate `output_type_from_wired_f` and
+  `effective_output_type` based on the derivation.
+
+**Tests.** New tests in `currying_test.rs`:
+- **Headline screenshot scenario:** `(Float, Float) → Int` source
+  flows into `map.f` over `Iter[Float]`. `map.output_type` derives to
+  `Function((Float,), Int)`. Each element yields a partially-applied
+  closure carrying that element. A second `map(apply(_, y), …)`
+  pass folds each one with a fixed `y`; results match a hand-computed
+  reference.
+- **Exact arity:** `(Float) → Int` flows in normally; output is
+  `Iter[Int]`.
+- **Mismatch:** `(Int, Float) → Bool` rejected for `map` over
+  `Iter[Float]` (doesn't start with `[Float]`).
+- **`f` disconnect:** stored `MapData.output_type` is restored when
+  `f` is unwired.
+- **`filter` / `fold` / `foreach` exact-arity unchanged:** regressions
+  on existing fixtures.
+
+**Gotchas.**
+- The starts-with check uses *canonical* (flat) source type,
+  guaranteed by Phase 1.
+- When `map.f`'s source emits a partially-applied closure (its
+  declared type already absorbed some args), the canonical type
+  reflects the *remaining* params — starts-with is checked against
+  those.
+- `MapData.output_type` is read only when `f` is disconnected.
+  Connecting `f` does not overwrite the stored value, so disconnect
+  restores it cleanly.
+
+### Phase 5: Editor (Flutter) — partial `apply`, derived `map` output, 0-arity Custom
+
+**Goal.** Author and use partial `apply` end-to-end. Author and use
+`map` auto-partial end-to-end. Author 0-arity Custom closures.
+
+**Scope.**
+- `APIApplyView` + `APIMapView` API types, populated by
+  `build_node_view`. FRB-regenerated for Flutter.
 - Flutter `apply` widget — read `APIApplyView`, render the read-only
-  derived summary when `from_wired_f`, render the existing
-  ClosureShapeEditor when not.
-- Pin colors / tooltips — output pin shows dynamic type; arg pins gain a
-  short "unwired ⇒ deferred" tooltip.
+  derived summary when `from_wired_f`, render
+  `ClosureShapeEditor` when not.
+- Flutter `map` widget — render derived `output_type` as read-only
+  when `output_type_from_wired_f`, user-editable field otherwise.
+  Disconnect restores the stored value into the field.
+- `ClosureShapeEditor` — 0-arity Custom support: allow empty
+  `param_names`, render `() → R` in titles. Add / remove buttons
+  work down to zero rows.
+- Pin colors / tooltips — output pin shows dynamic type; arg pins
+  on `apply` gain the "unwired ⇒ deferred" tooltip.
 - `flutter analyze` clean.
 
 **Tests.** Manual walkthrough:
-1. Place a `closure` of kind `Custom`, `param_names = ["x","y"]`,
-   `type_args = [Float, Float, Float]`, body `expr: x+y`.
-2. Place an `apply` and wire the closure into `f`. Observe the arg pins
-   become two `Float`s, output pin is `Float`.
-3. Wire only `arg0` to a `float` literal. Output pin re-types to
-   `Function((Float,), Float)`. Wire that output into another `apply`,
-   confirm shape derives correctly, wire `arg0` on the second apply,
-   confirm result is the expected sum.
+1. Place a `closure` of kind Custom, `param_names = ["x","y"]`,
+   `type_args = [Float, Float, Float]`, body `expr: x+y`. Place an
+   `apply` and wire the closure into `f`. Confirm two arg pins, type
+   `Float` each.
+2. Wire only `arg0` to a `float` literal. Output pin re-types to
+   `Function((Float,), Float)`.
+3. Wire that output into another `apply` with one arg wired ⇒ full
+   result.
 4. Disconnect `f` on the original apply — kind picker returns,
    declaring the intended shape works as before.
-5. Regression: existing closure / HOF networks load and evaluate
+5. **Headline scenario:** Place a `closure` Custom with `param_names
+   = ["x","y"]`, `type_args = [Float, Float, Int]`, body `expr:
+   x*y`. Place a `map`, wire `range(3)` to `xs`, wire the closure
+   directly to `f`. Confirm `map.output_type` becomes
+   `Function((Float,), Int)` (read-only display, "derived from f"
+   hint). Wire into `collect`, then into a downstream `map(apply(_,
+   y), …)` chain; results match hand-computed values.
+6. **0-arity Custom:** Place a `closure` Custom, remove all params
+   via the editor, set return type `Float`, body `expr: 42.0`.
+   Title shows `() → Float`. Place `apply` with `f` wired, no arg
+   pins — forces the thunk to `42.0`.
+7. Regression: existing closure / HOF networks load and evaluate
    unchanged.
 
-**Verification.** `cd rust && cargo test` green; `flutter run` launches;
-manual walkthrough passes.
+**Verification.** `cd rust && cargo test` green; `flutter run`
+launches; manual walkthrough passes.
 
 **Gotchas.**
-- **Showing the wired closure's pin names.** The closure source (often a
-  `closure` node) has authored `param_names`. The `apply` view should
-  propagate them so the user sees `arg0 = x`, `arg1 = y` rather than
-  generic `arg0`, `arg1`. Where the source is a function pin
-  (`output_pin_index == -1`) or a subnetwork's `Function` output, fall
-  back to the node-type's parameter names.
-- **Re-render trigger on wiring change.** `calculate_custom_node_type`
-  re-runs when input wires change; the existing change-propagation
-  pipeline already covers this, but verify the `apply` widget's view
-  updates without an explicit user click.
+- **Showing the wired closure's pin names.** Propagate `param_names`
+  from the wired source. When the source is a function pin
+  (`output_pin_index == -1`) or a subnetwork's `Function` output,
+  fall back to the node-type's parameter names.
+- **Re-render trigger on wiring change.**
+  `calculate_custom_node_type` re-runs when input wires change;
+  verify the `apply` and `map` widgets update without an explicit
+  user click.
+- **0-arity Custom + `apply` with zero arg pins.** The editor must
+  allow placing an `apply` whose `f` is wired to a 0-arity closure
+  with zero arg pins rendered — and the output pin still shows the
+  return type. The "no args wired" branch of `apply.eval` (k=0,
+  declared=0) forces the thunk.
+- **`map.output_type` field state restore.** On `f` disconnect, the
+  editor must refresh the field's editor from the stored value (not
+  show whatever derived value was last displayed). Mirror the
+  existing pattern used for any node where input changes invalidate
+  derived output.
 
 ### Out of phase plan (deferred)
 
-- **HOF auto-partialization.** Let `(T, X…) → Y` flow into `map.f: (T)
-  → U` by inferring `U = Function((X…,), Y)` from the wired `f`. Needs
-  `map`'s `output_type` to be derived from `f` rather than user-set.
-  Additive; substrate already supports it via Phase 2. See Open
-  Question 1.
-- **`ApplyData.kind` deprecation.** Once the editor exclusively renders
-  the derived shape and the kind picker becomes a niche
+- **Auto-partialization on a hypothetical future HOF with
+  unconstrained output.** Adopt the `map` pattern verbatim.
+- **`ApplyData.kind` deprecation.** Once the editor exclusively
+  renders the derived shape and the kind picker becomes a niche
   default-shape-hint, retire the field entirely. Needs a one-version
   serialization migration.
-- **0-arity closures.** A `() → R` kind, or a `Custom` with `param_names
-  = []`. Today the substrate already supports it (`run_closure_once`
-  with `args = vec![]`); the editor and `ClosureShapeEditor` need a
-  tiny relaxation. See Open Question 3.
+- **`MapData.output_type` deprecation.** Same trajectory once `map`'s
+  `f` pin is always-connected in practice (or once a "shape hint"
+  affordance ships for the disconnected case).
 - **`compose` / `flip` and other combinators.** Per
-  `design_closures.md`'s deferred list; partial application makes these
-  much easier to express but doesn't deliver them.
+  `design_closures.md`'s deferred list; partial application makes
+  these much easier to express but doesn't deliver them.
 
 ## Open questions
 
-1. **HOF auto-partialization.** Should `map.f: (T) → U` accept any `(T,
-   X…) → Y` source, with `map.output_type` inferred to `Function((X…,),
-   Y)`? Mechanically the substrate supports it as of Phase 2; the type
-   system already accepts the conversion as of Phase 1. The hold-up is
-   `map`/`filter`/`fold`/`foreach`'s `output_type` (and equivalents)
-   being user-configured properties today, not derived from `f`. Lifting
-   this is additive: change each HOF's `calculate_custom_node_type` to
-   derive `output_type` from `f` when present, fall back to the stored
-   property when `f` is disconnected. Defer until users hit it; the
-   `apply`-in-body workaround is one node, not a tower.
-2. **Disconnected-`f` shape on `apply`.** The kind picker is the v1
-   fallback, which is workable but slightly awkward — the user sees a
-   picker that "doesn't really matter once you wire `f`". Alternative:
-   show no pins at all until `f` is wired (apply is "empty" without
-   `f`). Decide during Phase 4 UX work.
-3. **0-arity closures.** The user's offhand remark: *"functions without
-   arguments still being functions that need evaluation. Does the custom
-   type really need to enforce at least one arrow?"* No — the substrate
-   doesn't need it. The closure-shape editor's `Custom` kind currently
-   accepts arbitrary arity, but verify it accepts arity 0 too; if not,
-   relax it. Mostly a UX consistency item, not a substrate change.
-4. **Non-prefix wiring on `apply`.** Allow wiring `arg0` and `arg2`
-   while `arg1` is empty? The result would be `Function((P_1,), R)` with
-   `P_0 = a_0`, `P_2 = a_2`, `P_1` left to the caller. This requires
+1. **Non-prefix wiring on `apply`.** Allow wiring `arg0` and `arg2`
+   while `arg1` is empty? The result would be `Function((P_1,), R)`
+   with `P_0 = a_0`, `P_2 = a_2`, `P_1` left to the caller. Requires
    tracking a "supplied mask" rather than just `k`, and re-indexing
-   `ZoneInput` references — neither expensive but a real conceptual
-   addition. v1 stays with prefix-only; revisit if users actually want
-   the freedom.
-5. **`pre_supplied_args` deep-clone cost.** For large payloads (a
+   `ZoneInput` references. v1 stays prefix-only; revisit if users
+   actually want the freedom.
+2. **Disconnected-`f` shape on `apply`.** The kind picker is the v1
+   fallback, slightly awkward — "doesn't really matter once you wire
+   `f`." Alternative: show no pins at all until `f` is wired. Decide
+   during Phase 5 UX work.
+3. **`pre_supplied_args` deep-clone cost.** For large payloads (a
    `Crystal` or `Molecule` value pre-bound into a closure), the
-   per-iteration `NetworkResult::clone` could matter. The payloads are
-   already `Arc`-backed (`CrystalData`'s `atoms`, `geo_tree_root`), so
-   clones are refcount bumps in practice — but a `Cow`-style "share
-   read-only" path inside `run_closure_once` would be a clean
-   optimization if profiling ever shows it.
-6. **Cycle detection.** `Function`-typed values can already flow into
-   captures, into `pre_supplied_args`, and through `ZoneInput` reads to
-   downstream `apply` consumers — and today's evaluator does no cycle
-   detection across that flow. This design adds one new value path
-   (`pre_supplied_args`) but does not introduce a fundamentally new
-   cycle vector: a `NetworkResult::Function` carried as a pre-bound arg
-   is structurally identical to one carried as a capture. If a future
-   recursion / fixed-point story for closures lands, cycle detection
-   should be designed there, not here. Defer.
+   per-iteration `NetworkResult::clone` could matter. The payloads
+   are already `Arc`-backed (`CrystalData`'s `atoms`,
+   `geo_tree_root`), so clones are refcount bumps in practice — but
+   a `Cow`-style "share read-only" path inside `run_closure_once`
+   would be a clean optimization if profiling ever shows it.
+4. **Cycle detection.** `Function`-typed values can already flow
+   into captures, into `pre_supplied_args`, and through `ZoneInput`
+   reads to downstream `apply` consumers — and today's evaluator
+   does no cycle detection across that flow. This design adds one
+   new value path (`pre_supplied_args`) but does not introduce a
+   fundamentally new cycle vector: a `NetworkResult::Function`
+   carried as a pre-bound arg is structurally identical to one
+   carried as a capture. If a future recursion / fixed-point story
+   for closures lands, cycle detection should be designed there.
+   Defer.
 
 ## Phasing summary
 
 | Phase | Outcome |
 |---|---|
-| 1 | Curry-equivalent `Function` conversion (no node behavior change) |
+| 1 | Canonical `FunctionType` storage + `.cnnd` load-time normalization (no node behavior change) |
 | 2 | `ZoneClosure.pre_supplied_args` substrate (no node yet produces a non-empty value) |
-| 3 | `apply` partial-application: derived pins + dynamic output type + partial/full eval branch |
-| 4 | Editor surface: `APIApplyView`, derived-shape rendering, arg-pin "deferred" affordance |
+| 3 | `apply` partial-application: derived pins + dynamic output type + partial/full eval with recursive consumption |
+| 4 | `map` auto-partialization: starts-with `f` rule, derived `output_type` (headline screenshot works) |
+| 5 | Editor surface: `APIApplyView` / `APIMapView`, derived-shape rendering, 0-arity Custom |
 
-Each phase's exit gate is the same as elsewhere in the project: `cd rust
-&& cargo test` green plus (Phase 4) `flutter run` launching a working
-editor. The user-visible payoff lands fully at Phase 3; Phase 4 is the
-ergonomic polish that makes it the obvious tool.
+Each phase's exit gate is the same as elsewhere in the project: `cd
+rust && cargo test` green plus (Phase 5) `flutter run` launching a
+working editor. The user-visible payoff lands fully at Phase 4 (the
+headline screenshot scenario evaluates correctly with a direct
+closure-to-`map.f` wire); Phase 5 is the ergonomic polish that makes
+it the obvious tool.
