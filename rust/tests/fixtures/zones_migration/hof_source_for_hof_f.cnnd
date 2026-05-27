@@ -54,12 +54,12 @@
             ],
             "arguments": [
               {
+                "argument_output_pins": {}
+              },
+              {
                 "argument_output_pins": {
                   "1": 0
                 }
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
             "data_type": "map",

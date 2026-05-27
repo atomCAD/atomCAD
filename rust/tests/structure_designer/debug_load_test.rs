@@ -12,7 +12,30 @@ fn debug_load_user_file() {
     });
     let mut registry = NodeTypeRegistry::new();
     match load_node_networks_from_file(&mut registry, &path) {
-        Ok(_) => println!("LOADED OK ({} networks)", registry.node_networks.len()),
+        Ok(_) => {
+            // Count closure nodes synthesised across all networks.
+            let mut closure_count = 0usize;
+            let mut networks_with_closure = Vec::new();
+            for (name, network) in &registry.node_networks {
+                let n = network
+                    .nodes
+                    .values()
+                    .filter(|n| n.node_type_name == "closure")
+                    .count();
+                if n > 0 {
+                    closure_count += n;
+                    networks_with_closure.push((name.clone(), n));
+                }
+            }
+            println!(
+                "LOADED OK ({} networks, {} closures synthesised)",
+                registry.node_networks.len(),
+                closure_count
+            );
+            for (name, n) in &networks_with_closure {
+                println!("  {}: {} closure(s)", name, n);
+            }
+        }
         Err(e) => {
             eprintln!("LOAD FAILED: {}", e);
             panic!("{}", e);

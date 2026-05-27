@@ -14,7 +14,7 @@ The migration is part of three landed designs:
   `IncomingWire` storage shape on `Argument`.
 - `doc/design_closures.md` — the `closure` and `apply` nodes, the optional
   `f: Function` pin on the four HOFs, the structural-match `Function`-type
-  conversion rule (replacing main's extras-as-prefix partial application).
+  conversion rule (replacing main's trailing-extras partial application).
 - `doc/design_function_pins.md` — the revived `-1` function-pin convention,
   re-synthesized as a real `NetworkResult::Function` value with the strict
   "all source inputs must be free" rule.
@@ -26,7 +26,7 @@ In scope:
   custom `Argument` deserializer — so the migration script does as little as
   possible.
 - The one transformation the script must perform: rewriting legacy HOF `f`-wires
-  whose source uses extras-as-prefix capture into the new `closure`-node shape.
+  whose source uses trailing-extras capture into the new `closure`-node shape.
 - Detection logic, transformation logic, error handling.
 - Test fixtures, following the v2→v3 / v3→v4 fixture-directory convention.
 - Implementation phases (each ending in `cargo test` green).
@@ -47,18 +47,22 @@ Out of scope:
 A v4 `.cnnd` from `main` has, for every `map` / `filter` / `fold` / `foreach`
 node, an `f: Function` argument that is **required** and almost always wired
 from another node's `-1` output pin ("function pin"). On main, the type
-conversion `Function((A, B, P, Q) -> R) → Function((P, Q) -> R)` was legal
-under the **extras-as-prefix partial application** rule: the source's first
-`N_total - K` inputs were *captures* (had to be wired), and the trailing `K`
-inputs were *parameters* (per-call bindings). The legacy `FunctionEvaluator`
-pre-evaluated captures at HOF eval time, then ran the source's body once per
-element.
+conversion `Function((P, Q, A, B) -> R) → Function((P, Q) -> R)` was legal
+under the **trailing-extras partial application** rule (see
+`data_type.rs::can_be_converted_to` on the legacy main branch: "F contains all
+parameters of G as its first parameters; F may have additional parameters
+after G's parameters"): the source's first `K` inputs are *parameters*
+(per-call bindings — must be **unwired**) and the trailing `N_total - K`
+inputs are *captures* (pre-evaluated once at HOF eval time — must be
+**wired**). The legacy `FunctionEvaluator` pre-evaluated the captures, then
+ran the source's body once per element with the per-call values plugged into
+the leading parameter pins.
 
 On the `zones` branch HEAD:
 
 - `FunctionEvaluator` is **deleted** (closures Phase 2).
 - The `Function` arm of `DataType::can_be_converted_to` was simplified to a
-  **structural same-arity** match (closures Phase 2). The extras-as-prefix rule
+  **structural same-arity** match (closures Phase 2). The trailing-extras rule
   has no remaining consumer.
 - The `-1` function pin is re-synthesized (function-pins Phase 1) but with a
   **strict rule**: `build_node_function_closure` requires every input pin of
@@ -68,7 +72,7 @@ On the `zones` branch HEAD:
   own inline `zone` body (`obtain_closure`).
 
 Consequence: a v4 file whose HOF `f`-source has any wired inputs (the
-extras-as-prefix legacy pattern) doesn't satisfy the new function-mode rule.
+trailing-extras legacy pattern) doesn't satisfy the new function-mode rule.
 Without migration, such files load (serde defaults plus the custom `Argument`
 deserializer make everything deserialize cleanly), but **validation rejects the
 `f`-wire** and the user sees a broken HOF. The migration's one purpose is to
@@ -169,14 +173,14 @@ for any HOF whose `f` pin is connected** (closures Phase 5,
 `function_input_pin_connected` gate). Since every legacy HOF on main has `f`
 wired (it was required), and the migration either *preserves the `f`-wire* (in
 the simple no-extras case) or *rewires `f` to point at a new closure node* (in
-the extras-as-prefix case), every migrated HOF ends up with `f` wired. The
+the trailing-extras case), every migrated HOF ends up with `f` wired. The
 empty default inline body is benign — validation skips its missing
 zone-output wire.
 
 ### Conclusion
 
 **The only code the migration must write is the HOF `f`-wire rewriter for the
-extras-as-prefix case.** Everything else is solved by existing serde
+trailing-extras case.** Everything else is solved by existing serde
 machinery. The migration script is small.
 
 ## What the migration must do
@@ -188,8 +192,8 @@ input-pin wiring state and act accordingly:
 | Source node's input wiring (input count = `N_total`, HOF expected arity = `K`) | Action |
 |---|---|
 | `N_total == K` and every input pin is unwired | **Keep wire as-is.** The new function-pin synthesizer (`build_node_function_closure`) handles this directly on the zones branch. |
-| `N_total > K`, the first `N_total - K` input pins are all wired, the trailing `K` are all unwired | **Closure-wrap.** Build a `closure` node, place a clone of the source in its body, wire captures across the boundary, wire parameters from the zone-input pins, rewire HOF.f to the closure. |
-| Anything else (wired pin after unwired pin, `N_total < K`, etc.) | **Skip with warning.** Leave the wire untouched. The file may fail to validate on load; the user sees a clear error and fixes interactively. |
+| `N_total > K`, the first `K` input pins are all unwired (per-call parameters), the trailing `N_total - K` are all wired (captures) | **Closure-wrap.** Build a `closure` node, place a clone of the source in its body, wire captures across the boundary, wire parameters from the zone-input pins, rewire HOF.f to the closure. |
+| Anything else (unwired pin after wired pin, `N_total < K`, etc.) | **Skip with warning.** Leave the wire untouched. The file may fail to validate on load; the user sees a clear error and fixes interactively. |
 
 The HOF arity table is **frozen at v5**:
 
@@ -216,8 +220,8 @@ For each `(network_name, network_json)` in `root["node_networks"]`:
      value source (impossible on v4 main but allowed defensively) — leave it.
    - Look up the source node `S` by `src_id` in this same network. (HOF `f`
      wires never cross scopes on v4 — there are no scopes on v4.)
-   - Compute `N_total = S.arguments.length` and partition into prefix-wired
-     (capture) and suffix-unwired (parameter) sets by walking
+   - Compute `N_total = S.arguments.length` and partition into prefix-unwired
+     (parameter) and suffix-wired (capture) sets by walking
      `S.arguments[0..N_total]`. An argument is "wired" iff its
      `argument_output_pins` map (v4 shape) is non-empty. (The dual-shape
      helper `argument_is_wired` also accepts the v5 `incoming_wires` shape
@@ -243,7 +247,7 @@ For each `(network_name, network_json)` in `root["node_networks"]`:
 ### Transformation algorithm (one action)
 
 Inputs: network JSON value, HOF node `H` at index `f_index`, source node `S`
-identified by `src_id`, prefix-wired capture count `C = N_total - K`,
+identified by `src_id`, suffix-wired capture count `C = N_total - K`,
 HOF kind ∈ {map, filter, fold, foreach}.
 
 #### Step 1 — Compute the closure's ClosureData
@@ -382,12 +386,12 @@ shape** — those are runtime-only state on the in-memory `NodeNetwork`.
       "position": [40.0, 40.0],
       "arguments": [
         // For each input pin i in 0..N_total of the source:
-        //   if i < C (capture): incoming_wires = [ { source_node_id: <orig parent src>,
-        //                                            source_pin: { "NodeOutput": { "pin_index": <orig pin> } },
-        //                                            source_scope_depth: 1 } ]
-        //   if i >= C (parameter): incoming_wires = [ { source_node_id: <new_closure_id>,
-        //                                               source_pin: { "ZoneInput": { "pin_index": <i - C> } },
-        //                                               source_scope_depth: 1 } ]
+        //   if i < K (parameter): incoming_wires = [ { source_node_id: <new_closure_id>,
+        //                                              source_pin: { "ZoneInput": { "pin_index": i } },
+        //                                              source_scope_depth: 1 } ]
+        //   if i >= K (capture):  incoming_wires = [ { source_node_id: <orig parent src>,
+        //                                              source_pin: { "NodeOutput": { "pin_index": <orig pin> } },
+        //                                              source_scope_depth: 1 } ]
       ],
       "data_type": "<S.data_type>",
       "data": <verbatim copy of S.data>
@@ -561,7 +565,7 @@ pattern.
 
 ### Error handling
 
-For each detection that doesn't fit the table (wired-after-unwired,
+For each detection that doesn't fit the table (unwired-after-wired,
 `N_total < K`, source node missing entirely):
 
 - Emit a warning via `eprintln!("v4→v5: skipping HOF f-wire on network={}, hof_id={}, reason={}", ...)`
@@ -593,7 +597,7 @@ pin are never inspected and pass through the migration unchanged:
 - **Non-HOF Function-typed input pins** generally. Same reasoning — on
   main, the only non-text-format `Function` pins are HOFs' `f`.
 
-If such a wire happens to exist and uses the legacy extras-as-prefix
+If such a wire happens to exist and uses the legacy trailing-extras
 pattern, it will fail validation on load (same way malformed HOF.f wires
 do — the user fixes interactively). The migration does not warn about
 these because it can't cheaply distinguish them from any other
@@ -614,7 +618,7 @@ focused on one pattern each):
 | `simple_foreach_with_capture.cnnd` | `foreach.f` wired from `expr` with 1 free + 1 wired input | Closure of kind `Foreach` |
 | `no_extras_preserved.cnnd` | `map.f` from `expr` with 1 free input only, no captures | Wire preserved unchanged (function-pin synthesizer handles it) |
 | `fanout_creates_two_closures.cnnd` | One `expr.-1` wired into two `map.f` pins | Two closures synthesized, each with its own body clone |
-| `custom_subnetwork_instance_source.cnnd` | HOF `f` wired from a custom subnetwork instance with extras-as-prefix wired | Closure wraps the instance node uniformly |
+| `custom_subnetwork_instance_source.cnnd` | HOF `f` wired from a custom subnetwork instance with trailing-extras wired | Closure wraps the instance node uniformly |
 | `nested_custom_network.cnnd` | An HOF lives inside a custom subnetwork's definition (not at top level) | Migration descends into the custom network's nodes and migrates the inner HOF |
 | `hof_source_for_hof_f.cnnd` | `map.f` wired from another `map`'s `-1` pin (the source is itself a HOF) | Closure wraps the source `map`; the source's own `f` argument is preserved verbatim in the body clone (with `source_scope_depth: 1` reaching the parent network's original f-source). Asserts load + validation outcome — see Open Questions §1 |
 | `source_cleanup_fanout.cnnd` | One `expr.-1` wired into two `map.f` pins; `expr` has no non-`-1` consumers | Two closures synthesized, **and** the parent-network `expr` deleted by source-node cleanup (§"Step 5"). Asserts the parent network no longer contains the source id after migration |
@@ -733,7 +737,7 @@ without are untouched.
 ### Phase 3: Closure synthesis (the main course)
 
 **Goal.** Implement the closure-wrapping transformation for the
-extras-as-prefix case. After this phase, fixtures with legacy capture
+trailing-extras case. After this phase, fixtures with legacy capture
 patterns load as fully-valid zones-branch networks.
 
 **Scope.**

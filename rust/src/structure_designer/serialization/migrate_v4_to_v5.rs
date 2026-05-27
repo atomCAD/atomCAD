@@ -4,20 +4,24 @@
 //! Design: see `doc/design_zones_migration.md`.
 //!
 //! Phase 3 scope (this drop, on top of Phase 2): the closure-wrapping
-//! transformation is now executed. For every legacy `HOF.f`-wire whose source
-//! has prefix-wired captures and suffix-unwired parameters, a new `closure`
+//! transformation is now executed. Main's legacy partial-application
+//! convention is **parameters first, captures last**: the source's first `K`
+//! (= the HOF's arity) input pins are per-call parameters (must be unwired)
+//! and the trailing `N_total - K` pins are captures (must be wired). For
+//! every legacy `HOF.f`-wire whose source matches this shape, a new `closure`
 //! node is synthesised in the parent network with a body containing a clone
-//! of the source node; capture wires reach across the body boundary
-//! (`source_scope_depth = 1`) and parameter wires read the closure's
-//! `ZoneInput` pins. The HOF's `f` argument is rewired to point at the new
-//! closure's pin 0. After every rewrite in a network finishes, any source
-//! node whose only consumers were the rewritten `-1` wires is deleted from
-//! the parent network (orphan cleanup — see §"Source-node cleanup").
+//! of the source node; the clone's first `K` arguments read the closure's
+//! `ZoneInput` pins (parameters), and the trailing arguments forward the
+//! original captures at `source_scope_depth = 1` to the parent network. The
+//! HOF's `f` argument is rewired to point at the new closure's pin 0. After
+//! every rewrite in a network finishes, any source node whose only consumers
+//! were the rewritten `-1` wires is deleted from the parent network (orphan
+//! cleanup — see §"Source-node cleanup").
 //!
 //! Wires that fall into `NoOp` (source has exactly `K` free inputs) are
 //! preserved unchanged — the function-pin synthesizer on the zones branch
-//! handles them directly. Wires in `Skip` (wired-after-unwired, `N_total < K`,
-//! missing source) are logged and left untouched.
+//! handles them directly. Wires in `Skip` (unwired pin after a wired pin,
+//! `N_total < K`, missing source) are logged and left untouched.
 //!
 //! The migration's *only* job is to rewrite legacy HOF `f`-wires. Everything
 //! else about v5 (zones, body wires, the `incoming_wires` storage shape,
@@ -102,12 +106,24 @@ pub(crate) enum ActionKind {
     /// new function-pin synthesizer (`build_node_function_closure`) handles
     /// this directly on the zones branch, so the wire is kept as-is.
     NoOp,
-    /// Source has `N_total > K` inputs with a clean prefix-wired (capture)
-    /// followed by suffix-unwired (parameter) partition. Phase 3 wraps the
-    /// source in a `closure` node.
-    ClosureWrap { capture_count: usize },
-    /// Anything else — wired-after-unwired, `N_total < K`, missing source
-    /// node, etc. Phase 3 logs and leaves the wire untouched.
+    /// Source has `N_total > K` inputs with a clean prefix-unwired (parameter)
+    /// followed by suffix-wired (capture) partition. Phase 3 wraps the source
+    /// in a `closure` node. (Main's partial-application convention is
+    /// **parameters first, captures last** — see
+    /// `data_type.rs::can_be_converted_to`'s Function arm on the legacy main
+    /// branch: "F contains all parameters of G as its first parameters; F may
+    /// have additional parameters after G's parameters.")
+    ///
+    /// `capture_count` = `N_total - K` is carried for diagnostics and to
+    /// distinguish the bucket from `NoOp` (`capture_count == 0`); the
+    /// execution pass recomputes positions from the HOF's arity directly
+    /// (parameters at index `[0..arity)`, captures at `[arity..N_total)`).
+    ClosureWrap {
+        #[allow(dead_code)] // Diagnostic only.
+        capture_count: usize,
+    },
+    /// Anything else — unwired pin after a wired pin, `N_total < K`, missing
+    /// source node, etc. Phase 3 logs and leaves the wire untouched.
     Skip { reason: String },
 }
 
@@ -239,9 +255,10 @@ pub(crate) fn detect_hof_f_actions(network: &Value) -> Vec<DetectedAction> {
             continue;
         };
 
-        // Partition source arguments into prefix-wired captures vs.
-        // suffix-unwired parameters. Missing-or-empty `arguments` is treated
-        // as "no inputs" — see Phase 2 Gotcha in the design doc.
+        // Partition source arguments into prefix-unwired parameters vs.
+        // suffix-wired captures (main's parameters-first, captures-last
+        // convention). Missing-or-empty `arguments` is treated as "no inputs"
+        // — see Phase 2 Gotcha in the design doc.
         let src_args: Vec<&Value> = src_node
             .get("arguments")
             .and_then(|v| v.as_array())
@@ -262,7 +279,17 @@ pub(crate) fn detect_hof_f_actions(network: &Value) -> Vec<DetectedAction> {
     actions
 }
 
-/// Implements the design doc's bucketing table on a single HOF.f source:
+/// Implements the bucketing table on a single HOF.f source. Main's
+/// partial-application convention is **parameters first, captures last**:
+/// the source's first `K` (= the HOF's arity) inputs are parameters (must be
+/// unwired), and the trailing `N_total - K` inputs are captures (must be
+/// wired).
+///
+/// | Source's input wiring (N_total / K) | Action |
+/// |---|---|
+/// | `N_total == K` and every input pin is unwired | `NoOp` |
+/// | `N_total > K`, first `K` unwired, trailing `N_total - K` wired | `ClosureWrap { capture_count }` |
+/// | Anything else (wired-then-unwired, `N_total < K`, etc.) | `Skip { reason }` |
 fn classify_source_arity(n_total: usize, arity: usize, src_args: &[&Value]) -> ActionKind {
     if n_total < arity {
         return ActionKind::Skip {
@@ -275,15 +302,16 @@ fn classify_source_arity(n_total: usize, arity: usize, src_args: &[&Value]) -> A
 
     let capture_count = n_total - arity;
 
-    // The first `capture_count` pins must all be wired; the trailing
-    // `arity` pins must all be unwired. Anything else is malformed.
+    // The first `arity` pins must all be unwired (per-call parameters); the
+    // trailing `capture_count` pins must all be wired (captures, pre-evaluated
+    // once at HOF eval time). Anything else is malformed.
     for (i, arg) in src_args.iter().enumerate() {
         let wired = argument_is_wired(arg);
-        let should_be_wired = i < capture_count;
+        let should_be_wired = i >= arity;
         if wired != should_be_wired {
             return ActionKind::Skip {
                 reason: format!(
-                    "source input pin {} is {} but the prefix-wired/suffix-unwired layout expected it {}",
+                    "source input pin {} is {} but the prefix-unwired/suffix-wired layout expected it {}",
                     i,
                     if wired { "wired" } else { "unwired" },
                     if should_be_wired { "wired" } else { "unwired" },
@@ -348,15 +376,28 @@ fn build_closure_data(hof_type: &str, hof_data: &Value) -> Value {
 // ---------------------------------------------------------------------------
 
 /// Build the body clone's `arguments` array: one entry per input pin on the
-/// original source node. The first `capture_count` are *capture wires*
-/// (reaching `source_scope_depth: 1` to the parent network); the trailing
-/// pins are *parameter wires* (reading `ZoneInput` on the new closure node).
-fn build_body_arguments(source_args: &[Value], capture_count: usize, closure_id: u64) -> Vec<Value> {
+/// original source node. The first `arity` are *parameter wires* (reading
+/// `ZoneInput` on the new closure node); the trailing `capture_count` are
+/// *capture wires* (reaching `source_scope_depth: 1` to the parent network).
+/// This mirrors main's partial-application convention — parameters first,
+/// captures last.
+fn build_body_arguments(source_args: &[Value], arity: usize, closure_id: u64) -> Vec<Value> {
     source_args
         .iter()
         .enumerate()
         .map(|(i, src_arg)| {
-            if i < capture_count {
+            if i < arity {
+                // Parameter: read closure's ZoneInput at index `i`.
+                serde_json::json!({
+                    "incoming_wires": [
+                        {
+                            "source_node_id": closure_id,
+                            "source_pin": { "ZoneInput": { "pin_index": i } },
+                            "source_scope_depth": 1,
+                        }
+                    ]
+                })
+            } else {
                 // Capture: forward the original wire's (source_node_id, pin_index)
                 // up one scope level. Reads either the v4 or v5 wire shape on the
                 // source side; emits v5 shape on the new body wire.
@@ -372,18 +413,6 @@ fn build_body_arguments(source_args: &[Value], capture_count: usize, closure_id:
                         }
                     ]
                 })
-            } else {
-                // Parameter: read closure's ZoneInput at index `i - capture_count`.
-                let pin_index = i - capture_count;
-                serde_json::json!({
-                    "incoming_wires": [
-                        {
-                            "source_node_id": closure_id,
-                            "source_pin": { "ZoneInput": { "pin_index": pin_index } },
-                            "source_scope_depth": 1,
-                        }
-                    ]
-                })
             }
         })
         .collect()
@@ -394,13 +423,13 @@ fn build_body_arguments(source_args: &[Value], capture_count: usize, closure_id:
 /// matches what `NodeNetwork::new_empty()` produces for runtime-created
 /// bodies (empty name, `OtherBuiltin` category, single `result` output pin
 /// of type `None`) — see `doc/design_zones_migration.md` §"Step 4".
-fn build_body_network(source_node: &Value, capture_count: usize, closure_id: u64) -> Value {
+fn build_body_network(source_node: &Value, arity: usize, closure_id: u64) -> Value {
     let src_args: Vec<Value> = source_node
         .get("arguments")
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
-    let body_args = build_body_arguments(&src_args, capture_count, closure_id);
+    let body_args = build_body_arguments(&src_args, arity, closure_id);
 
     let src_type_name = source_node
         .get("node_type_name")
@@ -471,7 +500,7 @@ fn build_closure_node(
     hof_node: &Value,
     source_node: &Value,
     hof_type: &str,
-    capture_count: usize,
+    arity: usize,
 ) -> Value {
     let hof_data = hof_node
         .get("data")
@@ -492,7 +521,7 @@ fn build_closure_node(
     };
     let position = [(hx - 160.0).round(), hy.round()];
 
-    let body = build_body_network(source_node, capture_count, new_id);
+    let body = build_body_network(source_node, arity, new_id);
 
     // The closure has exactly one zone-output pin in every preset kind; it
     // reads body-local node 1's pin 0.
@@ -683,7 +712,12 @@ fn migrate_network(
 
     // Partition: `NoOp` is silent and untouched; `Skip` logs and is untouched;
     // `ClosureWrap` advances to the id-allocation pass.
-    let mut wraps: Vec<(u64, usize, u64, String, usize)> = Vec::new(); // (hof_id, f_index, src_id, hof_type, capture_count)
+    //
+    // The fifth tuple entry is the HOF's arity (= the number of leading
+    // parameter pins on the source). The captured `ClosureWrap.capture_count`
+    // is `src.arguments.len() - arity` — recoverable from the snapshot, so we
+    // only carry the value the execution pass needs.
+    let mut wraps: Vec<(u64, usize, u64, String, usize)> = Vec::new(); // (hof_id, f_index, src_id, hof_type, arity)
     for action in &actions {
         match &action.kind {
             ActionKind::NoOp => {}
@@ -693,13 +727,16 @@ fn migrate_network(
                     network_name, action.hof_id, reason, action.src_id,
                 );
             }
-            ActionKind::ClosureWrap { capture_count } => {
+            ActionKind::ClosureWrap { capture_count: _ } => {
+                let arity = hof_lookup(&action.hof_type)
+                    .map(|(_, a)| a)
+                    .unwrap_or(0);
                 wraps.push((
                     action.hof_id,
                     action.f_index,
                     action.src_id,
                     action.hof_type.clone(),
-                    *capture_count,
+                    arity,
                 ));
             }
         }
@@ -743,20 +780,14 @@ fn migrate_network(
     let mut new_closure_nodes: Vec<Value> = Vec::with_capacity(wraps.len());
     let mut rewritten_sources: HashSet<u64> = HashSet::new();
     for (rewrite, &new_id) in wraps.iter().zip(allocations.iter()) {
-        let (hof_id, _f_index, src_id, hof_type, capture_count) = rewrite;
+        let (hof_id, _f_index, src_id, hof_type, arity) = rewrite;
         let Some(hof_node) = hof_snapshots.get(hof_id) else {
             continue;
         };
         let Some(src_node) = src_snapshots.get(src_id) else {
             continue;
         };
-        let closure = build_closure_node(
-            new_id,
-            hof_node,
-            src_node,
-            hof_type.as_str(),
-            *capture_count,
-        );
+        let closure = build_closure_node(new_id, hof_node, src_node, hof_type.as_str(), *arity);
         new_closure_nodes.push(closure);
         rewritten_sources.insert(*src_id);
     }

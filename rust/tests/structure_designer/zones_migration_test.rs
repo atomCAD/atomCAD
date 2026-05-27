@@ -5,7 +5,7 @@
 // - Phase 2: detection + skip-with-warning (Phase 2 was a stepping stone — the
 //   skip-with-warning branch survives, the ClosureWrap-as-warning branch is
 //   replaced by the real transformation in Phase 3).
-// - Phase 3: closure-wrapping transformation for the extras-as-prefix case.
+// - Phase 3: closure-wrapping transformation for the trailing-extras case.
 //
 // Pattern modelled after `tests/integration/iterator_migration_test.rs`.
 
@@ -256,33 +256,34 @@ fn test_phase3_simple_map_with_capture_synthesises_closure() {
         .expect("body's only node must have id 1");
     assert_eq!(clone.node_type_name, "vec3");
 
-    // Body clone's first two args are captures (depth=1 NodeOutput) reaching
-    // the parent network's fx (id 1) and fy (id 2); the third is the
-    // iteration value (depth=1 ZoneInput pin 0) reading the closure's
-    // zone-input.
-    let capture_x = &clone.arguments[0].incoming_wires[0];
-    assert_eq!(capture_x.source_node_id, 1, "first capture must read fx");
+    // Main's partial-application convention is parameters-first, captures-
+    // last. With map's K=1, the body clone's first pin (args[0] = vec3.x) is
+    // the parameter (depth=1 ZoneInput pin 0 reading the closure's zone-
+    // input); args[1] = vec3.y and args[2] = vec3.z are captures (depth=1
+    // NodeOutput) reaching the parent network's fx (id 1) and fy (id 2).
+    let param_x = &clone.arguments[0].incoming_wires[0];
     assert_eq!(
-        capture_x.source_pin,
-        SourcePin::NodeOutput { pin_index: 0 }
+        param_x.source_node_id, closure_id,
+        "parameter wire must reach the closure's ZoneInput"
     );
-    assert_eq!(capture_x.source_scope_depth, 1);
+    assert_eq!(param_x.source_pin, SourcePin::ZoneInput { pin_index: 0 });
+    assert_eq!(param_x.source_scope_depth, 1);
 
     let capture_y = &clone.arguments[1].incoming_wires[0];
-    assert_eq!(capture_y.source_node_id, 2, "second capture must read fy");
+    assert_eq!(capture_y.source_node_id, 1, "first capture must read fx");
     assert_eq!(
         capture_y.source_pin,
         SourcePin::NodeOutput { pin_index: 0 }
     );
     assert_eq!(capture_y.source_scope_depth, 1);
 
-    let param_z = &clone.arguments[2].incoming_wires[0];
+    let capture_z = &clone.arguments[2].incoming_wires[0];
+    assert_eq!(capture_z.source_node_id, 2, "second capture must read fy");
     assert_eq!(
-        param_z.source_node_id, closure_id,
-        "parameter wire must reach the closure's ZoneInput"
+        capture_z.source_pin,
+        SourcePin::NodeOutput { pin_index: 0 }
     );
-    assert_eq!(param_z.source_pin, SourcePin::ZoneInput { pin_index: 0 });
-    assert_eq!(param_z.source_scope_depth, 1);
+    assert_eq!(capture_z.source_scope_depth, 1);
 
     // The closure's zone-output reads body-local node 1 pin 0.
     assert_eq!(closure_node.zone_output_arguments.len(), 1);
@@ -622,7 +623,7 @@ fn test_phase4_type_mismatch_source_loads_without_panic() {
 fn test_phase4_real_filter_then_fold_evaluates() {
     // End-to-end regression: a representative real-world chain
     // `range → filter → fold` where both HOFs use the legacy
-    // extras-as-prefix `f`-wire pattern. After v4→v5 migration the network
+    // trailing-extras `f`-wire pattern. After v4→v5 migration the network
     // must load, validate, and produce the expected fold result.
     //
     // range(0,1,5) → [0,1,2,3,4]

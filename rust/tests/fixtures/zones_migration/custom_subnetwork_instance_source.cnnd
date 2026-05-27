@@ -11,11 +11,11 @@
           "category": "Custom",
           "parameters": [
             {
-              "name": "k",
+              "name": "x",
               "data_type": "Float"
             },
             {
-              "name": "x",
+              "name": "k",
               "data_type": "Float"
             }
           ],
@@ -45,9 +45,9 @@
               "data_type": "Float",
               "data_type_str": null,
               "param_id": 1,
-              "param_index": 0,
+              "param_index": 1,
               "param_name": "k",
-              "sort_order": 0
+              "sort_order": 1
             }
           },
           {
@@ -68,9 +68,9 @@
               "data_type": "Float",
               "data_type_str": null,
               "param_id": 2,
-              "param_index": 1,
+              "param_index": 0,
               "param_name": "x",
-              "sort_order": 1
+              "sort_order": 0
             }
           },
           {
@@ -149,12 +149,12 @@
             ],
             "arguments": [
               {
+                "argument_output_pins": {}
+              },
+              {
                 "argument_output_pins": {
                   "1": 0
                 }
-              },
-              {
-                "argument_output_pins": {}
               }
             ],
             "data_type": "custom",
