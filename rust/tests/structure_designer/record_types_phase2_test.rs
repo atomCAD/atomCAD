@@ -744,6 +744,108 @@ fn record_named_inside_array_round_trips_through_data_type_string() {
     assert_eq!(parsed, src);
 }
 
+// ---------------------------------------------------------------------------
+// Regression: renaming a record def must not invalidate `custom_node_type` on
+// dynamic-arg nodes that have nothing to do with records. The rename pass
+// clears every node's `custom_node_type` defensively, and `repair_node_network`
+// is the only thing that puts them back. For non-record dynamic-arg nodes
+// (`sequence`, `expr`, ...) the base `NodeType` has `parameters: vec![]`, so
+// failing to repopulate leaves the node type-resolving to an empty-parameter
+// shell — any later evaluation that indexes `parameters[0]` panics with
+// "index out of bounds". See `node_type_registry.rs::get_parameter_name`.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn rename_record_type_def_repopulates_sequence_custom_node_type() {
+    use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Net1");
+    designer.set_active_node_network_name(Some("Net1".to_string()));
+
+    // A `sequence` node has zero base parameters and grows them dynamically
+    // from `SequenceData::input_count` via `calculate_custom_node_type`.
+    let seq_id = designer.add_node("sequence", glam::DVec2::ZERO);
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("Net1")
+            .unwrap();
+        let node = net.nodes.get_mut(&seq_id).unwrap();
+        let d = node
+            .data
+            .as_any_mut()
+            .downcast_mut::<SequenceData>()
+            .expect("expected SequenceData");
+        d.element_type = DataType::Int;
+        d.input_count = 3;
+    }
+    // Populate the cache once so we have something to lose. Use the static
+    // helper so the borrows of `node_networks` and the per-record maps don't
+    // alias on `&mut node_type_registry`.
+    {
+        let registry = &mut designer.node_type_registry;
+        let mut net = registry.node_networks.remove("Net1").unwrap();
+        let node = net.nodes.get_mut(&seq_id).unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+        registry.node_networks.insert("Net1".to_string(), net);
+    }
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("Net1")
+            .unwrap();
+        let node = net.nodes.get(&seq_id).unwrap();
+        let nt = designer
+            .node_type_registry
+            .get_node_type_for_node(node)
+            .expect("type resolves");
+        assert_eq!(
+            nt.parameters.len(),
+            3,
+            "precondition: sequence has 3 parameters before rename"
+        );
+    }
+
+    // A record def the sequence node has nothing to do with.
+    designer
+        .add_record_type_def(RecordTypeDef {
+            name: "Old".to_string(),
+            fields: vec![("x".to_string(), DataType::Int)],
+        })
+        .unwrap();
+
+    designer.rename_record_type_def("Old", "New").unwrap();
+
+    // After rename: the sequence node's `custom_node_type` must still resolve
+    // to a 3-parameter type. Pre-fix this regresses to the base `NodeType`
+    // with 0 parameters.
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("Net1")
+        .unwrap();
+    let node = net.nodes.get(&seq_id).unwrap();
+    let nt = designer
+        .node_type_registry
+        .get_node_type_for_node(node)
+        .expect("type resolves");
+    assert_eq!(
+        nt.parameters.len(),
+        3,
+        "sequence parameters lost after rename — repair_node_network failed to \
+         repopulate non-record dynamic-arg nodes"
+    );
+}
+
 // Silence import warnings for items kept for cross-test re-use even when only
 // some tests in this file consume them.
 #[allow(dead_code)]

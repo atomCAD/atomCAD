@@ -186,8 +186,14 @@ impl fmt::Display for DataType {
                 // Named records are emitted as `Record(Name)` so the string
                 // round-trips through `DataType::from_string` without colliding
                 // with built-in type names or with bare-identifier node
-                // references in the text-format parser.
-                RecordType::Named(name) => write!(f, "Record({})", name),
+                // references in the text-format parser. Names that aren't
+                // bare identifiers (containing parens, dots, leading digits,
+                // etc.) are backtick-quoted: `` Record(`weird(name)`) ``.
+                RecordType::Named(name) => {
+                    write!(f, "Record(")?;
+                    fmt_record_name(name, f)?;
+                    write!(f, ")")
+                }
                 RecordType::Anonymous(fields) => {
                     write!(f, "{{")?;
                     for (i, (name, ty)) in fields.iter().enumerate() {
@@ -660,14 +666,132 @@ struct DataTypeLexer {
 }
 
 impl DataType {
-    /// Parses a DataType from its textual representation
+    /// Parses a DataType from its textual representation.
+    ///
+    /// Record names inside `Record(<name>)` may be:
+    /// * a bare identifier (e.g. `Record(Point)`),
+    /// * a backtick-quoted name (e.g. `` Record(`weird(name)`) ``), or
+    /// * a legacy unquoted blob containing characters illegal in a bare
+    ///   identifier (e.g. `Record(surface(100)_gemcut_named)`). This last
+    ///   form was unintentionally emitted by older builds before record def
+    ///   names were validated; it stays accepted on the read path so existing
+    ///   `.cnnd` files load cleanly. New saves always use one of the first
+    ///   two forms.
     pub fn from_string(input: &str) -> Result<DataType, String> {
-        let tokens = DataTypeLexer::tokenize(input)?;
+        let normalized = normalize_legacy_record_names(input);
+        let tokens = DataTypeLexer::tokenize(normalized.as_ref())?;
         let mut parser = DataTypeParser::new(tokens);
         let data_type = parser.parse_data_type()?;
         parser.expect(DataTypeToken::Eof)?;
         Ok(data_type)
     }
+}
+
+/// Returns `true` if `name` is a valid bare identifier under the DataType
+/// lexer's rules: starts with `[A-Za-z_]`, continues with `[A-Za-z0-9_]`.
+fn is_simple_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Emits a record name into the Display formatter. Bare identifiers are
+/// written as-is; anything else gets backtick-wrapped. A name containing a
+/// literal backtick is a corner case we don't currently handle — record def
+/// names with backticks aren't producible through the UI, and quoting one
+/// would require an escape convention this format doesn't have.
+fn fmt_record_name(name: &str, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if is_simple_identifier(name) {
+        write!(f, "{}", name)
+    } else {
+        write!(f, "`{}`", name)
+    }
+}
+
+/// Rewrites legacy `Record(<weird-name>)` occurrences in `input` into the
+/// backtick-quoted form so the strict tokenizer can handle them. Triggers
+/// only when the content immediately after `Record(` is neither a bare
+/// identifier followed by `)` nor an already-backticked name — so well-formed
+/// input is returned unchanged (and skips the allocation via `Cow::Borrowed`).
+///
+/// Paren-matching is used to locate the closing `)` of the `Record(...)`,
+/// which is unambiguous because the *outer* delimiter is fixed: every
+/// `Record(` is followed by exactly one name and one matching `)`. Inner
+/// `(` / `)` characters in the name are just counted.
+fn normalize_legacy_record_names(input: &str) -> Cow<'_, str> {
+    let bytes = input.as_bytes();
+    let needle = b"Record(";
+    let mut out: Option<String> = None;
+    // Index in `input` up to which we've already copied into `out`.
+    let mut consumed = 0usize;
+    let mut i = 0usize;
+    while i + needle.len() <= bytes.len() {
+        let is_record_open =
+            bytes[i..].starts_with(needle) && (i == 0 || !is_ident_continue_byte(bytes[i - 1]));
+        if !is_record_open {
+            i += 1;
+            continue;
+        }
+        let content_start = i + needle.len();
+        // Find matching ')'. Inner '(' / ')' are counted; backtick-quoted
+        // spans are skipped over so a quoted name with embedded ')' doesn't
+        // confuse the depth count.
+        let mut j = content_start;
+        let mut depth: i32 = 1;
+        let mut in_backticks = false;
+        while j < bytes.len() {
+            let c = bytes[j];
+            if in_backticks {
+                if c == b'`' {
+                    in_backticks = false;
+                }
+            } else if c == b'`' {
+                in_backticks = true;
+            } else if c == b'(' {
+                depth += 1;
+            } else if c == b')' {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            j += 1;
+        }
+        if depth != 0 {
+            // Unterminated. Bail out and let the strict tokenizer report the
+            // error through its usual path.
+            break;
+        }
+        let inner = &input[content_start..j];
+        let trimmed = inner.trim();
+        let needs_rewrite = !(is_simple_identifier(trimmed)
+            || (trimmed.starts_with('`') && trimmed.ends_with('`') && trimmed.len() >= 2));
+        if needs_rewrite {
+            let buf = out.get_or_insert_with(String::new);
+            buf.push_str(&input[consumed..i]);
+            buf.push_str("Record(`");
+            buf.push_str(trimmed);
+            buf.push_str("`)");
+            consumed = j + 1;
+        }
+        // Skip past the entire `Record(...)` either way so we don't recurse
+        // into a nested `Record(` that's actually inside the name blob.
+        i = j + 1;
+    }
+    match out {
+        Some(mut buf) => {
+            buf.push_str(&input[consumed..]);
+            Cow::Owned(buf)
+        }
+        None => Cow::Borrowed(input),
+    }
+}
+
+fn is_ident_continue_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
 
 struct DataTypeParser {
@@ -955,6 +1079,30 @@ impl DataTypeLexer {
             Some(ch) if ch.is_alphabetic() || ch == '_' => {
                 let identifier = self.read_identifier();
                 Ok(DataTypeToken::Identifier(identifier))
+            }
+            Some('`') => {
+                // Backtick-quoted identifier: contents are emitted verbatim as
+                // a single `Identifier` token. Used to carry record-def names
+                // that aren't valid bare identifiers (parens, dots, leading
+                // digits, etc.). No escape convention is defined; a literal
+                // backtick inside a name is rejected as unterminated below.
+                self.advance(); // consume opening '`'
+                let mut name = String::new();
+                loop {
+                    match self.peek() {
+                        Some('`') => {
+                            self.advance();
+                            return Ok(DataTypeToken::Identifier(name));
+                        }
+                        Some(ch) => {
+                            name.push(ch);
+                            self.advance();
+                        }
+                        None => {
+                            return Err("Unterminated backtick-quoted identifier".to_string());
+                        }
+                    }
+                }
             }
             Some(other) => Err(format!("Unexpected character: {}", other)),
         }

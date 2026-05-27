@@ -4,7 +4,7 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api::{
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
     APIDataType, APIDataTypeBase,
 };
-use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
+use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType, RecordType};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
 /// All phase types plus a non-phase control (Float). Used to construct the
@@ -313,4 +313,104 @@ fn custom_text_iter_promotes_on_back_conversion() {
     assert!(promoted.custom_data_type.is_none());
     assert_eq!(promoted.children.len(), 1);
     assert!(promoted.children[0].data_type_base == APIDataTypeBase::Int);
+}
+
+// ---------------------------------------------------------------------------
+// Record names that aren't bare identifiers: backtick-quoting on Display and
+// legacy unquoted paren-blob acceptance on read. Covers .cnnd files saved by
+// older builds that wrote record def names like `surface(100)_gemcut_named`
+// verbatim into a parameter's `data_type` string.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn record_name_with_parens_and_digits_displays_with_backticks() {
+    let ty = DataType::Record(RecordType::Named("surface(100)_gemcut_named".to_string()));
+    assert_eq!(ty.to_string(), "Record(`surface(100)_gemcut_named`)");
+}
+
+#[test]
+fn record_name_with_leading_digit_displays_with_backticks() {
+    let ty = DataType::Record(RecordType::Named("1leading_digit".to_string()));
+    assert_eq!(ty.to_string(), "Record(`1leading_digit`)");
+}
+
+#[test]
+fn simple_record_name_displays_without_backticks() {
+    let ty = DataType::Record(RecordType::Named("Foo_2".to_string()));
+    assert_eq!(ty.to_string(), "Record(Foo_2)");
+}
+
+#[test]
+fn backtick_quoted_record_name_roundtrips() {
+    let ty = DataType::Record(RecordType::Named("surface(100)_gemcut_named".to_string()));
+    let s = ty.to_string();
+    let parsed = DataType::from_string(&s).expect("parse");
+    assert_eq!(parsed, ty);
+}
+
+#[test]
+fn legacy_unquoted_record_name_parses() {
+    // .cnnd files written by older builds contain this exact byte sequence.
+    let parsed = DataType::from_string("Record(surface(100)_gemcut_named)").expect("parse");
+    assert_eq!(
+        parsed,
+        DataType::Record(RecordType::Named("surface(100)_gemcut_named".to_string()))
+    );
+}
+
+#[test]
+fn legacy_unquoted_record_name_inside_iter_parses() {
+    let parsed = DataType::from_string("Iter[Record(surface(100)_gemcut_named)]").expect("parse");
+    assert_eq!(
+        parsed,
+        DataType::Iterator(Box::new(DataType::Record(RecordType::Named(
+            "surface(100)_gemcut_named".to_string(),
+        ))))
+    );
+}
+
+#[test]
+fn legacy_unquoted_record_name_inside_array_parses() {
+    let parsed = DataType::from_string("[Record(weird.name)]").expect("parse");
+    assert_eq!(
+        parsed,
+        DataType::Array(Box::new(DataType::Record(RecordType::Named(
+            "weird.name".to_string(),
+        ))))
+    );
+}
+
+#[test]
+fn record_with_leading_digit_legacy_form_parses() {
+    let parsed = DataType::from_string("Record(1foo)").expect("parse");
+    assert_eq!(
+        parsed,
+        DataType::Record(RecordType::Named("1foo".to_string()))
+    );
+}
+
+#[test]
+fn record_legacy_form_round_trips_to_backticked_canonical() {
+    // Legacy unquoted form on input, canonical backticked form on output.
+    let parsed = DataType::from_string("Record(surface(100)_gemcut_named)").expect("parse");
+    assert_eq!(parsed.to_string(), "Record(`surface(100)_gemcut_named`)");
+    // And the canonical form parses back to the same value.
+    let reparsed = DataType::from_string(&parsed.to_string()).expect("parse");
+    assert_eq!(reparsed, parsed);
+}
+
+#[test]
+fn simple_input_skips_normalization_allocation() {
+    // Smoke test: a clean input still parses. (We don't observe Cow allocation
+    // directly, but a regression that mangled non-Record inputs would surface
+    // as a parse error here.)
+    for s in [
+        "Int",
+        "[Float]",
+        "Record(Point)",
+        "Iter[Record(Point)]",
+        "(Int, Float) => Bool",
+    ] {
+        DataType::from_string(s).unwrap_or_else(|e| panic!("failed on {s:?}: {e}"));
+    }
 }

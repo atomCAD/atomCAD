@@ -231,6 +231,8 @@
       "PowerShell(flutter analyze *)",
       "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\" -Recurse -Filter \"*.dart\")",
       "Bash(Select-Object FullName)"
+      "Bash(rustfmt --check src/structure_designer/data_type.rs tests/structure_designer/data_type_test.rs)",
+      "PowerShell(git config *)"
     ]
   }
 }

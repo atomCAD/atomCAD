@@ -1043,48 +1043,34 @@ impl NodeTypeRegistry {
     /// # Parameters
     /// * `network` - A mutable reference to the node network to repair
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
-        // Refresh record-node pin layouts FIRST so the parameter / output-pin
-        // counts derived from the registry are visible to the arg-count and
-        // wire-pin repair passes below. record_construct / record_destructure
-        // schemas resolve through `record_type_defs` rather than from per-node
-        // data, so this is the only place a schema change reaches them. Other
-        // node types' caches are unaffected (refresh_args=true preserves
-        // wires when parameters match by name/id).
+        // Refresh every node's custom_node_type FIRST so the parameter /
+        // output-pin counts derived from per-node data and the registry are
+        // visible to the arg-count and wire-pin repair passes below.
+        //
+        // Why every node, not just record nodes: a record-def rename rewrites
+        // `Record(Named(old))` to `Record(Named(new))` inside per-node data
+        // for *every* dynamic-arg node (parameter, expr, map, filter, fold,
+        // foreach, sequence, array_*, …). Their cached `custom_node_type`
+        // still carries the stale `Named(old)` reference until we re-derive
+        // it from data here. Skipping non-record nodes used to leave them in
+        // a state where a subsequent eval indexes `parameters[0]` on a base
+        // type with `parameters: vec![]` and panics — see
+        // `tests/structure_designer/record_types_phase2_test.rs::rename_record_type_def_repopulates_sequence_custom_node_type`.
+        //
+        // refresh_args=true relies on the existing cache's parameter
+        // names/IDs to preserve wires when the structure is unchanged
+        // (the common rename case); structural changes (field add/remove on
+        // delete/update) fall back to ID-then-name matching for surviving
+        // wires. Nodes whose `calculate_custom_node_type` returns None are
+        // unaffected — they never carry a custom cache.
         for node in network.nodes.values_mut() {
-            if matches!(
-                node.node_type_name.as_str(),
-                "record_construct" | "record_destructure" | "product"
-            ) {
-                Self::populate_custom_node_type_cache_with_types(
-                    &self.built_in_node_types,
-                    &self.record_type_defs,
-                    &self.built_in_record_type_defs,
-                    node,
-                    true,
-                );
-            } else if let Some(base_node_type) = self.built_in_node_types.get(&node.node_type_name)
-            {
-                // For zone-bearing built-in node types, re-derive zone state
-                // from the base/custom type so that newly populated map nodes
-                // (and any future HOF) end up with a body initialized and
-                // `zone_output_arguments` sized correctly. Non-HOF types
-                // short-circuit in `ensure_zone_init`.
-                if base_node_type.has_zone()
-                    || node
-                        .custom_node_type
-                        .as_ref()
-                        .map(|t| t.has_zone())
-                        .unwrap_or(false)
-                {
-                    Self::populate_custom_node_type_cache_with_types(
-                        &self.built_in_node_types,
-                        &self.record_type_defs,
-                        &self.built_in_record_type_defs,
-                        node,
-                        true,
-                    );
-                }
-            }
+            Self::populate_custom_node_type_cache_with_types(
+                &self.built_in_node_types,
+                &self.record_type_defs,
+                &self.built_in_record_type_defs,
+                node,
+                true,
+            );
         }
 
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
