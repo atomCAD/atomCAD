@@ -1,0 +1,149 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Float"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "float",
+            "custom_name": "scale",
+            "position": [
+              50.0,
+              50.0
+            ],
+            "arguments": [],
+            "data_type": "float",
+            "data": {
+              "value": 0.5
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "expr",
+            "custom_name": "step",
+            "position": [
+              200.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "parameters": [
+                { "id": 1, "name": "s", "data_type": "Float", "data_type_str": null },
+                { "id": 2, "name": "acc", "data_type": "Float", "data_type_str": null },
+                { "id": 3, "name": "x", "data_type": "Float", "data_type_str": null }
+              ],
+              "expression": "acc + s * x"
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "range",
+            "custom_name": "r",
+            "position": [
+              200.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 5
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "float",
+            "custom_name": "init",
+            "position": [
+              200.0,
+              350.0
+            ],
+            "arguments": [],
+            "data_type": "float",
+            "data": {
+              "value": 0.0
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "fold",
+            "custom_name": "fld",
+            "position": [
+              400.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": -1
+                }
+              }
+            ],
+            "data_type": "fold",
+            "data": {
+              "element_type": "Float",
+              "accumulator_type": "Float"
+            }
+          }
+        ],
+        "return_node_id": 5,
+        "displayed_node_ids": [
+          [
+            5,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 4
+}

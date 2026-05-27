@@ -1,0 +1,180 @@
+{
+  "node_networks": [
+    [
+      "DoMap",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "DoMap",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Iter[Vec3]"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "float",
+            "custom_name": "fx",
+            "position": [
+              50.0,
+              50.0
+            ],
+            "arguments": [],
+            "data_type": "float",
+            "data": {
+              "value": 1.0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "float",
+            "custom_name": "fy",
+            "position": [
+              50.0,
+              120.0
+            ],
+            "arguments": [],
+            "data_type": "float",
+            "data": {
+              "value": 2.0
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "vec3",
+            "custom_name": "v",
+            "position": [
+              200.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "vec3",
+            "data": {
+              "value": [
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "range",
+            "custom_name": "r",
+            "position": [
+              200.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 3
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "map",
+            "custom_name": "m",
+            "position": [
+              400.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "4": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "3": -1
+                }
+              }
+            ],
+            "data_type": "map",
+            "data": {
+              "input_type": "Float",
+              "output_type": "Vec3"
+            }
+          }
+        ],
+        "return_node_id": 5,
+        "displayed_node_ids": []
+      }
+    ],
+    [
+      "Main",
+      {
+        "next_node_id": 2,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Iter[Vec3]"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "DoMap",
+            "custom_name": "dm",
+            "position": [
+              100.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "custom",
+            "data": {}
+          }
+        ],
+        "return_node_id": 1,
+        "displayed_node_ids": [
+          [
+            1,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 4
+}

@@ -1,0 +1,215 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 10,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Int"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "threshold",
+            "position": [
+              50.0,
+              50.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 2
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "int",
+            "custom_name": "scale",
+            "position": [
+              50.0,
+              150.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 10
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "expr",
+            "custom_name": "pred",
+            "position": [
+              200.0,
+              50.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "parameters": [
+                { "id": 1, "name": "t", "data_type": "Int", "data_type_str": null },
+                { "id": 2, "name": "x", "data_type": "Int", "data_type_str": null }
+              ],
+              "expression": "x > t"
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "expr",
+            "custom_name": "step",
+            "position": [
+              200.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "parameters": [
+                { "id": 1, "name": "s", "data_type": "Int", "data_type_str": null },
+                { "id": 2, "name": "acc", "data_type": "Int", "data_type_str": null },
+                { "id": 3, "name": "x", "data_type": "Int", "data_type_str": null }
+              ],
+              "expression": "acc + s * x"
+            }
+          },
+          {
+            "id": 5,
+            "node_type_name": "range",
+            "custom_name": "r",
+            "position": [
+              200.0,
+              350.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 5
+            }
+          },
+          {
+            "id": 6,
+            "node_type_name": "filter",
+            "custom_name": "f",
+            "position": [
+              400.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "5": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "3": -1
+                }
+              }
+            ],
+            "data_type": "filter",
+            "data": {
+              "element_type": "Int"
+            }
+          },
+          {
+            "id": 7,
+            "node_type_name": "int",
+            "custom_name": "init",
+            "position": [
+              400.0,
+              350.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            }
+          },
+          {
+            "id": 8,
+            "node_type_name": "fold",
+            "custom_name": "fld",
+            "position": [
+              600.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "6": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "7": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "4": -1
+                }
+              }
+            ],
+            "data_type": "fold",
+            "data": {
+              "element_type": "Int",
+              "accumulator_type": "Int"
+            }
+          }
+        ],
+        "return_node_id": 8,
+        "displayed_node_ids": [
+          [
+            8,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 4
+}

@@ -1,0 +1,135 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Iter[Iter[Float]]"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "range",
+            "custom_name": "ys",
+            "position": [
+              50.0,
+              50.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 3
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "map",
+            "custom_name": "inner_map",
+            "position": [
+              200.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "map",
+            "data": {
+              "input_type": "Float",
+              "output_type": "Float"
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "range",
+            "custom_name": "xs",
+            "position": [
+              200.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 4
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "map",
+            "custom_name": "outer_map",
+            "position": [
+              400.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": -1
+                }
+              }
+            ],
+            "data_type": "map",
+            "data": {
+              "input_type": "Float",
+              "output_type": { "Iterator": "Float" }
+            }
+          }
+        ],
+        "return_node_id": 4,
+        "displayed_node_ids": [
+          [
+            4,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 4
+}

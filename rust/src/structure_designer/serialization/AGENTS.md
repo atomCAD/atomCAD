@@ -9,12 +9,13 @@ JSON-based persistence for `.cnnd` project files.
 | `node_networks_serialization.rs` | Save/load entire projects (.cnnd files); chained version dispatch |
 | `migrate_v2_to_v3.rs` | One-shot JSON pre-pass for v2 files (atom_fill split, etc.) |
 | `migrate_v3_to_v4.rs` | One-shot JSON pre-pass for v3 files: insert `collect` between iterator producers (`range`/`map`/`filter`/`product` and transitively-iterator custom networks) and `Array[T]`-typed consumers |
+| `migrate_v4_to_v5.rs` | One-shot JSON pre-pass for v4 files: rewrite legacy `HOF.f` wires that used main's extras-as-prefix partial-application rule into the new `closure`-node shape; orphan sources (those whose only consumers were the rewritten `-1` wires) are dropped from the parent network |
 | `atom_edit_data_serialization.rs` | Save/load atom_edit node diff data (inline flags + backward-compat migration) |
 | `edit_atom_data_serialization.rs` | Save/load EditAtom node command history (legacy) |
 
 ## .cnnd File Format
 
-JSON with versioned schema (`SERIALIZATION_VERSION = 4`):
+JSON with versioned schema (`SERIALIZATION_VERSION = 5`):
 - Top-level: array of `SerializableNodeNetwork` plus `record_type_defs` (record schemas)
 - Each network: name, node_type, nodes, return_node_id, camera_settings
 - Each node: id, type_name, custom_name, position, arguments (wires), data
@@ -38,9 +39,12 @@ Key entry points:
 ```text
 if version < 3 { migrate_v2_to_v3(&mut root_value)?; }
 if version < 4 { migrate_v3_to_v4(&mut root_value)?; }
+if version < 5 { migrate_v4_to_v5(&mut root_value)?; }
 ```
 
-A v2 file chains both passes; a v3 file runs only v3→v4; a v4 file runs neither. Migrations are pre-deserialization because they synthesize new nodes (atom_fill split, `collect` insertion) — serde-level field defaults can't express that. Each migration is **frozen at its release version** (constants like `migrate_v3_to_v4::ITERATOR_PINS_V4` are hardcoded, not read from the live `NodeTypeRegistry`) so future registry changes don't retroactively alter how an old file gets up-converted. ID and position allocation is deterministic (read-only pre-pass + sorted mutation pass) for byte-identical re-runs and idempotent double-migration. Design doc: `doc/design_iterators.md` §"Backward compatibility" (and `doc/design_cnnd_migration_v2_to_v3.md` for the older pass).
+A v2 file chains all three passes; a v3 file runs v3→v4 and v4→v5; a v4 file runs only v4→v5; a v5 file runs none. Migrations are pre-deserialization because they synthesize new nodes (atom_fill split, `collect` insertion, `closure` wrap) — serde-level field defaults can't express that. Each migration is **frozen at its release version** (constants like `migrate_v3_to_v4::ITERATOR_PINS_V4` and `migrate_v4_to_v5::HOF_F_PINS_V5` are hardcoded, not read from the live `NodeTypeRegistry`) so future registry changes don't retroactively alter how an old file gets up-converted. ID and position allocation is deterministic (read-only pre-pass + sorted mutation pass) for byte-identical re-runs and idempotent double-migration.
+
+The v4→v5 pass (`migrate_v4_to_v5.rs`) rewrites legacy `HOF.f`-wires that used main's **extras-as-prefix partial application** rule into the new `closure`-node shape that the zones branch's structural-arity rule expects. For every `map`/`filter`/`fold`/`foreach` node whose `f` argument is wired to some source's `-1` (function) pin and that source has the prefix-wired-captures + suffix-unwired-parameters shape, a new `closure` node is synthesised in the parent network: its `ClosureData` matches the HOF kind (`Map`/`Filter`/`Fold`/`Foreach`) and `type_args` carry the HOF's stored input/output types; its body contains a clone of the source with body-local id `1`; capture wires reach the parent network at `source_scope_depth: 1`; parameter wires read the closure's `ZoneInput` pins. Sources whose only consumers were the rewritten `-1` wires are dropped from the parent (orphan-source cleanup). The rule of thumb is that the only code path the migration must write is the HOF `f`-wire rewriter — everything else about v5 (zones, `incoming_wires` shape, `body_width`/`body_height`, `collapse_mode`) is handled transparently by `#[serde(default)]` and the custom `Argument` deserializer. Design docs: `doc/design_iterators.md` §"Backward compatibility" (v3→v4), `doc/design_cnnd_migration_v2_to_v3.md` (v2→v3), `doc/design_zones_migration.md` (v4→v5).
 
 ## Record Type Defs
 

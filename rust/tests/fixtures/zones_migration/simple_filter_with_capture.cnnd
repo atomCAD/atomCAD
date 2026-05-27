@@ -1,0 +1,125 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 6,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Iter[Float]"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "float",
+            "custom_name": "threshold",
+            "position": [
+              50.0,
+              50.0
+            ],
+            "arguments": [],
+            "data_type": "float",
+            "data": {
+              "value": 2.0
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "expr",
+            "custom_name": "pred",
+            "position": [
+              200.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "1": 0
+                }
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "expr",
+            "data": {
+              "parameters": [
+                { "id": 1, "name": "t", "data_type": "Float", "data_type_str": null },
+                { "id": 2, "name": "x", "data_type": "Float", "data_type_str": null }
+              ],
+              "expression": "x > t"
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "range",
+            "custom_name": "r",
+            "position": [
+              200.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 5
+            }
+          },
+          {
+            "id": 4,
+            "node_type_name": "filter",
+            "custom_name": "f",
+            "position": [
+              400.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "3": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "2": -1
+                }
+              }
+            ],
+            "data_type": "filter",
+            "data": {
+              "element_type": "Float"
+            }
+          }
+        ],
+        "return_node_id": 4,
+        "displayed_node_ids": [
+          [
+            4,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 4
+}
