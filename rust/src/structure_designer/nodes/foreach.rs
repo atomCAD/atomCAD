@@ -54,10 +54,10 @@ impl NodeData for ForeachData {
         // function value that, when wired, overrides the inline body). The
         // inline side-effecting body lives inside the zone.
         custom.parameters[0].data_type = DataType::Iterator(Box::new(self.input_type.clone()));
-        custom.parameters[1].data_type = DataType::Function(FunctionType {
-            parameter_types: vec![self.input_type.clone()],
-            output_type: Box::new(DataType::Unit),
-        });
+        custom.parameters[1].data_type = DataType::Function(FunctionType::new(
+            vec![self.input_type.clone()],
+            DataType::Unit,
+        ));
         custom.output_pins = OutputPinDefinition::single_fixed(DataType::Unit);
 
         // Inside-facing pins: one element source, one Unit destination. The
@@ -236,10 +236,10 @@ pub fn get_node_type() -> NodeType {
                 // Optional side-effecting function value. When wired, it
                 // overrides the inline zone body. Type tracks input_type via
                 // `calculate_custom_node_type`.
-                data_type: DataType::Function(FunctionType {
-                    parameter_types: vec![DataType::Float],
-                    output_type: Box::new(DataType::Unit),
-                }),
+                data_type: DataType::Function(FunctionType::new(
+                    vec![DataType::Float],
+                    DataType::Unit,
+                )),
             },
         ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Unit),

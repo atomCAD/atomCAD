@@ -48,10 +48,10 @@ impl NodeData for FoldData {
         // body). The inline combining body lives inside the zone.
         custom.parameters[0].data_type = DataType::Iterator(Box::new(self.element_type.clone()));
         custom.parameters[1].data_type = self.accumulator_type.clone();
-        custom.parameters[2].data_type = DataType::Function(FunctionType {
-            parameter_types: vec![self.accumulator_type.clone(), self.element_type.clone()],
-            output_type: Box::new(self.accumulator_type.clone()),
-        });
+        custom.parameters[2].data_type = DataType::Function(FunctionType::new(
+            vec![self.accumulator_type.clone(), self.element_type.clone()],
+            self.accumulator_type.clone(),
+        ));
         custom.output_pins = OutputPinDefinition::single_fixed(self.accumulator_type.clone());
 
         // Inside-facing pins: two zone-input sources (acc, element) and one
@@ -251,10 +251,10 @@ pub fn get_node_type() -> NodeType {
                 // Optional combining function value. When wired, it overrides
                 // the inline zone body. Type tracks accumulator/element types
                 // via `calculate_custom_node_type`.
-                data_type: DataType::Function(FunctionType {
-                    parameter_types: vec![DataType::Float, DataType::Float],
-                    output_type: Box::new(DataType::Float),
-                }),
+                data_type: DataType::Function(FunctionType::new(
+                    vec![DataType::Float, DataType::Float],
+                    DataType::Float,
+                )),
             },
         ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Float),

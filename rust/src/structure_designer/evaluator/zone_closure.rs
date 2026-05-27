@@ -60,10 +60,7 @@ impl ZoneClosure {
     /// arity/return metadata. Used to infer the `DataType::Function` of a
     /// `NetworkResult::Function(ZoneClosure)` value and for its display string.
     pub fn function_type(&self) -> FunctionType {
-        FunctionType {
-            parameter_types: self.param_types.clone(),
-            output_type: Box::new(self.return_type.clone()),
-        }
+        FunctionType::new(self.param_types.clone(), self.return_type.clone())
     }
 }
 

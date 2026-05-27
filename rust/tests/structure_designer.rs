@@ -300,3 +300,6 @@ mod zones_migration_test;
 
 #[path = "structure_designer/debug_load_test.rs"]
 mod debug_load_test;
+
+#[path = "structure_designer/currying_test.rs"]
+mod currying_test;

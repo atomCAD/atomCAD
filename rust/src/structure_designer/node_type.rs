@@ -215,14 +215,13 @@ impl NodeType {
     }
 
     pub fn get_function_type(&self) -> DataType {
-        DataType::Function(FunctionType {
-            parameter_types: self
-                .parameters
+        DataType::Function(FunctionType::new(
+            self.parameters
                 .iter()
                 .map(|p| p.data_type.clone())
                 .collect(),
-            output_type: Box::new(self.output_type().clone()),
-        })
+            self.output_type().clone(),
+        ))
     }
 
     pub fn get_output_pin_type(&self, output_pin_index: i32) -> DataType {

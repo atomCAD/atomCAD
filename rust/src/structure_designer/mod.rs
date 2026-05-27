@@ -1,6 +1,7 @@
 #![allow(clippy::module_inception)]
 
 pub mod camera_settings;
+pub mod canonicalize;
 pub mod cli_runner;
 pub mod common_constants;
 pub mod data_type;

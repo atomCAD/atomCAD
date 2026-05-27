@@ -122,10 +122,10 @@ impl ClosureKind {
 
     /// The `DataType::Function` a value of this shape carries.
     pub fn function_type(&self, type_args: &[DataType], param_names: &[String]) -> FunctionType {
-        FunctionType {
-            parameter_types: self.param_types(type_args, param_names),
-            output_type: Box::new(self.return_type(type_args, param_names)),
-        }
+        FunctionType::new(
+            self.param_types(type_args, param_names),
+            self.return_type(type_args, param_names),
+        )
     }
 }
 
@@ -182,10 +182,9 @@ impl NodeData for ClosureData {
         // External: no input pins — captures arrive as ordinary capture wires
         // drawn into the body. One output pin: the function value itself.
         custom.parameters = vec![];
-        custom.output_pins = OutputPinDefinition::single_fixed(DataType::Function(FunctionType {
-            parameter_types: params.clone(),
-            output_type: Box::new(ret.clone()),
-        }));
+        custom.output_pins = OutputPinDefinition::single_fixed(DataType::Function(
+            FunctionType::new(params.clone(), ret.clone()),
+        ));
 
         // Inside-facing zone pins: one source per parameter, one destination
         // for the result.
@@ -259,10 +258,10 @@ pub fn get_node_type() -> NodeType {
         // External interface is filled in by `calculate_custom_node_type`; the
         // default is the map-like `(Float) -> Float` shape.
         parameters: vec![],
-        output_pins: OutputPinDefinition::single_fixed(DataType::Function(FunctionType {
-            parameter_types: vec![DataType::Float],
-            output_type: Box::new(DataType::Float),
-        })),
+        output_pins: OutputPinDefinition::single_fixed(DataType::Function(FunctionType::new(
+            vec![DataType::Float],
+            DataType::Float,
+        ))),
         zone_input_pins: vec![OutputPinDefinition::fixed("element", DataType::Float)],
         zone_output_pins: vec![Parameter {
             id: None,

@@ -76,10 +76,7 @@ impl NodeData for ApplyData {
         let mut parameters = vec![Parameter {
             id: None,
             name: "f".to_string(),
-            data_type: DataType::Function(FunctionType {
-                parameter_types: params.clone(),
-                output_type: Box::new(ret.clone()),
-            }),
+            data_type: DataType::Function(FunctionType::new(params.clone(), ret.clone())),
         }];
         for (i, t) in params.iter().enumerate() {
             let name = param_names
@@ -196,10 +193,10 @@ pub fn get_node_type() -> NodeType {
             Parameter {
                 id: None,
                 name: "f".to_string(),
-                data_type: DataType::Function(FunctionType {
-                    parameter_types: vec![DataType::Float],
-                    output_type: Box::new(DataType::Float),
-                }),
+                data_type: DataType::Function(FunctionType::new(
+                    vec![DataType::Float],
+                    DataType::Float,
+                )),
             },
             Parameter {
                 id: None,

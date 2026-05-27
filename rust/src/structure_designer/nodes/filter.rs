@@ -46,10 +46,10 @@ impl NodeData for FilterData {
         // value that, when wired, overrides the inline body). The inline
         // predicate body lives inside the zone.
         custom.parameters[0].data_type = iter_ty.clone();
-        custom.parameters[1].data_type = DataType::Function(FunctionType {
-            parameter_types: vec![self.element_type.clone()],
-            output_type: Box::new(DataType::Bool),
-        });
+        custom.parameters[1].data_type = DataType::Function(FunctionType::new(
+            vec![self.element_type.clone()],
+            DataType::Bool,
+        ));
         custom.output_pins = OutputPinDefinition::single_fixed(iter_ty);
 
         // Inside-facing pins: one element source, one Bool destination.
@@ -184,10 +184,10 @@ pub fn get_node_type() -> NodeType {
                 // Optional predicate function value. When wired, it overrides
                 // the inline zone body. Type tracks element_type via
                 // `calculate_custom_node_type`.
-                data_type: DataType::Function(FunctionType {
-                    parameter_types: vec![DataType::Float],
-                    output_type: Box::new(DataType::Bool),
-                }),
+                data_type: DataType::Function(FunctionType::new(
+                    vec![DataType::Float],
+                    DataType::Bool,
+                )),
             },
         ],
         output_pins: OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(

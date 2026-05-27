@@ -266,10 +266,12 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
                 .map(api_data_type_to_data_type)
                 .collect();
             let output_type = api_data_type_to_data_type(&api_data_type.children[n])?;
-            let base = DataType::Function(crate::structure_designer::data_type::FunctionType {
-                parameter_types: parameter_types?,
-                output_type: Box::new(output_type),
-            });
+            let base = DataType::Function(
+                crate::structure_designer::data_type::FunctionType::new(
+                    parameter_types?,
+                    output_type,
+                ),
+            );
             return Ok(if api_data_type.array {
                 DataType::Array(Box::new(base))
             } else {

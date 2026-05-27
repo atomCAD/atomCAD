@@ -857,6 +857,14 @@ pub fn load_node_networks_from_file(
         registry.record_type_defs.insert(def.name.clone(), def);
     }
 
+    // Canonicalize every stored `DataType::Function` reachable through record
+    // type def field types. Serde routing through `FunctionType::new` already
+    // canonicalizes JSON-deserialized values; this is the belt-and-braces pass
+    // covering any path that bypassed serde. See `canonicalize.rs`.
+    crate::structure_designer::canonicalize::canonicalize_record_type_defs(
+        &mut registry.record_type_defs,
+    );
+
     // Re-run cycle + dangling-reference checks on the loaded record_type_defs
     // (defensive against hand-edited `.cnnd` files). Errors are non-fatal at
     // load — they're logged so the user can fix them in the schema editor and
@@ -886,6 +894,13 @@ pub fn load_node_networks_from_file(
                 format!("In network '{}': {}", name, e),
             )
         })?;
+        // Canonicalize every `DataType::Function` reachable from this network
+        // before any validator or evaluator touches it. Serde routing through
+        // `FunctionType::new` and the data-type-string parser already
+        // canonicalize the common load paths; this is the belt-and-braces
+        // walker for any path that bypassed them. See `canonicalize.rs` and
+        // `doc/design_currying.md` Phase 1.
+        crate::structure_designer::canonicalize::canonicalize_network(&mut network);
         registry.initialize_custom_node_types_for_network(&mut network);
 
         registry.repair_node_network(&mut network);

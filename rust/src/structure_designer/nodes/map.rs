@@ -39,10 +39,10 @@ impl NodeData for MapData {
         // inside the zone.
         custom_node_type.parameters[0].data_type =
             DataType::Iterator(Box::new(self.input_type.clone()));
-        custom_node_type.parameters[1].data_type = DataType::Function(FunctionType {
-            parameter_types: vec![self.input_type.clone()],
-            output_type: Box::new(self.output_type.clone()),
-        });
+        custom_node_type.parameters[1].data_type = DataType::Function(FunctionType::new(
+            vec![self.input_type.clone()],
+            self.output_type.clone(),
+        ));
         custom_node_type.output_pins =
             OutputPinDefinition::single(DataType::Iterator(Box::new(self.output_type.clone())));
 
@@ -192,10 +192,10 @@ pub fn get_node_type() -> NodeType {
           name: "f".to_string(),
           // Optional function value. When wired, it overrides the inline zone
           // body. Type tracks input/output via `calculate_custom_node_type`.
-          data_type: DataType::Function(FunctionType {
-            parameter_types: vec![DataType::Float],
-            output_type: Box::new(DataType::Float),
-          }),
+          data_type: DataType::Function(FunctionType::new(
+            vec![DataType::Float],
+            DataType::Float,
+          )),
         },
       ],
       output_pins: OutputPinDefinition::single(DataType::Iterator(Box::new(DataType::Float))), // will change based on the output type

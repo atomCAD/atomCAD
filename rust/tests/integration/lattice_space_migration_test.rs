@@ -367,16 +367,17 @@ fn test_load_function_type_parameter_rename() {
         ),
         // `A -> A -> A` parses right-associatively as `A -> (A -> A)`, so
         // every nested `Atomic` identifier â€” three in total â€” must be
-        // rewritten by the scan.
+        // rewritten by the scan. After currying Phase 1, the canonical (flat)
+        // function storage invariant collapses `(A) -> (A -> A)` to
+        // `(A, A) -> A` on load (see `doc/design_currying.md`); the rename is
+        // still verified because every nested identifier had to be rewritten
+        // before flattening.
         (
             "curried".to_string(),
-            DataType::Function(FunctionType {
-                parameter_types: vec![DataType::Molecule],
-                output_type: Box::new(DataType::Function(FunctionType {
-                    parameter_types: vec![DataType::Molecule],
-                    output_type: Box::new(DataType::Molecule),
-                })),
-            }),
+            DataType::Function(FunctionType::new(
+                vec![DataType::Molecule, DataType::Molecule],
+                DataType::Molecule,
+            )),
         ),
         // `[Atomic] -> Atomic` exercises the combination of array wrapping
         // and function arrow in a single DataType display string.

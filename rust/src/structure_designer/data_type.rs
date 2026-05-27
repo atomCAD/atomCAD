@@ -4,10 +4,111 @@ use std::fmt;
 
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 
+/// A function type carrying its parameter list and a non-function output type.
+///
+/// **Canonical form invariant** (see `doc/design_currying.md`): the
+/// `output_type` is never itself a `Function`. Nested `Function` returns are
+/// absorbed into `parameter_types` on construction so the currying-equivalent
+/// forms `(A, B, C) -> D`, `(A, B) -> ((C) -> D)`, `A -> B -> C -> D`, etc.,
+/// all collapse to a single in-memory representation. This makes the
+/// type-comparison rule plain structural same-arity, sound by construction.
+///
+/// Every construction site routes through [`FunctionType::new`]. The serde
+/// `Deserialize` impl is wired through a `FunctionTypeRaw` shim so on-disk
+/// forms are canonicalized as they enter memory (covers both JSON node-data
+/// fields and `RecordTypeDef.fields` types; string-encoded pin types are
+/// canonicalized at the parser since the parser also calls `new`).
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(from = "FunctionTypeRaw")]
 pub struct FunctionType {
     pub parameter_types: Vec<DataType>,
     pub output_type: Box<DataType>,
+}
+
+/// Wire-shape twin of [`FunctionType`] used only for deserialization. Routes
+/// every loaded value through [`FunctionType::new`] so non-canonical on-disk
+/// forms collapse to canonical in memory.
+#[derive(Deserialize)]
+struct FunctionTypeRaw {
+    parameter_types: Vec<DataType>,
+    output_type: Box<DataType>,
+}
+
+impl From<FunctionTypeRaw> for FunctionType {
+    fn from(raw: FunctionTypeRaw) -> Self {
+        FunctionType::new(raw.parameter_types, *raw.output_type)
+    }
+}
+
+impl FunctionType {
+    /// Canonicalizing constructor. Absorbs nested `Function` returns into
+    /// `parameter_types` so the resulting value has a non-function
+    /// `output_type`. Every `FunctionType` constructed in source code MUST
+    /// route through this constructor; struct-literal construction is an
+    /// invariant violation and will leave a non-canonical value reachable.
+    pub fn new(parameter_types: Vec<DataType>, output_type: DataType) -> Self {
+        let mut params = parameter_types;
+        let mut output = output_type;
+        while let DataType::Function(inner) = output {
+            params.extend(inner.parameter_types);
+            output = *inner.output_type;
+        }
+        Self {
+            parameter_types: params,
+            output_type: Box::new(output),
+        }
+    }
+}
+
+/// Recursively rewrite every `DataType::Function` reachable through `Array`,
+/// `Iterator`, nested function parameters/returns, or
+/// `Record::Anonymous` field types into its canonical (flat) form.
+///
+/// At load time the serde `Deserialize` hook on [`FunctionType`] already
+/// canonicalizes every JSON-deserialized value, and the data-type string
+/// parser routes through [`FunctionType::new`], so on-disk `DataType` values
+/// arrive canonical. This walker is the in-memory belt-and-braces equivalent
+/// for callers that build a `DataType` value programmatically and want to
+/// guarantee canonical storage (the network-wide driver
+/// [`canonicalize_network`] uses it).
+pub fn canonicalize_data_type(t: &mut DataType) {
+    match t {
+        DataType::Function(ft) => {
+            for p in &mut ft.parameter_types {
+                canonicalize_data_type(p);
+            }
+            canonicalize_data_type(&mut ft.output_type);
+            // Absorb nested Function returns into parameter_types. Use
+            // mem::replace so the inner Box can be unboxed without a clone
+            // of the (potentially large) returned subtree.
+            loop {
+                let replaced =
+                    std::mem::replace(ft.output_type.as_mut(), DataType::None);
+                match replaced {
+                    DataType::Function(inner) => {
+                        ft.parameter_types.extend(inner.parameter_types);
+                        *ft.output_type = *inner.output_type;
+                    }
+                    other => {
+                        *ft.output_type = other;
+                        break;
+                    }
+                }
+            }
+        }
+        DataType::Array(inner) | DataType::Iterator(inner) => {
+            canonicalize_data_type(inner);
+        }
+        DataType::Record(RecordType::Anonymous(fields)) => {
+            for (_, ty) in fields {
+                canonicalize_data_type(ty);
+            }
+        }
+        // `Record::Named(_)` references a registered def; the def's fields are
+        // walked by the network-level driver (or are already canonical via
+        // serde deserialization).
+        _ => {}
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
@@ -830,10 +931,7 @@ impl DataTypeParser {
         if self.peek() == &DataTypeToken::Arrow {
             self.bump(); // consume '->'
             let return_type = self.parse_data_type()?;
-            data_type = DataType::Function(FunctionType {
-                parameter_types: vec![data_type],
-                output_type: Box::new(return_type),
-            });
+            data_type = DataType::Function(FunctionType::new(vec![data_type], return_type));
         }
 
         Ok(data_type)
@@ -942,10 +1040,7 @@ impl DataTypeParser {
             self.bump(); // consume ')'
             self.expect(DataTypeToken::Arrow)?;
             let output_type = self.parse_data_type()?;
-            return Ok(DataType::Function(FunctionType {
-                parameter_types: vec![],
-                output_type: Box::new(output_type),
-            }));
+            return Ok(DataType::Function(FunctionType::new(vec![], output_type)));
         }
 
         // It's not an empty list, so parse the first type.
@@ -953,19 +1048,29 @@ impl DataTypeParser {
 
         // After the first type, we can have a comma (multi-param func) or a right paren (grouped type).
         if self.peek() == &DataTypeToken::Comma {
-            // Case 2: Multi-parameter function, e.g., '(Int, Float) => Bool'
+            // Case 2: Multi-parameter function. Accepted forms — both with
+            // `->` and `=>` — match the Display impl (which always emits `->`)
+            // and the legacy `=>` syntax used by older code paths. Canonical
+            // (flat) function storage means saved files now round-trip
+            // multi-param types through this rule on reload (see Phase 1 of
+            // `doc/design_currying.md`).
             let mut params = vec![first_type];
             while self.peek() == &DataTypeToken::Comma {
                 self.bump(); // consume ','
                 params.push(self.parse_data_type()?);
             }
             self.expect(DataTypeToken::RightParen)?;
-            self.expect(DataTypeToken::FatArrow)?;
+            match self.peek() {
+                DataTypeToken::Arrow | DataTypeToken::FatArrow => self.bump(),
+                other => {
+                    return Err(format!(
+                        "Expected '->' or '=>' after parameter list, found {:?}",
+                        other
+                    ));
+                }
+            }
             let output_type = self.parse_data_type()?;
-            Ok(DataType::Function(FunctionType {
-                parameter_types: params,
-                output_type: Box::new(output_type),
-            }))
+            Ok(DataType::Function(FunctionType::new(params, output_type)))
         } else {
             // Case 3: A single, grouped type, e.g., '(Int)' or '(Int -> Bool)'
             self.expect(DataTypeToken::RightParen)?;
