@@ -294,3 +294,6 @@ mod hof_collapse_test;
 
 #[path = "structure_designer/function_pin_test.rs"]
 mod function_pin_test;
+
+#[path = "structure_designer/zones_migration_test.rs"]
+mod zones_migration_test;

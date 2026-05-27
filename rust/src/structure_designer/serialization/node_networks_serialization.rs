@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 4;
+const SERIALIZATION_VERSION: u32 = 5;
 
 /// Camera settings that are saved per node network
 #[derive(Serialize, Deserialize, Clone)]
@@ -801,6 +801,14 @@ pub fn load_node_networks_from_file(
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("v3→v4 migration failed: {}", e),
+            )
+        })?;
+    }
+    if version < 5 {
+        super::migrate_v4_to_v5::migrate_v4_to_v5(&mut root_value).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("v4→v5 migration failed: {}", e),
             )
         })?;
     }

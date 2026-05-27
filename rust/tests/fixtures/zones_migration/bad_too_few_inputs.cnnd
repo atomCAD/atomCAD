@@ -1,0 +1,99 @@
+{
+  "node_networks": [
+    [
+      "Main",
+      {
+        "next_node_id": 5,
+        "node_type": {
+          "name": "Main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "output",
+              "data_type": "Iter[Int]"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "i",
+            "position": [
+              50.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 7
+            }
+          },
+          {
+            "id": 2,
+            "node_type_name": "range",
+            "custom_name": "r",
+            "position": [
+              200.0,
+              250.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              },
+              {
+                "argument_output_pins": {}
+              }
+            ],
+            "data_type": "range",
+            "data": {
+              "start": 0,
+              "step": 1,
+              "count": 3
+            }
+          },
+          {
+            "id": 3,
+            "node_type_name": "map",
+            "custom_name": "m",
+            "position": [
+              400.0,
+              200.0
+            ],
+            "arguments": [
+              {
+                "argument_output_pins": {
+                  "2": 0
+                }
+              },
+              {
+                "argument_output_pins": {
+                  "1": -1
+                }
+              }
+            ],
+            "data_type": "map",
+            "data": {
+              "input_type": "Int",
+              "output_type": "Int"
+            }
+          }
+        ],
+        "return_node_id": 3,
+        "displayed_node_ids": [
+          [
+            3,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 4
+}
