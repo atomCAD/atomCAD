@@ -1238,14 +1238,12 @@ impl NodeTypeRegistry {
     /// Top-level driver for the Currying Phase 4 `map` post-pass: for every
     /// `map` node in `network` whose `f` pin is wired to a resolvable `Function`
     /// source whose declared (canonical, flat) parameter list **starts with**
-    /// the map's element type, override the node's `custom_node_type` so that:
-    /// 1. `map.f`'s declared pin type matches the wired source's exact function
-    ///    type (so the standard structural wire check passes).
-    /// 2. `map`'s output pin type becomes `Iter[derived_output]` where
-    ///    `derived_output` is either `*src.output_type` (when the source's
-    ///    parameter list is just `[element_type]`) or
-    ///    `Function(tail, *src.output_type)` (when the source has extra params
-    ///    that absorb as partial-application tail).
+    /// the map's element type, override the node's `custom_node_type` so that
+    /// `map`'s output pin type becomes `Iter[derived_output]` where
+    /// `derived_output` is either `*src.output_type` (when the source's
+    /// parameter list is just `[element_type]`) or
+    /// `Function(tail, *src.output_type)` (when the source has extra params
+    /// that absorb as partial-application tail).
     ///
     /// The HOF auto-partialization rule from `doc/design_currying.md` Phase 4:
     /// any `Function` source whose parameter list starts with `[element_type]`
@@ -1254,6 +1252,14 @@ impl NodeTypeRegistry {
     /// parameters. The zone-body pins (`zone_input_pins`, `zone_output_pins`)
     /// are intentionally left at `MapData`-driven values so that disconnecting
     /// `f` restores the user's inline-body shape cleanly.
+    ///
+    /// `map.f`'s declared type is permanently
+    /// `AnyFunction { leading_params: [element_type] }` (set by
+    /// `MapData::calculate_custom_node_type`) and is **not** rewritten here —
+    /// the standard `Function(_) → AnyFunction { [element_type] }`
+    /// compatibility rule (Phase A) handles wire type-checking against
+    /// arbitrary higher-arity sources. See
+    /// `doc/design_function_pin_unification.md` (Phase C).
     ///
     /// Called from `repair_node_network` (heavyweight repair entry, e.g.
     /// `.cnnd` load) and from `network_validator::validate_network` (every
@@ -1318,9 +1324,12 @@ impl NodeTypeRegistry {
     /// Currying Phase 4, `doc/design_currying.md` §"HOF auto-partialization
     /// (`map`)". The derived layout:
     /// - `xs` pin: `Iter[element_type]` (unchanged from `MapData`-driven).
-    /// - `f` pin: `Function(src.parameter_types, src.output_type)` exactly —
-    ///   so the standard structural wire check in `can_be_converted_to`
-    ///   matches the source's flat type after this post-pass installs.
+    /// - `f` pin: **left untouched** — its declared type is permanently
+    ///   `AnyFunction { leading_params: [element_type] }` (set by
+    ///   `MapData::calculate_custom_node_type`); the Phase A
+    ///   `Function(_) → AnyFunction { … }` compatibility rule handles
+    ///   structural wire checking against the source. See
+    ///   `doc/design_function_pin_unification.md` (Phase C).
     /// - Output pin: `Iter[derived_output]` where `derived_output` is
     ///   `Function(tail, R)` for a non-empty tail (canonicalized) or `R` when
     ///   the tail is empty.
@@ -1349,14 +1358,15 @@ impl NodeTypeRegistry {
         };
 
         // Starts-with rule: the source's parameter list must begin with
-        // `[element_type]`. element_type is whatever the MapData-driven f pin's
-        // declared first param is — that's what calculate_custom_node_type
-        // installs as `Function(vec![input_type], output_type)`.
+        // `[element_type]`. element_type is the MapData-driven f pin's
+        // `AnyFunction` leading-param entry — what
+        // `calculate_custom_node_type` installs as
+        // `AnyFunction { leading_params: vec![input_type] }`.
         let f_pin_type = &map_data_default.parameters.get(1)?.data_type;
-        let DataType::Function(f_ft) = f_pin_type else {
+        let DataType::AnyFunction { leading_params } = f_pin_type else {
             return None;
         };
-        let element_type = f_ft.parameter_types.first()?.clone();
+        let element_type = leading_params.first()?.clone();
         if src_ft.parameter_types.first() != Some(&element_type) {
             return None;
         }
@@ -1370,16 +1380,10 @@ impl NodeTypeRegistry {
             DataType::Function(FunctionType::new(tail.to_vec(), return_type))
         };
 
-        // Build the override on top of the MapData-driven default.
+        // Build the override on top of the MapData-driven default. The f-pin
+        // declared type stays at `AnyFunction { leading_params: [element] }` —
+        // Phase C no longer rewrites it. Only the output pin is updated.
         let mut custom = map_data_default.clone();
-        // f pin: take the source's exact function type so the standard
-        // structural wire check matches.
-        if let Some(f_param) = custom.parameters.get_mut(1) {
-            f_param.data_type = DataType::Function(FunctionType::new(
-                src_ft.parameter_types.clone(),
-                (*src_ft.output_type).clone(),
-            ));
-        }
         // Output pin: Iter[derived_output].
         custom.output_pins =
             OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(derived_output)));

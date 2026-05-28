@@ -621,9 +621,13 @@ fn map_registers_zone_pins() {
     );
     assert_eq!(nt.parameters[0].name, "xs");
     assert_eq!(nt.parameters[1].name, "f");
+    // Function-pin Unification Phase C: `map.f` is declared `AnyFunction`,
+    // not `Function`. The leading_params encode the starts-with rule
+    // (`map.f` accepts any function whose parameter list begins with the
+    // element type). See `doc/design_function_pin_unification.md` (Phase C).
     assert!(
-        matches!(nt.parameters[1].data_type, DataType::Function(_)),
-        "the `f` pin must be a Function type"
+        matches!(nt.parameters[1].data_type, DataType::AnyFunction { .. }),
+        "the `f` pin must be an AnyFunction type"
     );
     assert_eq!(nt.zone_input_pins.len(), 1);
     assert_eq!(nt.zone_input_pins[0].name, "element");
@@ -649,12 +653,16 @@ fn map_calculate_custom_node_type_int_to_float() {
         DataType::Iterator(Box::new(DataType::Int))
     );
     assert_eq!(custom.parameters[1].name, "f");
+    // Function-pin Unification Phase C: the `f` pin's declared type is
+    // `AnyFunction { leading_params: [element_type] }` — Int here. The
+    // output type is still `Iter[output_type]` (Iter[Float] for this
+    // MapData configuration) until the post-pass derives it from a wired
+    // source. See `doc/design_function_pin_unification.md` (Phase C).
     assert_eq!(
         custom.parameters[1].data_type,
-        DataType::Function(rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
-            parameter_types: vec![DataType::Int],
-            output_type: Box::new(DataType::Float),
-        })
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Int],
+        }
     );
     assert_eq!(
         *custom.output_type(),

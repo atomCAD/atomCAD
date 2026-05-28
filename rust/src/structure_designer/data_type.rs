@@ -352,6 +352,19 @@ impl DataType {
         matches!(self, DataType::Array(_))
     }
 
+    /// Returns true for the two function-shaped pin types: the concrete
+    /// `Function(_)` (used as both source and dest) and the `AnyFunction { .. }`
+    /// destination-only constraint introduced in Function-pin Unification
+    /// Phase A. Callers that need to detect "this is a function-value pin"
+    /// (validator's f-pin-connected check, connect/disconnect revalidation
+    /// gates, HOF collapse-Auto resolver) should test this rather than
+    /// matching `DataType::Function(_)` alone, since after Phases B/C the
+    /// HOF / `apply` f pins are declared as `AnyFunction`. See
+    /// `doc/design_function_pin_unification.md`.
+    pub fn is_function_shape(&self) -> bool {
+        matches!(self, DataType::Function(_) | DataType::AnyFunction { .. })
+    }
+
     /// Returns true for abstract phase supertypes (HasAtoms, HasStructure, HasFreeLinOps).
     /// Abstract types appear only as declared input-pin types on built-in polymorphic
     /// nodes; no `NetworkResult` value ever carries an abstract `DataType`.

@@ -2151,12 +2151,14 @@ impl StructureDesigner {
                         return;
                     }
                     let dt = &node_type.parameters[dest_param_index].data_type;
+                    // `dest_is_function_pin` covers both `Function(_)` and
+                    // `AnyFunction { .. }` (the destination-only constraint
+                    // added in Function-pin Unification Phase A). After Phases
+                    // B/C, `apply.f` / `map.f` are declared as `AnyFunction`,
+                    // so a wire into them must still trigger revalidation.
                     (
                         dt.is_array(),
-                        matches!(
-                            dt,
-                            crate::structure_designer::data_type::DataType::Function(_)
-                        ),
+                        dt.is_function_shape(),
                         dest_node.node_type_name == "apply",
                     )
                 }
@@ -4504,17 +4506,16 @@ impl StructureDesigner {
                     // below doesn't validate, so request an explicit re-validate
                     // (the mirror of the function-wire case in `connect_nodes`).
                     let source_is_function_pin = wire.source_pin_index().is_some_and(|p| p < 0);
+                    // Function-shape covers both `Function(_)` and
+                    // `AnyFunction { .. }` (see `DataType::is_function_shape`).
+                    // Function-pin Unification Phases B/C make `apply.f` /
+                    // `map.f` declared as `AnyFunction`.
                     let dest_is_function_pin = node_network
                         .nodes
                         .get(&wire.destination_node_id)
                         .and_then(|n| self.node_type_registry.get_node_type_for_node(n))
                         .and_then(|nt| nt.parameters.get(wire.destination_argument_index))
-                        .is_some_and(|p| {
-                            matches!(
-                                p.data_type,
-                                crate::structure_designer::data_type::DataType::Function(_)
-                            )
-                        });
+                        .is_some_and(|p| p.data_type.is_function_shape());
                     if source_is_function_pin || dest_is_function_pin {
                         should_validate = true;
                     }

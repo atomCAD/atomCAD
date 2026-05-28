@@ -1408,7 +1408,10 @@ fn map_phase4_higher_arity_source_derives_output_type() {
     let g = phase3_add_custom_int_closure(&mut designer, "main", &["x", "y"], "x * y", -200.0);
     let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
     // Wire closure to map.f. Connect must succeed via the starts-with rule:
-    // declared map.f is `Function([Int], Int)`, source is `Function([Int, Int], Int)`.
+    // declared map.f is `AnyFunction { leading_params: [Int] }` (Function-pin
+    // Unification Phase C); the source is `Function([Int, Int], Int)`, which
+    // satisfies the leading-prefix constraint via the standard
+    // `Function → AnyFunction` compatibility rule (Phase A).
     assert!(
         designer.can_connect_nodes(g, 0, m, 1),
         "starts-with rule must admit a (Int, Int) -> Int source into map.f over Iter[Int]"
@@ -1802,5 +1805,194 @@ fn apply_phase_b_any_function_rule_accepts_arbitrary_arity_sources() {
     assert!(
         designer.can_connect_nodes(g3, 0, app, 0),
         "3-arg closure must connect to apply.f via the AnyFunction rule"
+    );
+}
+
+// =============================================================================
+// Function-pin unification Phase C — `map.f` declared type is permanently
+// `AnyFunction { leading_params: vec![element_type] }`, regardless of wiring
+// state. The post-pass no longer rewrites the f-pin type; the
+// `Function(_) → AnyFunction { [element_type] }` compatibility rule (Phase A)
+// makes the f wire type-check on its own, including for higher-arity sources
+// that participate in HOF auto-partialization. The name-matched starts-with
+// exception in `can_connect_nodes` is removed. See
+// `doc/design_function_pin_unification.md` (Phase C).
+// =============================================================================
+
+/// Helper: read the declared type of `map`'s f pin (parameter index 1) from
+/// its current custom_node_type.
+fn map_f_pin_type(designer: &StructureDesigner, network_name: &str, map_id: u64) -> DataType {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let node = net.nodes.get(&map_id).unwrap();
+    designer
+        .node_type_registry
+        .get_node_type_for_node(node)
+        .unwrap()
+        .parameters[1]
+        .data_type
+        .clone()
+}
+
+// ----------------------------------------------------------------------------
+// Test C1: map.f is AnyFunction { vec![element_type] } on a freshly-added map
+// for various MapData configurations.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase_c_f_pin_is_any_function_when_unwired() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let m_int = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    assert_eq!(
+        map_f_pin_type(&designer, "main", m_int),
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Int],
+        },
+        "Int-input map.f must declare AnyFunction {{ leading_params: [Int] }}"
+    );
+
+    let m_float = phase4_add_map(&mut designer, "main", DataType::Float, DataType::Bool, 100.0);
+    assert_eq!(
+        map_f_pin_type(&designer, "main", m_float),
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Float],
+        },
+        "Float-input map.f must declare AnyFunction {{ leading_params: [Float] }}"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test C2: map.f stays AnyFunction { vec![element_type] } after a higher-arity
+// closure is wired in — the post-pass derives the output pin type but leaves
+// the f-pin's declared type unchanged.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase_c_f_pin_stays_any_function_after_wiring() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(&mut designer, "main", &["x", "y"], "x * y", -200.0);
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    designer.connect_nodes(g, 0, m, 1);
+
+    assert_eq!(
+        map_f_pin_type(&designer, "main", m),
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Int],
+        },
+        "map.f must remain AnyFunction {{ leading_params: [Int] }} after wiring — \
+         the post-pass derives output type but does not rewrite f"
+    );
+
+    // Sanity check: the post-pass still derived the partial-application output.
+    let out_ty = phase4_output_type(&designer, "main", m);
+    let DataType::Iterator(inner) = out_ty else {
+        panic!("expected Iter[_] output after wiring");
+    };
+    assert!(
+        matches!(*inner, DataType::Function(_)),
+        "output should derive to Iter[Function((Int,), Int)] for a 2-arg source"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test C3: map.f declared type tracks input_type changes via
+// `calculate_custom_node_type`. Changing MapData.input_type rederives the
+// leading_params entry.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase_c_f_pin_tracks_input_type() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Start as Int → Int.
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+    assert_eq!(
+        map_f_pin_type(&designer, "main", m),
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Int],
+        },
+    );
+
+    // Flip to Float → Float by replacing MapData.
+    phase2_set_node_data(
+        &mut designer,
+        "main",
+        m,
+        Box::new(MapData {
+            input_type: DataType::Float,
+            output_type: DataType::Float,
+        }),
+    );
+
+    assert_eq!(
+        map_f_pin_type(&designer, "main", m),
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Float],
+        },
+        "after flipping MapData.input_type to Float, map.f's AnyFunction \
+         leading_params must rederive to [Float]"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test C4: the name-matched starts-with exception is gone — `can_connect_nodes`
+// now routes through the standard AnyFunction compatibility rule for both
+// exact-arity and higher-arity sources.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn map_phase_c_any_function_rule_accepts_higher_arity_sources() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // 1-arg (Int) -> Int and 3-arg (Int, Int, Int) -> Int closures both
+    // satisfy the AnyFunction { leading_params: [Int] } constraint on
+    // map.f over Iter[Int].
+    let g1 = phase3_add_custom_int_closure(&mut designer, "main", &["x"], "x * x", -300.0);
+    let g3 =
+        phase3_add_custom_int_closure(&mut designer, "main", &["x", "y", "z"], "x+y+z", -200.0);
+
+    let m = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    assert!(
+        designer.can_connect_nodes(g1, 0, m, 1),
+        "1-arg (Int)->Int source must connect to map.f via the AnyFunction rule"
+    );
+    assert!(
+        designer.can_connect_nodes(g3, 0, m, 1),
+        "3-arg (Int,Int,Int)->Int source must connect to map.f via the AnyFunction rule"
+    );
+
+    // First-param mismatch is still rejected.
+    let g_bool = {
+        let id = designer.add_node("closure", DVec2::new(0.0, -400.0));
+        phase2_set_node_data(
+            &mut designer,
+            "main",
+            id,
+            Box::new(ClosureData {
+                kind: ClosureKind::Custom,
+                type_args: vec![DataType::Bool, DataType::Int, DataType::Int],
+                param_names: vec!["b".into(), "x".into()],
+                custom_label: None,
+            }),
+        );
+        id
+    };
+    assert!(
+        !designer.can_connect_nodes(g_bool, 0, m, 1),
+        "(Bool, Int) -> Int source must still be rejected (leading param Bool ≠ Int)"
     );
 }

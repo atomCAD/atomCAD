@@ -1,5 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::{DataType, FunctionType};
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -37,12 +37,19 @@ impl NodeData for MapData {
         // External: `xs` (the stream) and the optional `f` (a function value
         // that, when wired, overrides the inline body). The inline body lives
         // inside the zone.
+        //
+        // `f` is permanently typed `AnyFunction { leading_params: [element] }`:
+        // any function whose parameter list starts with the element type flows
+        // in via the Phase A compatibility rule. Higher-arity sources are
+        // accepted; the excess parameters become the partial-application tail
+        // at evaluation. The post-pass no longer rewrites this declared type —
+        // it only derives the output pin type. See
+        // `doc/design_function_pin_unification.md` (Phase C).
         custom_node_type.parameters[0].data_type =
             DataType::Iterator(Box::new(self.input_type.clone()));
-        custom_node_type.parameters[1].data_type = DataType::Function(FunctionType::new(
-            vec![self.input_type.clone()],
-            self.output_type.clone(),
-        ));
+        custom_node_type.parameters[1].data_type = DataType::AnyFunction {
+            leading_params: vec![self.input_type.clone()],
+        };
         custom_node_type.output_pins =
             OutputPinDefinition::single(DataType::Iterator(Box::new(self.output_type.clone())));
 
@@ -191,11 +198,13 @@ pub fn get_node_type() -> NodeType {
           id: None,
           name: "f".to_string(),
           // Optional function value. When wired, it overrides the inline zone
-          // body. Type tracks input/output via `calculate_custom_node_type`.
-          data_type: DataType::Function(FunctionType::new(
-            vec![DataType::Float],
-            DataType::Float,
-          )),
+          // body. Declared type is `AnyFunction { leading_params: [element] }`
+          // (the default element is Float here); the post-pass derives the
+          // output pin type from the wired source. See
+          // `doc/design_function_pin_unification.md` (Phase C).
+          data_type: DataType::AnyFunction {
+            leading_params: vec![DataType::Float],
+          },
         },
       ],
       output_pins: OutputPinDefinition::single(DataType::Iterator(Box::new(DataType::Float))), // will change based on the output type

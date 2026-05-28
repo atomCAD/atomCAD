@@ -513,19 +513,25 @@ pub fn collapsable_type_name(name: &str) -> bool {
     COLLAPSABLE_HOF_TYPE_NAMES.contains(&name)
 }
 
-/// Returns true if `node` has an input pin named `f` of `Function` type that
-/// carries at least one incoming wire.
+/// Returns true if `node` has an input pin named `f` of function shape
+/// (concrete `Function(_)` or the `AnyFunction { .. }` destination-only
+/// constraint added in Function-pin Unification Phase A) that carries at
+/// least one incoming wire.
 ///
-/// HOFs gain an optional `f: Function` pin which, when wired, drives evaluation
-/// in place of the inline body (so the "zone-output pin must have a wire" rule
-/// is suspended for that HOF). `apply` has a *required* `f` pin. The `closure`
-/// node has no `f` *input* pin (it exposes a `Function` *output*), so this is
-/// always false for it. See `doc/design_closures.md` §"Validation".
+/// HOFs gain an optional `f` pin which, when wired, drives evaluation in
+/// place of the inline body (so the "zone-output pin must have a wire" rule
+/// is suspended for that HOF). `apply` has a *required* `f` pin. After
+/// Function-pin Unification Phases B/C, `apply.f` / `map.f` are declared as
+/// `AnyFunction` rather than `Function`, so this predicate must accept both
+/// shapes via `DataType::is_function_shape`. The `closure` node has no `f`
+/// *input* pin (it exposes a `Function` *output*), so this is always false
+/// for it. See `doc/design_closures.md` §"Validation" and
+/// `doc/design_function_pin_unification.md`.
 pub fn function_input_pin_connected(node: &Node, node_type: &NodeType) -> bool {
     node_type
         .parameters
         .iter()
-        .position(|p| p.name == "f" && matches!(p.data_type, DataType::Function(_)))
+        .position(|p| p.name == "f" && p.data_type.is_function_shape())
         .and_then(|idx| node.arguments.get(idx))
         .map(|arg| !arg.incoming_wires.is_empty())
         .unwrap_or(false)
@@ -1239,40 +1245,14 @@ impl NodeNetwork {
         };
 
         // Check if the data types are compatible using conversion rules.
-        if DataType::can_be_converted_to(
-            &source_output_type,
-            &dest_param_type,
-            node_type_registry,
-        ) {
-            return true;
-        }
-
-        // Currying Phase 4 (`doc/design_currying.md`, §"HOF auto-partialization
-        // (`map`)"): `map.f` accepts any `Function` source whose parameter list
-        // **starts with** `[element_type]`. The excess parameters become the
-        // partial-application tail at evaluation; `map`'s post-pass overrides
-        // the f-pin's declared type to match the source exactly so standard
-        // structural validation passes on every subsequent revalidate. This
-        // gate is what lets the user create the wire in the first place
-        // (before any post-pass has run).
-        //
-        // `map.f` lives at parameter index 1; the dest_param_type is the
-        // current `Function([element_type], _)` set by MapData-driven
-        // `calculate_custom_node_type`. We accept the wire when the source is
-        // a `Function` whose parameter list starts with that element_type.
-        if dest_node.node_type_name == "map" && dest_param_index == 1 {
-            if let (DataType::Function(dest_ft), DataType::Function(src_ft)) =
-                (&dest_param_type, &source_output_type)
-            {
-                if let Some(element_type) = dest_ft.parameter_types.first() {
-                    if src_ft.parameter_types.first() == Some(element_type) {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        false
+        // The starts-with rule for `map.f` (Currying Phase 4) is no longer
+        // a name-matched exception here — `map.f`'s declared type is
+        // `AnyFunction { leading_params: [element_type] }` (set by
+        // `MapData::calculate_custom_node_type`), and the standard
+        // `Function(_) → AnyFunction { … }` compatibility rule in
+        // `can_be_converted_to` (Phase A) handles the structural check.
+        // See `doc/design_function_pin_unification.md` (Phase C).
+        DataType::can_be_converted_to(&source_output_type, &dest_param_type, node_type_registry)
     }
 
     pub fn connect_nodes(
