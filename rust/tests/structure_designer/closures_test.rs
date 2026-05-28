@@ -1837,11 +1837,13 @@ fn custom_kind_closure_calculate_node_type_arity1() {
     assert_eq!(custom.zone_output_pins[0].data_type, DataType::Float);
 }
 
-/// `Custom` `apply`: arity-2 `(Int, Float) -> Bool` produces a required `f`
-/// pin plus two arg pins, all with authored names.
+/// `Custom` `apply`: arity-2 `(Int, Float) -> Bool` produces a `f` pin
+/// (typed `AnyFunction { vec![] }` — see Function-pin Unification Phase B,
+/// `doc/design_function_pin_unification.md`) plus two arg pins driven by the
+/// authored ApplyData (the disconnected-`f` default; the post-pass overrides
+/// arg-pin layout from the wired source when `f` is connected).
 #[test]
 fn custom_kind_apply_calculate_node_type_arity2() {
-    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
     use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
     use rust_lib_flutter_cad::structure_designer::nodes::apply::get_node_type;
 
@@ -1858,10 +1860,9 @@ fn custom_kind_apply_calculate_node_type_arity2() {
     assert_eq!(custom.parameters[0].name, "f");
     assert_eq!(
         custom.parameters[0].data_type,
-        DataType::Function(FunctionType {
-            parameter_types: vec![DataType::Int, DataType::Float],
-            output_type: Box::new(DataType::Bool),
-        }),
+        DataType::AnyFunction {
+            leading_params: vec![],
+        },
     );
     assert_eq!(custom.parameters[1].name, "lhs");
     assert_eq!(custom.parameters[1].data_type, DataType::Int);

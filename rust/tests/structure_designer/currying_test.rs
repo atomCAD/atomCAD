@@ -1668,3 +1668,139 @@ fn map_phase4_filter_exact_arity_unchanged() {
         "filter.f must keep exact-arity matching — a (Int, Int) -> Bool source must not satisfy a (Int) -> Bool pin"
     );
 }
+
+// =============================================================================
+// Function-pin unification Phase B — `apply.f` declared type is permanently
+// `AnyFunction { leading_params: vec![] }`, regardless of wiring state. The
+// post-pass no longer rewrites it; the standard
+// `Function(_) → AnyFunction { vec![] }` compatibility rule (Phase A) makes
+// the f wire type-check on its own. See
+// `doc/design_function_pin_unification.md` (Phase B).
+// =============================================================================
+
+/// Helper: read the declared type of `apply`'s f pin (parameter index 0) from
+/// its current custom_node_type.
+fn apply_f_pin_type(designer: &StructureDesigner, network_name: &str, apply_id: u64) -> DataType {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let node = net.nodes.get(&apply_id).unwrap();
+    designer
+        .node_type_registry
+        .get_node_type_for_node(node)
+        .unwrap()
+        .parameters[0]
+        .data_type
+        .clone()
+}
+
+// ----------------------------------------------------------------------------
+// Test B1: f pin starts as AnyFunction { vec![] } on a freshly-added apply.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase_b_f_pin_is_any_function_when_unwired() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let app = phase3_add_apply(&mut designer, "main", 0.0);
+
+    assert_eq!(
+        apply_f_pin_type(&designer, "main", app),
+        DataType::AnyFunction {
+            leading_params: vec![]
+        },
+        "freshly added apply must expose f as AnyFunction {{ vec![] }} (no leading-param constraint)"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test B2: f pin stays AnyFunction { vec![] } after a 3-arg closure is wired
+// in — the post-pass installs arg-pin layout + output type but leaves the
+// f-pin's declared type unchanged.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase_b_f_pin_stays_any_function_after_wiring() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g, 0, app, 0);
+
+    assert_eq!(
+        apply_f_pin_type(&designer, "main", app),
+        DataType::AnyFunction {
+            leading_params: vec![]
+        },
+        "apply.f must remain AnyFunction {{ vec![] }} after wiring — the post-pass derives arg-pin layout but does not rewrite f"
+    );
+
+    // Sanity check: the post-pass still installed the f + 3 arg-pin layout.
+    let param_count = {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let node = net.nodes.get(&app).unwrap();
+        designer
+            .node_type_registry
+            .get_node_type_for_node(node)
+            .unwrap()
+            .parameters
+            .len()
+    };
+    assert_eq!(
+        param_count, 4,
+        "apply wired to a 3-arg closure must expose f + 3 arg pins"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Test B3: `can_connect_nodes` accepts a closure source into apply.f via the
+// standard `Function(_) → AnyFunction { vec![] }` rule — no name-matched
+// exception is required. Exercised with a 1- and 3-arg closure.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase_b_any_function_rule_accepts_arbitrary_arity_sources() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Closures of different arities all flow into apply.f via the AnyFunction
+    // unconstrained rule. Without the Phase A rule + Phase B declared-type
+    // change, the connect check would require exact match against the
+    // default `(Float) -> Float`.
+    let g1 = phase3_add_custom_int_closure(&mut designer, "main", &["a"], "a + 1", -300.0);
+    let g3 = phase3_add_custom_int_closure(
+        &mut designer,
+        "main",
+        &["a", "b", "c"],
+        "a + b + c",
+        -200.0,
+    );
+
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+
+    assert!(
+        designer.can_connect_nodes(g1, 0, app, 0),
+        "1-arg closure must connect to apply.f via the AnyFunction rule"
+    );
+    assert!(
+        designer.can_connect_nodes(g3, 0, app, 0),
+        "3-arg closure must connect to apply.f via the AnyFunction rule"
+    );
+}

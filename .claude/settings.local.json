@@ -232,7 +232,10 @@
       "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\" -Recurse -Filter \"*.dart\")",
       "Bash(Select-Object FullName)",
       "Bash(rustfmt --check src/structure_designer/data_type.rs tests/structure_designer/data_type_test.rs)",
-      "PowerShell(git config *)"
+      "PowerShell(git config *)",
+      "Bash(rustfmt --check src/structure_designer/node_type_registry.rs src/structure_designer/nodes/apply.rs tests/structure_designer/closures_test.rs tests/structure_designer/currying_test.rs)",
+      "Bash(rustfmt src/structure_designer/node_type_registry.rs src/structure_designer/nodes/apply.rs tests/structure_designer/closures_test.rs tests/structure_designer/currying_test.rs)",
+      "Bash(rustfmt --check src/structure_designer/nodes/apply.rs)"
     ]
   }
 }

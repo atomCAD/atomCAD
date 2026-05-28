@@ -21,7 +21,7 @@
 //! non-function. See `doc/design_currying.md` §"`apply` semantics".
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::{DataType, FunctionType};
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -80,20 +80,27 @@ impl NodeData for ApplyData {
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
         // ApplyData-driven layout (the disconnected-`f` default). When `f` is
         // wired, `NodeTypeRegistry::repair_node_network` runs a post-pass that
-        // overrides this with a layout derived from the wired source's declared
-        // (canonical, flat) function type and the count of wired arg pins.
+        // overrides this with arg pins + output pin derived from the wired
+        // source's declared (canonical, flat) function type and the count of
+        // wired arg pins. The f-pin's declared type is permanently
+        // `AnyFunction { leading_params: vec![] }` — any function value flows
+        // in via the AnyFunction compatibility rule.
+        // See `doc/design_function_pin_unification.md` (Phase B).
         let mut custom = base_node_type.clone();
 
         let params = self.kind.param_types(&self.type_args, &self.param_names);
         let ret = self.kind.return_type(&self.type_args, &self.param_names);
         let param_names = self.kind.param_names(&self.param_names);
 
-        // External pins: a required `f: Function(...)` followed by one ordinary
-        // input pin per function parameter. `apply` owns no zone.
+        // External pins: a required `f: Function*` (AnyFunction with no
+        // leading-param constraints) followed by one ordinary input pin per
+        // function parameter. `apply` owns no zone.
         let mut parameters = vec![Parameter {
             id: None,
             name: "f".to_string(),
-            data_type: DataType::Function(FunctionType::new(params.clone(), ret.clone())),
+            data_type: DataType::AnyFunction {
+                leading_params: vec![],
+            },
         }];
         for (i, t) in params.iter().enumerate() {
             let name = param_names
@@ -301,15 +308,16 @@ pub fn get_node_type() -> NodeType {
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         // External interface is filled in by `calculate_custom_node_type`; the
-        // default is the map-like `(Float) -> Float` shape: `f`, one arg, Float out.
+        // default is the map-like one-arg Float shape with the unified
+        // `f: Function*` pin (AnyFunction with no leading-param constraints).
+        // See `doc/design_function_pin_unification.md` (Phase B).
         parameters: vec![
             Parameter {
                 id: None,
                 name: "f".to_string(),
-                data_type: DataType::Function(FunctionType::new(
-                    vec![DataType::Float],
-                    DataType::Float,
-                )),
+                data_type: DataType::AnyFunction {
+                    leading_params: vec![],
+                },
             },
             Parameter {
                 id: None,

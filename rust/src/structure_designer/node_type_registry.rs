@@ -87,7 +87,7 @@ use crate::api::structure_designer::structure_designer_api_types::APINetworkWith
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::{DataType, RecordType, walk_data_type_record_names_mut};
+use crate::structure_designer::data_type::{walk_data_type_record_names_mut, DataType, RecordType};
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
@@ -1179,15 +1179,20 @@ impl NodeTypeRegistry {
 
         let mut custom = base.clone();
 
-        // External pins: f + N arg pins.
+        // External pins: f + N arg pins. The f-pin's declared type is
+        // permanently `AnyFunction { leading_params: vec![] }` (set by
+        // `ApplyData::calculate_custom_node_type` and inherited here via
+        // `base.clone()`). The post-pass no longer rewrites it — the
+        // standard `Function(_) → AnyFunction { vec![] }` compatibility rule
+        // makes the f wire type-check on its own. See
+        // `doc/design_function_pin_unification.md` (Phase B).
         let mut parameters = Vec::with_capacity(1 + total_arity);
         parameters.push(Parameter {
             id: None,
             name: "f".to_string(),
-            data_type: DataType::Function(FunctionType::new(
-                src_ft.parameter_types.clone(),
-                return_type.clone(),
-            )),
+            data_type: DataType::AnyFunction {
+                leading_params: vec![],
+            },
         });
         for (i, param_ty) in src_ft.parameter_types.iter().enumerate() {
             // OLD index for arg{i} is at parameter slot `1 + i` (after `f`).
