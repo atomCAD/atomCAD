@@ -78,43 +78,36 @@ impl NodeData for ApplyData {
     }
 
     fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
-        // ApplyData-driven layout (the disconnected-`f` default). When `f` is
-        // wired, `NodeTypeRegistry::repair_node_network` runs a post-pass that
+        // Disconnected-`f` default: render only the `f` pin. No arg pins, no
+        // kind-derived output type. When `f` is wired,
+        // `NodeTypeRegistry::repair_node_network` runs a post-pass that
         // overrides this with arg pins + output pin derived from the wired
         // source's declared (canonical, flat) function type and the count of
         // wired arg pins. The f-pin's declared type is permanently
         // `AnyFunction { leading_params: vec![] }` — any function value flows
         // in via the AnyFunction compatibility rule.
-        // See `doc/design_function_pin_unification.md` (Phase B).
+        //
+        // `ApplyData.kind` / `type_args` / `param_names` remain on disk for
+        // `.cnnd` back-compat but are structurally irrelevant: neither the
+        // disconnected-`f` UX nor the wired-`f` UX consults them to render
+        // pins. Deprecation deferred — see
+        // `doc/design_function_pin_unification.md` (Phase D).
         let mut custom = base_node_type.clone();
 
-        let params = self.kind.param_types(&self.type_args, &self.param_names);
-        let ret = self.kind.return_type(&self.type_args, &self.param_names);
-        let param_names = self.kind.param_names(&self.param_names);
-
-        // External pins: a required `f: Function*` (AnyFunction with no
-        // leading-param constraints) followed by one ordinary input pin per
-        // function parameter. `apply` owns no zone.
-        let mut parameters = vec![Parameter {
+        custom.parameters = vec![Parameter {
             id: None,
             name: "f".to_string(),
             data_type: DataType::AnyFunction {
                 leading_params: vec![],
             },
         }];
-        for (i, t) in params.iter().enumerate() {
-            let name = param_names
-                .get(i)
-                .cloned()
-                .unwrap_or_else(|| format!("arg{}", i));
-            parameters.push(Parameter {
-                id: None,
-                name,
-                data_type: t.clone(),
-            });
-        }
-        custom.parameters = parameters;
-        custom.output_pins = OutputPinDefinition::single_fixed(ret);
+        // Output type is unknown until `f` is wired — use `DataType::None`
+        // as a stable placeholder. The post-pass installs the real output
+        // type as soon as `f` resolves to a `Function(_)`. With `f`
+        // disconnected the apply node's evaluation errors with "f not
+        // connected", so this output type is never observed in a healthy
+        // network.
+        custom.output_pins = OutputPinDefinition::single_fixed(DataType::None);
 
         Some(custom)
     }
@@ -269,32 +262,22 @@ impl NodeData for ApplyData {
     }
 
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
-        // `f` is the only required pin; arg pins are optional so that wiring
-        // only a contiguous prefix is valid (the unwired tail rolls into the
-        // resulting function's remaining parameter list). The prefix-only rule
-        // is enforced by `network_validator::validate_apply_prefix_wiring`.
+        // `f` is the only required pin. Arg pins (materialised by the post-
+        // pass once `f` is wired) are optional so that wiring only a
+        // contiguous prefix is valid (the unwired tail rolls into the
+        // resulting function's remaining parameter list). The prefix-only
+        // rule is enforced by the validator.
+        //
+        // Phase D of function-pin unification: with no kind-derived arg pins
+        // before `f` is wired and source-derived names afterward, we can't
+        // enumerate the post-pass-installed arg-pin names from `ApplyData`.
+        // The registry's repair post-pass uses generic `argN` names by
+        // default (and inherits OLD names at overlapping indices), so we
+        // mark a generous range of `argN` slots optional belt-and-braces.
+        // The lookup is by exact pin name; extra entries are harmless.
         let mut m = HashMap::new();
         m.insert("f".to_string(), (true, None));
-        // Mirror the kind's param_names (used to skin the static-shape default
-        // when `f` is disconnected). When `f` is wired, the registry's
-        // repair post-pass overrides the custom node type and these names may
-        // change — but `get_parameter_metadata` is read from `ApplyData`, not
-        // from the custom type, so we stay in lock-step with the ApplyData-
-        // driven layout (the only one the validator's "required pin missing"
-        // rule would consult under).
-        for name in self.kind.param_names(&self.param_names) {
-            m.insert(name, (false, None));
-        }
-        // Also mark the generic `argN` fallback names as optional, so the
-        // wire-derived layout (when `f` is wired) still has its arg pins
-        // recognized as optional even if `get_parameter_metadata` is consulted
-        // before the post-pass-driven name is installed. This belt-and-braces
-        // entry is harmless — the lookup is by exact pin name.
-        let arity = self
-            .kind
-            .param_types(&self.type_args, &self.param_names)
-            .len();
-        for i in 0..arity {
+        for i in 0..16 {
             m.insert(format!("arg{}", i), (false, None));
         }
         m

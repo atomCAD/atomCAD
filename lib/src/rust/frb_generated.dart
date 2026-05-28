@@ -12545,6 +12545,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIDerivedShapeView dco_decode_api_derived_shape_view(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 1)
+      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    return APIDerivedShapeView(
+      derivedFromInputPin: dco_decode_opt_String(arr[0]),
+    );
+  }
+
+  @protected
   APIDiffStats dco_decode_api_diff_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -13841,6 +13852,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIDerivedShapeView dco_decode_box_autoadd_api_derived_shape_view(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_derived_shape_view(raw);
+  }
+
+  @protected
   APIDragSource dco_decode_box_autoadd_api_drag_source(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_drag_source(raw);
@@ -14724,8 +14742,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 23)
-      throw Exception('unexpected arr length: expect 23 but see ${arr.length}');
+    if (arr.length != 24)
+      throw Exception('unexpected arr length: expect 24 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -14750,6 +14768,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       commentHeight: dco_decode_opt_box_autoadd_f_64(arr[20]),
       closureCustomLabel: dco_decode_opt_String(arr[21]),
       zone: dco_decode_opt_box_autoadd_zone_view(arr[22]),
+      derivedShape: dco_decode_opt_box_autoadd_api_derived_shape_view(arr[23]),
     );
   }
 
@@ -14866,6 +14885,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_api_data_type(raw);
+  }
+
+  @protected
+  APIDerivedShapeView? dco_decode_opt_box_autoadd_api_derived_shape_view(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_api_derived_shape_view(raw);
   }
 
   @protected
@@ -15968,6 +15996,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_i_32(deserializer);
     return APIDataTypeBase.values[inner];
+  }
+
+  @protected
+  APIDerivedShapeView sse_decode_api_derived_shape_view(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_derivedFromInputPin = sse_decode_opt_String(deserializer);
+    return APIDerivedShapeView(derivedFromInputPin: var_derivedFromInputPin);
   }
 
   @protected
@@ -17213,6 +17249,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIDerivedShapeView sse_decode_box_autoadd_api_derived_shape_view(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_derived_shape_view(deserializer));
+  }
+
+  @protected
   APIDragSource sse_decode_box_autoadd_api_drag_source(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -18336,6 +18379,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_commentHeight = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_closureCustomLabel = sse_decode_opt_String(deserializer);
     var var_zone = sse_decode_opt_box_autoadd_zone_view(deserializer);
+    var var_derivedShape =
+        sse_decode_opt_box_autoadd_api_derived_shape_view(deserializer);
     return NodeView(
         id: var_id,
         nodeTypeName: var_nodeTypeName,
@@ -18359,7 +18404,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         commentWidth: var_commentWidth,
         commentHeight: var_commentHeight,
         closureCustomLabel: var_closureCustomLabel,
-        zone: var_zone);
+        zone: var_zone,
+        derivedShape: var_derivedShape);
   }
 
   @protected
@@ -18572,6 +18618,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_data_type(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIDerivedShapeView? sse_decode_opt_box_autoadd_api_derived_shape_view(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_derived_shape_view(deserializer));
     } else {
       return null;
     }
@@ -19974,6 +20032,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_derived_shape_view(
+      APIDerivedShapeView self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.derivedFromInputPin, serializer);
+  }
+
+  @protected
   void sse_encode_api_diff_stats(APIDiffStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.atomsAdded, serializer);
@@ -20978,6 +21043,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIDataType self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_data_type(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_derived_shape_view(
+      APIDerivedShapeView self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_derived_shape_view(self, serializer);
   }
 
   @protected
@@ -21997,6 +22069,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.commentHeight, serializer);
     sse_encode_opt_String(self.closureCustomLabel, serializer);
     sse_encode_opt_box_autoadd_zone_view(self.zone, serializer);
+    sse_encode_opt_box_autoadd_api_derived_shape_view(
+        self.derivedShape, serializer);
   }
 
   @protected
@@ -22193,6 +22267,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_data_type(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_derived_shape_view(
+      APIDerivedShapeView? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_derived_shape_view(self, serializer);
     }
   }
 

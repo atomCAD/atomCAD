@@ -31,6 +31,7 @@ import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/foreach_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/fold_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/closure_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/apply_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/sequence_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec3_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/ivec2_editor.dart';
@@ -470,6 +471,7 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: mapData,
           model: model,
+          node: selectedNode,
         );
       case 'filter':
         final filterData = getFilterData(
@@ -549,23 +551,12 @@ class NodeDataWidget extends StatelessWidget {
           ),
         );
       case 'apply':
-        final applyData = getApplyData(scopePath: scopePath, nodeId: selectedNode.id);
-        return ClosureShapeEditor(
-          title: 'Apply Properties',
-          nodeTypeName: 'apply',
-          kind: applyData?.kind ?? APIClosureKind.map,
-          typeArgs: applyData?.typeArgs ?? const [],
-          paramNames: applyData?.paramNames ?? const [],
-          loading: applyData == null,
-          onChanged: (kind, typeArgs, paramNames, _) => model.setApplyData(
-            selectedNode.id,
-            APIApplyData(
-              kind: kind,
-              typeArgs: typeArgs,
-              paramNames: paramNames,
-            ),
-          ),
-        );
+        // Phase D: no kind picker — `apply` derives its arg pins from the
+        // wired `f` source's flat function type. The panel is informational
+        // only; `ApplyData.kind` / `type_args` stay on disk for `.cnnd`
+        // back-compat but are structurally irrelevant. See
+        // `doc/design_function_pin_unification.md` (Phase D).
+        return ApplyEditor(node: selectedNode);
       case 'sequence':
         final sequenceData = model.getSequenceData(selectedNode.id);
         return SequenceEditor(

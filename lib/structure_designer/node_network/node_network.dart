@@ -353,6 +353,14 @@ Color getDataTypeColor(String typeName) {
     return DATA_TYPE_COLORS['->']!;
   }
 
+  // AnyFunction pins render as `Function*` (no leading-param constraint) or
+  // `Function(T1, ..., *)` (starts-with constraint). They carry function
+  // values, so we use the same amber Function family color. See
+  // `doc/design_function_pin_unification.md` (Phase D).
+  if (typeName.contains('Function')) {
+    return DATA_TYPE_COLORS['->']!;
+  }
+
   // Records (named or anonymous, possibly array-wrapped) all render in
   // the same neutral color.
   if (isRecordDataType(typeName)) {

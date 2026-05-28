@@ -10809,6 +10809,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_derivedFromInputPin = <Option<String>>::sse_decode(deserializer);
+        return crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView {
+            derived_from_input_pin: var_derivedFromInputPin,
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIDiffStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -12959,6 +12971,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_zone = <Option<
             crate::api::structure_designer::structure_designer_api_types::ZoneView,
         >>::sse_decode(deserializer);
+        let mut var_derivedShape = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::NodeView {
             id: var_id,
             node_type_name: var_nodeTypeName,
@@ -12983,6 +12998,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             comment_height: var_commentHeight,
             closure_custom_label: var_closureCustomLabel,
             zone: var_zone,
+            derived_shape: var_derivedShape,
         };
     }
 }
@@ -13213,6 +13229,19 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -15637,6 +15666,29 @@ impl
     fn into_into_dart(
         self,
     ) -> crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [self.derived_from_input_pin.into_into_dart().into_dart()].into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView,
+    > for crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView {
         self
     }
 }
@@ -18515,6 +18567,7 @@ impl flutter_rust_bridge::IntoDart
             self.comment_height.into_into_dart().into_dart(),
             self.closure_custom_label.into_into_dart().into_dart(),
             self.zone.into_into_dart().into_dart(),
+            self.derived_shape.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -19287,6 +19340,15 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::I
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 25 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 26 }
  _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.derived_from_input_pin, serializer);
     }
 }
 
@@ -20849,6 +20911,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <Option<f64>>::sse_encode(self.comment_height, serializer);
         <Option<String>>::sse_encode(self.closure_custom_label, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::ZoneView>>::sse_encode(self.zone, serializer);
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView>>::sse_encode(self.derived_shape, serializer);
     }
 }
 
@@ -21064,6 +21127,18 @@ impl SseEncode
             <crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_encode(
                 value, serializer,
             );
+        }
+    }
+}
+
+impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView>::sse_encode(value, serializer);
         }
     }
 }

@@ -343,7 +343,12 @@ fn apply_function_pin_expr_double() {
             param_names: vec![],
         }),
     );
-    wire_function_pin(&mut designer, "main", expr_id, apply_id, 0); // f
+    // Phase D: apply renders only the `f` pin until `f` is wired (the post-
+    // pass derives arg pins from the wired source's flat function type).
+    // Go through `connect_nodes` for `f` so validation runs and installs the
+    // arg pins; otherwise `connect_nodes(arg_id, 0, apply_id, 1)` would
+    // early-return on "param index out of bounds".
+    designer.connect_nodes(expr_id, -1, apply_id, 0); // f ← expr.fn
     designer.connect_nodes(arg_id, 0, apply_id, 1); // element
 
     let result = evaluate_node(&designer, "main", apply_id);

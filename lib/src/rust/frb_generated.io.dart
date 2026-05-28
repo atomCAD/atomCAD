@@ -125,6 +125,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDataTypeBase dco_decode_api_data_type_base(dynamic raw);
 
   @protected
+  APIDerivedShapeView dco_decode_api_derived_shape_view(dynamic raw);
+
+  @protected
   APIDiffStats dco_decode_api_diff_stats(dynamic raw);
 
   @protected
@@ -440,6 +443,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType dco_decode_box_autoadd_api_data_type(dynamic raw);
+
+  @protected
+  APIDerivedShapeView dco_decode_box_autoadd_api_derived_shape_view(
+      dynamic raw);
 
   @protected
   APIDragSource dco_decode_box_autoadd_api_drag_source(dynamic raw);
@@ -892,6 +899,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDataType? dco_decode_opt_box_autoadd_api_data_type(dynamic raw);
 
   @protected
+  APIDerivedShapeView? dco_decode_opt_box_autoadd_api_derived_shape_view(
+      dynamic raw);
+
+  @protected
   APIDragSource? dco_decode_opt_box_autoadd_api_drag_source(dynamic raw);
 
   @protected
@@ -1293,6 +1304,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDataTypeBase sse_decode_api_data_type_base(SseDeserializer deserializer);
 
   @protected
+  APIDerivedShapeView sse_decode_api_derived_shape_view(
+      SseDeserializer deserializer);
+
+  @protected
   APIDiffStats sse_decode_api_diff_stats(SseDeserializer deserializer);
 
   @protected
@@ -1648,6 +1663,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIDataType sse_decode_box_autoadd_api_data_type(
+      SseDeserializer deserializer);
+
+  @protected
+  APIDerivedShapeView sse_decode_box_autoadd_api_derived_shape_view(
       SseDeserializer deserializer);
 
   @protected
@@ -2196,6 +2215,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIDerivedShapeView? sse_decode_opt_box_autoadd_api_derived_shape_view(
+      SseDeserializer deserializer);
+
+  @protected
   APIDragSource? sse_decode_opt_box_autoadd_api_drag_source(
       SseDeserializer deserializer);
 
@@ -2664,6 +2687,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIDataTypeBase self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_derived_shape_view(
+      APIDerivedShapeView self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_diff_stats(APIDiffStats self, SseSerializer serializer);
 
   @protected
@@ -3050,6 +3077,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_data_type(
       APIDataType self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_derived_shape_view(
+      APIDerivedShapeView self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_drag_source(
@@ -3609,6 +3640,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_data_type(
       APIDataType? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_derived_shape_view(
+      APIDerivedShapeView? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_drag_source(

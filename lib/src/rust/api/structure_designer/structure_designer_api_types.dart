@@ -722,6 +722,36 @@ enum APIDataTypeBase {
   ;
 }
 
+/// "Is this node's layout/output type derived from a wired input pin?"
+///
+/// Apply uses this to drive its no-pins-until-wired UX: when `f` is connected
+/// the post-pass materialises arg pins from the wired source's flat function
+/// type, otherwise only the `f` pin renders. Map uses it to flip its
+/// `output_type` editor between editable (fallback) and read-only (derived).
+///
+/// `derived_from_input_pin` is `Some(pin_name)` when the wired source on
+/// `pin_name` drives the derived layout/output, `None` otherwise. Per-pin
+/// info continues to flow through the existing `NodeView` machinery; this
+/// view holds only the derivation status. See
+/// `doc/design_function_pin_unification.md` (Phase D).
+class APIDerivedShapeView {
+  final String? derivedFromInputPin;
+
+  const APIDerivedShapeView({
+    this.derivedFromInputPin,
+  });
+
+  @override
+  int get hashCode => derivedFromInputPin.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIDerivedShapeView &&
+          runtimeType == other.runtimeType &&
+          derivedFromInputPin == other.derivedFromInputPin;
+}
+
 class APIDiffStats {
   final int atomsAdded;
   final int atomsDeleted;
@@ -3123,6 +3153,13 @@ class NodeView {
   /// See `doc/design_zones_ui.md` §"Phase U3".
   final ZoneView? zone;
 
+  /// Surfaces "this node's layout/output type is derived from a wired input
+  /// pin" for the unified `apply` / `map` UX in function-pin unification
+  /// Phase D. Populated by `build_node_view` only for `apply` and `map`;
+  /// `None` for every other node type. See
+  /// `doc/design_function_pin_unification.md` (Phase D).
+  final APIDerivedShapeView? derivedShape;
+
   NodeView({
     required this.id,
     required this.nodeTypeName,
@@ -3147,6 +3184,7 @@ class NodeView {
     this.commentHeight,
     this.closureCustomLabel,
     this.zone,
+    this.derivedShape,
   });
 
   @override
@@ -3173,7 +3211,8 @@ class NodeView {
       commentWidth.hashCode ^
       commentHeight.hashCode ^
       closureCustomLabel.hashCode ^
-      zone.hashCode;
+      zone.hashCode ^
+      derivedShape.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3202,7 +3241,8 @@ class NodeView {
           commentWidth == other.commentWidth &&
           commentHeight == other.commentHeight &&
           closureCustomLabel == other.closureCustomLabel &&
-          zone == other.zone;
+          zone == other.zone &&
+          derivedShape == other.derivedShape;
 }
 
 class OutputPinView {

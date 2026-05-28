@@ -493,7 +493,7 @@ Without a limit there is no built-in size cap. If you wire a 10⁹-element itera
 
 `map`, `filter`, `fold`, and `foreach` are the four **higher-order function** (HOF) nodes — each one walks a stream of values and runs a per-element body on every element. Unlike a regular node, an HOF has an **inline body region** inside the node itself: a small editable canvas with its own nodes and wires that defines the per-element computation. The inline body is the default way to author that computation.
 
-Each HOF *also* exposes an optional **`f` input pin**: wire a `Function` value (typically a [`closure`](#closure) node's output) into it and that function drives the HOF instead of its inline body. When `f` is connected the inline body is hidden in the editor and ignored at evaluation; disconnect `f` and the inline body returns. This is what lets one authored body be reused across several HOFs. See *[Function values and closures](#function-values-and-closures)* below.
+Each HOF *also* exposes an optional **`f` input pin**: wire a `Function` value (typically a [`closure`](#closure) node's output) into it and that function drives the HOF instead of its inline body. When `f` is connected the inline body is hidden in the editor and ignored at evaluation; disconnect `f` and the inline body returns. This is what lets one authored body be reused across several HOFs. `filter`, `fold`, and `foreach` accept exact-arity `f` sources; `map.f` additionally accepts **any** `Function` whose parameter list starts with the input element type and auto-partializes the excess parameters (the source's tail becomes part of the streamed output element type). See *[Function values and closures](#function-values-and-closures)* below.
 
 A `map` node placed in a network looks like this — the rectangle in the middle is the body region:
 
@@ -541,8 +541,8 @@ Takes a stream of values (`xs: Iter[T]`), runs the body on every element, and pr
 **External pins**
 
 - Input `xs: Iter[InputType]` — the stream to transform. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
-- Input `f: Function((InputType) -> OutputType)` *(optional)* — when wired, this function value drives the transform instead of the inline body.
-- Output `Iter[OutputType]` — the transformed stream.
+- Input `f: Function(InputType, *)` *(optional)* — any function value whose parameter list **starts with** `InputType`. When wired, it drives the transform instead of the inline body. The `*` marks "any tail allowed": a `(InputType) → U` source slots in normally; a higher-arity source like `(InputType, K) → U` is **auto-partialized** — each element of the stream produces a partially-applied closure of type `Function((K,), U)` carrying that element as its first bound argument. See *[Function values and closures](#function-values-and-closures)* and the worked example below.
+- Output `Iter[OutputType]` — the transformed stream. When `f` is connected, `OutputType` is **derived** from the wired source's signature (the partial-application tail's return, or the source's full return when the arities match), and the stored `Output type` property is shown as a read-only display in the editor.
 
 **Body (inline)**
 
@@ -555,6 +555,8 @@ To see the map node in action please check out the *Pattern* demo [in the demos 
 
 In the Pattern demo, `map`'s input type is `Int` and output type is `Blueprint` — so the body's `element` pin is `Int` and the `result` pin is `Blueprint`. Inside the body, an `Int → Blueprint` chain (a `cuboid` whose position is driven by `element`, for instance) wires into `result`. To parameterize the body — e.g. a `gap` value that the body uses to space the cuboids — drop a `float` (or any other) node in the **outer** scope and drag a capture wire from it into the relevant body-internal node's input. The capture wire is the inline-body equivalent of the old "extra function parameter" mechanism.
 
+**Auto-partialization example.** A `closure` of kind `Custom` with parameters `(x: Float, y: Float)` and body `expr: x * y` has type `Function((Float, Float) → Int)`. Wire it directly into the `f` pin of a `map` whose `Input type` is `Float` (e.g. driven by `range(3) → collect`), and `map.output_type` is derived to `Function((Float,), Int)` — `map` produces a stream of partially-applied closures, one per `xs` element, each with that element bound as its `x`. Downstream you can pipe this `Iter[Function((Float,), Int)]` into a second `map` whose body calls `apply` on each closure to finish the computation. No nested-`closure` ladder, no inline body required.
+
 ## filter
 
 Returns a stream containing the elements of `xs` for which the body's `result` zone-output was `true`, preserving order. The filter is **lazy**: the body runs one element at a time, only when a downstream consumer pulls from `filter`'s output, and rejected elements are skipped without buffering.
@@ -566,7 +568,7 @@ Returns a stream containing the elements of `xs` for which the body's `result` z
 **External pins**
 
 - Input `xs: Iter[ElementType]` — the stream to filter. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion.
-- Input `f: Function((ElementType) -> Bool)` *(optional)* — when wired, this predicate drives the filter instead of the inline body.
+- Input `f: Function((ElementType) -> Bool)` *(optional)* — when wired, this predicate drives the filter instead of the inline body. Exact-arity: `filter` does not auto-partialize (its output type is fixed `Bool`, so there is nothing to absorb extra arguments into); only `map` accepts higher-arity sources via the starts-with rule.
 - Output `Iter[ElementType]` — the kept-elements stream.
 
 **Body (inline)**
@@ -598,7 +600,7 @@ Reduces `xs` to a single value by repeatedly running the body with `(acc, elemen
 
 - Input `xs: Iter[ElementType]` — the stream to reduce. Accepts an `Array[ElementType]` source via the implicit `[T] → Iter[T]` wire conversion, so the legacy `[1, 2, 3] → fold` shape keeps working with no edit.
 - Input `init: AccumulatorType` — the initial accumulator value.
-- Input `f: Function((AccumulatorType, ElementType) -> AccumulatorType)` *(optional)* — when wired, this function drives the reduction instead of the inline body.
+- Input `f: Function((AccumulatorType, ElementType) -> AccumulatorType)` *(optional)* — when wired, this function drives the reduction instead of the inline body. Exact-arity: `fold` does not auto-partialize (its output type is fixed at `AccumulatorType`); only `map` accepts higher-arity sources.
 - Output `AccumulatorType` — the final accumulator after the stream exhausts.
 
 **Body (inline)**
@@ -624,7 +626,7 @@ Side-effect counterpart of `map`: walks a stream of values and runs the body on 
 **External pins**
 
 - Input `xs: Iter[InputType]` — the stream to walk. Accepts an `Array[InputType]` source via the implicit `[T] → Iter[T]` wire conversion.
-- Input `f: Function((InputType) -> Unit)` *(optional)* — when wired, this function drives the per-element side effect instead of the inline body.
+- Input `f: Function((InputType) -> Unit)` *(optional)* — when wired, this function drives the per-element side effect instead of the inline body. Exact-arity: `foreach` does not auto-partialize (its output is fixed `Unit`); only `map` accepts higher-arity sources.
 - Output `Unit` — not displayable; the only point of wiring `foreach` is its side effect under Execute.
 
 **Body (inline)**
@@ -641,7 +643,7 @@ Side-effect counterpart of `map`: walks a stream of values and runs the body on 
 
 ## Function values and closures
 
-A **function value** (type `Function((P0, P1, …) -> R)`) is a per-element computation captured as a value that can travel along a wire and be called later. It is the same bundle an HOF's inline body represents — a body, its captured outer-scope values, and the wire delivering its result — detached from any single call site. Function pins and wires render in **amber**.
+A **function value** (type `Function((P0, P1, …) -> R)`) is a computation captured as a value that can travel along a wire and be called later. It is the same bundle an HOF's inline body represents — a body, its captured outer-scope values, and the wire delivering its result — detached from any single call site. Function pins and wires render in **amber**.
 
 Two roles meet around a function value:
 
@@ -652,58 +654,72 @@ This buys three things the inline-body model alone cannot express:
 
 - **Reuse** — author one body in a `closure` and wire it into several HOFs' `f` pins, instead of redrawing the same body at each call site.
 - **Function factories** — a subnetwork can compute and return a `closure` configured by its inputs (e.g. a `(k: Int) -> Function` network whose returned `closure` captures `k` and adds it).
-- **Single-value application** — `apply` calls a function once, on one argument set, outside any iteration.
+- **Single-value application** — `apply` calls a function once, on one argument set, outside any iteration. It also supports **partial application** — wire a prefix of the function's arguments and `apply` returns a new function value carrying the remaining (unwired) parameters.
+
+**Currying equivalence (function types are canonical).** Function types are stored in a **flat** canonical form: `(A, B, C) → D`, `(A) → ((B, C) → D)`, `(A, B) → ((C) → D)`, and `(A) → (B) → (C) → D` are **the same type** — the multi-arg flat form. All four notations parse the same way and compare identical. Where one form ends and the next begins is decided at the call site by how many arguments you supply, not by how the value was authored.
 
 **Capture-freeze timing.** A `closure`'s captures (values wired in from outside its body) are frozen when the `closure` node is evaluated — at its *definition site*, the standard closure semantics. A `closure` placed *outside* a `fold` freezes its captures once and shares them across every iteration (reuse without recomputation); a `closure` placed *inside* a `fold` body re-freezes per outer iteration, snapshotting that iteration's values.
 
-**Compatibility.** A function value flows into a `Function`-typed pin when the two function types match **structurally**: same arity, with each parameter type and the return type pairwise convertible (the usual leaf conversions like `Int → Float` apply). The four `closure`/`apply` *kinds* are exactly the four HOF body shapes, so a closure of a given kind drops into the matching HOF's `f` pin by construction.
+**Compatibility.** A function value flows into a `Function`-typed pin when the two function types match **structurally**: same arity (after canonical flattening), with each parameter type and the return type pairwise convertible (the usual leaf conversions like `Int → Float` apply). The four HOFs' `f` pins differ in how much flexibility they grant:
+
+- **`map.f`** has type `Function(InputType, *)` — any function value whose parameter list **starts with** `InputType` is accepted; extra parameters become a partial-application tail. See the `map` section for the worked example.
+- **`filter.f`** / **`fold.f`** / **`foreach.f`** are exact-arity. Their output types are constrained (`Bool` / `AccumulatorType` / `Unit`), so a partial result has nowhere to go.
+- **`apply.f`** has type `Function*` — accepts *any* function value, of any shape; argument pins materialize from the wired source's signature.
 
 **Restrictions.** Function values cannot be array elements, record fields, or `Iter[T]` elements, and `Iter[T]` values cannot be captured into a closure. A v1 closure has exactly one result. Closures cannot reference themselves, so recursion is not expressible.
 
 ## closure
 
-Exposes its inline zone body as a first-class `Function` value on its output pin, rather than consuming the body inline the way an HOF does. Wire the output into an HOF's `f` pin (reuse across call sites), into an [`apply`](#apply) node (call it once), or into a subnetwork's return node (a function factory). Captures are frozen once, when the `closure` node is evaluated — see *[Function values and closures](#function-values-and-closures)* above.
+Exposes its inline zone body as a first-class `Function` value on its output pin, rather than consuming the body inline the way an HOF does. Wire the output into an HOF's `f` pin (reuse across call sites), into an [`apply`](#apply) node (call it once, or partially apply it), or into a subnetwork's return node (a function factory). Captures are frozen once, when the `closure` node is evaluated — see *[Function values and closures](#function-values-and-closures)* above.
 
 **Property**
 
-- `Kind` — a shape template that fixes the arity and decides, per pin, whether each type is **free** (you pick a `DataType`) or **fixed/derived** (supplied by the system). The four kinds are exactly the four HOF body shapes:
+- `Kind` — a shape template that fixes the arity and decides, per pin, whether each type is **free** (you pick a `DataType`) or **fixed/derived** (supplied by the system). The five kinds are the four HOF body shapes plus a fully-flexible `Custom`:
 
-  | Kind | free slots (you pick) | result |
+  | Kind | parameters | result |
   |---|---|---|
-  | `(T) -> U` *(map-like)* | `T`, `U` | free `U` |
-  | `(T) -> Bool` *(filter-like)* | `T` | fixed `Bool` |
-  | `(A, T) -> A` *(fold-like)* | `A`, `T` | derived `= A` |
-  | `(T) -> Unit` *(foreach-like)* | `T` | fixed `Unit` |
+  | `(T) -> U` *(map-like)* | `T` (named `element`) | free `U` (named `result`) |
+  | `(T) -> Bool` *(filter-like)* | `T` (named `element`) | fixed `Bool` (named `result`) |
+  | `(A, T) -> A` *(fold-like)* | `A` (named `acc`), `T` (named `element`) | derived `= A` (named `new_acc`) |
+  | `(T) -> Unit` *(foreach-like)* | `T` (named `element`) | fixed `Unit` (named `out`) |
+  | `(P0, P1, …, Pn) -> R` *(`Custom`)* | arbitrary count and naming (including **0**), each independently typed | free `R` |
 
-  The Node Properties panel shows a kind dropdown above one or two type pickers (one per free slot), with a read-only line for the fixed/derived result. Changing the kind restructures the node's zone pins through the standard repair pass.
+  The four preset kinds are the natural match for the four HOFs' `f` pins. `Custom` is the general case: it accepts any number of parameters (including zero), with user-chosen names and types, and a free return type. A 0-parameter Custom closure (a **thunk**) has type `() → R` and is rendered with a `() → R` title. Pair Custom with `apply` for partial application or for calling functions whose shapes don't match any HOF; Custom closures also flow into `map.f` via the "starts-with" rule whenever their first parameter matches the input element type.
+
+  The Node Properties panel shows a kind dropdown above one or two type pickers for the preset kinds, or a list of named-parameter rows + a return-type picker for `Custom`. Changing the kind restructures the node's zone pins through the standard repair pass.
 
 **Output (single pin)**
 
-- `Function((params) -> result)` — the function value.
+- `Function((params) -> result)` — the function value. Multi-parameter return types are stored in canonical flat form (see *[Function values and closures](#function-values-and-closures)* on currying equivalence).
 
 **Body (inline)**
 
-- Zone-input pins (inner-left): one per parameter — `element` for the one-parameter kinds, `acc` + `element` for the fold-like kind — mirroring the matching HOF so authored bodies read identically.
-- Zone-output pin (inner-right): the result — `result`, `new_acc`, or `out` by kind. Must have at least one incoming wire (an empty body fails validation, like any HOF body).
+- Zone-input pins (inner-left): one per parameter — the preset kinds use `element` and `acc` to match the matching HOF; `Custom` uses the user-supplied parameter names. A 0-parameter Custom closure has no zone-input pins.
+- Zone-output pin (inner-right): the result — `result`, `new_acc`, or `out` by preset kind, or `result` for `Custom`. Must have at least one incoming wire (an empty body fails validation, like any HOF body).
 
 The body is authored exactly like an HOF body: click into the region to make it the active scope, add nodes, and drag capture wires across the boundary. Captures are ordinary capture wires drawn into the body — they are *not* part of the shape, so the kind/type editor only ever describes parameters and result.
 
 ## apply
 
-Calls a function value **once**, on a single argument set, and returns its result. This is the minimal consumer that makes a `Function` a genuinely callable value rather than only fuel for the iterating HOFs: where the four HOFs run a function across a stream, `apply` runs it once. The motivating use is calling the output of a function-factory subnetwork — `apply(make_adder(5), 10)` yields `15`.
+Calls a function value, and either runs it to completion (full application) or partially applies it (returning a new function value that still needs the rest of its arguments). Where the four HOFs run a function across a stream, `apply` runs it once on a single argument frame. Two motivating uses:
 
-**Property**
+- **Full application** — call the output of a function-factory subnetwork. `apply(make_adder(5), 10)` yields `15`.
+- **Partial application** — `apply(g, 2)` where `g: (Float, Float) → Float` yields a `Function((Float,) → Float)` that still needs its second argument. Chaining `apply` nodes lets you fill in arguments one or several at a time and is the flat (non-nested) counterpart to a ladder of nested `closure` definitions.
 
-- `Kind` — the same shape template as the [`closure`](#closure) node (`(T) -> U`, `(T) -> Bool`, `(A, T) -> A`, `(T) -> Unit`), chosen from the same dropdown + type pickers. It drives the type of the required `f` pin and of the per-parameter argument pins.
+**Properties**
+
+`apply` has no user-set kind or shape property. Its pin layout is **entirely derived from the connected `f`**: when nothing is wired into `f`, only the `f` pin is shown. The moment a `Function` source is wired into `f`, argument pins materialize matching that source's canonical (flat) signature.
 
 **Input pins**
 
-- `f: Function((params) -> result)` — **required**. The function value to call (typically a `closure` output, or a subnetwork's `Function` output). Unlike an HOF, `apply` has no inline body to fall back on, so a disconnected `f` is a validation error.
-- One argument pin per parameter — `element`, or `acc` + `element` for the fold-like kind — each typed to the corresponding parameter type. All required.
+- `f: Function*` — **required**. Declared type accepts any function value, of any shape. Unlike an HOF, `apply` has no inline body to fall back on, so a disconnected `f` is a validation error.
+- One argument pin per parameter of the wired source's canonical (flat) signature, typed to that parameter's type. **Arg pins are optional and must be wired as a contiguous prefix.** Wire `arg0…arg_{k-1}` and leave the tail (`arg_k…arg_{N-1}`) unwired to partially apply; wire all of them to fully evaluate. Wiring a non-prefix (e.g. `arg1` while `arg0` is unwired) is a validation error — partial application is positional from the left.
 
 **Output (single pin)**
 
-- The function's return type for the selected kind. When the kind is `(T) -> Unit` the output is `Unit`, so `apply` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — calling an effectful function is itself an effect.
+- **Full eval (`k == N`)**: the function's return type `R`. When `R` is `Unit`, `apply` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — calling an effectful function is itself an effect.
+- **Partial application (`k < N`)**: `Function(<unwired parameter types>, R)` — a new function value bundling the wired arguments and the still-needed ones. Downstream consumers (another `apply`, an HOF's `f` pin, or a `Function`-typed pin on a subnetwork's return) consume it like any other function value.
+- **Thunk force (`N == 0`, `k == 0`)**: when `f` is a 0-parameter Custom closure (a `() → R` thunk), no argument pins appear and the output is `R` — `apply` simply runs the body.
 
 ## print
 

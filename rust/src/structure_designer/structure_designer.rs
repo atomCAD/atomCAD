@@ -4516,7 +4516,20 @@ impl StructureDesigner {
                         .and_then(|n| self.node_type_registry.get_node_type_for_node(n))
                         .and_then(|nt| nt.parameters.get(wire.destination_argument_index))
                         .is_some_and(|p| p.data_type.is_function_shape());
-                    if source_is_function_pin || dest_is_function_pin {
+                    // Currying Phase 3 / Function-pin Unification Phase D: an
+                    // `apply` node's output type depends on `k` (the count of
+                    // wired arg pins). Deleting *any* wire whose destination is
+                    // an apply changes `k`, so the post-pass that rewrites
+                    // apply's `custom_node_type` must re-run. Mirrors the
+                    // `dest_is_apply` arm in `connect_nodes`; without it the
+                    // declared output stays stale at the previous k's value
+                    // while runtime returns the partial closure, and any
+                    // downstream wire type-checks against a stale type.
+                    let dest_is_apply = node_network
+                        .nodes
+                        .get(&wire.destination_node_id)
+                        .is_some_and(|n| n.node_type_name == "apply");
+                    if source_is_function_pin || dest_is_function_pin || dest_is_apply {
                         should_validate = true;
                     }
                 }

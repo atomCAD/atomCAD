@@ -12,6 +12,7 @@ use super::structure_designer_api_types::APICollapseMode;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APIDataType;
+use super::structure_designer_api_types::APIDerivedShapeView;
 use super::structure_designer_api_types::APIDragSource;
 use super::structure_designer_api_types::APIExecuteResult;
 use super::structure_designer_api_types::APIExportXYZData;
@@ -658,6 +659,8 @@ fn build_node_view(
 
     let zone = build_zone_view(node, node_type, cad_instance);
 
+    let derived_shape = build_derived_shape_view(node, node_network, cad_instance);
+
     Some(NodeView {
         id: node.id,
         node_type_name: node.node_type_name.clone(),
@@ -682,7 +685,78 @@ fn build_node_view(
         comment_height,
         closure_custom_label,
         zone,
+        derived_shape,
     })
+}
+
+/// Build an [`APIDerivedShapeView`] for nodes whose layout / output type is
+/// derived from a wired input pin: `apply` (arg pins materialise from `f`) and
+/// `map` (output type derives from `f` via the starts-with rule). Returns
+/// `None` for every other node type. The resulting `derived_from_input_pin`
+/// is `Some("f")` only when the relevant source resolves to a usable type
+/// (`Function(_)` for apply; `Function(_)` whose params start with the map's
+/// element type for map). See
+/// `doc/design_function_pin_unification.md` (Phase D).
+fn build_derived_shape_view(
+    node: &crate::structure_designer::node_network::Node,
+    node_network: &crate::structure_designer::node_network::NodeNetwork,
+    cad_instance: &crate::api::api_common::CADInstance,
+) -> Option<APIDerivedShapeView> {
+    use crate::structure_designer::data_type::DataType;
+    let registry = &cad_instance.structure_designer.node_type_registry;
+    match node.node_type_name.as_str() {
+        "apply" => {
+            let f_arg = node.arguments.first()?;
+            let f_wire = f_arg.incoming_wires.first()?;
+            if f_wire.source_scope_depth != 0 {
+                return Some(APIDerivedShapeView {
+                    derived_from_input_pin: None,
+                });
+            }
+            let (src_node_id, src_pin_index) = f_wire.as_legacy_pair()?;
+            let src_node = node_network.nodes.get(&src_node_id)?;
+            let src_type = registry.resolve_output_type(src_node, node_network, src_pin_index);
+            let derived = matches!(src_type, Some(DataType::Function(_)));
+            Some(APIDerivedShapeView {
+                derived_from_input_pin: derived.then(|| "f".to_string()),
+            })
+        }
+        "map" => {
+            let f_arg = node.arguments.get(1)?;
+            let f_wire = f_arg.incoming_wires.first()?;
+            if f_wire.source_scope_depth != 0 {
+                return Some(APIDerivedShapeView {
+                    derived_from_input_pin: None,
+                });
+            }
+            let (src_node_id, src_pin_index) = f_wire.as_legacy_pair()?;
+            let src_node = node_network.nodes.get(&src_node_id)?;
+            let src_type = registry.resolve_output_type(src_node, node_network, src_pin_index)?;
+            let DataType::Function(src_ft) = src_type else {
+                return Some(APIDerivedShapeView {
+                    derived_from_input_pin: None,
+                });
+            };
+            // Read the element_type from the map's f-pin declared AnyFunction
+            // leading_params (set by MapData::calculate_custom_node_type).
+            let element_type = {
+                let nt = registry.get_node_type_for_node(node)?;
+                let f_param = nt.parameters.get(1)?;
+                match &f_param.data_type {
+                    DataType::AnyFunction { leading_params } => leading_params.first()?.clone(),
+                    _ => return Some(APIDerivedShapeView {
+                        derived_from_input_pin: None,
+                    }),
+                }
+            };
+            let starts_with =
+                src_ft.parameter_types.first() == Some(&element_type);
+            Some(APIDerivedShapeView {
+                derived_from_input_pin: starts_with.then(|| "f".to_string()),
+            })
+        }
+        _ => None,
+    }
 }
 
 /// Collect every wire stored on [node_network] as [`WireView`]s — used by

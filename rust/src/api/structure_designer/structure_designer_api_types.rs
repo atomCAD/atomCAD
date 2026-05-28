@@ -160,6 +160,28 @@ pub struct NodeView {
     /// `stored_height` plus a node count; body nodes/wires arrive in U4.
     /// See `doc/design_zones_ui.md` §"Phase U3".
     pub zone: Option<ZoneView>,
+    /// Surfaces "this node's layout/output type is derived from a wired input
+    /// pin" for the unified `apply` / `map` UX in function-pin unification
+    /// Phase D. Populated by `build_node_view` only for `apply` and `map`;
+    /// `None` for every other node type. See
+    /// `doc/design_function_pin_unification.md` (Phase D).
+    pub derived_shape: Option<APIDerivedShapeView>,
+}
+
+/// "Is this node's layout/output type derived from a wired input pin?"
+///
+/// Apply uses this to drive its no-pins-until-wired UX: when `f` is connected
+/// the post-pass materialises arg pins from the wired source's flat function
+/// type, otherwise only the `f` pin renders. Map uses it to flip its
+/// `output_type` editor between editable (fallback) and read-only (derived).
+///
+/// `derived_from_input_pin` is `Some(pin_name)` when the wired source on
+/// `pin_name` drives the derived layout/output, `None` otherwise. Per-pin
+/// info continues to flow through the existing `NodeView` machinery; this
+/// view holds only the derivation status. See
+/// `doc/design_function_pin_unification.md` (Phase D).
+pub struct APIDerivedShapeView {
+    pub derived_from_input_pin: Option<String>,
 }
 
 /// Read-only view of an HOF node's body, surfaced for the Flutter editor.

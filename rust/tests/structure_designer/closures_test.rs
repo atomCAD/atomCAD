@@ -1221,32 +1221,48 @@ fn closure_inside_fold_body_refreezes_capture_per_iteration() {
         );
     }
 
-    // Wire A: f ← C (pin 0), element ← the fold's `element` (pin 1, depth-1).
+    // Wire A: f ← C (pin 0). Phase D of function-pin unification means apply
+    // has *only* the `f` pin until `f` is wired and the post-pass installs
+    // the arg pins. Wire `f` first, then re-run the apply post-pass on the
+    // fold body (split-borrow via temporary remove/reinsert of the parent
+    // network) to materialise the arg-pin layout from the wired source's
+    // flat function type. With the layout in place, wire element ← the
+    // fold's `element` (pin 1, depth-1).
     {
-        let fold_body = designer
+        let mut main_network = designer
             .node_type_registry
             .node_networks
-            .get_mut("main")
-            .unwrap()
-            .nodes
-            .get_mut(&fold_id)
-            .unwrap()
-            .zone_mut()
+            .remove("main")
             .unwrap();
-        fold_body.nodes.get_mut(&a_id).unwrap().arguments[0]
-            .incoming_wires
-            .push(IncomingWire {
-                source_node_id: c_id,
-                source_pin: SourcePin::NodeOutput { pin_index: 0 },
-                source_scope_depth: 0,
-            });
-        fold_body.nodes.get_mut(&a_id).unwrap().arguments[1]
-            .incoming_wires
-            .push(IncomingWire {
-                source_node_id: fold_id,
-                source_pin: SourcePin::ZoneInput { pin_index: 1 },
-                source_scope_depth: 1,
-            });
+        {
+            let fold_body = main_network
+                .nodes
+                .get_mut(&fold_id)
+                .unwrap()
+                .zone_mut()
+                .unwrap();
+            fold_body.nodes.get_mut(&a_id).unwrap().arguments[0]
+                .incoming_wires
+                .push(IncomingWire {
+                    source_node_id: c_id,
+                    source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                    source_scope_depth: 0,
+                });
+            designer
+                .node_type_registry
+                .update_apply_pin_layouts_for_network(fold_body);
+            fold_body.nodes.get_mut(&a_id).unwrap().arguments[1]
+                .incoming_wires
+                .push(IncomingWire {
+                    source_node_id: fold_id,
+                    source_pin: SourcePin::ZoneInput { pin_index: 1 },
+                    source_scope_depth: 1,
+                });
+        }
+        designer
+            .node_type_registry
+            .node_networks
+            .insert("main".to_string(), main_network);
     }
 
     // fold's zone-output (new_acc) ← A.
@@ -1837,11 +1853,12 @@ fn custom_kind_closure_calculate_node_type_arity1() {
     assert_eq!(custom.zone_output_pins[0].data_type, DataType::Float);
 }
 
-/// `Custom` `apply`: arity-2 `(Int, Float) -> Bool` produces a `f` pin
-/// (typed `AnyFunction { vec![] }` — see Function-pin Unification Phase B,
-/// `doc/design_function_pin_unification.md`) plus two arg pins driven by the
-/// authored ApplyData (the disconnected-`f` default; the post-pass overrides
-/// arg-pin layout from the wired source when `f` is connected).
+/// `Custom` `apply`: with `f` disconnected the disconnected-`f` default is
+/// **only the `f` pin** — no arg pins materialise until `f` is wired (the
+/// post-pass derives them from the wired source's flat function type).
+/// `ApplyData.kind` / `type_args` / `param_names` stay on disk for `.cnnd`
+/// back-compat but are structurally irrelevant here. See
+/// `doc/design_function_pin_unification.md` (Phase D, "Apply node UX").
 #[test]
 fn custom_kind_apply_calculate_node_type_arity2() {
     use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
@@ -1855,8 +1872,8 @@ fn custom_kind_apply_calculate_node_type_arity2() {
     let base: NodeType = get_node_type();
     let custom = data.calculate_custom_node_type(&base).unwrap();
 
-    // External: `f` + 2 arg pins.
-    assert_eq!(custom.parameters.len(), 3);
+    // Disconnected-`f` default: only the `f` pin renders.
+    assert_eq!(custom.parameters.len(), 1);
     assert_eq!(custom.parameters[0].name, "f");
     assert_eq!(
         custom.parameters[0].data_type,
@@ -1864,14 +1881,10 @@ fn custom_kind_apply_calculate_node_type_arity2() {
             leading_params: vec![],
         },
     );
-    assert_eq!(custom.parameters[1].name, "lhs");
-    assert_eq!(custom.parameters[1].data_type, DataType::Int);
-    assert_eq!(custom.parameters[2].name, "rhs");
-    assert_eq!(custom.parameters[2].data_type, DataType::Float);
 
-    // Output: the authored return type.
+    // Output is unknown until `f` is wired — `DataType::None` placeholder.
     assert_eq!(custom.output_pins.len(), 1);
-    assert_eq!(custom.output_type(), &DataType::Bool);
+    assert_eq!(custom.output_type(), &DataType::None);
 
     // No zone pins on `apply`.
     assert_eq!(custom.zone_input_pins.len(), 0);

@@ -137,6 +137,13 @@ class PinViewWidget extends StatelessWidget {
   /// "default — no input connected".
   final bool resolvedViaFallback;
 
+  /// Optional node-specific tooltip line, appended after the type label and
+  /// any AnyFunction description. Used by `apply` / `map` to describe how the
+  /// wired function value will be consumed ("apply will call it on the wired
+  /// arguments" / "applied per element of the stream"). See
+  /// `doc/design_function_pin_unification.md` (Phase D).
+  final String? extraTooltipLine;
+
   const PinViewWidget(
       {super.key,
       required this.dataType,
@@ -147,7 +154,44 @@ class PinViewWidget extends StatelessWidget {
       this.alignment,
       this.alignmentReason,
       this.declaredDataType,
-      this.resolvedViaFallback = false});
+      this.resolvedViaFallback = false,
+      this.extraTooltipLine});
+
+  /// Friendly description for an AnyFunction pin type string, or `null` when
+  /// [typeName] is not an AnyFunction. AnyFunction pins surface as `Function*`
+  /// (no constraint) or `Function(T1, ..., *)` (starts-with constraint). The
+  /// description is appended to the tooltip's type label to make the
+  /// `Function*` / `*` notation self-explanatory. Wording mirrors
+  /// `doc/design_function_pin_unification.md` (Phase D, §"Pin colors /
+  /// tooltips").
+  static String? _anyFunctionDescription(String typeName) {
+    if (typeName == 'Function*') {
+      return 'any function value';
+    }
+    const prefix = 'Function(';
+    const suffix = ',*)';
+    if (typeName.startsWith(prefix) && typeName.endsWith(suffix)) {
+      final inner = typeName.substring(
+          prefix.length, typeName.length - suffix.length);
+      if (inner.isEmpty) return null;
+      // `inner` is a flat list of leading parameter types separated by `,`.
+      // For nested commas (e.g. `(Int,Bool) -> Float`) the simple split would
+      // mis-tokenise — but those wrap in `()` so we still get the leading-
+      // param list as the user authored it for display. Worst case the
+      // description shows a slightly noisier signature; the type label above
+      // it is authoritative.
+      if (!inner.contains(',')) {
+        return 'function whose first parameter is `$inner` '
+            '(extra parameters allowed)';
+      }
+      // Approximate the leading-params count for the multi-leading-param
+      // case; the heuristic is a comma split that's correct for flat types.
+      final parts = inner.split(',');
+      return 'function whose first ${parts.length} parameters are `$inner` '
+          '(extra parameters allowed)';
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,6 +226,23 @@ class PinViewWidget extends StatelessWidget {
       spans.add(TextSpan(text: '── $pinName ──  $typeLabel'));
     } else {
       spans.add(TextSpan(text: typeLabel));
+    }
+    // AnyFunction friendly description ("any function value" / "function whose
+    // first parameter is `T` (extra parameters allowed)") — appended so the
+    // `Function*` / `*` notation reads as English. See
+    // `doc/design_function_pin_unification.md` (Phase D).
+    final anyFnDesc = _anyFunctionDescription(dataType);
+    if (anyFnDesc != null) {
+      spans.add(TextSpan(
+        text: '\n$anyFnDesc',
+        style: const TextStyle(color: Colors.white70),
+      ));
+    }
+    if (extraTooltipLine != null && extraTooltipLine!.isNotEmpty) {
+      spans.add(TextSpan(
+        text: '\n${extraTooltipLine!}',
+        style: const TextStyle(color: Colors.white70),
+      ));
     }
     Color? reasonColor;
     if (alignment == APIAlignment.motifUnaligned) {
@@ -628,6 +689,12 @@ class PinWidget extends StatelessWidget {
   /// fallback. Forwarded to [PinViewWidget] for tooltip annotation.
   final bool resolvedViaFallback;
 
+  /// Optional node-specific tooltip line forwarded to [PinViewWidget]. Used
+  /// for AnyFunction `f` pins on `apply` / `map` to describe how the wired
+  /// function value will be consumed. See
+  /// `doc/design_function_pin_unification.md` (Phase D).
+  final String? extraTooltipLine;
+
   PinWidget(
       {required this.pinReference,
       required this.multi,
@@ -636,7 +703,8 @@ class PinWidget extends StatelessWidget {
       this.alignment,
       this.alignmentReason,
       this.declaredDataType,
-      this.resolvedViaFallback = false})
+      this.resolvedViaFallback = false,
+      this.extraTooltipLine})
       : super(
             key: ValueKey(
                 pinReference.pinIndex + (pinReference.isOutput ? 1000 : 0)));
@@ -677,7 +745,8 @@ class PinWidget extends StatelessWidget {
                     alignment: alignment,
                     alignmentReason: alignmentReason,
                     declaredDataType: declaredDataType,
-                    resolvedViaFallback: resolvedViaFallback),
+                    resolvedViaFallback: resolvedViaFallback,
+                    extraTooltipLine: extraTooltipLine),
               ),
             ),
             child: SizedBox(
@@ -693,7 +762,8 @@ class PinWidget extends StatelessWidget {
                     alignment: alignment,
                     alignmentReason: alignmentReason,
                     declaredDataType: declaredDataType,
-                    resolvedViaFallback: resolvedViaFallback),
+                    resolvedViaFallback: resolvedViaFallback,
+                    extraTooltipLine: extraTooltipLine),
               ),
             ),
             onDragUpdate: (details) {
@@ -1086,15 +1156,18 @@ class NodeWidget extends StatelessWidget {
                   .asMap()
                   .entries
                   .map((entry) => _buildInputPin(
-                      entry.value.name,
-                      PinReference(
-                        nodeId: node.id,
-                        scopeChain: scopeChain,
-                        pinKind: PinKind.externalInput,
-                        pinIndex: entry.key,
-                        dataType: entry.value.dataType,
-                      ),
-                      entry.value.multi))
+                        entry.value.name,
+                        PinReference(
+                          nodeId: node.id,
+                          scopeChain: scopeChain,
+                          pinKind: PinKind.externalInput,
+                          pinIndex: entry.key,
+                          dataType: entry.value.dataType,
+                        ),
+                        entry.value.multi,
+                        extraTooltipLine:
+                            _extraTooltipForInputPin(entry.value.name),
+                      ))
                   .toList(),
             ),
           ),
@@ -1158,15 +1231,18 @@ class NodeWidget extends StatelessWidget {
                     .asMap()
                     .entries
                     .map((entry) => _buildInputPin(
-                        entry.value.name,
-                        PinReference(
-                          nodeId: node.id,
-                          scopeChain: scopeChain,
-                          pinKind: PinKind.externalInput,
-                          pinIndex: entry.key,
-                          dataType: entry.value.dataType,
-                        ),
-                        entry.value.multi))
+                          entry.value.name,
+                          PinReference(
+                            nodeId: node.id,
+                            scopeChain: scopeChain,
+                            pinKind: PinKind.externalInput,
+                            pinIndex: entry.key,
+                            dataType: entry.value.dataType,
+                          ),
+                          entry.value.multi,
+                          extraTooltipLine:
+                              _extraTooltipForInputPin(entry.value.name),
+                        ))
                     .toList(),
               ),
             ),
@@ -1231,11 +1307,19 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
-  /// Creates a labeled input pin.
-  Widget _buildInputPin(String label, PinReference pinReference, bool multi) {
+  /// Creates a labeled input pin. [extraTooltipLine], when non-null, appends
+  /// a node-specific line to the pin's tooltip (e.g. apply.f → "apply will
+  /// call it on the wired arguments"). See
+  /// `doc/design_function_pin_unification.md` (Phase D).
+  Widget _buildInputPin(String label, PinReference pinReference, bool multi,
+      {String? extraTooltipLine}) {
     return Row(
       children: [
-        PinWidget(pinReference: pinReference, multi: multi),
+        PinWidget(
+          pinReference: pinReference,
+          multi: multi,
+          extraTooltipLine: extraTooltipLine,
+        ),
         SizedBox(width: 2),
         Expanded(
           child: Text(
@@ -1246,6 +1330,21 @@ class NodeWidget extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Returns the node-specific secondary tooltip line for the `f` AnyFunction
+  /// input pin on `apply` and `map`, or `null` for every other pin / node.
+  /// Wording per `doc/design_function_pin_unification.md` (Phase D).
+  String? _extraTooltipForInputPin(String pinName) {
+    if (pinName != 'f') return null;
+    switch (node.nodeTypeName) {
+      case 'apply':
+        return 'apply will call it on the wired arguments';
+      case 'map':
+        return 'applied per element of the stream';
+      default:
+        return null;
+    }
   }
 
   /// Creates an output pin row with eye icon and pin dot.
