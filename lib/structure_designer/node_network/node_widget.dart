@@ -1101,6 +1101,14 @@ class NodeWidget extends StatelessWidget {
                         dataType: node.functionType,
                       ),
                       multi: false,
+                      // The `-1` pin's type is wiring-aware
+                      // (`doc/design_node_function_pin_captures.md`): its
+                      // parameters are the node's unwired input pins; wired
+                      // inputs are frozen as captures and drop out of the
+                      // signature. The label flowing into `node.functionType`
+                      // already reflects this; this line names the rule.
+                      extraTooltipLine: 'function of the unwired inputs; '
+                          'wired inputs are captured',
                     ),
                 ],
               ],

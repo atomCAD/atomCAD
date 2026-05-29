@@ -603,7 +603,18 @@ fn build_node_view(
         .and_then(|d| d.custom_label.clone());
 
     let output_type = node_type.output_type().clone();
-    let function_type = node_type.get_function_type();
+    // The `-1` (function) pin's type is wiring-aware
+    // (`doc/design_node_function_pin_captures.md`): its parameters are the
+    // node's *unwired* input pins, with wired inputs frozen as captures. Route
+    // the displayed/hover type through the same `resolve_output_type(-1)` path
+    // the validator and connect-gate use, so the captured (wired) pins drop out
+    // of the advertised signature. Fall back to the all-parameters declaration
+    // if the wiring-aware type can't resolve (e.g. polymorphic pin 0).
+    let function_type = cad_instance
+        .structure_designer
+        .node_type_registry
+        .resolve_output_type(node, node_network, -1)
+        .unwrap_or_else(|| node_type.get_function_type());
 
     let scene_node_data = cad_instance
         .structure_designer
