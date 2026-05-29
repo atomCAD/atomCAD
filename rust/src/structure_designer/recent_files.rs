@@ -1,7 +1,7 @@
 //! Recently opened files tracking.
 //!
 //! Stores a list of recently opened file paths in the user's config directory.
-//! The list is capped at 10 entries, with the most recently opened file first.
+//! The list is capped at 32 entries, with the most recently opened file first.
 //!
 //! Stored separately from preferences in `<config_dir>/atomCAD/recent_files.json`.
 
@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 const CONFIG_DIR_NAME: &str = "atomCAD";
 const RECENT_FILES_FILE_NAME: &str = "recent_files.json";
-const MAX_RECENT_FILES: usize = 10;
+const MAX_RECENT_FILES: usize = 32;
 
 /// Returns the path to the recent files JSON file.
 fn get_recent_files_path() -> Option<PathBuf> {
@@ -43,7 +43,7 @@ pub fn load_recent_files() -> Vec<String> {
 /// Adds a file path to the recent files list.
 ///
 /// The path is placed at the front of the list. If it already exists in the list,
-/// it is moved to the front (deduplication). The list is capped at 10 entries.
+/// it is moved to the front (deduplication). The list is capped at 32 entries.
 /// Non-existent files are pruned during this operation.
 pub fn add_recent_file(file_path: &str) {
     let mut files = load_recent_files();
