@@ -192,31 +192,45 @@ pub fn build_inline_closure<'a>(
     })
 }
 
-/// Build a [`ZoneClosure`] from a non-HOF node viewed as a function of *all*
-/// its inputs — the "function pin" producer (`output_pin_index == -1`).
+/// Build a [`ZoneClosure`] from a node viewed as a function of its
+/// **unconnected** inputs — the "function pin" producer (`output_pin_index ==
+/// -1`).
+///
+/// Per `doc/design_node_function_pin_captures.md`, the `-1` pin reflects the
+/// node's *actual wiring*: each input pin is partitioned into
+///
+/// - **unwired** → a **parameter** of the synthesized function, in pin order
+///   (densely renumbered), and
+/// - **wired** → a **capture**, pre-evaluated once here and frozen.
 ///
 /// The synthesized closure's body is a one-node synthetic network holding a
-/// clone of `N`, with **every** input pin fed from a zone-input parameter and
-/// **no captures**. Per element the consumer pushes the iteration values as the
+/// clone of `N`. Each unwired pin reads from a `ZoneInput` parameter
+/// (`pin_index` = the *dense parameter index*, not the original pin index);
+/// each wired pin forwards `N`'s original incoming wire(s) rebased `+1` in scope
+/// depth (parent-relative from inside the synthesized body), so they resolve as
+/// ordinary captures via [`build_captures`]. Per element the consumer pushes the
 /// parameter frame and resolves the result wire — exactly the existing
 /// [`run_closure_once`] step, so a function-pin wire drops into an HOF's `f`
-/// pin / `apply` identically to a `closure` node's output. See
-/// `doc/design_function_pins.md`.
+/// pin / `apply` identically to a `closure` node's output.
 ///
-/// The synthesized function type is `(all input pins) -> output pin 0` —
-/// exactly `NodeType::get_function_type()`. We read its parts directly so the
-/// body wiring and the carried `param_types` / `return_type` stay in lock-step.
+/// This generalizes main's old `FunctionEvaluator` semantics (captures may sit
+/// at *any* pin position, not just the trailing ones) and subsumes the
+/// `migrate_v4_to_v5` closure-synthesis pass — it does at runtime what the
+/// migration did at load time.
 ///
-/// Rejects (`Err(NetworkResult::Error(_))`):
-/// - a node with **zero inputs** — a `() -> T` function matches no HOF; and
-/// - a node with an **unresolved / polymorphic** pin-0 output type
-///   (`SameAsInput` / `SameAsArrayElements` read as `DataType::None` here): its
-///   function-type return is unknowable, since the function-mode rule keeps
-///   every input disconnected. See design Open Question 2.
+/// The synthesized function type is `(unwired input pins) -> output pin 0`,
+/// matching the wiring-aware `resolve_output_type(node, _, -1)` arm so the body
+/// wiring and the carried `param_types` / `return_type` stay in lock-step. A
+/// fully-captured node (all inputs wired) is a legal `() -> R` thunk.
 ///
-/// `_evaluator` is unused (a no-capture closure needs no pre-evaluation) but
-/// kept for signature symmetry with [`build_inline_closure`] and the design's
-/// `evaluate` call site.
+/// Rejects (`Err(NetworkResult::Error(_))`) only a node with an **unresolved /
+/// polymorphic** pin-0 output type (`SameAsInput` / `SameAsArrayElements` read
+/// as `DataType::None` here): its function-type return is unknowable. See design
+/// Open Question 1.
+///
+/// `evaluator` / `context` are needed to pre-evaluate captures (mirrors
+/// [`build_inline_closure`]); the no-capture case leaves them effectively
+/// unused.
 ///
 /// `NetworkResult` is a large enum, so the `Err` variant trips
 /// `clippy::result_large_err`; we keep the un-boxed error so the `evaluate`
@@ -224,10 +238,11 @@ pub fn build_inline_closure<'a>(
 #[allow(clippy::result_large_err)]
 #[allow(clippy::arc_with_non_send_sync)]
 pub fn build_node_function_closure<'a>(
-    _evaluator: &NetworkEvaluator,
+    evaluator: &NetworkEvaluator,
     network_stack: &[NetworkStackElement<'a>],
     node_id: u64,
     registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
 ) -> Result<ZoneClosure, NetworkResult> {
     let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
@@ -241,19 +256,7 @@ pub fn build_node_function_closure<'a>(
         }
     };
 
-    let param_types: Vec<DataType> = node_type
-        .parameters
-        .iter()
-        .map(|p| p.data_type.clone())
-        .collect();
     let return_type = node_type.output_type().clone();
-
-    if param_types.is_empty() {
-        return Err(NetworkResult::Error(format!(
-            "function pin: '{}' has no inputs, so its function type () -> _ matches no consumer",
-            node.node_type_name
-        )));
-    }
     if return_type == DataType::None {
         return Err(NetworkResult::Error(format!(
             "function pin: '{}' has an unresolved (polymorphic) output type",
@@ -261,20 +264,62 @@ pub fn build_node_function_closure<'a>(
         )));
     }
 
-    // The body node: a clone of N with a fresh body-local id, every input pin
-    // fed from a zone-input parameter (depth 1, keyed by N's id). N's inputs
-    // are guaranteed empty by the function-mode rule, so these fill empty slots
-    // — no live wire is discarded. N is non-HOF, so its `zone` /
-    // `zone_output_arguments` are already empty and come along inert.
+    let num_pins = node_type.parameters.len();
+
+    // Partition pins: unwired pins become parameters (in ascending pin order),
+    // wired pins become captures. `unwired_pins[j]` is the original pin index
+    // of dense parameter `j`.
+    let unwired_pins: Vec<usize> = (0..num_pins)
+        .filter(|&i| {
+            node.arguments
+                .get(i)
+                .map(|a| a.is_empty())
+                .unwrap_or(true)
+        })
+        .collect();
+
+    let param_types: Vec<DataType> = unwired_pins
+        .iter()
+        .map(|&i| node_type.parameters[i].data_type.clone())
+        .collect();
+
+    // The body node: a clone of N with a fresh body-local id. N is non-HOF, so
+    // its `zone` / `zone_output_arguments` come along inert.
     const BODY_NODE_ID: u64 = 1;
     let owner_key = node_id; // scope-frame key; distinct in role from BODY_NODE_ID
 
     let mut body_node = node.clone();
     body_node.id = BODY_NODE_ID;
-    body_node.arguments = (0..param_types.len())
+
+    // Rebuild the body node's arguments per the partition. Unwired pins read
+    // from the parameter frame (`ZoneInput { pin_index: dense_param_index }`,
+    // depth 1, keyed by N's id); wired pins forward N's original wire(s) rebased
+    // `+1` so they resolve as captures against the parent scope.
+    //
+    // Two index spaces are in play: the *original pin index* `i` and the *dense
+    // parameter index* `j` (0..unwired_pins.len()). The zone-input `pin_index`
+    // is the parameter index, not the pin index.
+    let mut dense_param_of_pin: HashMap<usize, usize> = HashMap::new();
+    for (j, &i) in unwired_pins.iter().enumerate() {
+        dense_param_of_pin.insert(i, j);
+    }
+
+    body_node.arguments = (0..num_pins)
         .map(|i| {
             let mut arg = Argument::new();
-            arg.set_source_full(owner_key, SourcePin::ZoneInput { pin_index: i }, 1);
+            if let Some(&j) = dense_param_of_pin.get(&i) {
+                // Unwired → parameter j.
+                arg.set_source_full(owner_key, SourcePin::ZoneInput { pin_index: j }, 1);
+            } else if let Some(orig) = node.arguments.get(i) {
+                // Wired → capture: forward original wire(s), rebased +1 in depth.
+                for w in &orig.incoming_wires {
+                    arg.incoming_wires.push(IncomingWire {
+                        source_node_id: w.source_node_id,
+                        source_pin: w.source_pin,
+                        source_scope_depth: w.source_scope_depth + 1,
+                    });
+                }
+            }
             arg
         })
         .collect();
@@ -285,14 +330,39 @@ pub fn build_node_function_closure<'a>(
     body_network.nodes.insert(BODY_NODE_ID, body_node);
     body_network.next_node_id = BODY_NODE_ID + 1;
 
+    let zone_output_wires = vec![IncomingWire {
+        source_node_id: BODY_NODE_ID,
+        source_pin: SourcePin::NodeOutput { pin_index: 0 },
+        source_scope_depth: 0,
+    }];
+
+    // Pre-evaluate the captures (the wired pins). Push the synthesized body onto
+    // the current stack so the rebased capture wires (depth >= 1) walk up to the
+    // parent scope and resolve there — exactly `build_inline_closure`'s pattern.
+    // For a node with no wired inputs this produces an empty capture map.
+    let captures = {
+        let mut body_stack = network_stack.to_vec();
+        body_stack.push(NetworkStackElement {
+            node_network: &body_network,
+            node_id,
+        });
+        match build_captures(
+            evaluator,
+            &body_stack,
+            registry,
+            context,
+            &body_network,
+            &zone_output_wires,
+        ) {
+            Ok(c) => c,
+            Err(err) => return Err(NetworkResult::Error(format!("function pin: {err}"))),
+        }
+    };
+
     Ok(ZoneClosure {
         body: Arc::new(body_network),
-        captures: Arc::new(HashMap::new()),
-        zone_output_wires: Arc::new(vec![IncomingWire {
-            source_node_id: BODY_NODE_ID,
-            source_pin: SourcePin::NodeOutput { pin_index: 0 },
-            source_scope_depth: 0,
-        }]),
+        captures,
+        zone_output_wires: Arc::new(zone_output_wires),
         owner_node_id: owner_key,
         param_types,
         return_type,

@@ -1551,14 +1551,15 @@ impl NetworkEvaluator {
         }
 
         // Function pin (`output_pin_index == -1`): synthesize a `Function`
-        // value from this node viewed as a function of all its inputs. It runs
-        // no `eval`, is never `Unit`, and has no display string — so it
-        // short-circuits ahead of the central skip rule and the
-        // built-in/custom dispatch below. The returned `Function(zc)` flows
-        // into an HOF `f` pin / `apply` exactly like a `closure` node's output.
-        // See `doc/design_function_pins.md`.
+        // value from this node viewed as a function of its *unconnected* inputs,
+        // with its connected inputs frozen as captures. It runs no `eval`, is
+        // never `Unit`, and has no display string — so it short-circuits ahead
+        // of the central skip rule and the built-in/custom dispatch below. The
+        // returned `Function(zc)` flows into an HOF `f` pin / `apply` exactly
+        // like a `closure` node's output. See
+        // `doc/design_node_function_pin_captures.md`.
         if output_pin_index == -1 {
-            return build_node_function_closure(self, network_stack, node_id, registry)
+            return build_node_function_closure(self, network_stack, node_id, registry, context)
                 .map(NetworkResult::Function)
                 .unwrap_or_else(|e| e); // e is already NetworkResult::Error(_)
         }

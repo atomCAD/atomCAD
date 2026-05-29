@@ -87,7 +87,9 @@ use crate::api::structure_designer::structure_designer_api_types::APINetworkWith
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::{walk_data_type_record_names_mut, DataType, RecordType};
+use crate::structure_designer::data_type::{
+    walk_data_type_record_names_mut, DataType, FunctionType, RecordType,
+};
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
@@ -680,8 +682,32 @@ impl NodeTypeRegistry {
     ) -> Option<ResolvedOutputType> {
         let node_type = self.get_node_type_for_node(node)?;
         if output_pin_index == -1 {
+            // Wiring-aware function pin type
+            // (`doc/design_node_function_pin_captures.md`): the parameters are
+            // the node's *unconnected* input pins (the connected ones are frozen
+            // as captures), in pin order; the return is pin 0's resolved type.
+            // Built from the specific node instance's wiring, not just its
+            // declaration — so wiring/unwiring an input changes the exposed
+            // function arity. Both `can_connect_nodes` and `validate_wires`
+            // route through here, so the wiring-aware type is consistent
+            // everywhere. Returns `None` if pin 0's type can't resolve
+            // (polymorphic / unresolved), which rejects the `-1` connection
+            // until resolvable (design Open Question 1).
+            let return_type = self.resolve_output_type(node, network, 0)?;
+            let params: Vec<DataType> = node_type
+                .parameters
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| {
+                    node.arguments
+                        .get(*i)
+                        .map(|a| a.is_empty())
+                        .unwrap_or(true)
+                })
+                .map(|(_, p)| p.data_type.clone())
+                .collect();
             return Some(ResolvedOutputType {
-                data_type: node_type.get_function_type(),
+                data_type: DataType::Function(FunctionType::new(params, return_type)),
                 via_fallback: false,
             });
         }

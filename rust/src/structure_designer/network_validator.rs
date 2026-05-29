@@ -779,24 +779,12 @@ fn validate_zones_recursive(
             }
         }
 
-        // Function-mode rule (doc/design_function_pins.md §"Function mode"): a
-        // node's function pin (`-1`) and its input pins are mutually exclusive —
-        // every input is a parameter, so a wired input on a function-pinned node
-        // is a dead wire. The drag gate (`can_connect_nodes`) blocks this in the
-        // editor; this catches the paths that bypass it (`.cnnd` loads,
-        // text-format edits). The matching wire-type check for a `-1` source is
-        // already handled by `validate_wires` (which resolves the source via
-        // `get_function_type()`), so only the mutual-exclusion needs flagging.
-        let has_wired_input = node.has_any_wired_input_pin();
-        if has_wired_input && network.function_pin_consumed(node_id) {
-            ok = false;
-            network.validation_errors.push(ValidationError::new(
-                "Node's function pin is used as a function value, so all of its \
-                 input pins must be left disconnected (every input is a parameter)"
-                    .to_string(),
-                Some(node_id),
-            ));
-        }
+        // The function-mode mutual-exclusion rule is gone
+        // (`doc/design_node_function_pin_captures.md`): wired inputs on a node
+        // whose `-1` pin is consumed are now legal *captures*, not dead wires.
+        // The `-1` source's wire-type check (now resolved against the
+        // wiring-aware `resolve_output_type(-1)`) still runs in
+        // `validate_wires`.
 
         // Wires in `arguments` are in this network's frame — depth = 0
         // resolves locally, depth > 0 walks `ancestors`.

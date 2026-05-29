@@ -13,7 +13,7 @@ use glam::f64::DVec2;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
     GeometryVisualization, GeometryVisualizationPreferences,
 };
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -462,22 +462,29 @@ fn map_function_pin_independent_walkers() {
     assert_eq!(second, vec![1, 2, 3], "the clone must drain independently");
 }
 
-/// A zero-input node's function pin is an error at synthesis: a `() -> T`
-/// function matches no consumer. Evaluating an `int` node's `-1` pin yields
-/// `Error`.
+/// A zero-input node's function pin is a legal `() -> R` thunk (the degenerate
+/// all-captured case, with zero captures). Re-grounded for
+/// `doc/design_node_function_pin_captures.md`: the old `param_types.is_empty()`
+/// rejection is gone. Evaluating an `int(42)` node's `-1` pin yields a
+/// `Function` value; forcing it via `apply` (with no args) returns `42`.
 #[test]
-fn function_pin_zero_input_node_errors() {
+fn function_pin_zero_input_node_is_thunk() {
     let mut designer = setup_designer_with_network("main");
 
     let int_id = add_int(&mut designer, "main", 42, 0.0);
     let result = evaluate_node_pin(&designer, "main", int_id, -1);
-    match result {
-        NetworkResult::Error(_) => {}
+    let zc = match result {
+        NetworkResult::Function(zc) => zc,
         other => panic!(
-            "expected Error for a zero-input node's function pin, got {}",
+            "expected a () -> Int thunk for a zero-input node's function pin, got {}",
             other.to_display_string()
         ),
-    }
+    };
+    assert!(
+        zc.param_types.is_empty(),
+        "a zero-input node's function pin is a nullary thunk"
+    );
+    assert_eq!(zc.return_type, DataType::Int);
 }
 
 /// A polymorphic-output node's function pin is rejected at synthesis: its
@@ -546,21 +553,6 @@ fn read_validity(designer: &StructureDesigner, network: &str) -> (bool, Vec<Stri
     (net.valid, errors)
 }
 
-/// Clear every incoming wire on `node_id`'s argument at `arg_index`. Used to
-/// disconnect a wire directly (no disconnect API needed in tests).
-fn clear_argument(designer: &mut StructureDesigner, network: &str, node_id: u64, arg_index: usize) {
-    let net = designer
-        .node_type_registry
-        .node_networks
-        .get_mut(network)
-        .unwrap();
-    net.nodes
-        .get_mut(&node_id)
-        .unwrap()
-        .arguments[arg_index]
-        .clear();
-}
-
 /// Remove `node_id` from `network` (drops it and any wires stored on its
 /// arguments, including a function-pin wire it consumed).
 fn remove_node(designer: &mut StructureDesigner, network: &str, node_id: u64) {
@@ -624,69 +616,99 @@ fn can_connect_function_pin_type_match() {
     assert!(designer.can_connect_nodes(expr2, -1, fold_id, 2));
 }
 
-/// Function-mode mutual exclusion is enforced in both directions at connect
-/// time: a function-pin source with a wired input is rejected, and an input
-/// pin on a node whose function pin is already consumed is rejected.
+/// Re-grounded for `doc/design_node_function_pin_captures.md`: the function-mode
+/// mutual-exclusion gates are gone. A function-pin source with a wired input is
+/// now legal (the wired input is a *capture*), and an input pin on a node whose
+/// function pin is already consumed is now legal (it adds a capture). The
+/// connection is gated only by the wiring-aware type match.
 #[test]
-fn can_connect_function_mode_mutual_exclusion() {
+fn can_connect_function_pin_with_captures_is_allowed() {
     let mut designer = setup_designer_with_network("main");
 
-    let expr1 = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    // expr2 keeps a free Int param even after one input is captured, so its
+    // wiring-aware `-1` type stays `(Int) -> Int` and fits `map.f`.
+    let expr1 = add_expr(
+        &mut designer,
+        "main",
+        "x + c",
+        vec![("x", DataType::Int), ("c", DataType::Int)],
+        -120.0,
+    );
     let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
     let arg_int = add_int(&mut designer, "main", 5, 120.0);
 
-    // Source side: with no wired input the function pin connects; once an input
-    // pin is wired, dragging the function pin is rejected (it would be a dead
-    // wire — every input is a parameter).
+    // Source side: the function pin connects with no captures; wiring `c` (a
+    // capture) leaves `(Int) -> Int` (x is still a parameter), still wireable.
     assert!(designer.can_connect_nodes(expr1, -1, map_id, 1));
-    designer.connect_nodes(arg_int, 0, expr1, 0); // wire x
+    designer.connect_nodes(arg_int, 0, expr1, 1); // capture c
     assert!(
-        !designer.can_connect_nodes(expr1, -1, map_id, 1),
-        "function pin must be unwireable while an input is connected"
+        designer.can_connect_nodes(expr1, -1, map_id, 1),
+        "function pin with one capture and a remaining (Int) param must still fit map.f"
     );
 
-    // Destination side: a fresh node accepts an input wire; once its function
-    // pin is consumed, the input pin no longer accepts a wire.
-    let expr2 = add_expr(&mut designer, "main", "y + 1", vec![("y", DataType::Int)], 240.0);
-    assert!(designer.can_connect_nodes(arg_int, 0, expr2, 0));
+    // Destination side: an input pin still accepts a wire after the function
+    // pin is consumed (it becomes a capture).
+    let expr2 = add_expr(
+        &mut designer,
+        "main",
+        "y + k",
+        vec![("y", DataType::Int), ("k", DataType::Int)],
+        240.0,
+    );
+    assert!(designer.can_connect_nodes(arg_int, 0, expr2, 1));
     wire_function_pin(&mut designer, "main", expr2, map_id, 1); // expr2.fn → map.f
     assert!(
-        !designer.can_connect_nodes(arg_int, 0, expr2, 0),
-        "an input pin must be unwireable while the function pin is consumed"
+        designer.can_connect_nodes(arg_int, 0, expr2, 1),
+        "an input pin must remain wireable (as a capture) while the function pin is consumed"
     );
 }
 
-/// A stored function-pin wire that bypasses the drag gate (`.cnnd` load /
-/// text edit) is caught by validation when the function-pinned node also has a
-/// wired input; disconnecting the input clears the error.
+/// Re-grounded for `doc/design_node_function_pin_captures.md`: a wired input on
+/// a function-consumed node is a legal *capture*, not a dead wire. With a
+/// two-param `x + c` expr feeding `map.f`, capturing `c` leaves a `(Int) -> Int`
+/// function that validates clean. Capturing *both* inputs makes a `() -> Int`
+/// thunk that no longer fits `map.f` — but that surfaces as an ordinary
+/// `AnyFunction` type mismatch, not the old function-mode message.
 #[test]
-fn validation_function_mode_both_wired() {
+fn validation_function_pin_captures_and_thunk_mismatch() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
-    let arg_int = add_int(&mut designer, "main", 7, 120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + c",
+        vec![("x", DataType::Int), ("c", DataType::Int)],
+        -120.0,
+    );
+    let cap_int = add_int(&mut designer, "main", 7, 120.0);
+    let x_int = add_int(&mut designer, "main", 9, 200.0);
     let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
 
     designer.connect_nodes(range_id, 0, map_id, 0); // xs
     wire_function_pin(&mut designer, "main", expr_id, map_id, 1); // expr.fn → map.f
-    designer.connect_nodes(arg_int, 0, expr_id, 0); // dead wire: expr.x
+    designer.connect_nodes(cap_int, 0, expr_id, 1); // capture c → (Int) -> Int
 
-    let (valid, errors) = validate_and_errors(&mut designer, "main");
-    assert!(!valid, "function pin + wired input must be invalid");
-    assert!(
-        errors.iter().any(|e| e.contains("used as a function value")),
-        "expected the function-mode error, got {errors:?}"
-    );
-
-    // Disconnecting the dead input wire clears the violation.
-    clear_argument(&mut designer, "main", expr_id, 0);
     let (valid, errors) = validate_and_errors(&mut designer, "main");
     assert!(
         valid,
-        "clearing the input wire should restore validity, got {errors:?}"
+        "one capture leaves a (Int) -> Int that fits map.f; got {errors:?}"
     );
     assert!(!errors.iter().any(|e| e.contains("used as a function value")));
+
+    // Capture the second input too → `() -> Int` thunk, which doesn't fit
+    // `map.f` (needs a leading Int param). Surfaces as a type mismatch.
+    designer.connect_nodes(x_int, 0, expr_id, 0); // capture x → () -> Int
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(!valid, "an all-captured thunk does not fit map.f");
+    assert!(
+        errors.iter().any(|e| e.contains("mismatch")),
+        "expected a wire type-mismatch error, got {errors:?}"
+    );
+    assert!(
+        !errors.iter().any(|e| e.contains("used as a function value")),
+        "the old function-mode error must be gone, got {errors:?}"
+    );
 }
 
 /// A matched function-pin wire validates clean (and an HOF driven by it with an
@@ -903,5 +925,244 @@ fn disconnecting_f_pin_revalidates_and_restores_zone_output_error() {
             l.contains("zone-output") && l.contains("no incoming wire")
         }),
         "expected the zone-output rule error after disconnecting `f`; got {errors_after:?}"
+    );
+}
+
+// ============================================================================
+// Captures on the function pin (doc/design_node_function_pin_captures.md, Phase 1)
+// ============================================================================
+
+/// Resolve `map_id`'s pin-0 output type in `network` (the type the
+/// `update_map_pin_layouts_for_network` post-pass installs from the wired `f`
+/// source). Used to assert the wire-state propagation flips.
+fn map_output_type(designer: &StructureDesigner, network: &str, map_id: u64) -> DataType {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    let node = net.nodes.get(&map_id).unwrap();
+    designer
+        .node_type_registry
+        .resolve_output_type(node, net, 0)
+        .expect("map pin-0 output type should resolve")
+}
+
+/// The headline: a two-param `x + c` expr with `c` **wired** (a capture) and `x`
+/// **unwired** (a parameter). Its `-1` pin resolves to `(Int) -> Int` with `c`
+/// frozen; mapping it over `range(0,1,3) = [0,1,2]` with `c = 10` yields
+/// `[10, 11, 12]`.
+#[test]
+fn map_function_pin_with_capture_freezes_value() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0); // [0,1,2]
+    let cap_id = add_int(&mut designer, "main", 10, 120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + c",
+        vec![("x", DataType::Int), ("c", DataType::Int)],
+        -120.0,
+    );
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(cap_id, 0, expr_id, 1); // capture c = 10
+    wire_function_pin(&mut designer, "main", expr_id, map_id, 1); // f ← expr.fn
+
+    let result = evaluate_node(&designer, "main", map_id);
+    let elements = extract_ints(drain_iter_with_designer(&designer, result));
+    assert_eq!(elements, vec![10, 11, 12]);
+}
+
+/// Capture-freeze timing under an outer `fold`: a `-1`-sourced function whose
+/// capture reads the *outer* iteration value re-freezes per outer step. The
+/// inner `map` body uses `add_outer(x) = x + acc` where `acc` is the outer
+/// fold's running accumulator (a capture reaching past the inner map into the
+/// fold). Summing the inner results across `fold` therefore mirrors an inline
+/// body — proving the capture isn't frozen once-and-stale.
+///
+/// This is exercised more directly elsewhere (zones_test capture-timing cases);
+/// here we keep a lean check that a capture sourced from a sibling constant
+/// reflects that constant's value at `-1`-eval, not some earlier default.
+#[test]
+fn function_pin_capture_reflects_source_value() {
+    let mut designer = setup_designer_with_network("main");
+
+    // c is produced by an expr (so it's a real evaluated source, not a literal
+    // baked into the body): c = 2 * 5 = 10.
+    let c_id = add_expr(&mut designer, "main", "2 * 5", vec![], 120.0);
+    let range_id = add_range(&mut designer, "main", 1, 1, 3, 0.0); // [1,2,3]
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x * c",
+        vec![("x", DataType::Int), ("c", DataType::Int)],
+        -120.0,
+    );
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(c_id, 0, expr_id, 1); // capture c = 10
+    wire_function_pin(&mut designer, "main", expr_id, map_id, 1); // f ← expr.fn
+
+    let result = evaluate_node(&designer, "main", map_id);
+    let elements = extract_ints(drain_iter_with_designer(&designer, result));
+    assert_eq!(elements, vec![10, 20, 30], "capture must equal the evaluated source value");
+}
+
+/// All-wired source → `() -> R` thunk, forced via `apply` (no args) returns `R`.
+/// `a * b` with both `a` and `b` captured (6 and 7) is a `() -> Int` thunk;
+/// `apply(f)` runs the body and returns `42`.
+#[test]
+fn apply_function_pin_all_captured_thunk_returns_value() {
+    let mut designer = setup_designer_with_network("main");
+
+    let a_id = add_int(&mut designer, "main", 6, -80.0);
+    let b_id = add_int(&mut designer, "main", 7, 80.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "a * b",
+        vec![("a", DataType::Int), ("b", DataType::Int)],
+        -200.0,
+    );
+    designer.connect_nodes(a_id, 0, expr_id, 0); // capture a
+    designer.connect_nodes(b_id, 0, expr_id, 1); // capture b
+
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int],
+            param_names: vec![],
+        }),
+    );
+    designer.connect_nodes(expr_id, -1, apply_id, 0); // f ← expr.fn (() -> Int)
+
+    let result = evaluate_node(&designer, "main", apply_id);
+    assert_eq!(extract_int(result), 42);
+}
+
+/// Wire-state propagation (guards the new revalidation triggers). With
+/// `expr.-1 → map.f` and a two-param `x + c` expr, wiring a capture on `c` flips
+/// `map`'s resolved output `Iter[Function((Int,),Int)]` → `Iter[Int]` with **no**
+/// edit at `map`; deleting that wire flips it back. Without the
+/// `function_pin_consumed`-keyed triggers in `connect_nodes` / `delete_selected`,
+/// the partial refresh would leave `map`'s derived type stale.
+#[test]
+fn function_pin_capture_propagates_to_consumer_type() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let cap_id = add_int(&mut designer, "main", 10, 120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + c",
+        vec![("x", DataType::Int), ("c", DataType::Int)],
+        -120.0,
+    );
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(expr_id, -1, map_id, 1); // f ← expr.fn ((Int,Int)->Int)
+
+    let iter_int = DataType::Iterator(Box::new(DataType::Int));
+
+    // Both expr inputs unwired → `(Int,Int)->Int` → map auto-partializes to a
+    // stream of partials (not `Iter[Int]`).
+    let before = map_output_type(&designer, "main", map_id);
+    assert_ne!(
+        before, iter_int,
+        "with no capture map should produce a partial stream, not Iter[Int]; got {before:?}"
+    );
+
+    // Wire a capture on `c` → expr.-1 becomes `(Int)->Int` → map output flips to
+    // `Iter[Int]`, with no edit at map. (Tests the connect-time trigger.)
+    designer.connect_nodes(cap_id, 0, expr_id, 1);
+    let after_capture = map_output_type(&designer, "main", map_id);
+    assert_eq!(
+        after_capture, iter_int,
+        "wiring a capture must re-derive map's output to Iter[Int]; got {after_capture:?}"
+    );
+
+    // Delete the capture wire → expr.-1 reverts to `(Int,Int)->Int` → map flips
+    // back. (Tests the delete-time trigger.)
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        assert!(
+            net.select_wire(cap_id, 0, expr_id, 1),
+            "failed to select the capture wire"
+        );
+    }
+    designer.delete_selected();
+    let after_delete = map_output_type(&designer, "main", map_id);
+    assert_ne!(
+        after_delete, iter_int,
+        "deleting the capture must revert map's output off Iter[Int]; got {after_delete:?}"
+    );
+    // And it is specifically the partial-stream shape again.
+    assert_eq!(
+        after_delete,
+        DataType::Iterator(Box::new(DataType::Function(FunctionType::new(
+            vec![DataType::Int],
+            DataType::Int
+        )))),
+        "deleting the capture should restore the partial-stream output"
+    );
+}
+
+/// Undo/redo of a capture-wire edit must re-derive the consumer's type too —
+/// `ConnectWireCommand` uses a `NodeDataChanged` refresh, which normally skips
+/// validation; the `function_pin_consumed`-keyed branch in
+/// `apply_undo_refresh_mode` covers it. Wiring a capture flips `map` to
+/// `Iter[Int]`; **undo** must flip it back, **redo** must flip it forward again.
+#[test]
+fn function_pin_capture_propagation_survives_undo_redo() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let cap_id = add_int(&mut designer, "main", 10, 120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + c",
+        vec![("x", DataType::Int), ("c", DataType::Int)],
+        -120.0,
+    );
+    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    designer.connect_nodes(range_id, 0, map_id, 0); // xs
+    designer.connect_nodes(expr_id, -1, map_id, 1); // f ← expr.fn
+
+    let iter_int = DataType::Iterator(Box::new(DataType::Int));
+
+    // Wire the capture (pushes a ConnectWireCommand) → map flips to Iter[Int].
+    designer.connect_nodes(cap_id, 0, expr_id, 1);
+    assert_eq!(map_output_type(&designer, "main", map_id), iter_int);
+
+    // Undo: the capture is removed → map must revert off Iter[Int].
+    assert!(designer.undo(), "undo should report success");
+    assert_ne!(
+        map_output_type(&designer, "main", map_id),
+        iter_int,
+        "undo of the capture must re-derive map's output off Iter[Int]"
+    );
+
+    // Redo: the capture is re-added → map must flip back to Iter[Int].
+    assert!(designer.redo(), "redo should report success");
+    assert_eq!(
+        map_output_type(&designer, "main", map_id),
+        iter_int,
+        "redo of the capture must re-derive map's output back to Iter[Int]"
     );
 }

@@ -496,8 +496,25 @@ impl StructureDesigner {
                 self.mark_lightweight_refresh();
             }
             UndoRefreshMode::NodeDataChanged(node_ids) => {
-                for node_id in node_ids {
+                for &node_id in &node_ids {
                     self.mark_node_data_changed(node_id);
+                }
+                // If any affected node's `-1` pin is consumed as a function
+                // value, the undone/redone wire edit changed its exposed arity
+                // (a capture added or removed), which must re-derive the
+                // consumer's type. The forward connect/delete paths validate on
+                // exactly this condition; mirror it here so undo/redo don't
+                // reintroduce the staleness those triggers fixed
+                // (`doc/design_node_function_pin_captures.md` §"Revalidation
+                // triggers"). `NodeDataChanged` otherwise skips validation, so
+                // without this an undone capture-wire edit would leave the
+                // consumer's derived type stale.
+                let needs_validate = self
+                    .get_active_node_network()
+                    .map(|net| node_ids.iter().any(|&id| net.function_pin_consumed(id)))
+                    .unwrap_or(false);
+                if needs_validate {
+                    self.validate_active_network();
                 }
             }
             UndoRefreshMode::Full => {
@@ -2131,7 +2148,7 @@ impl StructureDesigner {
             None => return,
         };
         // First validate the connection
-        let (dest_param_is_multi, dest_is_function_pin, dest_is_apply) = {
+        let (dest_param_is_multi, dest_is_function_pin, dest_is_apply, dest_function_pin_consumed) = {
             // Get the network
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
@@ -2143,6 +2160,15 @@ impl StructureDesigner {
                 Some(node) => node,
                 None => return,
             };
+
+            // Wiring an *ordinary input pin* on a node whose `-1` pin is
+            // consumed changes the exposed function arity (the new wire freezes
+            // a parameter into a capture), so the consumer's derived type must
+            // re-derive. `function_pin_consumed` is the source-side trigger,
+            // the analog of `dest_is_apply` on the consumer side
+            // (`doc/design_node_function_pin_captures.md` §"Revalidation
+            // triggers").
+            let dest_function_pin_consumed = network.function_pin_consumed(dest_node_id);
 
             // Get the node type and check parameter
             match self.node_type_registry.get_node_type_for_node(dest_node) {
@@ -2160,6 +2186,7 @@ impl StructureDesigner {
                         dt.is_array(),
                         dt.is_function_shape(),
                         dest_node.node_type_name == "apply",
+                        dest_function_pin_consumed,
                     )
                 }
                 None => return,
@@ -2181,7 +2208,10 @@ impl StructureDesigner {
         // into `apply.arg0` would leave the output type stale at its previous
         // partial/full shape and downstream consumers would type-check against
         // the wrong type. Apply destinations therefore always revalidate.
-        let revalidate = dest_is_function_pin || source_output_pin_index < 0 || dest_is_apply;
+        let revalidate = dest_is_function_pin
+            || source_output_pin_index < 0
+            || dest_is_apply
+            || dest_function_pin_consumed;
 
         // Capture the existing wire on this pin before connecting (for undo)
         let replaced_wire = if !dest_param_is_multi {
@@ -4491,6 +4521,22 @@ impl StructureDesigner {
                         }
                     }
                 }
+
+                // Deleting a node that feeds a *capture* input of a
+                // function-consumed node retypes that node's `-1` pin (the
+                // frozen capture becomes an unconnected parameter again),
+                // changing the exposed arity. Any connected node that is
+                // itself function-consumed therefore needs revalidation
+                // (`doc/design_node_function_pin_captures.md` §"Revalidation
+                // triggers"). `dirty_nodes` already enumerates the nodes
+                // connected to the deletion, so it's the natural place to test.
+                if !should_validate
+                    && dirty_nodes
+                        .iter()
+                        .any(|&id| node_network.function_pin_consumed(id))
+                {
+                    should_validate = true;
+                }
             }
             // If wires are selected, both source and destination nodes will be dirty
             else if !node_network.selected_wires.is_empty() {
@@ -4529,7 +4575,19 @@ impl StructureDesigner {
                         .nodes
                         .get(&wire.destination_node_id)
                         .is_some_and(|n| n.node_type_name == "apply");
-                    if source_is_function_pin || dest_is_function_pin || dest_is_apply {
+                    // Deleting an *ordinary input wire* on a node whose `-1` pin
+                    // is consumed restores a parameter (the frozen capture
+                    // becomes an unconnected pin again), changing the exposed
+                    // arity — so the consumer's derived type must re-derive
+                    // (`doc/design_node_function_pin_captures.md` §"Revalidation
+                    // triggers"). Source-side analog of `dest_is_apply`.
+                    let dest_function_pin_consumed =
+                        node_network.function_pin_consumed(wire.destination_node_id);
+                    if source_is_function_pin
+                        || dest_is_function_pin
+                        || dest_is_apply
+                        || dest_function_pin_consumed
+                    {
                         should_validate = true;
                     }
                 }

@@ -563,16 +563,6 @@ impl Node {
         self.zone.as_mut().map(|arc| Arc::make_mut(arc))
     }
 
-    /// True if any of this node's input pins (arguments) carries an incoming
-    /// wire. The function-mode rule (`doc/design_function_pins.md` §"Function
-    /// mode") uses this: a node whose function pin (`-1`) is wired as a function
-    /// value must leave **every** input pin disconnected, because every input is
-    /// a parameter — a wired input would be a dead wire the synthesizer never
-    /// reads.
-    pub fn has_any_wired_input_pin(&self) -> bool {
-        self.arguments.iter().any(|arg| !arg.is_empty())
-    }
-
     /// In debug builds, panic if this node's zone state is inconsistent with
     /// its declared `NodeType`: non-HOF types (no zone pins) must have
     /// `zone == None` and an empty `zone_output_arguments`. Phase 2 lands the
@@ -1211,21 +1201,14 @@ impl NodeNetwork {
             return false;
         }
 
-        // Function-mode mutual exclusion (doc/design_function_pins.md
-        // §"Function mode"). Enforced in both directions:
-        //   (1) A function-pin (`-1`) source is only wireable when the source
-        //       node has no wired input pin — every input is a parameter, so a
-        //       wired input would be a dead wire the synthesizer never reads.
-        //   (2) An input pin may not be wired on a node whose function pin is
-        //       already consumed (the dual of rule 1, destination side).
-        // The type match itself is handled below by `resolve_output_type`
-        // (which maps `-1` to `get_function_type()`) + `can_be_converted_to`.
-        if source_output_pin_index == -1 && source_node.has_any_wired_input_pin() {
-            return false;
-        }
-        if self.function_pin_consumed(dest_node_id) {
-            return false;
-        }
+        // Function-mode mutual exclusion is gone
+        // (`doc/design_node_function_pin_captures.md`): wiring an input pin on a
+        // node whose `-1` pin is consumed is now legal — it freezes that input
+        // as a *capture* (removing a parameter), changing the exposed function
+        // arity, which re-derives on the next validate pass. Likewise a `-1`
+        // source with some inputs wired is the normal capture idiom. The type
+        // match below uses the wiring-aware `resolve_output_type` (which builds
+        // the `-1` type from the node's unconnected pins) + `can_be_converted_to`.
 
         // Get the expected input type for the destination parameter.
         // The destination pin's declared type may be abstract.

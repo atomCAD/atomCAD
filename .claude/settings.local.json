@@ -235,7 +235,12 @@
       "PowerShell(git config *)",
       "Bash(rustfmt --check src/structure_designer/node_type_registry.rs src/structure_designer/nodes/apply.rs tests/structure_designer/closures_test.rs tests/structure_designer/currying_test.rs)",
       "Bash(rustfmt src/structure_designer/node_type_registry.rs src/structure_designer/nodes/apply.rs tests/structure_designer/closures_test.rs tests/structure_designer/currying_test.rs)",
-      "Bash(rustfmt --check src/structure_designer/nodes/apply.rs)"
+      "Bash(rustfmt --check src/structure_designer/nodes/apply.rs)",
+      "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\" -Recurse -Name)",
+      "Bash(sed -n '640,700p' src/structure_designer/node_type_registry.rs)",
+      "Bash(sed -n '1490,1530p' src/structure_designer/node_type_registry.rs)",
+      "Bash(sed -n '1085,1110p' lib/structure_designer/node_network/node_widget.dart)",
+      "Bash(sed -n '740,760p' lib/structure_designer/node_network/scope_resolver.dart)"
     ]
   }
 }
