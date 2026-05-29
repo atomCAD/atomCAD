@@ -918,22 +918,18 @@ fn test_migrate_v3_to_v4_skips_malformed_arguments() {
 }
 
 // ---------------------------------------------------------------------------
-// v4 → v5 regression: every iterator_migration/ fixture (except the
+// Chained dispatch regression: every iterator_migration/ fixture (except the
 // intentionally-malformed one whose strict deserialization fails, by design)
-// must continue to load cleanly through the full v3 → v4 → v5 chain.
-//
-// The check counts the v4→v5 pre-pass invocations: a v3 fixture must trigger
-// exactly one v4→v5 call (the version dispatch runs the new pass after the
-// v3→v4 pass bumps the in-memory version field). None of the iterator
-// fixtures contains a legacy HOF.f-with-extras wire, so v4→v5 is effectively
-// inert per fixture — but the dispatch must still run, and load must still
-// succeed.
+// must continue to load cleanly. v3 files chain through the v3→v4 pass and
+// then have their in-memory version bumped to the current SERIALIZATION_VERSION
+// (5) with no further transform — there is no v4→v5 pass (the legacy
+// function-pin idiom is handled at evaluation time by the function-pin
+// synthesizer; see `doc/design_node_function_pin_captures.md`). This guards
+// that dropping the v4→v5 pass did not regress the load of any v2/v3 fixture.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_v3_fixtures_chain_through_v4_to_v5() {
-    use rust_lib_flutter_cad::structure_designer::serialization::migrate_v4_to_v5;
-
+fn test_v3_fixtures_chain_through_to_current_version() {
     // Every fixture file under iterator_migration/ that the existing
     // iterator_migration tests successfully load. `old_malformed_map_output_type.cnnd`
     // is excluded because the *source* `map` node's malformed `output_type`
@@ -952,21 +948,14 @@ fn test_v3_fixtures_chain_through_v4_to_v5() {
     ];
 
     for fixture_name in fixtures {
-        migrate_v4_to_v5::reset_migration_call_count();
         let path = format!("{}/{}", FIXTURE_DIR, fixture_name);
         let mut registry = NodeTypeRegistry::new();
         load_node_networks_from_file(&mut registry, &path).unwrap_or_else(|e| {
             panic!(
-                "fixture {} failed to load through v3→v4→v5 chain: {}",
+                "fixture {} failed to load through the migration chain: {}",
                 fixture_name, e
             )
         });
-        assert_eq!(
-            migrate_v4_to_v5::migration_call_count(),
-            1,
-            "v3 fixture {} must invoke the v4→v5 pre-pass exactly once",
-            fixture_name
-        );
         assert!(
             !registry.node_networks.is_empty(),
             "{} produced an empty registry",

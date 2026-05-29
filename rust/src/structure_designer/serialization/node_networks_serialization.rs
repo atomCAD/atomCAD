@@ -802,7 +802,17 @@ pub fn load_node_networks_from_file(
 
     // Chained historical up-converters. Each pass runs only if the loaded
     // file pre-dates the version after that pass. A v2 file chains through
-    // both passes; a v3 file runs only v3→v4; a v4 file runs neither.
+    // both passes; a v3 file runs only v3→v4.
+    //
+    // Note: there is no v4→v5 transform pass. The constant is held at
+    // `SERIALIZATION_VERSION = 5`, so a v4 (or v3-chained-to-v4) file has its
+    // in-memory version bumped to 5 below with no structural rewrite. The
+    // legacy main-branch function-pin idiom (a node's `-1` pin feeding an HOF
+    // `f` pin with some inputs wired as captures) loads directly: the custom
+    // `Argument` deserializer converts the wire storage shape, and the
+    // function-pin synthesizer (`build_node_function_closure`) reproduces the
+    // capture/parameter partition at evaluation time. See
+    // `doc/design_node_function_pin_captures.md`.
     if version < 3 {
         super::migrate_v2_to_v3::migrate_v2_to_v3(&mut root_value).map_err(|e| {
             io::Error::new(
@@ -816,14 +826,6 @@ pub fn load_node_networks_from_file(
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("v3→v4 migration failed: {}", e),
-            )
-        })?;
-    }
-    if version < 5 {
-        super::migrate_v4_to_v5::migrate_v4_to_v5(&mut root_value).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("v4→v5 migration failed: {}", e),
             )
         })?;
     }
