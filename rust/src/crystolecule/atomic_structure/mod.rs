@@ -918,6 +918,25 @@ impl MemorySizeEstimator for AtomicStructure {
     }
 }
 
+/// Formats a float for snapshot output, collapsing a value that rounds to zero
+/// at `decimals` precision to *positive* zero.
+///
+/// Without this, an essentially-zero quantity (a surface atom's
+/// `in_crystal_depth`, a lattice position on an axis) can land on the negative
+/// side of zero — `-0.0`, or a tiny negative like `-1e-16` produced by a
+/// different floating-point reduction order across machines/thread counts — and
+/// render as `-0.000`. The sign carries no meaning at display precision, but it
+/// makes the snapshot nondeterministic. Rounding first, then adding `0.0`,
+/// normalizes IEEE-754 negative zero away.
+fn fmt_snapshot_float(v: f64, decimals: usize) -> String {
+    let scale = 10f64.powi(decimals as i32);
+    let rounded = (v * scale).round() / scale;
+    // `if rounded == 0.0 { 0.0 }` maps both `-0.0` and `0.0` to `+0.0`
+    // (they compare equal); any non-zero value passes through unchanged.
+    let normalized = if rounded == 0.0 { 0.0 } else { rounded };
+    format!("{:.*}", decimals, normalized)
+}
+
 impl AtomicStructure {
     /// Returns a detailed string representation for snapshot testing.
     /// Includes frame transform, counts, and details of first 10 atoms and bonds.
@@ -939,13 +958,13 @@ impl AtomicStructure {
             lines.push(format!("first {} atoms:", atoms.len()));
             for atom in &atoms {
                 lines.push(format!(
-                    "  [{}] Z={} pos=({:.6}, {:.6}, {:.6}) depth={:.3} bonds={}",
+                    "  [{}] Z={} pos=({}, {}, {}) depth={} bonds={}",
                     atom.id,
                     atom.atomic_number,
-                    atom.position.x,
-                    atom.position.y,
-                    atom.position.z,
-                    atom.in_crystal_depth,
+                    fmt_snapshot_float(atom.position.x, 6),
+                    fmt_snapshot_float(atom.position.y, 6),
+                    fmt_snapshot_float(atom.position.z, 6),
+                    fmt_snapshot_float(atom.in_crystal_depth as f64, 3),
                     atom.bonds.len()
                 ));
             }

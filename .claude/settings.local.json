@@ -243,7 +243,11 @@
       "Bash(sed -n '740,760p' lib/structure_designer/node_network/scope_resolver.dart)",
       "PowerShell(gh issue view 324 --repo atomCAD/atomCAD --json title,body,createdAt,state,labels,comments | Out-String)",
       "PowerShell(Get-Item *)",
-      "PowerShell(cargo test *)"
+      "PowerShell(cargo test *)",
+      "PowerShell(cd C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust; $env:INSTA_UPDATE=\"no\"; 1..3 | ForEach-Object { Write-Output \"=== Run $_ ===\"; cargo test --test structure_designer node_snapshots_test::test_extrude_demo_evaluation 2>&1 | Select-String \"test result|FAILED|depth=-0\" | Select-Object -First 5 })",
+      "PowerShell(gh issue view 326 --repo atomCAD/atomCAD --json title,body,comments,author,labels | Out-String)",
+      "PowerShell($out = \"$env:TEMP\\\\issue326.png\"; try { Invoke-WebRequest -Uri \"https://private-user-images.githubusercontent.com/3246014/598915319-587672a6-7b88-4e77-a63a-3cf13901858d.png\" -OutFile $out -ErrorAction Stop; Get-Item $out | Select-Object Length, FullName } catch { \"FAILED: $\\($_.Exception.Message\\)\" })",
+      "PowerShell(cargo *)"
     ]
   }
 }
