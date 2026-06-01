@@ -434,17 +434,56 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Logical-pixel floor for a body node's top-left inside a zone body. A node
+  /// inside an HOF/closure body lives in body-local coordinates whose interior
+  /// origin is `(0, 0)`; the body grows to fit content on the right/down but
+  /// has no leftward/upward growth, so a node dragged past `(0, 0)` escapes the
+  /// visible body rect. Clamping the drag to this inset keeps body nodes inside
+  /// the rect (and clears the zone-input pin column on the left edge).
+  static const double _ZONE_BODY_DRAG_INSET = 8.0;
+
+  /// Clamps a drag [delta] so no node in [movedNodes] is pushed left/up past the
+  /// body-interior floor ([_ZONE_BODY_DRAG_INSET]), keeping a multi-node
+  /// selection rigid (the shared delta is clamped, not each node). Returns
+  /// [delta] unchanged at the top level (empty [scopeChain]) or when there is
+  /// nothing to move. Only blocks moving *further* past the floor — an
+  /// already-escaped node (e.g. from an older file) can still be dragged back
+  /// inward without snapping.
+  Offset _clampZoneBodyDragDelta(
+      Offset delta, Iterable<NodeView> movedNodes, List<BigInt> scopeChain) {
+    if (scopeChain.isEmpty) return delta;
+    double? minX, minY;
+    for (final node in movedNodes) {
+      if (minX == null || node.position.x < minX) minX = node.position.x;
+      if (minY == null || node.position.y < minY) minY = node.position.y;
+    }
+    if (minX == null || minY == null) return delta;
+    // Lower bound on the delta: how far left/up the group may still move before
+    // the leftmost/topmost node hits the floor. min(0, ...) so an already-escaped
+    // node yields a bound of 0 (no further-left motion, but rightward passes).
+    final slackX = _ZONE_BODY_DRAG_INSET - minX;
+    final slackY = _ZONE_BODY_DRAG_INSET - minY;
+    final lowerX = slackX < 0 ? slackX : 0.0;
+    final lowerY = slackY < 0 ? slackY : 0.0;
+    return Offset(
+      delta.dx < lowerX ? lowerX : delta.dx,
+      delta.dy < lowerY ? lowerY : delta.dy,
+    );
+  }
+
   /// Drag all selected nodes by delta (UI-only, does not commit to kernel).
-  /// Mutates positions in the body scope identified by [scopeChain].
+  /// Mutates positions in the body scope identified by [scopeChain]. Inside a
+  /// zone body the delta is clamped so the selection can't escape the body rect
+  /// on the left/top (see [_clampZoneBodyDragDelta]).
   void dragSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     final containerNodes = _nodesAtScope(scopeChain);
     if (containerNodes == null) return;
-    for (final node in containerNodes.values) {
-      if (node.selected) {
-        node.position = APIVec2(
-            x: node.position.x + delta.dx, y: node.position.y + delta.dy);
-      }
+    final selected = containerNodes.values.where((node) => node.selected);
+    final clamped = _clampZoneBodyDragDelta(delta, selected, scopeChain);
+    for (final node in selected) {
+      node.position = APIVec2(
+          x: node.position.x + clamped.dx, y: node.position.y + clamped.dy);
     }
     notifyListeners();
   }
@@ -855,8 +894,9 @@ class StructureDesignerModel extends ChangeNotifier {
       {List<BigInt> scopeChain = const []}) {
     final node = _findNodeInScope(nodeId, scopeChain);
     if (node == null) return;
-    node.position =
-        APIVec2(x: node.position.x + delta.dx, y: node.position.y + delta.dy);
+    final clamped = _clampZoneBodyDragDelta(delta, [node], scopeChain);
+    node.position = APIVec2(
+        x: node.position.x + clamped.dx, y: node.position.y + clamped.dy);
     notifyListeners();
   }
 
