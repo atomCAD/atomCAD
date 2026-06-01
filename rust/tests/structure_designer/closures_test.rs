@@ -2166,3 +2166,255 @@ fn preset_to_custom_data_preservation() {
     assert_eq!(preset_ret, custom_ret);
     assert_eq!(custom_ret, DataType::Unit);
 }
+
+// ============================================================================
+// Issue #326 - copy/paste of zone-bearing nodes (closure) + apply
+// ============================================================================
+
+/// Helper: among a freshly pasted id set, find the one whose node type matches.
+fn find_pasted(
+    designer: &StructureDesigner,
+    network: &str,
+    new_ids: &[u64],
+    node_type: &str,
+) -> u64 {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    new_ids
+        .iter()
+        .copied()
+        .find(|id| net.nodes.get(id).unwrap().node_type_name == node_type)
+        .unwrap_or_else(|| panic!("no pasted `{node_type}` node found"))
+}
+
+/// Regression for issue #326. Copy/paste of a `closure` (a zone-bearing node)
+/// must remap the body's `ZoneInput` iteration-value wire from the OLD closure
+/// id to the NEW pasted id. Before the fix the body's `element` wire kept the
+/// old id, so evaluating the pasted `apply` (which runs the closure body)
+/// panicked with "current_zone_input: no scope-stack entry for HOF id N".
+#[test]
+fn paste_closure_and_apply_remaps_zone_input_and_evaluates() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_int_map_closure(&mut designer, "main", "x + 1", "x", None, -120.0);
+    let arg_id = add_int(&mut designer, "main", 10, 0.0);
+
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
+        }),
+    );
+    designer.connect_nodes(closure_id, 0, apply_id, 0); // f
+    designer.connect_nodes(arg_id, 0, apply_id, 1); // element
+
+    // Sanity: the original evaluates fine.
+    assert_eq!(extract_int(evaluate_node(&designer, "main", apply_id)), 11);
+
+    // Select everything and round-trip through the clipboard.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        network.select_nodes(vec![closure_id, arg_id, apply_id]);
+    }
+    assert!(designer.copy_selection());
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    assert_eq!(new_ids.len(), 3);
+
+    let pasted_closure = find_pasted(&designer, "main", &new_ids, "closure");
+    let pasted_apply = find_pasted(&designer, "main", &new_ids, "apply");
+
+    // The pasted closure's body `element` wire must point at the PASTED closure
+    // id, not the original - this is the core of the fix.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let body = network
+            .nodes
+            .get(&pasted_closure)
+            .unwrap()
+            .zone
+            .as_ref()
+            .expect("pasted closure missing body");
+        let zone_input_wire = body
+            .nodes
+            .values()
+            .flat_map(|n| n.arguments.iter())
+            .flat_map(|a| a.incoming_wires.iter())
+            .find(|w| {
+                matches!(w.source_pin, SourcePin::ZoneInput { .. }) && w.source_scope_depth == 1
+            })
+            .expect("body has no depth-1 ZoneInput wire");
+        assert_eq!(
+            zone_input_wire.source_node_id, pasted_closure,
+            "ZoneInput wire was not remapped to the pasted closure id"
+        );
+        assert_ne!(
+            zone_input_wire.source_node_id, closure_id,
+            "ZoneInput wire still references the original closure id"
+        );
+    }
+
+    // Evaluating the pasted apply must not panic and must give the same answer.
+    assert_eq!(
+        extract_int(evaluate_node(&designer, "main", pasted_apply)),
+        11
+    );
+}
+
+/// The cut path (copy + delete) must also round-trip: cutting the closure +
+/// apply and pasting must produce a working, evaluable copy.
+#[test]
+fn cut_then_paste_closure_and_apply_evaluates() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_int_map_closure(&mut designer, "main", "x + 1", "x", None, -120.0);
+    let arg_id = add_int(&mut designer, "main", 10, 0.0);
+
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
+        }),
+    );
+    designer.connect_nodes(closure_id, 0, apply_id, 0);
+    designer.connect_nodes(arg_id, 0, apply_id, 1);
+
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        network.select_nodes(vec![closure_id, arg_id, apply_id]);
+    }
+    assert!(designer.cut_selection());
+
+    // Originals gone.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        assert!(!network.nodes.contains_key(&closure_id));
+        assert!(!network.nodes.contains_key(&apply_id));
+    }
+
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    assert_eq!(new_ids.len(), 3);
+    let pasted_apply = find_pasted(&designer, "main", &new_ids, "apply");
+    assert_eq!(
+        extract_int(evaluate_node(&designer, "main", pasted_apply)),
+        11
+    );
+}
+
+/// A capture wire (depth-1 `NodeOutput`) into a closure body must also follow
+/// the id remap when the captured source node is part of the same paste. The
+/// closure captures `k = 5` and adds it; `apply(f, 10)` must still yield `15`
+/// after the paste.
+#[test]
+fn paste_closure_with_capture_remaps_capture_wire() {
+    let mut designer = setup_designer_with_network("main");
+
+    let k_id = add_int(&mut designer, "main", 5, -240.0);
+    let closure_id = add_int_map_closure(
+        &mut designer,
+        "main",
+        "x + k",
+        "x",
+        Some(("k", k_id)),
+        -120.0,
+    );
+    let arg_id = add_int(&mut designer, "main", 10, 0.0);
+
+    let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
+        }),
+    );
+    designer.connect_nodes(closure_id, 0, apply_id, 0);
+    designer.connect_nodes(arg_id, 0, apply_id, 1);
+
+    assert_eq!(extract_int(evaluate_node(&designer, "main", apply_id)), 15);
+
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        network.select_nodes(vec![k_id, closure_id, arg_id, apply_id]);
+    }
+    assert!(designer.copy_selection());
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 400.0));
+    assert_eq!(new_ids.len(), 4);
+
+    let pasted_closure = find_pasted(&designer, "main", &new_ids, "closure");
+    let pasted_apply = find_pasted(&designer, "main", &new_ids, "apply");
+
+    // The body's depth-1 NodeOutput capture must point at a pasted node, not
+    // the original `k`.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let body = network
+            .nodes
+            .get(&pasted_closure)
+            .unwrap()
+            .zone
+            .as_ref()
+            .unwrap();
+        let capture_wire = body
+            .nodes
+            .values()
+            .flat_map(|n| n.arguments.iter())
+            .flat_map(|a| a.incoming_wires.iter())
+            .find(|w| {
+                matches!(w.source_pin, SourcePin::NodeOutput { .. }) && w.source_scope_depth == 1
+            })
+            .expect("body has no depth-1 capture wire");
+        assert_ne!(
+            capture_wire.source_node_id, k_id,
+            "capture wire still references the original k node"
+        );
+        assert!(
+            new_ids.contains(&capture_wire.source_node_id),
+            "capture wire must reference a pasted node"
+        );
+    }
+
+    assert_eq!(
+        extract_int(evaluate_node(&designer, "main", pasted_apply)),
+        15
+    );
+}

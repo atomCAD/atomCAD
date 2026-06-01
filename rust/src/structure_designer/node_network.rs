@@ -553,6 +553,53 @@ pub fn resolve_body_collapsed(node: &Node, node_type: &NodeType) -> bool {
     }
 }
 
+/// Rewrite zone-body wires whose source lives in the pasted node's network
+/// (`S0`) so they follow the `old_to_new` id remap produced by
+/// [`NodeNetwork::copy_nodes_from`]. Recurses into nested bodies, tracking the
+/// nesting level (the pasted node's own body is level 1, each nested body one
+/// deeper).
+///
+/// A body wire at nesting `n` reaches S0 iff its `source_scope_depth == n`:
+/// - `ZoneInput { .. }` wires carry the enclosing HOF's id in `source_node_id`
+///   (used directly as the scope-stack key at eval), so the pasted node's own
+///   body references it at depth 1, a body nested one deeper at depth 2, etc.
+/// - `NodeOutput` capture wires at that same depth resolve their source against
+///   S0, so a capture of a *co-pasted* sibling must follow the remap too.
+///
+/// Gating on the exact `depth == nesting` match (rather than blindly remapping
+/// every `source_node_id` found in `old_to_new`) is what makes this robust
+/// against per-body `next_node_id` collisions: a body-internal node can share
+/// an id with an S0 node, but it is only ever referenced at a *shallower* depth,
+/// so it is left untouched. Wires that don't reach S0 (`depth < nesting`,
+/// including ordinary `depth == 0` intra-body wires) point at body-internal
+/// nodes whose ids are preserved by the verbatim body clone, so they need no
+/// remap.
+fn remap_body_wires_to_pasted_scope(
+    body: &mut NodeNetwork,
+    nesting: u8,
+    old_to_new: &HashMap<u64, u64>,
+) {
+    for node in body.nodes.values_mut() {
+        for arg in node
+            .arguments
+            .iter_mut()
+            .chain(node.zone_output_arguments.iter_mut())
+        {
+            for wire in &mut arg.incoming_wires {
+                if wire.source_scope_depth == nesting {
+                    if let Some(&mapped_id) = old_to_new.get(&wire.source_node_id) {
+                        wire.source_node_id = mapped_id;
+                    }
+                }
+            }
+        }
+
+        if let Some(nested) = node.zone_mut() {
+            remap_body_wires_to_pasted_scope(nested, nesting + 1, old_to_new);
+        }
+    }
+}
+
 impl Node {
     /// Mutable access to this node's owned zone body, lazily cloning under
     /// `Arc::make_mut`. Returns `None` for nodes that don't own a zone (every
@@ -1048,6 +1095,22 @@ impl NodeNetwork {
                         .collect();
                     arg.incoming_wires = remapped;
                 }
+            }
+        }
+
+        // Step 3 — Remap zone-body wires that reference the pasted node's own
+        // network (`S0`). A zone-bearing node (closure / map / filter / fold /
+        // foreach) is cloned with its body verbatim (the `Arc` in Step 1), so
+        // the body's internal wires that point *up* into S0 — the HOF's own
+        // `ZoneInput` iteration-value references and cross-scope `NodeOutput`
+        // captures — still carry the OLD source ids. Without this remap a
+        // pasted closure's body looks up the old HOF id at eval and panics
+        // ("current_zone_input: no scope-stack entry for HOF id N"); see
+        // issue #326. Step 2 only touches the top-level node's `arguments`,
+        // never the body.
+        for &new_id in &new_ids {
+            if let Some(body) = self.nodes.get_mut(&new_id).and_then(|node| node.zone_mut()) {
+                remap_body_wires_to_pasted_scope(body, 1, &old_to_new);
             }
         }
 

@@ -2019,6 +2019,17 @@ impl StructureDesigner {
         self.set_dirty(true);
         self.mark_full_refresh();
 
+        // Re-derive validation-dependent state for the pasted nodes. The
+        // refresh path alone does not validate (see
+        // `project_refresh_does_not_validate`), so without this an `apply`
+        // node's arg-pin layout (installed by
+        // `update_apply_pin_layouts_for_network`, which only runs inside
+        // validation) stays collapsed to the bare `f` pin until the node is
+        // next touched, dropping its wired arg connections from view. Runs
+        // before the undo snapshot below so the snapshot captures the
+        // settled, post-validation node state. See issue #326.
+        self.validate_active_network();
+
         // Push undo command: snapshot all pasted nodes and their internal wires
         if !new_ids.is_empty() {
             let new_id_set: HashSet<u64> = new_ids.iter().copied().collect();
