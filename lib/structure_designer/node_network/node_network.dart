@@ -1274,6 +1274,15 @@ class NodeNetworkState extends State<NodeNetwork> {
     }
   }
 
+  /// Track the cursor during plain hover (no button pressed) so Ctrl+V knows
+  /// where the mouse is. `onPointerMove` only fires while a button is held, so
+  /// without this `_lastMousePosition` would stay frozen at the end of the
+  /// last drag and Ctrl+V would paste into the wrong scope (the stale point's
+  /// containing scope) instead of the zone actually under the cursor.
+  void _handlePointerHover(PointerHoverEvent event) {
+    _lastMousePosition = event.localPosition;
+  }
+
   /// Handle pointer move event for panning (middle mouse or Shift + right mouse) and rectangle selection
   void _handlePointerMove(PointerMoveEvent event) {
     // Always track mouse position for paste (Ctrl+V)
@@ -1509,7 +1518,11 @@ class NodeNetworkState extends State<NodeNetwork> {
                 model.copySelection(scopeChain: model.activeScopeChain);
                 return KeyEventResult.handled;
               }
-              // Ctrl+V: Paste at cursor position
+              // Ctrl+V: Paste at cursor position. When the cursor is over a
+              // zone body, paste into that body — `findContainingScope`
+              // resolves the scope (and body-local position) under the mouse,
+              // exactly as right-click → Paste does. Falls back to the
+              // top-level network when the cursor is over empty canvas.
               if (HardwareKeyboard.instance.isControlPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyV) {
                 if (model.hasClipboardContent()) {
@@ -1519,8 +1532,9 @@ class NodeNetworkState extends State<NodeNetwork> {
                   final logicalPos = scopeHit?.bodyLocal ??
                       screenToLogical(_lastMousePosition, _panOffset,
                           getZoomScale(_zoomLevel));
+                  final pasteScope = scopeHit?.scopeChain ?? const <BigInt>[];
                   model.pasteAtPosition(logicalPos.dx, logicalPos.dy,
-                      scopeChain: model.activeScopeChain);
+                      scopeChain: pasteScope);
                 }
                 return KeyEventResult.handled;
               }
@@ -1546,6 +1560,7 @@ class NodeNetworkState extends State<NodeNetwork> {
               },
               child: Listener(
                 onPointerDown: _handlePointerDown,
+                onPointerHover: _handlePointerHover,
                 onPointerMove: _handlePointerMove,
                 onPointerUp: _handlePointerUp,
                 onPointerSignal: (event) {

@@ -6837,16 +6837,14 @@ pub fn promote_node_to_parameter(
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn copy_selection(scope_path: Vec<u64>) -> bool {
+    // `scope_path` is accepted for API symmetry but unused: copy locates the
+    // selection's scope itself (the single-scope selection invariant means it
+    // is unambiguous), so it works on a zone-body selection regardless of the
+    // caller's active scope.
+    let _ = &scope_path;
     unsafe {
         with_mut_cad_instance_or(
-            |cad_instance| {
-                if !scope_path.is_empty() {
-                    // Body-scope clipboard ops land in U4 / U5 alongside
-                    // body authoring.
-                    return false;
-                }
-                cad_instance.structure_designer.copy_selection()
-            },
+            |cad_instance| cad_instance.structure_designer.copy_selection(),
             false,
         )
     }
@@ -6857,11 +6855,10 @@ pub fn paste_at_position(scope_path: Vec<u64>, x: f64, y: f64) -> Vec<u64> {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if !scope_path.is_empty() {
-                    return vec![];
-                }
                 let position = glam::f64::DVec2::new(x, y);
-                let new_ids = cad_instance.structure_designer.paste_at_position(position);
+                let new_ids = cad_instance
+                    .structure_designer
+                    .paste_at_position_scoped(&scope_path, position);
                 refresh_structure_designer_auto(cad_instance);
                 new_ids
             },
@@ -6872,12 +6869,12 @@ pub fn paste_at_position(scope_path: Vec<u64>, x: f64, y: f64) -> Vec<u64> {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn cut_selection(scope_path: Vec<u64>) -> bool {
+    // Like `copy_selection`, the scope is located internally; `scope_path` is
+    // accepted only for API symmetry.
+    let _ = &scope_path;
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                if !scope_path.is_empty() {
-                    return false;
-                }
                 let result = cad_instance.structure_designer.cut_selection();
                 if result {
                     refresh_structure_designer_auto(cad_instance);

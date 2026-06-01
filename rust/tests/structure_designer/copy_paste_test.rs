@@ -579,3 +579,323 @@ fn test_pasted_nodes_become_selected() {
     assert!(!network.is_node_selected(id1));
     assert!(!network.is_node_selected(id2));
 }
+
+// ===== ZONE (HOF body) COPY / PASTE / CUT =====
+//
+// Copy/cut operate on the selection wherever it lives (single-scope
+// invariant), and paste targets the scope it is given. These exercise the
+// scoped clipboard paths against a `map` HOF body. See
+// `doc/design_zones_ui.md`.
+
+/// main + a top-level `map` HOF (whose body is auto-initialized). Returns the
+/// map node id so tests can address its body via scope_path `[map_id]`.
+fn setup_with_map() -> (StructureDesigner, u64) {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(100.0, 100.0));
+    assert_ne!(map_id, 0, "failed to add map node");
+    (designer, map_id)
+}
+
+#[test]
+fn test_find_selection_scope_locates_body_and_top_level() {
+    let (mut designer, map_id) = setup_with_map();
+
+    // Nothing selected anywhere.
+    assert_eq!(designer.find_selection_scope(), None);
+
+    // Top-level selection → empty scope path.
+    let top = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], top);
+    assert_eq!(designer.find_selection_scope(), Some(vec![]));
+
+    // Body selection → [map_id]. Selecting in the body clears top-level
+    // (single-scope invariant), so the located scope is unambiguous.
+    let inner = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    designer.select_node_scoped(&[map_id], inner);
+    assert_eq!(designer.find_selection_scope(), Some(vec![map_id]));
+}
+
+#[test]
+fn test_copy_body_selection_and_paste_into_same_body() {
+    let (mut designer, map_id) = setup_with_map();
+
+    // Two connected nodes inside the body: int -> collect.
+    let int_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    let collect_id = designer.add_node_scoped(&[map_id], "collect", DVec2::new(200.0, 0.0), None);
+    designer.connect_nodes_scoped(&[map_id], int_id, 0, collect_id, 0);
+
+    // Select both body nodes and copy. copy_selection ignores the active
+    // scope and locates the selection itself.
+    designer.select_nodes_scoped(&[map_id], vec![int_id, collect_id]);
+    assert!(designer.copy_selection());
+
+    // Paste into the same body.
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(0.0, 300.0));
+    assert_eq!(new_ids.len(), 2);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert_eq!(body.nodes.len(), 4, "body now holds originals + pastes");
+
+    // Internal wire preserved among the pasted pair (remapped to the new int,
+    // not the original).
+    let pasted_collect = new_ids
+        .iter()
+        .find(|&&id| body.nodes.get(&id).unwrap().node_type_name == "collect")
+        .unwrap();
+    let pasted_int = new_ids
+        .iter()
+        .find(|&&id| body.nodes.get(&id).unwrap().node_type_name == "int")
+        .unwrap();
+    assert_eq!(
+        body.nodes.get(pasted_collect).unwrap().arguments[0].get_node_id(),
+        Some(*pasted_int),
+        "pasted collect should wire to the pasted int"
+    );
+
+    // Pasted nodes are selected in the body.
+    assert!(body.is_node_selected(*pasted_collect));
+    assert!(body.is_node_selected(*pasted_int));
+
+    // Top-level untouched (still just the map node).
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert_eq!(main.nodes.len(), 1);
+}
+
+#[test]
+fn test_copy_top_level_and_paste_into_body() {
+    let (mut designer, map_id) = setup_with_map();
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    assert!(designer.copy_selection());
+
+    // Paste into the map's body.
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    assert_eq!(new_ids.len(), 1);
+
+    // The pasted node lives in the body.
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(body.nodes.contains_key(&new_ids[0]));
+    assert_eq!(body.nodes.get(&new_ids[0]).unwrap().node_type_name, "float");
+
+    // Single-scope invariant: selecting the pasted body nodes cleared the
+    // top-level selection of the source float.
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(main.selected_node_ids.is_empty());
+    // Original float still present at top level (copy, not cut).
+    assert!(main.nodes.contains_key(&float_id));
+}
+
+#[test]
+fn test_copy_body_node_drops_cross_scope_capture_on_paste() {
+    use rust_lib_flutter_cad::structure_designer::node_network::{IncomingWire, SourcePin};
+
+    let (mut designer, map_id) = setup_with_map();
+
+    // Top-level source captured by a body node.
+    let k_id = designer.add_node("int", DVec2::new(0.0, 0.0));
+    let body_node = designer.add_node_scoped(&[map_id], "collect", DVec2::new(10.0, 10.0), None);
+
+    // Author the capture wire by hand (depth 1 into the body node).
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        let body = net.nodes.get_mut(&map_id).unwrap().zone_mut().unwrap();
+        body.nodes.get_mut(&body_node).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: k_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+    }
+
+    // Copy just the body node, then paste it at the top level.
+    designer.select_node_scoped(&[map_id], body_node);
+    assert!(designer.copy_selection());
+    let new_ids = designer.paste_at_position_scoped(&[], DVec2::new(0.0, 300.0));
+    assert_eq!(new_ids.len(), 1);
+
+    // The cross-scope capture is dropped — the pasted node has no incoming wire.
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(
+        main.nodes.get(&new_ids[0]).unwrap().arguments[0].is_empty(),
+        "cross-scope capture must be dropped on paste"
+    );
+}
+
+#[test]
+fn test_cut_body_selection_removes_from_body() {
+    let (mut designer, map_id) = setup_with_map();
+
+    let int_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    let collect_id = designer.add_node_scoped(&[map_id], "collect", DVec2::new(200.0, 0.0), None);
+    designer.select_nodes_scoped(&[map_id], vec![int_id, collect_id]);
+
+    assert!(designer.cut_selection());
+    assert!(designer.has_clipboard_content());
+
+    // Both body nodes are gone.
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(!body.nodes.contains_key(&int_id));
+    assert!(!body.nodes.contains_key(&collect_id));
+
+    // Paste back into the body restores two nodes.
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(0.0, 0.0));
+    assert_eq!(new_ids.len(), 2);
+}
+
+#[test]
+fn test_scoped_paste_undo_redo_round_trip() {
+    let (mut designer, map_id) = setup_with_map();
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    designer.copy_selection();
+
+    let body_count = |d: &StructureDesigner| d.get_scope_network(&[map_id]).unwrap().nodes.len();
+    assert_eq!(body_count(&designer), 0);
+
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    assert_eq!(new_ids.len(), 1);
+    assert_eq!(body_count(&designer), 1);
+
+    // Undo removes the pasted body node.
+    assert!(designer.undo());
+    assert_eq!(body_count(&designer), 0);
+
+    // Redo restores it.
+    assert!(designer.redo());
+    assert_eq!(body_count(&designer), 1);
+}
+
+#[test]
+fn test_scoped_cut_undo_restores_body_nodes() {
+    let (mut designer, map_id) = setup_with_map();
+
+    let int_id = designer.add_node_scoped(&[map_id], "int", DVec2::new(0.0, 0.0), None);
+    designer.select_node_scoped(&[map_id], int_id);
+
+    let body_count = |d: &StructureDesigner| d.get_scope_network(&[map_id]).unwrap().nodes.len();
+    assert_eq!(body_count(&designer), 1);
+
+    assert!(designer.cut_selection());
+    assert_eq!(body_count(&designer), 0);
+
+    // Undo the cut's body delete restores the node.
+    assert!(designer.undo());
+    assert_eq!(body_count(&designer), 1);
+}
+
+#[test]
+fn test_paste_into_body_shifts_content_inside_rect() {
+    // Pasting near the body's top-left corner must not leave nodes at negative
+    // body-local coords (which render clipped outside the rect). The body's
+    // content is shifted right/down so the top-left-most node clears the inset.
+    let (mut designer, map_id) = setup_with_map();
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    designer.copy_selection();
+
+    // Paste at a body-local position that would land the node above/left of
+    // the body interior origin (negative coords).
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(-50.0, -30.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    let pos = body.nodes.get(&new_ids[0]).unwrap().position;
+    // The single pasted node becomes the top-left-most, so it lands exactly at
+    // the inset on both axes.
+    assert!(pos.x >= 8.0 - f64::EPSILON, "node x must clear the inset: {}", pos.x);
+    assert!(pos.y >= 8.0 - f64::EPSILON, "node y must clear the inset: {}", pos.y);
+    assert_eq!(pos, DVec2::new(8.0, 8.0));
+}
+
+#[test]
+fn test_paste_into_body_preserves_relative_layout_when_shifting() {
+    // When the body already has valid content and a paste lands partly past
+    // the corner, the whole body shifts rigidly: relative offsets between all
+    // nodes (existing + pasted) are preserved.
+    let (mut designer, map_id) = setup_with_map();
+
+    // Existing body node well inside the rect.
+    let existing = designer.add_node_scoped(&[map_id], "int", DVec2::new(100.0, 100.0), None);
+    let existing_before = designer
+        .get_scope_network(&[map_id])
+        .unwrap()
+        .nodes
+        .get(&existing)
+        .unwrap()
+        .position;
+
+    // Copy a top-level node and paste it past the top-left corner.
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    designer.copy_selection();
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(-42.0, -42.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    let pasted = body.nodes.get(&new_ids[0]).unwrap().position;
+    let existing_after = body.nodes.get(&existing).unwrap().position;
+
+    // Pasted node clears the inset.
+    assert_eq!(pasted, DVec2::new(8.0, 8.0));
+    // Existing node shifted by the same delta (50, 50): relative layout intact.
+    assert_eq!(existing_after - existing_before, pasted - DVec2::new(-42.0, -42.0));
+}
+
+#[test]
+fn test_paste_into_body_no_shift_when_already_inside() {
+    // A paste that lands fully inside the rect must not move anything.
+    let (mut designer, map_id) = setup_with_map();
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    designer.copy_selection();
+
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(120.0, 90.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert_eq!(
+        body.nodes.get(&new_ids[0]).unwrap().position,
+        DVec2::new(120.0, 90.0),
+        "a paste fully inside the rect must not be shifted"
+    );
+}
+
+#[test]
+fn test_paste_scoped_empty_path_matches_top_level() {
+    // With an empty scope_path the scoped paste delegates to the top-level
+    // path, so it behaves exactly like paste_at_position.
+    let mut designer = setup_designer_with_network("main");
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    designer.copy_selection();
+
+    let new_ids = designer.paste_at_position_scoped(&[], DVec2::new(50.0, 50.0));
+    assert_eq!(new_ids.len(), 1);
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert_eq!(main.nodes.get(&new_ids[0]).unwrap().position, DVec2::new(50.0, 50.0));
+}

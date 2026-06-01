@@ -255,6 +255,20 @@ impl StructureDesigner {
         Some(current)
     }
 
+    /// Returns the scope path of the network that currently holds the
+    /// selection, or `None` if nothing is selected anywhere. An empty `Vec`
+    /// means the top-level active network. The single-scope selection
+    /// invariant guarantees at most one network has a non-empty selection, so
+    /// the first match found by the depth-first walk is unambiguous. Used by
+    /// copy/cut so they operate on the selection wherever it lives, including
+    /// inside a zone body.
+    pub fn find_selection_scope(&self) -> Option<Vec<u64>> {
+        let network_name = self.active_node_network_name.as_ref()?;
+        let network = self.node_type_registry.node_networks.get(network_name)?;
+        let mut prefix = Vec::new();
+        find_selection_scope_recursive(network, &mut prefix)
+    }
+
     /// Returns the atomic structure from the interactive pin of the selected node, if any.
     /// The interactive pin is the lowest-indexed displayed output pin.
     pub fn get_atomic_structure_from_selected_node(&self) -> Option<&AtomicStructure> {
@@ -1929,31 +1943,36 @@ impl StructureDesigner {
 
     /// Copies the currently selected nodes to the clipboard.
     /// Returns true if something was copied, false if selection was empty.
+    ///
+    /// The selection lives in exactly one scope at a time (the single-scope
+    /// selection invariant), so copy locates that scope itself via
+    /// [`find_selection_scope`] rather than trusting a caller-supplied scope
+    /// path. This makes Ctrl+C "just work" on a zone-body selection even when
+    /// the active scope chain points elsewhere (e.g. the user clicked an empty
+    /// body interior, which moves the active scope without moving the
+    /// selection). The clipboard is a flat, scope-agnostic `NodeNetwork` that
+    /// can subsequently be pasted into any scope.
     pub fn copy_selection(&mut self) -> bool {
-        let node_network_name = match &self.active_node_network_name {
-            Some(name) => name.clone(),
+        let scope = match self.find_selection_scope() {
+            Some(scope) => scope,
             None => return false,
         };
 
-        let active_network = match self
-            .node_type_registry
-            .node_networks
-            .get(&node_network_name)
-        {
+        let source = match self.get_scope_network(&scope) {
             Some(network) => network,
             None => return false,
         };
 
-        if active_network.selected_node_ids.is_empty() {
+        if source.selected_node_ids.is_empty() {
             return false;
         }
 
         // Compute centroid of selected nodes' positions
-        let selected_ids = active_network.selected_node_ids.clone();
+        let selected_ids = source.selected_node_ids.clone();
         let mut sum = DVec2::ZERO;
         let mut count = 0u64;
         for &id in &selected_ids {
-            if let Some(node) = active_network.nodes.get(&id) {
+            if let Some(node) = source.nodes.get(&id) {
                 sum += node.position;
                 count += 1;
             }
@@ -1963,9 +1982,13 @@ impl StructureDesigner {
         }
         let centroid = sum / count as f64;
 
-        // Create clipboard and copy nodes centered at (0, 0)
+        // Create clipboard and copy nodes centered at (0, 0). `copy_nodes_from`
+        // only retains wires whose source is among the copied set, so any
+        // cross-scope wire (an ancestor capture or an enclosing HOF's
+        // iteration-value reference) is dropped — the clipboard holds a
+        // self-contained fragment that pastes cleanly into any scope.
         let mut clipboard = NodeNetwork::new_empty();
-        clipboard.copy_nodes_from(active_network, &selected_ids, -centroid);
+        clipboard.copy_nodes_from(source, &selected_ids, -centroid);
         self.clipboard = Some(clipboard);
         true
     }
@@ -2083,13 +2106,89 @@ impl StructureDesigner {
         new_ids
     }
 
+    /// Scope-aware variant of [`paste_at_position`]. With an empty `scope_path`
+    /// it delegates to the top-level `paste_at_position` (which keeps its own
+    /// `PasteNodesCommand` undo path). With a non-empty path it pastes the
+    /// clipboard into the addressed zone body and records the edit as a
+    /// whole-body `EditZoneBodyCommand`, mirroring `duplicate_node_scoped` /
+    /// `delete_selected_scoped`.
+    pub fn paste_at_position_scoped(&mut self, scope_path: &[u64], position: DVec2) -> Vec<u64> {
+        if scope_path.is_empty() {
+            return self.paste_at_position(position);
+        }
+
+        // Snapshot the clipboard into a fresh network first — `copy_nodes_from`
+        // needs an immutable borrow of the clipboard while we later borrow the
+        // body mutably, so decouple them up front.
+        let clipboard = match &self.clipboard {
+            Some(cb) => cb,
+            None => return vec![],
+        };
+        let all_clipboard_ids: HashSet<u64> = clipboard.nodes.keys().copied().collect();
+        if all_clipboard_ids.is_empty() {
+            return vec![];
+        }
+        let mut clipboard_snapshot = NodeNetwork::new_empty();
+        clipboard_snapshot.copy_nodes_from(clipboard, &all_clipboard_ids, DVec2::ZERO);
+        let snapshot_ids: HashSet<u64> = clipboard_snapshot.nodes.keys().copied().collect();
+
+        // Whole-body before-state for undo (captured before mutation).
+        let before = self.snapshot_zone_body(scope_path);
+
+        let new_ids = match self.get_scope_network_mut(scope_path) {
+            Some(body) => {
+                let ids = body.copy_nodes_from(&clipboard_snapshot, &snapshot_ids, position);
+                // Keep all body content inside the body rect. The body grows
+                // right/down to fit content but never up/left, so a paste near
+                // the body's top-left corner can place nodes at negative
+                // body-local coords that render outside (clipped) the rect.
+                // Shift the whole body's content right/down so the top-left-most
+                // node sits at the body inset; the layout pass then grows the
+                // body on the right/bottom to fit. The inset matches the
+                // Flutter drag-clamp floor (`_ZONE_BODY_DRAG_INSET`).
+                shift_body_content_inside(body, ZONE_BODY_CONTENT_INSET);
+                // Select the pasted nodes inside the body scope.
+                body.select_nodes(ids.clone());
+                ids
+            }
+            None => return vec![],
+        };
+
+        if new_ids.is_empty() {
+            return vec![];
+        }
+
+        // Single-scope selection invariant: the pasted nodes are now the
+        // selection (in the body scope), so clear any selection elsewhere.
+        self.clear_selection_in_other_scopes(scope_path);
+
+        // A body edit changes what the enclosing HOF emits, so re-validate and
+        // re-evaluate from the top (matches `delete_selected_scoped`). The
+        // refresh path alone does not validate (see
+        // `project_refresh_does_not_validate`), so derived state like a pasted
+        // `apply` node's arg-pin layout would otherwise stay stale (issue #326).
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.validate_active_network();
+        self.push_zone_body_command(scope_path, "Paste".to_string(), before);
+
+        new_ids
+    }
+
     /// Cuts the currently selected nodes (copy + delete).
     /// Returns true if something was cut.
+    ///
+    /// Copy locates the selection's scope; the matching delete must run in that
+    /// same scope so a zone-body selection is removed from its body (not the
+    /// top-level network).
     pub fn cut_selection(&mut self) -> bool {
         if !self.copy_selection() {
             return false;
         }
-        self.delete_selected();
+        // `copy_selection` does not clear the selection, so it is still in the
+        // same scope `copy_selection` located.
+        let scope = self.find_selection_scope().unwrap_or_default();
+        self.delete_selected_scoped(&scope);
         true
     }
 
@@ -6414,6 +6513,66 @@ fn clear_selection_recursive(network: &mut NodeNetwork) {
 /// `network`). The kept network keeps its own selection; every other network —
 /// the ancestors along the path and all bodies off the path — is cleared.
 /// Backs [`StructureDesigner::clear_selection_in_other_scopes`].
+/// Logical-pixel floor for a body node's top-left inside a zone body. Mirrors
+/// the Flutter drag-clamp floor `_ZONE_BODY_DRAG_INSET` in
+/// `structure_designer_model.dart`: a body's interior origin is `(0, 0)` and it
+/// grows right/down but not up/left, so body content must stay at or beyond
+/// this inset to remain inside the visible rect. Keep the two values in sync.
+const ZONE_BODY_CONTENT_INSET: f64 = 8.0;
+
+/// Shift every node in `network` right/down by the smallest non-negative delta
+/// that brings the top-left-most node to `inset` on each axis. A no-op when the
+/// content already clears the inset (it never moves content left/up). Used by
+/// scoped paste to keep freshly-pasted body content inside the body rect (the
+/// body has no leftward/upward growth). The whole body moves rigidly so
+/// relative node layout — and wires — are preserved.
+fn shift_body_content_inside(network: &mut NodeNetwork, inset: f64) {
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    for node in network.nodes.values() {
+        if node.position.x < min_x {
+            min_x = node.position.x;
+        }
+        if node.position.y < min_y {
+            min_y = node.position.y;
+        }
+    }
+    if !min_x.is_finite() || !min_y.is_finite() {
+        return; // empty body — nothing to shift
+    }
+    let delta = DVec2::new((inset - min_x).max(0.0), (inset - min_y).max(0.0));
+    if delta == DVec2::ZERO {
+        return;
+    }
+    for node in network.nodes.values_mut() {
+        node.position += delta;
+    }
+}
+
+/// Depth-first search for the first network (including any zone body, at any
+/// depth) whose `selected_node_ids` is non-empty. `prefix` accumulates the
+/// chain of HOF node ids walked into; on a hit it holds the scope path of the
+/// selected network. Returns `None` if no network has a selection. See
+/// [`StructureDesigner::find_selection_scope`].
+fn find_selection_scope_recursive(
+    network: &NodeNetwork,
+    prefix: &mut Vec<u64>,
+) -> Option<Vec<u64>> {
+    if !network.selected_node_ids.is_empty() {
+        return Some(prefix.clone());
+    }
+    for (id, node) in network.nodes.iter() {
+        if let Some(zone) = node.zone.as_ref() {
+            prefix.push(*id);
+            if let Some(found) = find_selection_scope_recursive(zone, prefix) {
+                return Some(found);
+            }
+            prefix.pop();
+        }
+    }
+    None
+}
+
 fn clear_selection_except_recursive(network: &mut NodeNetwork, keep_scope_path: &[u64]) {
     match keep_scope_path.split_first() {
         None => {
