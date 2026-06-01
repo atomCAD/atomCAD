@@ -943,6 +943,26 @@ class StructureDesignerModel extends ChangeNotifier {
     return true;
   }
 
+  /// True if a [PinKind.zoneInput] [source] may legally wire to a destination
+  /// whose evaluation scope is [effectiveDestScope].
+  ///
+  /// A zone-input pin produces an HOF body's iteration value (`element` /
+  /// `acc`), which only exists *inside that HOF's own body*. So the destination
+  /// must live at the HOF's body scope (`source.scopeChain ++ [source.nodeId]`)
+  /// or deeper — i.e. that body scope must be a prefix of [effectiveDestScope].
+  /// A sibling of the HOF, or any node in an unrelated zone, references a value
+  /// that isn't in scope there. The Rust authority (`can_connect_wire_scoped`)
+  /// deliberately delegates this scope-containment check to the caller, so it
+  /// must be enforced here. Captures flow the other way (an ancestor node's
+  /// output *into* a body) and are unaffected; non-`zoneInput` sources are
+  /// unconstrained by this rule.
+  static bool _zoneInputSourceInScope(
+      PinReference source, List<BigInt> effectiveDestScope) {
+    if (source.pinKind != PinKind.zoneInput) return true;
+    final bodyScope = [...source.scopeChain, source.nodeId];
+    return _isScopePrefix(bodyScope, effectiveDestScope);
+  }
+
   bool canConnectPins(PinReference pin1, PinReference pin2) {
     if (pin1.isOutput == pin2.isOutput) {
       return false;
@@ -971,6 +991,9 @@ class StructureDesignerModel extends ChangeNotifier {
     // evaluation scope. Otherwise the source can't be evaluated at the
     // destination's call site.
     if (!_isScopePrefix(outPin.scopeChain, effectiveDestScope)) return false;
+    // A zone-input source's iteration value is only in scope inside its own
+    // HOF body; reject drops onto siblings or unrelated zones.
+    if (!_zoneInputSourceInScope(outPin, effectiveDestScope)) return false;
     final sourceScopeDepth =
         effectiveDestScope.length - outPin.scopeChain.length;
 
@@ -1038,6 +1061,9 @@ class StructureDesignerModel extends ChangeNotifier {
         : inPin.scopeChain;
 
     if (!_isScopePrefix(outPin.scopeChain, effectiveDestScope)) return;
+    // A zone-input source's iteration value is only in scope inside its own
+    // HOF body; reject drops onto siblings or unrelated zones.
+    if (!_zoneInputSourceInScope(outPin, effectiveDestScope)) return;
     final sourceScopeDepth =
         effectiveDestScope.length - outPin.scopeChain.length;
 
