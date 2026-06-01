@@ -890,12 +890,7 @@ pub fn load_node_networks_from_file(
             &registry.built_in_node_types,
             design_dir,
         )
-        .map_err(|e| {
-            io::Error::new(
-                e.kind(),
-                format!("In network '{}': {}", name, e),
-            )
-        })?;
+        .map_err(|e| io::Error::new(e.kind(), format!("In network '{}': {}", name, e)))?;
         // Canonicalize every `DataType::Function` reachable from this network
         // before any validator or evaluator touches it. Serde routing through
         // `FunctionType::new` and the data-type-string parser already

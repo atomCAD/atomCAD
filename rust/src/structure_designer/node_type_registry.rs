@@ -88,7 +88,7 @@ use crate::api::structure_designer::structure_designer_api_types::APINodeCategor
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::{
-    walk_data_type_record_names_mut, DataType, FunctionType, RecordType,
+    DataType, FunctionType, RecordType, walk_data_type_record_names_mut,
 };
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::Node;
@@ -698,12 +698,7 @@ impl NodeTypeRegistry {
                 .parameters
                 .iter()
                 .enumerate()
-                .filter(|(i, _)| {
-                    node.arguments
-                        .get(*i)
-                        .map(|a| a.is_empty())
-                        .unwrap_or(true)
-                })
+                .filter(|(i, _)| node.arguments.get(*i).map(|a| a.is_empty()).unwrap_or(true))
                 .map(|(_, p)| p.data_type.clone())
                 .collect();
             return Some(ResolvedOutputType {

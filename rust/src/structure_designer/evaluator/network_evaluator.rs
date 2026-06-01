@@ -14,6 +14,7 @@ use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::evaluator::zone_closure::build_node_function_closure;
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
 use crate::structure_designer::node_data::EvalOutput;
@@ -21,7 +22,6 @@ use crate::structure_designer::node_network::{
     IncomingWire, Node, NodeDisplayType, NodeNetwork, SourcePin,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::structure_designer::evaluator::zone_closure::build_node_function_closure;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,

@@ -219,20 +219,14 @@ fn test_nonexistent_node() {
 /// what's exercised, not any per-node-type logic. This is the same trick the
 /// existing tests in this file use: build the graph manually and read out the
 /// dependency walk.
-fn build_capture_into_map(
-    parent: &mut NodeNetwork,
-    source_id: u64,
-) -> (u64, u64) {
+fn build_capture_into_map(parent: &mut NodeNetwork, source_id: u64) -> (u64, u64) {
     // The "map" node — a top-level node owning a zone body.
     let map_id = parent.add_node("test", DVec2::ZERO, 1, Box::new(MockNodeData));
 
     // Body containing a single "expr" node that captures `source_id`.
     let mut body = NodeNetwork::new_empty();
     let expr_id = body.add_node("test", DVec2::ZERO, 1, Box::new(MockNodeData));
-    body.nodes
-        .get_mut(&expr_id)
-        .unwrap()
-        .arguments[0]
+    body.nodes.get_mut(&expr_id).unwrap().arguments[0]
         .incoming_wires
         .push(IncomingWire {
             source_node_id: source_id,

@@ -240,7 +240,10 @@
       "Bash(sed -n '640,700p' src/structure_designer/node_type_registry.rs)",
       "Bash(sed -n '1490,1530p' src/structure_designer/node_type_registry.rs)",
       "Bash(sed -n '1085,1110p' lib/structure_designer/node_network/node_widget.dart)",
-      "Bash(sed -n '740,760p' lib/structure_designer/node_network/scope_resolver.dart)"
+      "Bash(sed -n '740,760p' lib/structure_designer/node_network/scope_resolver.dart)",
+      "PowerShell(gh issue view 324 --repo atomCAD/atomCAD --json title,body,createdAt,state,labels,comments | Out-String)",
+      "PowerShell(Get-Item *)",
+      "PowerShell(cargo test *)"
     ]
   }
 }

@@ -2250,7 +2250,10 @@ fn move_in_body_without_movement_creates_no_command() {
 
     designer.begin_move_nodes_scoped(&scope);
     designer.end_move_nodes();
-    assert!(!designer.undo(), "click-without-drag should create no command");
+    assert!(
+        !designer.undo(),
+        "click-without-drag should create no command"
+    );
 }
 
 #[test]

@@ -270,12 +270,7 @@ pub fn build_node_function_closure<'a>(
     // wired pins become captures. `unwired_pins[j]` is the original pin index
     // of dense parameter `j`.
     let unwired_pins: Vec<usize> = (0..num_pins)
-        .filter(|&i| {
-            node.arguments
-                .get(i)
-                .map(|a| a.is_empty())
-                .unwrap_or(true)
-        })
+        .filter(|&i| node.arguments.get(i).map(|a| a.is_empty()).unwrap_or(true))
         .collect();
 
     let param_types: Vec<DataType> = unwired_pins
@@ -451,8 +446,7 @@ pub fn run_closure_once<'a>(
     let frame = if closure.pre_supplied_args.is_empty() {
         args
     } else {
-        let mut frame =
-            Vec::with_capacity(closure.pre_supplied_args.len() + args.len());
+        let mut frame = Vec::with_capacity(closure.pre_supplied_args.len() + args.len());
         frame.extend(closure.pre_supplied_args.iter().cloned());
         frame.extend(args);
         frame

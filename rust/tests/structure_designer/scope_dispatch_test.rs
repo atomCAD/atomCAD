@@ -579,7 +579,10 @@ fn delete_selected_scoped_removes_body_wire() {
             .iter()
             .any(|a| !a.incoming_wires.is_empty())
     };
-    assert!(connected(&designer), "precondition: collect has an incoming wire");
+    assert!(
+        connected(&designer),
+        "precondition: collect has an incoming wire"
+    );
 
     designer.select_wire_scoped(&[map_id], int_id, 0, collect_id, 0);
     designer.delete_selected_scoped(&[map_id]);
@@ -657,7 +660,11 @@ fn capture_wire_is_selectable_and_deletable_in_its_body() {
         "the capture wire should be removed after delete"
     );
     assert!(
-        designer.get_scope_network(&[]).unwrap().nodes.contains_key(&k_id),
+        designer
+            .get_scope_network(&[])
+            .unwrap()
+            .nodes
+            .contains_key(&k_id),
         "the captured top-level source node must survive"
     );
 }

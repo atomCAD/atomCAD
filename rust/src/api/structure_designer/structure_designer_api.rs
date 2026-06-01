@@ -257,9 +257,7 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
         }
         APIDataTypeBase::Function => {
             if api_data_type.children.is_empty() {
-                return Err(
-                    "Function type requires at least one child (the return type)".into(),
-                );
+                return Err("Function type requires at least one child (the return type)".into());
             }
             let n = api_data_type.children.len() - 1;
             let parameter_types: Result<Vec<_>, _> = api_data_type.children[..n]
@@ -267,12 +265,10 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
                 .map(api_data_type_to_data_type)
                 .collect();
             let output_type = api_data_type_to_data_type(&api_data_type.children[n])?;
-            let base = DataType::Function(
-                crate::structure_designer::data_type::FunctionType::new(
-                    parameter_types?,
-                    output_type,
-                ),
-            );
+            let base = DataType::Function(crate::structure_designer::data_type::FunctionType::new(
+                parameter_types?,
+                output_type,
+            ));
             return Ok(if api_data_type.array {
                 DataType::Array(Box::new(base))
             } else {
@@ -755,13 +751,14 @@ fn build_derived_shape_view(
                 let f_param = nt.parameters.get(1)?;
                 match &f_param.data_type {
                     DataType::AnyFunction { leading_params } => leading_params.first()?.clone(),
-                    _ => return Some(APIDerivedShapeView {
-                        derived_from_input_pin: None,
-                    }),
+                    _ => {
+                        return Some(APIDerivedShapeView {
+                            derived_from_input_pin: None,
+                        });
+                    }
                 }
             };
-            let starts_with =
-                src_ft.parameter_types.first() == Some(&element_type);
+            let starts_with = src_ft.parameter_types.first() == Some(&element_type);
             Some(APIDerivedShapeView {
                 derived_from_input_pin: starts_with.then(|| "f".to_string()),
             })
@@ -1970,7 +1967,9 @@ pub fn move_selected_nodes(scope_path: Vec<u64>, delta_x: f64, delta_y: f64) {
 pub fn begin_move_nodes(scope_path: Vec<u64>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            instance.structure_designer.begin_move_nodes_scoped(&scope_path);
+            instance
+                .structure_designer
+                .begin_move_nodes_scoped(&scope_path);
         });
     }
 }
@@ -2257,9 +2256,11 @@ pub fn select_nodes_and_wires(
                     )
                 })
                 .collect();
-            instance
-                .structure_designer
-                .select_nodes_and_wires_scoped(&scope_path, node_ids, wire_structs);
+            instance.structure_designer.select_nodes_and_wires_scoped(
+                &scope_path,
+                node_ids,
+                wire_structs,
+            );
             refresh_structure_designer_auto(instance);
         });
     }
@@ -2407,7 +2408,10 @@ pub fn get_int_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIntData> {
 /// "no schema chosen yet". Returns `None` if the node does not exist or is
 /// not a `record_construct`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_construct_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRecordSchemaData> {
+pub fn get_record_construct_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIRecordSchemaData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -2429,7 +2433,10 @@ pub fn get_record_construct_data(scope_path: Vec<u64>, node_id: u64) -> Option<A
 /// Reads the `schema` property of a `record_destructure` node — same shape
 /// and semantics as `get_record_construct_data`.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_destructure_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIRecordSchemaData> {
+pub fn get_record_destructure_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIRecordSchemaData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -3013,7 +3020,10 @@ pub fn get_apply_diff_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAppl
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_composediff_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomComposeDiffData> {
+pub fn get_atom_composediff_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIAtomComposeDiffData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -5323,7 +5333,10 @@ pub fn clear_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name:
 /// Pure read — `&self`, no subnetwork evaluation. Safe to call on every
 /// panel rebuild.
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_record_construct_fields(scope_path: Vec<u64>, node_id: u64) -> Option<Vec<APILiteralField>> {
+pub fn get_record_construct_fields(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<Vec<APILiteralField>> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {

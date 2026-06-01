@@ -167,7 +167,10 @@ fn canonicalize_recurses_into_leading_params() {
     let DataType::Function(inner_ft) = &leading_params[0] else {
         panic!("expected nested Function inside leading_params");
     };
-    assert_eq!(inner_ft.parameter_types, vec![DataType::Bool, DataType::Int]);
+    assert_eq!(
+        inner_ft.parameter_types,
+        vec![DataType::Bool, DataType::Int]
+    );
     assert_eq!(*inner_ft.output_type, DataType::Float);
 }
 
@@ -307,10 +310,7 @@ fn function_value_into_any_function_is_identity_passthrough() {
 #[test]
 fn function_value_into_constrained_any_function_is_identity_passthrough() {
     let registry = NodeTypeRegistry::new();
-    let value = make_function_value(
-        vec![DataType::Int, DataType::Bool],
-        DataType::String,
-    );
+    let value = make_function_value(vec![DataType::Int, DataType::Bool], DataType::String);
     let src_ty = value.infer_data_type().unwrap();
     let dst_ty = DataType::AnyFunction {
         leading_params: vec![DataType::Int],

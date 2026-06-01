@@ -57,7 +57,12 @@ pub fn get_facet_shell_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFac
 
 /// Sets the center and max miller index for a facet shell node
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_facet_shell_center(scope_path: Vec<u64>, node_id: u64, center: APIIVec3, max_miller_index: i32) -> bool {
+pub fn set_facet_shell_center(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    center: APIIVec3,
+    max_miller_index: i32,
+) -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {

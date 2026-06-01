@@ -1680,11 +1680,7 @@ impl StructureDesigner {
                 }
             }
             self.set_dirty(true);
-            self.push_zone_body_command(
-                scope_path,
-                format!("Add {} node", node_type_name),
-                before,
-            );
+            self.push_zone_body_command(scope_path, format!("Add {} node", node_type_name), before);
         }
         node_id
     }
@@ -6452,4 +6448,3 @@ fn find_node_data_at_scope<'a>(
     }
     current.get_node_network_data(node_ref.node_id)
 }
-

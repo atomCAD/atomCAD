@@ -230,7 +230,10 @@ fn test_simple_foreach_with_capture_evaluates() {
     match evaluate_node(&registry, "Main", foreach_id, true) {
         NetworkResult::Unit => {}
         NetworkResult::Error(e) => panic!("foreach evaluated to Error: {}", e),
-        other => panic!("expected Unit from foreach, got {}", other.to_display_string()),
+        other => panic!(
+            "expected Unit from foreach, got {}",
+            other.to_display_string()
+        ),
     }
 }
 
@@ -293,7 +296,10 @@ fn test_custom_subnetwork_instance_source_evaluates() {
 
     let map_id = find_node_id_by_type(main, "map");
     let result = evaluate_node(&registry, "Main", map_id, false);
-    assert_eq!(as_floats(drain(&registry, result)), vec![0.0, 3.0, 6.0, 9.0]);
+    assert_eq!(
+        as_floats(drain(&registry, result)),
+        vec![0.0, 3.0, 6.0, 9.0]
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +375,10 @@ fn test_v3_chained_through_evaluates() {
 
     let map_id = find_node_id_by_type(main, "map");
     let result = evaluate_node(&registry, "Main", map_id, false);
-    assert_eq!(as_floats(drain(&registry, result)), vec![0.0, 2.0, 4.0, 6.0]);
+    assert_eq!(
+        as_floats(drain(&registry, result)),
+        vec![0.0, 2.0, 4.0, 6.0]
+    );
 }
 
 // ---------------------------------------------------------------------------

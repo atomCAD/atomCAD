@@ -275,7 +275,13 @@ fn map_function_pin_expr_increment() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + 1",
+        vec![("x", DataType::Int)],
+        -120.0,
+    );
     let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
 
     designer.connect_nodes(range_id, 0, map_id, 0); // xs
@@ -329,7 +335,13 @@ fn map_function_pin_single_input_builtin_array_len() {
 fn apply_function_pin_expr_double() {
     let mut designer = setup_designer_with_network("main");
 
-    let expr_id = add_expr(&mut designer, "main", "x * 2", vec![("x", DataType::Int)], -120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x * 2",
+        vec![("x", DataType::Int)],
+        -120.0,
+    );
     let arg_id = add_int(&mut designer, "main", 10, 0.0);
 
     let apply_id = designer.add_node("apply", DVec2::new(350.0, 0.0));
@@ -415,7 +427,13 @@ fn map_function_pin_custom_subnetwork_yields_blueprints() {
 
     let range_id = add_range(&mut designer, "main", 1, 1, 3, 0.0); // radii [1,2,3]
     let maker_id = designer.add_node("sphere_maker", DVec2::new(150.0, -120.0));
-    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Blueprint, 0.0);
+    let map_id = add_map(
+        &mut designer,
+        "main",
+        DataType::Int,
+        DataType::Blueprint,
+        0.0,
+    );
 
     designer.connect_nodes(range_id, 0, map_id, 0); // xs
     wire_function_pin(&mut designer, "main", maker_id, map_id, 1); // f ← sphere_maker.fn
@@ -440,7 +458,13 @@ fn map_function_pin_independent_walkers() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + 1",
+        vec![("x", DataType::Int)],
+        -120.0,
+    );
     let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
 
     designer.connect_nodes(range_id, 0, map_id, 0);
@@ -594,7 +618,13 @@ fn scene_output(designer: &StructureDesigner, network: &str, node_id: u64) -> No
 fn can_connect_function_pin_type_match() {
     let mut designer = setup_designer_with_network("main");
 
-    let expr1 = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -200.0);
+    let expr1 = add_expr(
+        &mut designer,
+        "main",
+        "x + 1",
+        vec![("x", DataType::Int)],
+        -200.0,
+    );
     let expr2 = add_expr(
         &mut designer,
         "main",
@@ -694,7 +724,11 @@ fn validation_function_pin_captures_and_thunk_mismatch() {
         valid,
         "one capture leaves a (Int) -> Int that fits map.f; got {errors:?}"
     );
-    assert!(!errors.iter().any(|e| e.contains("used as a function value")));
+    assert!(
+        !errors
+            .iter()
+            .any(|e| e.contains("used as a function value"))
+    );
 
     // Capture the second input too → `() -> Int` thunk, which doesn't fit
     // `map.f` (needs a leading Int param). Surfaces as a type mismatch.
@@ -706,7 +740,9 @@ fn validation_function_pin_captures_and_thunk_mismatch() {
         "expected a wire type-mismatch error, got {errors:?}"
     );
     assert!(
-        !errors.iter().any(|e| e.contains("used as a function value")),
+        !errors
+            .iter()
+            .any(|e| e.contains("used as a function value")),
         "the old function-mode error must be gone, got {errors:?}"
     );
 }
@@ -720,13 +756,22 @@ fn validation_function_pin_type_match_and_mismatch() {
     {
         let mut designer = setup_designer_with_network("main");
         let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-        let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+        let expr_id = add_expr(
+            &mut designer,
+            "main",
+            "x + 1",
+            vec![("x", DataType::Int)],
+            -120.0,
+        );
         let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
         designer.connect_nodes(range_id, 0, map_id, 0);
         wire_function_pin(&mut designer, "main", expr_id, map_id, 1);
 
         let (valid, errors) = validate_and_errors(&mut designer, "main");
-        assert!(valid, "matched function pin should validate clean: {errors:?}");
+        assert!(
+            valid,
+            "matched function pin should validate clean: {errors:?}"
+        );
     }
 
     // Mismatched: (Bool,Int)->Int into map.f (expects starts-with [Int]) —
@@ -794,7 +839,13 @@ fn scene_skip_function_mode_node() {
     // body ignores its parameter, so it both fits `map.f` and renders standalone.
     let mut designer = setup_designer_with_network("const_sphere");
     let param_id = designer.add_node("parameter", DVec2::new(0.0, 0.0));
-    configure_parameter(&mut designer, "const_sphere", param_id, "unused", DataType::Int);
+    configure_parameter(
+        &mut designer,
+        "const_sphere",
+        param_id,
+        "unused",
+        DataType::Int,
+    );
     let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
     designer.set_return_node_id(Some(sphere_id));
     designer.validate_active_network();
@@ -804,7 +855,13 @@ fn scene_skip_function_mode_node() {
     designer.set_active_node_network_name(Some("main".to_string()));
     let range_id = add_range(&mut designer, "main", 1, 1, 3, 0.0);
     let maker_id = designer.add_node("const_sphere", DVec2::new(150.0, -120.0));
-    let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Blueprint, 0.0);
+    let map_id = add_map(
+        &mut designer,
+        "main",
+        DataType::Int,
+        DataType::Blueprint,
+        0.0,
+    );
     designer.connect_nodes(range_id, 0, map_id, 0);
     wire_function_pin(&mut designer, "main", maker_id, map_id, 1);
     designer.validate_active_network();
@@ -847,7 +904,13 @@ fn connecting_f_pin_revalidates_and_clears_stale_zone_output_error() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + 1",
+        vec![("x", DataType::Int)],
+        -120.0,
+    );
     let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
 
     designer.connect_nodes(range_id, 0, map_id, 0); // xs
@@ -888,7 +951,13 @@ fn disconnecting_f_pin_revalidates_and_restores_zone_output_error() {
     let mut designer = setup_designer_with_network("main");
 
     let range_id = add_range(&mut designer, "main", 0, 1, 3, 0.0);
-    let expr_id = add_expr(&mut designer, "main", "x + 1", vec![("x", DataType::Int)], -120.0);
+    let expr_id = add_expr(
+        &mut designer,
+        "main",
+        "x + 1",
+        vec![("x", DataType::Int)],
+        -120.0,
+    );
     let map_id = add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
 
     designer.connect_nodes(range_id, 0, map_id, 0); // xs
@@ -1009,7 +1078,11 @@ fn function_pin_capture_reflects_source_value() {
 
     let result = evaluate_node(&designer, "main", map_id);
     let elements = extract_ints(drain_iter_with_designer(&designer, result));
-    assert_eq!(elements, vec![10, 20, 30], "capture must equal the evaluated source value");
+    assert_eq!(
+        elements,
+        vec![10, 20, 30],
+        "capture must equal the evaluated source value"
+    );
 }
 
 /// All-wired source → `() -> R` thunk, forced via `apply` (no args) returns `R`.

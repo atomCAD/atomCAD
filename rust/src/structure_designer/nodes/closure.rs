@@ -88,8 +88,8 @@ impl ClosureKind {
     /// The return type — i.e. the closure's single zone-output pin type.
     pub fn return_type(&self, type_args: &[DataType], param_names: &[String]) -> DataType {
         match self {
-            ClosureKind::Map => arg(type_args, 1), // free U
-            ClosureKind::Filter => DataType::Bool, // fixed
+            ClosureKind::Map => arg(type_args, 1),  // free U
+            ClosureKind::Filter => DataType::Bool,  // fixed
             ClosureKind::Fold => arg(type_args, 0), // derived = A
             ClosureKind::Foreach => DataType::Unit, // fixed
             ClosureKind::Custom => arg(type_args, param_names.len()),
@@ -192,10 +192,7 @@ impl NodeData for ClosureData {
             .iter()
             .enumerate()
             .map(|(i, t)| {
-                let name = param_names
-                    .get(i)
-                    .map(String::as_str)
-                    .unwrap_or("element");
+                let name = param_names.get(i).map(String::as_str).unwrap_or("element");
                 OutputPinDefinition::fixed(name, t.clone())
             })
             .collect();

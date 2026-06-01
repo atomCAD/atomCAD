@@ -399,6 +399,50 @@ fn record_legacy_form_round_trips_to_backticked_canonical() {
     assert_eq!(reparsed, parsed);
 }
 
+// --- Function-parameter bracketing in Display (issue #324) ---
+// A function-typed *parameter* must be parenthesized because `->` is
+// right-associative: without brackets `(Float -> Float) -> Float` would print
+// as `Float -> Float -> Float`, which conventionally means the distinct type
+// `Float -> (Float -> Float)` and parses back to `(Float, Float) -> Float`.
+
+#[test]
+fn display_brackets_function_typed_single_param() {
+    // (Float -> Float) -> Float
+    let inner = DataType::Function(FunctionType::new(vec![DataType::Float], DataType::Float));
+    let outer = DataType::Function(FunctionType::new(vec![inner], DataType::Float));
+    assert_eq!(outer.to_string(), "(Float -> Float) -> Float");
+}
+
+#[test]
+fn display_no_brackets_for_non_function_single_param() {
+    // Non-function params are left bare: Float -> Float.
+    let ty = DataType::Function(FunctionType::new(vec![DataType::Float], DataType::Float));
+    assert_eq!(ty.to_string(), "Float -> Float");
+}
+
+#[test]
+fn display_brackets_function_typed_param_among_many() {
+    // ((Float -> Float),Int) -> Bool — the function param is parenthesized
+    // even though the surrounding comma already delimits it.
+    let inner = DataType::Function(FunctionType::new(vec![DataType::Float], DataType::Float));
+    let outer = DataType::Function(FunctionType::new(
+        vec![inner, DataType::Int],
+        DataType::Bool,
+    ));
+    assert_eq!(outer.to_string(), "((Float -> Float),Int) -> Bool");
+}
+
+#[test]
+fn function_typed_param_display_roundtrips() {
+    // The pre-fix string `Float -> Float -> Float` parsed back to the WRONG
+    // type `(Float, Float) -> Float`. The bracketed form must round-trip to
+    // the original `(Float -> Float) -> Float`.
+    let inner = DataType::Function(FunctionType::new(vec![DataType::Float], DataType::Float));
+    let original = DataType::Function(FunctionType::new(vec![inner], DataType::Float));
+    let reparsed = DataType::from_string(&original.to_string()).expect("parse");
+    assert_eq!(reparsed, original);
+}
+
 #[test]
 fn simple_input_skips_normalization_allocation() {
     // Smoke test: a clean input still parses. (We don't observe Cow allocation

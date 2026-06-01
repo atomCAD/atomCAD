@@ -111,10 +111,12 @@ fn test_fold_custom_type_int_int() {
     // `f`: (accumulator_type, element_type) -> accumulator_type.
     assert_eq!(
         custom.parameters[2].data_type,
-        DataType::Function(rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
-            parameter_types: vec![DataType::Int, DataType::Int],
-            output_type: Box::new(DataType::Int),
-        })
+        DataType::Function(
+            rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
+                parameter_types: vec![DataType::Int, DataType::Int],
+                output_type: Box::new(DataType::Int),
+            }
+        )
     );
     assert_eq!(*custom.output_type(), DataType::Int);
 

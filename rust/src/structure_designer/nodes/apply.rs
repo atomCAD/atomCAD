@@ -154,8 +154,13 @@ impl NodeData for ApplyData {
             if node.arguments[1 + i].incoming_wires.is_empty() {
                 break; // First unwired pin terminates the prefix.
             }
-            let v = network_evaluator
-                .evaluate_arg_required(network_stack, node_id, registry, context, 1 + i);
+            let v = network_evaluator.evaluate_arg_required(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                1 + i,
+            );
             if let NetworkResult::Error(_) = v {
                 return EvalOutput::single(v);
             }

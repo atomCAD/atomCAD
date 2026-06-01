@@ -82,8 +82,7 @@ pub fn canonicalize_data_type(t: &mut DataType) {
             // mem::replace so the inner Box can be unboxed without a clone
             // of the (potentially large) returned subtree.
             loop {
-                let replaced =
-                    std::mem::replace(ft.output_type.as_mut(), DataType::None);
+                let replaced = std::mem::replace(ft.output_type.as_mut(), DataType::None);
                 match replaced {
                     DataType::Function(inner) => {
                         ft.parameter_types.extend(inner.parameter_types);
@@ -163,7 +162,9 @@ pub enum DataType {
     /// `AnyFunction` — every concrete `Function` value carries a fully-specified
     /// `FunctionType`. The validator rejects `AnyFunction` appearing as a
     /// resolved output type. See `doc/design_function_pin_unification.md`.
-    AnyFunction { leading_params: Vec<DataType> },
+    AnyFunction {
+        leading_params: Vec<DataType>,
+    },
     Record(RecordType),
 }
 
@@ -292,13 +293,14 @@ impl fmt::Display for DataType {
                     write!(
                         f,
                         "{} -> {}",
-                        func_type.parameter_types[0], func_type.output_type
+                        fmt_param_type(&func_type.parameter_types[0]),
+                        func_type.output_type
                     )
                 } else {
                     let params = func_type
                         .parameter_types
                         .iter()
-                        .map(|t| t.to_string())
+                        .map(fmt_param_type)
                         .collect::<Vec<_>>()
                         .join(",");
                     write!(f, "({}) -> {}", params, func_type.output_type)
@@ -546,8 +548,7 @@ impl DataType {
             if src_ft.parameter_types.len() < leading_params.len() {
                 return false;
             }
-            for (src_param, dest_param) in
-                src_ft.parameter_types.iter().zip(leading_params.iter())
+            for (src_param, dest_param) in src_ft.parameter_types.iter().zip(leading_params.iter())
             {
                 if !DataType::can_be_converted_to(src_param, dest_param, registry) {
                     return false;
@@ -715,8 +716,7 @@ impl DataType {
             if src_ft.parameter_types.len() < leading_params.len() {
                 return false;
             }
-            for (src_param, dest_param) in
-                src_ft.parameter_types.iter().zip(leading_params.iter())
+            for (src_param, dest_param) in src_ft.parameter_types.iter().zip(leading_params.iter())
             {
                 if !DataType::can_be_converted_to_strict_no_broadcast(
                     src_param, dest_param, registry,
@@ -789,9 +789,7 @@ pub fn contains_iterator(t: &DataType) -> bool {
             func.parameter_types.iter().any(contains_iterator)
                 || contains_iterator(&func.output_type)
         }
-        DataType::AnyFunction { leading_params } => {
-            leading_params.iter().any(contains_iterator)
-        }
+        DataType::AnyFunction { leading_params } => leading_params.iter().any(contains_iterator),
         DataType::Record(RecordType::Anonymous(fields)) => {
             fields.iter().any(|(_, ty)| contains_iterator(ty))
         }
@@ -909,6 +907,20 @@ fn is_simple_identifier(name: &str) -> bool {
         _ => return false,
     }
     chars.all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Formats a type that appears in function *parameter* position, wrapping a
+/// function-typed parameter in parentheses. The `->` arrow is right-associative,
+/// so a bare function parameter reads as part of the return type:
+/// `(Float -> Float) -> Float` would otherwise print as `Float -> Float -> Float`,
+/// which by convention means the *distinct* type `Float -> (Float -> Float)` and
+/// actually parses back to `(Float, Float) -> Float`. Parenthesizing keeps the
+/// rendering unambiguous and round-trip-correct. See issue #324.
+fn fmt_param_type(t: &DataType) -> String {
+    match t {
+        DataType::Function(_) => format!("({})", t),
+        _ => t.to_string(),
+    }
 }
 
 /// Emits a record name into the Display formatter. Bare identifiers are

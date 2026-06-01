@@ -110,10 +110,12 @@ fn test_filter_custom_type_int() {
     // `f`: (element_type) -> Bool.
     assert_eq!(
         custom.parameters[1].data_type,
-        DataType::Function(rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
-            parameter_types: vec![DataType::Int],
-            output_type: Box::new(DataType::Bool),
-        })
+        DataType::Function(
+            rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
+                parameter_types: vec![DataType::Int],
+                output_type: Box::new(DataType::Bool),
+            }
+        )
     );
     assert_eq!(
         *custom.output_type(),

@@ -1545,8 +1545,11 @@ impl NodeNetwork {
         destination_node_id: u64,
         destination_argument_index: usize,
     ) -> bool {
-        match self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
-        {
+        match self.canonicalize_wire(
+            source_node_id,
+            destination_node_id,
+            destination_argument_index,
+        ) {
             Some(wire) => self.selected_wires.contains(&wire),
             None => false,
         }
@@ -1565,9 +1568,11 @@ impl NodeNetwork {
         destination_argument_index: usize,
     ) -> bool {
         let _ = source_output_pin_index;
-        let Some(wire) =
-            self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
-        else {
+        let Some(wire) = self.canonicalize_wire(
+            source_node_id,
+            destination_node_id,
+            destination_argument_index,
+        ) else {
             return false;
         };
         self.selected_node_ids.clear();
@@ -1589,9 +1594,11 @@ impl NodeNetwork {
         destination_argument_index: usize,
     ) -> bool {
         let _ = source_output_pin_index;
-        let Some(wire) =
-            self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
-        else {
+        let Some(wire) = self.canonicalize_wire(
+            source_node_id,
+            destination_node_id,
+            destination_argument_index,
+        ) else {
             return false;
         };
 
@@ -1615,9 +1622,11 @@ impl NodeNetwork {
         destination_argument_index: usize,
     ) -> bool {
         let _ = source_output_pin_index;
-        let Some(wire) =
-            self.canonicalize_wire(source_node_id, destination_node_id, destination_argument_index)
-        else {
+        let Some(wire) = self.canonicalize_wire(
+            source_node_id,
+            destination_node_id,
+            destination_argument_index,
+        ) else {
             return false;
         };
 

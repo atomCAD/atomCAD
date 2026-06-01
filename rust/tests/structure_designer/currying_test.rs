@@ -45,7 +45,9 @@ use rust_lib_flutter_cad::structure_designer::node_network::{
     Argument, CollapseMode, DEFAULT_BODY_HEIGHT, DEFAULT_BODY_WIDTH, IncomingWire, Node,
     NodeNetwork, SourcePin,
 };
-use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, no_data_loader, no_data_saver};
+use rust_lib_flutter_cad::structure_designer::node_type::{
+    NodeType, no_data_loader, no_data_saver,
+};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::{
     NodeTypeRegistry, RecordTypeDef,
 };
@@ -175,7 +177,10 @@ fn canonicalize_walks_through_nested_function_parameter() {
 fn canonicalize_walks_through_anonymous_record_fields() {
     let mut t = DataType::Record(RecordType::anonymous(vec![
         ("f".to_string(), non_canonical_a_then_bc_to_d()),
-        ("g".to_string(), DataType::Iterator(Box::new(non_canonical_a_then_bc_to_d()))),
+        (
+            "g".to_string(),
+            DataType::Iterator(Box::new(non_canonical_a_then_bc_to_d())),
+        ),
     ]));
     canonicalize_data_type(&mut t);
     let expected = DataType::Record(RecordType::anonymous(vec![
@@ -271,8 +276,7 @@ fn parser_produces_canonical_for_right_associative_chain() {
 #[test]
 fn parser_produces_canonical_for_paren_then_arrow() {
     // `(Float, Int) => (Bool -> String)` should flatten to (Float, Int, Bool) -> String.
-    let parsed =
-        DataType::from_string("(Float, Int) => (Bool -> String)").expect("parse");
+    let parsed = DataType::from_string("(Float, Int) => (Bool -> String)").expect("parse");
     assert_eq!(parsed, canonical_abc_to_d());
 }
 
@@ -280,8 +284,7 @@ fn parser_produces_canonical_for_paren_then_arrow() {
 fn parser_produces_canonical_for_zero_arg_function_returning_function() {
     // `() -> (Int -> Float)` should flatten to (Int) -> Float.
     let parsed = DataType::from_string("() -> (Int -> Float)").expect("parse");
-    let expected =
-        DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Float));
+    let expected = DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Float));
     assert_eq!(parsed, expected);
 }
 
@@ -448,17 +451,15 @@ fn built_in_node_type_signatures_are_already_canonical() {
     let registry = NodeTypeRegistry::new();
     for (name, node_type) in &registry.built_in_node_types {
         // Snapshot signature.
-        let before_params: Vec<DataType> =
-            node_type.parameters.iter().map(|p| p.data_type.clone()).collect();
+        let before_params: Vec<DataType> = node_type
+            .parameters
+            .iter()
+            .map(|p| p.data_type.clone())
+            .collect();
         let before_outputs: Vec<DataType> = node_type
             .output_pins
             .iter()
-            .map(|p| {
-                p.data_type
-                    .fixed_type()
-                    .cloned()
-                    .unwrap_or(DataType::None)
-            })
+            .map(|p| p.data_type.fixed_type().cloned().unwrap_or(DataType::None))
             .collect();
 
         // Re-canonicalize the in-memory signature and compare. We use the
@@ -544,7 +545,9 @@ fn phase2_add_expr_to_body(
     let registry = &mut designer.node_type_registry;
     let network = registry.node_networks.get_mut(owner_network).unwrap();
     let owner_node = network.nodes.get_mut(&owner_node_id).unwrap();
-    let body = owner_node.zone_mut().expect("zone-owning node missing zone");
+    let body = owner_node
+        .zone_mut()
+        .expect("zone-owning node missing zone");
 
     let expr_params: Vec<ExprParameter> = param_names
         .iter()
@@ -613,10 +616,7 @@ fn phase2_wire_zone_input_to_body_node(
         .unwrap()
         .zone_mut()
         .unwrap();
-    body.nodes
-        .get_mut(&body_node_id)
-        .unwrap()
-        .arguments[body_param_index]
+    body.nodes.get_mut(&body_node_id).unwrap().arguments[body_param_index]
         .incoming_wires
         .push(IncomingWire {
             source_node_id: owner_node_id,
@@ -894,8 +894,7 @@ fn phase3_add_custom_int_closure(
             custom_label: None,
         }),
     );
-    let expr_id =
-        phase2_add_expr_to_body(designer, network, closure_id, expression, param_names);
+    let expr_id = phase2_add_expr_to_body(designer, network, closure_id, expression, param_names);
     for (i, _) in param_names.iter().enumerate() {
         phase2_wire_zone_input_to_body_node(designer, network, closure_id, i, expr_id, i);
     }
@@ -932,13 +931,8 @@ fn apply_phase3_full_eval_three_args() {
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
 
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
     let a = phase3_add_int(&mut designer, "main", 2, -100.0);
     let b = phase3_add_int(&mut designer, "main", 3, -50.0);
     let c = phase3_add_int(&mut designer, "main", 4, 0.0);
@@ -963,13 +957,8 @@ fn apply_phase3_partial_then_full_via_second_apply() {
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
 
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
     let a = phase3_add_int(&mut designer, "main", 10, -100.0);
     let b = phase3_add_int(&mut designer, "main", 20, -50.0);
     let c = phase3_add_int(&mut designer, "main", 30, 0.0);
@@ -1000,13 +989,7 @@ fn apply_phase3_identity_partial_returns_f_unchanged() {
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
 
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b"],
-        "a * b",
-        -100.0,
-    );
+    let g = phase3_add_custom_int_closure(&mut designer, "main", &["a", "b"], "a * b", -100.0);
     let app = phase3_add_apply(&mut designer, "main", 0.0);
     designer.connect_nodes(g, 0, app, 0); // f only, no arg pins wired
 
@@ -1116,13 +1099,8 @@ fn apply_phase3_prefix_only_validation_rejects_gap() {
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
 
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
     let b = phase3_add_int(&mut designer, "main", 5, -50.0);
 
     let app = phase3_add_apply(&mut designer, "main", 50.0);
@@ -1173,16 +1151,15 @@ fn apply_phase3_canonical_flat_arity_drives_arg_pins() {
     // canonicalizes so the closure's declared output type is the flat
     // (A, B, C) -> D. We use Ints throughout for body computability — the
     // canonicalization itself is type-agnostic.
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
     // Verify the closure's declared output is canonical 3-arg.
     let nt = {
-        let net = designer.node_type_registry.node_networks.get("main").unwrap();
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
         let node = net.nodes.get(&g).unwrap();
         designer
             .node_type_registry
@@ -1215,7 +1192,11 @@ fn apply_phase3_canonical_flat_arity_drives_arg_pins() {
     // the f wire), apply's custom_node_type should have exactly 4 parameters
     // (f + 3 arg pins).
     let apply_param_count = {
-        let net = designer.node_type_registry.node_networks.get("main").unwrap();
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
         let node = net.nodes.get(&app).unwrap();
         designer
             .node_type_registry
@@ -1243,13 +1224,8 @@ fn apply_phase3_output_pin_retypes_on_partial_wiring() {
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
 
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
     let a = phase3_add_int(&mut designer, "main", 1, -100.0);
 
     let app = phase3_add_apply(&mut designer, "main", 50.0);
@@ -1258,7 +1234,11 @@ fn apply_phase3_output_pin_retypes_on_partial_wiring() {
     // arg1, arg2 left unwired ⇒ k=1, output type should be Function((Int, Int), Int)
 
     let out_ty = {
-        let net = designer.node_type_registry.node_networks.get("main").unwrap();
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
         let node = net.nodes.get(&app).unwrap();
         designer
             .node_type_registry
@@ -1375,11 +1355,7 @@ fn phase4_drain_map_walker(
 /// Returns the *resolved* output type of `node_id`'s pin 0 (output) against
 /// the active network — what downstream consumers see, including the
 /// derivation our post-pass performs for `map`.
-fn phase4_output_type(
-    designer: &StructureDesigner,
-    network_name: &str,
-    node_id: u64,
-) -> DataType {
+fn phase4_output_type(designer: &StructureDesigner, network_name: &str, node_id: u64) -> DataType {
     let net = designer
         .node_type_registry
         .node_networks
@@ -1608,8 +1584,8 @@ fn map_phase4_f_disconnect_restores_stored_output_type() {
             .get_mut("main")
             .unwrap();
         net.selected_wires.clear();
-        net.selected_wires
-            .push(rust_lib_flutter_cad::structure_designer::node_network::Wire {
+        net.selected_wires.push(
+            rust_lib_flutter_cad::structure_designer::node_network::Wire {
                 source_node_id: g,
                 source_pin: SourcePin::NodeOutput { pin_index: 0 },
                 source_scope_depth: 0,
@@ -1617,7 +1593,8 @@ fn map_phase4_f_disconnect_restores_stored_output_type() {
                 destination_argument_index: 1,
                 destination_argument_kind:
                     rust_lib_flutter_cad::structure_designer::node_network::ArgumentKind::External,
-            });
+            },
+        );
     }
     designer.delete_selected();
 
@@ -1732,13 +1709,8 @@ fn apply_phase_b_f_pin_stays_any_function_after_wiring() {
     designer.add_node_network("main");
     designer.set_active_node_network_name(Some("main".to_string()));
 
-    let g = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
     let app = phase3_add_apply(&mut designer, "main", 50.0);
     designer.connect_nodes(g, 0, app, 0);
 
@@ -1788,13 +1760,8 @@ fn apply_phase_b_any_function_rule_accepts_arbitrary_arity_sources() {
     // change, the connect check would require exact match against the
     // default `(Float) -> Float`.
     let g1 = phase3_add_custom_int_closure(&mut designer, "main", &["a"], "a + 1", -300.0);
-    let g3 = phase3_add_custom_int_closure(
-        &mut designer,
-        "main",
-        &["a", "b", "c"],
-        "a + b + c",
-        -200.0,
-    );
+    let g3 =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -200.0);
 
     let app = phase3_add_apply(&mut designer, "main", 50.0);
 
@@ -1857,7 +1824,13 @@ fn map_phase_c_f_pin_is_any_function_when_unwired() {
         "Int-input map.f must declare AnyFunction {{ leading_params: [Int] }}"
     );
 
-    let m_float = phase4_add_map(&mut designer, "main", DataType::Float, DataType::Bool, 100.0);
+    let m_float = phase4_add_map(
+        &mut designer,
+        "main",
+        DataType::Float,
+        DataType::Bool,
+        100.0,
+    );
     assert_eq!(
         map_f_pin_type(&designer, "main", m_float),
         DataType::AnyFunction {
