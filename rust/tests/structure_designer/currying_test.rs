@@ -2245,3 +2245,88 @@ fn apply_pin_layout_resolves_zone_input_function_source() {
          source (f pin + 1 arg pin)"
     );
 }
+
+// =============================================================================
+// The cross-scope body apply layout is re-derived at LOAD time.
+//
+// `.cnnd` files saved by old code never derived a body apply's arg pins from a
+// zone-input `f`. This test proves the load path re-derives them: it builds the
+// zone-input-fed body apply, saves it to a real `.cnnd`, then loads it through
+// the full `StructureDesigner::load_node_networks` path (which runs
+// `repair_node_network` per network and then `validate_network` over every
+// network in dependency order — the latter being what runs the recursive,
+// ancestor-aware post-pass). The reloaded body apply must carry its arg pin.
+// =============================================================================
+
+#[test]
+fn apply_pin_layout_rederived_on_cnnd_load_with_zone_input_f() {
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+        save_node_networks_to_file,
+    };
+
+    // Build the source design: a `map` over `Iter[(Int) -> Int]` whose body
+    // apply takes its `f` from the map's `element` zone-input pin.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let elem_fn = DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Int));
+    let map_id = phase4_add_map(&mut designer, "main", elem_fn, DataType::Int, 0.0);
+
+    let apply_id = {
+        let map_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let apply_id = map_body.add_node(
+            "apply",
+            DVec2::new(200.0, 0.0),
+            2,
+            Box::new(ApplyData {
+                kind: ClosureKind::Map,
+                type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
+            }),
+        );
+        map_body.nodes.get_mut(&apply_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: map_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+        apply_id
+    };
+
+    // Save to a temp `.cnnd`.
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let path = temp_dir.path().join("zone_input_apply.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save .cnnd");
+
+    // Load into a fresh designer through the full load path (repair +
+    // validate-all-networks).
+    let mut loaded = StructureDesigner::new();
+    loaded
+        .load_node_networks(path.to_str().unwrap())
+        .expect("load .cnnd");
+
+    // The reloaded body apply carries its derived arg pin (f + 1 arg = 2).
+    let params = body_apply_param_count(&loaded, map_id, apply_id);
+    assert_eq!(
+        params, 2,
+        "loading a .cnnd must re-derive the body apply's arg pin from the \
+         zone-input `(Int) -> Int` source"
+    );
+}
