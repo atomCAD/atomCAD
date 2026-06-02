@@ -1222,9 +1222,28 @@ impl NodeTypeRegistry {
     /// type-checks the f wire and the arg wires). Idempotent: running it
     /// repeatedly with the same wires produces the same custom_node_type.
     ///
-    /// Body-internal apply nodes are intentionally not handled here. They
-    /// surface via `repair_node_network`'s zone-body recursion if needed.
+    /// Recurses into every HOF zone body so body-internal `apply` nodes get
+    /// the same derived layout. The `f`-source is resolved across scopes via
+    /// the threaded ancestor chain, so it works whether `f` is wired from a
+    /// node in the same body (depth 0), a cross-scope capture (`NodeOutput`
+    /// depth ≥ 1), or a zone-input reference (`ZoneInput` depth ≥ 1 — e.g.
+    /// dragging the body's `element`/`acc` pin into `apply.f`). Without this,
+    /// dragging a function-typed wire into an `apply` inside a zone produced
+    /// no arg pins — the layout stayed collapsed to the bare `f` pin.
     pub fn update_apply_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
+        self.update_apply_pin_layouts_scoped(network, &[], &[]);
+    }
+
+    /// Scope-aware recursive worker for the apply post-pass. `ancestors` /
+    /// `ancestor_hof_ids` describe `network`'s enclosing-zone chain using the
+    /// same root-first indexing as `validate_zones_recursive` /
+    /// `resolve_wire_source_type_scoped` (empty when `network` is top-level).
+    fn update_apply_pin_layouts_scoped(
+        &self,
+        network: &mut NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) {
         // Snapshot pass (immutable read).
         let apply_ids: Vec<u64> = network
             .nodes
@@ -1236,7 +1255,12 @@ impl NodeTypeRegistry {
             let Some(node) = network.nodes.get(&id) else {
                 continue;
             };
-            if let Some(custom) = self.compute_apply_custom_type_from_wired_f(node, network) {
+            if let Some(custom) = self.compute_apply_custom_type_from_wired_f(
+                node,
+                network,
+                ancestors,
+                ancestor_hof_ids,
+            ) {
                 overrides.push((id, custom));
             }
         }
@@ -1244,6 +1268,36 @@ impl NodeTypeRegistry {
         for (id, custom) in overrides {
             if let Some(node) = network.nodes.get_mut(&id) {
                 node.set_custom_node_type(Some(custom), true);
+            }
+        }
+
+        // Recurse into zone bodies with the chain extended by this network and
+        // the HOF id, so a body-internal `apply` whose `f` is a cross-scope
+        // capture or zone-input reference resolves against the enclosing HOF.
+        // Take-and-restore (not `zone_mut`) so `&*network` can serve as the
+        // immediate-parent ancestor while the body is mutated — the same
+        // borrow-split as `network_validator::validate_zones_recursive`.
+        let hof_ids: Vec<u64> = network
+            .nodes
+            .iter()
+            .filter_map(|(&id, n)| n.zone.is_some().then_some(id))
+            .collect();
+        for hof_id in hof_ids {
+            let Some(mut body_arc) =
+                network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take())
+            else {
+                continue;
+            };
+            {
+                let mut new_ancestors: Vec<&NodeNetwork> = ancestors.to_vec();
+                new_ancestors.push(&*network);
+                let mut new_hof_ids: Vec<u64> = ancestor_hof_ids.to_vec();
+                new_hof_ids.push(hof_id);
+                let body = std::sync::Arc::make_mut(&mut body_arc);
+                self.update_apply_pin_layouts_scoped(body, &new_ancestors, &new_hof_ids);
+            }
+            if let Some(node) = network.nodes.get_mut(&hof_id) {
+                node.zone = Some(body_arc);
             }
         }
     }
@@ -1259,8 +1313,13 @@ impl NodeTypeRegistry {
     /// Returns `None` to fall back to today's `ApplyData`-driven layout when:
     /// - `f` is disconnected, or
     /// - the source type doesn't resolve (unresolved polymorphic upstream,
-    ///   stale wire, etc.), or
+    ///   stale wire, cross-scope source with an incomplete ancestor chain), or
     /// - the source type is not a `Function`.
+    ///
+    /// The `f`-source is resolved across scopes via `ancestors` /
+    /// `ancestor_hof_ids`, so it works for a local source (depth 0), a
+    /// cross-scope capture (`NodeOutput` depth ≥ 1), or a zone-input
+    /// reference (`ZoneInput` depth ≥ 1, e.g. the body's `element`/`acc` pin).
     ///
     /// Currying Phase 3, `doc/design_currying.md` §"`apply` semantics":
     /// - Number of arg pins `N = source's flat parameter_types.len()`.
@@ -1281,6 +1340,8 @@ impl NodeTypeRegistry {
         &self,
         apply_node: &Node,
         network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
     ) -> Option<NodeType> {
         use crate::structure_designer::data_type::FunctionType;
         use crate::structure_designer::node_type::OutputPinDefinition;
@@ -1288,17 +1349,16 @@ impl NodeTypeRegistry {
         let base = self.built_in_node_types.get("apply")?;
         let f_arg = apply_node.arguments.first()?;
         let f_wire = f_arg.incoming_wires.first()?;
-        // Only handle local-scope NodeOutput wires here — captures and zone
-        // inputs (`source_scope_depth > 0` or `ZoneInput { .. }`) for an
-        // apply.f live cross-scope and aren't repairable from this network
-        // alone. They round-trip through validation which surfaces any
-        // shape errors.
-        if f_wire.source_scope_depth != 0 {
-            return None;
-        }
-        let (src_node_id, src_pin_index) = f_wire.as_legacy_pair()?;
-        let src_node = network.nodes.get(&src_node_id)?;
-        let src_type = self.resolve_output_type(src_node, network, src_pin_index)?;
+        // Resolve the f source's type across scopes — local (depth 0),
+        // cross-scope capture (`NodeOutput` depth ≥ 1), or zone-input
+        // reference (`ZoneInput` depth ≥ 1, e.g. dragging the body's
+        // `element`/`acc` pin into apply.f). Returns `None` for abstract or
+        // otherwise-unresolvable sources (including a cross-scope source whose
+        // ancestor chain isn't available — e.g. the body is being processed in
+        // isolation during repair; the top-level pass resolves it correctly).
+        let src_type = self
+            .resolve_wire_source_type_scoped(f_wire, network, ancestors, ancestor_hof_ids)?
+            .data_type;
         let DataType::Function(src_ft) = src_type else {
             return None;
         };
@@ -1413,7 +1473,23 @@ impl NodeTypeRegistry {
     /// Called from `repair_node_network` (heavyweight repair entry, e.g.
     /// `.cnnd` load) and from `network_validator::validate_network` (every
     /// validate pass). Idempotent: running it on a steady state is a no-op.
+    ///
+    /// Recurses into HOF zone bodies (with the ancestor chain threaded), so a
+    /// body-internal `map` whose `f` is wired — including from a cross-scope
+    /// capture or a zone-input pin — derives its layout too.
     pub fn update_map_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
+        self.update_map_pin_layouts_scoped(network, &[], &[]);
+    }
+
+    /// Scope-aware recursive worker for the map post-pass. See
+    /// [`Self::update_apply_pin_layouts_scoped`] for the chain convention and
+    /// the take-and-restore borrow-split rationale.
+    fn update_map_pin_layouts_scoped(
+        &self,
+        network: &mut NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) {
         // Snapshot pass (immutable read). Recompute *every* map node's
         // custom_node_type so disconnecting `f` restores the MapData-driven
         // layout cleanly — without this, an override installed by a previous
@@ -1432,7 +1508,9 @@ impl NodeTypeRegistry {
             let Some(node) = network.nodes.get(&id) else {
                 continue;
             };
-            if let Some(custom) = self.compute_map_custom_type(node, network) {
+            if let Some(custom) =
+                self.compute_map_custom_type(node, network, ancestors, ancestor_hof_ids)
+            {
                 updates.push((id, custom));
             }
         }
@@ -1442,23 +1520,81 @@ impl NodeTypeRegistry {
                 node.set_custom_node_type(Some(custom), true);
             }
         }
+
+        // Recurse into zone bodies with the chain extended. Take-and-restore
+        // so `&*network` can serve as the immediate-parent ancestor while the
+        // body is mutated (see `update_apply_pin_layouts_scoped`).
+        let hof_ids: Vec<u64> = network
+            .nodes
+            .iter()
+            .filter_map(|(&id, n)| n.zone.is_some().then_some(id))
+            .collect();
+        for hof_id in hof_ids {
+            let Some(mut body_arc) =
+                network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take())
+            else {
+                continue;
+            };
+            {
+                let mut new_ancestors: Vec<&NodeNetwork> = ancestors.to_vec();
+                new_ancestors.push(&*network);
+                let mut new_hof_ids: Vec<u64> = ancestor_hof_ids.to_vec();
+                new_hof_ids.push(hof_id);
+                let body = std::sync::Arc::make_mut(&mut body_arc);
+                self.update_map_pin_layouts_scoped(body, &new_ancestors, &new_hof_ids);
+            }
+            if let Some(node) = network.nodes.get_mut(&hof_id) {
+                node.zone = Some(body_arc);
+            }
+        }
     }
 
-    /// Resolves the custom_node_type for a `map` node: derived from the wired
-    /// `f` source when the starts-with rule matches, else the MapData-driven
-    /// default. Returns `None` only when the base `map` node type is missing
-    /// from the registry (shouldn't happen in a well-formed registry) or when
+    /// Resolves the custom_node_type for a `map` node:
+    /// - `f` wired and derivable (starts-with rule matches) → the derived
+    ///   layout.
+    /// - `f` disconnected → the MapData-driven default (so disconnect cleanly
+    ///   restores the user's inline-body shape).
+    /// - `f` wired but **unresolvable** (cross-scope source whose ancestor
+    ///   chain isn't available in the current call, or a stale/abstract
+    ///   source) → `None`, meaning "leave the existing layout untouched". This
+    ///   keeps the body-recursion of `repair_node_network` (which processes
+    ///   each body once more with no ancestor chain) from clobbering a derived
+    ///   cross-scope layout that the top-level pass already installed.
+    ///
+    /// Returns `None` when the base `map` node type is missing or
     /// `calculate_custom_node_type` produces nothing.
-    fn compute_map_custom_type(&self, map_node: &Node, network: &NodeNetwork) -> Option<NodeType> {
+    fn compute_map_custom_type(
+        &self,
+        map_node: &Node,
+        network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<NodeType> {
         let base = self.built_in_node_types.get("map")?;
-        // MapData-driven default (today's behavior) — the fallback when `f` is
-        // disconnected or starts-with doesn't match.
         let map_data_default = map_node.data.calculate_custom_node_type(base)?;
-        // Try to derive from wired f; fall back to the MapData default.
-        Some(
-            self.compute_map_custom_type_from_wired_f(map_node, network, &map_data_default)
-                .unwrap_or(map_data_default),
-        )
+        if let Some(derived) = self.compute_map_custom_type_from_wired_f(
+            map_node,
+            network,
+            &map_data_default,
+            ancestors,
+            ancestor_hof_ids,
+        ) {
+            return Some(derived);
+        }
+        // `f` wired but the source didn't resolve to a starts-with-compatible
+        // Function in this scope context — keep the existing layout rather
+        // than reverting to the MapData default (avoids the repair-recursion
+        // clobber). Disconnected `f` falls through to the default.
+        let f_wired = map_node
+            .arguments
+            .get(1)
+            .map(|a| !a.incoming_wires.is_empty())
+            .unwrap_or(false);
+        if f_wired {
+            None
+        } else {
+            Some(map_data_default)
+        }
     }
 
     /// Computes the dynamic `custom_node_type` for a `map` node whose `f` pin
@@ -1489,19 +1625,21 @@ impl NodeTypeRegistry {
         map_node: &Node,
         network: &NodeNetwork,
         map_data_default: &NodeType,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
     ) -> Option<NodeType> {
         use crate::structure_designer::data_type::FunctionType;
         use crate::structure_designer::node_type::OutputPinDefinition;
 
-        // map.f is parameter index 1.
+        // map.f is parameter index 1. Resolve its source across scopes — local
+        // (depth 0), cross-scope capture, or zone-input reference — so a `map`
+        // inside a zone body whose `f` is fed by an outer `element`/`acc` pin
+        // derives its layout too.
         let f_arg = map_node.arguments.get(1)?;
         let f_wire = f_arg.incoming_wires.first()?;
-        if f_wire.source_scope_depth != 0 {
-            return None;
-        }
-        let (src_node_id, src_pin_index) = f_wire.as_legacy_pair()?;
-        let src_node = network.nodes.get(&src_node_id)?;
-        let src_type = self.resolve_output_type(src_node, network, src_pin_index)?;
+        let src_type = self
+            .resolve_wire_source_type_scoped(f_wire, network, ancestors, ancestor_hof_ids)?
+            .data_type;
         let DataType::Function(src_ft) = src_type else {
             return None;
         };

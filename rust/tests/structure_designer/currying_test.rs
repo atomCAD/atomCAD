@@ -1969,3 +1969,279 @@ fn map_phase_c_any_function_rule_accepts_higher_arity_sources() {
         "(Bool, Int) -> Int source must still be rejected (leading param Bool ≠ Int)"
     );
 }
+
+// =============================================================================
+// Apply-pin post-pass recurses into zone bodies.
+//
+// Regression for the bug where dragging a function-typed wire into the `f`
+// pin of an `apply` node that lives *inside* a zone body produced no arg
+// pins. `update_apply_pin_layouts_for_network` historically only ran on the
+// top-level network, so a body-internal apply's layout stayed collapsed to
+// the bare `f` pin. The fix makes the post-pass descend into every HOF zone
+// body. See `node_type_registry.rs::update_apply_pin_layouts_for_network`.
+// =============================================================================
+
+#[test]
+fn apply_pin_layout_post_pass_recurses_into_zone_body() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Outer `map` whose body will host the apply. (Any zone-owning HOF works;
+    // the post-pass keys on `Node.zone.is_some()`.)
+    let map_id = phase4_add_map(&mut designer, "main", DataType::Int, DataType::Int, 0.0);
+
+    // Add a `closure` source ((Int) -> Int) and an `apply` consumer into the
+    // map body, then wire apply.f ← closure (depth-0, same body).
+    let (closure_id, apply_id) = {
+        let map_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let closure_id = map_body.add_node(
+            "closure",
+            DVec2::new(0.0, 0.0),
+            0,
+            Box::new(ClosureData {
+                kind: ClosureKind::Map,
+                type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
+                custom_label: None,
+            }),
+        );
+        let apply_id = map_body.add_node(
+            "apply",
+            DVec2::new(200.0, 0.0),
+            2,
+            Box::new(ApplyData {
+                kind: ClosureKind::Map,
+                type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
+            }),
+        );
+        (closure_id, apply_id)
+    };
+
+    // Populate caches for the two body nodes (sizes apply's arg slots; with
+    // Phase D, apply's ApplyData-driven layout is just the bare `f` pin until
+    // the post-pass derives the arg pins from the wired source).
+    for nid in [closure_id, apply_id] {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&nid)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Sanity: before the post-pass, the body apply is collapsed to the bare
+    // `f` pin (1 parameter).
+    let params_before = body_apply_param_count(&designer, map_id, apply_id);
+    assert_eq!(
+        params_before, 1,
+        "before the post-pass, the body apply should carry only its `f` pin"
+    );
+
+    // Wire apply.f ← closure inside the body.
+    {
+        let map_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        map_body.nodes.get_mut(&apply_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: closure_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+
+    // Run the post-pass on the TOP network only. The fix makes it recurse
+    // into the map body and derive the body apply's arg-pin layout from the
+    // wired (Int) -> Int source.
+    {
+        let mut main = designer
+            .node_type_registry
+            .node_networks
+            .remove("main")
+            .unwrap();
+        designer
+            .node_type_registry
+            .update_apply_pin_layouts_for_network(&mut main);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert("main".to_string(), main);
+    }
+
+    // After the recursive post-pass, the body apply has its `f` pin plus one
+    // derived arg pin (the (Int) -> Int source's single parameter).
+    let params_after = body_apply_param_count(&designer, map_id, apply_id);
+    assert_eq!(
+        params_after, 2,
+        "the recursive post-pass must derive the body apply's arg pin from \
+         the wired (Int) -> Int source (f pin + 1 arg pin)"
+    );
+}
+
+/// Read the parameter count of an `apply` node living inside `map_id`'s body.
+fn body_apply_param_count(designer: &StructureDesigner, map_id: u64, apply_id: u64) -> usize {
+    let map_node = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap();
+    let body = map_node.zone.as_ref().unwrap();
+    let apply_node = body.nodes.get(&apply_id).unwrap();
+    apply_node
+        .custom_node_type
+        .as_ref()
+        .map(|nt| nt.parameters.len())
+        .expect("body apply should carry a custom_node_type")
+}
+
+// =============================================================================
+// Apply-pin post-pass resolves a body apply's `f` fed by a ZONE-INPUT pin.
+//
+// The follow-up bug: dragging a function-typed wire from a zone-input pin
+// (the body's `element` / `acc`) into a body apply's `f` produced no arg pins,
+// because the post-pass resolved the f-source only within the body's own frame
+// (`source_scope_depth == 0`). The fix threads the ancestor chain and resolves
+// the zone-input source against the enclosing HOF's `zone_input_pins`.
+// =============================================================================
+
+#[test]
+fn apply_pin_layout_resolves_zone_input_function_source() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Outer `map` whose element type is itself a function `(Int) -> Int`, so
+    // the body's `element` zone-input pin carries that function value.
+    let elem_fn = DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Int));
+    let map_id = phase4_add_map(&mut designer, "main", elem_fn, DataType::Int, 0.0);
+
+    // Add an `apply` into the map body.
+    let apply_id = {
+        let map_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        map_body.add_node(
+            "apply",
+            DVec2::new(200.0, 0.0),
+            2,
+            Box::new(ApplyData {
+                kind: ClosureKind::Map,
+                type_args: vec![DataType::Int, DataType::Int],
+                param_names: vec![],
+            }),
+        )
+    };
+
+    // Populate apply's cache (collapses to the bare `f` pin under Phase D).
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&apply_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Wire apply.f ← the map's `element` zone-input pin (pin_index 0, depth 1).
+    {
+        let map_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        map_body.nodes.get_mut(&apply_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: map_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+    }
+
+    // Run the post-pass on the TOP network. The threaded ancestor chain lets
+    // the body apply resolve its `f` source against the map's zone-input pin
+    // type `(Int) -> Int`.
+    {
+        let mut main = designer
+            .node_type_registry
+            .node_networks
+            .remove("main")
+            .unwrap();
+        designer
+            .node_type_registry
+            .update_apply_pin_layouts_for_network(&mut main);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert("main".to_string(), main);
+    }
+
+    let params_after = body_apply_param_count(&designer, map_id, apply_id);
+    assert_eq!(
+        params_after, 2,
+        "the body apply must derive its arg pin from the zone-input `(Int) -> Int` \
+         source (f pin + 1 arg pin)"
+    );
+}
