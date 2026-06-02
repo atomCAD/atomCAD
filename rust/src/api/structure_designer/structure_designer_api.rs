@@ -611,6 +611,14 @@ fn build_node_view(
         .downcast_ref::<ClosureData>()
         .and_then(|d| d.custom_label.clone());
 
+    // Enclosing-zone chain for `node_network`, so polymorphic output pins fed
+    // by a body's delayed-argument (zone-input) pin resolve to the concrete
+    // element type rather than dead-ending. Empty for a top-level network.
+    let (scope_ancestors, scope_hof_ids) = cad_instance
+        .structure_designer
+        .get_scope_ancestors(scope_path)
+        .unwrap_or_default();
+
     let output_type = node_type.output_type().clone();
     // The `-1` (function) pin's type is wiring-aware
     // (`doc/design_node_function_pin_captures.md`): its parameters are the
@@ -622,7 +630,7 @@ fn build_node_view(
     let function_type = cad_instance
         .structure_designer
         .node_type_registry
-        .resolve_output_type(node, node_network, -1)
+        .resolve_output_type_scoped(node, node_network, -1, &scope_ancestors, &scope_hof_ids)
         .unwrap_or_else(|| node_type.get_function_type());
 
     let scene_node_data = cad_instance
@@ -644,8 +652,13 @@ fn build_node_view(
                 match cad_instance
                     .structure_designer
                     .node_type_registry
-                    .resolve_output_type_detailed(node, node_network, i as i32)
-                {
+                    .resolve_output_type_detailed_scoped(
+                        node,
+                        node_network,
+                        i as i32,
+                        &scope_ancestors,
+                        &scope_hof_ids,
+                    ) {
                     Some(r) => (Some(r.data_type.to_string()), r.via_fallback),
                     None => (None, false),
                 }

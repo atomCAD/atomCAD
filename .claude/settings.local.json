@@ -248,7 +248,8 @@
       "PowerShell(gh issue view 326 --repo atomCAD/atomCAD --json title,body,comments,author,labels | Out-String)",
       "PowerShell($out = \"$env:TEMP\\\\issue326.png\"; try { Invoke-WebRequest -Uri \"https://private-user-images.githubusercontent.com/3246014/598915319-587672a6-7b88-4e77-a63a-3cf13901858d.png\" -OutFile $out -ErrorAction Stop; Get-Item $out | Select-Object Length, FullName } catch { \"FAILED: $\\($_.Exception.Message\\)\" })",
       "PowerShell(cargo *)",
-      "Bash(Get-ChildItem -Path C:\\\\machine_phase_systems\\\\flutter_cad -Directory)"
+      "Bash(Get-ChildItem -Path C:\\\\machine_phase_systems\\\\flutter_cad -Directory)",
+      "PowerShell(gh issue *)"
     ]
   }
 }

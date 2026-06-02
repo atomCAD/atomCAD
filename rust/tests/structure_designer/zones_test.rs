@@ -2756,3 +2756,106 @@ fn validation_rule1_error_attributed_to_hof_in_parent_network() {
         text,
     );
 }
+
+/// Regression for issue #318 ("zones branch: type refinement is not working
+/// fully"). A polymorphic (`SameAsInput`) node inside an HOF body, fed
+/// *directly* by the body's delayed-argument (`element`) zone-input pin, must
+/// refine its output type to the concrete element type rather than dead-end
+/// at `None`. Here a `map` over `Iter[Blueprint]` feeds its `element` straight
+/// into `free_rot` (input pin `HasFreeLinOps`, output `SameAsInput("input")`),
+/// which must resolve to `Blueprint`. Before the fix the `SameAsInput` chase
+/// could not follow a `ZoneInput`-sourced wire, so the output was unresolved
+/// — which blocked using the main concrete types inside closures.
+#[test]
+fn map_body_zone_input_refines_polymorphic_output_type() {
+    use glam::f64::DVec3;
+    use rust_lib_flutter_cad::structure_designer::node_network::SourcePin;
+    use rust_lib_flutter_cad::structure_designer::nodes::free_rot::FreeRotData;
+
+    let mut designer = setup_designer_with_network("main");
+
+    // map(input=Blueprint, output=Blueprint).
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Blueprint,
+            output_type: DataType::Blueprint,
+        }),
+    );
+
+    // Add two `free_rot` nodes into the map body. free_rot has 4 params
+    // (input, angle, rot_axis, pivot_point); param 0 (`input`) is HasFreeLinOps.
+    let add_free_rot = |designer: &mut StructureDesigner, x: f64| -> u64 {
+        let registry = &mut designer.node_type_registry;
+        let body = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .expect("map node missing zone");
+        body.add_node(
+            "free_rot",
+            DVec2::new(x, 0.0),
+            4,
+            Box::new(FreeRotData {
+                angle: 0.0,
+                rot_axis: DVec3::new(0.0, 0.0, 1.0),
+                pivot_point: DVec3::ZERO,
+            }),
+        )
+    };
+    let free_rot_id = add_free_rot(&mut designer, 50.0);
+    let free_rot2_id = add_free_rot(&mut designer, 100.0);
+
+    // Wire `element` zone-input pin (Blueprint) → free_rot.input (param 0).
+    wire_zone_input_to_body_node(&mut designer, "main", map_id, free_rot_id, 0);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    let free_rot_node = body.nodes.get(&free_rot_id).unwrap();
+
+    // Without the enclosing-zone chain the ZoneInput source is unresolvable —
+    // this is the bug the fix addresses.
+    let unscoped = designer
+        .node_type_registry
+        .resolve_output_type(free_rot_node, body, 0);
+    assert_eq!(
+        unscoped, None,
+        "without the scope chain the ZoneInput-sourced SameAsInput pin dead-ends"
+    );
+
+    // With the chain, free_rot's output refines to the concrete element type.
+    let (ancestors, hof_ids) = designer.get_scope_ancestors(&[map_id]).unwrap();
+    let scoped = designer.node_type_registry.resolve_output_type_scoped(
+        free_rot_node,
+        body,
+        0,
+        &ancestors,
+        &hof_ids,
+    );
+    assert_eq!(
+        scoped,
+        Some(DataType::Blueprint),
+        "free_rot fed by the map body's Blueprint element pin must refine to Blueprint"
+    );
+
+    // And authoring a downstream wire from free_rot's refined output now
+    // type-checks (free_rot.output:Blueprint -> free_rot2.input:HasFreeLinOps).
+    assert!(
+        designer.can_connect_wire_scoped(
+            &[map_id],
+            free_rot_id,
+            SourcePin::NodeOutput { pin_index: 0 },
+            0,
+            free_rot2_id,
+            0,
+        ),
+        "free_rot's refined Blueprint output should connect to a downstream \
+         HasFreeLinOps input inside the body"
+    );
+}

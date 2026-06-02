@@ -91,6 +91,7 @@ use crate::structure_designer::data_type::{
     DataType, FunctionType, RecordType, walk_data_type_record_names_mut,
 };
 use crate::structure_designer::node_network::Argument;
+use crate::structure_designer::node_network::IncomingWire;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::SourcePin;
@@ -666,8 +667,40 @@ impl NodeTypeRegistry {
         network: &NodeNetwork,
         output_pin_index: i32,
     ) -> Option<DataType> {
-        self.resolve_output_type_detailed(node, network, output_pin_index)
-            .map(|r| r.data_type)
+        self.resolve_output_type_scoped(node, network, output_pin_index, &[], &[])
+    }
+
+    /// Scope-aware variant of [`Self::resolve_output_type`]. `ancestors` /
+    /// `ancestor_hof_ids` describe the enclosing-zone chain of `network`, using
+    /// the same indexing convention as the validator: `ancestors[i]` is the
+    /// network at depth `i` from the root, and `ancestor_hof_ids[i]` is the HOF
+    /// id in `ancestors[i]` whose zone body is `ancestors[i + 1]` — the deepest
+    /// entry being the HOF whose body is `network` itself. Pass empty slices
+    /// when `network` is a top-level network (no enclosing zones).
+    ///
+    /// Without the chain a `SameAsInput` pin fed *directly* by a body's
+    /// delayed-argument (`ZoneInput`) pin — or by a cross-scope capture — has
+    /// no resolvable source and dead-ends at `None`. With it, such a pin
+    /// resolves to the enclosing HOF's concrete zone-input (element) type, so
+    /// e.g. wiring a `map` body's `element` straight into `free_rot`'s abstract
+    /// `HasFreeLinOps` input refines to the concrete element type. Build the
+    /// chain with `StructureDesigner::get_scope_ancestors`.
+    pub fn resolve_output_type_scoped(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+        output_pin_index: i32,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<DataType> {
+        self.resolve_output_type_detailed_scoped(
+            node,
+            network,
+            output_pin_index,
+            ancestors,
+            ancestor_hof_ids,
+        )
+        .map(|r| r.data_type)
     }
 
     /// Same as `resolve_output_type`, but also reports whether the pin was
@@ -679,6 +712,20 @@ impl NodeTypeRegistry {
         node: &Node,
         network: &NodeNetwork,
         output_pin_index: i32,
+    ) -> Option<ResolvedOutputType> {
+        self.resolve_output_type_detailed_scoped(node, network, output_pin_index, &[], &[])
+    }
+
+    /// Scope-aware variant of [`Self::resolve_output_type_detailed`]. See
+    /// [`Self::resolve_output_type_scoped`] for the meaning of `ancestors` /
+    /// `ancestor_hof_ids`.
+    pub fn resolve_output_type_detailed_scoped(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+        output_pin_index: i32,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
     ) -> Option<ResolvedOutputType> {
         let node_type = self.get_node_type_for_node(node)?;
         if output_pin_index == -1 {
@@ -693,7 +740,8 @@ impl NodeTypeRegistry {
             // everywhere. Returns `None` if pin 0's type can't resolve
             // (polymorphic / unresolved), which rejects the `-1` connection
             // until resolvable (design Open Question 1).
-            let return_type = self.resolve_output_type(node, network, 0)?;
+            let return_type =
+                self.resolve_output_type_scoped(node, network, 0, ancestors, ancestor_hof_ids)?;
             let params: Vec<DataType> = node_type
                 .parameters
                 .iter()
@@ -707,15 +755,24 @@ impl NodeTypeRegistry {
             });
         }
         let pin = node_type.output_pins.get(output_pin_index as usize)?;
-        self.resolve_pin_output_type(&pin.data_type, node, node_type, network)
+        self.resolve_pin_output_type_scoped(
+            &pin.data_type,
+            node,
+            node_type,
+            network,
+            ancestors,
+            ancestor_hof_ids,
+        )
     }
 
-    fn resolve_pin_output_type(
+    fn resolve_pin_output_type_scoped(
         &self,
         pin_type: &PinOutputType,
         node: &Node,
         node_type: &NodeType,
         network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
     ) -> Option<ResolvedOutputType> {
         match pin_type {
             PinOutputType::Fixed(t) => {
@@ -732,10 +789,27 @@ impl NodeTypeRegistry {
                 input_pin_name,
                 fallback_if_disconnected,
             } => {
-                match self.single_source_for_input(node, node_type, input_pin_name, network) {
-                    Some((src_node, src_pin_index)) => {
-                        self.resolve_output_type_detailed(src_node, network, src_pin_index)
-                    }
+                // Locate the single incoming wire on the named input pin.
+                // `SameAsInput` is only meaningful for single-connection
+                // (non-array) input pins; a pin with 0 or >1 wires falls through
+                // to the fallback/None branch below. Unlike the former
+                // `single_source_for_input`, this inspects the wire directly, so
+                // a `ZoneInput` (delayed-argument) or cross-scope capture source
+                // is followed rather than silently dropped.
+                let single_wire = node_type
+                    .parameters
+                    .iter()
+                    .position(|p| p.name == *input_pin_name)
+                    .and_then(|i| node.arguments.get(i))
+                    .filter(|arg| arg.incoming_wires.len() == 1)
+                    .and_then(|arg| arg.incoming_wires.first());
+                match single_wire {
+                    Some(wire) => self.resolve_wire_source_type_scoped(
+                        wire,
+                        network,
+                        ancestors,
+                        ancestor_hof_ids,
+                    ),
                     None => {
                         // No single connected source. Apply the fallback if the
                         // input pin is genuinely disconnected (zero connections);
@@ -790,6 +864,81 @@ impl NodeTypeRegistry {
         }
     }
 
+    /// Resolve the concrete output type produced by a single incoming wire,
+    /// following local node outputs (depth 0), cross-scope captures
+    /// (`NodeOutput` at depth ≥ 1), and zone-input / delayed-argument sources
+    /// (`ZoneInput` at depth ≥ 1). `network` is the wire's storage network and
+    /// `ancestors` / `ancestor_hof_ids` are its enclosing-zone chain (see
+    /// [`Self::resolve_output_type_scoped`]). Returns `None` for abstract or
+    /// otherwise-unresolvable sources, matching the rest of the resolver.
+    fn resolve_wire_source_type_scoped(
+        &self,
+        wire: &IncomingWire,
+        network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<ResolvedOutputType> {
+        let depth = wire.source_scope_depth as usize;
+        match wire.source_pin {
+            SourcePin::NodeOutput { pin_index } => {
+                if depth == 0 {
+                    // Local source in the same network.
+                    let src_node = network.nodes.get(&wire.source_node_id)?;
+                    self.resolve_output_type_detailed_scoped(
+                        src_node,
+                        network,
+                        pin_index,
+                        ancestors,
+                        ancestor_hof_ids,
+                    )
+                } else {
+                    // Capture from an ancestor network `depth` frames up.
+                    if depth > ancestors.len() {
+                        return None;
+                    }
+                    let src_network = ancestors[ancestors.len() - depth];
+                    let src_node = src_network.nodes.get(&wire.source_node_id)?;
+                    let new_ancestors = &ancestors[..ancestors.len() - depth];
+                    let new_hof_ids = &ancestor_hof_ids[..ancestor_hof_ids.len() - depth];
+                    self.resolve_output_type_detailed_scoped(
+                        src_node,
+                        src_network,
+                        pin_index,
+                        new_ancestors,
+                        new_hof_ids,
+                    )
+                }
+            }
+            SourcePin::ZoneInput { pin_index } => {
+                // Delayed-argument reference to an enclosing HOF's zone-input
+                // pin (`element` / `acc`). The HOF lives `depth` frames up; its
+                // declared zone-input pin type is the body parameter's type.
+                if depth < 1 || depth > ancestors.len() || depth > ancestor_hof_ids.len() {
+                    return None;
+                }
+                let hof_network = ancestors[ancestors.len() - depth];
+                let hof_id = ancestor_hof_ids[ancestor_hof_ids.len() - depth];
+                let hof_node = hof_network.nodes.get(&hof_id)?;
+                let hof_node_type = self.get_node_type_for_node(hof_node)?;
+                let pin = hof_node_type.zone_input_pins.get(pin_index)?;
+                // Resolve the zone-input pin's declared type against the HOF's
+                // own scope. For the common `Fixed(concrete)` case this returns
+                // the concrete element type (and `None` for an abstract
+                // declaration — concrete-only, like every other pin).
+                let new_ancestors = &ancestors[..ancestors.len() - depth];
+                let new_hof_ids = &ancestor_hof_ids[..ancestor_hof_ids.len() - depth];
+                self.resolve_pin_output_type_scoped(
+                    &pin.data_type,
+                    hof_node,
+                    hof_node_type,
+                    hof_network,
+                    new_ancestors,
+                    new_hof_ids,
+                )
+            }
+        }
+    }
+
     /// Returns `true` when the named input pin exists on this node and has
     /// zero connections wired to it. Used to gate `SameAsInput` fallback
     /// resolution: a malformed pin name or argument count mismatch yields
@@ -812,27 +961,6 @@ impl NodeTypeRegistry {
             Some(argument) => argument.is_empty(),
             None => false,
         }
-    }
-
-    fn single_source_for_input<'a>(
-        &self,
-        node: &'a Node,
-        node_type: &NodeType,
-        input_pin_name: &str,
-        network: &'a NodeNetwork,
-    ) -> Option<(&'a Node, i32)> {
-        let arg_index = node_type
-            .parameters
-            .iter()
-            .position(|p| p.name == input_pin_name)?;
-        let argument = node.arguments.get(arg_index)?;
-        // SameAsInput is only meaningful for single-connection (non-array) input pins.
-        if argument.len() != 1 {
-            return None;
-        }
-        let (src_node_id, src_pin_index) = argument.iter_source_pins().next()?;
-        let src_node = network.nodes.get(&src_node_id)?;
-        Some((src_node, src_pin_index))
     }
 
     pub fn get_parameter_name(&self, node: &Node, parameter_index: usize) -> String {

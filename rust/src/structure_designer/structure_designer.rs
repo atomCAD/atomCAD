@@ -236,6 +236,32 @@ impl StructureDesigner {
         Some(current)
     }
 
+    /// Returns the enclosing-zone ancestor chain for `scope_path`, in the
+    /// indexing convention used by the validator and
+    /// [`NodeTypeRegistry::resolve_output_type_scoped`]: `ancestors[i]` is the
+    /// network at depth `i` from the active root, and `ancestor_hof_ids[i]` is
+    /// the HOF id in `ancestors[i]` whose zone body is `ancestors[i + 1]` — the
+    /// deepest entry's body being the network `scope_path` itself resolves to
+    /// (i.e. [`get_scope_network`]'s return value). Both vectors have length
+    /// `scope_path.len()`; an empty `scope_path` yields two empty vectors
+    /// (top-level network, no enclosing zones). The resolved body network is
+    /// **not** included — it is what the caller passes as the resolver's
+    /// `network` argument.
+    pub fn get_scope_ancestors(&self, scope_path: &[u64]) -> Option<(Vec<&NodeNetwork>, Vec<u64>)> {
+        let network_name = self.active_node_network_name.as_ref()?;
+        let mut current = self.node_type_registry.node_networks.get(network_name)?;
+        let mut ancestors: Vec<&NodeNetwork> = Vec::with_capacity(scope_path.len());
+        let mut hof_ids: Vec<u64> = Vec::with_capacity(scope_path.len());
+        for hof_id in scope_path {
+            ancestors.push(current);
+            hof_ids.push(*hof_id);
+            let node = current.nodes.get(hof_id)?;
+            let zone = node.zone.as_ref()?;
+            current = zone;
+        }
+        Some((ancestors, hof_ids))
+    }
+
     /// Mutable counterpart of [`get_scope_network`]. Each step calls
     /// `Node::zone_mut` so the `Arc<NodeNetwork>` is uniquely owned (CoW)
     /// before the descent continues. Returns `None` under the same conditions
@@ -2232,12 +2258,15 @@ impl StructureDesigner {
             None => return false,
         };
 
+        // Top-level active network: no enclosing zones.
         network.can_connect_nodes(
             source_node_id,
             source_output_pin_index,
             dest_node_id,
             dest_param_index,
             &self.node_type_registry,
+            &[],
+            &[],
         )
     }
 
@@ -2421,6 +2450,10 @@ impl StructureDesigner {
                 dest_param_index,
             );
         }
+        let (ancestors, ancestor_hof_ids) = match self.get_scope_ancestors(scope_path) {
+            Some(t) => t,
+            None => return false,
+        };
         let network = match self.get_scope_network(scope_path) {
             Some(n) => n,
             None => return false,
@@ -2431,6 +2464,8 @@ impl StructureDesigner {
             dest_node_id,
             dest_param_index,
             &self.node_type_registry,
+            &ancestors,
+            &ancestor_hof_ids,
         )
     }
 
@@ -2635,10 +2670,22 @@ impl StructureDesigner {
         };
         let source_type = match source_pin {
             crate::structure_designer::node_network::SourcePin::NodeOutput { pin_index } => {
-                match self.node_type_registry.resolve_output_type(
+                // Resolve with the source's enclosing-zone chain so a
+                // polymorphic (`SameAsInput`) source pin inside an HOF body —
+                // e.g. `free_rot` fed by the body's delayed-argument `element`
+                // pin — refines to the concrete element type instead of
+                // dead-ending. See `get_scope_ancestors`.
+                let (ancestors, ancestor_hof_ids) =
+                    match self.get_scope_ancestors(source_scope_path) {
+                        Some(t) => t,
+                        None => return false,
+                    };
+                match self.node_type_registry.resolve_output_type_scoped(
                     source_node,
                     source_network,
                     pin_index,
+                    &ancestors,
+                    &ancestor_hof_ids,
                 ) {
                     Some(t) => t,
                     None => return false,

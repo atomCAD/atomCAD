@@ -1240,6 +1240,7 @@ impl NodeNetwork {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn can_connect_nodes(
         &self,
         source_node_id: u64,
@@ -1247,6 +1248,8 @@ impl NodeNetwork {
         dest_node_id: u64,
         dest_param_index: usize,
         node_type_registry: &crate::structure_designer::node_type_registry::NodeTypeRegistry,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
     ) -> bool {
         // Check if both nodes exist
         let source_node = match self.nodes.get(&source_node_id) {
@@ -1281,10 +1284,12 @@ impl NodeNetwork {
         // Get the resolved concrete output type of the source pin. For a
         // polymorphic pin that cannot yet be resolved (e.g. its own input is
         // disconnected), the connection is considered invalid.
-        let source_output_type = match node_type_registry.resolve_output_type(
+        let source_output_type = match node_type_registry.resolve_output_type_scoped(
             source_node,
             self,
             source_output_pin_index,
+            ancestors,
+            ancestor_hof_ids,
         ) {
             Some(t) => t,
             None => return false,
