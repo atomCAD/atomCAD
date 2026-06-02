@@ -452,6 +452,12 @@ pub fn run_closure_once<'a>(
         frame
     };
     context.push_zone_input_frame(closure.owner_node_id, frame);
+    // Enter the body's scope so the body nodes' errors / output strings are
+    // keyed under this HOF's id (their ids share the top-level / sibling-body
+    // id space). For the lazy walkers this push lands on the real scene
+    // context, so a body node's hover value no longer collides with a same-id
+    // node in an enclosing scope. See `doc/design_zones.md`.
+    context.push_eval_scope(closure.owner_node_id);
 
     // Push the closure's body onto the base stack. For the lazy walkers
     // (`network_stack == &[]`) this is a body-only stack; for the eager HOFs
@@ -470,6 +476,7 @@ pub fn run_closure_once<'a>(
         &closure.zone_output_wires,
     );
 
+    context.pop_eval_scope();
     context.pop_zone_input_frame(closure.owner_node_id);
     context.captured_source_values = saved_captures;
 

@@ -7,6 +7,7 @@ use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::geo_tree::GeoNode;
 use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::structure_designer::evaluator::network_result::Alignment;
+use crate::structure_designer::node_network::NodeRef;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use std::any::Any;
@@ -69,13 +70,16 @@ pub struct NodeSceneData {
     /// without re-evaluation. `displayed_outputs()` uses this to filter `pin_outputs`.
     pub displayed_pins: HashSet<i32>,
 
-    /// Errors collected during evaluation of this node and its dependencies
-    /// Maps node_id -> error_message for all nodes in the evaluation chain
-    pub node_errors: HashMap<u64, String>,
+    /// Errors collected during evaluation of this node and its dependencies.
+    /// Maps the scope-aware [`NodeRef`] -> error_message for all nodes in the
+    /// evaluation chain (scope-aware so body-internal ids don't collide with
+    /// top-level ids).
+    pub node_errors: HashMap<NodeRef, String>,
 
-    /// Output strings collected during evaluation of this node and its dependencies
-    /// Maps node_id -> per-pin output strings for all nodes in the evaluation chain
-    pub node_output_strings: HashMap<u64, Vec<String>>,
+    /// Output strings collected during evaluation of this node and its
+    /// dependencies. Maps the scope-aware [`NodeRef`] -> per-pin output strings
+    /// for all nodes in the evaluation chain.
+    pub node_output_strings: HashMap<NodeRef, Vec<String>>,
 
     /// Unit cell associated with this node's output (if applicable)
     pub unit_cell: Option<UnitCellStruct>,
@@ -192,8 +196,8 @@ impl StructureDesignerScene {
         }
     }
 
-    /// Helper to get all errors from all nodes
-    pub fn get_all_node_errors(&self) -> HashMap<u64, String> {
+    /// Helper to get all errors from all nodes, keyed by scope-aware [`NodeRef`].
+    pub fn get_all_node_errors(&self) -> HashMap<NodeRef, String> {
         let mut all_errors = HashMap::new();
         for node_data in self.node_data.values() {
             all_errors.extend(node_data.node_errors.clone());
@@ -201,13 +205,48 @@ impl StructureDesignerScene {
         all_errors
     }
 
-    /// Helper to get all output strings from all nodes
-    pub fn get_all_node_output_strings(&self) -> HashMap<u64, Vec<String>> {
+    /// Helper to get all output strings from all nodes, keyed by scope-aware
+    /// [`NodeRef`].
+    pub fn get_all_node_output_strings(&self) -> HashMap<NodeRef, Vec<String>> {
         let mut all_strings = HashMap::new();
         for node_data in self.node_data.values() {
             all_strings.extend(node_data.node_output_strings.clone());
         }
         all_strings
+    }
+
+    /// Scope-aware lookup of a node's per-pin output display strings (the
+    /// "hover values" the UI shows on a node's output pins). `scope_path` is the
+    /// chain of HOF/closure body-owner ids identifying the body the node lives
+    /// in (empty = top-level network); `node_id` is the node's id within that
+    /// scope.
+    ///
+    /// This is the single read seam the API layer (`build_node_view`) goes
+    /// through. The backing `node_output_strings` map is keyed by [`NodeRef`],
+    /// so a body node and a top-level node that share a numeric id (per-body
+    /// `next_node_id` counters let them) no longer collide. See the
+    /// `hover_value_body_node_not_clobbered_by_colliding_top_level_node`
+    /// regression test.
+    pub fn get_node_output_strings(&self, scope_path: &[u64], node_id: u64) -> Option<Vec<String>> {
+        let key = NodeRef::scoped(scope_path, node_id);
+        for node_data in self.node_data.values() {
+            if let Some(strings) = node_data.node_output_strings.get(&key) {
+                return Some(strings.clone());
+            }
+        }
+        None
+    }
+
+    /// Scope-aware lookup of a node's evaluation error message (companion to
+    /// [`Self::get_node_output_strings`]). Same keying rationale.
+    pub fn get_node_error(&self, scope_path: &[u64], node_id: u64) -> Option<String> {
+        let key = NodeRef::scoped(scope_path, node_id);
+        for node_data in self.node_data.values() {
+            if let Some(err) = node_data.node_errors.get(&key) {
+                return Some(err.clone());
+            }
+        }
+        None
     }
 
     // Cache management methods for invisible nodes
@@ -318,7 +357,7 @@ impl MemorySizeEstimator for NodeSceneData {
             .node_errors
             .values()
             .map(|value| {
-                std::mem::size_of::<u64>() + std::mem::size_of::<String>() + value.capacity()
+                std::mem::size_of::<NodeRef>() + std::mem::size_of::<String>() + value.capacity()
             })
             .sum::<usize>();
 
@@ -327,7 +366,7 @@ impl MemorySizeEstimator for NodeSceneData {
             .node_output_strings
             .values()
             .map(|strings| {
-                std::mem::size_of::<u64>()
+                std::mem::size_of::<NodeRef>()
                     + std::mem::size_of::<Vec<String>>()
                     + strings
                         .iter()

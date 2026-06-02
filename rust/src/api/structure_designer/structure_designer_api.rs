@@ -427,6 +427,7 @@ fn build_zone_view(
     node: &crate::structure_designer::node_network::Node,
     node_type: &crate::structure_designer::node_type::NodeType,
     cad_instance: &crate::api::api_common::CADInstance,
+    scope_path: &[u64],
 ) -> Option<ZoneView> {
     if !node_type.has_zone() {
         return None;
@@ -464,9 +465,13 @@ fn build_zone_view(
         })
         .collect();
 
+    // Body nodes live one scope deeper than this HOF: their scope path is this
+    // HOF's scope path plus this HOF's id.
+    let mut body_scope_path = scope_path.to_vec();
+    body_scope_path.push(node.id);
     let mut nodes = HashMap::new();
     for (body_node_id, body_node) in body.nodes.iter() {
-        if let Some(view) = build_node_view(body_node, body, cad_instance) {
+        if let Some(view) = build_node_view(body_node, body, cad_instance, &body_scope_path) {
             nodes.insert(*body_node_id, view);
         }
     }
@@ -521,6 +526,7 @@ fn build_node_view(
     node: &crate::structure_designer::node_network::Node,
     node_network: &crate::structure_designer::node_network::NodeNetwork,
     cad_instance: &crate::api::api_common::CADInstance,
+    scope_path: &[u64],
 ) -> Option<NodeView> {
     let node_type = cad_instance
         .structure_designer
@@ -552,10 +558,9 @@ fn build_node_view(
         if let Some(eval_error) = cad_instance
             .structure_designer
             .last_generated_structure_designer_scene
-            .get_all_node_errors()
-            .get(&node.id)
+            .get_node_error(scope_path, node.id)
         {
-            error_messages.push(eval_error.clone());
+            error_messages.push(eval_error);
         }
     }
     let error = if error_messages.is_empty() {
@@ -567,9 +572,7 @@ fn build_node_view(
     let output_pin_strings = cad_instance
         .structure_designer
         .last_generated_structure_designer_scene
-        .get_all_node_output_strings()
-        .get(&node.id)
-        .cloned()
+        .get_node_output_strings(scope_path, node.id)
         .unwrap_or_default();
 
     let mut connected_input_pins = std::collections::HashSet::new();
@@ -664,7 +667,7 @@ fn build_node_view(
         })
         .unwrap_or_default();
 
-    let zone = build_zone_view(node, node_type, cad_instance);
+    let zone = build_zone_view(node, node_type, cad_instance, scope_path);
 
     let derived_shape = build_derived_shape_view(node, node_network, cad_instance);
 
@@ -837,7 +840,7 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
                 let mut nodes = HashMap::new();
                 for (node_id, node) in node_network.nodes.iter() {
-                    if let Some(view) = build_node_view(node, node_network, cad_instance) {
+                    if let Some(view) = build_node_view(node, node_network, cad_instance, &[]) {
                         nodes.insert(*node_id, view);
                     }
                 }

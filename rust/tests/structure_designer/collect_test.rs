@@ -13,6 +13,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
+use rust_lib_flutter_cad::structure_designer::node_network::NodeRef;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
@@ -591,7 +592,7 @@ fn evaluate_with_subtitle(
     let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
     let subtitle = context
         .node_output_strings
-        .get(&node_id)
+        .get(&NodeRef::top(node_id))
         .and_then(|v| v.first())
         .cloned();
     (result, subtitle)

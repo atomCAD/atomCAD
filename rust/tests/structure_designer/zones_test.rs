@@ -14,6 +14,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_network::{Argument, IncomingWire, SourcePin};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
 use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
@@ -418,6 +419,112 @@ fn map_zone_trivial_element_plus_one() {
     let result = evaluate_node(&designer, "main", map_id);
     let elements = extract_ints(drain_iter_with_designer(&designer, result));
     assert_eq!(elements, vec![1, 2, 3]);
+}
+
+/// Regression: a node's output-pin hover value must belong to the node it is
+/// shown on. Body-internal node ids share the top-level id space (per-body
+/// `next_node_id` counters both start at 1), so a body node and a top-level
+/// node can carry the same numeric id. The scene's `node_output_strings` map
+/// is keyed by bare `node_id`, so within one display pass the later writer
+/// clobbers the earlier — a displayed top-level node overwrites a colliding
+/// body node's hover value.
+///
+/// Setup: `range(3) -> map(x + 1) -> collect`, with `collect` displayed.
+/// `collect` is added first so it takes top-level id 1, colliding with the map
+/// body's first node (the `expr`, body id 1). During the display pass the
+/// `collect` node (id 1) writes its own array string last, clobbering the body
+/// expr's per-element value under bare id 1.
+///
+/// Before the `NodeRef` re-keying this asserts the *current* (buggy) behavior
+/// is gone: the body expr's hover value, looked up at its real scope
+/// `[map_id]`, must be its own last element (`3`) — not the colliding
+/// top-level `collect` node's value.
+#[test]
+fn hover_value_body_node_not_clobbered_by_colliding_top_level_node() {
+    let mut designer = setup_designer_with_network("main");
+
+    // collect FIRST so it takes top-level id 1 (collides with the body expr).
+    let collect_id = designer.add_node("collect", DVec2::new(400.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        collect_id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+            limit: None,
+            offset: 0,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+
+    let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 0,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    designer.connect_nodes(range_id, 0, map_id, 0);
+    designer.connect_nodes(map_id, 0, collect_id, 0);
+
+    // Body: expr "x + 1" reading the `element` zone-input pin.
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "x + 1",
+        vec![("x".to_string(), DataType::Int)],
+    );
+    wire_zone_input_to_body_node(&mut designer, "main", map_id, expr_id, 0);
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, expr_id);
+
+    // Precondition: the collision actually exists (both numeric id 1).
+    assert_eq!(
+        collect_id, expr_id,
+        "test relies on the top-level collect node and the map body's expr \
+         node sharing a numeric id"
+    );
+
+    // Display `collect` and run a full refresh so the scene is populated.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        network.set_pin_displayed(collect_id, 0, true);
+    }
+    designer.validate_active_network();
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+
+    let scene = &designer.last_generated_structure_designer_scene;
+
+    // The body expr lives in the map's body, so its scope path is [map_id].
+    // Its pin-0 hover value is the last element it produced: range(2) + 1 = 3.
+    let body_strings = scene.get_node_output_strings(&[map_id], expr_id);
+    assert_eq!(
+        body_strings.as_deref(),
+        Some(["3".to_string()].as_slice()),
+        "body expr hover value should be its own last element (3), not the \
+         colliding top-level collect node's value"
+    );
 }
 
 /// Capture: the body reads `k = int(5)` from the outer network. Verifies

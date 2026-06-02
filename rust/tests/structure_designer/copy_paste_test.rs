@@ -822,8 +822,16 @@ fn test_paste_into_body_shifts_content_inside_rect() {
     let pos = body.nodes.get(&new_ids[0]).unwrap().position;
     // The single pasted node becomes the top-left-most, so it lands exactly at
     // the inset on both axes.
-    assert!(pos.x >= 8.0 - f64::EPSILON, "node x must clear the inset: {}", pos.x);
-    assert!(pos.y >= 8.0 - f64::EPSILON, "node y must clear the inset: {}", pos.y);
+    assert!(
+        pos.x >= 8.0 - f64::EPSILON,
+        "node x must clear the inset: {}",
+        pos.x
+    );
+    assert!(
+        pos.y >= 8.0 - f64::EPSILON,
+        "node y must clear the inset: {}",
+        pos.y
+    );
     assert_eq!(pos, DVec2::new(8.0, 8.0));
 }
 
@@ -858,7 +866,10 @@ fn test_paste_into_body_preserves_relative_layout_when_shifting() {
     // Pasted node clears the inset.
     assert_eq!(pasted, DVec2::new(8.0, 8.0));
     // Existing node shifted by the same delta (50, 50): relative layout intact.
-    assert_eq!(existing_after - existing_before, pasted - DVec2::new(-42.0, -42.0));
+    assert_eq!(
+        existing_after - existing_before,
+        pasted - DVec2::new(-42.0, -42.0)
+    );
 }
 
 #[test]
@@ -897,5 +908,8 @@ fn test_paste_scoped_empty_path_matches_top_level() {
         .node_networks
         .get("main")
         .unwrap();
-    assert_eq!(main.nodes.get(&new_ids[0]).unwrap().position, DVec2::new(50.0, 50.0));
+    assert_eq!(
+        main.nodes.get(&new_ids[0]).unwrap().position,
+        DVec2::new(50.0, 50.0)
+    );
 }

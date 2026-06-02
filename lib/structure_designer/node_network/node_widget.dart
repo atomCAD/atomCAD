@@ -1372,11 +1372,19 @@ class NodeWidget extends StatelessWidget {
     // for a sampled preview. Derived — disconnecting `f` restores the eye for
     // free. See `doc/design_function_pins.md` §"Display in function mode".
     final bool functionConsumed = node.functionPinConsumed;
+    // Zone-body display suppression. Nodes inside an HOF/closure body (non-empty
+    // scope chain) can never contribute to the 3D scene — scene generation only
+    // iterates the top-level network's `displayed_nodes`, and the Rust
+    // `toggle_output_pin_display` API is inert for non-empty scope paths. So the
+    // eye would be a dead control: hide it entirely. The pin dot and its hover
+    // value (last evaluated value, from `node.outputPinStrings`) are kept.
+    final bool isBodyNode = scopeChain.isNotEmpty;
+    final bool showEyeArea = !isUnitPin && !isBodyNode;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (!isUnitPin && functionConsumed)
+        if (showEyeArea && functionConsumed)
           Tooltip(
             message: 'Used as a function — wire into `apply` to preview it.',
             preferBelow: false,
@@ -1386,7 +1394,7 @@ class NodeWidget extends StatelessWidget {
               size: 16,
             ),
           )
-        else if (!isUnitPin)
+        else if (showEyeArea)
           GestureDetector(
             key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
             onTap: () {
@@ -1400,7 +1408,7 @@ class NodeWidget extends StatelessWidget {
               size: 16,
             ),
           ),
-        if (!isUnitPin) const SizedBox(width: 2),
+        if (showEyeArea) const SizedBox(width: 2),
         PinWidget(
           pinReference: PinReference(
             nodeId: node.id,

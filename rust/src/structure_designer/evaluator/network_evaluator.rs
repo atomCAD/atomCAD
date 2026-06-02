@@ -19,7 +19,7 @@ use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
 use crate::structure_designer::node_data::EvalOutput;
 use crate::structure_designer::node_network::{
-    IncomingWire, Node, NodeDisplayType, NodeNetwork, SourcePin,
+    IncomingWire, Node, NodeDisplayType, NodeNetwork, NodeRef, SourcePin,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
@@ -137,8 +137,24 @@ pub struct PrintLogEntry {
 }
 
 pub struct NetworkEvaluationContext {
-    pub node_errors: HashMap<u64, String>,
-    pub node_output_strings: HashMap<u64, Vec<String>>,
+    /// Per-node evaluation errors, keyed by the node's **scope-aware** address
+    /// ([`NodeRef`]). Body-internal node ids share the top-level id space
+    /// (per-body `next_node_id` counters), so a bare-`u64` key would let a body
+    /// node and a top-level node with the same id clobber each other within one
+    /// pass. The scope path is maintained on `eval_scope_path` (pushed on HOF
+    /// body / custom-network entry).
+    pub node_errors: HashMap<NodeRef, String>,
+    /// Per-node, per-pin output display strings (the "hover values" shown on
+    /// output pins), keyed by scope-aware [`NodeRef`] for the same reason as
+    /// `node_errors`.
+    pub node_output_strings: HashMap<NodeRef, Vec<String>>,
+    /// The scope path of the node currently being evaluated — the chain of HOF
+    /// body-owner ids (and custom-network instance ids) from the displayed
+    /// top-level node down to the current frame. Maintained by
+    /// [`Self::push_eval_scope`] / [`Self::pop_eval_scope`] at every body /
+    /// custom-network boundary, and combined with the node id to form the
+    /// `NodeRef` keys above. Empty = top-level.
+    pub eval_scope_path: Vec<u64>,
     pub selected_node_eval_cache: Option<Box<dyn Any>>,
     pub top_level_parameters: HashMap<String, NetworkResult>,
     /// Whether to use spatial grid cutoff for vdW interactions during minimization.
@@ -217,6 +233,7 @@ impl NetworkEvaluationContext {
         Self {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
+            eval_scope_path: Vec::new(),
             selected_node_eval_cache: None,
             top_level_parameters: HashMap::new(),
             use_vdw_cutoff: false,
@@ -329,6 +346,11 @@ impl NetworkEvaluationContext {
         Self {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
+            // The body's nodes are scoped under the same path as the eager HOF
+            // that is iterating them — carry it through so any strings/errors
+            // they record are keyed consistently (the eager body's own
+            // `run_closure_once` push appends the HOF id on top of this).
+            eval_scope_path: self.eval_scope_path.clone(),
             selected_node_eval_cache: None,
             top_level_parameters: HashMap::new(),
             use_vdw_cutoff: self.use_vdw_cutoff,
@@ -378,6 +400,25 @@ impl NetworkEvaluationContext {
             )
         });
         *slot = value;
+    }
+
+    /// Enter a nested scope (an HOF/closure body or a custom-network instance)
+    /// owned by `owner_node_id`. Subsequent `node_errors` / `node_output_strings`
+    /// inserts are keyed under the extended path until the matching
+    /// [`Self::pop_eval_scope`]. Always pair push/pop (run_closure_once and the
+    /// custom-network branches bracket their recursion with them).
+    pub fn push_eval_scope(&mut self, owner_node_id: u64) {
+        self.eval_scope_path.push(owner_node_id);
+    }
+
+    /// Leave the most recently entered scope. See [`Self::push_eval_scope`].
+    pub fn pop_eval_scope(&mut self) {
+        self.eval_scope_path.pop();
+    }
+
+    /// The scope-aware address of `node_id` at the current evaluation scope.
+    pub fn node_ref(&self, node_id: u64) -> NodeRef {
+        NodeRef::scoped(&self.eval_scope_path, node_id)
     }
 }
 
@@ -494,6 +535,11 @@ impl NetworkEvaluator {
         // touched.
         context.node_errors.clear();
         context.node_output_strings.clear();
+        // `generate_scene` always starts a displayed node's evaluation at the
+        // top level; the scope path is rebuilt by the push/pop bracketing as
+        // the pass descends into bodies / custom networks. Clear defensively in
+        // case a prior pass left it unbalanced.
+        context.eval_scope_path.clear();
         context.selected_node_eval_cache = None;
 
         // We assign the root node network zero node id. It is not used in the evaluation.
@@ -1412,7 +1458,8 @@ impl NetworkEvaluator {
                         // node consistently with non-skipped passes.
                         let pin_strings: Vec<String> =
                             results.iter().map(|r| r.to_display_string()).collect();
-                        context.node_output_strings.insert(node_id, pin_strings);
+                        let key = context.node_ref(node_id);
+                        context.node_output_strings.insert(key, pin_strings);
                         return EvalOutput::multi(results);
                     }
                 }
@@ -1444,6 +1491,11 @@ impl NetworkEvaluator {
                     node.node_type_name
                 )));
             }
+            // Entering a custom-network instance: its internal node ids share
+            // the top-level id space, so scope their errors/strings under this
+            // instance id (keeps them from clobbering same-id nodes in the
+            // active network — those internals are never read back in the view).
+            context.push_eval_scope(node_id);
             let eval_output = self.evaluate_all_outputs(
                 &child_network_stack,
                 child_network.return_node_id.unwrap(),
@@ -1451,6 +1503,7 @@ impl NetworkEvaluator {
                 false,
                 context,
             );
+            context.pop_eval_scope();
             // Wrap errors with the custom network name for better diagnostics
             let child_display_results = eval_output.display_results;
             let results: Vec<NetworkResult> = eval_output
@@ -1500,7 +1553,8 @@ impl NetworkEvaluator {
         // Record error from primary (pin 0) result
         let primary = eval_output.primary();
         if let NetworkResult::Error(error_message) = primary {
-            context.node_errors.insert(node_id, error_message.clone());
+            let key = context.node_ref(node_id);
+            context.node_errors.insert(key, error_message.clone());
         }
         // Record per-pin display strings. A node may publish a custom
         // subtitle via `EvalOutput::pin_subtitles` (e.g. `collect` reports
@@ -1519,7 +1573,8 @@ impl NetworkEvaluator {
                     .unwrap_or_else(|| r.to_display_string_capped(ARRAY_DISPLAY_CAP))
             })
             .collect();
-        context.node_output_strings.insert(node_id, pin_strings);
+        let key = context.node_ref(node_id);
+        context.node_output_strings.insert(key, pin_strings);
 
         eval_output
     }
@@ -1546,7 +1601,8 @@ impl NetworkEvaluator {
             .is_some_and(|frame| frame.node_network.nodes.contains_key(&node_id))
         {
             let msg = format!("evaluate: node {} not found in active frame", node_id);
-            context.node_errors.insert(node_id, msg.clone());
+            let key = context.node_ref(node_id);
+            context.node_errors.insert(key, msg.clone());
             return NetworkResult::Error(msg);
         }
 
@@ -1598,7 +1654,8 @@ impl NetworkEvaluator {
                             let pin_strings: Vec<String> = (0..pin_count)
                                 .map(|_| NetworkResult::Unit.to_display_string())
                                 .collect();
-                            context.node_output_strings.insert(node_id, pin_strings);
+                            let key = context.node_ref(node_id);
+                            context.node_output_strings.insert(key, pin_strings);
                             return NetworkResult::Unit;
                         }
                     }
@@ -1628,7 +1685,8 @@ impl NetworkEvaluator {
                             .unwrap_or_else(|| r.to_display_string())
                     })
                     .collect();
-                context.node_output_strings.insert(node_id, pin_strings);
+                let key = context.node_ref(node_id);
+                context.node_output_strings.insert(key, pin_strings);
                 // Capture subtitle for the requested pin so the outer clobber
                 // below preserves it (otherwise it would be replaced by the
                 // result's raw display string — e.g. an array dump).
@@ -1655,6 +1713,9 @@ impl NetworkEvaluator {
                         node.node_type_name
                     ));
                 }
+                // Scope the custom-network internals under this instance id
+                // (see the matching branch in `evaluate_all_outputs`).
+                context.push_eval_scope(node_id);
                 let result = self.evaluate(
                     &child_network_stack,
                     child_network.return_node_id.unwrap(),
@@ -1663,6 +1724,7 @@ impl NetworkEvaluator {
                     false,
                     context,
                 );
+                context.pop_eval_scope();
                 if let NetworkResult::Error(_error) = &result {
                     NetworkResult::Error(format!("Error in {}", node.node_type_name))
                 } else {
@@ -1675,7 +1737,8 @@ impl NetworkEvaluator {
 
         // Check for error and store it in the context
         if let NetworkResult::Error(error_message) = &result {
-            context.node_errors.insert(node_id, error_message.clone());
+            let key = context.node_ref(node_id);
+            context.node_errors.insert(key, error_message.clone());
         }
 
         // Record per-pin display string (single-pin evaluation overwrites).
@@ -1689,9 +1752,10 @@ impl NetworkEvaluator {
         } else {
             output_pin_index as usize
         };
+        let key = context.node_ref(node_id);
         let entry = context
             .node_output_strings
-            .entry(node_id)
+            .entry(key)
             .or_insert_with(Vec::new);
         // Grow the vec if needed
         if entry.len() <= pin_index {
