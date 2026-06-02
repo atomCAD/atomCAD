@@ -462,6 +462,9 @@ fn build_zone_view(
             name: param.name.clone(),
             data_type: param.data_type.to_string(),
             multi: param.data_type.is_array(),
+            // Zone-output (body destination) pins are not drag-from sources for
+            // the add-node popup, so no hint is needed.
+            drag_hint_type: None,
         })
         .collect();
 
@@ -545,6 +548,13 @@ fn build_node_view(
             name: param.name.clone(),
             data_type: data_type.to_string(),
             multi: data_type.is_array(),
+            // Lossy-declared pins (e.g. `map.f`'s `AnyFunction`) expose a
+            // concrete drag hint so a wire dragged off them infers the new
+            // node's types fully. See `doc/design_drag_aware_add_node.md`.
+            drag_hint_type: node
+                .data
+                .drag_hint_for_input_pin(i)
+                .map(|dt| dt.to_string()),
         });
     }
 

@@ -23,7 +23,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::zone_closure::build_inline_closure;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -164,6 +164,47 @@ impl Default for ClosureData {
     }
 }
 
+/// Build a [`ClosureData`] whose function value is exactly `(params) -> ret`.
+///
+/// Prefers a **preset** [`ClosureKind`] whose shape matches the signature — so
+/// the new closure gets the matching HOF's pin names (`element` / `acc`) and
+/// drops straight into that HOF's `f` pin — and falls back to `Custom`
+/// (auto-named `p0`, `p1`, …) for any shape no preset covers (arity 0, arity
+/// ≥ 3, or a 2-arg signature that isn't fold-shaped). Used by
+/// `ClosureData::adapt_for_drag_source` when the user drags a closure off a
+/// function-typed input pin. See `doc/design_drag_aware_add_node.md`.
+fn closure_data_for_signature(params: &[DataType], ret: &DataType) -> ClosureData {
+    let preset = |kind: ClosureKind, type_args: Vec<DataType>| ClosureData {
+        kind,
+        type_args,
+        param_names: vec![],
+        custom_label: None,
+    };
+    match (params, ret) {
+        // `(T) -> Bool` → filter-like predicate.
+        ([t], DataType::Bool) => preset(ClosureKind::Filter, vec![t.clone()]),
+        // `(T) -> Unit` → foreach-like effect.
+        ([t], DataType::Unit) => preset(ClosureKind::Foreach, vec![t.clone()]),
+        // `(A, T) -> A` → fold-like accumulator (return matches first param).
+        ([a, t], r) if r == a => preset(ClosureKind::Fold, vec![a.clone(), t.clone()]),
+        // `(T) -> U` (any other single-param return) → map-like.
+        ([t], u) => preset(ClosureKind::Map, vec![t.clone(), u.clone()]),
+        // Everything else: a fully-flexible Custom closure reproducing the
+        // signature exactly, with synthesized parameter names.
+        _ => {
+            let param_names: Vec<String> = (0..params.len()).map(|i| format!("p{i}")).collect();
+            let mut type_args = params.to_vec();
+            type_args.push(ret.clone());
+            ClosureData {
+                kind: ClosureKind::Custom,
+                type_args,
+                param_names,
+                custom_label: None,
+            }
+        }
+    }
+}
+
 impl NodeData for ClosureData {
     fn provide_gadget(
         &self,
@@ -203,6 +244,47 @@ impl NodeData for ClosureData {
         }];
 
         Some(custom)
+    }
+
+    /// Adapt a freshly-placed `closure` so its `Function` output matches a
+    /// dragged function-typed input pin.
+    ///
+    /// A closure *produces* a function value, so the only meaningful drag is
+    /// `FromInput`: the user dragged off an HOF's `f` pin, an `apply.f`, or a
+    /// subnetwork `Function` input and wants the new closure to satisfy it.
+    /// We read the target signature from the source pin type and rebuild the
+    /// `{ kind, type_args, param_names }` model via
+    /// [`closure_data_for_signature`].
+    ///
+    /// `filter.f` / `fold.f` / `foreach.f` are concrete `Function(...)` pins,
+    /// so the full signature (including return type) is recovered exactly.
+    /// `map.f` is `AnyFunction { leading_params: [element] }`, which carries
+    /// only the parameter prefix — the return type is defaulted to the last
+    /// parameter (for the single-param map case, `(T) -> T`, matching
+    /// `MapData::adapt_for_drag_source`'s `output_type = input_type`
+    /// convention). Tier 2 supplies the exact return type via a richer drag
+    /// hint (`doc/design_drag_aware_add_node.md`).
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        if direction != DragDirection::FromInput {
+            return None;
+        }
+        let (params, ret) = match source_type {
+            DataType::Function(ft) => (ft.parameter_types.clone(), (*ft.output_type).clone()),
+            // `AnyFunction` carries only the parameter prefix, never the
+            // return type. An empty list is "any function" (`apply.f`) — there
+            // is nothing to infer, so leave the default closure.
+            DataType::AnyFunction { leading_params } if !leading_params.is_empty() => {
+                let ret = leading_params.last().cloned().unwrap();
+                (leading_params.clone(), ret)
+            }
+            _ => return None,
+        };
+        Some(Box::new(closure_data_for_signature(&params, &ret)))
     }
 
     fn eval<'a>(

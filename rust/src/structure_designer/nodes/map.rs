@@ -1,5 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -179,6 +179,22 @@ impl NodeData for MapData {
             input_type: elem.clone(),
             output_type: elem,
         }))
+    }
+
+    fn drag_hint_for_input_pin(&self, pin_index: usize) -> Option<DataType> {
+        // The `f` pin (index 1) is declared `AnyFunction { leading_params:
+        // [input_type] }`, which omits the return type. Expose the natural
+        // concrete signature `(input_type) -> output_type` so a `closure`
+        // dragged off this pin reflects the map's output type exactly. See
+        // `doc/design_drag_aware_add_node.md` (Tier 2).
+        if pin_index == 1 {
+            Some(DataType::Function(FunctionType::new(
+                vec![self.input_type.clone()],
+                self.output_type.clone(),
+            )))
+        } else {
+            None
+        }
     }
 }
 

@@ -77,6 +77,15 @@ pub struct InputPinView {
     pub name: String,
     pub data_type: String,
     pub multi: bool,
+    /// Optional concrete type the Flutter editor should send as the drag
+    /// source when a wire is dragged *off* this pin, overriding `data_type`.
+    /// Populated only when the declared `data_type` is deliberately lossy:
+    /// `map.f`'s `AnyFunction` declaration omits the return type, so map sets
+    /// this to the concrete `(input_type) -> output_type` signature, letting a
+    /// dropped `closure` reflect the map's output type exactly. `None` for
+    /// every pin whose declared type already drives drag inference correctly.
+    /// See `doc/design_drag_aware_add_node.md` (Tier 2).
+    pub drag_hint_type: Option<String>,
 }
 
 pub struct OutputPinView {

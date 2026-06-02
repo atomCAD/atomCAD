@@ -200,6 +200,24 @@ pub trait NodeData: Any + AsAny {
     ) -> Option<Box<dyn NodeData>> {
         None
     }
+
+    /// A concrete type hint for dragging a wire *off* the given input pin,
+    /// overriding the pin's declared type for drag-aware add-node inference.
+    ///
+    /// Needed when a pin's declared type is deliberately lossy: `map.f` is
+    /// `AnyFunction { leading_params: [element] }`, which carries the parameter
+    /// prefix but not the return type. `MapData` overrides this to return the
+    /// natural concrete signature `Function([input_type], output_type)` so a
+    /// `closure` dropped from `map.f` reflects the map's output type exactly,
+    /// rather than defaulting the return to the element type.
+    ///
+    /// Default: `None` — the pin's declared type drives drag inference, which
+    /// is correct for every pin whose declared type is already concrete (e.g.
+    /// `filter.f` / `fold.f` / `foreach.f`). See
+    /// `doc/design_drag_aware_add_node.md`.
+    fn drag_hint_for_input_pin(&self, _pin_index: usize) -> Option<DataType> {
+        None
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -14455,12 +14455,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   InputPinView dco_decode_input_pin_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return InputPinView(
       name: dco_decode_String(arr[0]),
       dataType: dco_decode_String(arr[1]),
       multi: dco_decode_bool(arr[2]),
+      dragHintType: dco_decode_opt_String(arr[3]),
     );
   }
 
@@ -17913,8 +17914,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_dataType = sse_decode_String(deserializer);
     var var_multi = sse_decode_bool(deserializer);
+    var var_dragHintType = sse_decode_opt_String(deserializer);
     return InputPinView(
-        name: var_name, dataType: var_dataType, multi: var_multi);
+        name: var_name,
+        dataType: var_dataType,
+        multi: var_multi,
+        dragHintType: var_dragHintType);
   }
 
   @protected
@@ -21689,6 +21694,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.dataType, serializer);
     sse_encode_bool(self.multi, serializer);
+    sse_encode_opt_String(self.dragHintType, serializer);
   }
 
   @protected

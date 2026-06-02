@@ -93,19 +93,17 @@ const double CLOSURE_BODY_RIGHT_PAD = 16.0;
 /// the `closure` node, which has no external inputs, uses a small pad so the
 /// body extends left. Both the rendering ([NodeWidget]) and the wire-endpoint
 /// math ([ScopeResolver]) read this single helper so the two never drift.
-double hofBodyLeftOffset(NodeView node) =>
-    node.nodeTypeName == 'closure'
-        ? CLOSURE_BODY_LEFT_PAD
-        : BASE_HOF_BODY_LEFT_OFFSET;
+double hofBodyLeftOffset(NodeView node) => node.nodeTypeName == 'closure'
+    ? CLOSURE_BODY_LEFT_PAD
+    : BASE_HOF_BODY_LEFT_OFFSET;
 
 /// External output column width to the right of an HOF's body region. The four
 /// HOFs reserve [BASE_HOF_BODY_RIGHT_GUTTER] for their result output pin; the
 /// `closure` node renders its `Function` output in the title bar instead, so it
 /// uses a small pad. See [hofBodyLeftOffset].
-double hofBodyRightGutter(NodeView node) =>
-    node.nodeTypeName == 'closure'
-        ? CLOSURE_BODY_RIGHT_PAD
-        : BASE_HOF_BODY_RIGHT_GUTTER;
+double hofBodyRightGutter(NodeView node) => node.nodeTypeName == 'closure'
+    ? CLOSURE_BODY_RIGHT_PAD
+    : BASE_HOF_BODY_RIGHT_GUTTER;
 
 /// True for an HOF whose single external output pin renders in the title bar
 /// (the slot non-HOF nodes use for the legacy function pin) rather than in a
@@ -252,7 +250,8 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   // For HOF nodes the body region itself contributes to the row height. In
   // U3 the body always renders at its stored size (no content_bbox computed
   // yet — U4 brings that in via the layout pass).
-  final bodyContentHeight = (zone != null && !compactHof) ? zone.storedHeight : 0.0;
+  final bodyContentHeight =
+      (zone != null && !compactHof) ? zone.storedHeight : 0.0;
   final mainBodyHeight = [
     inputPinsHeight,
     outputPinsHeight,
@@ -270,9 +269,7 @@ Size getNodeSize(NodeView node, ZoomLevel zoomLevel) {
   // Base width for the standard node; expanded HOFs add the body region plus
   // gutters, a compact HOF uses the regular node width.
   final baseWidth = (zone != null && !compactHof)
-      ? hofBodyLeftOffset(node) +
-          zone.storedWidth +
-          hofBodyRightGutter(node)
+      ? hofBodyLeftOffset(node) + zone.storedWidth + hofBodyRightGutter(node)
       : BASE_NODE_WIDTH;
 
   if (zoomLevel == ZoomLevel.normal) {
@@ -534,7 +531,12 @@ class NodeNetworkState extends State<NodeNetwork> {
   void _handleWireDropInEmptySpace(
       PinReference startPin, Offset dropPosition) async {
     final isOutput = startPin.isOutput;
-    final dataType = startPin.dataType;
+    // For a drag *off* an input pin, the declared pin type may be deliberately
+    // lossy (e.g. `map.f`'s `AnyFunction`, which carries the parameter prefix
+    // but not the return type). Prefer the pin's concrete `dragHintType` when
+    // present so both the popup filter and the created node's type inference
+    // see the full signature. See `doc/design_drag_aware_add_node.md` (Tier 2).
+    final dataType = _dragSourceTypeFor(startPin);
 
     final selectedNodeType = await showAddNodePopup(
       context,
@@ -693,6 +695,25 @@ class NodeNetworkState extends State<NodeNetwork> {
       }
     }
     return result;
+  }
+
+  /// The type to use as the drag source when a wire is dragged off [startPin].
+  ///
+  /// Normally the pin's declared [PinReference.dataType], but an external input
+  /// pin may expose a concrete `dragHintType` that overrides a deliberately
+  /// lossy declared type (e.g. `map.f`'s `AnyFunction` → the concrete
+  /// `(input_type) -> output_type`). See `doc/design_drag_aware_add_node.md`.
+  String _dragSourceTypeFor(PinReference startPin) {
+    if (startPin.pinKind == PinKind.externalInput) {
+      final node = _lookupNodeInScope(startPin.nodeId, startPin.scopeChain);
+      if (node != null &&
+          startPin.pinIndex >= 0 &&
+          startPin.pinIndex < node.inputPins.length) {
+        final hint = node.inputPins[startPin.pinIndex].dragHintType;
+        if (hint != null && hint.isNotEmpty) return hint;
+      }
+    }
+    return startPin.dataType;
   }
 
   /// Walk the model view to find a node by id at the given scope.
@@ -1245,7 +1266,8 @@ class NodeNetworkState extends State<NodeNetwork> {
       if (inner == null) continue;
       final innerChain = [...scopeChain, node.id];
       if (resolver.isBodyCollapsed(innerChain)) continue;
-      _appendZoneNodesRecursive(children, inner, innerChain, rootView, resolver);
+      _appendZoneNodesRecursive(
+          children, inner, innerChain, rootView, resolver);
     }
   }
 
@@ -1322,8 +1344,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     // this Listener (an ancestor of the whole canvas) always does.
     else if (_selectionRectStart != null) {
       final rect = _selectionRect;
-      final isTap =
-          rect == null || (rect.width <= _TAP_MAX_DRAG && rect.height <= _TAP_MAX_DRAG);
+      final isTap = rect == null ||
+          (rect.width <= _TAP_MAX_DRAG && rect.height <= _TAP_MAX_DRAG);
       if (isTap) {
         _handleCanvasTap(event.localPosition);
         _clearSelectionRect();

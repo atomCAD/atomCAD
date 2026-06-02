@@ -18,6 +18,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::array_append::ArrayAppendDa
 use rust_lib_flutter_cad::structure_designer::nodes::array_at::ArrayAtData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_len::ArrayLenData;
+use rust_lib_flutter_cad::structure_designer::nodes::closure::{ClosureData, ClosureKind};
 use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::expr::ExprData;
 use rust_lib_flutter_cad::structure_designer::nodes::filter::FilterData;
@@ -1384,4 +1385,216 @@ fn add_node_with_drag_source_falls_back_for_expr_on_iter() {
     // output Int.
     assert_eq!(data.parameters[0].data_type, DataType::Int);
     assert_eq!(data.expression, "x");
+}
+
+// ============================================================================
+// Closure adapter (Tier 1) + map.f drag hint (Tier 2)
+// `doc/design_drag_aware_add_node.md`
+// ============================================================================
+
+fn adapt_closure(source: DataType, dir: DragDirection) -> Option<ClosureData> {
+    let registry = NodeTypeRegistry::new();
+    let data: Box<dyn NodeData> = Box::new(ClosureData::default());
+    let adapted = data.adapt_for_drag_source(&source, dir, &registry)?;
+    adapted.as_any_ref().downcast_ref::<ClosureData>().cloned()
+}
+
+fn fn_type(params: Vec<DataType>, ret: DataType) -> DataType {
+    DataType::Function(FunctionType::new(params, ret))
+}
+
+// --- concrete Function sources (filter.f / fold.f / foreach.f shapes) -------
+
+#[test]
+fn closure_adapter_filter_shape() {
+    // filter.f is `Function([elem], Bool)` → Filter closure.
+    let adapted = adapt_closure(
+        fn_type(vec![DataType::IVec3], DataType::Bool),
+        DragDirection::FromInput,
+    )
+    .expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Filter);
+    assert_eq!(adapted.type_args, vec![DataType::IVec3]);
+}
+
+#[test]
+fn closure_adapter_foreach_shape() {
+    // foreach.f is `Function([elem], Unit)` → Foreach closure.
+    let adapted = adapt_closure(
+        fn_type(vec![DataType::Int], DataType::Unit),
+        DragDirection::FromInput,
+    )
+    .expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Foreach);
+    assert_eq!(adapted.type_args, vec![DataType::Int]);
+}
+
+#[test]
+fn closure_adapter_fold_shape() {
+    // fold.f is `Function([acc, elem], acc)` → Fold closure.
+    let adapted = adapt_closure(
+        fn_type(vec![DataType::Float, DataType::Int], DataType::Float),
+        DragDirection::FromInput,
+    )
+    .expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Fold);
+    assert_eq!(adapted.type_args, vec![DataType::Float, DataType::Int]);
+}
+
+#[test]
+fn closure_adapter_map_shape_from_concrete_function() {
+    // A concrete `(T) -> U` with non-Bool/Unit return → Map closure. This is
+    // also the Tier 2 path for map.f once the drag hint supplies the concrete
+    // signature with output_type != input_type.
+    let adapted = adapt_closure(
+        fn_type(vec![DataType::Int], DataType::Crystal),
+        DragDirection::FromInput,
+    )
+    .expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Map);
+    assert_eq!(adapted.type_args, vec![DataType::Int, DataType::Crystal]);
+}
+
+#[test]
+fn closure_adapter_custom_shape_for_arity_three() {
+    // No preset matches arity 3 → Custom closure reproducing the signature.
+    let adapted = adapt_closure(
+        fn_type(
+            vec![DataType::Int, DataType::Bool, DataType::Float],
+            DataType::String,
+        ),
+        DragDirection::FromInput,
+    )
+    .expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Custom);
+    assert_eq!(adapted.param_names, vec!["p0", "p1", "p2"]);
+    assert_eq!(
+        adapted.type_args,
+        vec![
+            DataType::Int,
+            DataType::Bool,
+            DataType::Float,
+            DataType::String
+        ]
+    );
+}
+
+// --- AnyFunction sources (map.f declared type, lossy) -----------------------
+
+#[test]
+fn closure_adapter_anyfunction_defaults_return_to_param() {
+    // map.f is `AnyFunction { leading_params: [Int] }` — the return type is not
+    // carried, so it defaults to the (last) parameter → `(Int) -> Int`. This is
+    // the user's motivating example (map Int,Int → closure Int -> Int).
+    let adapted = adapt_closure(
+        DataType::AnyFunction {
+            leading_params: vec![DataType::Int],
+        },
+        DragDirection::FromInput,
+    )
+    .expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Map);
+    assert_eq!(adapted.type_args, vec![DataType::Int, DataType::Int]);
+}
+
+#[test]
+fn closure_adapter_anyfunction_empty_is_none() {
+    // apply.f is `AnyFunction { leading_params: [] }` ("any function") — nothing
+    // to infer, leave the default closure.
+    assert!(
+        adapt_closure(
+            DataType::AnyFunction {
+                leading_params: vec![],
+            },
+            DragDirection::FromInput,
+        )
+        .is_none()
+    );
+}
+
+// --- rejected cases ---------------------------------------------------------
+
+#[test]
+fn closure_adapter_from_output_is_none() {
+    // A closure produces a function; dragging from an output to place a closure
+    // is not a real workflow.
+    assert!(
+        adapt_closure(
+            fn_type(vec![DataType::Int], DataType::Int),
+            DragDirection::FromOutput,
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn closure_adapter_non_function_source_is_none() {
+    assert!(adapt_closure(DataType::Int, DragDirection::FromInput).is_none());
+    assert!(adapt_closure(DataType::Crystal, DragDirection::FromInput).is_none());
+}
+
+// --- create-time: closure picked from a function-typed input pin ------------
+
+#[test]
+fn add_node_with_drag_source_configures_closure_from_filter_f() {
+    let mut designer = setup_designer();
+    let node_id = designer.add_node_with_drag_source(
+        "closure",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: fn_type(vec![DataType::Int], DataType::Bool),
+            direction: DragDirection::FromInput,
+        }),
+    );
+    assert_ne!(node_id, 0);
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    let data = net
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ClosureData>()
+        .cloned()
+        .expect("ClosureData");
+    assert_eq!(data.kind, ClosureKind::Filter);
+    assert_eq!(data.type_args, vec![DataType::Int]);
+}
+
+// --- Tier 2: map.f exposes a concrete drag hint -----------------------------
+
+#[test]
+fn map_drag_hint_exposes_concrete_function_signature() {
+    let data = MapData {
+        input_type: DataType::Int,
+        output_type: DataType::Crystal,
+    };
+    // The `f` pin (index 1) hints the concrete `(input_type) -> output_type`.
+    assert_eq!(
+        data.drag_hint_for_input_pin(1),
+        Some(fn_type(vec![DataType::Int], DataType::Crystal))
+    );
+    // The `xs` pin (index 0) has no hint — its declared type is concrete.
+    assert_eq!(data.drag_hint_for_input_pin(0), None);
+}
+
+#[test]
+fn map_drag_hint_round_trips_through_string_into_closure() {
+    // End-to-end Tier 2 path: the API layer serializes the hint via
+    // `to_string()` and re-parses it via `from_string()` before handing it to
+    // the closure adapter. Verify a map `Int -> Crystal` hint survives that
+    // round-trip and produces a `(Int) -> Crystal` Map closure.
+    let data = MapData {
+        input_type: DataType::Int,
+        output_type: DataType::Crystal,
+    };
+    let hint = data.drag_hint_for_input_pin(1).expect("hint");
+    let reparsed = DataType::from_string(&hint.to_string()).expect("round-trip");
+    let adapted = adapt_closure(reparsed, DragDirection::FromInput).expect("should adapt");
+    assert_eq!(adapted.kind, ClosureKind::Map);
+    assert_eq!(adapted.type_args, vec![DataType::Int, DataType::Crystal]);
 }

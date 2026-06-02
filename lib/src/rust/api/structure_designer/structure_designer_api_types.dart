@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `assert_receiver_is_total_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -3045,14 +3045,29 @@ class InputPinView {
   final String dataType;
   final bool multi;
 
+  /// Optional concrete type the Flutter editor should send as the drag
+  /// source when a wire is dragged *off* this pin, overriding `data_type`.
+  /// Populated only when the declared `data_type` is deliberately lossy:
+  /// `map.f`'s `AnyFunction` declaration omits the return type, so map sets
+  /// this to the concrete `(input_type) -> output_type` signature, letting a
+  /// dropped `closure` reflect the map's output type exactly. `None` for
+  /// every pin whose declared type already drives drag inference correctly.
+  /// See `doc/design_drag_aware_add_node.md` (Tier 2).
+  final String? dragHintType;
+
   const InputPinView({
     required this.name,
     required this.dataType,
     required this.multi,
+    this.dragHintType,
   });
 
   @override
-  int get hashCode => name.hashCode ^ dataType.hashCode ^ multi.hashCode;
+  int get hashCode =>
+      name.hashCode ^
+      dataType.hashCode ^
+      multi.hashCode ^
+      dragHintType.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3061,7 +3076,8 @@ class InputPinView {
           runtimeType == other.runtimeType &&
           name == other.name &&
           dataType == other.dataType &&
-          multi == other.multi;
+          multi == other.multi &&
+          dragHintType == other.dragHintType;
 }
 
 class NodeNetworkView {
