@@ -830,3 +830,27 @@ The branch starts on `zones` after Rust phase 6 lands. Baseline: ~2005+ Rust tes
 | U7 | Polish: validation surface, focus mode, function-pin removal |
 
 Each phase has the same exit gate: `cd rust && cargo test` green AND `flutter run` launches a working editor. The user-visible value lands progressively from U3 onward; U1-U2 are foundational refactors with no UI change.
+
+---
+
+### Deferred: body-node display in the 3D viewport (and the bare-`u64` invariant it would break)
+
+None of U1–U7 let a body node's output render in the 3D viewport. Scene generation iterates only the **top-level** network's `displayed_nodes` (`StructureDesigner::refresh_full`), and the per-pin display toggle is intentionally inert for body scopes:
+
+```rust
+// structure_designer_api::toggle_output_pin_display
+if !scope_path.is_empty() { return; }   // body paths accepted but no-op
+```
+
+Because of this, the Flutter eye icon is **hidden** for body-node output pins (`node_widget.dart` `_buildOutputPin`, gated on `scopeChain.isNotEmpty`) — it would otherwise be a dead control. Body nodes *do* render in the **node editor** and *do* get evaluated (as part of an enclosing top-level node's pass), so they still show a per-pin **hover value** (last evaluated value).
+
+**The latent trap.** A whole family of structures is keyed by **bare `u64` node id** and is correct *only* because "body nodes are never displayed":
+
+- `StructureDesignerScene.node_data: HashMap<u64, NodeSceneData>` and its `invisible_node_cache` (only displayed = top-level nodes ever inserted).
+- `raytrace_per_node` / viewport-pick hit results (iterate `node_data`).
+- `StructureDesignerChanges.visibility_changed: HashSet<u64>` (documented top-level-only).
+- The selected-node gadget eval cache (`selected_node_eval_cache` + `get_node_eval_cache(node_id)`), a viewport feature.
+
+Per-body `next_node_id` counters both start at 1, so a body node and a top-level node routinely share a numeric id. The moment body-node display becomes real, every structure above can conflate the two and must move to the scope-aware `NodeRef { scope_path, node_id }` key (the type in `structure_designer/node_network.rs`).
+
+**Precedent already set.** The *evaluation-time* per-node maps had exactly this latency and were already migrated to `NodeRef`: `NetworkEvaluationContext`/`NodeSceneData`'s `node_output_strings` and `node_errors` (keyed via a `context.eval_scope_path` accumulator pushed on HOF-body and custom-network entry; read through `StructureDesignerScene::get_node_output_strings(scope_path, node_id)` / `get_node_error(...)`, which `build_node_view`/`build_zone_view` thread the scope path into). That fix is the template — the regression test `zones_test::hover_value_body_node_not_clobbered_by_colliding_top_level_node` documents the failure mode. Anyone implementing body-node display should apply the same `NodeRef` treatment to the display-keyed structures listed above.
