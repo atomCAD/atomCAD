@@ -70,6 +70,9 @@ mod preferences_test;
 #[path = "structure_designer/selection_factoring_test.rs"]
 mod selection_factoring_test;
 
+#[path = "structure_designer/node_inlining_test.rs"]
+mod node_inlining_test;
+
 #[path = "structure_designer/promote_to_parameter_test.rs"]
 mod promote_to_parameter_test;
 

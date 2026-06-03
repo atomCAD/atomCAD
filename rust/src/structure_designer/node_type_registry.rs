@@ -1283,8 +1283,7 @@ impl NodeTypeRegistry {
             .filter_map(|(&id, n)| n.zone.is_some().then_some(id))
             .collect();
         for hof_id in hof_ids {
-            let Some(mut body_arc) =
-                network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take())
+            let Some(mut body_arc) = network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take())
             else {
                 continue;
             };
@@ -1530,8 +1529,7 @@ impl NodeTypeRegistry {
             .filter_map(|(&id, n)| n.zone.is_some().then_some(id))
             .collect();
         for hof_id in hof_ids {
-            let Some(mut body_arc) =
-                network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take())
+            let Some(mut body_arc) = network.nodes.get_mut(&hof_id).and_then(|n| n.zone.take())
             else {
                 continue;
             };

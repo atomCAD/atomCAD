@@ -2260,9 +2260,7 @@ fn apply_pin_layout_resolves_zone_input_function_source() {
 
 #[test]
 fn apply_pin_layout_rederived_on_cnnd_load_with_zone_input_f() {
-    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
-        save_node_networks_to_file,
-    };
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
 
     // Build the source design: a `map` over `Iter[(Int) -> Int]` whose body
     // apply takes its `f` from the map's `element` zone-input pin.
