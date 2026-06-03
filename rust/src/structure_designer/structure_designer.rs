@@ -6457,6 +6457,139 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// Converts a custom-network instance node into a `closure` node
+    /// (*Network → Closure*): replaces the instance `I` (whose function pin is
+    /// used, or which is unconsumed) with a `closure` node `C` whose inline body
+    /// is a copy of `I`'s network `N`. `I`'s **wired** input pins become
+    /// **captures** in the body; its **unwired** input pins become the closure's
+    /// **parameters**. `I` and `C` expose the same `Function` value — `I` on its
+    /// function pin (`-1`), `C` on its primary output pin (`0`) — so the only
+    /// externally-visible change is flipping consuming wires `-1 → 0`. The named
+    /// definition `N` is left untouched in the registry.
+    ///
+    /// **Phase 1: top level only** (`scope_path` must be empty); body-scoped
+    /// conversion lands in a later phase. See
+    /// `doc/design_closure_network_conversion.md` (Direction A).
+    pub fn convert_instance_to_closure(
+        &mut self,
+        scope_path: Vec<u64>,
+        node_id: u64,
+    ) -> Result<(), String> {
+        use super::closure_network_conversion as conv;
+
+        // Phase 1 handles the top-level active network only.
+        if !scope_path.is_empty() {
+            return Err("Convert to closure inside a zone body is not yet supported".to_string());
+        }
+
+        // 1. Resolve the instance node; read its type name.
+        let type_name = {
+            let target = self
+                .get_scope_network(&scope_path)
+                .ok_or("Scope not found")?;
+            let instance = target
+                .nodes
+                .get(&node_id)
+                .ok_or("Node to convert not found")?;
+            instance.node_type_name.clone()
+        };
+
+        // 2. Gate: only custom-network instances can be converted. Built-ins,
+        //    HOFs, `apply`, and `closure` are not custom types.
+        if !self.node_type_registry.is_custom_node_type(&type_name) {
+            return Err("Only custom node instances can be converted to a closure".to_string());
+        }
+
+        // 3. Gate: `I` must be used as a function, not a value — no wire anywhere
+        //    consumes its normal output pins (index >= 0). Consumers of its `-1`
+        //    pin (or no consumers at all) are fine.
+        {
+            let target = self.get_scope_network(&scope_path).unwrap();
+            if conv::node_consumed_as_value(target, node_id) {
+                return Err(
+                    "This node is used as a value, not a function; only a node consumed \
+                    through its function pin can be converted to a closure"
+                        .to_string(),
+                );
+            }
+        }
+
+        // 4. Clone the definition N (read it while mutating the host).
+        let source = self
+            .node_type_registry
+            .node_networks
+            .get(&type_name)
+            .ok_or("Custom network definition not found")?
+            .clone();
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or("No active network")?;
+
+        // 5. Snapshot BEFORE the conversion (for undo). Phase 1: top level only.
+        let before = self.snapshot_network(&network_name);
+
+        // 6. Build the closure node `C` (reads N, registry).
+        let closure_node = {
+            let target = self.get_scope_network(&scope_path).unwrap();
+            let instance = target.nodes.get(&node_id).unwrap();
+            conv::build_closure_from_instance(instance, &source, &self.node_type_registry)?
+        };
+
+        // 7. Replace `I` with `C` (same id), redirect `-1` consumers to pin `0`,
+        //    and drop any stale display state (C's pin 0 is a Function — no
+        //    viewport output).
+        {
+            let target = self
+                .get_scope_network_mut(&scope_path)
+                .ok_or("Scope not found")?;
+            target.nodes.insert(node_id, closure_node);
+            target.displayed_nodes.remove(&node_id);
+            conv::redirect_function_consumers(target, node_id);
+        }
+
+        // 8. Repopulate per-node custom-type caches: the host's top-level network
+        //    covers both `C` and `B`'s interior (`B` lives inside `C`). Use the
+        //    split-borrow static variant (consults only the read-only type maps)
+        //    to avoid a registry borrow conflict, as `inline_custom_node` does.
+        {
+            let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
+                &self.node_type_registry.built_in_node_types,
+                &self.node_type_registry.record_type_defs,
+                &self.node_type_registry.built_in_record_type_defs,
+                &mut self.node_type_registry.node_networks,
+            );
+            if let Some(top) = node_networks.get_mut(&network_name) {
+                NodeTypeRegistry::initialize_custom_node_types_for_network_with_types(
+                    built_in_types,
+                    record_type_defs,
+                    built_in_record_type_defs,
+                    top,
+                );
+            }
+        }
+
+        // 9. Validate — refresh paths do not validate.
+        self.validate_active_network();
+
+        // 10. Push undo command (Phase 1: top level).
+        if let (Some(before), Some(after)) = (before, self.snapshot_network(&network_name)) {
+            use super::undo::commands::convert_to_closure::ConvertToClosureCommand;
+            self.push_command(ConvertToClosureCommand {
+                network_name: network_name.clone(),
+                before_snapshot: before,
+                after_snapshot: after,
+            });
+        }
+
+        // 11. Mark dirty and schedule refresh.
+        self.is_dirty = true;
+        self.mark_full_refresh();
+
+        Ok(())
+    }
+
     /// Promotes a node to a parameter.
     ///
     /// Creates a new `parameter` node typed after the given node's output
