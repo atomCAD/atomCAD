@@ -11,7 +11,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::{EvalOutput, NodeData};
 use rust_lib_flutter_cad::structure_designer::node_inlining::{
-    copy_content_into, make_space_for_inline, splice_inline_boundary,
+    content_bounding_box, copy_content_into, make_space_for_inline, splice_inline_boundary,
 };
 use rust_lib_flutter_cad::structure_designer::node_network::{
     Argument, IncomingWire, Node, NodeDisplayType, NodeNetwork, SourcePin,
@@ -77,6 +77,12 @@ fn pos(network: &NodeNetwork, id: u64) -> DVec2 {
     network.nodes[&id].position
 }
 
+/// A `node_id -> size` map giving every node in `network` the same `size`. For
+/// make_space tests that don't exercise the size-aware safe-zone boundary.
+fn uniform_sizes(network: &NodeNetwork, size: DVec2) -> HashMap<u64, DVec2> {
+    network.nodes.keys().map(|&id| (id, size)).collect()
+}
+
 // ---------------------------------------------------------------------------
 // make_space_for_inline
 // ---------------------------------------------------------------------------
@@ -96,7 +102,15 @@ fn make_space_shifts_lower_right_quadrant_on_both_axes() {
     let lower_right = add(&mut network, "union", DVec2::new(300.0, 300.0), 0); // both past
     let overlapping = add(&mut network, "union", DVec2::new(50.0, 50.0), 0); // neither past
 
-    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+    let szs = uniform_sizes(&network, DVec2::new(160.0, 80.0));
+    let delta = make_space_for_inline(
+        &mut network,
+        instance,
+        anchor,
+        original_size,
+        content_size,
+        &szs,
+    );
 
     assert_eq!(delta, DVec2::new(140.0, 150.0));
 
@@ -124,7 +138,15 @@ fn make_space_no_move_when_content_fits() {
     let instance = add(&mut network, "union", anchor, 0);
     let far = add(&mut network, "union", DVec2::new(500.0, 500.0), 0);
 
-    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+    let szs = uniform_sizes(&network, DVec2::new(160.0, 80.0));
+    let delta = make_space_for_inline(
+        &mut network,
+        instance,
+        anchor,
+        original_size,
+        content_size,
+        &szs,
+    );
 
     assert_eq!(delta, DVec2::ZERO);
     assert_eq!(pos(&network, far), DVec2::new(500.0, 500.0));
@@ -147,11 +169,74 @@ fn make_space_excludes_only_the_instance() {
     let coincident = add(&mut network, "union", anchor, 0);
     let past = add(&mut network, "union", DVec2::new(150.0, 150.0), 0);
 
-    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+    let szs = uniform_sizes(&network, DVec2::new(160.0, 80.0));
+    let delta = make_space_for_inline(
+        &mut network,
+        instance,
+        anchor,
+        original_size,
+        content_size,
+        &szs,
+    );
 
     assert_eq!(delta, DVec2::new(100.0, 100.0));
     assert_eq!(pos(&network, coincident), anchor);
     assert_eq!(pos(&network, past), DVec2::new(250.0, 250.0));
+}
+
+#[test]
+fn make_space_uses_node_size_for_safe_zone() {
+    // The content grows right+down from the anchor. A node's safe-zone status is
+    // decided by its FAR edge, not its top-left corner:
+    //  - "completely above" iff bottom edge (y + height) <= anchor.y
+    //  - "completely left"  iff right edge  (x + width)  <= anchor.x
+    // A node that merely straddles the instance's top/left edge sits in the
+    // swept band and MUST shift. A point-only implementation (testing the
+    // top-left corner alone) would wrongly leave the straddling nodes — so this
+    // test only passes with the size-aware algorithm.
+    let mut network = NodeNetwork::new_empty();
+    let anchor = DVec2::new(0.0, 0.0);
+    let original_size = DVec2::new(100.0, 100.0);
+    let content_size = DVec2::new(300.0, 300.0); // delta = (200, 200)
+    let instance = add(&mut network, "union", anchor, 0);
+
+    // Straddles the top edge: top at y=-30, but height 60 → bottom at +30 > 0.
+    // To the right (x=200>100), so it must shift RIGHT.
+    let straddle_top = add(&mut network, "union", DVec2::new(200.0, -30.0), 0);
+    // Straddles the left edge: left at x=-30, but width 60 → right at +30 > 0.
+    // Below (y=200>100), so it must shift DOWN.
+    let straddle_left = add(&mut network, "union", DVec2::new(-30.0, 200.0), 0);
+    // Truly above: bottom = -100 + 40 = -60 <= 0 → safe (no rightward shift).
+    let truly_above = add(&mut network, "union", DVec2::new(200.0, -100.0), 0);
+    // Truly left: right = -100 + 40 = -60 <= 0 → safe (no downward shift).
+    let truly_left = add(&mut network, "union", DVec2::new(-100.0, 200.0), 0);
+
+    let szs: HashMap<u64, DVec2> = [
+        (instance, DVec2::new(100.0, 100.0)),
+        (straddle_top, DVec2::new(50.0, 60.0)),
+        (straddle_left, DVec2::new(60.0, 50.0)),
+        (truly_above, DVec2::new(50.0, 40.0)),
+        (truly_left, DVec2::new(40.0, 50.0)),
+    ]
+    .into_iter()
+    .collect();
+
+    let delta = make_space_for_inline(
+        &mut network,
+        instance,
+        anchor,
+        original_size,
+        content_size,
+        &szs,
+    );
+    assert_eq!(delta, DVec2::new(200.0, 200.0));
+
+    // Straddling nodes are in the swept band → they shift on that axis.
+    assert_eq!(pos(&network, straddle_top), DVec2::new(400.0, -30.0)); // x += 200
+    assert_eq!(pos(&network, straddle_left), DVec2::new(-30.0, 400.0)); // y += 200
+    // Truly-outside nodes are safe → unchanged.
+    assert_eq!(pos(&network, truly_above), DVec2::new(200.0, -100.0));
+    assert_eq!(pos(&network, truly_left), DVec2::new(-100.0, 200.0));
 }
 
 // ---------------------------------------------------------------------------
@@ -986,6 +1071,73 @@ fn inline_inside_body_undo_redo_roundtrip() {
         snapshot_body(&mut designer, map_id),
         after,
         "redo reapplies the inline"
+    );
+}
+
+#[test]
+fn content_bbox_accounts_for_expanded_hof_body() {
+    // Regression: an expanded `map` in the inlined content must contribute its
+    // body-region size to the content bounding box, otherwise make-space leaves
+    // too little room and the copied content overlaps existing parent nodes.
+    use rust_lib_flutter_cad::structure_designer::node_network::CollapseMode;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("n");
+    designer.set_active_node_network_name(Some("n".to_string()));
+    let map_id = designer.add_node("map", DVec2::ZERO);
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("n")
+            .unwrap();
+        let m = net.nodes.get_mut(&map_id).unwrap();
+        m.body_width = 600.0;
+        m.body_height = 400.0;
+        m.collapse_mode = CollapseMode::Expanded; // ensure not collapsed
+    }
+
+    let net = designer.node_type_registry.node_networks.get("n").unwrap();
+    let (_min, size) = content_bounding_box(net, &designer.node_type_registry);
+    // The 600x400 body must dominate the ~160-wide pin-count estimate.
+    assert!(size.x >= 600.0, "width must include body, got {}", size.x);
+    assert!(size.y >= 400.0, "height must include body, got {}", size.y);
+}
+
+#[test]
+fn content_bbox_collapsed_hof_uses_regular_size() {
+    // A collapsed HOF renders as a regular-node footprint, so its large stored
+    // body dimensions must NOT inflate the content bounding box.
+    use rust_lib_flutter_cad::structure_designer::node_network::CollapseMode;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("n");
+    designer.set_active_node_network_name(Some("n".to_string()));
+    let map_id = designer.add_node("map", DVec2::ZERO);
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("n")
+            .unwrap();
+        let m = net.nodes.get_mut(&map_id).unwrap();
+        m.body_width = 600.0;
+        m.body_height = 400.0;
+        m.collapse_mode = CollapseMode::Collapsed;
+    }
+
+    let net = designer.node_type_registry.node_networks.get("n").unwrap();
+    let (_min, size) = content_bounding_box(net, &designer.node_type_registry);
+    // Regular-node width (160), not the 740 a body-inclusive estimate would give.
+    assert!(
+        size.x < 200.0,
+        "collapsed HOF should use regular width, got {}",
+        size.x
+    );
+    assert!(
+        size.y < 200.0,
+        "collapsed HOF should use regular height, got {}",
+        size.y
     );
 }
 

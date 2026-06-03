@@ -145,6 +145,13 @@ You can convert a group of selected nodes into a reusable custom node type:
 
 The selection must be a "single-output subset" — at most one wire may exit the selection to nodes outside it. Parameter nodes cannot be included in the selection.
 
+**Inline a custom node**
+The inverse of factoring: you can replace a custom node instance with a copy of its subnetwork's contents, spliced into the current network in place.
+1. Right-click a custom node instance and choose **"Inline"**. (The item appears only for custom nodes — built-in nodes, including the higher-order-function nodes, `closure`, and `apply`, cannot be inlined.)
+2. The single instance is removed and the subnetwork's nodes are copied in where it stood. Each input pin's incoming wire is reconnected to whatever inside the subnetwork consumed the matching `parameter`, and consumers of the instance's output are reconnected to the subnetwork's return node. Surrounding nodes are pushed right and down to make room for the (usually larger) inlined content.
+
+The named subnetwork definition in the user-types panel is **left untouched** — only this one instance is expanded, and any other instances of the same custom node keep working. Inlining works in any scope, including inside a higher-order-function body, and is undoable (`Ctrl+Z`).
+
 **Click-to-activate from viewport**
 When multiple nodes have their output visible in the 3D viewport, you can click on a rendered output to activate the node that produced it. The first click activates the node and scrolls the node network panel to reveal it; subsequent clicks on the same node’s output perform the normal action (e.g., atom selection). If outputs from multiple nodes overlap at the click position, a disambiguation popup appears letting you choose which node to activate. The active node’s geometry is rendered with a distinct color to help distinguish it from other visible outputs.
 

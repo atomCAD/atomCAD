@@ -97,6 +97,73 @@ pub fn get_node_width() -> f64 {
     NODE_WIDTH
 }
 
+// =============================================================================
+// HOF (zone-owning) node sizing
+//
+// Constants match Flutter's `BASE_HOF_BODY_*` / `CLOSURE_BODY_*` in
+// `lib/structure_designer/node_network/node_network.dart`.
+// =============================================================================
+
+/// External input-column width to the left of a four-HOF body region.
+const HOF_BODY_LEFT_OFFSET: f64 = 70.0;
+/// External output-column width to the right of a four-HOF body region.
+const HOF_BODY_RIGHT_GUTTER: f64 = 70.0;
+/// Trimmed left/right pads for the `closure` node (no external input column;
+/// its `Function` output renders in the title bar).
+const CLOSURE_BODY_LEFT_PAD: f64 = 16.0;
+const CLOSURE_BODY_RIGHT_PAD: f64 = 16.0;
+
+/// Estimates the full (width, height) of a higher-order-function / zone-owning
+/// node whose body region is **expanded** (not collapsed).
+///
+/// A regular node's footprint is just title + pins + subtitle + padding, but an
+/// expanded HOF (`map` / `filter` / `fold` / `foreach` / `closure`) is dominated
+/// by its body region (`body_width` × `body_height`), flanked by the external
+/// pin columns. This mirrors Flutter's `effectiveNodeSizeLogical`
+/// (`scope_resolver.dart`) using the node's *stored* body dimensions.
+///
+/// `is_closure` trims the left/right chrome (the `closure` node has no external
+/// input column and renders its function output in the title bar).
+///
+/// Callers that include HOFs in a bounding-box computation (e.g.
+/// `node_inlining::content_bounding_box`) must use this for expanded HOFs;
+/// [`estimate_node_size`] alone undersizes them by the whole body and causes
+/// downstream nodes to overlap.
+#[allow(clippy::too_many_arguments)]
+pub fn estimate_hof_node_size(
+    num_input_pins: usize,
+    num_output_pins: usize,
+    num_zone_input_pins: usize,
+    num_zone_output_pins: usize,
+    body_width: f64,
+    body_height: f64,
+    has_subtitle: bool,
+    is_closure: bool,
+) -> DVec2 {
+    let (left, right) = if is_closure {
+        (CLOSURE_BODY_LEFT_PAD, CLOSURE_BODY_RIGHT_PAD)
+    } else {
+        (HOF_BODY_LEFT_OFFSET, HOF_BODY_RIGHT_GUTTER)
+    };
+    let width = left + body_width + right;
+
+    // The vertical mid-band is the tallest of: the external pins, the inner
+    // zone pins, and the body itself (never smaller than one output row).
+    let main_body_height = [
+        num_input_pins as f64 * PER_PARAM_HEIGHT,
+        num_output_pins as f64 * PER_PARAM_HEIGHT,
+        num_zone_input_pins as f64 * PER_PARAM_HEIGHT,
+        num_zone_output_pins as f64 * PER_PARAM_HEIGHT,
+        body_height,
+        OUTPUT_HEIGHT,
+    ]
+    .into_iter()
+    .fold(0.0_f64, f64::max);
+
+    let subtitle = if has_subtitle { SUBTITLE_HEIGHT } else { 0.0 };
+    DVec2::new(width, TITLE_HEIGHT + main_body_height + subtitle + PADDING)
+}
+
 /// Calculates the vertical offset for placing a duplicate node below the original.
 ///
 /// This accounts for the original node's height plus a gap for visual separation.

@@ -21,7 +21,9 @@ use glam::f64::DVec2;
 use std::collections::{HashMap, HashSet};
 
 use super::node_layout;
-use super::node_network::{Argument, IncomingWire, Node, NodeNetwork, SourcePin};
+use super::node_network::{
+    Argument, IncomingWire, Node, NodeNetwork, SourcePin, resolve_body_collapsed,
+};
 use super::node_type_registry::NodeTypeRegistry;
 use super::nodes::parameter::ParameterData;
 
@@ -29,12 +31,33 @@ use super::nodes::parameter::ParameterData;
 /// content, keeping the instance node's upper-left corner fixed.
 ///
 /// The content that will replace the instance is generally larger than the
-/// single node it replaces. We make room with a simple, predictable rule: every
-/// node strictly past the instance's right edge shifts right by the extra width
-/// the content needs; every node strictly past the instance's bottom edge shifts
-/// down by the extra height. A node in the lower-right quadrant (past both edges)
-/// shifts on both axes; a node that merely overlaps the instance vertically or
-/// horizontally does not move.
+/// single node it replaces, and it grows **rightward and downward** from the
+/// fixed anchor. We make room with this rule:
+///
+/// - Shift a node **right** by the extra width iff its left edge is past the
+///   instance's right edge **and it is not completely above** the instance. The
+///   rightward growth only sweeps the band at or below the instance's top, so a
+///   node whose entire vertical extent lies above that top is safe and stays put.
+/// - Shift a node **down** by the extra height iff its top edge is past the
+///   instance's bottom edge **and it is not completely to the left** of the
+///   instance. The downward growth only sweeps the band at or right of the
+///   instance's left, so a node whose entire horizontal extent lies left of that
+///   left edge is safe and stays put.
+///
+/// The above/left guards are **size-aware**: "completely above" means the node's
+/// *bottom* edge (`position.y + size.y`) is at or above the instance's top
+/// (`anchor.y`); "completely to the left" means the node's *right* edge
+/// (`position.x + size.x`) is at or left of the instance's left (`anchor.x`).
+/// A node that merely *straddles* the top (its top above `anchor.y` but its body
+/// dipping below) sits in the swept band and is therefore shifted — a point-only
+/// test of the top-left corner would wrongly leave it overlapping the content.
+/// Per-node sizes come from `node_sizes` (see [`estimate_network_node_sizes`]); a
+/// node absent from the map is treated as a zero-size point.
+///
+/// Without the guards, a node in the upper-right would be dragged rightward and
+/// one in the lower-left dragged downward even though the growing content never
+/// reaches them — distorting the layout. A node in the lower-right quadrant
+/// (past both edges, neither above nor left) still shifts on both axes.
 ///
 /// `instance_id` is excluded from the shift (its top-left corner is the anchor).
 /// Returns the `delta` actually applied (componentwise `max(0, content - original)`),
@@ -45,6 +68,7 @@ pub fn make_space_for_inline(
     anchor: DVec2,
     original_size: DVec2,
     content_size: DVec2,
+    node_sizes: &HashMap<u64, DVec2>,
 ) -> DVec2 {
     // Extra space the content needs beyond the original node, never negative.
     let delta = (content_size - original_size).max(DVec2::ZERO);
@@ -56,10 +80,18 @@ pub fn make_space_for_inline(
         if id == instance_id {
             continue;
         }
-        if node.position.x > right_edge {
+        // A node whose whole vertical/horizontal extent lies above/left of the
+        // instance is never reached by the content's rightward/downward growth,
+        // so it is left untouched on that axis. Use the node's far edge (bottom
+        // for "above", right for "left") — the near edge alone (its top-left
+        // corner) would misjudge a node straddling the instance's edge.
+        let size = node_sizes.get(&id).copied().unwrap_or(DVec2::ZERO);
+        let completely_above = node.position.y + size.y <= anchor.y;
+        let completely_left = node.position.x + size.x <= anchor.x;
+        if node.position.x > right_edge && !completely_above {
             node.position.x += delta.x;
         }
-        if node.position.y > bottom_edge {
+        if node.position.y > bottom_edge && !completely_left {
             node.position.y += delta.y;
         }
     }
@@ -174,11 +206,36 @@ fn dedup_name(target: &NodeNetwork, desired: &str) -> String {
 /// the layout heuristic used elsewhere (`auto_layout::get_node_size`): subtitle
 /// always assumed present, which is the common case for the node kinds inline
 /// operates on.
+///
+/// An **expanded** HOF / zone-owning node (`map` / `filter` / `fold` /
+/// `foreach` / `closure`) is sized by its body region via
+/// [`node_layout::estimate_hof_node_size`] — its real footprint is dominated by
+/// the body, far larger than the pin-count estimate. Without this, inlining a
+/// network that contains an expanded HOF leaves too little room and the copied
+/// content overlaps existing parent nodes. A collapsed HOF falls back to the
+/// regular size (it renders as a regular-node footprint).
 fn estimate_node_size_in_network(node: &Node, registry: &NodeTypeRegistry) -> DVec2 {
-    let (n_in, n_out) = registry
-        .get_node_type_for_node(node)
+    let node_type = registry.get_node_type_for_node(node);
+    let (n_in, n_out) = node_type
         .map(|nt| (nt.parameters.len(), nt.output_pin_count()))
         .unwrap_or((0, 1));
+
+    if let Some(nt) = node_type
+        && nt.has_zone()
+        && !resolve_body_collapsed(node, nt)
+    {
+        return node_layout::estimate_hof_node_size(
+            n_in,
+            n_out,
+            nt.zone_input_pins.len(),
+            nt.zone_output_pins.len(),
+            node.body_width,
+            node.body_height,
+            true,
+            node.node_type_name == "closure",
+        );
+    }
+
     node_layout::estimate_node_size(n_in, n_out, true)
 }
 
@@ -187,6 +244,21 @@ fn estimate_node_size_in_network(node: &Node, registry: &NodeTypeRegistry) -> DV
 /// separately so the orchestrator reads as the design's `original_size`.
 pub fn instance_size(instance: &Node, registry: &NodeTypeRegistry) -> DVec2 {
     estimate_node_size_in_network(instance, registry)
+}
+
+/// Estimated rendered size of every node in `network`, keyed by id. Feeds
+/// [`make_space_for_inline`]'s size-aware safe-zone test; the orchestrator
+/// computes this (under an immutable registry borrow) before taking the mutable
+/// borrow it needs to move the nodes.
+pub fn estimate_network_node_sizes(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+) -> HashMap<u64, DVec2> {
+    network
+        .nodes
+        .iter()
+        .map(|(&id, node)| (id, estimate_node_size_in_network(node, registry)))
+        .collect()
 }
 
 /// Bounding box of `source`'s non-`parameter` content as `(content_min, content_size)`:

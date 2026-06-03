@@ -6372,6 +6372,16 @@ impl StructureDesigner {
             (None, self.snapshot_zone_body(&scope_path))
         };
 
+        // Estimate the existing nodes' rendered sizes (immutable registry
+        // borrow) before the mutable target borrow below — `make_space` needs
+        // them for its size-aware safe-zone test.
+        let node_sizes = {
+            let target = self
+                .get_scope_network(&scope_path)
+                .ok_or("Scope not found")?;
+            node_inlining::estimate_network_node_sizes(target, &self.node_type_registry)
+        };
+
         // 6. Run the three helpers on the resolved target network (top-level
         //    active network or a nested body). The helpers touch no registry
         //    state, so a plain `&mut NodeNetwork` borrow suffices.
@@ -6385,6 +6395,7 @@ impl StructureDesigner {
                 anchor,
                 original_size,
                 content_size,
+                &node_sizes,
             );
             let id_mapping = node_inlining::copy_content_into(target, &source, anchor, content_min);
             node_inlining::splice_inline_boundary(target, node_id, &source, &id_mapping);
