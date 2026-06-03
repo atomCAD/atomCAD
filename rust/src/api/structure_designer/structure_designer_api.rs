@@ -6822,6 +6822,66 @@ pub fn factor_selection_into_subnetwork(
     }
 }
 
+/// Whether the node at `(scope_path, node_id)` can be inlined — i.e. it is a
+/// custom-network instance (built-ins, HOFs, `apply`, `closure` are not custom
+/// types and so are rejected). Used to gate the context-menu item.
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_inline_node(scope_path: Vec<u64>, node_id: u64) -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let sd = &cad_instance.structure_designer;
+                match sd
+                    .get_scope_network(&scope_path)
+                    .and_then(|network| network.nodes.get(&node_id))
+                {
+                    Some(node) => sd
+                        .node_type_registry
+                        .is_custom_node_type(&node.node_type_name),
+                    None => false,
+                }
+            },
+            false,
+        )
+    }
+}
+
+/// Inline a custom-network instance: replace the node at `(scope_path, node_id)`
+/// with a copy of its custom network's contents, spliced into the parent
+/// network (or zone body) in place. The named definition is left untouched.
+///
+/// See `doc/design_inline_custom_node.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn inline_custom_node(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> super::structure_designer_api_types::InlineResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .inline_custom_node(scope_path, node_id)
+            {
+                Ok(()) => {
+                    refresh_structure_designer_auto(cad_instance);
+                    super::structure_designer_api_types::InlineResult {
+                        success: true,
+                        error: None,
+                    }
+                }
+                Err(error) => super::structure_designer_api_types::InlineResult {
+                    success: false,
+                    error: Some(error),
+                },
+            },
+            super::structure_designer_api_types::InlineResult {
+                success: false,
+                error: Some("CAD instance not available".to_string()),
+            },
+        )
+    }
+}
+
 /// Promote a node to a parameter.
 ///
 /// Inserts a `parameter` node typed after the given node's output pin 0,

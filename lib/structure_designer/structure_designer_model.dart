@@ -1707,6 +1707,21 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  /// Inline the custom-network instance `nodeId` (in scope `scopeChain`):
+  /// replace it with a copy of its network's contents, spliced into the
+  /// containing network/body in place. The named definition is left untouched.
+  /// Returns the API result; UI is refreshed regardless of success.
+  /// See `doc/design_inline_custom_node.md`.
+  InlineResult inlineCustomNode(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
+    final result = structure_designer_api.inlineCustomNode(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
   /// Run an explicit Execute pass on `nodeId` in the active network.
   ///
   /// Synchronous FFI call (the `with_*_cad_instance` helpers require
@@ -1736,42 +1751,66 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setIntData(BigInt nodeId, APIIntData data) {
-    structure_designer_api.setIntData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setIntData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setStringData(BigInt nodeId, APIStringData data) {
-    structure_designer_api.setStringData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setStringData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setRecordConstructData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setRecordConstructData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setRecordConstructData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setRecordDestructureData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setRecordDestructureData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setRecordDestructureData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setProductData(BigInt nodeId, APIRecordSchemaData data) {
-    structure_designer_api.setProductData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setProductData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setBoolData(BigInt nodeId, APIBoolData data) {
-    structure_designer_api.setBoolData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setBoolData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setPrintData(BigInt nodeId, APIPrintData data) {
-    structure_designer_api.setPrintData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setPrintData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setFloatData(BigInt nodeId, APIFloatData data) {
-    structure_designer_api.setFloatData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setFloatData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
@@ -1779,18 +1818,24 @@ class StructureDesignerModel extends ChangeNotifier {
   /// `null` if `nodeId` is not a custom node. An empty list means a custom
   /// node with no simple-typed parameters.
   List<APILiteralField>? getCustomNodeParams(BigInt nodeId) =>
-      structure_designer_api.getCustomNodeParams(scopePath: propertyEditorScopePath, nodeId: nodeId);
+      structure_designer_api.getCustomNodeParams(
+          scopePath: propertyEditorScopePath, nodeId: nodeId);
 
   void setCustomNodeLiteral(
       BigInt nodeId, String paramName, APILiteralValue value) {
-    structure_designer_api.setCustomNodeLiteral(scopePath: _scopeChainToBytes(propertyEditorScopeChain), 
-        nodeId: nodeId, paramName: paramName, value: value);
+    structure_designer_api.setCustomNodeLiteral(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        paramName: paramName,
+        value: value);
     refreshFromKernel();
   }
 
   void clearCustomNodeLiteral(BigInt nodeId, String paramName) {
-    structure_designer_api.clearCustomNodeLiteral(scopePath: _scopeChainToBytes(propertyEditorScopeChain), 
-        nodeId: nodeId, paramName: paramName);
+    structure_designer_api.clearCustomNodeLiteral(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        paramName: paramName);
     refreshFromKernel();
   }
 
@@ -1799,280 +1844,425 @@ class StructureDesignerModel extends ChangeNotifier {
   /// or its schema is empty / dangling. An empty list means a schema with no
   /// simple-typed fields.
   List<APILiteralField>? getRecordConstructFields(BigInt nodeId) =>
-      structure_designer_api.getRecordConstructFields(scopePath: propertyEditorScopePath, nodeId: nodeId);
+      structure_designer_api.getRecordConstructFields(
+          scopePath: propertyEditorScopePath, nodeId: nodeId);
 
   void setRecordConstructLiteral(
       BigInt nodeId, String fieldName, APILiteralValue value) {
-    structure_designer_api.setRecordConstructLiteral(scopePath: _scopeChainToBytes(propertyEditorScopeChain), 
-        nodeId: nodeId, fieldName: fieldName, value: value);
+    structure_designer_api.setRecordConstructLiteral(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        fieldName: fieldName,
+        value: value);
     refreshFromKernel();
   }
 
   void clearRecordConstructLiteral(BigInt nodeId, String fieldName) {
-    structure_designer_api.clearRecordConstructLiteral(scopePath: _scopeChainToBytes(propertyEditorScopeChain), 
-        nodeId: nodeId, fieldName: fieldName);
+    structure_designer_api.clearRecordConstructLiteral(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        fieldName: fieldName);
     refreshFromKernel();
   }
 
   void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
-    structure_designer_api.setIvec2Data(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setIvec2Data(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setIvec3Data(BigInt nodeId, APIIVec3Data data) {
-    structure_designer_api.setIvec3Data(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setIvec3Data(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setSupercellData(BigInt nodeId, APISupercellData data) {
-    structure_designer_api.setSupercellData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setSupercellData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setImat3RowsData(BigInt nodeId, APIIMat3RowsData data) {
-    structure_designer_api.setImat3RowsData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setImat3RowsData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setImat3ColsData(BigInt nodeId, APIIMat3ColsData data) {
-    structure_designer_api.setImat3ColsData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setImat3ColsData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setImat3DiagData(BigInt nodeId, APIIMat3DiagData data) {
-    structure_designer_api.setImat3DiagData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setImat3DiagData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setMat3RowsData(BigInt nodeId, APIMat3RowsData data) {
-    structure_designer_api.setMat3RowsData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMat3RowsData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setMat3ColsData(BigInt nodeId, APIMat3ColsData data) {
-    structure_designer_api.setMat3ColsData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMat3ColsData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setMat3DiagData(BigInt nodeId, APIMat3DiagData data) {
-    structure_designer_api.setMat3DiagData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMat3DiagData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setRangeData(BigInt nodeId, APIRangeData data) {
-    structure_designer_api.setRangeData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setRangeData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setVec2Data(BigInt nodeId, APIVec2Data data) {
-    structure_designer_api.setVec2Data(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setVec2Data(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setVec3Data(BigInt nodeId, APIVec3Data data) {
-    structure_designer_api.setVec3Data(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setVec3Data(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setCuboidData(BigInt nodeId, APICuboidData data) {
-    structure_designer_api.setCuboidData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setCuboidData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setSphereData(BigInt nodeId, APISphereData data) {
-    structure_designer_api.setSphereData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setSphereData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setExtrudeData(BigInt nodeId, APIExtrudeData data) {
-    structure_designer_api.setExtrudeData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setExtrudeData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setHalfSpaceData(BigInt nodeId, APIHalfSpaceData data) {
-    structure_designer_api.setHalfSpaceData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setHalfSpaceData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setDrawingPlaneData(BigInt nodeId, APIDrawingPlaneData data) {
-    structure_designer_api.setDrawingPlaneData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setDrawingPlaneData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setRectData(BigInt nodeId, APIRectData data) {
-    structure_designer_api.setRectData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setRectData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setCircleData(BigInt nodeId, APICircleData data) {
-    structure_designer_api.setCircleData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setCircleData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setHalfPlaneData(BigInt nodeId, APIHalfPlaneData data) {
-    structure_designer_api.setHalfPlaneData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setHalfPlaneData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setRegPolyData(BigInt nodeId, APIRegPolyData data) {
-    structure_designer_api.setRegPolyData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setRegPolyData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setGeoTransData(BigInt nodeId, APIGeoTransData data) {
-    structure_designer_api.setGeoTransData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setGeoTransData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APILatticeSymopData? getLatticeSymopData(BigInt nodeId) {
-    return structure_designer_api.getLatticeSymopData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getLatticeSymopData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setLatticeSymopData(BigInt nodeId, APILatticeSymopData data) {
-    structure_designer_api.setLatticeSymopData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setLatticeSymopData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIStructureMoveData? getStructureMoveData(BigInt nodeId) {
-    return structure_designer_api.getStructureMoveData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getStructureMoveData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setStructureMoveData(BigInt nodeId, APIStructureMoveData data) {
-    structure_designer_api.setStructureMoveData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setStructureMoveData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIStructureRotData? getStructureRotData(BigInt nodeId) {
-    return structure_designer_api.getStructureRotData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getStructureRotData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setStructureRotData(BigInt nodeId, APIStructureRotData data) {
-    structure_designer_api.setStructureRotData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setStructureRotData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setFreeMoveData(BigInt nodeId, APIFreeMoveData data) {
-    structure_designer_api.setFreeMoveData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setFreeMoveData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setFreeRotData(BigInt nodeId, APIFreeRotData data) {
-    structure_designer_api.setFreeRotData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setFreeRotData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setParameterData(BigInt nodeId, APIParameterData data) {
-    structure_designer_api.setParameterData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setParameterData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setMApData(BigInt nodeId, APIMapData data) {
-    structure_designer_api.setMapData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMapData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setFilterData(BigInt nodeId, APIFilterData data) {
-    structure_designer_api.setFilterData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setFilterData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setForeachData(BigInt nodeId, APIForeachData data) {
-    structure_designer_api.setForeachData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setForeachData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setCollectData(BigInt nodeId, APICollectData data) {
-    structure_designer_api.setCollectData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setCollectData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setArrayAtData(BigInt nodeId, APIArrayAtData data) {
-    structure_designer_api.setArrayAtData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setArrayAtData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setFoldData(BigInt nodeId, APIFoldData data) {
-    structure_designer_api.setFoldData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setFoldData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setClosureData(BigInt nodeId, APIClosureData data) {
-    structure_designer_api.setClosureData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setClosureData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setApplyData(BigInt nodeId, APIApplyData data) {
-    structure_designer_api.setApplyData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setApplyData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APISequenceData? getSequenceData(BigInt nodeId) {
-    return structure_designer_api.getSequenceData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getSequenceData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setSequenceData(BigInt nodeId, APISequenceData data) {
-    structure_designer_api.setSequenceData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setSequenceData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIResult setExprData(BigInt nodeId, APIExprData data) {
-    final result =
-        structure_designer_api.setExprData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    final result = structure_designer_api.setExprData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
     return result;
   }
 
   void setMotifData(BigInt nodeId, APIMotifData data) {
-    structure_designer_api.setMotifData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMotifData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIMotifData? getMotifData(BigInt nodeId) {
-    return structure_designer_api.getMotifData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getMotifData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setMaterializeData(BigInt nodeId, APIMaterializeData data) {
-    structure_designer_api.setMaterializeData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMaterializeData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIMaterializeData? getMaterializeData(BigInt nodeId) {
-    return structure_designer_api.getMaterializeData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getMaterializeData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setMotifSubData(BigInt nodeId, APIMotifSubData data) {
-    structure_designer_api.setMotifSubData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setMotifSubData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIMotifSubData? getMotifSubData(BigInt nodeId) {
-    return structure_designer_api.getMotifSubData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getMotifSubData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   APIParameterData? getParameterData(BigInt nodeId) {
-    return structure_designer_api.getParameterData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getParameterData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   APIExprData? getExprData(BigInt nodeId) {
-    return structure_designer_api.getExprData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getExprData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setImportXyzData(BigInt nodeId, APIImportXYZData data) {
-    structure_designer_api.setImportXyzData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setImportXyzData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIImportXYZData? getImportXyzData(BigInt nodeId) {
-    return structure_designer_api.getImportXyzData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getImportXyzData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setExportXyzData(BigInt nodeId, APIExportXYZData data) {
-    structure_designer_api.setExportXyzData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setExportXyzData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIExportXYZData? getExportXyzData(BigInt nodeId) {
-    return structure_designer_api.getExportXyzData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getExportXyzData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   APIResult importXyz(BigInt nodeId) {
@@ -2083,12 +2273,16 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setImportCifData(BigInt nodeId, APIImportCIFData data) {
-    structure_designer_api.setImportCifData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setImportCifData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIImportCIFData? getImportCifData(BigInt nodeId) {
-    return structure_designer_api.getImportCifData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getImportCifData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   APIResult importCif(BigInt nodeId) {
@@ -2099,40 +2293,60 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setInferBondsData(BigInt nodeId, APIInferBondsData data) {
-    structure_designer_api.setInferBondsData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setInferBondsData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIInferBondsData? getInferBondsData(BigInt nodeId) {
-    return structure_designer_api.getInferBondsData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getInferBondsData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setAtomReplaceData(BigInt nodeId, APIAtomReplaceData data) {
-    structure_designer_api.setAtomReplaceData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setAtomReplaceData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   APIAtomReplaceData? getAtomReplaceData(BigInt nodeId) {
-    return structure_designer_api.getAtomReplaceData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+    return structure_designer_api.getAtomReplaceData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
   void setApplyDiffData(BigInt nodeId, APIApplyDiffData data) {
-    structure_designer_api.setApplyDiffData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setApplyDiffData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setAtomComposeDiffData(BigInt nodeId, APIAtomComposeDiffData data) {
-    structure_designer_api.setAtomComposediffData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setAtomComposediffData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setAtomCutData(BigInt nodeId, APIAtomCutData data) {
-    structure_designer_api.setAtomCutData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setAtomCutData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 
   void setLatticeVecsData(BigInt nodeId, APILatticeVecsData data) {
-    structure_designer_api.setLatticeVecsData(scopePath: _scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId, data: data);
+    structure_designer_api.setLatticeVecsData(
+        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
     refreshFromKernel();
   }
 

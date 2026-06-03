@@ -3040,6 +3040,34 @@ sealed class GuidedPlacementApiResult with _$GuidedPlacementApiResult {
   }) = GuidedPlacementApiResult_GuidedPlacementStarted;
 }
 
+/// Result of an Inline-a-Custom-Node attempt.
+///
+/// Modeled on [`FactorSelectionResult`] but without `new_node_id` — inlining
+/// produces many nodes rather than one. See `doc/design_inline_custom_node.md`.
+class InlineResult {
+  /// Whether the inline succeeded
+  final bool success;
+
+  /// Error message if the inline failed
+  final String? error;
+
+  const InlineResult({
+    required this.success,
+    this.error,
+  });
+
+  @override
+  int get hashCode => success.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InlineResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          error == other.error;
+}
+
 class InputPinView {
   final String name;
   final String dataType;

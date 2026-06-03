@@ -1278,6 +1278,17 @@ pub struct FactorSelectionResult {
     pub new_node_id: Option<u64>,
 }
 
+/// Result of an Inline-a-Custom-Node attempt.
+///
+/// Modeled on [`FactorSelectionResult`] but without `new_node_id` — inlining
+/// produces many nodes rather than one. See `doc/design_inline_custom_node.md`.
+pub struct InlineResult {
+    /// Whether the inline succeeded
+    pub success: bool,
+    /// Error message if the inline failed
+    pub error: Option<String>,
+}
+
 /// Result of a Promote-to-Parameter attempt.
 pub struct APIPromoteToParameterResult {
     pub success: bool,

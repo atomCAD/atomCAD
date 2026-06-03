@@ -94,7 +94,8 @@ const Color NODE_TITLE_COLOR_PARAMETER = Color(0xFF1B5E20); // Dark green
 const Color HOF_BODY_BORDER_COLOR = Color(0x4D000000); // black @ ~0.30
 // Amber-tinted border for the "driven by `f`" placeholder, echoing the
 // Function wire color; opaque enough to read against the light body fill.
-const Color HOF_BODY_FUNCTION_OVERRIDE_BORDER_COLOR = Color(0xB3FFA726); // amber @ ~0.70
+const Color HOF_BODY_FUNCTION_OVERRIDE_BORDER_COLOR =
+    Color(0xB3FFA726); // amber @ ~0.70
 // Italic note text on the collapsed / function-override placeholders.
 const Color HOF_BODY_PLACEHOLDER_TEXT_COLOR = Colors.black54;
 
@@ -171,8 +172,8 @@ class PinViewWidget extends StatelessWidget {
     const prefix = 'Function(';
     const suffix = ',*)';
     if (typeName.startsWith(prefix) && typeName.endsWith(suffix)) {
-      final inner = typeName.substring(
-          prefix.length, typeName.length - suffix.length);
+      final inner =
+          typeName.substring(prefix.length, typeName.length - suffix.length);
       if (inner.isEmpty) return null;
       // `inner` is a flat list of leading parameter types separated by `,`.
       // For nested commas (e.g. `(Int,Bool) -> Float`) the simple split would
@@ -937,7 +938,8 @@ class NodeWidget extends StatelessWidget {
     // compact HOF gets correct, fully interactive pins with no new pin code.
     // The title-bar Row is unchanged: it still suppresses the legacy function
     // pin on every HOF. See `doc/design_hof_node_collapse.md`.
-    final bool compactHof = isHof && node.zone!.collapsable && node.zone!.collapsed;
+    final bool compactHof =
+        isHof && node.zone!.collapsable && node.zone!.collapsed;
     // Closure: its single Function output pin renders in the title bar (the
     // legacy function-pin slot) instead of a right-edge output column, and the
     // body extends into the freed gutter. Only when the body is actually shown
@@ -993,7 +995,8 @@ class NodeWidget extends StatelessWidget {
                       child: node.outputPins.isNotEmpty
                           ? Text.rich(
                               TextSpan(children: [
-                                if ((node.closureCustomLabel ?? '').isNotEmpty) ...[
+                                if ((node.closureCustomLabel ?? '')
+                                    .isNotEmpty) ...[
                                   TextSpan(
                                     text: node.closureCustomLabel!,
                                     style: const TextStyle(
@@ -1020,16 +1023,15 @@ class NodeWidget extends StatelessWidget {
                                   style: TextStyle(
                                     color: (node.active || node.selected)
                                         ? Colors.white
-                                        : getDataTypeColor(node
-                                            .outputPins.first.effectiveDataType),
+                                        : getDataTypeColor(node.outputPins.first
+                                            .effectiveDataType),
                                     fontWeight: FontWeight.bold,
                                     fontSize: 15,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
                                 TextSpan(
-                                  text:
-                                      node.outputPins.first.effectiveDataType,
+                                  text: node.outputPins.first.effectiveDataType,
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -1211,7 +1213,8 @@ class NodeWidget extends StatelessWidget {
     final zone = node.zone!;
     final bodyChain = [...scopeChain, node.id];
     final cachedSize = resolver.layout.lookupSize(bodyChain);
-    final effectiveSize = cachedSize ?? Size(zone.storedWidth, zone.storedHeight);
+    final effectiveSize =
+        cachedSize ?? Size(zone.storedWidth, zone.storedHeight);
     final collapsed = resolver.isBodyCollapsed(bodyChain);
     final fOverridden = resolver.isBodyFunctionOverridden(bodyChain);
     // Closure trims its chrome: no external input column to reserve (it has no
@@ -1278,8 +1281,8 @@ class NodeWidget extends StatelessWidget {
               zone: zone,
               effectiveSize: effectiveSize,
               onResize: (newSize) {
-                final model = Provider.of<StructureDesignerModel>(context,
-                    listen: false);
+                final model =
+                    Provider.of<StructureDesignerModel>(context, listen: false);
                 model.setZoneSize(
                     scopeChain, node.id, newSize.width, newSize.height);
               },
@@ -1622,6 +1625,11 @@ class NodeWidget extends StatelessWidget {
             value: 'go_to_definition',
             child: Text('Go to Definition'),
           ),
+        if (isCustomNode)
+          PopupMenuItem(
+            value: 'inline',
+            child: Text('Inline'),
+          ),
         PopupMenuItem(
           value: 'execute',
           child: Row(
@@ -1674,8 +1682,8 @@ class NodeWidget extends StatelessWidget {
           const PopupMenuItem<String>(enabled: false, child: Text('Body')),
           _collapseModeItem(
               'collapse_auto', 'Auto (follow f)', node.zone!.collapseMode),
-          _collapseModeItem('collapse_expanded', 'Always expanded',
-              node.zone!.collapseMode),
+          _collapseModeItem(
+              'collapse_expanded', 'Always expanded', node.zone!.collapseMode),
           _collapseModeItem('collapse_collapsed', 'Always collapsed',
               node.zone!.collapseMode),
         ],
@@ -1686,6 +1694,19 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.setActiveNodeNetwork(node.nodeTypeName);
+      } else if (value == 'inline') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        final result = model.inlineCustomNode(node.id, scopeChain: scopeChain);
+        if (!context.mounted) return;
+        if (!result.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.error ?? 'Could not inline node'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
       } else if (value == 'execute') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
@@ -1978,8 +1999,8 @@ class _ZoneBodyRegion extends StatelessWidget {
             child: Listener(
               behavior: HitTestBehavior.translucent,
               onPointerDown: (_) {
-                final model = Provider.of<StructureDesignerModel>(context,
-                    listen: false);
+                final model =
+                    Provider.of<StructureDesignerModel>(context, listen: false);
                 model.setActiveScopeChain(_bodyScopeChain);
               },
             ),

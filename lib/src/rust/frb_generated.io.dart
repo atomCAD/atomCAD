@@ -719,6 +719,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   int dco_decode_i_8(dynamic raw);
 
   @protected
+  InlineResult dco_decode_inline_result(dynamic raw);
+
+  @protected
   InputPinView dco_decode_input_pin_view(dynamic raw);
 
   @protected
@@ -1995,6 +1998,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   int sse_decode_i_8(SseDeserializer deserializer);
+
+  @protected
+  InlineResult sse_decode_inline_result(SseDeserializer deserializer);
 
   @protected
   InputPinView sse_decode_input_pin_view(SseDeserializer deserializer);
@@ -3415,6 +3421,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_i_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_inline_result(InlineResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_input_pin_view(InputPinView self, SseSerializer serializer);

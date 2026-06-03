@@ -1757,6 +1757,25 @@ FactorSelectionResult factorSelectionIntoSubnetwork(
         .crateApiStructureDesignerStructureDesignerApiFactorSelectionIntoSubnetwork(
             request: request);
 
+/// Whether the node at `(scope_path, node_id)` can be inlined — i.e. it is a
+/// custom-network instance (built-ins, HOFs, `apply`, `closure` are not custom
+/// types and so are rejected). Used to gate the context-menu item.
+bool canInlineNode({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiCanInlineNode(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Inline a custom-network instance: replace the node at `(scope_path, node_id)`
+/// with a copy of its custom network's contents, spliced into the parent
+/// network (or zone body) in place. The named definition is left untouched.
+///
+/// See `doc/design_inline_custom_node.md`.
+InlineResult inlineCustomNode(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiInlineCustomNode(
+            scopePath: scopePath, nodeId: nodeId);
+
 /// Promote a node to a parameter.
 ///
 /// Inserts a `parameter` node typed after the given node's output pin 0,
