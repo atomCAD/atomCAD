@@ -95,6 +95,16 @@ Only B-top (top-of-tree) nodes ever get fresh ids when copied; nested body `Arc`
 **verbatim**, so deeper ids are preserved. This is the invariant `copy_content_into`
 (`node_inlining.rs`) already maintains and it is load-bearing for all the depth gates here.
 
+> **"Verbatim" is about ids, not wires.** Preserving nested ids does *not* mean nested bodies
+> are left untouched: the splice still **descends into every body** (CoW-cloning the `Arc` on
+> first mutation via `zone_mut`) and rewrites the wires at each nesting `k ≥ 1`, because a
+> parameter/boundary reference can live arbitrarily deep (e.g. a `map` inside `N` whose body
+> captures one of `N`'s parameters). What "verbatim" buys is that the **ids those wires point
+> at** stay stable, so the `source_scope_depth == k` id-classification gate is unambiguous at
+> every frame. This is exactly `node_inlining.rs`'s `descend_body`, which processes both
+> `arguments` **and** `zone_output_arguments` at every depth — the two splices below inherit
+> that shape.
+
 ---
 
 ## Direction A — Network → Closure (custom instance ⇒ closure)
@@ -132,16 +142,29 @@ input pin is wired:
   source(s).
 
 The closure's shape: `params = (types of unwired pins, in cp order)`, `ret = N.output pin-0
-type`. Build `ClosureData` via the existing `closure_data_for_signature(params, ret)` helper in
-`nodes/closure.rs` (make it `pub(crate)`), which picks a preset `ClosureKind` when the shape
-matches and `Custom` otherwise. `calculate_custom_node_type` then derives `C`'s
-`zone_input_pins` (the parameters) and single `zone_output_pin` (the result).
+type`. To **preserve `N`'s parameter names**, build `ClosureData` **directly** as a `Custom`
+closure:
 
-> *Naming note:* presets relabel parameters to `element`/`acc`. To **preserve `N`'s parameter
-> names**, prefer `ClosureKind::Custom` with `param_names` = the unwired parameter nodes' names.
-> Either is functionally identical (function-type compatibility is structural, kind-independent);
-> the design recommends `Custom` for name fidelity and notes the preset path as the
-> drag-consistent alternative.
+```rust
+ClosureData {
+    kind: ClosureKind::Custom,
+    type_args: [unwired pin types in cp order ++ [ret]],   // N params, then return
+    param_names: [unwired parameter nodes' names, in cp order],
+    custom_label: None,
+}
+```
+
+`calculate_custom_node_type` then derives `C`'s `zone_input_pins` (the parameters, named) and
+single `zone_output_pin` (the result).
+
+> *Why not `closure_data_for_signature`?* The existing `closure_data_for_signature(params, ret)`
+> helper in `nodes/closure.rs` takes **types only** — it relabels preset-kind parameters to
+> `element`/`acc` and synthesizes `p0, p1, …` for its `Custom` fallback, so it **cannot carry
+> `N`'s names**. We therefore construct `ClosureData` by hand here rather than call it. Picking a
+> preset `ClosureKind` (when the shape matches a Map/Filter/Fold/Foreach signature) would be
+> *functionally* identical — function-type compatibility is structural and kind-independent — but
+> loses the authored names, so `Custom` is preferred. (Naming differences are cosmetic and are
+> normalized away in the round-trip tests.)
 
 **Body `B`.** `B = NodeNetwork::new_empty()`. Copy `N`'s non-`parameter` nodes into `B` with
 `copy_content_into(&mut B, &N, anchor=ZERO, content_min)` → `id_mapping` (B-top nodes get fresh
@@ -175,6 +198,12 @@ same-scope wire; `≥ 1` if `I` itself captures).
     (The `+1` beyond the inline formula `k + iw.depth` is exactly the extra frame `B` adds below
     `H`.) Multiple wires on a multi-input pin replicate; an empty instance pin drops `w`.
 
+> **The three cases are exhaustive — no `s > k` arises here.** Unlike Direction B (where the body
+> can reach *above* its host, giving an `s ≥ k + 1` boundary class), `N` is a **self-contained**
+> network: it has no captures above its own top, so every wire in the copied content resolves at
+> or below `B`-top, i.e. `s ≤ k`. The boundary in Direction A is therefore reached purely by
+> *id* (a `parameter`-node reference, always at `s == k`), never by an above-top depth.
+
 > **Why parameter references are matched by id against `N` directly (not gated on depth):** in
 > `N`, every wire that reads a parameter node does so at the parameter's scope — `parameter`
 > nodes only live at `N`-top, so a body-internal wire reading a parameter is a *capture inside
@@ -198,6 +227,14 @@ had **no** function-value-producing pin 0 distinct from the network output; its 
 was on `-1`. Concretely: every wire consuming `(I.id, NodeOutput { pin_index: -1 })` (across `H`
 and sub-bodies, any depth) becomes `(C.id, NodeOutput { pin_index: 0 })` at the same depth.
 Since `C.id == I.id`, only `pin_index` changes (`-1 → 0`).
+
+**Clear stale display state.** If `I` carried a `NodeDisplayState` with output pin 0 displayed
+(only reachable in the unconsumed case — a consumed `-1` already suppresses `I` in
+`generate_scene`), drop it: `C`'s pin 0 is now a `Function`, which produces no viewport output,
+so a leftover displayed pin would be a dangling eye. Remove `I.id` from `H.displayed_nodes` (or
+reset it to an empty `displayed_pins`) when building `C`. The symmetric Direction B case needs no
+such handling — `I` enters function mode the moment its `-1` is consumed, so it is display-skipped
+regardless.
 
 ### Undo (Network → Closure)
 
@@ -313,10 +350,23 @@ depth `k`, on `NodeOutput` pin 0.) Set `N.return_node_id`:
 sub-bodies, any depth) becomes `(I.id, NodeOutput { -1 })` at the same depth. `C.id == I.id`,
 so only `pin_index` changes (`0 → -1`).
 
-Register `N` (`registry.add_node_network(N)`), then
-`initialize_custom_node_types_for_network` on `H`'s top-level network (the split-borrow walk
-used by inline) so `I` and the copied content get their cached types, and
-`validate_active_network()`.
+**Cache initialization — `N`'s content vs. `I`.** Two *different* networks need their custom-node
+type caches populated, and they are reached differently (this is **not** the inline pattern,
+where the copied content lands in the host and a single host walk covers everything):
+
+- **`N`'s internal nodes** (the lifted body) live inside the newly-registered network `N`, which
+  a walk of `H`'s top-level network never visits. `extract_network_from_closure` already holds
+  `registry`, so it populates `N`'s content caches **at build time** — exactly as
+  `create_subnetwork_from_selection` does for factoring (which then only `add_node_network` +
+  `validate`, with no separate content-init step). Do **not** rely on a post-hoc
+  `initialize_custom_node_types_for_network` on `H` to reach them — it cannot.
+- **`I` itself** is the one node added to `H`; its `custom_node_type` is set explicitly when it is
+  built (`add_node_with_id` then `set_custom_node_type` from the registry, above).
+
+So the orchestration is: `registry.add_node_network(N)` (with `N`'s content already cached), then
+`validate_active_network()` on `H` (which revalidates `I` against the now-registered `N`). If a
+belt-and-suspenders refresh of `H` is wanted, `initialize_custom_node_types_for_network` on `H`'s
+top-level network is harmless but only covers `I` and `H`'s other nodes, **never** `N`'s interior.
 
 ### Undo (Closure → Network)
 
@@ -393,7 +443,11 @@ pub fn build_closure_from_instance(
 // Closure → Network: produce the new network `N` from the closure body and the
 // classification of `C`'s body wires into (closure params, captures).
 pub struct ExtractionPlan {
-    pub network: NodeNetwork,                 // N (parameter nodes + copied body)
+    // N (parameter nodes + copied body). Its interior custom-node-type caches are
+    // populated here at build time (using `registry`), since N is registered as a
+    // standalone network and a later host walk never reaches its interior — mirrors
+    // `create_subnetwork_from_selection`.
+    pub network: NodeNetwork,
     pub capture_wires: Vec<IncomingWire>,     // one per capture pin, in pin order, as seen from H
     pub closure_param_count: usize,           // m (leading unwired pins on I)
 }
@@ -417,10 +471,19 @@ pub fn extract_closure_to_network(&mut self, scope_path: Vec<u64>, node_id: u64,
 ```
 
 Both are **scope-aware** (`get_scope_network[_mut](&scope_path)`), snapshot for undo per the
-top-level/body split above, run the builders, repoint consumers, then
-`initialize_custom_node_types_for_network` (for the copied content) + `validate_active_network()`
-+ `is_dirty = true; mark_full_refresh()`. `extract_closure_to_network` additionally validates the
-name (`identifier::is_valid_user_name`, not already taken) and `registry.add_node_network(N)`.
+top-level/body split above, run the builders, repoint consumers, then `validate_active_network()`
++ `is_dirty = true; mark_full_refresh()`.
+
+Cache initialization differs by direction (see "Cache initialization" under Direction B):
+
+- *Network → Closure:* the new body `B` lands inside `H`, so a single
+  `initialize_custom_node_types_for_network` on `H`'s top-level network (the inline pattern)
+  reaches both `C` and `B`'s interior.
+- *Closure → Network:* the lifted body lives in the separately-registered `N`, **not** in `H`.
+  `extract_closure_to_network` populates `N`'s content caches **at build time** inside
+  `extract_network_from_closure` (it holds `registry`, mirroring
+  `create_subnetwork_from_selection`), then `registry.add_node_network(N)` and validates `H` for
+  `I`. It additionally validates the name (`identifier::is_valid_user_name`, not already taken).
 
 ## API + Flutter UI
 
@@ -459,9 +522,11 @@ New `rust/tests/structure_designer/closure_network_conversion_test.rs` (register
 
 **Network → Closure**
 
-- Basic: instance of a 1-param network, pin unwired → closure of kind Map with one zone-input
-  pin; result wire set; consumer flipped `-1 → 0`; assert `evaluate` of a downstream `map.f`
-  yields the same stream as the original instance-as-function.
+- Basic: instance of a 1-param network, pin unwired → a `Custom` closure with one (named)
+  zone-input pin (Build `C` always emits `Custom`; the resulting `(T) -> U` function value still
+  drops into `map.f` by structural compatibility); result wire set; consumer flipped `-1 → 0`;
+  assert `evaluate` of a downstream `map.f` yields the same stream as the original
+  instance-as-function.
 - Mixed pins: 1 wired + 1 unwired → closure with one zone-input param and one **capture wire**
   in the body pointing at the wired source (assert depth 1 at body top); unwired → zone-input.
 - Multi-param, all unwired → `Custom` closure preserving param names/order.
@@ -469,6 +534,25 @@ New `rust/tests/structure_designer/closure_network_conversion_test.rs` (register
   `= k + 1 + d_I`.
 - Inside a zone body (`scope_path` non-empty): the resulting closure's captures resolve against
   the correct enclosing scope; body-undo round-trip.
+- **Passthrough return** (`N`'s return node *is* a parameter — the network forwards an argument):
+  unwired pin → the closure's `zone_output` wire becomes `ZoneInput { cp }` at depth 1 (exercises
+  `eval_step`'s `ZoneInput`-zone-output branch); wired pin → the result wire becomes the capture
+  wire. Assert **evaluation** of the resulting closure matches the original instance-as-function
+  for both sub-cases.
+- **Consumer captured at depth ≥ 1**: the instance's `-1` value is consumed by a *sibling/inner
+  HOF body* (a body wire `(I.id, NodeOutput { -1 }, depth d ≥ 1)`), not just a same-scope sink.
+  Assert the flip to `(C.id, NodeOutput { 0 })` happens **in the sub-body at the same depth** —
+  the recursive consumer walk, not just the host frame. Add a variant with **two** consumers
+  (e.g. two `map.f` sinks) and assert both flip.
+- **Nested HOF zone-output rewrite**: `N` contains a nested HOF whose `zone_output_arguments`
+  returns a value sourced from one of `N`'s parameters (or a capture). Assert the nested body's
+  zone-output wire is rewritten (not just `arguments`) — the `descend_body` zone-output path.
+- **Unconsumed instance**: gate allows no consumers; assert the closure is produced and left
+  unconsumed. If the instance had output pin 0 displayed, assert `I.id`'s displayed pin is
+  **cleared** in `H.displayed_nodes` (a `Function`-valued pin renders nothing).
+- **Multi-output source network** (`N` has > 1 output pin): assert the conversion succeeds, the
+  closure has a single `zone_output` from pin 0, secondaries are dropped without error, and
+  evaluation matches `I`'s `-1` value (which already exposed only pin 0).
 - Reject: non-custom node; instance with a normal-output consumer; network with no return.
 
 **Closure → Network**
@@ -483,10 +567,23 @@ New `rust/tests/structure_designer/closure_network_conversion_test.rs` (register
   at depth `e = 0`.
 - **Capture above host (`e ≥ 1`)**: closure nested inside a `fold` body, capturing a
   grandparent constant (`source_scope_depth = 2` at body top). Assert: `I`'s capture wire has
-  `source_scope_depth = 1`; body wire in `N` at depth `k`.
+  `source_scope_depth = 1`; body wire in `N` at depth `k`. **And** assert *evaluation* — run the
+  enclosing `fold` and compare its numeric output before vs. after the conversion (structural
+  depth assertions alone do not exercise the freeze-cadence claim, the subtlest part of the
+  design).
 - **`ZoneInput` capture (`e ≥ 1`)**: closure inside a `fold` body capturing the fold's `acc`
-  iteration value. Assert `I`'s wire is `ZoneInput { pin }` at depth `e`.
+  iteration value. Assert `I`'s wire is `ZoneInput { pin }` at depth `e`, **and** that the
+  enclosing `fold` evaluates to the same result before vs. after conversion (the per-iteration
+  value must still be read live, not frozen).
+- **Passthrough result wire** (the closure forwards an argument or a captured value directly):
+  result wire reads a closure-param `ZoneInput` / a capture → `return_node_id =
+  paramnode[…].id`. Assert the parameter-node return is set and evaluation matches.
 - **Same capture referenced from two nestings** dedups to one parameter node / one `I` pin.
+- **Distinct captures with colliding base names**: two captures whose source nodes share a base
+  name → assert their capture parameter nodes get de-duplicated names (`…_cap`, `…_cap_2`) and
+  two separate `I` pins (distinct from the *same-capture* dedup above).
+- **Consumer captured at depth ≥ 1**: `C`'s `0` value consumed by a sibling/inner HOF body;
+  assert the flip to `(I.id, NodeOutput { -1 })` happens in the sub-body at the same depth.
 - Reject: non-closure node (`map`/`apply`); closure with no result wire; result from a secondary
   output pin.
 
@@ -495,9 +592,15 @@ New `rust/tests/structure_designer/closure_network_conversion_test.rs` (register
 - `closure → network → closure`: build a closure with parameters + a capture, extract to a
   network, then convert the resulting instance back to a closure. Assert the reconstructed
   closure's `function_type`, body wiring shape, capture targets, and zone-output wire match the
-  original (normalize ids/param-node names). Cover the nested-body / `e ≥ 1` cases.
-- `instance → closure → network → instance`: assert the final instance's `-1` resolved type and
-  evaluated function value equal the original's.
+  original (normalize ids/param-node names; **ignore `ClosureKind` and param-name labels** —
+  Direction A always emits `Custom`, so compare on `function_type`, not `kind`) **and** that both
+  closures *evaluate* to the same function value (structural match is not enough). Cover the
+  nested-body / `e ≥ 1` cases explicitly, since that is where structural and semantic equality
+  can diverge.
+- `instance → closure → network → instance`: use a starting instance with **both** a wired
+  (capture) pin and an unwired (parameter) pin, ideally nested in a `fold`/`map` body so an
+  `e ≥ 1` capture is in play. Assert the final instance's `-1` resolved type and evaluated
+  function value equal the original's.
 - Undo/redo round-trip for both directions, top-level and body scope; network byte-identical
   after undo (`normalize_json`, as in the undo tests).
 
@@ -508,17 +611,24 @@ New `rust/tests/structure_designer/closure_network_conversion_test.rs` (register
 **Phase 1 — Network → Closure, top level.** `build_closure_from_instance` + the closure-flavoured
 splice; orchestrator `convert_instance_to_closure` for empty `scope_path`;
 `ConvertToClosureCommand` (before/after one network). Tests: basic, mixed pins, multi-param,
+**passthrough return**, **unconsumed + display-clear**, **multi-output source**, **consumer
+captured at depth ≥ 1** (incl. the two-consumer variant), **nested-HOF zone-output rewrite**, and
 reject cases. (Reuses `copy_content_into` directly.)
 
 **Phase 2 — Closure → Network, top level.** `extract_network_from_closure` + capture collection
 + the inverse splice; orchestrator `extract_closure_to_network` (registry add, name validation);
-reuse `FactorSelectionCommand` for undo. Tests: basic, capture, deep capture (`e = 0, k = 1`),
-dedup, rejects, **and the `closure → network → closure` round-trip**.
+reuse `FactorSelectionCommand` for undo. Tests: basic (with evaluation), capture (`e = 0`, with
+evaluation), deep capture (`e = 0, k = 1`), **passthrough result wire**, same-capture dedup,
+**colliding-base-name dedup**, **consumer captured at depth ≥ 1**, rejects, **and the
+`closure → network → closure` round-trip** (structural *and* evaluation equality).
 
 **Phase 3 — Body scope + `e ≥ 1` captures.** Both orchestrators handle non-empty `scope_path`
 (`get_scope_network_mut`, `ZoneBodySnapshot` undo, new `ExtractClosureBodyCommand`). Tests:
-`e ≥ 1` `NodeOutput` and `ZoneInput` captures; conversions inside `fold`/`map` bodies; body
-undo round-trips.
+`e ≥ 1` `NodeOutput` and `ZoneInput` captures — each asserting **both** wire-depth structure
+**and** end-to-end evaluation (run the enclosing `fold`/`map`, compare numeric output before vs.
+after conversion); conversions inside `fold`/`map` bodies; the `instance → closure → network →
+instance` round-trip on a mixed (capture + parameter) instance nested deep enough to exercise an
+`e ≥ 1` capture; body undo round-trips.
 
 **Phase 4 — API + Flutter UI.** FFI functions + `can_*` gates; `node_widget.dart` menu items +
 name dialog; model methods; `flutter_rust_bridge_codegen generate`. Manual walkthrough: convert
@@ -535,8 +645,11 @@ inside a zone body; undo each.
   reused for top-level Closure → Network.
 - `rust/src/structure_designer/mod.rs` — declare the module.
 - `rust/src/structure_designer/structure_designer.rs` — the two orchestrators + undo wiring.
-- `rust/src/structure_designer/nodes/closure.rs` — make `closure_data_for_signature`
-  `pub(crate)`.
+- `rust/src/structure_designer/nodes/closure.rs` — **no signature change needed**: Build `C`
+  constructs `ClosureData { kind: ClosureKind::Custom, .. }` directly (it does **not** call
+  `closure_data_for_signature`, which can't carry `N`'s parameter names). Just confirm
+  `ClosureData` / `ClosureKind` are reachable from the new module (already `pub`, reused by
+  `apply.rs`).
 - `rust/src/api/structure_designer/structure_designer_api.rs` + `…_api_types.rs` — FFI functions
   + `ConversionResult`.
 - Regenerate FFI: `flutter_rust_bridge_codegen generate`.
