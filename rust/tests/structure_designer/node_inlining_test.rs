@@ -4,19 +4,24 @@
 use glam::f64::DVec2;
 use std::sync::Arc;
 
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::{EvalOutput, NodeData};
 use rust_lib_flutter_cad::structure_designer::node_inlining::{
-    copy_content_into, make_space_for_inline,
+    copy_content_into, make_space_for_inline, splice_inline_boundary,
 };
-use rust_lib_flutter_cad::structure_designer::node_network::{NodeDisplayType, NodeNetwork};
+use rust_lib_flutter_cad::structure_designer::node_network::{
+    Argument, IncomingWire, Node, NodeDisplayType, NodeNetwork, SourcePin,
+};
 use rust_lib_flutter_cad::structure_designer::node_network_gadget::NodeNetworkGadget;
 use rust_lib_flutter_cad::structure_designer::node_type::NodeType;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use std::collections::HashMap;
 use std::collections::HashSet;
 
 // ---------------------------------------------------------------------------
@@ -293,4 +298,582 @@ fn copy_content_preserves_name_when_no_collision() {
         target.nodes[&copied].custom_name.as_deref(),
         Some("unique_name")
     );
+}
+
+// ---------------------------------------------------------------------------
+// splice_inline_boundary — scaffolding
+// ---------------------------------------------------------------------------
+
+/// Adds a `parameter` node with the given `param_index` (one default input pin).
+fn add_param(net: &mut NodeNetwork, param_index: usize) -> u64 {
+    let data = ParameterData {
+        param_id: Some(param_index as u64 + 1),
+        param_index,
+        param_name: format!("p{param_index}"),
+        data_type: DataType::Int,
+        sort_order: param_index as i32,
+        data_type_str: None,
+        error: None,
+    };
+    net.add_node("parameter", DVec2::ZERO, 1, Box::new(data))
+}
+
+/// Wire `dst.arguments[arg]` to read `src` pin `pin` in the same scope (depth 0).
+fn wire(net: &mut NodeNetwork, dst: u64, arg: usize, src: u64, pin: i32) {
+    net.nodes.get_mut(&dst).unwrap().arguments[arg].set_source(src, pin);
+}
+
+fn wires_of(net: &NodeNetwork, node: u64, arg: usize) -> &[IncomingWire] {
+    &net.nodes[&node].arguments[arg].incoming_wires
+}
+
+/// The single node id inside `node`'s zone body (tests build one-node bodies).
+fn only_body_node(net: &NodeNetwork, node: u64) -> u64 {
+    let body = net.nodes[&node].zone.as_ref().unwrap();
+    *body.nodes.keys().next().unwrap()
+}
+
+fn body_wires(net: &NodeNetwork, hof: u64, body_node: u64, arg: usize) -> &[IncomingWire] {
+    let body = net.nodes[&hof].zone.as_ref().unwrap();
+    &body.nodes[&body_node].arguments[arg].incoming_wires
+}
+
+/// Runs the full inline splice (copy + boundary fix-up) on a hand-built pair.
+/// Positions are irrelevant to these tests, so `content_min`/`anchor` are zero.
+fn inline_direct(
+    target: &mut NodeNetwork,
+    source: &NodeNetwork,
+    instance_id: u64,
+) -> HashMap<u64, u64> {
+    let id_mapping = copy_content_into(target, source, DVec2::ZERO, DVec2::ZERO);
+    splice_inline_boundary(target, instance_id, source, &id_mapping);
+    id_mapping
+}
+
+// ---------------------------------------------------------------------------
+// splice_inline_boundary — flat cases
+// ---------------------------------------------------------------------------
+
+#[test]
+fn splice_basic_single_param_single_output() {
+    // N: p0 -> c (value node consuming the param); return = c.
+    let mut source = NodeNetwork::new_empty();
+    let p0 = add_param(&mut source, 0);
+    let c = add(&mut source, "value", DVec2::ZERO, 1);
+    wire(&mut source, c, 0, p0, 0);
+    source.return_node_id = Some(c);
+
+    // target: X -> I(pin0); Y reads I(pin0).
+    let mut target = NodeNetwork::new_empty();
+    let x = add(&mut target, "float", DVec2::ZERO, 0);
+    let i = add(&mut target, "helper", DVec2::ZERO, 1);
+    wire(&mut target, i, 0, x, 0);
+    let y = add(&mut target, "value", DVec2::ZERO, 1);
+    wire(&mut target, y, 0, i, 0);
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let c2 = mapping[&c];
+
+    // Instance gone; copied content present.
+    assert!(!target.nodes.contains_key(&i));
+    assert!(target.nodes.contains_key(&c2));
+    // Param ref inside the copied content spliced to the instance's input source X.
+    assert_eq!(wires_of(&target, c2, 0), &[IncomingWire::node_output(x, 0)]);
+    // Consumer of the instance output repointed to the return node (copied c).
+    assert_eq!(wires_of(&target, y, 0), &[IncomingWire::node_output(c2, 0)]);
+}
+
+#[test]
+fn splice_multi_parameter() {
+    // N: p0, p1 -> c (2-input node); return = c.
+    let mut source = NodeNetwork::new_empty();
+    let p0 = add_param(&mut source, 0);
+    let p1 = add_param(&mut source, 1);
+    let c = add(&mut source, "value", DVec2::ZERO, 2);
+    wire(&mut source, c, 0, p0, 0);
+    wire(&mut source, c, 1, p1, 0);
+    source.return_node_id = Some(c);
+
+    // target: X -> I(pin0), Z -> I(pin1).
+    let mut target = NodeNetwork::new_empty();
+    let x = add(&mut target, "float", DVec2::ZERO, 0);
+    let z = add(&mut target, "float", DVec2::ZERO, 0);
+    let i = add(&mut target, "helper", DVec2::ZERO, 2);
+    wire(&mut target, i, 0, x, 0);
+    wire(&mut target, i, 1, z, 0);
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let c2 = mapping[&c];
+
+    // Each copied param ref goes to the matching instance input source.
+    assert_eq!(wires_of(&target, c2, 0), &[IncomingWire::node_output(x, 0)]);
+    assert_eq!(wires_of(&target, c2, 1), &[IncomingWire::node_output(z, 0)]);
+}
+
+#[test]
+fn splice_multi_output_preserves_pin_index() {
+    // Consumer reads the instance's output pin 1; after inline it reads the
+    // return node's pin 1 (multi-output passthrough).
+    let mut source = NodeNetwork::new_empty();
+    let c = add(&mut source, "value", DVec2::ZERO, 0);
+    source.return_node_id = Some(c);
+
+    let mut target = NodeNetwork::new_empty();
+    let i = add(&mut target, "helper", DVec2::ZERO, 0);
+    let y = add(&mut target, "value", DVec2::ZERO, 1);
+    wire(&mut target, y, 0, i, 1); // read pin 1
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let c2 = mapping[&c];
+
+    assert_eq!(wires_of(&target, y, 0), &[IncomingWire::node_output(c2, 1)]);
+}
+
+#[test]
+fn splice_unconnected_input_uses_param_default() {
+    // p0 has a default value provider d inside N; the instance pin is unwired,
+    // so the copied param ref falls back to the (remapped) default.
+    let mut source = NodeNetwork::new_empty();
+    let p0 = add_param(&mut source, 0);
+    let d = add(&mut source, "int", DVec2::ZERO, 0); // default provider
+    wire(&mut source, p0, 0, d, 0); // parameter's default input
+    let c = add(&mut source, "value", DVec2::ZERO, 1);
+    wire(&mut source, c, 0, p0, 0);
+    source.return_node_id = Some(c);
+
+    let mut target = NodeNetwork::new_empty();
+    let i = add(&mut target, "helper", DVec2::ZERO, 1); // pin 0 unconnected
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let c2 = mapping[&c];
+    let d2 = mapping[&d];
+
+    // The param ref resolves to the copied default provider.
+    assert_eq!(
+        wires_of(&target, c2, 0),
+        &[IncomingWire::node_output(d2, 0)]
+    );
+}
+
+#[test]
+fn splice_unconnected_input_no_default_drops_wire() {
+    let mut source = NodeNetwork::new_empty();
+    let p0 = add_param(&mut source, 0);
+    let c = add(&mut source, "value", DVec2::ZERO, 1);
+    wire(&mut source, c, 0, p0, 0);
+    source.return_node_id = Some(c);
+
+    let mut target = NodeNetwork::new_empty();
+    let i = add(&mut target, "helper", DVec2::ZERO, 1); // unconnected, no default
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let c2 = mapping[&c];
+
+    // No instance wire and no default -> the param ref is dropped.
+    assert!(wires_of(&target, c2, 0).is_empty());
+}
+
+#[test]
+fn splice_no_return_drops_consumers() {
+    let mut source = NodeNetwork::new_empty();
+    let _c = add(&mut source, "value", DVec2::ZERO, 0);
+    // return_node_id stays None.
+
+    let mut target = NodeNetwork::new_empty();
+    let i = add(&mut target, "helper", DVec2::ZERO, 0);
+    let y = add(&mut target, "value", DVec2::ZERO, 1);
+    wire(&mut target, y, 0, i, 0);
+
+    inline_direct(&mut target, &source, i);
+
+    // No return node -> the consumer wire is dropped.
+    assert!(wires_of(&target, y, 0).is_empty());
+}
+
+// ---------------------------------------------------------------------------
+// splice_inline_boundary — scope-aware (bodies / captures)
+// ---------------------------------------------------------------------------
+
+#[allow(clippy::arc_with_non_send_sync)]
+fn attach_body(net: &mut NodeNetwork, hof: u64, body: NodeNetwork) {
+    net.nodes.get_mut(&hof).unwrap().zone = Some(std::sync::Arc::new(body));
+}
+
+#[test]
+fn splice_nested_capture_of_parameter_k1() {
+    // N: p0; hof(map) whose body node captures p0 at depth 1; return = hof.
+    let mut source = NodeNetwork::new_empty();
+    let p0 = add_param(&mut source, 0);
+    let hof = add(&mut source, "map", DVec2::ZERO, 0);
+    let mut body = NodeNetwork::new_empty();
+    let e = body.add_node("value", DVec2::ZERO, 1, Box::new(MockNodeData));
+    body.nodes.get_mut(&e).unwrap().arguments[0].set_source_full(
+        p0,
+        SourcePin::NodeOutput { pin_index: 0 },
+        1,
+    );
+    attach_body(&mut source, hof, body);
+    source.return_node_id = Some(hof);
+
+    // target: X -> I(pin0).
+    let mut target = NodeNetwork::new_empty();
+    let x = add(&mut target, "float", DVec2::ZERO, 0);
+    let i = add(&mut target, "helper", DVec2::ZERO, 1);
+    wire(&mut target, i, 0, x, 0);
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let hof2 = mapping[&hof];
+    let e2 = only_body_node(&target, hof2);
+
+    // The depth-1 capture of p0 becomes a depth-1 capture of X (instance source,
+    // shifted by k=1).
+    assert_eq!(
+        body_wires(&target, hof2, e2, 0),
+        &[IncomingWire {
+            source_node_id: x,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        }]
+    );
+}
+
+#[test]
+#[allow(clippy::arc_with_non_send_sync)] // matches NodeNetwork's own Arc usage
+fn splice_nested_capture_of_parameter_k2() {
+    // N: p0; outer map whose body holds an inner map whose body captures p0 at
+    // depth 2.
+    let mut source = NodeNetwork::new_empty();
+    let p0 = add_param(&mut source, 0);
+    let outer = add(&mut source, "map", DVec2::ZERO, 0);
+
+    let mut outer_body = NodeNetwork::new_empty();
+    let inner = outer_body.add_node("map", DVec2::ZERO, 0, Box::new(MockNodeData));
+    let mut inner_body = NodeNetwork::new_empty();
+    let leaf = inner_body.add_node("value", DVec2::ZERO, 1, Box::new(MockNodeData));
+    inner_body.nodes.get_mut(&leaf).unwrap().arguments[0].set_source_full(
+        p0,
+        SourcePin::NodeOutput { pin_index: 0 },
+        2,
+    );
+    outer_body.nodes.get_mut(&inner).unwrap().zone = Some(std::sync::Arc::new(inner_body));
+    attach_body(&mut source, outer, outer_body);
+    source.return_node_id = Some(outer);
+
+    let mut target = NodeNetwork::new_empty();
+    let x = add(&mut target, "float", DVec2::ZERO, 0);
+    let i = add(&mut target, "helper", DVec2::ZERO, 1);
+    wire(&mut target, i, 0, x, 0);
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let outer2 = mapping[&outer];
+
+    // Reach the leaf two bodies deep and verify the depth-2 capture now reaches
+    // X at depth 2.
+    let outer_b = target.nodes[&outer2].zone.as_ref().unwrap();
+    let inner_id = *outer_b.nodes.keys().next().unwrap();
+    let inner_b = outer_b.nodes[&inner_id].zone.as_ref().unwrap();
+    let leaf_id = *inner_b.nodes.keys().next().unwrap();
+    let leaf_wires = &inner_b.nodes[&leaf_id].arguments[0].incoming_wires;
+    assert_eq!(
+        leaf_wires,
+        &[IncomingWire {
+            source_node_id: x,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 2,
+        }]
+    );
+}
+
+#[test]
+fn splice_nested_capture_of_copied_node() {
+    // N: content a; hof whose body captures sibling a at depth 1; return = hof.
+    let mut source = NodeNetwork::new_empty();
+    let a = add(&mut source, "int", DVec2::ZERO, 0);
+    let hof = add(&mut source, "map", DVec2::ZERO, 0);
+    let mut body = NodeNetwork::new_empty();
+    let e = body.add_node("value", DVec2::ZERO, 1, Box::new(MockNodeData));
+    body.nodes.get_mut(&e).unwrap().arguments[0].set_source_full(
+        a,
+        SourcePin::NodeOutput { pin_index: 0 },
+        1,
+    );
+    attach_body(&mut source, hof, body);
+    source.return_node_id = Some(hof);
+
+    let mut target = NodeNetwork::new_empty();
+    let i = add(&mut target, "helper", DVec2::ZERO, 0);
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let hof2 = mapping[&hof];
+    let a2 = mapping[&a];
+    let e2 = only_body_node(&target, hof2);
+
+    // Capture of a co-copied sibling: remapped through id_mapping, depth kept.
+    assert_eq!(
+        body_wires(&target, hof2, e2, 0),
+        &[IncomingWire {
+            source_node_id: a2,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        }]
+    );
+}
+
+#[test]
+fn splice_new_id_collision_with_old_param_id() {
+    // Engineer a copied node whose NEW id equals an OLD parameter id, and verify
+    // classification (by N's old id space) still distinguishes a param capture
+    // from a copied-node capture.
+    let mut source = NodeNetwork::new_empty(); // next_node_id = 1
+    let p0 = add_param(&mut source, 0); // old id 1
+    let a = add(&mut source, "int", DVec2::ZERO, 0); // old id 2
+    let hof = add(&mut source, "map", DVec2::ZERO, 0); // old id 3
+    let mut body = NodeNetwork::new_empty();
+    let e = body.add_node("value", DVec2::ZERO, 2, Box::new(MockNodeData));
+    // arg0 captures sibling a (old 2), arg1 captures param p0 (old 1).
+    body.nodes.get_mut(&e).unwrap().arguments[0].set_source_full(
+        a,
+        SourcePin::NodeOutput { pin_index: 0 },
+        1,
+    );
+    body.nodes.get_mut(&e).unwrap().arguments[1].set_source_full(
+        p0,
+        SourcePin::NodeOutput { pin_index: 0 },
+        1,
+    );
+    attach_body(&mut source, hof, body);
+    source.return_node_id = Some(a);
+
+    // target: a manual instance (id 100) wired to X (id 50); force next_node_id
+    // to 1 so the first copied node (a) gets new id 1 == old p0 id.
+    let mut target = NodeNetwork::new_empty();
+    let x = 50u64;
+    target.nodes.insert(
+        x,
+        Node {
+            id: x,
+            node_type_name: "float".to_string(),
+            custom_name: Some("x".to_string()),
+            position: DVec2::ZERO,
+            arguments: vec![],
+            data: Box::new(MockNodeData),
+            custom_node_type: None,
+            zone: None,
+            zone_output_arguments: vec![],
+            body_width: 320.0,
+            body_height: 180.0,
+            collapse_mode:
+                rust_lib_flutter_cad::structure_designer::node_network::CollapseMode::Auto,
+        },
+    );
+    let inst = 100u64;
+    let mut inst_arg = Argument::new();
+    inst_arg.set_source(x, 0);
+    target.nodes.insert(
+        inst,
+        Node {
+            id: inst,
+            node_type_name: "helper".to_string(),
+            custom_name: Some("inst".to_string()),
+            position: DVec2::ZERO,
+            arguments: vec![inst_arg],
+            data: Box::new(MockNodeData),
+            custom_node_type: None,
+            zone: None,
+            zone_output_arguments: vec![],
+            body_width: 320.0,
+            body_height: 180.0,
+            collapse_mode:
+                rust_lib_flutter_cad::structure_designer::node_network::CollapseMode::Auto,
+        },
+    );
+    target.next_node_id = 1; // force the collision
+
+    let mapping = inline_direct(&mut target, &source, inst);
+    let a2 = mapping[&a];
+    let hof2 = mapping[&hof];
+    assert_eq!(a2, 1, "copied `a` should take new id 1 (== old p0 id)");
+
+    let e2 = only_body_node(&target, hof2);
+    // arg0 (capture of old a=2) -> remapped to a2 (new id 1).
+    assert_eq!(
+        body_wires(&target, hof2, e2, 0),
+        &[IncomingWire {
+            source_node_id: a2,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        }]
+    );
+    // arg1 (capture of old p0=1) -> param-spliced to X, NOT misclassified as a2.
+    assert_eq!(
+        body_wires(&target, hof2, e2, 1),
+        &[IncomingWire {
+            source_node_id: x,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        }]
+    );
+}
+
+#[test]
+fn splice_sibling_hof_body_captures_instance_output() {
+    // A pre-existing sibling HOF in the target captures the instance's output
+    // from inside its body (depth 1); Descent B repoints it to the return node.
+    let mut source = NodeNetwork::new_empty();
+    let c = add(&mut source, "value", DVec2::ZERO, 0);
+    source.return_node_id = Some(c);
+
+    let mut target = NodeNetwork::new_empty();
+    let i = add(&mut target, "helper", DVec2::ZERO, 0);
+    let sibling = add(&mut target, "map", DVec2::ZERO, 0);
+    let mut body = NodeNetwork::new_empty();
+    let g = body.add_node("value", DVec2::ZERO, 1, Box::new(MockNodeData));
+    body.nodes.get_mut(&g).unwrap().arguments[0].set_source_full(
+        i,
+        SourcePin::NodeOutput { pin_index: 0 },
+        1,
+    );
+    attach_body(&mut target, sibling, body);
+
+    let mapping = inline_direct(&mut target, &source, i);
+    let c2 = mapping[&c];
+    let g_id = only_body_node(&target, sibling);
+
+    // The deep capture of the instance output now reads the return node, depth kept.
+    assert_eq!(
+        body_wires(&target, sibling, g_id, 0),
+        &[IncomingWire {
+            source_node_id: c2,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        }]
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Orchestrator (StructureDesigner) + undo
+// ---------------------------------------------------------------------------
+
+/// Build a `StructureDesigner` with a custom network `helper` (one Int param,
+/// an `int` content node as return) and a `main` network holding one instance
+/// of `helper`. Returns (designer, instance_node_id).
+fn setup_with_helper_instance() -> (StructureDesigner, u64) {
+    let mut designer = StructureDesigner::new();
+
+    // Build "helper": parameter + int content (return).
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    designer.add_node("parameter", DVec2::new(-200.0, 0.0));
+    let content = designer.add_node("int", DVec2::new(0.0, 0.0));
+    designer.set_return_node_id(Some(content));
+
+    // Build "main" with one instance of helper.
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let inst = designer.add_node("helper", DVec2::new(0.0, 0.0));
+
+    (designer, inst)
+}
+
+#[test]
+fn inline_orchestrator_basic_removes_instance_and_adds_content() {
+    let (mut designer, inst) = setup_with_helper_instance();
+
+    designer.inline_custom_node(vec![], inst).unwrap();
+
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    // Instance gone.
+    assert!(!main.nodes.contains_key(&inst));
+    // No remaining "helper" instance; the int content was copied in.
+    assert!(main.nodes.values().all(|n| n.node_type_name != "helper"));
+    assert!(main.nodes.values().any(|n| n.node_type_name == "int"));
+    // The "helper" definition is untouched in the registry.
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("helper")
+    );
+}
+
+#[test]
+fn inline_rejects_non_custom_node() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let sphere = designer.add_node("sphere", DVec2::ZERO);
+
+    let result = designer.inline_custom_node(vec![], sphere);
+    assert!(result.is_err());
+    assert_eq!(
+        result.unwrap_err(),
+        "Only custom network nodes can be inlined"
+    );
+}
+
+#[test]
+fn inline_undo_redo_roundtrip() {
+    let (mut designer, inst) = setup_with_helper_instance();
+    designer.undo_stack.clear();
+
+    let before = snapshot_main(&mut designer);
+    designer.inline_custom_node(vec![], inst).unwrap();
+    let after = snapshot_main(&mut designer);
+    assert_ne!(before, after, "inline should change the network");
+
+    designer.undo();
+    assert_eq!(
+        snapshot_main(&mut designer),
+        before,
+        "undo restores network"
+    );
+
+    designer.redo();
+    assert_eq!(snapshot_main(&mut designer), after, "redo reapplies inline");
+}
+
+/// Serialize the `main` network to a normalized JSON value (HashMap-order
+/// independent) for undo/redo comparison.
+fn snapshot_main(designer: &mut StructureDesigner) -> serde_json::Value {
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
+
+    let registry = &mut designer.node_type_registry;
+    let (built_in_types, node_networks) =
+        (&registry.built_in_node_types, &mut registry.node_networks);
+    let network = node_networks.get_mut("main").unwrap();
+    let serializable = node_network_to_serializable(network, built_in_types, None).unwrap();
+    let mut value = serde_json::to_value(&serializable).unwrap();
+    normalize_json(&mut value);
+    value
+}
+
+/// Sort HashMap-derived arrays (`nodes`, `displayed_node_ids`,
+/// `displayed_output_pins`) so comparison is deterministic.
+fn normalize_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, val) in map.iter_mut() {
+                if (key == "nodes" || key == "displayed_node_ids" || key == "displayed_output_pins")
+                    && let serde_json::Value::Array(arr) = val
+                {
+                    arr.sort_by(|a, b| {
+                        serde_json::to_string(a)
+                            .unwrap_or_default()
+                            .cmp(&serde_json::to_string(b).unwrap_or_default())
+                    });
+                }
+                normalize_json(val);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for v in arr.iter_mut() {
+                normalize_json(v);
+            }
+        }
+        _ => {}
+    }
 }

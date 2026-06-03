@@ -18,9 +18,12 @@
 //! `doc/design_inline_custom_node.md`.
 
 use glam::f64::DVec2;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use super::node_network::{Node, NodeNetwork};
+use super::node_layout;
+use super::node_network::{Argument, IncomingWire, Node, NodeNetwork, SourcePin};
+use super::node_type_registry::NodeTypeRegistry;
+use super::nodes::parameter::ParameterData;
 
 /// Push the lower-right region of `network` outward to make room for inlined
 /// content, keeping the instance node's upper-left corner fixed.
@@ -164,4 +167,274 @@ fn dedup_name(target: &NodeNetwork, desired: &str) -> String {
         }
         suffix += 1;
     }
+}
+
+/// Estimated (width, height) of `node` within its network, using the node's
+/// resolved type (custom-node types resolve through `custom_node_type`). Mirrors
+/// the layout heuristic used elsewhere (`auto_layout::get_node_size`): subtitle
+/// always assumed present, which is the common case for the node kinds inline
+/// operates on.
+fn estimate_node_size_in_network(node: &Node, registry: &NodeTypeRegistry) -> DVec2 {
+    let (n_in, n_out) = registry
+        .get_node_type_for_node(node)
+        .map(|nt| (nt.parameters.len(), nt.output_pin_count()))
+        .unwrap_or((0, 1));
+    node_layout::estimate_node_size(n_in, n_out, true)
+}
+
+/// Estimated size of the custom-node *instance* that is being inlined. Equal to
+/// [`estimate_node_size_in_network`] applied to the instance node — exposed
+/// separately so the orchestrator reads as the design's `original_size`.
+pub fn instance_size(instance: &Node, registry: &NodeTypeRegistry) -> DVec2 {
+    estimate_node_size_in_network(instance, registry)
+}
+
+/// Bounding box of `source`'s non-`parameter` content as `(content_min, content_size)`:
+/// the top-left of the box and its extent, where each node is expanded by its
+/// estimated size. Returns `(ZERO, ZERO)` when there is no non-`parameter` node.
+pub fn content_bounding_box(source: &NodeNetwork, registry: &NodeTypeRegistry) -> (DVec2, DVec2) {
+    let mut min = DVec2::splat(f64::MAX);
+    let mut max = DVec2::splat(f64::MIN);
+    let mut any = false;
+    for node in source.nodes.values() {
+        if node.node_type_name == "parameter" {
+            continue;
+        }
+        any = true;
+        let size = estimate_node_size_in_network(node, registry);
+        min = min.min(node.position);
+        max = max.max(node.position + size);
+    }
+    if !any {
+        return (DVec2::ZERO, DVec2::ZERO);
+    }
+    (min, max - min)
+}
+
+// ---------------------------------------------------------------------------
+// Scope-aware boundary splice
+// ---------------------------------------------------------------------------
+
+/// Classification context for **Descent A** (shared across the recursion into
+/// nested bodies). All ids it indexes by are in `N`'s original id space, since
+/// the copied content's wires still carry `N`'s ids (see [`copy_content_into`]).
+struct DescentA<'a> {
+    /// `N`'s `parameter` node id → its `param_index`.
+    param_id_to_index: &'a HashMap<u64, usize>,
+    /// `param_index` → the wires that replace a reference to that parameter
+    /// (the instance's input wires on that pin, or the parameter's default).
+    instance_wires: &'a HashMap<usize, Vec<IncomingWire>>,
+    /// `N`'s top-level non-`parameter` node id → its new (copied) id.
+    id_mapping: &'a HashMap<u64, u64>,
+}
+
+impl DescentA<'_> {
+    /// Rebuild every argument list's wires at nesting `k`, classifying each wire
+    /// whose `source_scope_depth == k` (wires at other depths point at
+    /// preserved-id body-internal / intermediate nodes and are kept verbatim).
+    fn reclassify(&self, args: &mut [Argument], k: u8) {
+        for arg in args.iter_mut() {
+            let mut new_wires: Vec<IncomingWire> = Vec::with_capacity(arg.incoming_wires.len());
+            for wire in &arg.incoming_wires {
+                if wire.source_scope_depth != k {
+                    new_wires.push(wire.clone());
+                    continue;
+                }
+                if let Some(&pidx) = self.param_id_to_index.get(&wire.source_node_id) {
+                    // Parameter-splice: replace with the instance's wires, each
+                    // reached from `k` frames deeper (depth shift by `k`). An
+                    // empty `instance_wires(p)` drops the wire.
+                    if let Some(iws) = self.instance_wires.get(&pidx) {
+                        for iw in iws {
+                            new_wires.push(IncomingWire {
+                                source_node_id: iw.source_node_id,
+                                source_pin: iw.source_pin,
+                                source_scope_depth: k + iw.source_scope_depth,
+                            });
+                        }
+                    }
+                } else if let Some(&new_id) = self.id_mapping.get(&wire.source_node_id) {
+                    // Reference to a co-copied node: follow the id remap, pin and
+                    // depth unchanged (the paste-path action).
+                    new_wires.push(IncomingWire {
+                        source_node_id: new_id,
+                        source_pin: wire.source_pin,
+                        source_scope_depth: wire.source_scope_depth,
+                    });
+                }
+                // otherwise drop — cannot happen for a valid self-contained N.
+            }
+            arg.incoming_wires = new_wires;
+        }
+    }
+
+    /// Recurse into a copied body, processing body-node `arguments` +
+    /// `zone_output_arguments` at the body's nesting.
+    fn descend_body(&self, body: &mut NodeNetwork, nesting: u8) {
+        for node in body.nodes.values_mut() {
+            self.reclassify(&mut node.arguments, nesting);
+            self.reclassify(&mut node.zone_output_arguments, nesting);
+            if let Some(nested) = node.zone_mut() {
+                self.descend_body(nested, nesting + 1);
+            }
+        }
+    }
+}
+
+/// **Descent B** per-argument-list pass: repoint any wire reading the instance's
+/// output pin (`source_node_id == instance_id`, `NodeOutput`, `depth == k`) to
+/// the return node, preserving the pin index (multi-output passthrough) and
+/// depth. With no return node, such wires are dropped.
+fn descent_b_repoint(args: &mut [Argument], k: u8, instance_id: u64, return_id: Option<u64>) {
+    for arg in args.iter_mut() {
+        let mut new_wires: Vec<IncomingWire> = Vec::with_capacity(arg.incoming_wires.len());
+        for wire in &arg.incoming_wires {
+            let is_instance_output = wire.source_scope_depth == k
+                && wire.source_node_id == instance_id
+                && matches!(wire.source_pin, SourcePin::NodeOutput { .. });
+            if is_instance_output {
+                if let Some(rid) = return_id {
+                    new_wires.push(IncomingWire {
+                        source_node_id: rid,
+                        source_pin: wire.source_pin, // keep consumer's pin index
+                        source_scope_depth: wire.source_scope_depth,
+                    });
+                }
+                // else: no return node — drop the consumer wire.
+            } else {
+                new_wires.push(wire.clone());
+            }
+        }
+        arg.incoming_wires = new_wires;
+    }
+}
+
+/// Recurse into a (non-copied) body for Descent B.
+fn descent_b_body(body: &mut NodeNetwork, nesting: u8, instance_id: u64, return_id: Option<u64>) {
+    for node in body.nodes.values_mut() {
+        descent_b_repoint(&mut node.arguments, nesting, instance_id, return_id);
+        descent_b_repoint(
+            &mut node.zone_output_arguments,
+            nesting,
+            instance_id,
+            return_id,
+        );
+        if let Some(nested) = node.zone_mut() {
+            descent_b_body(nested, nesting + 1, instance_id, return_id);
+        }
+    }
+}
+
+/// All wire fix-up for inlining, scope-aware. `target` already contains the
+/// copied content (see [`copy_content_into`]); `id_mapping` is its `old → new`
+/// id map. `source` is `N`, read for its `parameter` nodes and `return_node_id`.
+///
+/// Performs **Descent A** (fix the copied content: parameter-splice + copied-node
+/// remap, recursing into bodies at the `depth == k` gate) and **Descent B**
+/// (repoint the instance's output consumers to `N`'s return node, recursing into
+/// sibling bodies), then deletes the instance.
+pub fn splice_inline_boundary(
+    target: &mut NodeNetwork,
+    instance_id: u64,
+    source: &NodeNetwork,
+    id_mapping: &HashMap<u64, u64>,
+) {
+    // (1) N's parameter node ids → param_index.
+    let mut param_id_to_index: HashMap<u64, usize> = HashMap::new();
+    for node in source.nodes.values() {
+        if node.node_type_name == "parameter" {
+            // `as_ref()` first so the method resolves on `dyn NodeData` (the
+            // inner value), not on `Box<dyn NodeData>` itself — the latter
+            // downcasts to the Box and silently misses.
+            if let Some(pd) = node
+                .data
+                .as_ref()
+                .as_any_ref()
+                .downcast_ref::<ParameterData>()
+            {
+                param_id_to_index.insert(node.id, pd.param_index);
+            }
+        }
+    }
+
+    // (2) instance_wires(p): the instance's incoming wires on input pin p
+    //     (verbatim — shape + depth preserved). If pin p is unconnected, fall
+    //     back to the parameter node's default wires, remapped through
+    //     id_mapping (a default references a node inside N).
+    let mut instance_wires: HashMap<usize, Vec<IncomingWire>> = HashMap::new();
+    {
+        let Some(instance) = target.nodes.get(&instance_id) else {
+            return;
+        };
+        for (&pid, &idx) in &param_id_to_index {
+            let connected = instance
+                .arguments
+                .get(idx)
+                .map(|a| a.incoming_wires.clone())
+                .unwrap_or_default();
+            if !connected.is_empty() {
+                instance_wires.insert(idx, connected);
+            } else {
+                let fallback = source
+                    .nodes
+                    .get(&pid)
+                    .and_then(|p| p.arguments.first())
+                    .map(|arg| {
+                        arg.incoming_wires
+                            .iter()
+                            .filter_map(|w| {
+                                id_mapping
+                                    .get(&w.source_node_id)
+                                    .map(|&new_id| IncomingWire {
+                                        source_node_id: new_id,
+                                        source_pin: w.source_pin,
+                                        source_scope_depth: w.source_scope_depth,
+                                    })
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                instance_wires.insert(idx, fallback);
+            }
+        }
+    }
+
+    // (3) Descent A — fix the copied content. Top-level copied nodes are at
+    //     k = 0 (process `arguments` only, matching the paste path); their
+    //     bodies recurse at k = 1, 2, … (arguments + zone_output_arguments).
+    let ctx = DescentA {
+        param_id_to_index: &param_id_to_index,
+        instance_wires: &instance_wires,
+        id_mapping,
+    };
+    let copied_ids: Vec<u64> = id_mapping.values().copied().collect();
+    for &new_id in &copied_ids {
+        if let Some(node) = target.nodes.get_mut(&new_id) {
+            ctx.reclassify(&mut node.arguments, 0);
+            if let Some(body) = node.zone_mut() {
+                ctx.descend_body(body, 1);
+            }
+        }
+    }
+
+    // (4) Descent B — repoint the instance's output consumers to the return
+    //     node. Walk the instance scope + all its bodies, skipping the freshly
+    //     copied nodes (they come from N and can't reference the instance).
+    let return_id = source
+        .return_node_id
+        .and_then(|rid| id_mapping.get(&rid).copied());
+    let copied_set: HashSet<u64> = copied_ids.into_iter().collect();
+    for (&id, node) in target.nodes.iter_mut() {
+        if copied_set.contains(&id) {
+            continue;
+        }
+        descent_b_repoint(&mut node.arguments, 0, instance_id, return_id);
+        if let Some(body) = node.zone_mut() {
+            descent_b_body(body, 1, instance_id, return_id);
+        }
+    }
+
+    // (5) Delete the instance — no wire references it after Descent B.
+    target.displayed_nodes.remove(&instance_id);
+    target.nodes.remove(&instance_id);
 }
