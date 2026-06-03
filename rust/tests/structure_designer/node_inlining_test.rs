@@ -851,6 +851,160 @@ fn snapshot_main(designer: &mut StructureDesigner) -> serde_json::Value {
     value
 }
 
+// ---------------------------------------------------------------------------
+// Orchestrator — inlining inside a zone body (Phase 3)
+// ---------------------------------------------------------------------------
+
+/// Build a `StructureDesigner` with a custom network `helper` (one param, an
+/// `int` content node as return) and a `main` network whose top level holds a
+/// `map` HOF; an instance of `helper` is added *inside* the map's body.
+/// Returns (designer, map_id, instance_node_id_in_body).
+fn setup_helper_instance_in_body() -> (StructureDesigner, u64, u64) {
+    let mut designer = StructureDesigner::new();
+
+    // Build "helper": parameter + int content (return).
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    designer.add_node("parameter", DVec2::new(-200.0, 0.0));
+    let content = designer.add_node("int", DVec2::new(0.0, 0.0));
+    designer.set_return_node_id(Some(content));
+
+    // Build "main" with a top-level `map` whose body holds a helper instance.
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    let inst = designer.add_node_scoped(&[map_id], "helper", DVec2::new(0.0, 0.0), None);
+    assert_ne!(inst, 0, "failed to add helper instance into the map body");
+
+    (designer, map_id, inst)
+}
+
+#[test]
+fn inline_inside_body_removes_instance_and_adds_content() {
+    let (mut designer, map_id, inst) = setup_helper_instance_in_body();
+
+    designer.inline_custom_node(vec![map_id], inst).unwrap();
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    // Instance gone from the body; the int content was copied in.
+    assert!(!body.nodes.contains_key(&inst));
+    assert!(body.nodes.values().all(|n| n.node_type_name != "helper"));
+    assert!(body.nodes.values().any(|n| n.node_type_name == "int"));
+    // The "helper" definition is untouched in the registry.
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("helper")
+    );
+}
+
+#[test]
+fn inline_inside_body_preserves_instance_capture_wire() {
+    // The instance's input pin is fed by a *capture* (depth 1) of a top-level
+    // node `x`. helper's content consumes that parameter, so after inlining the
+    // copied content's parameter reference must be spliced to the capture,
+    // verbatim at nesting k = 0 (depth == k + d_I == 0 + 1 == 1).
+    let mut designer = StructureDesigner::new();
+
+    // helper: parameter p0; content = array_at whose Int `index` pin reads p0;
+    // return = array_at.
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    let p0 = designer.add_node("parameter", DVec2::new(-200.0, 0.0));
+    let content = designer.add_node("array_at", DVec2::new(0.0, 0.0));
+    {
+        let helper = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("helper")
+            .unwrap();
+        // arg[1] is array_at's Int `index` pin.
+        helper.nodes.get_mut(&content).unwrap().arguments[1].set_source(p0, 0);
+    }
+    designer.set_return_node_id(Some(content));
+
+    // main: a top-level Int source `x`, a `map`, and a helper instance in the
+    // body whose pin 0 captures `x` at depth 1.
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let x = designer.add_node("int", DVec2::new(-300.0, -100.0));
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    let inst = designer.add_node_scoped(&[map_id], "helper", DVec2::new(0.0, 0.0), None);
+    {
+        let body = designer.get_scope_network_mut(&[map_id]).unwrap();
+        body.nodes.get_mut(&inst).unwrap().arguments[0].set_source_full(
+            x,
+            SourcePin::NodeOutput { pin_index: 0 },
+            1,
+        );
+    }
+
+    designer.inline_custom_node(vec![map_id], inst).unwrap();
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(
+        !body.nodes.contains_key(&inst),
+        "instance removed from body"
+    );
+    let copied = body
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "array_at")
+        .expect("array_at content copied into the body");
+    // The copied parameter reference resolves to the instance's capture of `x`
+    // at depth 1 (k = 0 + d_I = 1).
+    assert_eq!(
+        copied.arguments[1].incoming_wires,
+        vec![IncomingWire {
+            source_node_id: x,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        }]
+    );
+}
+
+#[test]
+fn inline_inside_body_undo_redo_roundtrip() {
+    let (mut designer, map_id, inst) = setup_helper_instance_in_body();
+    designer.undo_stack.clear();
+
+    let before = snapshot_body(&mut designer, map_id);
+    designer.inline_custom_node(vec![map_id], inst).unwrap();
+    let after = snapshot_body(&mut designer, map_id);
+    assert_ne!(before, after, "inline should change the body");
+
+    designer.undo();
+    assert_eq!(
+        snapshot_body(&mut designer, map_id),
+        before,
+        "undo restores the body"
+    );
+
+    designer.redo();
+    assert_eq!(
+        snapshot_body(&mut designer, map_id),
+        after,
+        "redo reapplies the inline"
+    );
+}
+
+/// Serialize the `map` body of `main` to a normalized JSON value for undo/redo
+/// comparison (HashMap-order independent).
+fn snapshot_body(designer: &mut StructureDesigner, map_id: u64) -> serde_json::Value {
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
+
+    let registry = &mut designer.node_type_registry;
+    let (built_in_types, node_networks) =
+        (&registry.built_in_node_types, &mut registry.node_networks);
+    let main = node_networks.get_mut("main").unwrap();
+    let body = main.nodes.get_mut(&map_id).unwrap().zone_mut().unwrap();
+    let serializable = node_network_to_serializable(body, built_in_types, None).unwrap();
+    let mut value = serde_json::to_value(&serializable).unwrap();
+    normalize_json(&mut value);
+    value
+}
+
 /// Sort HashMap-derived arrays (`nodes`, `displayed_node_ids`,
 /// `displayed_output_pins`) so comparison is deterministic.
 fn normalize_json(value: &mut serde_json::Value) {

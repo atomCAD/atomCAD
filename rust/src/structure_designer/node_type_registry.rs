@@ -539,10 +539,42 @@ impl NodeTypeRegistry {
     /// `calculate_custom_node_type` would fall back to the bare built-in type
     /// after a `.cnnd` round-trip and panic on first parameter access.
     pub fn initialize_custom_node_types_for_network(&self, network: &mut NodeNetwork) {
+        Self::initialize_custom_node_types_for_network_with_types(
+            &self.built_in_node_types,
+            &self.record_type_defs,
+            &self.built_in_record_type_defs,
+            network,
+        );
+    }
+
+    /// Static, `node_networks`-free recursive variant of
+    /// [`initialize_custom_node_types_for_network`]. Because it consults only the
+    /// read-only type maps (never `node_networks`), it can repopulate caches for
+    /// a body network that itself still lives inside `node_networks` — the caller
+    /// destructures the registry's sibling fields and passes the maps in (the
+    /// split-borrow pattern used by `add_node_scoped` / `inline_custom_node` for
+    /// body-scoped edits).
+    pub fn initialize_custom_node_types_for_network_with_types(
+        built_in_types: &std::collections::HashMap<String, NodeType>,
+        record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
+        built_in_record_type_defs: &std::collections::HashMap<String, RecordTypeDef>,
+        network: &mut NodeNetwork,
+    ) {
         for node in network.nodes.values_mut() {
-            self.populate_custom_node_type_cache(node, false);
+            Self::populate_custom_node_type_cache_with_types(
+                built_in_types,
+                record_type_defs,
+                built_in_record_type_defs,
+                node,
+                false,
+            );
             if let Some(body) = node.zone_mut() {
-                self.initialize_custom_node_types_for_network(body);
+                Self::initialize_custom_node_types_for_network_with_types(
+                    built_in_types,
+                    record_type_defs,
+                    built_in_record_type_defs,
+                    body,
+                );
             }
         }
     }

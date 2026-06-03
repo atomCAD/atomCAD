@@ -6312,16 +6312,15 @@ impl StructureDesigner {
     /// `N`'s contents, spliced into the parent network in place. The named
     /// definition in the registry is left untouched.
     ///
-    /// Phase 2 supports the **top-level** active network only (`scope_path`
-    /// empty); body-scoped inlining (non-empty `scope_path`) lands in Phase 3.
-    /// See `doc/design_inline_custom_node.md`.
+    /// Scope-aware: with an empty `scope_path` the target is the top-level
+    /// active network; with a non-empty `scope_path` it is the HOF body resolved
+    /// by that chain of node ids. The splice algorithm is scope-relative and
+    /// identical in both cases; only target resolution and the undo command
+    /// differ (a whole-network `InlineNodeCommand` at top level, an
+    /// `EditZoneBodyCommand` inside a body). See `doc/design_inline_custom_node.md`.
     pub fn inline_custom_node(&mut self, scope_path: Vec<u64>, node_id: u64) -> Result<(), String> {
         use super::node_inlining;
-
-        // Phase 2: top-level only.
-        if !scope_path.is_empty() {
-            return Err("Inlining inside a zone body is not yet supported".to_string());
-        }
+        use super::node_type_registry::NodeTypeRegistry;
 
         // 1. Resolve the instance node and read what we need before mutating.
         let (type_name, anchor) = {
@@ -6342,7 +6341,7 @@ impl StructureDesigner {
             return Err("Only custom network nodes can be inlined".to_string());
         }
 
-        // 3. Clone the definition N (read it while mutating the parent).
+        // 3. Clone the definition N (read it while mutating the target).
         let source = self
             .node_type_registry
             .node_networks
@@ -6364,51 +6363,80 @@ impl StructureDesigner {
             .clone()
             .ok_or("No active network")?;
 
-        // 5. Snapshot the parent network BEFORE the inline (for undo).
-        let before_snapshot = self.snapshot_network(&network_name);
+        // 5. Snapshot BEFORE the inline (for undo). Top level snapshots the whole
+        //    active network; a body snapshots just the zone body (+ the owning
+        //    HOF's zone_output_arguments).
+        let (top_before, body_before) = if scope_path.is_empty() {
+            (self.snapshot_network(&network_name), None)
+        } else {
+            (None, self.snapshot_zone_body(&scope_path))
+        };
 
-        // 6. Run the three helpers. The parent network is removed from the
-        //    registry first so the cache-repopulation call (step 7), which
-        //    borrows `&self.node_type_registry`, doesn't conflict with the
-        //    `&mut NodeNetwork`.
-        let mut network = self
-            .node_type_registry
-            .node_networks
-            .remove(&network_name)
-            .ok_or("Network not found")?;
-        node_inlining::make_space_for_inline(
-            &mut network,
-            node_id,
-            anchor,
-            original_size,
-            content_size,
-        );
-        let id_mapping =
-            node_inlining::copy_content_into(&mut network, &source, anchor, content_min);
-        node_inlining::splice_inline_boundary(&mut network, node_id, &source, &id_mapping);
+        // 6. Run the three helpers on the resolved target network (top-level
+        //    active network or a nested body). The helpers touch no registry
+        //    state, so a plain `&mut NodeNetwork` borrow suffices.
+        {
+            let target = self
+                .get_scope_network_mut(&scope_path)
+                .ok_or("Scope not found")?;
+            node_inlining::make_space_for_inline(
+                target,
+                node_id,
+                anchor,
+                original_size,
+                content_size,
+            );
+            let id_mapping = node_inlining::copy_content_into(target, &source, anchor, content_min);
+            node_inlining::splice_inline_boundary(target, node_id, &source, &id_mapping);
+        }
 
         // 7. Repopulate per-node custom-type caches for the copied content
         //    (descends into bodies, as `create_subnetwork_from_selection` does).
-        self.node_type_registry
-            .initialize_custom_node_types_for_network(&mut network);
+        //    Split-borrow walk of the scope path so it works whether the target
+        //    is the top-level network or a body still living in `node_networks`.
+        {
+            let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
+                &self.node_type_registry.built_in_node_types,
+                &self.node_type_registry.record_type_defs,
+                &self.node_type_registry.built_in_record_type_defs,
+                &mut self.node_type_registry.node_networks,
+            );
+            if let Some(top) = node_networks.get_mut(&network_name) {
+                let mut current: Option<&mut NodeNetwork> = Some(top);
+                for hof_id in &scope_path {
+                    current = match current {
+                        Some(net) => net.nodes.get_mut(hof_id).and_then(|n| n.zone_mut()),
+                        None => None,
+                    };
+                }
+                if let Some(target) = current {
+                    NodeTypeRegistry::initialize_custom_node_types_for_network_with_types(
+                        built_in_types,
+                        record_type_defs,
+                        built_in_record_type_defs,
+                        target,
+                    );
+                }
+            }
+        }
 
-        // Reinsert the mutated network.
-        self.node_type_registry
-            .node_networks
-            .insert(network_name.clone(), network);
-
-        // 8. Validate — refresh paths do not validate.
+        // 8. Validate — refresh paths do not validate. `validate_active_network`
+        //    recurses into zone bodies, so body-scoped inlines are covered too.
         self.validate_active_network();
 
-        // 9. Push undo command (top-level before/after snapshot).
-        if let (Some(before), Some(after)) = (before_snapshot, self.snapshot_network(&network_name))
-        {
-            use super::undo::commands::inline_node::InlineNodeCommand;
-            self.push_command(InlineNodeCommand {
-                network_name: network_name.clone(),
-                before_snapshot: before,
-                after_snapshot: after,
-            });
+        // 9. Push undo command (scope-dependent).
+        if scope_path.is_empty() {
+            if let (Some(before), Some(after)) = (top_before, self.snapshot_network(&network_name))
+            {
+                use super::undo::commands::inline_node::InlineNodeCommand;
+                self.push_command(InlineNodeCommand {
+                    network_name: network_name.clone(),
+                    before_snapshot: before,
+                    after_snapshot: after,
+                });
+            }
+        } else {
+            self.push_zone_body_command(&scope_path, "Inline custom node".to_string(), body_before);
         }
 
         // 10. Mark dirty and schedule refresh.
