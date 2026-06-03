@@ -681,6 +681,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CliConfig dco_decode_cli_config(dynamic raw);
 
   @protected
+  ConversionResult dco_decode_conversion_result(dynamic raw);
+
+  @protected
   DragFrozenStatus dco_decode_drag_frozen_status(dynamic raw);
 
   @protected
@@ -1954,6 +1957,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CliConfig sse_decode_cli_config(SseDeserializer deserializer);
+
+  @protected
+  ConversionResult sse_decode_conversion_result(SseDeserializer deserializer);
 
   @protected
   DragFrozenStatus sse_decode_drag_frozen_status(SseDeserializer deserializer);
@@ -3376,6 +3382,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_cli_config(CliConfig self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_conversion_result(
+      ConversionResult self, SseSerializer serializer);
 
   @protected
   void sse_encode_drag_frozen_status(

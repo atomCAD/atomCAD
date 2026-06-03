@@ -6882,6 +6882,116 @@ pub fn inline_custom_node(
     }
 }
 
+/// Whether the node at `(scope_path, node_id)` can be converted to a closure —
+/// i.e. it is a custom-network instance used as a function (or unconsumed), with
+/// a return node. Used to gate the context-menu item.
+/// See `doc/design_closure_network_conversion.md` (Direction A).
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_convert_instance_to_closure(scope_path: Vec<u64>, node_id: u64) -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .can_convert_instance_to_closure(&scope_path, node_id)
+            },
+            false,
+        )
+    }
+}
+
+/// Convert a custom-network instance node into a `closure` node
+/// (*Network → Closure*): replaces the instance `I` at `(scope_path, node_id)`
+/// with a `closure` node `C` whose inline body is a copy of `I`'s network. `I`'s
+/// wired input pins become captures in the body; its unwired input pins become
+/// the closure's parameters. See `doc/design_closure_network_conversion.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn convert_instance_to_closure(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> super::structure_designer_api_types::ConversionResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .convert_instance_to_closure(scope_path, node_id)
+            {
+                Ok(()) => {
+                    refresh_structure_designer_auto(cad_instance);
+                    super::structure_designer_api_types::ConversionResult {
+                        success: true,
+                        error: None,
+                    }
+                }
+                Err(error) => super::structure_designer_api_types::ConversionResult {
+                    success: false,
+                    error: Some(error),
+                },
+            },
+            super::structure_designer_api_types::ConversionResult {
+                success: false,
+                error: Some("CAD instance not available".to_string()),
+            },
+        )
+    }
+}
+
+/// Whether the node at `(scope_path, node_id)` can be extracted to a network —
+/// i.e. it is a `closure` node with a result wire. Used to gate the
+/// context-menu item. See `doc/design_closure_network_conversion.md`
+/// (Direction B).
+#[flutter_rust_bridge::frb(sync)]
+pub fn can_extract_closure_to_network(scope_path: Vec<u64>, node_id: u64) -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .can_extract_closure_to_network(&scope_path, node_id)
+            },
+            false,
+        )
+    }
+}
+
+/// Extract a `closure` node into a new named custom network
+/// (*Closure → Network*): lifts the closure `C`'s inline body into a fresh
+/// standalone network `N` (with parameter nodes for both the closure's
+/// parameters and its captures) and replaces `C` with an instance of `N`, wired
+/// so its function pin reproduces `C`. See
+/// `doc/design_closure_network_conversion.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn extract_closure_to_network(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    name: String,
+) -> super::structure_designer_api_types::ConversionResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| match cad_instance
+                .structure_designer
+                .extract_closure_to_network(scope_path, node_id, &name)
+            {
+                Ok(_instance_id) => {
+                    refresh_structure_designer_auto(cad_instance);
+                    super::structure_designer_api_types::ConversionResult {
+                        success: true,
+                        error: None,
+                    }
+                }
+                Err(error) => super::structure_designer_api_types::ConversionResult {
+                    success: false,
+                    error: Some(error),
+                },
+            },
+            super::structure_designer_api_types::ConversionResult {
+                success: false,
+                error: Some("CAD instance not available".to_string()),
+            },
+        )
+    }
+}
+
 /// Promote a node to a parameter.
 ///
 /// Inserts a `parameter` node typed after the given node's output pin 0,

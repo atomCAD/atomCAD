@@ -6457,6 +6457,65 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// Whether the node at `(scope_path, node_id)` can be converted to a closure
+    /// (*Network → Closure*): it must be a custom-network instance, used as a
+    /// function (no wire consumes a normal output pin) or unconsumed, whose
+    /// definition has a return node. Cheap, side-effect-free — gates the
+    /// context-menu item. See `doc/design_closure_network_conversion.md`.
+    pub fn can_convert_instance_to_closure(&self, scope_path: &[u64], node_id: u64) -> bool {
+        use super::closure_network_conversion as conv;
+
+        let Some(target) = self.get_scope_network(scope_path) else {
+            return false;
+        };
+        let Some(instance) = target.nodes.get(&node_id) else {
+            return false;
+        };
+        // Gate 1: only custom-network instances (rejects built-ins, HOFs,
+        // `apply`, `closure`).
+        if !self
+            .node_type_registry
+            .is_custom_node_type(&instance.node_type_name)
+        {
+            return false;
+        }
+        // Gate 2: used as a function, not a value.
+        if conv::node_consumed_as_value(target, node_id) {
+            return false;
+        }
+        // Gate 3: the definition must have a return node.
+        match self
+            .node_type_registry
+            .node_networks
+            .get(&instance.node_type_name)
+        {
+            Some(source) => source.return_node_id.is_some(),
+            None => false,
+        }
+    }
+
+    /// Whether the node at `(scope_path, node_id)` can be extracted to a network
+    /// (*Closure → Network*): it must be a `closure` node with a result wire.
+    /// Cheap, side-effect-free — gates the context-menu item. See
+    /// `doc/design_closure_network_conversion.md` (Direction B). (The
+    /// secondary-output-pin rejection is checked at extraction time and surfaced
+    /// as an error message rather than hidden from the menu.)
+    pub fn can_extract_closure_to_network(&self, scope_path: &[u64], node_id: u64) -> bool {
+        let Some(target) = self.get_scope_network(scope_path) else {
+            return false;
+        };
+        let Some(c) = target.nodes.get(&node_id) else {
+            return false;
+        };
+        if c.node_type_name != "closure" {
+            return false;
+        }
+        // The closure must deliver a result.
+        c.zone_output_arguments
+            .first()
+            .is_some_and(|arg| !arg.incoming_wires.is_empty())
+    }
+
     /// Converts a custom-network instance node into a `closure` node
     /// (*Network → Closure*): replaces the instance `I` (whose function pin is
     /// used, or which is unconsumed) with a `closure` node `C` whose inline body

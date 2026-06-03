@@ -2907,6 +2907,34 @@ class CliConfig {
           parameters == other.parameters;
 }
 
+/// Result of a closure ⇄ custom-network conversion attempt
+/// (*Convert to Closure* / *Extract to Network*).
+///
+/// Modeled on [`InlineResult`]; see `doc/design_closure_network_conversion.md`.
+class ConversionResult {
+  /// Whether the conversion succeeded
+  final bool success;
+
+  /// Error message if the conversion failed
+  final String? error;
+
+  const ConversionResult({
+    required this.success,
+    this.error,
+  });
+
+  @override
+  int get hashCode => success.hashCode ^ error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ConversionResult &&
+          runtimeType == other.runtimeType &&
+          success == other.success &&
+          error == other.error;
+}
+
 /// Status of frozen atoms during a drag operation.
 enum DragFrozenStatus {
   /// No frozen atoms in selection — all atoms moved normally.

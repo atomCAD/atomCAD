@@ -1722,6 +1722,59 @@ class StructureDesignerModel extends ChangeNotifier {
     return result;
   }
 
+  /// Whether `nodeId` (in scope `scopeChain`) can be converted to a closure —
+  /// a custom-network instance used as a function (or unconsumed) with a return
+  /// node. Gates the context-menu item.
+  bool canConvertInstanceToClosure(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
+    return structure_designer_api.canConvertInstanceToClosure(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
+  }
+
+  /// Whether `nodeId` (in scope `scopeChain`) can be extracted to a network —
+  /// a `closure` node with a result wire. Gates the context-menu item.
+  bool canExtractClosureToNetwork(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
+    return structure_designer_api.canExtractClosureToNetwork(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
+  }
+
+  /// Convert the custom-network instance `nodeId` (in scope `scopeChain`) into a
+  /// `closure` node (*Network → Closure*): its body becomes a copy of the
+  /// instance's network, wired input pins become captures, unwired pins become
+  /// closure parameters. Returns the API result; UI is refreshed regardless of
+  /// success. See `doc/design_closure_network_conversion.md`.
+  ConversionResult convertInstanceToClosure(BigInt nodeId,
+      {List<BigInt> scopeChain = const []}) {
+    final result = structure_designer_api.convertInstanceToClosure(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Extract the `closure` node `nodeId` (in scope `scopeChain`) into a new named
+  /// custom network `name` (*Closure → Network*): lifts the closure's body into a
+  /// fresh standalone network (with parameter nodes for both the closure's
+  /// parameters and its captures) and replaces the closure with an instance of
+  /// that network. Returns the API result; UI is refreshed regardless of success.
+  /// See `doc/design_closure_network_conversion.md`.
+  ConversionResult extractClosureToNetwork(BigInt nodeId, String name,
+      {List<BigInt> scopeChain = const []}) {
+    final result = structure_designer_api.extractClosureToNetwork(
+      scopePath: _scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+      name: name,
+    );
+    refreshFromKernel();
+    return result;
+  }
+
   /// Run an explicit Execute pass on `nodeId` in the active network.
   ///
   /// Synchronous FFI call (the `with_*_cad_instance` helpers require

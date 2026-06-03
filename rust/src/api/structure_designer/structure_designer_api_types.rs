@@ -1289,6 +1289,17 @@ pub struct InlineResult {
     pub error: Option<String>,
 }
 
+/// Result of a closure ⇄ custom-network conversion attempt
+/// (*Convert to Closure* / *Extract to Network*).
+///
+/// Modeled on [`InlineResult`]; see `doc/design_closure_network_conversion.md`.
+pub struct ConversionResult {
+    /// Whether the conversion succeeded
+    pub success: bool,
+    /// Error message if the conversion failed
+    pub error: Option<String>,
+}
+
 /// Result of a Promote-to-Parameter attempt.
 pub struct APIPromoteToParameterResult {
     pub success: bool,

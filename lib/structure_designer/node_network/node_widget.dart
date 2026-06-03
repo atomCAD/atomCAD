@@ -22,6 +22,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dart';
+import 'package:flutter_cad/structure_designer/extract_closure_to_network_dialog.dart';
 
 /// Key constants for node widget testing
 class NodeWidgetKeys {
@@ -1612,6 +1613,14 @@ class NodeWidget extends StatelessWidget {
     // `collapsable` false. See `doc/design_hof_node_collapse.md`.
     final bool isCollapsableHof = node.zone != null && node.zone!.collapsable;
 
+    // Closure ⇄ network conversions (`doc/design_closure_network_conversion.md`).
+    // "Convert to Closure" is offered on a custom-network instance used as a
+    // function (or unconsumed); "Extract to Network…" on a `closure` node.
+    final bool canConvertToClosure = isCustomNode &&
+        model.canConvertInstanceToClosure(node.id, scopeChain: scopeChain);
+    final bool canExtractToNetwork = node.nodeTypeName == 'closure' &&
+        model.canExtractClosureToNetwork(node.id, scopeChain: scopeChain);
+
     // Explicit `<String>` so the heterogeneous items list (the value-bearing
     // items, the disabled "Body" header, and the `PopupMenuDivider`) infers
     // `List<PopupMenuEntry<String>>` rather than collapsing to a `StatefulWidget`
@@ -1672,6 +1681,16 @@ class NodeWidget extends StatelessWidget {
           PopupMenuItem(
             value: 'factor_into_subnetwork',
             child: Text('Factor out to Subnetwork...'),
+          ),
+        if (canConvertToClosure)
+          PopupMenuItem(
+            value: 'convert_to_closure',
+            child: Text('Convert to Closure'),
+          ),
+        if (canExtractToNetwork)
+          PopupMenuItem(
+            value: 'extract_to_network',
+            child: Text('Extract to Network...'),
           ),
         // Body collapse-mode radio group (collapsable HOFs only). The
         // check-mark sits on the current `collapseMode`; picking "Auto" is the
@@ -1748,6 +1767,24 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         showFactorIntoSubnetworkDialog(context, model);
+      } else if (value == 'convert_to_closure') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        final result =
+            model.convertInstanceToClosure(node.id, scopeChain: scopeChain);
+        if (!context.mounted) return;
+        if (!result.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result.error ?? 'Could not convert to closure'),
+              backgroundColor: Colors.red.shade700,
+            ),
+          );
+        }
+      } else if (value == 'extract_to_network') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        showExtractClosureToNetworkDialog(context, model, node.id, scopeChain);
       } else if (value == 'collapse_auto') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

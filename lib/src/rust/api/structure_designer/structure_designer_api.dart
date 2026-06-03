@@ -1776,6 +1776,51 @@ InlineResult inlineCustomNode(
         .crateApiStructureDesignerStructureDesignerApiInlineCustomNode(
             scopePath: scopePath, nodeId: nodeId);
 
+/// Whether the node at `(scope_path, node_id)` can be converted to a closure —
+/// i.e. it is a custom-network instance used as a function (or unconsumed), with
+/// a return node. Used to gate the context-menu item.
+/// See `doc/design_closure_network_conversion.md` (Direction A).
+bool canConvertInstanceToClosure(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiCanConvertInstanceToClosure(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Convert a custom-network instance node into a `closure` node
+/// (*Network → Closure*): replaces the instance `I` at `(scope_path, node_id)`
+/// with a `closure` node `C` whose inline body is a copy of `I`'s network. `I`'s
+/// wired input pins become captures in the body; its unwired input pins become
+/// the closure's parameters. See `doc/design_closure_network_conversion.md`.
+ConversionResult convertInstanceToClosure(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiConvertInstanceToClosure(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Whether the node at `(scope_path, node_id)` can be extracted to a network —
+/// i.e. it is a `closure` node with a result wire. Used to gate the
+/// context-menu item. See `doc/design_closure_network_conversion.md`
+/// (Direction B).
+bool canExtractClosureToNetwork(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiCanExtractClosureToNetwork(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Extract a `closure` node into a new named custom network
+/// (*Closure → Network*): lifts the closure `C`'s inline body into a fresh
+/// standalone network `N` (with parameter nodes for both the closure's
+/// parameters and its captures) and replaces `C` with an instance of `N`, wired
+/// so its function pin reproduces `C`. See
+/// `doc/design_closure_network_conversion.md`.
+ConversionResult extractClosureToNetwork(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required String name}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiExtractClosureToNetwork(
+            scopePath: scopePath, nodeId: nodeId, name: name);
+
 /// Promote a node to a parameter.
 ///
 /// Inserts a `parameter` node typed after the given node's output pin 0,
