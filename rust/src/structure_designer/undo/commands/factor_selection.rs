@@ -31,12 +31,21 @@ impl std::fmt::Debug for FactorSelectionCommand {
 
 impl FactorSelectionCommand {
     /// Replace a network in the registry with one deserialized from a snapshot.
+    ///
+    /// Re-runs `initialize_custom_node_types_for_network` on the deserialized
+    /// network so per-node custom-type caches (incl. nodes inside HOF / closure
+    /// bodies — e.g. an `expr` inside a lifted closure body) are repopulated.
+    /// Without this a restored body node has an empty parameter list and the next
+    /// evaluation errors. Mirrors `ConvertToClosureCommand::restore_network` /
+    /// `EditZoneBodyCommand::restore`.
     fn restore_network(ctx: &mut UndoContext, name: &str, snapshot: &SerializableNodeNetwork) {
-        if let Ok(network) = serializable_to_node_network(
+        if let Ok(mut network) = serializable_to_node_network(
             snapshot,
             &ctx.node_type_registry.built_in_node_types,
             None,
         ) {
+            ctx.node_type_registry
+                .initialize_custom_node_types_for_network(&mut network);
             ctx.node_type_registry
                 .node_networks
                 .insert(name.to_string(), network);

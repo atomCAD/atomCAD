@@ -6590,6 +6590,168 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// Extracts a `closure` node into a new named custom network
+    /// (*Closure → Network*): lifts the closure `C`'s inline body `B` into a
+    /// fresh standalone network `N` — with `parameter` nodes for both the
+    /// closure's parameters and its captures — and replaces `C` with an instance
+    /// `I` of `N`, wired so `I`'s function value (`-1` pin) reproduces `C`'s. The
+    /// closure's parameters become `I`'s **unwired** pins (the `-1` value's
+    /// parameters); its captures become `I`'s **wired** pins (capture sources).
+    /// Consumers of `C`'s pin `0` are flipped to `I`'s pin `-1` (same node id).
+    ///
+    /// **Phase 2: top level only** (`scope_path` must be empty); body-scoped
+    /// extraction lands in a later phase. See
+    /// `doc/design_closure_network_conversion.md` (Direction B). Returns the
+    /// instance node id (equal to `node_id`).
+    pub fn extract_closure_to_network(
+        &mut self,
+        scope_path: Vec<u64>,
+        node_id: u64,
+        network_name: &str,
+    ) -> Result<u64, String> {
+        use super::closure_network_conversion as conv;
+        use super::node_network::{Argument, Node};
+
+        // Phase 2 handles the top-level active network only.
+        if !scope_path.is_empty() {
+            return Err(
+                "Extract closure to network inside a zone body is not yet supported".to_string(),
+            );
+        }
+
+        // 1. Validate the network name (relaxed user-name rules) and uniqueness.
+        if let Err(reason) = super::identifier::is_valid_user_name(network_name) {
+            return Err(format!("Invalid network name: {}", reason));
+        }
+        if self.node_type_registry.name_is_taken(network_name) {
+            return Err(format!("Node type '{}' already exists", network_name));
+        }
+
+        // 2. Resolve `C`; gate: only `closure` nodes can be extracted.
+        {
+            let target = self
+                .get_scope_network(&scope_path)
+                .ok_or("Scope not found")?;
+            let c = target
+                .nodes
+                .get(&node_id)
+                .ok_or("Node to extract not found")?;
+            if c.node_type_name != "closure" {
+                return Err("Only closure nodes can be extracted to a network".to_string());
+            }
+        }
+
+        let host_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or("No active network")?;
+
+        // 3. Snapshot BEFORE the extraction (for undo). Phase 2: top level only.
+        let before = self.snapshot_network(&host_name);
+
+        // 4. Build the extraction plan (reads `C` + the host scope `H`, builds `N`
+        //    with its interior caches populated). For top level the only ancestor
+        //    is `H` itself.
+        let plan = {
+            let target = self.get_scope_network(&scope_path).unwrap();
+            let c = target.nodes.get(&node_id).unwrap();
+            conv::extract_network_from_closure(
+                c,
+                network_name,
+                &[target],
+                &self.node_type_registry,
+            )?
+        };
+        let conv::ExtractionPlan {
+            network: new_network,
+            capture_wires,
+            closure_param_count,
+        } = plan;
+
+        // Read `C`'s geometry/name and its declared node type before mutating.
+        let (custom_name, position, body_width, body_height, collapse_mode) = {
+            let target = self.get_scope_network(&scope_path).unwrap();
+            let c = target.nodes.get(&node_id).unwrap();
+            (
+                c.custom_name.clone(),
+                c.position,
+                c.body_width,
+                c.body_height,
+                c.collapse_mode,
+            )
+        };
+        let i_node_type = new_network.node_type.clone();
+        let param_count = closure_param_count + capture_wires.len();
+
+        // 5. Register `N` (its content caches are already populated).
+        self.node_type_registry.add_node_network(new_network);
+
+        // 6. Replace `C` with the instance `I` (same id + position): closure-param
+        //    pins (0..m) stay unwired; capture pins (m..) carry the capture wires.
+        //    Then flip consumers of `C`'s pin `0` to `I`'s function pin `-1`, and
+        //    drop any stale display state.
+        {
+            let arguments: Vec<Argument> = (0..param_count)
+                .map(|i| {
+                    let mut arg = Argument::new();
+                    if i >= closure_param_count {
+                        arg.incoming_wires = vec![capture_wires[i - closure_param_count].clone()];
+                    }
+                    arg
+                })
+                .collect();
+
+            let instance = Node {
+                id: node_id,
+                node_type_name: network_name.to_string(),
+                custom_name,
+                position,
+                arguments,
+                data: Box::new(CustomNodeData::default()),
+                custom_node_type: Some(i_node_type),
+                zone: None,
+                zone_output_arguments: Vec::new(),
+                body_width,
+                body_height,
+                collapse_mode,
+            };
+
+            let target = self
+                .get_scope_network_mut(&scope_path)
+                .ok_or("Scope not found")?;
+            target.nodes.insert(node_id, instance);
+            target.displayed_nodes.remove(&node_id);
+            conv::redirect_value_consumers(target, node_id);
+        }
+
+        // 7. Validate `H` (revalidates `I` against the now-registered `N`).
+        //    Refresh paths do not validate.
+        self.validate_active_network();
+
+        // 8. Push undo command (Phase 2: top level — reuse FactorSelectionCommand,
+        //    which adds/removes the subnetwork and restores the source by name).
+        if let (Some(source_before), Some(source_after), Some(subnetwork_snap)) = (
+            before,
+            self.snapshot_network(&host_name),
+            self.snapshot_network(network_name),
+        ) {
+            use super::undo::commands::factor_selection::FactorSelectionCommand;
+            self.push_command(FactorSelectionCommand {
+                source_network_name: host_name.clone(),
+                subnetwork_name: network_name.to_string(),
+                source_network_before: source_before,
+                source_network_after: source_after,
+                subnetwork_snapshot: subnetwork_snap,
+            });
+        }
+
+        // 9. Mark dirty and schedule refresh.
+        self.is_dirty = true;
+        self.mark_full_refresh();
+
+        Ok(node_id)
+    }
+
     /// Promotes a node to a parameter.
     ///
     /// Creates a new `parameter` node typed after the given node's output
