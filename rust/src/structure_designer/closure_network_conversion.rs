@@ -610,7 +610,8 @@ impl SpliceClosureToNetwork<'_> {
 
 /// Resolve a capture's parameter type and a base name from the ancestor scope it
 /// lives in. `host_ancestors[0]` is `H` (external level 0), `host_ancestors[e]`
-/// the scope `e` frames above. Phase 2 only ever sees `e == 0`.
+/// the scope `e` frames above. Phase 2 only ever sees `e == 0`; Phase 3 (body
+/// scope) reaches `e >= 1` and `ZoneInput` (iteration-value) captures.
 fn resolve_capture_type_and_name(
     host_ancestors: &[&NodeNetwork],
     registry: &NodeTypeRegistry,
@@ -618,8 +619,7 @@ fn resolve_capture_type_and_name(
 ) -> Result<(DataType, String), String> {
     let (e, src_id, src_pin) = *key;
     let net = host_ancestors.get(e as usize).ok_or_else(|| {
-        "Capture reaches above the available scope chain (deeper captures need a later phase)"
-            .to_string()
+        "Capture reaches above the available scope chain (the closure is malformed)".to_string()
     })?;
     let node = net
         .nodes
@@ -636,11 +636,31 @@ fn resolve_capture_type_and_name(
                 .unwrap_or_else(|| node.node_type_name.clone());
             Ok((dt, format!("{base}_cap")))
         }
-        // Capturing an enclosing HOF's iteration value (`ZoneInput`) only arises
-        // when the closure is nested inside another HOF body — impossible at top
-        // level, handled in the body-scope phase.
-        SourcePin::ZoneInput { .. } => {
-            Err("Capturing an enclosing iteration value is not yet supported".to_string())
+        // Capturing an enclosing HOF's iteration value (`element` / `acc`). The
+        // source node is that HOF (living `e` frames above `H`); the captured
+        // value's type is the HOF's declared zone-input pin `pin_index`. This
+        // only arises when the closure is nested inside another HOF body — i.e.
+        // a body-scope conversion (`e >= 1`).
+        SourcePin::ZoneInput { pin_index } => {
+            let hof_type = registry
+                .get_node_type_for_node(node)
+                .ok_or_else(|| "Capture source HOF has no node type".to_string())?;
+            let pin = hof_type
+                .zone_input_pins
+                .get(pin_index)
+                .ok_or_else(|| "Capture references an invalid zone-input pin".to_string())?;
+            // For the common `Fixed(concrete)` case this is the concrete
+            // iteration-value type; a polymorphic declaration dead-ends at
+            // `None` (concrete-only, like every other unresolved pin here).
+            let dt = match &pin.data_type {
+                PinOutputType::Fixed(dt) => dt.clone(),
+                _ => DataType::None,
+            };
+            let base = node
+                .custom_name
+                .clone()
+                .unwrap_or_else(|| node.node_type_name.clone());
+            Ok((dt, format!("{base}_{}_cap", pin.name)))
         }
     }
 }
@@ -665,8 +685,9 @@ fn make_unique_name(desired: &str, taken: &mut HashSet<String>) -> String {
 /// **Closure → Network** direction.
 ///
 /// `host_ancestors[0]` is the host scope `H` (the network directly containing
-/// `C`), `host_ancestors[e]` the scope `e` frames above. Phase 2 (top level)
-/// always passes `&[H]`, so every capture is at external level 0.
+/// `C`), `host_ancestors[e]` the scope `e` frames above. Top-level extraction
+/// passes `&[H]` (every capture at external level 0); a body-scope extraction
+/// passes the full chain `[H, parent, …, top]` so `e >= 1` captures resolve.
 ///
 /// Returns the network to register plus the capture wires `I` must carry and the
 /// closure-parameter count. The orchestrator registers `N`, builds `I` (reusing

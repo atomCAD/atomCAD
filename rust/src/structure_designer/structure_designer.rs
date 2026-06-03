@@ -6467,8 +6467,8 @@ impl StructureDesigner {
     /// externally-visible change is flipping consuming wires `-1 → 0`. The named
     /// definition `N` is left untouched in the registry.
     ///
-    /// **Phase 1: top level only** (`scope_path` must be empty); body-scoped
-    /// conversion lands in a later phase. See
+    /// Works both at the top level (`scope_path` empty) and inside a zone body
+    /// (`scope_path` = `[parent.., hof_id]` down to the body holding `I`). See
     /// `doc/design_closure_network_conversion.md` (Direction A).
     pub fn convert_instance_to_closure(
         &mut self,
@@ -6477,10 +6477,7 @@ impl StructureDesigner {
     ) -> Result<(), String> {
         use super::closure_network_conversion as conv;
 
-        // Phase 1 handles the top-level active network only.
-        if !scope_path.is_empty() {
-            return Err("Convert to closure inside a zone body is not yet supported".to_string());
-        }
+        let scoped = !scope_path.is_empty();
 
         // 1. Resolve the instance node; read its type name.
         let type_name = {
@@ -6527,8 +6524,19 @@ impl StructureDesigner {
             .clone()
             .ok_or("No active network")?;
 
-        // 5. Snapshot BEFORE the conversion (for undo). Phase 1: top level only.
-        let before = self.snapshot_network(&network_name);
+        // 5. Snapshot BEFORE the conversion (for undo): the whole host network at
+        //    top level, or the host body (and its owner HOF's zone-output wires)
+        //    when inside a zone body.
+        let before_top = if scoped {
+            None
+        } else {
+            self.snapshot_network(&network_name)
+        };
+        let before_body = if scoped {
+            self.snapshot_zone_body(&scope_path)
+        } else {
+            None
+        };
 
         // 6. Build the closure node `C` (reads N, registry).
         let closure_node = {
@@ -6553,6 +6561,12 @@ impl StructureDesigner {
         //    covers both `C` and `B`'s interior (`B` lives inside `C`). Use the
         //    split-borrow static variant (consults only the read-only type maps)
         //    to avoid a registry borrow conflict, as `inline_custom_node` does.
+        //    The re-init resets every `apply` / `map` consumer to its bare
+        //    `calculate_custom_node_type` default, erasing the post-pass-derived
+        //    arg-pin names; the *preserving-args* post-passes below re-derive
+        //    those layouts without rebuilding the arguments vector, so the
+        //    `validate_active_network` post-pass that follows is a no-op and the
+        //    arg wires survive (otherwise the by-name rebuild drops them).
         {
             let (built_in_types, record_type_defs, built_in_record_type_defs, node_networks) = (
                 &self.node_type_registry.built_in_node_types,
@@ -6569,12 +6583,30 @@ impl StructureDesigner {
                 );
             }
         }
+        if let Some(top) = self.node_type_registry.node_networks.remove(&network_name) {
+            let mut top = top;
+            self.node_type_registry
+                .update_apply_pin_layouts_for_network_preserving_args(&mut top);
+            self.node_type_registry
+                .update_map_pin_layouts_for_network_preserving_args(&mut top);
+            self.node_type_registry
+                .node_networks
+                .insert(network_name.clone(), top);
+        }
 
-        // 9. Validate — refresh paths do not validate.
+        // 9. Validate — refresh paths do not validate. Validating the active
+        //    network walks its whole body tree, so a body-scoped `C`/`B` is
+        //    covered too.
         self.validate_active_network();
 
-        // 10. Push undo command (Phase 1: top level).
-        if let (Some(before), Some(after)) = (before, self.snapshot_network(&network_name)) {
+        // 10. Push undo command: a whole-network before/after snapshot at top
+        //     level, or an `EditZoneBodyCommand` (whole-body snapshot) when the
+        //     host scope is a zone body.
+        if scoped {
+            self.push_zone_body_command(&scope_path, "Convert to closure".to_string(), before_body);
+        } else if let (Some(before), Some(after)) =
+            (before_top, self.snapshot_network(&network_name))
+        {
             use super::undo::commands::convert_to_closure::ConvertToClosureCommand;
             self.push_command(ConvertToClosureCommand {
                 network_name: network_name.clone(),
@@ -6599,8 +6631,10 @@ impl StructureDesigner {
     /// parameters); its captures become `I`'s **wired** pins (capture sources).
     /// Consumers of `C`'s pin `0` are flipped to `I`'s pin `-1` (same node id).
     ///
-    /// **Phase 2: top level only** (`scope_path` must be empty); body-scoped
-    /// extraction lands in a later phase. See
+    /// Works both at the top level (`scope_path` empty) and inside a zone body
+    /// (`scope_path` = `[parent.., hof_id]` down to the body holding `C`); a
+    /// body-scope extraction collects captures across the full ancestor chain so
+    /// captures reaching above the host scope (`e >= 1`) resolve. See
     /// `doc/design_closure_network_conversion.md` (Direction B). Returns the
     /// instance node id (equal to `node_id`).
     pub fn extract_closure_to_network(
@@ -6612,12 +6646,7 @@ impl StructureDesigner {
         use super::closure_network_conversion as conv;
         use super::node_network::{Argument, Node};
 
-        // Phase 2 handles the top-level active network only.
-        if !scope_path.is_empty() {
-            return Err(
-                "Extract closure to network inside a zone body is not yet supported".to_string(),
-            );
-        }
+        let scoped = !scope_path.is_empty();
 
         // 1. Validate the network name (relaxed user-name rules) and uniqueness.
         if let Err(reason) = super::identifier::is_valid_user_name(network_name) {
@@ -6646,19 +6675,37 @@ impl StructureDesigner {
             .clone()
             .ok_or("No active network")?;
 
-        // 3. Snapshot BEFORE the extraction (for undo). Phase 2: top level only.
-        let before = self.snapshot_network(&host_name);
+        // 3. Snapshot BEFORE the extraction (for undo): the whole host network at
+        //    top level, or the host body when inside a zone body.
+        let before_top = if scoped {
+            None
+        } else {
+            self.snapshot_network(&host_name)
+        };
+        let before_body = if scoped {
+            self.snapshot_zone_body(&scope_path)
+        } else {
+            None
+        };
 
-        // 4. Build the extraction plan (reads `C` + the host scope `H`, builds `N`
-        //    with its interior caches populated). For top level the only ancestor
-        //    is `H` itself.
+        // 4. Build the extraction plan (reads `C` + the host ancestor chain,
+        //    builds `N` with its interior caches populated). `host_ancestors` is
+        //    `[H, parent, …, top]`: `H` first (external level 0), each enclosing
+        //    scope above it — so captures reaching above `H` (`e >= 1`) resolve.
+        //    At top level this is just `[H]`.
         let plan = {
+            let (ancestors, _hof_ids) = self
+                .get_scope_ancestors(&scope_path)
+                .ok_or("Scope not found")?;
             let target = self.get_scope_network(&scope_path).unwrap();
+            let mut host_ancestors: Vec<&NodeNetwork> = Vec::with_capacity(ancestors.len() + 1);
+            host_ancestors.push(target);
+            host_ancestors.extend(ancestors.iter().rev().copied());
             let c = target.nodes.get(&node_id).unwrap();
             conv::extract_network_from_closure(
                 c,
                 network_name,
-                &[target],
+                &host_ancestors,
                 &self.node_type_registry,
             )?
         };
@@ -6725,13 +6772,32 @@ impl StructureDesigner {
         }
 
         // 7. Validate `H` (revalidates `I` against the now-registered `N`).
-        //    Refresh paths do not validate.
+        //    Refresh paths do not validate. Validating the active network walks
+        //    its whole body tree, so a body-scoped `I` is covered too.
         self.validate_active_network();
 
-        // 8. Push undo command (Phase 2: top level — reuse FactorSelectionCommand,
-        //    which adds/removes the subnetwork and restores the source by name).
-        if let (Some(source_before), Some(source_after), Some(subnetwork_snap)) = (
-            before,
+        // 8. Push undo command. At top level reuse `FactorSelectionCommand`
+        //    (adds/removes the subnetwork, restores the source by name). Inside a
+        //    zone body use `ExtractClosureBodyCommand` — the same add/remove of
+        //    `N`, but the host is restored from a `ZoneBodySnapshot`.
+        if scoped {
+            if let (Some(body_before), Some(body_after), Some(subnetwork_snap)) = (
+                before_body,
+                self.snapshot_zone_body(&scope_path),
+                self.snapshot_network(network_name),
+            ) {
+                use super::undo::commands::extract_closure_body::ExtractClosureBodyCommand;
+                self.push_command(ExtractClosureBodyCommand {
+                    network_name: host_name.clone(),
+                    subnetwork_name: network_name.to_string(),
+                    subnetwork_snapshot: subnetwork_snap,
+                    scope_path: scope_path.clone(),
+                    body_before,
+                    body_after,
+                });
+            }
+        } else if let (Some(source_before), Some(source_after), Some(subnetwork_snap)) = (
+            before_top,
             self.snapshot_network(&host_name),
             self.snapshot_network(network_name),
         ) {

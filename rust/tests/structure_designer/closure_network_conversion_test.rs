@@ -13,13 +13,16 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::node_data::CustomNodeData;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_network::{
     Argument, IncomingWire, NodeDisplayState, NodeDisplayType, SourcePin,
 };
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::apply::ApplyData;
 use rust_lib_flutter_cad::structure_designer::nodes::closure::{ClosureData, ClosureKind};
 use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
+use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
 use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
@@ -1021,6 +1024,15 @@ fn convert_undo_redo_round_trip() {
     assert_eq!(after, vec![1, 2, 3]);
 }
 
+/// A `NetworkResult::Int` (the result of evaluating a terminal `fold`).
+fn extract_int(result: NetworkResult) -> i32 {
+    match result {
+        NetworkResult::Int(v) => v,
+        NetworkResult::Error(msg) => panic!("expected Int, got Error: {msg}"),
+        other => panic!("expected Int, got {}", other.to_display_string()),
+    }
+}
+
 // ============================================================================
 // Closure → Network (Phase 2, top level)
 // ============================================================================
@@ -1628,4 +1640,693 @@ fn extract_undo_redo_round_trip() {
         evaluate_node(&designer, "main", map_id),
     ));
     assert_eq!(after, vec![1, 2, 3]);
+}
+
+// ============================================================================
+// Phase 3 — body scope + e >= 1 captures
+// ============================================================================
+//
+// All Phase-3 scenarios place the conversion target inside a `fold` body. The
+// fold (over `[1,2,3]`, init `0`) applies a body function to each element via an
+// inline `apply` whose `f` reads that function value. For *Closure → Network*
+// the function is a `closure` C; for *Network → Closure* it is a custom-network
+// instance I used through its `-1` pin. The fold's numeric output therefore
+// exercises the converted function end-to-end, before and after the rewrite.
+
+/// Populate the custom-node-type cache for a node living inside `fold_id`'s body.
+fn populate_fold_body_node(
+    designer: &mut StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    node_id: u64,
+    refresh_args: bool,
+) {
+    let registry = &mut designer.node_type_registry;
+    let node = registry
+        .node_networks
+        .get_mut(network)
+        .unwrap()
+        .nodes
+        .get_mut(&fold_id)
+        .unwrap()
+        .zone_mut()
+        .unwrap()
+        .nodes
+        .get_mut(&node_id)
+        .unwrap();
+    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        &registry.built_in_node_types,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+        node,
+        refresh_args,
+    );
+}
+
+/// Add a node into `fold_id`'s body (positioned at `pos_y`) and populate its
+/// cache (`refresh_args = true`). Returns the new body node's id.
+fn add_node_to_fold_body(
+    designer: &mut StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    type_name: &str,
+    num_args: usize,
+    data: Box<dyn NodeData>,
+    pos_y: f64,
+) -> u64 {
+    let id = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut(network)
+            .unwrap()
+            .nodes
+            .get_mut(&fold_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        body.add_node(type_name, DVec2::new(0.0, pos_y), num_args, data)
+    };
+    populate_fold_body_node(designer, network, fold_id, id, true);
+    id
+}
+
+/// Create a `fold` over `[1,2,3]` with init `0` (Int element + accumulator) in
+/// `network`. Returns the fold node id.
+fn add_int_fold(designer: &mut StructureDesigner, network: &str) -> u64 {
+    let range_id = add_range(designer, network, 1, 1, 3, 0.0); // [1,2,3]
+    let init_id = add_int(designer, network, 0, 80.0);
+    let fold_id = designer.add_node("fold", DVec2::new(200.0, 0.0));
+    set_node_data(
+        designer,
+        network,
+        fold_id,
+        Box::new(FoldData {
+            element_type: DataType::Int,
+            accumulator_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, fold_id, 0); // xs
+    designer.connect_nodes(init_id, 0, fold_id, 1); // init
+    fold_id
+}
+
+/// Add a Map-kind `(Int) -> Int` `closure` C into `fold_id`'s body whose own
+/// body computes `expr` over `x` (= C's `element`) plus one expr param per
+/// `capture_names` entry. Wires `x` and the zone-output; leaves the capture arg
+/// slots **unwired** (the caller wires them at the depth it needs via
+/// [`push_closure_body_capture`]). Returns `(c_id, c_expr_id)`.
+fn add_closure_to_fold_body(
+    designer: &mut StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    expr: &str,
+    capture_names: &[&str],
+) -> (u64, u64) {
+    let c_id = add_node_to_fold_body(
+        designer,
+        network,
+        fold_id,
+        "closure",
+        0,
+        Box::new(ClosureData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
+            custom_label: None,
+        }),
+        0.0,
+    );
+
+    // Build C's body: `expr` over `x` + one Int param per capture name.
+    let c_expr_id = {
+        let c_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut(network)
+            .unwrap()
+            .nodes
+            .get_mut(&fold_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&c_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+
+        let mut expr_params: Vec<ExprParameter> = vec![ExprParameter {
+            id: None,
+            name: "x".to_string(),
+            data_type: DataType::Int,
+            data_type_str: None,
+        }];
+        for name in capture_names {
+            expr_params.push(ExprParameter {
+                id: None,
+                name: name.to_string(),
+                data_type: DataType::Int,
+                data_type_str: None,
+            });
+        }
+        let num_params = expr_params.len();
+        let mut expr_data = ExprData {
+            parameters: expr_params,
+            expression: expr.to_string(),
+            expr: None,
+            error: None,
+            output_type: None,
+        };
+        let _ = expr_data.parse_and_validate(0);
+        let expr_id = c_body.add_node(
+            "expr",
+            DVec2::new(50.0, 0.0),
+            num_params,
+            Box::new(expr_data),
+        );
+
+        // x <- C's `element` zone-input pin (depth 1, the immediately enclosing
+        // closure).
+        c_body.nodes.get_mut(&expr_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: c_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+
+        // C's zone-output (result) <- expr.
+        let c_node = designer
+            .node_type_registry
+            .node_networks
+            .get_mut(network)
+            .unwrap()
+            .nodes
+            .get_mut(&fold_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&c_id)
+            .unwrap();
+        if c_node.zone_output_arguments.is_empty() {
+            c_node.zone_output_arguments.push(Argument::new());
+        }
+        c_node.zone_output_arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: expr_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+        expr_id
+    };
+
+    // Populate C's body expr (refresh_args = false to preserve the wires above).
+    {
+        let registry = &mut designer.node_type_registry;
+        let expr_node = registry
+            .node_networks
+            .get_mut(network)
+            .unwrap()
+            .nodes
+            .get_mut(&fold_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&c_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&c_expr_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            expr_node,
+            false,
+        );
+    }
+
+    (c_id, c_expr_id)
+}
+
+/// Push a capture wire into C's body expr at `arg_index` (C lives in `fold_id`'s
+/// body). The wire is given as-seen-from-C's-body.
+fn push_closure_body_capture(
+    designer: &mut StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    c_id: u64,
+    c_expr_id: u64,
+    arg_index: usize,
+    wire: IncomingWire,
+) {
+    let expr_node = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap()
+        .nodes
+        .get_mut(&fold_id)
+        .unwrap()
+        .zone_mut()
+        .unwrap()
+        .nodes
+        .get_mut(&c_id)
+        .unwrap()
+        .zone_mut()
+        .unwrap()
+        .nodes
+        .get_mut(&c_expr_id)
+        .unwrap();
+    expr_node.arguments[arg_index].incoming_wires.push(wire);
+}
+
+/// Add an `apply` A into `fold_id`'s body that applies the function value on
+/// `(func_id, func_pin)` to the fold's `element`, feeding the fold's `new_acc`.
+/// Runs the apply post-pass so A's arg pins materialize, then wires `element`
+/// and the zone-output. Returns A's id.
+fn add_apply_to_fold_body(
+    designer: &mut StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    func_id: u64,
+    func_pin: i32,
+) -> u64 {
+    let a_id = add_node_to_fold_body(
+        designer,
+        network,
+        fold_id,
+        "apply",
+        1,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
+        }),
+        100.0,
+    );
+
+    // Wire A.f, run the apply post-pass to install the arg pins from the wired
+    // source's function type, then wire A.element. Split-borrow via a temporary
+    // remove/reinsert of the host network.
+    {
+        let mut net = designer
+            .node_type_registry
+            .node_networks
+            .remove(network)
+            .unwrap();
+        {
+            let body = net.nodes.get_mut(&fold_id).unwrap().zone_mut().unwrap();
+            body.nodes.get_mut(&a_id).unwrap().arguments[0]
+                .incoming_wires
+                .push(IncomingWire {
+                    source_node_id: func_id,
+                    source_pin: SourcePin::NodeOutput {
+                        pin_index: func_pin,
+                    },
+                    source_scope_depth: 0,
+                });
+            designer
+                .node_type_registry
+                .update_apply_pin_layouts_for_network(body);
+            body.nodes.get_mut(&a_id).unwrap().arguments[1]
+                .incoming_wires
+                .push(IncomingWire {
+                    source_node_id: fold_id,
+                    source_pin: SourcePin::ZoneInput { pin_index: 1 }, // element
+                    source_scope_depth: 1,
+                });
+        }
+        designer
+            .node_type_registry
+            .node_networks
+            .insert(network.to_string(), net);
+    }
+
+    // fold's zone-output (new_acc) <- A.
+    wire_body_node_to_zone_output(designer, network, fold_id, a_id);
+    a_id
+}
+
+/// The type name of a node living inside `fold_id`'s body.
+fn fold_body_node_type(
+    designer: &StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    node_id: u64,
+) -> String {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap()
+        .nodes
+        .get(&fold_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .node_type_name
+        .clone()
+}
+
+/// A wire on node `node_id` (argument `arg_index`) inside `fold_id`'s body.
+fn fold_body_instance_wire(
+    designer: &StructureDesigner,
+    network: &str,
+    fold_id: u64,
+    node_id: u64,
+    arg_index: usize,
+) -> IncomingWire {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap()
+        .nodes
+        .get(&fold_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .arguments[arg_index]
+        .incoming_wires[0]
+        .clone()
+}
+
+// ----------------------------------------------------------------------------
+// Closure → Network, inside a fold body
+// ----------------------------------------------------------------------------
+
+/// `e = 0` capture inside a body: the closure captures a constant living in the
+/// **same** fold body. After extraction the instance's capture pin is a normal
+/// same-scope wire (depth 0) to that constant; the fold's value is unchanged;
+/// undo restores the closure and removes the network.
+#[test]
+fn extract_in_body_capture_e0() {
+    let mut designer = setup_designer_with_network("main");
+    let fold_id = add_int_fold(&mut designer, "main");
+
+    // A constant living inside the fold body (host scope of the closure).
+    let body_const = add_node_to_fold_body(
+        &mut designer,
+        "main",
+        fold_id,
+        "int",
+        0,
+        Box::new(IntData { value: 5 }),
+        200.0,
+    );
+
+    let (c_id, c_expr_id) =
+        add_closure_to_fold_body(&mut designer, "main", fold_id, "x + cap", &["cap"]);
+    // cap <- body const (from C's body, the fold-body const is 1 frame up → e=0).
+    push_closure_body_capture(
+        &mut designer,
+        "main",
+        fold_id,
+        c_id,
+        c_expr_id,
+        1,
+        IncomingWire {
+            source_node_id: body_const,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 1,
+        },
+    );
+    add_apply_to_fold_body(&mut designer, "main", fold_id, c_id, 0);
+    designer.validate_active_network();
+
+    // Baseline: new_acc = element + 5; fold over [1,2,3] → 3 + 5 = 8.
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 8);
+
+    designer
+        .extract_closure_to_network(vec![fold_id], c_id, "addbody")
+        .expect("extraction should succeed");
+
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, c_id),
+        "addbody"
+    );
+    // Instance capture pin (index 1) is a normal same-scope wire (e = 0).
+    let cap = fold_body_instance_wire(&designer, "main", fold_id, c_id, 1);
+    assert_eq!(cap.source_node_id, body_const);
+    assert_eq!(cap.source_pin, SourcePin::NodeOutput { pin_index: 0 });
+    assert_eq!(
+        cap.source_scope_depth, 0,
+        "e = 0 capture is a same-scope wire"
+    );
+
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 8);
+
+    // Body undo: closure restored, network removed.
+    designer.undo();
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, c_id),
+        "closure"
+    );
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key("addbody"),
+        "undo removes the extracted network"
+    );
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 8);
+
+    designer.redo();
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, c_id),
+        "addbody"
+    );
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 8);
+}
+
+/// `e >= 1` `NodeOutput` capture: a closure in the fold body captures a
+/// **top-level** constant (one frame above the host body). After extraction the
+/// instance's capture wire has `source_scope_depth == 1`; the fold's value is
+/// unchanged.
+#[test]
+fn extract_in_body_capture_e1_node_output() {
+    let mut designer = setup_designer_with_network("main");
+    // Top-level constant captured from within the fold body's closure.
+    let top_const = add_int(&mut designer, "main", 100, -200.0);
+    let fold_id = add_int_fold(&mut designer, "main");
+
+    let (c_id, c_expr_id) =
+        add_closure_to_fold_body(&mut designer, "main", fold_id, "x + cap", &["cap"]);
+    // cap <- top-level const. From C's body: C-body → fold-body → main = depth 2.
+    push_closure_body_capture(
+        &mut designer,
+        "main",
+        fold_id,
+        c_id,
+        c_expr_id,
+        1,
+        IncomingWire {
+            source_node_id: top_const,
+            source_pin: SourcePin::NodeOutput { pin_index: 0 },
+            source_scope_depth: 2,
+        },
+    );
+    add_apply_to_fold_body(&mut designer, "main", fold_id, c_id, 0);
+    designer.validate_active_network();
+
+    // Baseline: new_acc = element + 100; fold over [1,2,3] → 3 + 100 = 103.
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 103);
+
+    designer
+        .extract_closure_to_network(vec![fold_id], c_id, "addtop")
+        .expect("extraction should succeed");
+
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, c_id),
+        "addtop"
+    );
+    // Instance capture wire reaches the top-level const at depth e = 1.
+    let cap = fold_body_instance_wire(&designer, "main", fold_id, c_id, 1);
+    assert_eq!(cap.source_node_id, top_const);
+    assert_eq!(cap.source_pin, SourcePin::NodeOutput { pin_index: 0 });
+    assert_eq!(
+        cap.source_scope_depth, 1,
+        "e = 1 capture wire on the instance"
+    );
+
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 103);
+}
+
+/// `e >= 1` `ZoneInput` capture: a closure in the fold body captures the fold's
+/// own `acc` iteration value. This is the subtlest case — the captured value
+/// must re-freeze per outer iteration. After extraction the instance carries a
+/// `ZoneInput` capture wire at depth `e = 1`, and the fold still evaluates to the
+/// running-sum result (not a frozen-once result).
+#[test]
+fn extract_in_body_capture_e1_zone_input() {
+    let mut designer = setup_designer_with_network("main");
+    let fold_id = add_int_fold(&mut designer, "main");
+
+    let (c_id, c_expr_id) =
+        add_closure_to_fold_body(&mut designer, "main", fold_id, "x + acc", &["acc"]);
+    // acc <- the fold's `acc` zone-input pin (index 0). From C's body the fold
+    // node is depth 2 (C-body → fold-body → main, where the fold node lives).
+    push_closure_body_capture(
+        &mut designer,
+        "main",
+        fold_id,
+        c_id,
+        c_expr_id,
+        1,
+        IncomingWire {
+            source_node_id: fold_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 0 }, // acc
+            source_scope_depth: 2,
+        },
+    );
+    add_apply_to_fold_body(&mut designer, "main", fold_id, c_id, 0);
+    designer.validate_active_network();
+
+    // Baseline: new_acc = element + acc; fold over [1,2,3] from 0 → 1,3,6.
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 6);
+
+    designer
+        .extract_closure_to_network(vec![fold_id], c_id, "addacc")
+        .expect("extraction should succeed");
+
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, c_id),
+        "addacc"
+    );
+    // Instance capture wire is a `ZoneInput` reference at depth e = 1.
+    let cap = fold_body_instance_wire(&designer, "main", fold_id, c_id, 1);
+    assert_eq!(cap.source_node_id, fold_id);
+    assert_eq!(cap.source_pin, SourcePin::ZoneInput { pin_index: 0 });
+    assert_eq!(
+        cap.source_scope_depth, 1,
+        "ZoneInput capture at depth e = 1"
+    );
+
+    // The per-iteration value must still be read live (re-frozen per outer
+    // iteration), so the running sum is preserved.
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 6);
+}
+
+/// `closure → network → closure` round trip with an `e >= 1` `ZoneInput`
+/// capture, inside a fold body. After extracting then converting back, the fold
+/// evaluates identically and the reconstructed body node is a closure again.
+#[test]
+fn round_trip_in_body_zone_input_capture() {
+    let mut designer = setup_designer_with_network("main");
+    let fold_id = add_int_fold(&mut designer, "main");
+
+    let (c_id, c_expr_id) =
+        add_closure_to_fold_body(&mut designer, "main", fold_id, "x + acc", &["acc"]);
+    push_closure_body_capture(
+        &mut designer,
+        "main",
+        fold_id,
+        c_id,
+        c_expr_id,
+        1,
+        IncomingWire {
+            source_node_id: fold_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 0 },
+            source_scope_depth: 2,
+        },
+    );
+    add_apply_to_fold_body(&mut designer, "main", fold_id, c_id, 0);
+    designer.validate_active_network();
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 6);
+
+    designer
+        .extract_closure_to_network(vec![fold_id], c_id, "addacc")
+        .expect("extraction should succeed");
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 6);
+
+    designer
+        .convert_instance_to_closure(vec![fold_id], c_id)
+        .expect("conversion back should succeed");
+
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, c_id),
+        "closure"
+    );
+    assert_eq!(
+        extract_int(evaluate_node(&designer, "main", fold_id)),
+        6,
+        "round trip preserves the per-iteration fold result"
+    );
+}
+
+// ----------------------------------------------------------------------------
+// Network → Closure, inside a fold body
+// ----------------------------------------------------------------------------
+
+/// Convert a custom-network instance used as a function inside a fold body. The
+/// body node becomes a `closure`, the `apply` consumer flips `-1 → 0`, the fold
+/// value is unchanged, and a body undo/redo round-trips.
+#[test]
+fn convert_in_body_basic_and_undo() {
+    let mut designer = setup_designer_with_network("main");
+    build_expr_network(&mut designer, "inc", &[("x", DataType::Int)], "x + 1", true);
+
+    let fold_id = add_int_fold(&mut designer, "main");
+
+    // An instance of `inc` inside the fold body, consumed through its `-1` pin.
+    let inst_id = add_node_to_fold_body(
+        &mut designer,
+        "main",
+        fold_id,
+        "inc",
+        1,
+        Box::new(CustomNodeData::default()),
+        0.0,
+    );
+    let a_id = add_apply_to_fold_body(&mut designer, "main", fold_id, inst_id, -1);
+    designer.validate_active_network();
+
+    // Baseline: inc.-1 = (Int) -> Int = x + 1; new_acc = element + 1; → 3 + 1 = 4.
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 4);
+
+    designer
+        .convert_instance_to_closure(vec![fold_id], inst_id)
+        .expect("conversion should succeed");
+
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, inst_id),
+        "closure"
+    );
+    // The apply's `f` wire flipped from the function pin (-1) to pin 0.
+    let f_wire = fold_body_instance_wire(&designer, "main", fold_id, a_id, 0);
+    assert_eq!(f_wire.source_node_id, inst_id);
+    assert_eq!(f_wire.source_pin, SourcePin::NodeOutput { pin_index: 0 });
+    assert_eq!(f_wire.source_scope_depth, 0);
+
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 4);
+
+    // Body undo restores the instance; redo re-applies the conversion.
+    designer.undo();
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, inst_id),
+        "inc"
+    );
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 4);
+
+    designer.redo();
+    assert_eq!(
+        fold_body_node_type(&designer, "main", fold_id, inst_id),
+        "closure"
+    );
+    assert_eq!(extract_int(evaluate_node(&designer, "main", fold_id)), 4);
 }

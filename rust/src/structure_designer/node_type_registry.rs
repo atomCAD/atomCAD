@@ -1263,18 +1263,37 @@ impl NodeTypeRegistry {
     /// dragging a function-typed wire into an `apply` inside a zone produced
     /// no arg pins — the layout stayed collapsed to the bare `f` pin.
     pub fn update_apply_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
-        self.update_apply_pin_layouts_scoped(network, &[], &[]);
+        self.update_apply_pin_layouts_scoped(network, &[], &[], true);
+    }
+
+    /// Like [`Self::update_apply_pin_layouts_for_network`], but installs the
+    /// derived layout with `refresh_args = false`, preserving the existing
+    /// `arguments` vector **positionally** rather than rebuilding it by pin
+    /// name. Used right after a `initialize_custom_node_types_for_network`
+    /// re-init (closure⇄network conversion, body-undo restore): that re-init
+    /// resets every `apply` to its bare `[f]` default, erasing the
+    /// post-pass-derived arg-pin names, so a subsequent by-name rebuild would
+    /// drop the (still-present) arg wires. Re-deriving the layout here with the
+    /// args kept in place restores the names so the *next* ordinary
+    /// (`refresh_args = true`) post-pass is a no-op. Safe because the caller's
+    /// `arguments` already matches the intended arity (a consistent
+    /// deserialized / copied graph).
+    pub fn update_apply_pin_layouts_for_network_preserving_args(&self, network: &mut NodeNetwork) {
+        self.update_apply_pin_layouts_scoped(network, &[], &[], false);
     }
 
     /// Scope-aware recursive worker for the apply post-pass. `ancestors` /
     /// `ancestor_hof_ids` describe `network`'s enclosing-zone chain using the
     /// same root-first indexing as `validate_zones_recursive` /
     /// `resolve_wire_source_type_scoped` (empty when `network` is top-level).
+    /// `refresh_args` is forwarded to `set_custom_node_type` (see
+    /// [`Self::update_apply_pin_layouts_for_network_preserving_args`]).
     fn update_apply_pin_layouts_scoped(
         &self,
         network: &mut NodeNetwork,
         ancestors: &[&NodeNetwork],
         ancestor_hof_ids: &[u64],
+        refresh_args: bool,
     ) {
         // Snapshot pass (immutable read).
         let apply_ids: Vec<u64> = network
@@ -1299,7 +1318,7 @@ impl NodeTypeRegistry {
         // Install pass (mutation).
         for (id, custom) in overrides {
             if let Some(node) = network.nodes.get_mut(&id) {
-                node.set_custom_node_type(Some(custom), true);
+                node.set_custom_node_type(Some(custom), refresh_args);
             }
         }
 
@@ -1325,7 +1344,12 @@ impl NodeTypeRegistry {
                 let mut new_hof_ids: Vec<u64> = ancestor_hof_ids.to_vec();
                 new_hof_ids.push(hof_id);
                 let body = std::sync::Arc::make_mut(&mut body_arc);
-                self.update_apply_pin_layouts_scoped(body, &new_ancestors, &new_hof_ids);
+                self.update_apply_pin_layouts_scoped(
+                    body,
+                    &new_ancestors,
+                    &new_hof_ids,
+                    refresh_args,
+                );
             }
             if let Some(node) = network.nodes.get_mut(&hof_id) {
                 node.zone = Some(body_arc);
@@ -1509,17 +1533,28 @@ impl NodeTypeRegistry {
     /// body-internal `map` whose `f` is wired — including from a cross-scope
     /// capture or a zone-input pin — derives its layout too.
     pub fn update_map_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
-        self.update_map_pin_layouts_scoped(network, &[], &[]);
+        self.update_map_pin_layouts_scoped(network, &[], &[], true);
+    }
+
+    /// `refresh_args = false` counterpart of
+    /// [`Self::update_map_pin_layouts_for_network`] — see
+    /// [`Self::update_apply_pin_layouts_for_network_preserving_args`] for why
+    /// the conversion / body-undo restore paths re-derive layouts without
+    /// rebuilding the arguments vector.
+    pub fn update_map_pin_layouts_for_network_preserving_args(&self, network: &mut NodeNetwork) {
+        self.update_map_pin_layouts_scoped(network, &[], &[], false);
     }
 
     /// Scope-aware recursive worker for the map post-pass. See
     /// [`Self::update_apply_pin_layouts_scoped`] for the chain convention and
-    /// the take-and-restore borrow-split rationale.
+    /// the take-and-restore borrow-split rationale. `refresh_args` is forwarded
+    /// to `set_custom_node_type`.
     fn update_map_pin_layouts_scoped(
         &self,
         network: &mut NodeNetwork,
         ancestors: &[&NodeNetwork],
         ancestor_hof_ids: &[u64],
+        refresh_args: bool,
     ) {
         // Snapshot pass (immutable read). Recompute *every* map node's
         // custom_node_type so disconnecting `f` restores the MapData-driven
@@ -1548,7 +1583,7 @@ impl NodeTypeRegistry {
         // Install pass (mutation).
         for (id, custom) in updates {
             if let Some(node) = network.nodes.get_mut(&id) {
-                node.set_custom_node_type(Some(custom), true);
+                node.set_custom_node_type(Some(custom), refresh_args);
             }
         }
 
@@ -1571,7 +1606,12 @@ impl NodeTypeRegistry {
                 let mut new_hof_ids: Vec<u64> = ancestor_hof_ids.to_vec();
                 new_hof_ids.push(hof_id);
                 let body = std::sync::Arc::make_mut(&mut body_arc);
-                self.update_map_pin_layouts_scoped(body, &new_ancestors, &new_hof_ids);
+                self.update_map_pin_layouts_scoped(
+                    body,
+                    &new_ancestors,
+                    &new_hof_ids,
+                    refresh_args,
+                );
             }
             if let Some(node) = network.nodes.get_mut(&hof_id) {
                 node.zone = Some(body_arc);

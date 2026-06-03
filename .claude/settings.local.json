@@ -254,7 +254,8 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\\\\structure_designer\\\\undo\\\\commands\" -File)",
       "Bash(Select-Object -ExpandProperty Name)",
-      "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\" -Directory)"
+      "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\" -Directory)",
+      "Bash(perl -0pi -e 's/\\\\n#\\\\[allow\\\\\\(dead_code\\\\\\)\\\\]\\\\s*$//' tests/structure_designer/closure_network_conversion_test.rs)"
     ]
   }
 }

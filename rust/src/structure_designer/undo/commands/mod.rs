@@ -13,6 +13,7 @@ pub mod delete_record_type_def;
 pub mod delete_wires;
 pub mod duplicate_node;
 pub mod edit_zone_body;
+pub mod extract_closure_body;
 pub mod factor_selection;
 pub mod inline_node;
 pub mod motif_edit_property;
