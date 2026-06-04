@@ -214,6 +214,14 @@ fn dedup_name(target: &NodeNetwork, desired: &str) -> String {
 /// network that contains an expanded HOF leaves too little room and the copied
 /// content overlaps existing parent nodes. A collapsed HOF falls back to the
 /// regular size (it renders as a regular-node footprint).
+///
+/// The body dimensions fed to [`node_layout::estimate_hof_node_size`] come from
+/// [`rendered_body_size`], which measures the body's **actual content**
+/// (recursing into nested HOFs) rather than trusting the stored
+/// `body_width`/`body_height`. The stored values are only a floor — a freshly
+/// built `closure` carries the flat `DEFAULT_BODY_*` even when its body holds
+/// nested zone nodes (a `map`, another `closure`) that render far wider, so
+/// trusting them would undersize the node and leave neighbours overlapping.
 fn estimate_node_size_in_network(node: &Node, registry: &NodeTypeRegistry) -> DVec2 {
     let node_type = registry.get_node_type_for_node(node);
     let (n_in, n_out) = node_type
@@ -224,19 +232,56 @@ fn estimate_node_size_in_network(node: &Node, registry: &NodeTypeRegistry) -> DV
         && nt.has_zone()
         && !resolve_body_collapsed(node, nt)
     {
+        let (body_width, body_height) = rendered_body_size(node, registry);
         return node_layout::estimate_hof_node_size(
             n_in,
             n_out,
             nt.zone_input_pins.len(),
             nt.zone_output_pins.len(),
-            node.body_width,
-            node.body_height,
+            body_width,
+            body_height,
             true,
             node.node_type_name == "closure",
         );
     }
 
     node_layout::estimate_node_size(n_in, n_out, true)
+}
+
+/// Rendered body-region size (logical) of an expanded zone-owning node,
+/// mirroring Flutter's `_computeBodySize` (`scope_resolver.dart`):
+/// `max(content_extent + padding, stored)`, where each body node's footprint is
+/// its **rendered** size — recursing into nested HOFs via
+/// [`estimate_node_size_in_network`]. The content extent is measured from the
+/// body-local origin (rightmost / bottommost edge), matching Flutter and the
+/// fact that [`copy_content_into`] anchors freshly-copied body content at the
+/// origin.
+///
+/// Without the recursion, a body containing a nested expanded HOF is undersized
+/// by that inner HOF's entire footprint, so the space-made for the outer node
+/// falls short and it overlaps its neighbours — the closure-conversion bug this
+/// addresses.
+fn rendered_body_size(node: &Node, registry: &NodeTypeRegistry) -> (f64, f64) {
+    let stored_width = node.body_width;
+    let stored_height = node.body_height;
+    let Some(body) = node.zone.as_deref() else {
+        return (stored_width, stored_height);
+    };
+
+    let mut max_right = 0.0_f64;
+    let mut max_bottom = 0.0_f64;
+    for child in body.nodes.values() {
+        let size = estimate_node_size_in_network(child, registry);
+        max_right = max_right.max(child.position.x + size.x);
+        max_bottom = max_bottom.max(child.position.y + size.y);
+    }
+
+    let content_width = max_right + node_layout::HOF_BODY_BOTTOM_PADDING;
+    let content_height = max_bottom + node_layout::HOF_BODY_BOTTOM_PADDING;
+    (
+        content_width.max(stored_width),
+        content_height.max(stored_height),
+    )
 }
 
 /// Estimated size of the custom-node *instance* that is being inlined. Equal to

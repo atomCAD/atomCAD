@@ -6535,6 +6535,7 @@ impl StructureDesigner {
         node_id: u64,
     ) -> Result<(), String> {
         use super::closure_network_conversion as conv;
+        use super::node_inlining;
 
         let scoped = !scope_path.is_empty();
 
@@ -6604,15 +6605,42 @@ impl StructureDesigner {
             conv::build_closure_from_instance(instance, &source, &self.node_type_registry)?
         };
 
-        // 7. Replace `I` with `C` (same id), redirect `-1` consumers to pin `0`,
-        //    and drop any stale display state (C's pin 0 is a Function — no
-        //    viewport output).
+        // 6b. Placement geometry for make-space (immutable registry borrow, taken
+        //     before the mutable target borrow below). `C` renders far larger
+        //     than the instance it replaces — its body shows the inlined network,
+        //     including nested zone nodes — so the lower-right region must be
+        //     pushed out or `C` overlaps its neighbours (e.g. a downstream
+        //     `collect`). The closure's size is measured from its actual body
+        //     content (`instance_size` → `rendered_body_size`), not its flat
+        //     `DEFAULT_BODY_*` placeholder.
+        let closure_size = node_inlining::instance_size(&closure_node, &self.node_type_registry);
+        let (anchor, original_size, node_sizes) = {
+            let target = self.get_scope_network(&scope_path).unwrap();
+            let instance = target.nodes.get(&node_id).unwrap();
+            (
+                instance.position,
+                node_inlining::instance_size(instance, &self.node_type_registry),
+                node_inlining::estimate_network_node_sizes(target, &self.node_type_registry),
+            )
+        };
+
+        // 7. Replace `I` with `C` (same id), make room for the larger closure,
+        //    redirect `-1` consumers to pin `0`, and drop any stale display state
+        //    (C's pin 0 is a Function — no viewport output).
         {
             let target = self
                 .get_scope_network_mut(&scope_path)
                 .ok_or("Scope not found")?;
             target.nodes.insert(node_id, closure_node);
             target.displayed_nodes.remove(&node_id);
+            node_inlining::make_space_for_inline(
+                target,
+                node_id,
+                anchor,
+                original_size,
+                closure_size,
+                &node_sizes,
+            );
             conv::redirect_function_consumers(target, node_id);
         }
 

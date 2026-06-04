@@ -21,6 +21,7 @@ use rust_lib_flutter_cad::structure_designer::node_network::{
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::apply::ApplyData;
 use rust_lib_flutter_cad::structure_designer::nodes::closure::{ClosureData, ClosureKind};
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
@@ -175,6 +176,28 @@ fn add_map(
         Box::new(MapData {
             input_type,
             output_type,
+        }),
+    );
+    id
+}
+
+/// Add a `collect` (terminal `Iter[T] → Array[T]`) node at an explicit position.
+fn add_collect(
+    designer: &mut StructureDesigner,
+    network: &str,
+    element_type: DataType,
+    x: f64,
+    y: f64,
+) -> u64 {
+    let id = designer.add_node("collect", DVec2::new(x, y));
+    set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(CollectData {
+            element_type,
+            limit: None,
+            offset: 0,
         }),
     );
     id
@@ -1022,6 +1045,120 @@ fn convert_undo_redo_round_trip() {
         evaluate_node(&designer, "main", map_id),
     ));
     assert_eq!(after, vec![1, 2, 3]);
+}
+
+/// Build and register `mynet(values: Iter[Int]) -> Iter[Int]` whose body is a
+/// single (expanded) `map` HOF fed by the parameter — so an instance converted
+/// to a closure has a **nested zone** inside its body. Leaves `main` active.
+fn build_nested_zone_network(designer: &mut StructureDesigner, name: &str) -> u64 {
+    designer.add_node_network(name);
+    designer.set_active_node_network_name(Some(name.to_string()));
+
+    let values_pid = designer.add_node("parameter", DVec2::new(0.0, 0.0));
+    designer.set_node_network_data(
+        values_pid,
+        Box::new(ParameterData {
+            param_id: None,
+            param_index: 0,
+            param_name: "values".to_string(),
+            data_type: DataType::Iterator(Box::new(DataType::Int)),
+            sort_order: 0,
+            data_type_str: None,
+            error: None,
+        }),
+    );
+    let map_id = add_map(designer, name, DataType::Int, DataType::Int, 0.0);
+    designer.connect_nodes(values_pid, 0, map_id, 0); // values -> map.xs
+    designer.set_return_node_id(Some(map_id));
+    designer.validate_active_network();
+
+    designer.set_active_node_network_name(Some("main".to_string()));
+    map_id
+}
+
+/// Regression (`hey.cnnd`): converting a custom-network instance whose body
+/// contains a **nested expanded HOF** must (a) size the new closure from its
+/// *actual* body content — the nested zone — not the flat `DEFAULT_BODY_*`, and
+/// (b) make room by pushing the lower-right neighbours out, so a downstream
+/// `collect` does not overlap the (much larger) closure. Before the fix the
+/// conversion never made space and the closure's size ignored nested zones.
+#[test]
+fn convert_nested_zone_closure_makes_space() {
+    use rust_lib_flutter_cad::structure_designer::node_inlining;
+
+    let mut designer = setup_designer_with_network("main");
+
+    // A nested-zone network and a flat one (plain `expr` return, no nested HOF)
+    // to use as a sizing baseline.
+    build_nested_zone_network(&mut designer, "mynet");
+    build_expr_network(
+        &mut designer,
+        "flat",
+        &[("x", DataType::Int)],
+        "x + 1",
+        true,
+    );
+
+    // Instance of the nested-zone network, with a `collect` placed just past its
+    // right edge (close enough to overlap once it balloons into a closure).
+    let inst_x = 800.0;
+    let inst_id = designer.add_node("mynet", DVec2::new(inst_x, 300.0));
+    let collect_x_before = 1000.0;
+    let collect_id = add_collect(
+        &mut designer,
+        "main",
+        DataType::Int,
+        collect_x_before,
+        300.0,
+    );
+
+    // A flat instance well clear of everything, for the sizing baseline.
+    let flat_inst_id = designer.add_node("flat", DVec2::new(800.0, 1000.0));
+
+    designer
+        .convert_instance_to_closure(vec![], inst_id)
+        .expect("nested-zone conversion should succeed");
+    designer
+        .convert_instance_to_closure(vec![], flat_inst_id)
+        .expect("flat conversion should succeed");
+    assert_eq!(node_type_name(&designer, "main", inst_id), "closure");
+
+    let registry = &designer.node_type_registry;
+    let main = registry.node_networks.get("main").unwrap();
+    let closure = main.nodes.get(&inst_id).unwrap();
+    let flat_closure = main.nodes.get(&flat_inst_id).unwrap();
+    let collect = main.nodes.get(&collect_id).unwrap();
+
+    let nested_size = node_inlining::instance_size(closure, registry);
+    let flat_size = node_inlining::instance_size(flat_closure, registry);
+
+    // (a) The nested-zone closure is sized from its inner `map`'s footprint, so
+    //     it is materially wider than a flat closure (whose body is the bare
+    //     default). If `rendered_body_size` ignored the nested zone, both would
+    //     collapse to the same default-body width.
+    assert!(
+        nested_size.x > flat_size.x + 100.0,
+        "nested-zone closure ({}) should be much wider than flat closure ({})",
+        nested_size.x,
+        flat_size.x
+    );
+
+    // (b) `collect` was pushed right (space was made — the conversion ran
+    //     `make_space_for_inline`).
+    assert!(
+        collect.position.x > collect_x_before,
+        "collect should be shifted right; before {collect_x_before}, after {}",
+        collect.position.x
+    );
+
+    // (c) No overlap: `collect`'s left edge clears the closure's right edge,
+    //     using the same recursive size the layout actually renders.
+    assert!(
+        collect.position.x >= closure.position.x + nested_size.x,
+        "collect (x={}) overlaps the closure (right edge {})",
+        collect.position.x,
+        closure.position.x + nested_size.x
+    );
 }
 
 /// A `NetworkResult::Int` (the result of evaluating a terminal `fold`).

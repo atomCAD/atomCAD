@@ -112,6 +112,11 @@ const HOF_BODY_RIGHT_GUTTER: f64 = 70.0;
 /// its `Function` output renders in the title bar).
 const CLOSURE_BODY_LEFT_PAD: f64 = 16.0;
 const CLOSURE_BODY_RIGHT_PAD: f64 = 16.0;
+/// Padding added to a body region's content bounding box (right and bottom)
+/// before it is compared against the stored body size. Matches Flutter's
+/// `BASE_HOF_BODY_BOTTOM_PADDING` in `node_network.dart`, used by
+/// `_computeBodySize` (`scope_resolver.dart`).
+pub const HOF_BODY_BOTTOM_PADDING: f64 = 8.0;
 
 /// Estimates the full (width, height) of a higher-order-function / zone-owning
 /// node whose body region is **expanded** (not collapsed).
