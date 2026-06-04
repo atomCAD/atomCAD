@@ -48,7 +48,15 @@ pub fn check_promote_eligibility(
     match resolved {
         DataType::Function(_) => Err("Cannot promote: functions cannot be parameters".to_string()),
         DataType::Unit => Err("Cannot promote: Unit values cannot be parameters".to_string()),
-        DataType::Iterator(_) => Err("Cannot promote: iterators cannot be parameters".to_string()),
+        // `Iter[T]` parameters are allowed. Custom networks already accept
+        // `Iter[T]` input pins, and per-read independent walker clones
+        // (Invariant 2, no pin-result memoization) make multi-consumer fan-out
+        // well-defined — see `doc/design_iterators.md` (Invariant 3: the
+        // top-level-parameter restriction is deliberate v1 conservatism, not a
+        // soundness issue, and is enforced at the CLI/API *binding* layer). The
+        // genuine aliasing hazard — capturing an `Iter[T]` into a closure — is
+        // a separate rule enforced by the network validator regardless of how
+        // the iterator value is produced, so promotion does not weaken it.
         DataType::None => Err("Cannot promote: invalid type".to_string()),
         t => Ok(t),
     }
