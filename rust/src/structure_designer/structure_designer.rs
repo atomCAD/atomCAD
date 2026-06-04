@@ -6307,6 +6307,125 @@ impl StructureDesigner {
         Ok(new_node_id)
     }
 
+    /// One reflow step at `scope_path` for `node_id`, which has just grown in
+    /// place from `old_sizes[0]`. Re-estimates the node's new rendered size; if
+    /// it grew, pushes the surrounding nodes in its own network out of the way
+    /// (via [`node_inlining::make_space_for_inline`]) and records the moves. If
+    /// that network is itself a zone body whose own footprint grew past its
+    /// stored size, the cascade recurses one scope up with the enclosing HOF as
+    /// the node. Returns one [`ScopedMoves`] per scope that actually moved nodes
+    /// (empty if nothing grew).
+    ///
+    /// CONTRACT: `node_id` MUST be a member of `network(scope_path)`. For in-body
+    /// growth that has no in-place growth at `scope_path` itself (Case C in the
+    /// design doc), the caller starts one scope up — passing the parent scope
+    /// and the body-owning HOF as `node_id`.
+    ///
+    /// Every `old_sizes[k]` must be the footprint **captured before the edit**:
+    /// by the time reflow runs the bodies have already grown, so the *before*
+    /// sizes cannot be re-derived. `old_sizes[0]` is `node_id`'s pre-edit size;
+    /// `old_sizes[k]` (k ≥ 1) is the pre-edit size of the ancestor HOF reached
+    /// after the k-th cascade step. The slice need only be as long as the cascade
+    /// can actually climb; a too-short slice simply stops the cascade early.
+    ///
+    /// This is the spatial primitive of `doc/design_reflow_on_footprint_change.md`
+    /// — it only moves nodes; the caller bundles the returned moves into
+    /// `MoveNodesCommand`s in the same undo step as the triggering edit.
+    pub fn reflow_for_footprint_change(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        old_sizes: &[DVec2],
+    ) -> Vec<ScopedMoves> {
+        use super::node_inlining::{
+            estimate_network_node_sizes, instance_size, make_space_for_inline,
+        };
+
+        let mut out: Vec<ScopedMoves> = Vec::new();
+        let mut path: Vec<u64> = scope_path.to_vec();
+        let mut nid = node_id;
+        let mut step = 0usize;
+
+        loop {
+            // The caller-supplied pre-edit footprint for this scope level. A
+            // too-short slice stops the cascade gracefully.
+            let Some(old) = old_sizes.get(step).copied() else {
+                break;
+            };
+
+            // Immutable phase: estimate the grown node's new size and, only if it
+            // actually grew, capture the sibling positions + per-node sizes
+            // make_space needs. The registry and the resolved network are both
+            // borrowed immutably here; the mutable borrow is taken below.
+            let prep = {
+                let Some(net) = self.get_scope_network(&path) else {
+                    break;
+                };
+                let Some(node) = net.nodes.get(&nid) else {
+                    break;
+                };
+                let anchor = node.position;
+                let new = instance_size(node, &self.node_type_registry);
+                let delta = (new - old).max(DVec2::ZERO);
+                if delta.x == 0.0 && delta.y == 0.0 {
+                    // Growth fully absorbed by this scope's existing slack — the
+                    // cascade can climb no further.
+                    None
+                } else {
+                    let node_sizes = estimate_network_node_sizes(net, &self.node_type_registry);
+                    let before: Vec<(u64, DVec2)> = net
+                        .nodes
+                        .iter()
+                        .filter(|&(&id, _)| id != nid)
+                        .map(|(&id, n)| (id, n.position))
+                        .collect();
+                    Some((anchor, new, node_sizes, before))
+                }
+            };
+
+            let Some((anchor, new, node_sizes, before)) = prep else {
+                break;
+            };
+
+            // Mutable phase: make space, then diff the captured before-positions
+            // against the post-move positions to build (id, old_pos, new_pos).
+            let moves = {
+                let Some(net) = self.get_scope_network_mut(&path) else {
+                    break;
+                };
+                make_space_for_inline(net, nid, anchor, old, new, &node_sizes);
+                before
+                    .into_iter()
+                    .filter_map(|(id, old_pos)| {
+                        let new_pos = net.nodes.get(&id)?.position;
+                        (new_pos != old_pos).then_some((id, old_pos, new_pos))
+                    })
+                    .collect::<Vec<(u64, DVec2, DVec2)>>()
+            };
+
+            if !moves.is_empty() {
+                out.push(ScopedMoves {
+                    scope_path: path.clone(),
+                    moves,
+                });
+            }
+
+            if path.is_empty() {
+                // Reached the top-level network — nothing further up.
+                break;
+            }
+
+            // Cascade one scope up: the body `net` (owned by HOF `path.last()`)
+            // grew, so that HOF grows in its parent network.
+            let len = path.len();
+            nid = path[len - 1];
+            path.truncate(len - 1);
+            step += 1;
+        }
+
+        out
+    }
+
     /// Inlines a custom-network instance: replaces the single node `node_id`
     /// (whose `node_type_name` resolves to a user network `N`) with a copy of
     /// `N`'s contents, spliced into the parent network in place. The named
@@ -7245,6 +7364,18 @@ fn clear_selection_except_recursive(network: &mut NodeNetwork, keep_scope_path: 
             }
         }
     }
+}
+
+/// The neighbour moves [`StructureDesigner::reflow_for_footprint_change`]
+/// applied in one network. Each entry maps directly onto a `MoveNodesCommand`:
+/// `scope_path` is the network the moves apply to (resolved on undo/redo via
+/// `UndoContext::network_in_scope_mut`), and `moves` is `(id, old_pos, new_pos)`
+/// for every neighbour that actually shifted (the grown node itself is never
+/// listed). See `doc/design_reflow_on_footprint_change.md`.
+#[derive(Debug, Clone)]
+pub struct ScopedMoves {
+    pub scope_path: Vec<u64>,
+    pub moves: Vec<(u64, DVec2, DVec2)>,
 }
 
 /// Walk `network` along `node_ref.scope_path` and return the data for the

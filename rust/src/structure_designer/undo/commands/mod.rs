@@ -4,6 +4,7 @@ pub mod add_record_type_def;
 pub mod atom_edit_mutation;
 pub mod atom_edit_set_tolerance;
 pub mod atom_edit_toggle_flag;
+pub mod composite;
 pub mod connect_wire;
 pub mod convert_to_closure;
 pub mod delete_namespace;

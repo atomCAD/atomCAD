@@ -16,6 +16,32 @@ pub enum UndoRefreshMode {
     Full,
 }
 
+/// Fold a sequence of child refresh modes into the single mode a
+/// [`CompositeCommand`](commands::composite::CompositeCommand) should report:
+/// the strongest child wins. Any `Full` ⇒ `Full`; otherwise the union of all
+/// `NodeDataChanged` id-lists (a `Lightweight` contributes nothing); otherwise
+/// `Lightweight`. This guarantees a child's heavier refresh is never downgraded
+/// to a sibling's lighter one. See `doc/design_reflow_on_footprint_change.md`.
+pub fn combine_refresh_modes(modes: impl IntoIterator<Item = UndoRefreshMode>) -> UndoRefreshMode {
+    let mut node_ids: Vec<u64> = Vec::new();
+    let mut saw_node_data = false;
+    for mode in modes {
+        match mode {
+            UndoRefreshMode::Full => return UndoRefreshMode::Full,
+            UndoRefreshMode::NodeDataChanged(ids) => {
+                saw_node_data = true;
+                node_ids.extend(ids);
+            }
+            UndoRefreshMode::Lightweight => {}
+        }
+    }
+    if saw_node_data {
+        UndoRefreshMode::NodeDataChanged(node_ids)
+    } else {
+        UndoRefreshMode::Lightweight
+    }
+}
+
 /// Focused context passed to undo/redo methods.
 ///
 /// Avoids passing all of StructureDesigner (which owns the UndoStack,
