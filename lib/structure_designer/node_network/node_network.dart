@@ -1523,15 +1523,20 @@ class NodeNetworkState extends State<NodeNetwork> {
                   return KeyEventResult.ignored;
                 }
 
-                final selectedNodeId = model.getSelectedNodeId();
-                if (selectedNodeId == null) {
+                // Resolve the selection together with its scope chain so
+                // duplicate works for a node selected inside a zone body — a
+                // body node and a top-level node can share a numeric id, so the
+                // id alone is ambiguous (see `rust/AGENTS.md` §"Addressing
+                // Nodes Across Scopes"). `getSelectedNodeId()` only searches the
+                // top level, which is why Ctrl+D used to silently do nothing
+                // inside a zone.
+                final selected = model.getSelectedNodeWithScope();
+                if (selected == null) {
                   return KeyEventResult.ignored;
                 }
 
-                // Active body's scope drives every keyboard shortcut per
-                // `doc/design_zones_ui.md` §"Phase U2 → activeScopeChain".
-                model.duplicateNode(selectedNodeId,
-                    scopeChain: model.activeScopeChain);
+                model.duplicateNode(selected.nodeId,
+                    scopeChain: selected.scopeChain);
                 return KeyEventResult.handled;
               }
               // Ctrl+C: Copy selection

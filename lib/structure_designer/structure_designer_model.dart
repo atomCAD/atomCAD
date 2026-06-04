@@ -1186,6 +1186,65 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
+  /// Find the currently selected node together with the scope chain of the
+  /// body it lives in. Unlike [getSelectedNodeId] (top-level only), this
+  /// descends into HOF zone bodies, so a selection inside a zone resolves
+  /// correctly. Prefers the active body's selection, then falls back to a full
+  /// tree walk. Returns null if nothing is selected.
+  ///
+  /// Keyboard shortcuts that act on a single node (e.g. Ctrl+D duplicate) use
+  /// this so they address the right node — a body node and a top-level node can
+  /// share a numeric id (per-body `next_node_id` counters), so the node id is
+  /// only meaningful together with its scope chain.
+  ({BigInt nodeId, List<BigInt> scopeChain})? getSelectedNodeWithScope() {
+    final view = nodeNetworkView;
+    if (view == null) return null;
+    // Active body first: if the user clicked into a body, that body's
+    // selected node is the one keyboard shortcuts should act on.
+    if (activeScopeChain.isNotEmpty) {
+      Map<BigInt, NodeView> current = view.nodes;
+      bool valid = true;
+      for (final hofId in activeScopeChain) {
+        final zone = current[hofId]?.zone;
+        if (zone == null) {
+          valid = false;
+          break;
+        }
+        current = zone.nodes;
+      }
+      if (valid) {
+        for (final entry in current.entries) {
+          if (entry.value.selected) {
+            return (nodeId: entry.key, scopeChain: activeScopeChain);
+          }
+        }
+      }
+    }
+    // Fall back: walk the whole scope tree, tracking the scope chain.
+    return _findSelectedNodeWithScope(view.nodes, const <BigInt>[]);
+  }
+
+  ({BigInt nodeId, List<BigInt> scopeChain})? _findSelectedNodeWithScope(
+    Map<BigInt, NodeView> nodes,
+    List<BigInt> scopeChain,
+  ) {
+    for (final entry in nodes.entries) {
+      if (entry.value.selected) {
+        return (nodeId: entry.key, scopeChain: scopeChain);
+      }
+    }
+    for (final entry in nodes.entries) {
+      final zone = entry.value.zone;
+      if (zone == null) continue;
+      final inner = _findSelectedNodeWithScope(
+        zone.nodes,
+        [...scopeChain, entry.key],
+      );
+      if (inner != null) return inner;
+    }
+    return null;
+  }
+
   bool renameNodeNetwork(String oldName, String newName) {
     final success = structure_designer_api.renameNodeNetwork(
       oldName: oldName,

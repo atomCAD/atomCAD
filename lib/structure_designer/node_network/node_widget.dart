@@ -1741,7 +1741,9 @@ class NodeWidget extends StatelessWidget {
       } else if (value == 'duplicate') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
-        model.duplicateNode(node.id);
+        // Pass the node's own scope so Duplicate works inside zone bodies, not
+        // just the top-level network.
+        model.duplicateNode(node.id, scopeChain: scopeChain);
       } else if (value == 'copy') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
