@@ -643,7 +643,19 @@ impl NetworkResult {
             // Single-value broadcast. Skip if source is itself an iterator —
             // the only valid Iter→Iter form is identity (already handled), and
             // anything else is rejected at validation; fall through.
-            if !matches!(source_type, DataType::Iterator(_)) {
+            //
+            // We must guard on the *runtime value* as well as the declared
+            // `source_type`, not just the latter: when an `Iter[T]` value flows
+            // through a `ZoneInput` whose owning node isn't an HOF (e.g. a custom
+            // network used through its function pin), the source type can't be
+            // resolved statically and falls back to `infer_data_type()`, which
+            // returns `None` for an iterator value. Without this guard the live
+            // iterator would be broadcast into a one-element stream, so a
+            // downstream `map`/`filter` would see the whole iterator as its
+            // single element. Pass the iterator through unchanged instead.
+            if !matches!(source_type, DataType::Iterator(_))
+                && !matches!(self, NetworkResult::Iterator(_))
+            {
                 let converted = self.convert_to(source_type, target_element_type, registry);
                 return NetworkResult::Iterator(Walker::from_array(vec![converted]));
             }

@@ -255,7 +255,18 @@
       "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\\\\structure_designer\\\\undo\\\\commands\" -File)",
       "Bash(Select-Object -ExpandProperty Name)",
       "Bash(Get-ChildItem -Path \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\rust\\\\src\" -Directory)",
-      "Bash(perl -0pi -e 's/\\\\n#\\\\[allow\\\\\\(dead_code\\\\\\)\\\\]\\\\s*$//' tests/structure_designer/closure_network_conversion_test.rs)"
+      "Bash(perl -0pi -e 's/\\\\n#\\\\[allow\\\\\\(dead_code\\\\\\)\\\\]\\\\s*$//' tests/structure_designer/closure_network_conversion_test.rs)",
+      "Bash(perl -0pi -e 's/\\\\n#\\\\[path = \"structure_designer\\\\/hey_debug_test\\\\.rs\"\\\\]\\\\nmod hey_debug_test;\\\\n//' tests/structure_designer.rs)",
+      "Read(//c/Users/Ádám Nagy/.claude/projects/C--machine-phase-systems-flutter-cad/memory/**)",
+      "Bash(printf -- '- [apply function-pin + Iter[T] param fix]\\(project_apply_function_pin_iter_fix.md\\) — broadcast guard checks runtime Iterator value; apply arg wires preserved positionally on load \\(repair_node_network + validate_network reorder\\).\\\\n')",
+      "Bash(chmod +x /tmp/mut_run.sh)",
+      "Bash(/tmp/mut_run.sh)",
+      "Bash(perl -0pi -e 's{node_type_registry\\\\.update_apply_pin_layouts_for_network_preserving_args\\\\\\(network\\\\\\);}{/*MUT*/ let _ = &network;}' src/structure_designer/network_validator.rs)",
+      "Bash(perl -0pi -e 's{/\\\\*MUT\\\\*/ let _ = &network;}{node_type_registry.update_apply_pin_layouts_for_network_preserving_args\\(network\\);}' src/structure_designer/network_validator.rs)",
+      "Bash(perl -0pi -e 's{update_apply_pin_layouts_for_network_preserving_args}{update_apply_pin_layouts_for_network}; s{update_map_pin_layouts_for_network_preserving_args}{update_map_pin_layouts_for_network}' src/structure_designer/network_validator.rs)",
+      "Bash(perl -0pi -e 's{update_apply_pin_layouts_for_network\\\\\\(network\\\\\\)}{update_apply_pin_layouts_for_network_preserving_args\\(network\\)}; s{update_map_pin_layouts_for_network\\\\\\(network\\\\\\)}{update_map_pin_layouts_for_network_preserving_args\\(network\\)}' src/structure_designer/network_validator.rs)",
+      "Bash(perl -0pi -e 's{let refresh_args = node\\\\.node_type_name != \"apply\";}{let refresh_args = true;}; s{self\\\\.update_apply_pin_layouts_for_network_preserving_args\\\\\\(network\\\\\\);}{self.update_apply_pin_layouts_for_network\\(network\\);}' src/structure_designer/node_type_registry.rs)",
+      "Bash(perl -0pi -e 's{let refresh_args = true;\\\\n}{let refresh_args = node.node_type_name != \"apply\";\\\\n}; s{self\\\\.update_apply_pin_layouts_for_network\\\\\\(network\\\\\\);}{self.update_apply_pin_layouts_for_network_preserving_args\\(network\\);}' src/structure_designer/node_type_registry.rs)"
     ]
   }
 }

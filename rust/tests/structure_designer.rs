@@ -312,3 +312,6 @@ mod currying_test;
 
 #[path = "structure_designer/function_pin_unification_test.rs"]
 mod function_pin_unification_test;
+
+#[path = "structure_designer/apply_function_pin_iter_test.rs"]
+mod apply_function_pin_iter_test;

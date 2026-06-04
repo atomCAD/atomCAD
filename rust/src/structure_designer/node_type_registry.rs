@@ -1784,12 +1784,24 @@ impl NodeTypeRegistry {
         // wires. Nodes whose `calculate_custom_node_type` returns None are
         // unaffected — they never carry a custom cache.
         for node in network.nodes.values_mut() {
+            // `apply` is special: its arg-pin layout is NOT reconstructable from
+            // per-node data (`ApplyData::calculate_custom_node_type` only ever
+            // emits the bare `[f]` pin) — the real layout is derived from the
+            // wired `f` source by `update_apply_pin_layouts_for_network` below.
+            // A by-name (`refresh_args = true`) rebuild here would reset the
+            // node to `[f]` and, because the freshly-deserialized `arguments`
+            // carry arg wires (e.g. `arg0`) at indices the `[f]` layout has no
+            // name for, silently drop them before the post-pass can re-derive
+            // the layout. Preserve the arguments positionally (`refresh_args =
+            // false`) so the post-pass can keep them. Every other node type's
+            // layout *is* data-derived, so they refresh by name as before.
+            let refresh_args = node.node_type_name != "apply";
             Self::populate_custom_node_type_cache_with_types(
                 &self.built_in_node_types,
                 &self.record_type_defs,
                 &self.built_in_record_type_defs,
                 node,
-                true,
+                refresh_args,
             );
         }
 
@@ -1800,7 +1812,16 @@ impl NodeTypeRegistry {
         // produced by the populate loop above. See
         // `update_apply_pin_layouts_for_network` for the borrow-split
         // snapshot + install pattern.
-        self.update_apply_pin_layouts_for_network(network);
+        //
+        // Use the *preserving-args* variant: the populate loop above left
+        // `apply`'s `arguments` intact (it skipped the by-name rebuild for
+        // `apply`) but reset its `custom_node_type` to the bare `[f]`. A
+        // by-name rebuild here would therefore drop the still-present arg
+        // wires (the `[f]` layout has no name for the `arg0` slot). Deriving
+        // the layout positionally keeps them; the arg-pin names are generic
+        // (`arg0`, `arg1`, …) and stable, so on an already-consistent graph
+        // this is identical to the by-name rebuild.
+        self.update_apply_pin_layouts_for_network_preserving_args(network);
 
         // Currying Phase 4 (`doc/design_currying.md`, §"HOF auto-partialization
         // (`map`)"): `map` nodes whose `f` (Function) pin is wired with a

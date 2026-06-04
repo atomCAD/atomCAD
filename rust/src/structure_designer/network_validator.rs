@@ -621,12 +621,6 @@ pub fn validate_network(
         );
     }
 
-    // REPAIR PHASE: Ensure argument counts match parameter counts in this network
-    repair_network_arguments(network, node_type_registry);
-
-    // REPAIR PHASE: Remove wires to output pins that no longer exist
-    repair_output_pin_wires(network, node_type_registry);
-
     // REPAIR PHASE: Currying Phase 3 (`doc/design_currying.md`). For every
     // `apply` node whose `f` pin is wired, override the node's
     // `custom_node_type` from the wired source's declared (canonical, flat)
@@ -635,7 +629,14 @@ pub fn validate_network(
     // reflects partial application (`k < N`) or full evaluation (`k == N`).
     // Must run BEFORE `validate_wires` so the type checks see the up-to-date
     // pin types; idempotent so re-running on a steady state is a no-op.
-    node_type_registry.update_apply_pin_layouts_for_network(network);
+    //
+    // Runs BEFORE `repair_network_arguments` (which would otherwise truncate a
+    // freshly-loaded `apply` to its bare `[f]` arity, dropping the still-present
+    // `arg0…` wires before they can be re-derived) and uses the
+    // *preserving-args* variant so the positionally-present arg wires survive
+    // the layout install. Arg-pin names are generic/stable, so on an
+    // already-consistent graph this matches the by-name rebuild.
+    node_type_registry.update_apply_pin_layouts_for_network_preserving_args(network);
 
     // REPAIR PHASE: Currying Phase 4 (`doc/design_currying.md`,
     // §"HOF auto-partialization (`map`)"). For every `map` node whose `f`
@@ -644,7 +645,15 @@ pub fn validate_network(
     // `f`. Runs after the apply post-pass so an `apply` source feeding
     // `map.f` has its output type resolved against its updated arg-pin
     // layout first.
-    node_type_registry.update_map_pin_layouts_for_network(network);
+    node_type_registry.update_map_pin_layouts_for_network_preserving_args(network);
+
+    // REPAIR PHASE: Ensure argument counts match parameter counts in this
+    // network (runs after the apply/map post-passes so their derived arg-pin
+    // counts are in place before padding/truncation).
+    repair_network_arguments(network, node_type_registry);
+
+    // REPAIR PHASE: Remove wires to output pins that no longer exist
+    repair_output_pin_wires(network, node_type_registry);
 
     // VALIDATION PHASE: Check wire validity and resolve polymorphic output pins.
     let mut ctx = ValidationContext::new();
