@@ -1085,12 +1085,28 @@ from connected `f`, dynamic output pin type, partial/full dispatch
 with recursive consumption in `eval`. Closes the §2 nested-body
 correctness gap and §"`apply` semantics"'s 0-arity thunk case.
 
+> **Implementation note (supersedes the `calculate_custom_node_type`
+> plan below).** The arg-pin layout derivation did *not* land in
+> `ApplyData::calculate_custom_node_type`. That method only ever emits
+> the bare `[f]` pin; the `[f, arg0, …]` layout is derived from the
+> wired `f` source by a separate post-pass,
+> `node_type_registry::update_apply_pin_layouts_for_network`, run from
+> both `repair_node_network` and every `validate_network` pass. The
+> consequence — `apply`'s layout is *unserialized derived state* that
+> must be preserved positionally on `.cnnd` load (`*_preserving_args`,
+> run before `repair_network_arguments`) — is documented in
+> `rust/src/structure_designer/serialization/AGENTS.md` ("Load pipeline
+> & derived state") and the apply paragraph of
+> `rust/src/structure_designer/AGENTS.md`.
+
 **Scope.**
 - `nodes/apply.rs`:
   - `calculate_custom_node_type` — when `f`'s source's function type
     is resolvable, derive `params` / `ret` from the source's
     declared (canonical) type. Fall back to the kind picker when `f`
-    is disconnected.
+    is disconnected. *(Superseded — see the implementation note above:
+    derivation lives in the `update_apply_pin_layouts_for_network`
+    post-pass, not here.)*
   - `eval` — implement the loop in §"`apply.eval`" with the
     identity-partial guard and recursive consumption.
   - `get_parameter_metadata` — mark arg pins optional.

@@ -24,6 +24,21 @@ Key entry points:
 - `save_node_networks_to_file(path, registry)` → writes .cnnd
 - `load_node_networks_from_file(path)` → returns `HashMap<String, NodeNetwork>`
 
+## Load pipeline & derived state (read before touching the load path)
+
+Loading runs in **two stages with different network orderings**, and the gap between them is a recurring source of "wires silently disappear on load" bugs.
+
+1. **`load_node_networks_from_file` — per network, in FILE order.** Deserialize (the custom `Argument` deserializer rebuilds each node's `arguments` straight from JSON) → `canonicalize_network` → `initialize_custom_node_types_for_network` → `repair_node_network` → insert into the registry.
+2. **`StructureDesigner::load_node_networks` — all networks, in DEPENDENCY order** (`get_networks_in_dependency_order`, dependencies first), calling `validate_network` on each.
+
+**The core asymmetry.** A node's *wires* are authoritative serialized data (positional, in `arguments`). A node's *pin layout* (`custom_node_type`) is **not** serialized — for most nodes it's reconstructed from per-node data (`calculate_custom_node_type`), but for **`apply` the layout is derived from the type of whatever is wired into `f`** (the source's canonical-flat function arity ⇒ `[f, arg0, …, argN-1]`). That source frequently lives in **another network**, which — because stage 1 runs in file order — may not be loaded yet. So `apply`'s real shape often **cannot** be derived during stage 1; only the dependency-ordered stage 2 can complete it.
+
+**The invariant:** *no operation that runs before the layout is derived may destroy the positional wire data.* The two ways a wire gets dropped are both layout-shape rebuilds against an under-derived (`[f]`) layout:
+- a **by-name `arguments` rebuild** (`set_custom_node_type(.., refresh_args = true)`) — has no name for the `arg0` slot the wire sits at, so it drops it;
+- a **truncation** (`network_validator::repair_network_arguments`) — cuts `arguments` down to the bare `[f]` count.
+
+Stage 1 stays non-destructive for `apply`: `initialize_…` uses `refresh_args = false`; `repair_node_network`'s generic populate special-cases `apply` to `refresh_args = false` and then runs the apply post-pass with the **preserving-args** variant; its argument-count fixer only *pads*, never truncates. So stage 1 leaves `apply` with an under-derived `[f]` layout but its `arguments` (incl. the unresolved `arg0` wire) intact. Stage 2's `validate_network` then runs the apply/map post-passes (preserving variants) **before** `repair_network_arguments`, so once the `f`-source is resolvable (dependency order) the real `[f, arg0, …]` layout is installed *with the wires preserved positionally*, and the now-no-op truncation/`validate_wires` follow. The `f` wire itself (index 0, and a `-1` source pin) is never at risk; only the derived `arg0…` pins are. See `structure_designer/AGENTS.md` (apply post-pass paragraph) and `doc/design_currying.md`.
+
 ## Serialization Conventions
 
 - `HashMap` → `Vec` conversion for deterministic JSON output
