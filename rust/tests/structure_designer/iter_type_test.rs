@@ -11,7 +11,40 @@
 use rust_lib_flutter_cad::structure_designer::data_type::{
     DataType, FunctionType, RecordType, contains_iterator,
 };
+use rust_lib_flutter_cad::structure_designer::evaluator::iterator_walker::Walker;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator,
+};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+
+/// Drain an `Iter[T]` value into its element `NetworkResult`s.
+fn drain(registry: &NodeTypeRegistry, result: NetworkResult) -> Vec<NetworkResult> {
+    let mut walker = match result {
+        NetworkResult::Iterator(w) => w,
+        other => panic!("expected Iterator, got {}", other.to_display_string()),
+    };
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let mut out = Vec::new();
+    while out.len() < 4096 {
+        match walker.next(&evaluator, registry, &mut context) {
+            None => return out,
+            Some(v) => out.push(v),
+        }
+    }
+    panic!("drain exceeded cap of 4096 elements");
+}
+
+fn as_ints(values: Vec<NetworkResult>) -> Vec<i32> {
+    values
+        .into_iter()
+        .map(|r| match r {
+            NetworkResult::Int(v) => v,
+            other => panic!("expected Int element, got {}", other.to_display_string()),
+        })
+        .collect()
+}
 
 // ============================================================================
 // Wire-time conversion rules
@@ -232,4 +265,77 @@ fn cli_top_level_parameter_with_iter_type_is_flagged() {
     assert!(!contains_iterator(&DataType::Array(Box::new(
         DataType::Float
     ))));
+}
+
+// ============================================================================
+// Runtime value conversion (`NetworkResult::convert_to`) into `Iter[T]`
+// ============================================================================
+//
+// The type-level rules above are about *whether* a wire is allowed; these
+// tests pin the *value-level* behavior of `convert_to` when an `Iter[T]`
+// destination is involved. The load-bearing one is
+// `iterator_value_with_none_source_passes_through`: a live `Iterator` value
+// must never be broadcast into a one-element stream, even when the declared
+// `source_type` fails to resolve to `Iterator(_)` (which happens when an
+// `Iter[T]` flows through a non-HOF `ZoneInput` — a custom network used via
+// its function pin — and the source type falls back to `infer_data_type()`,
+// which has no `Iterator` arm and yields `None`). Regression guard for the
+// "Arithmetic operation not supported for these types" bug where a downstream
+// `map` saw the whole iterator as its single element.
+
+#[test]
+fn iterator_value_with_none_source_passes_through() {
+    let registry = NodeTypeRegistry::new();
+    let value = NetworkResult::Iterator(Walker::from_array(vec![
+        NetworkResult::Int(1),
+        NetworkResult::Int(2),
+        NetworkResult::Int(3),
+    ]));
+    // Source type unresolved (`None`) — as it is for an iterator flowing
+    // through a non-HOF `ZoneInput`. Must pass the iterator through unchanged,
+    // NOT wrap it as a single element.
+    let converted = value.convert_to(
+        &DataType::None,
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &registry,
+    );
+    assert_eq!(as_ints(drain(&registry, converted)), vec![1, 2, 3]);
+}
+
+#[test]
+fn iterator_value_with_iter_source_passes_through() {
+    let registry = NodeTypeRegistry::new();
+    let iter_int = DataType::Iterator(Box::new(DataType::Int));
+    let value = NetworkResult::Iterator(Walker::from_array(vec![
+        NetworkResult::Int(10),
+        NetworkResult::Int(20),
+    ]));
+    let converted = value.convert_to(&iter_int, &iter_int, &registry);
+    assert_eq!(as_ints(drain(&registry, converted)), vec![10, 20]);
+}
+
+#[test]
+fn scalar_value_still_broadcasts_into_singleton_iter() {
+    // The runtime-value guard must NOT suppress the legitimate `S → Iter[T]`
+    // single-element broadcast for a non-iterator value.
+    let registry = NodeTypeRegistry::new();
+    let converted = NetworkResult::Int(7).convert_to(
+        &DataType::Int,
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &registry,
+    );
+    assert_eq!(as_ints(drain(&registry, converted)), vec![7]);
+}
+
+#[test]
+fn array_value_still_wraps_into_iter_elementwise() {
+    // The `[S] → Iter[T]` eager element wrap is unaffected by the guard.
+    let registry = NodeTypeRegistry::new();
+    let value = NetworkResult::Array(vec![NetworkResult::Int(4), NetworkResult::Int(5)]);
+    let converted = value.convert_to(
+        &DataType::Array(Box::new(DataType::Int)),
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &registry,
+    );
+    assert_eq!(as_ints(drain(&registry, converted)), vec![4, 5]);
 }

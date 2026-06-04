@@ -1215,6 +1215,120 @@ fn apply_phase3_canonical_flat_arity_drives_arg_pins() {
 }
 
 // ----------------------------------------------------------------------------
+// Test 6b: rewiring apply.f to a LOWER-arity source shrinks the arg pins and
+// drops the now-orphaned arg wires (while preserving the surviving ones).
+//
+// This guards the load/validate-path change that switched apply's post-pass to
+// the *preserving-args* variant and reordered it ahead of
+// `repair_network_arguments`. Preserving keeps arguments positionally; the
+// arity *shrink* therefore relies on `repair_network_arguments` truncating the
+// tail. The surviving `arg0` wire must stay put; the orphaned `arg1`/`arg2`
+// wires (to the old 3-arg call) must be gone.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn apply_phase3_rewire_f_to_lower_arity_shrinks_arg_pins() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    let g3 =
+        phase3_add_custom_int_closure(&mut designer, "main", &["a", "b", "c"], "a + b + c", -250.0);
+    let g1 = phase3_add_custom_int_closure(&mut designer, "main", &["a"], "a + 100", -200.0);
+    let a = phase3_add_int(&mut designer, "main", 2, -100.0);
+    let b = phase3_add_int(&mut designer, "main", 3, -50.0);
+    let c = phase3_add_int(&mut designer, "main", 4, 0.0);
+
+    // Start fully wired against the 3-arg source: f + arg0..arg2.
+    let app = phase3_add_apply(&mut designer, "main", 50.0);
+    designer.connect_nodes(g3, 0, app, 0);
+    designer.connect_nodes(a, 0, app, 1);
+    designer.connect_nodes(b, 0, app, 2);
+    designer.connect_nodes(c, 0, app, 3);
+
+    let param_count = |designer: &StructureDesigner| {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let node = net.nodes.get(&app).unwrap();
+        designer
+            .node_type_registry
+            .get_node_type_for_node(node)
+            .unwrap()
+            .parameters
+            .len()
+    };
+    assert_eq!(param_count(&designer), 4, "f + 3 arg pins when wired to g3");
+    assert_eq!(
+        phase3_extract_int(phase3_evaluate_node(&designer, "main", app)),
+        9
+    );
+
+    // Rewire f to the 1-arg source. `f` is a single-connection pin, so this
+    // replaces the g3 wire; the connect revalidates and reshapes the node.
+    designer.connect_nodes(g1, 0, app, 0);
+
+    // The arg-pin layout must shrink to f + arg0.
+    assert_eq!(
+        param_count(&designer),
+        2,
+        "rewiring f to a 1-arg source must shrink apply to f + arg0"
+    );
+
+    // Inspect the surviving wires: f -> g1, arg0 -> a, and NO wires to b or c.
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let node = net.nodes.get(&app).unwrap();
+        assert_eq!(
+            node.arguments.len(),
+            2,
+            "stale arg1/arg2 slots must be truncated, not left dangling"
+        );
+        // f pin -> g1
+        let f_src: Vec<u64> = node.arguments[0]
+            .incoming_wires
+            .iter()
+            .map(|w| w.source_node_id)
+            .collect();
+        assert_eq!(f_src, vec![g1], "f must now point at the 1-arg source");
+        // arg0 -> a survived
+        let arg0_src: Vec<u64> = node.arguments[1]
+            .incoming_wires
+            .iter()
+            .map(|w| w.source_node_id)
+            .collect();
+        assert_eq!(
+            arg0_src,
+            vec![a],
+            "the surviving arg0 wire (to `a`) must be kept"
+        );
+        // b and c must not appear anywhere in apply's arguments.
+        let all_sources: Vec<u64> = node
+            .arguments
+            .iter()
+            .flat_map(|arg| arg.incoming_wires.iter().map(|w| w.source_node_id))
+            .collect();
+        assert!(
+            !all_sources.contains(&b) && !all_sources.contains(&c),
+            "orphaned arg1/arg2 wires (to b, c) must be dropped; got sources {:?}",
+            all_sources
+        );
+    }
+
+    // Full eval against the 1-arg function: g1(a) = a + 100 = 102.
+    assert_eq!(
+        phase3_extract_int(phase3_evaluate_node(&designer, "main", app)),
+        102
+    );
+}
+
+// ----------------------------------------------------------------------------
 // Test 7: apply's output pin retypes to Function on partial wiring.
 // ----------------------------------------------------------------------------
 
