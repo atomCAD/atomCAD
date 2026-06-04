@@ -6,7 +6,9 @@ use super::evaluator::network_result::NetworkResult;
 use super::navigation_history::NavigationHistory;
 use super::network_validator::{NetworkValidationResult, validate_network};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
-use super::node_network::{CollapseMode, NodeNetwork, NodeRef, collapsable_type_name};
+use super::node_network::{
+    CollapseMode, NodeNetwork, NodeRef, Wire, collapsable_type_name, resolve_body_collapsed,
+};
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
@@ -499,34 +501,79 @@ impl StructureDesigner {
             None => return,
         };
         // Resolve the (possibly nested) body and read the old value, guarding so
-        // only collapsable HOFs honor the mode.
+        // only collapsable HOFs honor the mode. Read-only here: the pre-edit
+        // footprints must be captured before any mutation (see below).
         let old = {
+            let Some(network) = self.get_scope_network(scope_path) else {
+                return;
+            };
+            let Some(node) = network.nodes.get(&hof_node_id) else {
+                return;
+            };
+            if !collapsable_type_name(&node.node_type_name) {
+                return;
+            }
+            node.collapse_mode
+        };
+        if old == mode {
+            return; // no-op; don't push an empty command
+        }
+
+        // Capture the pre-edit footprint chain *before* flipping the mode: an
+        // Expand grows the HOF's rendered footprint, and if the HOF is itself
+        // nested in a body that growth cascades up. Reflow re-estimates the
+        // *after* sizes, so the *before* sizes must be snapshotted now.
+        let old_sizes = self.capture_footprint_chain(scope_path, hof_node_id);
+
+        // Apply the mode change.
+        {
             let Some(network) = self.get_scope_network_mut(scope_path) else {
                 return;
             };
             let Some(node) = network.nodes.get_mut(&hof_node_id) else {
                 return;
             };
-            if !collapsable_type_name(&node.node_type_name) {
-                return;
-            }
-            let old = node.collapse_mode;
             node.collapse_mode = mode;
-            old
-        };
-        if old == mode {
-            return; // no-op; don't push an empty command
         }
-        self.push_command(
-            super::undo::commands::set_collapse_mode::SetCollapseModeCommand {
-                network_name,
-                scope_path: scope_path.to_vec(),
-                node_id: hof_node_id,
-                old_mode: old,
-                new_mode: mode,
+
+        // Push neighbours out of the way of the grown (possibly cascading)
+        // footprint. A Collapse/shrink produces no moves (reflow sees delta 0).
+        let scoped_moves = self.reflow_for_footprint_change(scope_path, hof_node_id, &old_sizes);
+
+        let collapse_cmd = super::undo::commands::set_collapse_mode::SetCollapseModeCommand {
+            network_name: network_name.clone(),
+            scope_path: scope_path.to_vec(),
+            node_id: hof_node_id,
+            old_mode: old,
+            new_mode: mode,
+            description: "Set HOF collapse mode".to_string(),
+        };
+
+        if scoped_moves.is_empty() {
+            // No neighbour moved — push the bare command (never a 1-child
+            // composite, per the reflow design).
+            self.push_command(collapse_cmd);
+        } else {
+            // Bundle the collapse with one MoveNodesCommand per reflowed scope so
+            // the mode flip and the neighbour shifts undo/redo as a single step.
+            let mut commands: Vec<Box<dyn UndoCommand>> =
+                Vec::with_capacity(1 + scoped_moves.len());
+            commands.push(Box::new(collapse_cmd));
+            for sm in scoped_moves {
+                commands.push(Box::new(
+                    super::undo::commands::move_nodes::MoveNodesCommand {
+                        network_name: network_name.clone(),
+                        scope_path: sm.scope_path,
+                        moves: sm.moves,
+                        description: "Reflow neighbours".to_string(),
+                    },
+                ));
+            }
+            self.push_command(super::undo::commands::composite::CompositeCommand {
+                commands,
                 description: "Set HOF collapse mode".to_string(),
-            },
-        );
+            });
+        }
     }
 
     /// Apply the appropriate refresh after an undo/redo operation.
@@ -760,27 +807,41 @@ impl StructureDesigner {
         description: String,
         before: Option<super::undo::commands::edit_zone_body::ZoneBodySnapshot>,
     ) {
+        if let Some(command) = self.build_zone_body_command(scope_path, description, before) {
+            self.push_command(command);
+        }
+    }
+
+    /// Build (but do not push) the [`EditZoneBodyCommand`] for a body-scoped
+    /// structural edit: snapshots the body's after-state and returns the command
+    /// iff it differs from `before`. Returns `None` when `before` is `None`
+    /// (e.g. a broken scope path), the edit was a no-op, or there is no active
+    /// network. Most callers want [`push_zone_body_command`]; callers that must
+    /// **bundle** the body edit with sibling commands (the Case A / C reflow
+    /// ancestor `MoveNodesCommand`s in a `CompositeCommand`) use this directly so
+    /// the whole thing undoes/redoes as one step. See
+    /// `doc/design_reflow_on_footprint_change.md`.
+    pub fn build_zone_body_command(
+        &mut self,
+        scope_path: &[u64],
+        description: String,
+        before: Option<super::undo::commands::edit_zone_body::ZoneBodySnapshot>,
+    ) -> Option<super::undo::commands::edit_zone_body::EditZoneBodyCommand> {
         use super::undo::commands::edit_zone_body::EditZoneBodyCommand;
 
-        let Some(before) = before else {
-            return;
-        };
-        let Some(after) = self.snapshot_zone_body(scope_path) else {
-            return;
-        };
+        let before = before?;
+        let after = self.snapshot_zone_body(scope_path)?;
         if !EditZoneBodyCommand::is_meaningful(&before, &after) {
-            return;
+            return None;
         }
-        let Some(network_name) = self.active_node_network_name.clone() else {
-            return;
-        };
-        self.push_command(EditZoneBodyCommand {
+        let network_name = self.active_node_network_name.clone()?;
+        Some(EditZoneBodyCommand {
             network_name,
             scope_path: scope_path.to_vec(),
             before,
             after,
             description,
-        });
+        })
     }
 
     // Generates the scene to be rendered according to the displayed nodes of the active node network
@@ -4626,6 +4687,29 @@ impl StructureDesigner {
             // unchanged and `push_zone_body_command`'s diff check drops the
             // no-op command.
             let before = self.snapshot_zone_body(scope_path);
+
+            // Case A reflow (doc/design_reflow_on_footprint_change.md): predict
+            // HOFs in this body that will expand when their `f` wire is removed,
+            // and snapshot their compact footprint chains — both must be read
+            // before the deletion applies.
+            let mut reflow_targets: Vec<(u64, Vec<DVec2>)> = Vec::new();
+            if let Some(network) = self.get_scope_network(scope_path) {
+                let info = network.collect_deletion_info();
+                let removed_wires = if info.is_node_deletion {
+                    &info.deleted_wires
+                } else {
+                    &info.selected_wires
+                };
+                let expanding = self.predict_f_disconnect_expansions(
+                    network,
+                    removed_wires,
+                    &info.deleted_node_ids,
+                );
+                for hof_id in expanding {
+                    reflow_targets.push((hof_id, self.capture_footprint_chain(scope_path, hof_id)));
+                }
+            }
+
             if let Some(network) = self.get_scope_network_mut(scope_path) {
                 network.delete_selected();
             }
@@ -4635,7 +4719,49 @@ impl StructureDesigner {
             // refresh (the undo command itself uses a Full refresh).
             self.mark_full_refresh();
             self.validate_active_network();
-            self.push_zone_body_command(scope_path, "Delete".to_string(), before);
+
+            // Reflow each expanded HOF starting INSIDE the body. The moves that
+            // land in the body scope itself ride the fresh after-snapshot taken
+            // by `build_zone_body_command`, so only the ANCESTOR cascade (if the
+            // body grew past its stored size) needs explicit bundling.
+            let mut ancestor_moves: Vec<ScopedMoves> = Vec::new();
+            for (hof_id, old_sizes) in &reflow_targets {
+                for sm in self.reflow_for_footprint_change(scope_path, *hof_id, old_sizes) {
+                    if sm.scope_path.as_slice() != scope_path {
+                        ancestor_moves.push(sm);
+                    }
+                }
+            }
+
+            let Some(edit_cmd) =
+                self.build_zone_body_command(scope_path, "Delete".to_string(), before)
+            else {
+                return;
+            };
+            if ancestor_moves.is_empty() {
+                self.push_command(edit_cmd);
+            } else if let Some(network_name) = self.active_node_network_name.clone() {
+                let description = edit_cmd.description().to_string();
+                let mut commands: Vec<Box<dyn UndoCommand>> = vec![Box::new(edit_cmd)];
+                for sm in ancestor_moves {
+                    commands.push(Box::new(
+                        super::undo::commands::move_nodes::MoveNodesCommand {
+                            network_name: network_name.clone(),
+                            scope_path: sm.scope_path,
+                            moves: sm.moves,
+                            description: "Reflow neighbours".to_string(),
+                        },
+                    ));
+                }
+                self.undo_stack.push(Box::new(
+                    super::undo::commands::composite::CompositeCommand {
+                        commands,
+                        description,
+                    },
+                ));
+            } else {
+                self.push_command(edit_cmd);
+            }
             return;
         }
 
@@ -4766,6 +4892,33 @@ impl StructureDesigner {
             }
         }
 
+        // Case A reflow (doc/design_reflow_on_footprint_change.md): predict which
+        // collapsable HOFs will expand once this deletion removes their `f` wire,
+        // and snapshot their *compact* footprints — both must be read before the
+        // deletion applies. The moves themselves are computed after deletion (the
+        // flip is a post-deletion fact) and bundled with the delete command.
+        let mut reflow_targets: Vec<(u64, Vec<DVec2>)> = Vec::new();
+        if let (Some(info), Some(network)) = (
+            deletion_info.as_ref(),
+            self.node_type_registry
+                .node_networks
+                .get(&node_network_name),
+        ) {
+            let removed_wires = if info.is_node_deletion {
+                &info.deleted_wires
+            } else {
+                &info.selected_wires
+            };
+            let expanding = self.predict_f_disconnect_expansions(
+                network,
+                removed_wires,
+                &info.deleted_node_ids,
+            );
+            for hof_id in expanding {
+                reflow_targets.push((hof_id, self.capture_footprint_chain(&[], hof_id)));
+            }
+        }
+
         // Perform the deletion
         if let Some(node_network) = self
             .node_type_registry
@@ -4786,7 +4939,9 @@ impl StructureDesigner {
             .as_ref()
             .is_some_and(|info| info.was_return_node.is_some());
 
-        // Push undo command
+        // Build the delete command (don't push yet — Case A reflow may bundle it
+        // with the neighbour moves into one undo step).
+        let mut delete_command: Option<Box<dyn UndoCommand>> = None;
         if let Some(info) = deletion_info {
             use super::undo::snapshot::WireSnapshot;
 
@@ -4807,14 +4962,16 @@ impl StructureDesigner {
                 } else {
                     format!("Delete {} nodes", deleted_node_snapshots.len())
                 };
-                self.push_command(super::undo::commands::delete_nodes::DeleteNodesCommand {
-                    network_name: node_network_name.clone(),
-                    deleted_nodes: deleted_node_snapshots,
-                    deleted_wires,
-                    was_return_node: info.was_return_node,
-                    display_states: info.display_states,
-                    description,
-                });
+                delete_command = Some(Box::new(
+                    super::undo::commands::delete_nodes::DeleteNodesCommand {
+                        network_name: node_network_name.clone(),
+                        deleted_nodes: deleted_node_snapshots,
+                        deleted_wires,
+                        was_return_node: info.was_return_node,
+                        display_states: info.display_states,
+                        description,
+                    },
+                ));
             } else if !info.is_node_deletion && !info.selected_wires.is_empty() {
                 let deleted_wires: Vec<WireSnapshot> = info
                     .selected_wires
@@ -4827,10 +4984,44 @@ impl StructureDesigner {
                     })
                     .collect();
 
-                self.push_command(super::undo::commands::delete_wires::DeleteWiresCommand {
-                    network_name: node_network_name.clone(),
-                    deleted_wires,
-                });
+                delete_command = Some(Box::new(
+                    super::undo::commands::delete_wires::DeleteWiresCommand {
+                        network_name: node_network_name.clone(),
+                        deleted_wires,
+                    },
+                ));
+            }
+        }
+
+        // Now that the deletion has applied, run reflow for each HOF that lost
+        // its `f` wire and flipped to expanded, and bundle the resulting
+        // neighbour moves with the delete command so they undo/redo as one step.
+        if let Some(delete_command) = delete_command {
+            let mut scoped_moves: Vec<ScopedMoves> = Vec::new();
+            for (hof_id, old_sizes) in &reflow_targets {
+                scoped_moves.extend(self.reflow_for_footprint_change(&[], *hof_id, old_sizes));
+            }
+            if scoped_moves.is_empty() {
+                self.undo_stack.push(delete_command);
+            } else {
+                let description = delete_command.description().to_string();
+                let mut commands: Vec<Box<dyn UndoCommand>> = vec![delete_command];
+                for sm in scoped_moves {
+                    commands.push(Box::new(
+                        super::undo::commands::move_nodes::MoveNodesCommand {
+                            network_name: node_network_name.clone(),
+                            scope_path: sm.scope_path,
+                            moves: sm.moves,
+                            description: "Reflow neighbours".to_string(),
+                        },
+                    ));
+                }
+                self.undo_stack.push(Box::new(
+                    super::undo::commands::composite::CompositeCommand {
+                        commands,
+                        description,
+                    },
+                ));
             }
         }
 
@@ -6305,6 +6496,96 @@ impl StructureDesigner {
         self.mark_full_refresh();
 
         Ok(new_node_id)
+    }
+
+    /// Capture the pre-edit rendered footprints along a reflow cascade chain,
+    /// starting at `node_id` in `network(scope_path)` and climbing one scope per
+    /// step toward the top-level network. The returned vector is exactly the
+    /// `old_sizes` slice [`reflow_for_footprint_change`] expects: index 0 is
+    /// `node_id`'s own footprint, index `k` (k ≥ 1) is the footprint of the
+    /// ancestor HOF `scope_path[len-k]` in its parent network.
+    ///
+    /// MUST be called **before** the edit that grows the node — once the edit
+    /// has been applied the bodies have already grown and the *before* sizes can
+    /// no longer be re-derived (the same contract reflow documents).
+    pub fn capture_footprint_chain(&self, scope_path: &[u64], node_id: u64) -> Vec<DVec2> {
+        use super::node_inlining::instance_size;
+
+        let mut sizes: Vec<DVec2> = Vec::new();
+        let mut path: Vec<u64> = scope_path.to_vec();
+        let mut nid = node_id;
+        loop {
+            let Some(net) = self.get_scope_network(&path) else {
+                break;
+            };
+            let Some(node) = net.nodes.get(&nid) else {
+                break;
+            };
+            sizes.push(instance_size(node, &self.node_type_registry));
+            if path.is_empty() {
+                break;
+            }
+            let len = path.len();
+            nid = path[len - 1];
+            path.truncate(len - 1);
+        }
+        sizes
+    }
+
+    /// Predict which collapsable HOF nodes in `network` will flip from compact
+    /// to expanded once `removed_wires` are gone — Case A of
+    /// `doc/design_reflow_on_footprint_change.md`. An HOF expands when it is in
+    /// [`CollapseMode::Auto`], is currently collapsed (its `f` function pin is
+    /// wired, so [`resolve_body_collapsed`] is true), and the wire feeding that
+    /// `f` pin is among `removed_wires` — whether the wire itself was selected
+    /// for deletion, or its source node is being deleted (in which case the
+    /// incident `f` wire lands in `DeletionInfo::deleted_wires`). HOFs that are
+    /// themselves being deleted (`deleted_node_ids`) are excluded — there is
+    /// nothing left to reflow around. Returns deduplicated HOF node ids.
+    ///
+    /// MUST be called on the **pre-deletion** network so the `f` wire and the
+    /// currently-collapsed state are still observable.
+    fn predict_f_disconnect_expansions(
+        &self,
+        network: &NodeNetwork,
+        removed_wires: &[Wire],
+        deleted_node_ids: &[u64],
+    ) -> Vec<u64> {
+        let mut expanding: Vec<u64> = Vec::new();
+        for wire in removed_wires {
+            let hof_id = wire.destination_node_id;
+            if deleted_node_ids.contains(&hof_id) || expanding.contains(&hof_id) {
+                continue;
+            }
+            let Some(node) = network.nodes.get(&hof_id) else {
+                continue;
+            };
+            if !collapsable_type_name(&node.node_type_name)
+                || node.collapse_mode != CollapseMode::Auto
+            {
+                continue;
+            }
+            let Some(node_type) = self.node_type_registry.get_node_type_for_node(node) else {
+                continue;
+            };
+            // The removed wire must terminate at this HOF's `f` (function) pin.
+            let Some(f_index) = node_type
+                .parameters
+                .iter()
+                .position(|p| p.name == "f" && p.data_type.is_function_shape())
+            else {
+                continue;
+            };
+            if wire.destination_argument_index != f_index {
+                continue;
+            }
+            // Auto + f currently wired ⇒ currently collapsed; removing the f wire
+            // flips it to expanded. Guard on the current state for safety.
+            if resolve_body_collapsed(node, node_type) {
+                expanding.push(hof_id);
+            }
+        }
+        expanding
     }
 
     /// One reflow step at `scope_path` for `node_id`, which has just grown in

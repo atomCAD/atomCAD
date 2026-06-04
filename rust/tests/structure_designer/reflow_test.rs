@@ -9,7 +9,11 @@
 use glam::f64::DVec2;
 use std::sync::{Arc, Mutex};
 
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_inlining::instance_size;
+use rust_lib_flutter_cad::structure_designer::node_network::CollapseMode;
+use rust_lib_flutter_cad::structure_designer::nodes::closure::{ClosureData, ClosureKind};
+use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::undo::commands::composite::CompositeCommand;
 use rust_lib_flutter_cad::structure_designer::undo::{
@@ -366,4 +370,364 @@ fn reflow_cascades_across_two_body_levels() {
     // Stored positions reflect the reported moves.
     assert_eq!(pos(&designer, &[m1], s_mid), s_mid_before + delta_mid);
     assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 1 — Case B: set_collapse_mode reflow + single-step undo
+// (doc/design_reflow_on_footprint_change.md §"Case B")
+// ---------------------------------------------------------------------------
+
+fn collapse_mode(designer: &StructureDesigner, scope_path: &[u64], id: u64) -> CollapseMode {
+    designer
+        .get_scope_network(scope_path)
+        .unwrap()
+        .nodes
+        .get(&id)
+        .unwrap()
+        .collapse_mode
+}
+
+/// Expanding a top-level compact HOF pushes its lower-right neighbour out of the
+/// way, and a single undo restores **both** the collapse mode and the neighbour
+/// position; redo re-applies both.
+#[test]
+fn set_collapse_mode_expand_pushes_neighbour_single_step_undo() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    // Grow the body so expansion is a meaningful footprint change.
+    designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
+
+    // Compact it first (Auto/expanded → Collapsed is a shrink, so it moves
+    // nothing) to establish a small starting footprint.
+    designer.set_collapse_mode(&[], map_id, CollapseMode::Collapsed);
+    let compact_size = node_size(&designer, &[], map_id);
+
+    // Neighbour in the compact footprint's lower-right sweep band.
+    let neighbour = designer.add_node(
+        "union",
+        DVec2::new(compact_size.x + 500.0, compact_size.y + 500.0),
+    );
+    let neighbour_before = pos(&designer, &[], neighbour);
+    designer.undo_stack.clear();
+
+    // Expand → footprint grows → neighbour pushed by the growth delta.
+    designer.set_collapse_mode(&[], map_id, CollapseMode::Expanded);
+    let expanded_size = node_size(&designer, &[], map_id);
+    let delta = grew(expanded_size, compact_size);
+    assert!(
+        delta.x > 0.0 && delta.y > 0.0,
+        "expected the map to grow on both axes, got delta {delta:?}"
+    );
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+    assert_eq!(
+        collapse_mode(&designer, &[], map_id),
+        CollapseMode::Expanded
+    );
+
+    // Single-step undo restores BOTH the mode and the neighbour position.
+    assert!(designer.undo());
+    assert_eq!(
+        collapse_mode(&designer, &[], map_id),
+        CollapseMode::Collapsed
+    );
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before);
+    // It really was one step — nothing left to undo (stack was cleared above).
+    assert!(!designer.undo_stack.can_undo());
+
+    // Redo re-applies both in one step.
+    assert!(designer.redo());
+    assert_eq!(
+        collapse_mode(&designer, &[], map_id),
+        CollapseMode::Expanded
+    );
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+}
+
+/// Collapsing (a shrink) moves nothing and records a single bare command.
+#[test]
+fn set_collapse_mode_collapse_moves_nothing() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
+
+    // map is Auto/expanded; put a neighbour in its expanded lower-right band.
+    let expanded_size = node_size(&designer, &[], map_id);
+    let neighbour = designer.add_node(
+        "union",
+        DVec2::new(expanded_size.x + 500.0, expanded_size.y + 500.0),
+    );
+    let neighbour_before = pos(&designer, &[], neighbour);
+    designer.undo_stack.clear();
+
+    // Collapse (shrink) — the gap left behind is harmless; pull nothing inward.
+    designer.set_collapse_mode(&[], map_id, CollapseMode::Collapsed);
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before);
+
+    // Single step (no bundled moves): one undo empties the cleared stack.
+    assert!(designer.undo());
+    assert_eq!(collapse_mode(&designer, &[], map_id), CollapseMode::Auto);
+    assert!(!designer.undo_stack.can_undo());
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before);
+}
+
+/// A nested HOF expanded inside an outer HOF's body grows the body, cascading
+/// the reflow to the outer's parent (top-level) network; one undo step restores
+/// the mode and every reflowed position across both scopes.
+#[test]
+fn set_collapse_mode_nested_expand_cascades_and_undoes_single_step() {
+    let mut designer = setup_designer_with_network("main");
+    let outer = designer.add_node("map", DVec2::new(0.0, 0.0));
+    let inner = designer.add_node_scoped(&[outer], "map", DVec2::new(0.0, 0.0), None);
+    // Grow the inner body so expanding `inner` is a real footprint change.
+    designer.add_node_scoped(&[outer, inner], "union", DVec2::new(1200.0, 1200.0), None);
+
+    // Compact `inner` first so expansion is the growing direction.
+    designer.set_collapse_mode(&[outer], inner, CollapseMode::Collapsed);
+
+    // Sibling of `inner` inside the outer body, in `inner`'s lower-right band.
+    let inner_compact = node_size(&designer, &[outer], inner);
+    let s_body = designer.add_node_scoped(
+        &[outer],
+        "union",
+        DVec2::new(inner_compact.x + 500.0, inner_compact.y + 500.0),
+        None,
+    );
+    // Sibling of `outer` at top level, in `outer`'s lower-right band.
+    let outer_size = node_size(&designer, &[], outer);
+    let s_top = designer.add_node(
+        "union",
+        DVec2::new(outer_size.x + 500.0, outer_size.y + 500.0),
+    );
+
+    let s_body_before = pos(&designer, &[outer], s_body);
+    let s_top_before = pos(&designer, &[], s_top);
+    let inner_old = node_size(&designer, &[outer], inner);
+    let outer_old = node_size(&designer, &[], outer);
+    designer.undo_stack.clear();
+
+    // Expand `inner`: grows the outer body and cascades to the top level.
+    designer.set_collapse_mode(&[outer], inner, CollapseMode::Expanded);
+
+    let delta_body = grew(node_size(&designer, &[outer], inner), inner_old);
+    let delta_top = grew(node_size(&designer, &[], outer), outer_old);
+    assert!(delta_body.x > 0.0 && delta_body.y > 0.0);
+    assert!(delta_top.x > 0.0 && delta_top.y > 0.0);
+    assert_eq!(pos(&designer, &[outer], s_body), s_body_before + delta_body);
+    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+
+    // One undo restores the mode and both reflowed positions.
+    assert!(designer.undo());
+    assert_eq!(
+        collapse_mode(&designer, &[outer], inner),
+        CollapseMode::Collapsed
+    );
+    assert_eq!(pos(&designer, &[outer], s_body), s_body_before);
+    assert_eq!(pos(&designer, &[], s_top), s_top_before);
+    assert!(!designer.undo_stack.can_undo());
+
+    // Redo re-applies all of it.
+    assert!(designer.redo());
+    assert_eq!(
+        collapse_mode(&designer, &[outer], inner),
+        CollapseMode::Expanded
+    );
+    assert_eq!(pos(&designer, &[outer], s_body), s_body_before + delta_body);
+    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Case A: f-pin disconnect reflow + single-step undo
+// (doc/design_reflow_on_footprint_change.md §"Case A")
+// ---------------------------------------------------------------------------
+
+/// Build an `Int→Int` `map` at `scope_path` whose own inline body is grown by a
+/// `union` (so expansion is a clear footprint change), with a `closure` wired
+/// into its `f` pin so the map renders **compact** (Auto mode, f connected).
+/// Returns `(map_id, closure_id)`. Removing the f wire — directly or by deleting
+/// the closure — flips the map to expanded.
+fn add_collapsed_map_with_closure_f(
+    designer: &mut StructureDesigner,
+    scope_path: &[u64],
+    map_pos: DVec2,
+    closure_pos: DVec2,
+) -> (u64, u64) {
+    let map_id = designer.add_node_scoped(scope_path, "map", map_pos, None);
+    designer.set_node_network_data_scoped(
+        scope_path,
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    // Grow the map's own inline body so the expand is a meaningful footprint
+    // change once `f` is disconnected and the body becomes visible again.
+    let map_body: Vec<u64> = scope_path.iter().copied().chain([map_id]).collect();
+    designer.add_node_scoped(&map_body, "union", DVec2::new(1200.0, 1200.0), None);
+
+    let closure_id = designer.add_node_scoped(scope_path, "closure", closure_pos, None);
+    designer.set_node_network_data_scoped(
+        scope_path,
+        closure_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Int, DataType::Int],
+            param_names: vec![],
+            custom_label: None,
+        }),
+    );
+    // f is map parameter index 1; wiring it makes the map compact (Auto mode).
+    designer.connect_nodes_scoped(scope_path, closure_id, 0, map_id, 1);
+
+    let f_wired = !designer
+        .get_scope_network(scope_path)
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap()
+        .arguments[1]
+        .incoming_wires
+        .is_empty();
+    assert!(
+        f_wired,
+        "closure should be wired into the map's f pin (map compact)"
+    );
+
+    (map_id, closure_id)
+}
+
+/// Deleting the `f` **wire** feeding a compact top-level `map` expands it and
+/// pushes its lower-right neighbour; a single undo restores **both** the wire
+/// (map compact again) and the neighbour position; redo re-applies both.
+#[test]
+fn delete_f_wire_expands_map_and_reflows_single_step_undo() {
+    let mut designer = setup_designer_with_network("main");
+    let (map_id, closure_id) = add_collapsed_map_with_closure_f(
+        &mut designer,
+        &[],
+        DVec2::new(0.0, 0.0),
+        DVec2::new(-400.0, 0.0),
+    );
+
+    let compact_size = node_size(&designer, &[], map_id);
+    let neighbour = designer.add_node(
+        "union",
+        DVec2::new(compact_size.x + 500.0, compact_size.y + 500.0),
+    );
+    let neighbour_before = pos(&designer, &[], neighbour);
+    designer.undo_stack.clear();
+
+    // Select and delete the f wire.
+    assert!(designer.select_wire(closure_id, 0, map_id, 1));
+    designer.delete_selected();
+
+    let expanded_size = node_size(&designer, &[], map_id);
+    let delta = grew(expanded_size, compact_size);
+    assert!(
+        delta.x > 0.0 && delta.y > 0.0,
+        "map should expand once its f wire is gone, got delta {delta:?}"
+    );
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+
+    // One undo restores the wire (map back to compact) and the neighbour.
+    assert!(designer.undo());
+    assert_eq!(node_size(&designer, &[], map_id), compact_size);
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before);
+    assert!(!designer.undo_stack.can_undo());
+
+    // Redo re-applies both.
+    assert!(designer.redo());
+    assert_eq!(node_size(&designer, &[], map_id), expanded_size);
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+}
+
+/// Deleting the `f`-**source node** (the closure) disconnects `f` the same way:
+/// the map expands and its neighbour is pushed, restored in one undo step.
+#[test]
+fn delete_f_source_node_expands_map_and_reflows() {
+    let mut designer = setup_designer_with_network("main");
+    let (map_id, closure_id) = add_collapsed_map_with_closure_f(
+        &mut designer,
+        &[],
+        DVec2::new(0.0, 0.0),
+        DVec2::new(-400.0, 0.0),
+    );
+
+    let compact_size = node_size(&designer, &[], map_id);
+    let neighbour = designer.add_node(
+        "union",
+        DVec2::new(compact_size.x + 500.0, compact_size.y + 500.0),
+    );
+    let neighbour_before = pos(&designer, &[], neighbour);
+    designer.undo_stack.clear();
+
+    // Delete the closure node that feeds f.
+    assert!(designer.select_node(closure_id));
+    designer.delete_selected();
+
+    let expanded_size = node_size(&designer, &[], map_id);
+    let delta = grew(expanded_size, compact_size);
+    assert!(delta.x > 0.0 && delta.y > 0.0);
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+
+    // Single undo restores the closure, the wire, and the neighbour position.
+    assert!(designer.undo());
+    assert_eq!(node_size(&designer, &[], map_id), compact_size);
+    assert_eq!(pos(&designer, &[], neighbour), neighbour_before);
+    assert!(!designer.undo_stack.can_undo());
+}
+
+/// Deleting the `f` wire of a compact `map` **inside a zone body** expands it
+/// and pushes its in-body neighbour; the move rides the `EditZoneBodyCommand`
+/// after-snapshot, so one undo restores the whole body in a single step.
+#[test]
+fn delete_f_wire_in_body_reflows_body_single_step_undo() {
+    let mut designer = setup_designer_with_network("main");
+    let outer = designer.add_node("map", DVec2::new(0.0, 0.0));
+
+    let (inner_map, inner_closure) = add_collapsed_map_with_closure_f(
+        &mut designer,
+        &[outer],
+        DVec2::new(0.0, 0.0),
+        DVec2::new(-400.0, 0.0),
+    );
+
+    let compact_size = node_size(&designer, &[outer], inner_map);
+    let neighbour = designer.add_node_scoped(
+        &[outer],
+        "union",
+        DVec2::new(compact_size.x + 500.0, compact_size.y + 500.0),
+        None,
+    );
+    let neighbour_before = pos(&designer, &[outer], neighbour);
+    designer.undo_stack.clear();
+
+    // Select + delete the f wire inside the outer body.
+    assert!(designer.select_wire_scoped(&[outer], inner_closure, 0, inner_map, 1));
+    designer.delete_selected_scoped(&[outer]);
+
+    let expanded_size = node_size(&designer, &[outer], inner_map);
+    let delta = grew(expanded_size, compact_size);
+    assert!(
+        delta.x > 0.0 && delta.y > 0.0,
+        "inner map should expand inside the body, got delta {delta:?}"
+    );
+    assert_eq!(
+        pos(&designer, &[outer], neighbour),
+        neighbour_before + delta
+    );
+
+    // One undo restores the body wholesale: wire back, map compact, neighbour
+    // back. (Body-scope moves ride the EditZoneBodyCommand after-snapshot.)
+    assert!(designer.undo());
+    assert_eq!(node_size(&designer, &[outer], inner_map), compact_size);
+    assert_eq!(pos(&designer, &[outer], neighbour), neighbour_before);
+    assert!(!designer.undo_stack.can_undo());
+
+    // Redo re-applies the expansion + reflow.
+    assert!(designer.redo());
+    assert_eq!(
+        pos(&designer, &[outer], neighbour),
+        neighbour_before + delta
+    );
 }
