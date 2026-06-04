@@ -844,6 +844,97 @@ impl StructureDesigner {
         })
     }
 
+    /// Capture the pre-edit footprint chain of the HOF that *owns* the body at
+    /// `scope_path` (Case C of `doc/design_reflow_on_footprint_change.md`). The
+    /// owning HOF is `scope_path.last()`, viewed from its parent network
+    /// `scope_path[..len-1]`; the returned chain is exactly the `old_sizes`
+    /// slice [`reflow_for_footprint_change`] expects when started at the parent
+    /// scope for that HOF (index 0 = the owning HOF's footprint in its parent,
+    /// index `k` ≥ 1 = the `k`-th further ancestor HOF's footprint).
+    ///
+    /// MUST be called **before** the body edit — once the edit has grown the
+    /// body the owning HOF's *before* footprint can no longer be re-derived.
+    /// Returns empty for an empty `scope_path` (top-level edits never cascade).
+    /// Pairs with [`push_zone_body_command_with_ancestor_reflow`].
+    pub fn capture_body_owner_footprint_chain(&self, scope_path: &[u64]) -> Vec<DVec2> {
+        match scope_path.split_last() {
+            Some((hof_id, parent)) => self.capture_footprint_chain(parent, *hof_id),
+            None => Vec::new(),
+        }
+    }
+
+    /// Finalize a body-scoped structural edit that may have grown the body's
+    /// footprint, cascading reflow into **ancestor** scopes — Case C of
+    /// `doc/design_reflow_on_footprint_change.md`. Adding / pasting /
+    /// duplicating a node (or wiring one) inside a body does not grow an
+    /// existing in-body node *in place*, so reflow produces **no moves inside
+    /// the edited body itself**. What grows is the body's owning HOF, whose
+    /// rendered footprint expands in the **parent** network — and that growth
+    /// can cascade up several scope levels. Every reflowed move therefore lands
+    /// in a scope the `EditZoneBodyCommand`'s body snapshot does **not** cover,
+    /// so each is bundled into the same undo step.
+    ///
+    /// `before` is the pre-edit body snapshot (a `None` before suppresses the
+    /// command, as in [`push_zone_body_command`]); `old_ancestor_sizes` is the
+    /// chain captured by [`capture_body_owner_footprint_chain`] **before** the
+    /// edit. Pushes either the bare `EditZoneBodyCommand` (no ancestor grew —
+    /// `delta == 0`) or a [`super::undo::commands::composite::CompositeCommand`]
+    /// bundling it with one `MoveNodesCommand` per reflowed ancestor scope.
+    pub fn push_zone_body_command_with_ancestor_reflow(
+        &mut self,
+        scope_path: &[u64],
+        description: String,
+        before: Option<super::undo::commands::edit_zone_body::ZoneBodySnapshot>,
+        old_ancestor_sizes: &[DVec2],
+    ) {
+        // The owning HOF lives one scope up; an empty path cannot cascade, so
+        // fall back to the plain push (no ancestor to reflow around).
+        let Some((hof_id, parent)) = scope_path.split_last() else {
+            self.push_zone_body_command(scope_path, description, before);
+            return;
+        };
+        let parent = parent.to_vec();
+
+        // Reflow the ancestor scopes only. The moves inside the edited body
+        // itself (if any) ride the fresh after-snapshot `build_zone_body_command`
+        // takes at push time, so reflow deliberately starts one scope up — every
+        // returned `ScopedMoves` lands in `parent` or higher, never `scope_path`.
+        let scoped_moves = self.reflow_for_footprint_change(&parent, *hof_id, old_ancestor_sizes);
+
+        let Some(edit_cmd) = self.build_zone_body_command(scope_path, description, before) else {
+            return;
+        };
+
+        if scoped_moves.is_empty() {
+            // Body absorbed the growth (or nothing grew) — push the bare body
+            // command (never a 1-child composite, per the reflow design).
+            self.push_command(edit_cmd);
+            return;
+        }
+
+        let Some(network_name) = self.active_node_network_name.clone() else {
+            self.push_command(edit_cmd);
+            return;
+        };
+
+        let composite_description = edit_cmd.description().to_string();
+        let mut commands: Vec<Box<dyn UndoCommand>> = vec![Box::new(edit_cmd)];
+        for sm in scoped_moves {
+            commands.push(Box::new(
+                super::undo::commands::move_nodes::MoveNodesCommand {
+                    network_name: network_name.clone(),
+                    scope_path: sm.scope_path,
+                    moves: sm.moves,
+                    description: "Reflow neighbours".to_string(),
+                },
+            ));
+        }
+        self.push_command(super::undo::commands::composite::CompositeCommand {
+            commands,
+            description: composite_description,
+        });
+    }
+
     // Generates the scene to be rendered according to the displayed nodes of the active node network
     pub fn refresh(&mut self, changes: &StructureDesignerChanges) {
         // Clear pending changes at the start of refresh
@@ -1723,6 +1814,11 @@ impl StructureDesigner {
         }
         // Capture the body's before-state for undo (whole-body snapshot).
         let before = self.snapshot_zone_body(scope_path);
+        // Case C reflow (doc/design_reflow_on_footprint_change.md): adding a node
+        // grows the body, which grows the owning HOF in the parent network and
+        // may cascade up. Capture the owning HOF's pre-edit footprint chain now,
+        // before the add — once the body has grown it can't be re-derived.
+        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(scope_path);
         // Body scope: drag-source adaptation and per-node-type bookkeeping
         // (parameter `param_id` / param_name) are top-level concerns and not
         // exercised inside an HOF body in U2. Add the node with default data
@@ -1781,7 +1877,12 @@ impl StructureDesigner {
                 }
             }
             self.set_dirty(true);
-            self.push_zone_body_command(scope_path, format!("Add {} node", node_type_name), before);
+            self.push_zone_body_command_with_ancestor_reflow(
+                scope_path,
+                format!("Add {} node", node_type_name),
+                before,
+                &old_ancestor_sizes,
+            );
         }
         node_id
     }
@@ -2221,6 +2322,10 @@ impl StructureDesigner {
 
         // Whole-body before-state for undo (captured before mutation).
         let before = self.snapshot_zone_body(scope_path);
+        // Case C reflow (doc/design_reflow_on_footprint_change.md): pasting nodes
+        // grows the body, which grows the owning HOF in the parent and may
+        // cascade up. Capture the owning HOF's pre-edit footprint chain now.
+        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(scope_path);
 
         let new_ids = match self.get_scope_network_mut(scope_path) {
             Some(body) => {
@@ -2257,7 +2362,12 @@ impl StructureDesigner {
         self.set_dirty(true);
         self.mark_full_refresh();
         self.validate_active_network();
-        self.push_zone_body_command(scope_path, "Paste".to_string(), before);
+        self.push_zone_body_command_with_ancestor_reflow(
+            scope_path,
+            "Paste".to_string(),
+            before,
+            &old_ancestor_sizes,
+        );
 
         new_ids
     }
@@ -2552,6 +2662,12 @@ impl StructureDesigner {
             return;
         }
         let before = self.snapshot_zone_body(scope_path);
+        // Case C reflow (doc/design_reflow_on_footprint_change.md): a wire can
+        // grow an in-body node's footprint (e.g. an `apply`/`map` gaining arg
+        // pins from the post-pass), growing the owning HOF in the parent and
+        // possibly cascading up. Capture the owning HOF's pre-edit footprint
+        // chain now; reflow sees `delta == 0` and moves nothing if it doesn't.
+        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(scope_path);
         let dest_param_is_multi = {
             let network = match self.get_scope_network(scope_path) {
                 Some(n) => n,
@@ -2590,7 +2706,12 @@ impl StructureDesigner {
         // Re-validate so zone-rule errors raised by a previous pass clear once
         // the user adds the wire that satisfies them.
         self.validate_active_network();
-        self.push_zone_body_command(scope_path, "Connect wire".to_string(), before);
+        self.push_zone_body_command_with_ancestor_reflow(
+            scope_path,
+            "Connect wire".to_string(),
+            before,
+            &old_ancestor_sizes,
+        );
     }
 
     /// Scope-aware variant of `connect_nodes` for cross-scope wires (captures
@@ -2637,6 +2758,12 @@ impl StructureDesigner {
         // Cross-scope / ZoneInput wire — capture the destination body's
         // before-state for undo (the wire is stored on a body-internal node).
         let before = self.snapshot_zone_body(dest_scope_path);
+        // Case C reflow (doc/design_reflow_on_footprint_change.md): the wire can
+        // grow the destination node (e.g. an `apply`/`map` gaining arg pins),
+        // growing the owning HOF in the parent and possibly cascading up.
+        // Capture the owning HOF's pre-edit footprint chain now (delta == 0 ⇒
+        // no moves if the wire doesn't grow anything).
+        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(dest_scope_path);
         // Resolve dest pin's multi-ness against the dest node's type.
         let dest_param_is_multi = {
             let network = match self.get_scope_network(dest_scope_path) {
@@ -2676,7 +2803,12 @@ impl StructureDesigner {
         // Re-validate so zone-rule errors raised by a previous pass clear once
         // the user adds the wire that satisfies them.
         self.validate_active_network();
-        self.push_zone_body_command(dest_scope_path, "Connect wire".to_string(), before);
+        self.push_zone_body_command_with_ancestor_reflow(
+            dest_scope_path,
+            "Connect wire".to_string(),
+            before,
+            &old_ancestor_sizes,
+        );
     }
 
     /// Scope-aware predicate for cross-scope wires (Phase U5). Returns `true`
@@ -2885,13 +3017,22 @@ impl StructureDesigner {
             return self.duplicate_node(node_id);
         }
         let before = self.snapshot_zone_body(scope_path);
+        // Case C reflow (doc/design_reflow_on_footprint_change.md): the duplicate
+        // grows the body, which grows the owning HOF in the parent and may
+        // cascade up. Capture the owning HOF's pre-edit footprint chain now.
+        let old_ancestor_sizes = self.capture_body_owner_footprint_chain(scope_path);
         let new_id = match self.get_scope_network_mut(scope_path) {
             Some(network) => network.duplicate_node(node_id).unwrap_or(0),
             None => return 0,
         };
         if new_id != 0 {
             self.set_dirty(true);
-            self.push_zone_body_command(scope_path, "Duplicate node".to_string(), before);
+            self.push_zone_body_command_with_ancestor_reflow(
+                scope_path,
+                "Duplicate node".to_string(),
+                before,
+                &old_ancestor_sizes,
+            );
         }
         new_id
     }
@@ -6998,6 +7139,20 @@ impl StructureDesigner {
             None
         };
 
+        // Case C residual cascade (doc/design_reflow_on_footprint_change.md):
+        // inside a body, the closure `C` renders far larger than the instance it
+        // replaces. The make-space in step 7 reflows `C`'s neighbours within the
+        // body scope, but the body itself can grow past its stored size — growing
+        // the owning HOF in the parent network and cascading up. Capture the
+        // owning HOF's pre-edit footprint chain now (before step 7's growth);
+        // the ancestor reflow runs at push time below. (Top-level conversion has
+        // no body to grow, so no ancestor cascade.)
+        let old_ancestor_sizes = if scoped {
+            self.capture_body_owner_footprint_chain(&scope_path)
+        } else {
+            Vec::new()
+        };
+
         // 6. Build the closure node `C` (reads N, registry).
         let closure_node = {
             let target = self.get_scope_network(&scope_path).unwrap();
@@ -7090,7 +7245,12 @@ impl StructureDesigner {
         //     level, or an `EditZoneBodyCommand` (whole-body snapshot) when the
         //     host scope is a zone body.
         if scoped {
-            self.push_zone_body_command(&scope_path, "Convert to closure".to_string(), before_body);
+            self.push_zone_body_command_with_ancestor_reflow(
+                &scope_path,
+                "Convert to closure".to_string(),
+                before_body,
+                &old_ancestor_sizes,
+            );
         } else if let (Some(before), Some(after)) =
             (before_top, self.snapshot_network(&network_name))
         {

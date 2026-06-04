@@ -202,6 +202,12 @@ The mechanism is one flag, one rule, one helper:
 
 Authoring guidance for effect-node `eval` arms: call effect logic unconditionally — the central rule guarantees `eval` is only invoked under `context.execute == true`. **Do not** add `if context.execute` guards inside individual effect nodes' `eval`. Light per-eval input validation that used to surface during display now defers to Execute; recover eager UX feedback via `get_subtitle` (see `nodes/export_xyz.rs::get_subtitle` for the `(no file name)` pattern). Design doc: `doc/design_node_execution.md`.
 
+## Reflow on Footprint Growth
+
+When an edit grows a node's **rendered footprint in place** — without the user dragging anything — neighbours should be pushed out of the way so the grown node doesn't overlap them. Use the reusable primitive `StructureDesigner::reflow_for_footprint_change(scope_path, node_id, old_sizes) -> Vec<ScopedMoves>` rather than reinventing neighbour-pushing: it re-estimates the node's new size (`node_inlining::instance_size`), shifts the lower-right sweep band in that scope via `node_inlining::make_space_for_inline`, and **cascades up the scope chain** — a zone body that grew past its stored size grows its owning HOF in the parent network, repeating until a scope absorbs the growth (`delta == 0`). It only moves nodes and reports the moves; it does not push undo commands.
+
+Pre-edit footprints **must be captured before mutating** (the bodies have already grown by the time reflow runs): `capture_footprint_chain(scope_path, node_id)` for a node growing in its own scope, `capture_body_owner_footprint_chain(scope_path)` for a body edit that grows the owning HOF one scope up (Case C). Triggers currently wired: HOF expand on `f`-disconnect (`delete_selected_scoped`), `set_collapse_mode`, in-body add·paste·duplicate·connect (`add_node_scoped` / `paste_at_position_scoped` / `duplicate_node_scoped` / `connect_nodes_scoped` / `connect_wire_scoped`), and `convert_instance_to_closure`. **Shrinks need no reflow** (pulling neighbours inward would be surprising — delta clamps to ≥ 0). The undo side bundles the moves into the same step via `CompositeCommand` — see `undo/AGENTS.md` ("Composite Commands & Reflow Bundling"). No Flutter change is needed: positions are authoritative in Rust and the `ScopeResolver` re-derives layout from them each frame. Design doc: `doc/design_reflow_on_footprint_change.md`.
+
 ## Change Tracking & Refresh
 
 `StructureDesignerChanges` tracks per-node visibility/data/selection changes. `RefreshMode` controls evaluation scope:

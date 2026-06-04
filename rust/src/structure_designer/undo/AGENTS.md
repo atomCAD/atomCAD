@@ -12,6 +12,7 @@ undo/
     ├── mod.rs
     ├── add_node.rs, delete_nodes.rs, delete_wires.rs
     ├── connect_wire.rs, move_nodes.rs
+    ├── composite.rs                # Bundles N child commands into one undo step
     ├── set_node_data.rs, set_return_node.rs, set_node_display.rs
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
@@ -75,13 +76,19 @@ All body-scoped **structural** edits (add / delete / duplicate, and connect of e
 
 Moves are the exception — they use the lighter scope-aware `MoveNodesCommand` via `begin_move_nodes_scoped` / `end_move_nodes` coalescing (one command per drag). Body resize uses `SetZoneSizeCommand` via `begin_zone_resize` / `end_zone_resize` coalescing (Flutter calls these on the resize handle's pan start/end).
 
+### Composite Commands & Reflow Bundling
+
+`CompositeCommand { commands: Vec<Box<dyn UndoCommand>>, description }` (`commands/composite.rs`) bundles N children into **one** undo step: `undo` runs them in reverse, `redo` forward (standard composite order; `MoveNodesCommand` sets absolute positions so order is immaterial in practice). Its `refresh_mode()` is `combine_refresh_modes` (in `mod.rs`) — strongest child wins: any `Full` ⇒ `Full`; else union all `NodeDataChanged` id-lists; else `Lightweight`. **Never construct a 1-child composite** — push the bare child instead.
+
+This is the mechanism behind **reflow-on-footprint-change** (`doc/design_reflow_on_footprint_change.md`): when an in-place footprint growth (HOF expand on `f`-disconnect / `set_collapse_mode` / in-body add·paste·duplicate·connect) pushes neighbour nodes, `StructureDesigner::reflow_for_footprint_change` returns the moved `(id, old, new)` per scope and the trigger bundles a `MoveNodesCommand` per scope alongside its primary command. **Rule: bundle a move command only for scopes the primary command's snapshot does NOT already cover.** A body-scoped `EditZoneBodyCommand` takes a *fresh after-snapshot at push time*, so moves *within that body* ride along for free — only **ancestor**-scope moves (the cascade climbing past the edited body) need explicit bundling. Helpers: `capture_footprint_chain` / `capture_body_owner_footprint_chain` (snapshot pre-edit sizes BEFORE mutating) and `push_zone_body_command_with_ancestor_reflow` (Case C — reflows starting one scope up at the body-owning HOF). `combine_refresh_modes` must promote to the strongest child so a deletion's `Full` is not downgraded to a move's `Lightweight`.
+
 ### Selection Is Not Undoable
 
 Consistent with most CAD applications. Simplifies the system significantly.
 
 ### Suppression
 
-`UndoStack::suppress_recording` / `resume_recording` — safety valve for future compound operations. `SetNodeData` is suppressed for `edit_atom` (deprecated) and `atom_edit` (has its own incremental commands).
+`UndoStack::suppress_recording` / `resume_recording` — prevents commands from being recorded at all (distinct from bundling several into one step, which is `CompositeCommand`'s job). `SetNodeData` is suppressed for `edit_atom` (deprecated) and `atom_edit` (has its own incremental commands).
 
 ## Known Pitfalls
 

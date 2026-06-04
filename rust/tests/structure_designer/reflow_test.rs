@@ -229,9 +229,18 @@ fn reflow_single_scope_pushes_lower_right_neighbour() {
     let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
     let old_size = node_size(&designer, &[], map_id);
 
+    // Trigger growth FIRST: drop a node far out in the map's body so its
+    // rendered body (and thus the map's footprint) expands well past the
+    // default. `add_node_scoped` now reflows the body's owning scope itself
+    // (Case C, Phase 3), so we grow *before* placing the neighbours — there is
+    // nothing for that internal reflow to push yet, leaving the manual
+    // `reflow_for_footprint_change` below as the sole reflow under test.
+    designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
+
     // A neighbour strictly in the lower-right sweep band (past both the right
     // and bottom edges of the map's *original* footprint) — it should shift on
-    // both axes by the growth delta.
+    // both axes by the growth delta. Placed via top-level `add_node`, which
+    // does not reflow.
     let lower_right =
         designer.add_node("union", DVec2::new(old_size.x + 500.0, old_size.y + 500.0));
     let lr_before = pos(&designer, &[], lower_right);
@@ -240,10 +249,6 @@ fn reflow_single_scope_pushes_lower_right_neighbour() {
     // rightward/downward growth, so it must stay put.
     let safe = designer.add_node("union", DVec2::new(-600.0, -600.0));
     let safe_before = pos(&designer, &[], safe);
-
-    // Trigger growth: drop a node far out in the map's body so its rendered
-    // body (and thus the map's footprint) expands well past the default.
-    designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
 
     let new_size = node_size(&designer, &[], map_id);
     let delta = grew(new_size, old_size);
@@ -304,31 +309,32 @@ fn reflow_cascades_across_two_body_levels() {
     // Nested `map` m2 inside m1's body (add_node_scoped runs ensure_zone_init).
     let m2 = designer.add_node_scoped(&[m1], "map", DVec2::new(0.0, 0.0), None);
 
-    // A sibling of m2 inside m1's body, in m2's lower-right sweep band.
-    let m2_size_pre = node_size(&designer, &[m1], m2);
+    // Capture the pre-trigger footprints (both ancestors) — the bands the
+    // neighbours below sit just outside of, and the `old_sizes` the manual
+    // reflow re-measures growth against.
+    let m2_old = node_size(&designer, &[m1], m2);
+    let m1_old = node_size(&designer, &[], m1);
+
+    // Trigger growth FIRST, before any sibling neighbours exist. This grows m2
+    // (in m1's body) and, because m1's rendered body recurses into m2, grows m1
+    // (in the top-level network). `add_node_scoped` now reflows internally
+    // (Case C, Phase 3); doing it before placing neighbours leaves nothing for
+    // that pass to push, so the manual reflow below is the only one acting on
+    // the tracked neighbours.
+    designer.add_node_scoped(&[m1, m2], "union", DVec2::new(1500.0, 1500.0), None);
+
+    // A sibling of m2 inside m1's body, in m2's *pre-trigger* lower-right band.
     let s_mid = designer.add_node_scoped(
         &[m1],
         "union",
-        DVec2::new(m2_size_pre.x + 500.0, m2_size_pre.y + 500.0),
+        DVec2::new(m2_old.x + 500.0, m2_old.y + 500.0),
         None,
     );
+    // A sibling of m1 in the top-level network, in m1's *pre-trigger* band.
+    let s_top = designer.add_node("union", DVec2::new(m1_old.x + 500.0, m1_old.y + 500.0));
 
-    // A sibling of m1 in the top-level network, in m1's lower-right sweep band.
-    let m1_size_pre = node_size(&designer, &[], m1);
-    let s_top = designer.add_node(
-        "union",
-        DVec2::new(m1_size_pre.x + 500.0, m1_size_pre.y + 500.0),
-    );
-
-    // Capture the pre-edit footprints (both ancestors) before triggering growth.
-    let m2_old = node_size(&designer, &[m1], m2);
-    let m1_old = node_size(&designer, &[], m1);
     let s_mid_before = pos(&designer, &[m1], s_mid);
     let s_top_before = pos(&designer, &[], s_top);
-
-    // Trigger: grow m2's body a lot. This grows m2 (in m1's body) and, because
-    // m1's rendered body recurses into m2, grows m1 (in the top-level network).
-    designer.add_node_scoped(&[m1, m2], "union", DVec2::new(1500.0, 1500.0), None);
 
     // Start the cascade in m1's body for m2; it climbs one level to the top.
     let scoped_moves = designer.reflow_for_footprint_change(&[m1], m2, &[m2_old, m1_old]);
@@ -730,4 +736,170 @@ fn delete_f_wire_in_body_reflows_body_single_step_undo() {
         pos(&designer, &[outer], neighbour),
         neighbour_before + delta
     );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Case C: in-body growth cascade
+// (doc/design_reflow_on_footprint_change.md §"Case C")
+// ---------------------------------------------------------------------------
+
+/// Adding a node inside a top-level `map`'s body grows the body, which grows the
+/// `map`'s rendered footprint in the parent (top-level) network, pushing the
+/// `map`'s lower-right sibling there. The added node itself rides the
+/// `EditZoneBodyCommand` after-snapshot, the sibling shift rides a bundled
+/// `MoveNodesCommand`, and one undo step restores **both**.
+#[test]
+fn add_node_in_body_pushes_parent_sibling_single_step_undo() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+
+    // Sibling of the (empty, expanded) map in its lower-right sweep band at the
+    // top level — it should shift once the map's footprint grows.
+    let map_old = node_size(&designer, &[], map_id);
+    let sibling = designer.add_node("union", DVec2::new(map_old.x + 500.0, map_old.y + 500.0));
+    let sibling_before = pos(&designer, &[], sibling);
+    designer.undo_stack.clear();
+
+    // Grow the map's body by dropping a node far out inside it. The body — and
+    // hence the map's parent-network footprint — expands.
+    designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
+
+    let map_new = node_size(&designer, &[], map_id);
+    let delta = grew(map_new, map_old);
+    assert!(
+        delta.x > 0.0 && delta.y > 0.0,
+        "adding a body node should grow the map's footprint, got delta {delta:?}"
+    );
+    assert_eq!(pos(&designer, &[], sibling), sibling_before + delta);
+
+    // One undo step removes the body node AND restores the sibling position.
+    assert!(designer.undo());
+    assert_eq!(node_size(&designer, &[], map_id), map_old);
+    assert_eq!(pos(&designer, &[], sibling), sibling_before);
+    assert!(!designer.undo_stack.can_undo());
+
+    // Redo re-applies the body edit and the reflow together.
+    assert!(designer.redo());
+    assert_eq!(node_size(&designer, &[], map_id), map_new);
+    assert_eq!(pos(&designer, &[], sibling), sibling_before + delta);
+}
+
+/// Adding a node inside a nested `map`'s body (scope `[outer, inner]`) cascades:
+/// `inner` grows in the `outer` body (pushing `inner`'s in-body sibling) and the
+/// `outer` body grows past its stored size, growing `outer` at the top level
+/// (pushing `outer`'s grandparent sibling). One undo step restores the inner
+/// body edit and every reflowed position across both ancestor scopes.
+#[test]
+fn add_node_in_nested_body_cascades_to_grandparent_single_step_undo() {
+    let mut designer = setup_designer_with_network("main");
+    let outer = designer.add_node("map", DVec2::new(0.0, 0.0));
+    let inner = designer.add_node_scoped(&[outer], "map", DVec2::new(0.0, 0.0), None);
+
+    // Sibling of `inner` inside the outer body, in `inner`'s lower-right band.
+    let inner_old0 = node_size(&designer, &[outer], inner);
+    let s_mid = designer.add_node_scoped(
+        &[outer],
+        "union",
+        DVec2::new(inner_old0.x + 500.0, inner_old0.y + 500.0),
+        None,
+    );
+    // Sibling of `outer` at top level, in `outer`'s lower-right band.
+    let outer_old0 = node_size(&designer, &[], outer);
+    let s_top = designer.add_node(
+        "union",
+        DVec2::new(outer_old0.x + 500.0, outer_old0.y + 500.0),
+    );
+
+    let s_mid_before = pos(&designer, &[outer], s_mid);
+    let s_top_before = pos(&designer, &[], s_top);
+    let inner_old = node_size(&designer, &[outer], inner);
+    let outer_old = node_size(&designer, &[], outer);
+    designer.undo_stack.clear();
+
+    // Grow `inner`'s body a lot — cascades up two scope levels.
+    designer.add_node_scoped(&[outer, inner], "union", DVec2::new(1500.0, 1500.0), None);
+
+    let delta_mid = grew(node_size(&designer, &[outer], inner), inner_old);
+    let delta_top = grew(node_size(&designer, &[], outer), outer_old);
+    assert!(delta_mid.x > 0.0 && delta_mid.y > 0.0);
+    assert!(delta_top.x > 0.0 && delta_top.y > 0.0);
+    assert_eq!(pos(&designer, &[outer], s_mid), s_mid_before + delta_mid);
+    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+
+    // One undo restores the inner body edit and both ancestor positions.
+    assert!(designer.undo());
+    assert_eq!(node_size(&designer, &[outer], inner), inner_old);
+    assert_eq!(pos(&designer, &[outer], s_mid), s_mid_before);
+    assert_eq!(pos(&designer, &[], s_top), s_top_before);
+    assert!(!designer.undo_stack.can_undo());
+
+    // Redo re-applies the whole cascade in one step.
+    assert!(designer.redo());
+    assert_eq!(pos(&designer, &[outer], s_mid), s_mid_before + delta_mid);
+    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+}
+
+/// A body with enough slack to absorb the new node (it lands well within the
+/// existing body bounds) does not grow the owning HOF, so reflow moves nothing
+/// and a single bare `EditZoneBodyCommand` is pushed (no composite).
+#[test]
+fn add_node_in_body_with_slack_pushes_nothing() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    // Establish a large body so a later small node fits inside its bounds.
+    designer.add_node_scoped(&[map_id], "union", DVec2::new(1500.0, 1500.0), None);
+
+    let big_size = node_size(&designer, &[], map_id);
+    let sibling = designer.add_node("union", DVec2::new(big_size.x + 500.0, big_size.y + 500.0));
+    let sibling_before = pos(&designer, &[], sibling);
+    designer.undo_stack.clear();
+
+    // Add a small node well inside the existing body bounds — the body's
+    // bounding box (dominated by the far union) is unchanged, so the map does
+    // not grow and nothing is pushed.
+    designer.add_node_scoped(&[map_id], "float", DVec2::new(100.0, 100.0), None);
+
+    assert_eq!(node_size(&designer, &[], map_id), big_size);
+    assert_eq!(pos(&designer, &[], sibling), sibling_before);
+
+    // Single bare command: one undo (the stack was cleared above) leaves nothing.
+    assert!(designer.undo());
+    assert!(!designer.undo_stack.can_undo());
+    assert_eq!(pos(&designer, &[], sibling), sibling_before);
+}
+
+/// Duplicating a node inside a body grows it (the copy is offset *below* the
+/// original — `duplicate_node` only shifts vertically), exercising the
+/// `duplicate_node_scoped` Case-C call site: the parent sibling is pushed
+/// downward and one undo step restores both.
+#[test]
+fn duplicate_node_in_body_pushes_parent_sibling_single_step_undo() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
+    // A node at the body's lower edge so its duplicate (offset further down)
+    // expands the body's bottom.
+    let inner = designer.add_node_scoped(&[map_id], "union", DVec2::new(900.0, 900.0), None);
+
+    let map_old = node_size(&designer, &[], map_id);
+    let sibling = designer.add_node("union", DVec2::new(map_old.x + 500.0, map_old.y + 500.0));
+    let sibling_before = pos(&designer, &[], sibling);
+    designer.undo_stack.clear();
+
+    designer.duplicate_node_scoped(&[map_id], inner);
+
+    let map_new = node_size(&designer, &[], map_id);
+    let delta = grew(map_new, map_old);
+    // The duplicate is placed directly below the original, so the body grows
+    // only on the y axis (x delta is legitimately 0).
+    assert!(
+        delta.x == 0.0 && delta.y > 0.0,
+        "the duplicate should grow the body vertically, got delta {delta:?}"
+    );
+    assert_eq!(pos(&designer, &[], sibling), sibling_before + delta);
+
+    // One undo removes the duplicate AND restores the sibling.
+    assert!(designer.undo());
+    assert_eq!(node_size(&designer, &[], map_id), map_old);
+    assert_eq!(pos(&designer, &[], sibling), sibling_before);
+    assert!(!designer.undo_stack.can_undo());
 }
