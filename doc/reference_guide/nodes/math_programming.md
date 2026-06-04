@@ -699,6 +699,8 @@ Exposes its inline zone body as a first-class `Function` value on its output pin
 
 The body is authored exactly like an HOF body: click into the region to make it the active scope, add nodes, and drag capture wires across the boundary. Captures are ordinary capture wires drawn into the body — they are *not* part of the shape, so the kind/type editor only ever describes parameters and result.
 
+A `closure` can be promoted into a reusable named subnetwork (and the reverse) via the right-click **Extract to Network…** / **Convert to Closure** operations — see [Convert between a closure and a named network](../ui.md#manipulating-nodes-and-wires).
+
 ## apply
 
 Calls a function value, and either runs it to completion (full application) or partially applies it (returning a new function value that still needs the rest of its arguments). Where the four HOFs run a function across a stream, `apply` runs it once on a single argument frame. Two motivating uses:

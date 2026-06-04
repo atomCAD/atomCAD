@@ -17,6 +17,8 @@ undo/
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs
     ├── inline_node.rs             # Inline a custom node (top-level; whole-network snapshot, like text_edit)
+    ├── convert_to_closure.rs      # Network→Closure (top-level; before/after whole-network snapshot)
+    ├── extract_closure_body.rs    # Closure→Network inside a zone body (body snapshot + add/remove of N)
     ├── edit_zone_body.rs           # Body-scoped structural edits (whole-body snapshot)
     ├── set_zone_size.rs            # HOF body resize (begin/end coalesced)
     ├── set_collapse_mode.rs        # HOF body collapse mode

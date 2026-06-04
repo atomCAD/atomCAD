@@ -30,6 +30,7 @@ structure_designer/
 ├── node_display_policy_resolver.rs # Controls node visibility
 ├── selection_factoring.rs     # Extracts selection into subnetwork
 ├── node_inlining.rs           # Inlines a custom-node instance (inverse of factoring)
+├── closure_network_conversion.rs # Converts closure ⇄ custom-network instance (function-value forms)
 ├── node_network_gadget.rs     # Gadget trait for interactive editing
 ├── node_layout.rs             # Node size estimation (matches Flutter)
 ├── navigation_history.rs      # Back/forward network navigation

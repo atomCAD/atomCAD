@@ -252,6 +252,8 @@ The inline body is the *default* way to author an HOF's per-element computation,
 
 A subnetwork can also *return* a `closure` as its `Function` output, giving you a **function factory**: a subnetwork whose result is a function configured by its inputs.
 
+Because a `closure` and a custom node instance used as a function value are two representations of the same function-with-captures, you can convert between them at any time: right-click a `closure` to **Extract to Network…** (lift its body into a reusable named subnetwork), or right-click a custom node instance used as a function to **Convert to Closure** (pull its body inline). See [Convert between a closure and a named network](./ui.md#manipulating-nodes-and-wires) for details.
+
 See the [`closure`](./nodes/math_programming.md#closure), [`apply`](./nodes/math_programming.md#apply), and [Function values and closures](./nodes/math_programming.md#function-values-and-closures) sections of the nodes reference for the full details.
 
 To see higher-order functions in atomCAD in action please check out the *Pattern* demo [in the demos document](../../samples/demo_description.md).

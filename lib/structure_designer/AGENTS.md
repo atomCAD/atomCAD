@@ -22,6 +22,7 @@ structure_designer/
 ├── geometry_visualization_widget.dart          # Geometry 3D display
 ├── preferences_window.dart           # Settings dialog
 ├── factor_into_subnetwork_dialog.dart # Extract selection to subnetwork
+├── extract_closure_to_network_dialog.dart # Name dialog for Closure→Network conversion
 ├── import_cnnd_library_dialog.dart   # Import from .cnnd library
 ├── identifier_validation.dart        # Field/identifier validation rules
 ├── namespace_utils.dart              # User-type-name validation (networks + record defs share one namespace)
@@ -135,6 +136,7 @@ The `closure` and `apply` nodes (plus the four HOFs' optional `f` input pin) exp
 - **Model / API:** `setClosureData` / `setApplyData` are model methods (they forward `activeScopeChain` as `scope_path` to the Rust API); `getClosureData` / `getApplyData` are direct generated-API calls. `node_data_widget.dart` routes `'closure'` to the shared `ClosureShapeEditor` (Map/Filter/Fold/Foreach/Custom) and `'apply'` to `apply_editor.dart` (a placard — apply has no user-set kind UI; pins are derived from the wired `f` by the Rust post-pass).
 - **Editor:** the closure shape editor (preset + Custom branches) and the inline-body/`f`-pin toggle are documented in `node_data/AGENTS.md` and `node_network/AGENTS.md` respectively. The apply placard (`apply_editor.dart`) renders a "wire a function into `f` to materialize argument pins" hint when `f` is disconnected, or a read-only summary of the wired source's signature when `f` is connected; argument pins themselves are emitted by the Rust post-pass (`update_apply_pin_layouts_for_network`). The map editor's `output_type` field switches to a read-only `_DerivedOutputTypeDisplay` (`map_editor.dart`) whenever `f` is connected; on disconnect, the field returns to its stored value. Body rendering is inherited from the zones UI — no closure-specific rendering code.
 - **Add Node popup** is registry-driven, so `closure` and `apply` appear automatically once registered in Rust; no Flutter list edit was needed.
+- **Closure ⇄ network conversion** (`doc/design_closure_network_conversion.md`): the node context menu (`node_network/node_widget.dart` `_handleContextMenu`) offers **"Convert to Closure"** on a custom-network instance used as a function, and **"Extract to Network..."** on a `closure` node — gated by the model's `canConvertInstanceToClosure` / `canExtractClosureToNetwork` (computed before `showMenu`). Convert is one-click (snackbar on error); Extract opens `extract_closure_to_network_dialog.dart` (name-only). Model methods `convertInstanceToClosure` / `extractClosureToNetwork` forward `scopeChain` and return a `ConversionResult { success, error }`.
 
 ## Structural Function / Iter types
 
