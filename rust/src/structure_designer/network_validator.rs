@@ -261,34 +261,43 @@ fn check_interface_changed(network: &NodeNetwork) -> bool {
 /// Repairs argument counts in the network to match parameter counts.
 /// This ensures all nodes have the correct number of arguments for their type.
 fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) {
-    let mut nodes_to_fix = Vec::new();
-
-    // Collect nodes that need argument count adjustments
-    for (dest_node_id, dest_node) in &network.nodes {
-        if let Some(dest_node_type) = node_type_registry.get_node_type_for_node(dest_node) {
-            let expected_param_count = dest_node_type.parameters.len();
-            let current_arg_count = dest_node.arguments.len();
-
-            if current_arg_count != expected_param_count {
-                nodes_to_fix.push((*dest_node_id, expected_param_count, current_arg_count));
+    // Recurse into HOF zone bodies as well as the top-level nodes. The pin
+    // *layout* post-passes (`update_apply_pin_layouts_for_network` /
+    // `update_map_pin_layouts_for_network`) already recurse into bodies and
+    // derive `[f, arg0, …]` there, but they install it with the preserving-
+    // args variant (`refresh_args = false`) so they never grow the
+    // `arguments` vector themselves. Growing/truncating `arguments` to match
+    // the pin count is *this* function's job; doing it only on `network.nodes`
+    // left a body `apply`/instance with `parameters.len() > arguments.len()`,
+    // so connection gating (`can_connect_nodes`, which indexes `arguments`)
+    // rejected every wire into the extra pins. See
+    // `https://github.com/atomCAD/atomCAD/issues/331` and the
+    // "bare `network.nodes` walk skips body nodes" note in
+    // `structure_designer/AGENTS.md`.
+    crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
+        // `get_node_type_for_node` borrows from `node`, so extract the count
+        // before mutating `node.arguments`.
+        let Some(expected_count) = node_type_registry
+            .get_node_type_for_node(node)
+            .map(|nt| nt.parameters.len())
+        else {
+            return;
+        };
+        let current_count = node.arguments.len();
+        match current_count.cmp(&expected_count) {
+            Ordering::Less => {
+                // Add empty arguments when too few.
+                for _ in current_count..expected_count {
+                    node.arguments.push(Argument::new());
+                }
             }
-        }
-    }
-
-    // Apply argument count fixes
-    for (node_id, expected_count, current_count) in nodes_to_fix {
-        let dest_node_mut = network.nodes.get_mut(&node_id).unwrap();
-
-        if current_count < expected_count {
-            // Add empty arguments when too few
-            for _ in current_count..expected_count {
-                dest_node_mut.arguments.push(Argument::new());
+            Ordering::Greater => {
+                // Remove excess arguments when too many.
+                node.arguments.truncate(expected_count);
             }
-        } else {
-            // Remove excess arguments when too many
-            dest_node_mut.arguments.truncate(expected_count);
+            Ordering::Equal => {}
         }
-    }
+    });
 }
 
 /// Removes wire connections that reference output pins that no longer exist on the source node.

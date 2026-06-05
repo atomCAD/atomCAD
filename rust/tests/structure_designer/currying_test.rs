@@ -2442,3 +2442,154 @@ fn apply_pin_layout_rederived_on_cnnd_load_with_zone_input_f() {
          zone-input `(Int) -> Int` source"
     );
 }
+
+/// Read the `arguments` (wire-slot) count of an `apply` node living inside
+/// `owner_id`'s body. The post-pass derives the *pin layout*
+/// (`custom_node_type.parameters`); the matching `arguments` slots are grown
+/// separately by `repair_network_arguments`. The two must agree, or connection
+/// gating (which indexes `arguments`) rejects wires into the extra pins.
+fn body_apply_arg_count(designer: &StructureDesigner, owner_id: u64, apply_id: u64) -> usize {
+    let body = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .nodes
+        .get(&owner_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .expect("owner HOF should own a body");
+    body.nodes.get(&apply_id).unwrap().arguments.len()
+}
+
+// =============================================================================
+// Regression: https://github.com/atomCAD/atomCAD/issues/331
+//
+// "apply nodes inside a closure: cannot connect a fitting-type wire to the
+// derived arg pins." A body-internal `apply` whose `f` is wired derives its
+// arg-pin LAYOUT (`custom_node_type.parameters` → `[f, arg0, …]`) via the
+// recursive apply post-pass. On the *interactive* validate path the post-pass
+// installs that layout with `refresh_args = false` (positional preservation —
+// it must stay non-destructive toward an under-derived `.cnnd` load), so it
+// does NOT grow the node's `arguments` vector. Growing `arguments` to match the
+// new pin count is the job of `repair_network_arguments` — which, before the
+// fix, walked only the TOP-LEVEL `network.nodes` and skipped every zone body
+// (the recurring "bare `network.nodes` walk skips body nodes" bug class, see
+// `structure_designer/AGENTS.md`).
+//
+// Net effect inside a body: `parameters.len() == 2` but `arguments.len() == 1`.
+// The arg pin renders in the UI (it comes from `parameters`), but
+// `NodeNetwork::can_connect_nodes` rejects every wire into it because its
+// `dest_param_index >= dest_node.arguments.len()` guard fires. The identical
+// `apply` at the TOP level works (top-level `repair_network_arguments` grows
+// its args) — which is exactly why the user saw it fail *only* inside a
+// closure/zone body.
+//
+// Reported against a `closure` body; reproduced here with a `closure` outer
+// whose `(Int) -> Int` parameter (the "delayed argument") feeds `apply.f`.
+// The root cause is body-type-agnostic, so the same fix covers `map` / `filter`
+// / `fold` / `foreach` bodies too.
+// =============================================================================
+
+#[test]
+fn apply_arg_pin_connectable_inside_closure_body() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+
+    // Outer `closure` with a single parameter `g : (Int) -> Int` — the user's
+    // "delayed argument". Its zone-input pin 0 therefore carries a function
+    // value that an inner `apply` can call.
+    let outer = designer.add_node("closure", DVec2::new(0.0, 0.0));
+    let g_type = DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Int));
+    phase2_set_node_data(
+        &mut designer,
+        "main",
+        outer,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![g_type, DataType::Int],
+            param_names: vec!["g".to_string()],
+            custom_label: None,
+        }),
+    );
+
+    // Add an `apply` and an `int` source INSIDE the closure body through the
+    // real scoped add path, so `apply` starts with its bare `[f]` layout
+    // (`arguments.len() == 1`).
+    let apply_id = designer.add_node_scoped(&[outer], "apply", DVec2::new(200.0, 0.0), None);
+    let int_id = designer.add_node_scoped(&[outer], "int", DVec2::new(0.0, 120.0), None);
+
+    // Wire apply.f ← the closure's `g` zone-input pin (pin 0, depth 1).
+    {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&outer)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        body.nodes.get_mut(&apply_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: outer,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+    }
+
+    // The interactive path: validate the active network. This runs the apply
+    // post-pass (preserving-args variant) followed by `repair_network_arguments`.
+    designer.validate_active_network();
+
+    // The derived pin layout has `f` + one `arg0` (this already passed before
+    // the fix — the layout was correct; only the wire-slot count lagged).
+    assert_eq!(
+        body_apply_param_count(&designer, outer, apply_id),
+        2,
+        "body apply must derive [f, arg0] from its (Int) -> Int zone-input source"
+    );
+
+    // The core invariant the bug violated: the `arguments` vector must grow to
+    // match the derived pin count even inside a zone body.
+    assert_eq!(
+        body_apply_arg_count(&designer, outer, apply_id),
+        2,
+        "repair_network_arguments must grow a BODY apply's arguments to match \
+         its derived pin count (issue #331)"
+    );
+
+    // The user-visible symptom: an `Int` source must be connectable to the
+    // derived `arg0` pin (param index 1) inside the body.
+    assert!(
+        designer.can_connect_nodes_scoped(&[outer], int_id, 0, apply_id, 1),
+        "an Int source must connect to the body apply's derived arg0 pin (issue #331)"
+    );
+
+    // …and actually performing the scoped connect must land the wire.
+    designer.connect_nodes_scoped(&[outer], int_id, 0, apply_id, 1);
+    let arg0_wired = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .nodes
+            .get(&outer)
+            .unwrap()
+            .zone
+            .as_ref()
+            .unwrap();
+        !body.nodes.get(&apply_id).unwrap().arguments[1]
+            .incoming_wires
+            .is_empty()
+    };
+    assert!(
+        arg0_wired,
+        "the scoped connect must persist a wire into the body apply's arg0"
+    );
+}
