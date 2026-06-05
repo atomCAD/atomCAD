@@ -396,6 +396,131 @@ fn test_clipboard_updates_node_type_name_on_rename() {
     assert_eq!(clipboard_node.node_type_name, "helper_v2");
 }
 
+// ===== CLIPBOARD RENAME CASCADE DESCENDS INTO ZONE BODIES =====
+//
+// Sibling of issue #331's body-skip: when an HOF/closure node is on the
+// clipboard and its inline body references a custom network, renaming that
+// network must update the body instance's `node_type_name` too. The clipboard
+// fixup loops in `rename_node_network` / `rename_namespace` walked only the
+// top-level `clipboard.nodes`, so a copied-then-renamed-then-pasted body kept a
+// stale/dangling reference. (The authoritative registry-side rename,
+// `apply_rename_core`, already recurses via `walk_all_nodes_mut`.)
+
+/// Read the `node_type_name` of the single instance node living inside the
+/// clipboard HOF node's zone body. Panics if the clipboard isn't a single HOF
+/// with a one-node body (the exact shape these tests build).
+fn clipboard_body_instance_type_name(designer: &StructureDesigner) -> String {
+    let clipboard = designer.clipboard.as_ref().expect("clipboard present");
+    let hof = clipboard
+        .nodes
+        .values()
+        .find(|n| n.zone.is_some())
+        .expect("clipboard should hold an HOF node with a body");
+    let body = hof.zone.as_ref().unwrap();
+    body.nodes
+        .values()
+        .next()
+        .expect("HOF body should hold the instance node")
+        .node_type_name
+        .clone()
+}
+
+#[test]
+fn test_clipboard_updates_body_node_type_name_on_rename() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Custom network "helper" usable as a node type.
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("helper")
+            .unwrap();
+        network.set_return_node(sphere_id);
+    }
+    designer.validate_active_network();
+
+    // main: a `map` HOF whose BODY holds a "helper" instance.
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let map_id = designer.add_node("map", DVec2::ZERO);
+    designer.add_node_scoped(&[map_id], "helper", DVec2::ZERO, None);
+
+    // Select & copy the map node — its body travels with it onto the clipboard.
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        network.select_node(map_id);
+    }
+    assert!(designer.copy_selection());
+    assert_eq!(
+        clipboard_body_instance_type_name(&designer),
+        "helper",
+        "precondition: clipboard body instance is 'helper' before rename"
+    );
+
+    designer.rename_node_network("helper", "helper_v2");
+
+    assert_eq!(
+        clipboard_body_instance_type_name(&designer),
+        "helper_v2",
+        "clipboard rename cascade must descend into HOF zone bodies"
+    );
+}
+
+#[test]
+fn test_clipboard_updates_body_node_type_name_on_namespace_rename() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Custom network "ns.helper" usable as a node type.
+    designer.add_node_network("ns.helper");
+    designer.set_active_node_network_name(Some("ns.helper".to_string()));
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("ns.helper")
+            .unwrap();
+        network.set_return_node(sphere_id);
+    }
+    designer.validate_active_network();
+
+    // main: a `map` HOF whose BODY holds an "ns.helper" instance.
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let map_id = designer.add_node("map", DVec2::ZERO);
+    designer.add_node_scoped(&[map_id], "ns.helper", DVec2::ZERO, None);
+
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        network.select_node(map_id);
+    }
+    assert!(designer.copy_selection());
+    assert_eq!(
+        clipboard_body_instance_type_name(&designer),
+        "ns.helper",
+        "precondition: clipboard body instance is 'ns.helper' before rename"
+    );
+
+    // Bulk namespace rename: ns.* -> ns2.*
+    designer.rename_namespace("ns", "ns2");
+
+    assert_eq!(
+        clipboard_body_instance_type_name(&designer),
+        "ns2.helper",
+        "namespace rename cascade must descend into HOF zone bodies"
+    );
+}
+
 // ===== CLIPBOARD INVALIDATION ON DELETE =====
 
 #[test]

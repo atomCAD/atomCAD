@@ -1337,13 +1337,16 @@ impl StructureDesigner {
         // Navigation history (not available in UndoContext)
         self.navigation_history.rename_network(old_name, new_name);
 
-        // Clipboard node_type_names (not available in UndoContext)
+        // Clipboard node_type_names (not available in UndoContext). Walk into
+        // HOF/closure zone bodies too — a copied body's instance of the renamed
+        // network must be updated or it dangles on paste (mirrors
+        // `apply_rename_core`, which recurses for the same reason).
         if let Some(ref mut clipboard) = self.clipboard {
-            for node in clipboard.nodes.values_mut() {
+            crate::structure_designer::node_network::walk_all_nodes_mut(clipboard, &mut |node| {
                 if node.node_type_name == old_name {
                     node.node_type_name = new_name.to_string();
                 }
-            }
+            });
         }
 
         self.set_dirty(true);
@@ -1415,16 +1418,18 @@ impl StructureDesigner {
             self.navigation_history.rename_network(old_name, new_name);
         }
 
-        // Update clipboard for all renames
+        // Update clipboard for all renames. Walk into HOF/closure zone bodies
+        // too so a copied body's instance of a renamed network is updated and
+        // doesn't dangle on paste (same body-skip class as the single rename).
         if let Some(ref mut clipboard) = self.clipboard {
-            for node in clipboard.nodes.values_mut() {
+            crate::structure_designer::node_network::walk_all_nodes_mut(clipboard, &mut |node| {
                 for (old_name, new_name) in &rename_pairs {
                     if node.node_type_name == *old_name {
                         node.node_type_name = new_name.clone();
                         break;
                     }
                 }
-            }
+            });
         }
 
         self.set_dirty(true);
