@@ -421,6 +421,22 @@ impl DataType {
         dest_type: &DataType,
         registry: &NodeTypeRegistry,
     ) -> bool {
+        // Public entry. Nullary function forcing (`() -> T` → `T`) is permitted
+        // only at this top level; internal recursive calls pass `top_level =
+        // false` so the rule never fires at nested element / parameter / field
+        // positions (e.g. `[() -> T]` does NOT convert to `[T]`). Every wire
+        // gate — `can_connect_nodes`, the validator, repair — routes through
+        // this entry, so they all get the rule consistently. See
+        // `doc/design_nullary_function_coercion.md` (D1).
+        Self::can_be_converted_to_impl(source_type, dest_type, registry, true)
+    }
+
+    fn can_be_converted_to_impl(
+        source_type: &DataType,
+        dest_type: &DataType,
+        registry: &NodeTypeRegistry,
+        top_level: bool,
+    ) -> bool {
         // Same types are always compatible
         if source_type == dest_type {
             return true;
@@ -433,6 +449,30 @@ impl DataType {
         // See `doc/design_node_execution.md` ("The Unit type").
         if matches!(dest_type, DataType::Unit) {
             return true;
+        }
+
+        // Nullary function forcing: `() -> T` is accepted wherever its
+        // (non-function) result type `T` is accepted — the canonical `T^1 ≅ T`
+        // isomorphism's forcing direction, exposed one-directionally (the
+        // reverse `T → () -> T` is intentionally NOT added). `top_level`-gated,
+        // so a nested `[() -> T]` does not convert to `[T]`; the runtime twin
+        // `NetworkEvaluator::force_nullary_arg` mirrors exactly this reach
+        // (including the `T → [T]` / `T → Iter[T]` broadcast composition, which
+        // falls out of the recursive call below). The `!is_function_shape`
+        // guard keeps `() -> T → () -> T` / `→ AnyFunction` flowing through the
+        // function arms below as ordinary function values rather than forcing.
+        // See `doc/design_nullary_function_coercion.md`.
+        if top_level {
+            if let DataType::Function(src_ft) = source_type {
+                if src_ft.parameter_types.is_empty() && !dest_type.is_function_shape() {
+                    return Self::can_be_converted_to_impl(
+                        &src_ft.output_type,
+                        dest_type,
+                        registry,
+                        false,
+                    );
+                }
+            }
         }
 
         // Records: full width + structural depth subtyping. Two `Named(n)`
@@ -493,10 +533,11 @@ impl DataType {
         if let DataType::Iterator(target_element_type) = dest_type {
             // Rule 1: array source, iterator destination → eager wrap.
             if let DataType::Array(source_element_type) = source_type {
-                return DataType::can_be_converted_to(
+                return Self::can_be_converted_to_impl(
                     source_element_type,
                     target_element_type,
                     registry,
+                    false,
                 );
             }
             // Rule 2 (negative): different iterator element types are not
@@ -505,7 +546,12 @@ impl DataType {
                 return false;
             }
             // Rule 3: scalar broadcast.
-            return DataType::can_be_converted_to(source_type, target_element_type, registry);
+            return Self::can_be_converted_to_impl(
+                source_type,
+                target_element_type,
+                registry,
+                false,
+            );
         }
 
         // No `Iter[T] → [T]` and no `Iter[T] → T`. Reject any conversion whose
@@ -517,7 +563,7 @@ impl DataType {
 
         // Check if we can convert T to [T] (single element to array)
         if let DataType::Array(target_element_type) = dest_type {
-            if DataType::can_be_converted_to(source_type, target_element_type, registry) {
+            if Self::can_be_converted_to_impl(source_type, target_element_type, registry, false) {
                 return true;
             }
         }
@@ -529,7 +575,12 @@ impl DataType {
         if let (DataType::Array(source_element_type), DataType::Array(target_element_type)) =
             (source_type, dest_type)
         {
-            if DataType::can_be_converted_to(source_element_type, target_element_type, registry) {
+            if Self::can_be_converted_to_impl(
+                source_element_type,
+                target_element_type,
+                registry,
+                false,
+            ) {
                 return true;
             }
         }
@@ -550,7 +601,7 @@ impl DataType {
             }
             for (src_param, dest_param) in src_ft.parameter_types.iter().zip(leading_params.iter())
             {
-                if !DataType::can_be_converted_to(src_param, dest_param, registry) {
+                if !Self::can_be_converted_to_impl(src_param, dest_param, registry, false) {
                     return false;
                 }
             }
@@ -576,10 +627,11 @@ impl DataType {
             if source_func.parameter_types.len() != dest_func.parameter_types.len() {
                 return false;
             }
-            if !DataType::can_be_converted_to(
+            if !Self::can_be_converted_to_impl(
                 &source_func.output_type,
                 &dest_func.output_type,
                 registry,
+                false,
             ) {
                 return false;
             }
@@ -588,7 +640,7 @@ impl DataType {
                 .iter()
                 .zip(dest_func.parameter_types.iter())
             {
-                if !DataType::can_be_converted_to(source_param, dest_param, registry) {
+                if !Self::can_be_converted_to_impl(source_param, dest_param, registry, false) {
                     return false;
                 }
             }
@@ -729,6 +781,13 @@ impl DataType {
         if matches!(source_type, DataType::AnyFunction { .. }) {
             return false;
         }
+
+        // Note: nullary function forcing (`() -> T` → `T`) is deliberately NOT
+        // applied in this strict variant. It is a wire-level coercion gated
+        // through `can_be_converted_to`; the drag-aware add-node popup (the only
+        // caller of the strict variant) stays conservative and does not suggest
+        // value-typed pins for a `() -> T` drag source. See
+        // `doc/design_nullary_function_coercion.md` (D1, Non-goals).
 
         // Function structural match: same arity, return + parameters pairwise
         // convertible, recursing strictly so broadcast can't sneak in via a

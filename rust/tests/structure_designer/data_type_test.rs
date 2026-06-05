@@ -458,3 +458,140 @@ fn simple_input_skips_normalization_allocation() {
         DataType::from_string(s).unwrap_or_else(|e| panic!("failed on {s:?}: {e}"));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Nullary function coercion (`() -> T` → `T`).
+// See `doc/design_nullary_function_coercion.md`.
+// ---------------------------------------------------------------------------
+
+/// `() -> T` as a `DataType`.
+fn nullary(output: DataType) -> DataType {
+    DataType::Function(FunctionType::new(vec![], output))
+}
+
+#[test]
+fn nullary_forces_to_its_result_type() {
+    let registry = NodeTypeRegistry::new();
+    // `() -> Int` flows into an `Int` pin.
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &DataType::Int,
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_forces_through_value_widening() {
+    let registry = NodeTypeRegistry::new();
+    // The forced result still gets the ordinary leaf widenings: `() -> Int`
+    // into a `Float` pin (Int -> Float), `() -> Crystal` into a `HasAtoms` pin
+    // (concrete -> abstract phase upcast).
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &DataType::Float,
+        &registry
+    ));
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Crystal),
+        &DataType::HasAtoms,
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_does_not_force_when_result_is_incompatible() {
+    let registry = NodeTypeRegistry::new();
+    // `() -> Int` into a `Bool` pin: Int is not convertible to Bool, so the
+    // forced value isn't either.
+    assert!(!DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &DataType::Bool,
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_coercion_is_one_directional() {
+    let registry = NodeTypeRegistry::new();
+    // The reverse `T -> () -> T` (auto-suspension) is intentionally NOT added.
+    assert!(!DataType::can_be_converted_to(
+        &DataType::Int,
+        &nullary(DataType::Int),
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_to_function_pin_stays_a_function() {
+    let registry = NodeTypeRegistry::new();
+    // A function-shaped destination is handled by the function arm, not the
+    // nullary arm: `() -> Int` into a `() -> Float` pin succeeds structurally
+    // (same arity, Int -> Float return) and remains a function value — it is
+    // NOT forced. We can only assert the type-level acceptance here.
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &nullary(DataType::Float),
+        &registry
+    ));
+    // And into an `apply.f`-style `AnyFunction` slot.
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &DataType::AnyFunction {
+            leading_params: vec![],
+        },
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_composes_with_scalar_broadcast_into_collections() {
+    let registry = NodeTypeRegistry::new();
+    // Case A (allowed): a *scalar* `() -> T` source forces to `T`, then the
+    // ordinary single-element broadcast wraps it into a collection pin.
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &DataType::Array(Box::new(DataType::Int)),
+        &registry
+    ));
+    assert!(DataType::can_be_converted_to(
+        &nullary(DataType::Int),
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_does_not_recurse_through_collection_sources() {
+    let registry = NodeTypeRegistry::new();
+    // Case B (rejected, top-level-only rule / D1): an *array of* nullary
+    // functions does NOT convert to an array of values. The runtime only
+    // forces at the top-level pin, so accepting this would be a type-lie.
+    assert!(!DataType::can_be_converted_to(
+        &DataType::Array(Box::new(nullary(DataType::Int))),
+        &DataType::Array(Box::new(DataType::Int)),
+        &registry
+    ));
+}
+
+#[test]
+fn nullary_not_forced_in_strict_no_broadcast_variant() {
+    let registry = NodeTypeRegistry::new();
+    // The drag-aware strict variant deliberately does not apply nullary forcing.
+    assert!(!DataType::can_be_converted_to_strict_no_broadcast(
+        &nullary(DataType::Int),
+        &DataType::Int,
+        &registry
+    ));
+}
+
+#[test]
+fn higher_arity_functions_are_never_forced() {
+    let registry = NodeTypeRegistry::new();
+    // `(Int) -> Int` is not nullary, so it does not force into an `Int` pin.
+    let unary = DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Int));
+    assert!(!DataType::can_be_converted_to(
+        &unary,
+        &DataType::Int,
+        &registry
+    ));
+}

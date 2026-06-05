@@ -14,7 +14,9 @@ use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
-use crate::structure_designer::evaluator::zone_closure::build_node_function_closure;
+use crate::structure_designer::evaluator::zone_closure::{
+    build_node_function_closure, run_closure_once,
+};
 use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_point_cloud;
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
 use crate::structure_designer::node_data::EvalOutput;
@@ -1233,6 +1235,21 @@ impl NetworkEvaluator {
                     return error_in_input(&input_name);
                 }
 
+                // Force a `() -> T` source to `T` before the merge when the
+                // array's element type wants the value (see
+                // `doc/design_nullary_function_coercion.md`).
+                let (result, source_type) = self.force_nullary_arg(
+                    network_stack,
+                    registry,
+                    context,
+                    result,
+                    source_type,
+                    &expected_type,
+                );
+                if let NetworkResult::Error(_) = result {
+                    return error_in_input(&input_name);
+                }
+
                 // convert_to handles conversion to array types, so we can convert directly.
                 // The result is guaranteed to be an array, containing one or more elements.
                 let converted_result = result.convert_to(&source_type, &expected_type, registry);
@@ -1254,11 +1271,75 @@ impl NetworkEvaluator {
                 if let NetworkResult::Error(_) = result {
                     return error_in_input(&input_name);
                 }
+                // Force a `() -> T` source to `T` when this pin wants the value
+                // (see `doc/design_nullary_function_coercion.md`).
+                let (result, source_type) = self.force_nullary_arg(
+                    network_stack,
+                    registry,
+                    context,
+                    result,
+                    source_type,
+                    &expected_type,
+                );
+                if let NetworkResult::Error(_) = result {
+                    return error_in_input(&input_name);
+                }
                 result.convert_to(&source_type, &expected_type, registry)
             } else {
                 NetworkResult::None // Nothing is connected
             }
         }
+    }
+
+    /// Nullary function forcing: if `result` is an arity-0 function value
+    /// (`() -> T`) flowing into a slot that wants the value `T`, run the
+    /// closure once with an empty frame and return the produced value plus its
+    /// inferred type; otherwise pass the value through untouched.
+    ///
+    /// The "wants the value" test peeks **one** `Array` level — so `[T]` forces
+    /// each `() -> T` wire to `T` before the merge, while `[() -> T]` keeps the
+    /// functions — but does not recurse deeper. This is the runtime twin of the
+    /// top-level static arm in `DataType::can_be_converted_to`; the two reach
+    /// exactly the same set of (source, dest) pairs. Higher-arity or
+    /// non-function sources are returned unchanged. An `Error` produced while
+    /// forcing propagates as the new result for the caller's error check.
+    ///
+    /// `param_types` (the closure's body frame size) is the correct
+    /// "consumes zero caller args" test: a partially-applied closure that has
+    /// become nullary has empty `param_types`, and `run_closure_once` prepends
+    /// its `pre_supplied_args` to the (empty) caller frame. See
+    /// `doc/design_nullary_function_coercion.md`.
+    fn force_nullary_arg<'a>(
+        &self,
+        network_stack: &[NetworkStackElement<'a>],
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+        result: NetworkResult,
+        source_type: DataType,
+        expected_type: &DataType,
+    ) -> (NetworkResult, DataType) {
+        let NetworkResult::Function(closure) = &result else {
+            return (result, source_type);
+        };
+        if !closure.param_types.is_empty() {
+            return (result, source_type);
+        }
+        // The slot that will receive the value: an array pin merges/broadcasts
+        // at its element type, every other pin at its own type.
+        let slot = match expected_type {
+            DataType::Array(elem) => elem.as_ref(),
+            other => other,
+        };
+        if slot.is_function_shape() {
+            return (result, source_type);
+        }
+        // Fall back to the declared return type if the forced value can't be
+        // inferred (e.g. an array whose elements don't infer); `Error`/`None`
+        // forced values are handled by the caller's error check / `convert_to`.
+        let declared_return = *closure.function_type().output_type;
+        let forced = run_closure_once(self, network_stack, registry, context, closure, Vec::new());
+        let forced_type = forced.infer_data_type().unwrap_or(declared_return);
+        (forced, forced_type)
     }
 
     /// Resolve one `IncomingWire` to its `(NetworkResult, source_data_type)`

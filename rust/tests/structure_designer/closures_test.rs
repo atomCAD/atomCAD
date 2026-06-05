@@ -2418,3 +2418,134 @@ fn paste_closure_with_capture_remaps_capture_wire() {
         15
     );
 }
+
+// ============================================================================
+// Nullary function coercion (`() -> T` → `T`).
+// See `doc/design_nullary_function_coercion.md`.
+// ============================================================================
+
+/// Add a nullary `() -> Int` `closure` node whose body returns the constant
+/// `value`. Returns the closure node's id.
+fn add_nullary_int_closure(
+    designer: &mut StructureDesigner,
+    network: &str,
+    value: i32,
+    y: f64,
+) -> u64 {
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, y));
+    set_node_data(
+        designer,
+        network,
+        closure_id,
+        Box::new(ClosureData {
+            // `Custom`, arity 0: `param_names` is empty and the single
+            // `type_args` entry (index `param_names.len() == 0`) is the return
+            // type. The resulting function type is `() -> Int`.
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int],
+            param_names: vec![],
+            custom_label: None,
+        }),
+    );
+
+    // Body: `int(value)` → `out` zone-output. No zone-input wiring (no params).
+    let registry = &mut designer.node_type_registry;
+    let body = registry
+        .node_networks
+        .get_mut(network)
+        .unwrap()
+        .nodes
+        .get_mut(&closure_id)
+        .unwrap()
+        .zone_mut()
+        .unwrap();
+    let const_id = body.add_node("int", DVec2::new(50.0, 0.0), 0, Box::new(IntData { value }));
+    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        &registry.built_in_node_types,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+        registry
+            .node_networks
+            .get_mut(network)
+            .unwrap()
+            .nodes
+            .get_mut(&closure_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&const_id)
+            .unwrap(),
+        true,
+    );
+    wire_body_node_to_zone_output(designer, network, closure_id, const_id);
+    closure_id
+}
+
+/// Add a top-level `expr` node with one `Int` parameter `x`. Returns its id.
+fn add_int_expr(designer: &mut StructureDesigner, network: &str, expression: &str, y: f64) -> u64 {
+    let mut expr_data = ExprData {
+        parameters: vec![ExprParameter {
+            id: None,
+            name: "x".to_string(),
+            data_type: DataType::Int,
+            data_type_str: None,
+        }],
+        expression: expression.to_string(),
+        expr: None,
+        error: None,
+        output_type: None,
+    };
+    let _ = expr_data.parse_and_validate(0);
+    let id = designer.add_node("expr", DVec2::new(250.0, y));
+    set_node_data(designer, network, id, Box::new(expr_data));
+    id
+}
+
+/// A zero-parameter `closure` wired directly into a value-typed input pin (no
+/// `apply` node) is forced at the consuming pin: `() -> Int` flows into the
+/// `Int` parameter of an `expr`, which sees the value `42` and computes `84`.
+#[test]
+fn nullary_closure_forces_into_value_pin() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_nullary_int_closure(&mut designer, "main", 42, 0.0);
+    let expr_id = add_int_expr(&mut designer, "main", "x * 2", 0.0);
+
+    // `connect_nodes` runs the connection gate, which must accept `() -> Int`
+    // into the `Int` pin via the nullary coercion rule.
+    designer.connect_nodes(closure_id, 0, expr_id, 0);
+
+    let result = evaluate_node(&designer, "main", expr_id);
+    assert_eq!(extract_int(result), 84);
+}
+
+/// The connection gate accepts a `() -> Int` source into an `Int` pin. (The
+/// reverse direction `Int → () -> Int` is covered at the type level by
+/// `data_type_test::nullary_coercion_is_one_directional`.)
+#[test]
+fn nullary_closure_connection_is_accepted() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_nullary_int_closure(&mut designer, "main", 7, 0.0);
+    let expr_id = add_int_expr(&mut designer, "main", "x", 0.0);
+
+    assert!(designer.can_connect_nodes(closure_id, 0, expr_id, 0));
+}
+
+/// Reuse: one nullary `closure` forced into two independent value pins. Each
+/// consumer forces the closure independently and gets the same value.
+#[test]
+fn nullary_closure_forced_by_two_consumers() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = add_nullary_int_closure(&mut designer, "main", 5, 0.0);
+    let expr_a = add_int_expr(&mut designer, "main", "x + 1", -100.0);
+    let expr_b = add_int_expr(&mut designer, "main", "x + 2", 100.0);
+
+    designer.connect_nodes(closure_id, 0, expr_a, 0);
+    designer.connect_nodes(closure_id, 0, expr_b, 0);
+
+    assert_eq!(extract_int(evaluate_node(&designer, "main", expr_a)), 6);
+    assert_eq!(extract_int(evaluate_node(&designer, "main", expr_b)), 7);
+}
