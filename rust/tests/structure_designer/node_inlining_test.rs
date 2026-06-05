@@ -77,53 +77,127 @@ fn pos(network: &NodeNetwork, id: u64) -> DVec2 {
     network.nodes[&id].position
 }
 
-/// A `node_id -> size` map giving every node in `network` the same `size`. For
-/// make_space tests that don't exercise the size-aware safe-zone boundary.
-fn uniform_sizes(network: &NodeNetwork, size: DVec2) -> HashMap<u64, DVec2> {
-    network.nodes.keys().map(|&id| (id, size)).collect()
-}
-
 // ---------------------------------------------------------------------------
 // make_space_for_inline
 // ---------------------------------------------------------------------------
 
 #[test]
-fn make_space_shifts_lower_right_quadrant_on_both_axes() {
+fn make_space_far_diagonal_shifts_both_axes() {
+    // A node whose top-left corner is past the instance's far (lower-right)
+    // corner on BOTH axes is reached diagonally by the growth and shifts on
+    // both axes, preserving its offset from the bottom-right corner.
+    let mut network = NodeNetwork::new_empty();
+
+    let anchor = DVec2::new(0.0, 0.0);
+    let original_size = DVec2::new(160.0, 100.0); // r.LR = (160, 100)
+    let content_size = DVec2::new(300.0, 250.0); // delta = (140, 150)
+
+    let instance = add(&mut network, "union", anchor, 0);
+    let far = add(&mut network, "union", DVec2::new(200.0, 150.0), 0); // past LR on both
+
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+
+    assert_eq!(delta, DVec2::new(140.0, 150.0));
+    assert_eq!(pos(&network, instance), anchor); // anchor never moves
+    assert_eq!(pos(&network, far), DVec2::new(340.0, 300.0)); // += (140, 150)
+}
+
+#[test]
+fn make_space_overlap_zone_splits_on_diagonal() {
+    // In the near-corner quadrant but not past the far corner on both axes, the
+    // instance's own diagonal (r.UL → r.LR) decides the single shift direction.
+    // r = (0,0)..(160,100), so W=160, H=100; cross = 160*v.y - 100*v.x.
+    //   cross < 0 → above the diagonal → shift RIGHT.
+    //   cross > 0 → below the diagonal → shift DOWN.
+    //   cross == 0 → on the diagonal → tie breaks to RIGHT.
     let mut network = NodeNetwork::new_empty();
 
     let anchor = DVec2::new(0.0, 0.0);
     let original_size = DVec2::new(160.0, 100.0);
-    let content_size = DVec2::new(300.0, 250.0);
-    // Expected delta = max(0, content - original) = (140, 150).
+    let content_size = DVec2::new(300.0, 250.0); // delta = (140, 150)
 
     let instance = add(&mut network, "union", anchor, 0);
-    let right_only = add(&mut network, "union", DVec2::new(200.0, 0.0), 0); // x past, y within
-    let below_only = add(&mut network, "union", DVec2::new(0.0, 200.0), 0); // y past, x within
-    let lower_right = add(&mut network, "union", DVec2::new(300.0, 300.0), 0); // both past
-    let overlapping = add(&mut network, "union", DVec2::new(50.0, 50.0), 0); // neither past
+    // Right of r, within its vertical band: cross = 160*50 - 100*200 < 0 → RIGHT.
+    let right_side = add(&mut network, "union", DVec2::new(200.0, 50.0), 0);
+    // Below r, within its horizontal band: cross = 160*150 - 100*50 > 0 → DOWN.
+    let below_side = add(&mut network, "union", DVec2::new(50.0, 150.0), 0);
+    // Exactly on the diagonal: cross = 160*50 - 100*80 = 0 → tie → RIGHT.
+    let on_diag = add(&mut network, "union", DVec2::new(80.0, 50.0), 0);
 
-    let szs = uniform_sizes(&network, DVec2::new(160.0, 80.0));
-    let delta = make_space_for_inline(
-        &mut network,
-        instance,
-        anchor,
-        original_size,
-        content_size,
-        &szs,
-    );
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
 
     assert_eq!(delta, DVec2::new(140.0, 150.0));
+    assert_eq!(pos(&network, right_side), DVec2::new(340.0, 50.0)); // x += 140
+    assert_eq!(pos(&network, below_side), DVec2::new(50.0, 300.0)); // y += 150
+    assert_eq!(pos(&network, on_diag), DVec2::new(220.0, 50.0)); // tie → x += 140
+}
 
-    // Instance never moves (it's the anchor).
-    assert_eq!(pos(&network, instance), anchor);
-    // Right-only: x shifts, y stays.
-    assert_eq!(pos(&network, right_only), DVec2::new(340.0, 0.0));
-    // Below-only: y shifts, x stays.
-    assert_eq!(pos(&network, below_only), DVec2::new(0.0, 350.0));
-    // Lower-right: both shift.
-    assert_eq!(pos(&network, lower_right), DVec2::new(440.0, 450.0));
-    // Overlapping: no move.
-    assert_eq!(pos(&network, overlapping), DVec2::new(50.0, 50.0));
+#[test]
+fn make_space_moves_overlapping_node_under_instance() {
+    // The fix: a node sitting a few pixels *under* / inside the instance (its
+    // top-left within r, not past the far corner) is still pushed out. The old
+    // far-corner rule left such a node unmoved (it failed `p.y > r.LR.y`).
+    let mut network = NodeNetwork::new_empty();
+
+    let anchor = DVec2::new(0.0, 0.0);
+    let original_size = DVec2::new(160.0, 100.0); // r.LR.y = 100
+    let content_size = DVec2::new(300.0, 250.0); // delta = (140, 150)
+
+    let instance = add(&mut network, "union", anchor, 0);
+    // Top-left inside r near the bottom: y=90 < 100, so NOT past the far corner,
+    // but in the near-corner quadrant. cross = 160*90 - 100*20 > 0 → DOWN.
+    let under = add(&mut network, "union", DVec2::new(20.0, 90.0), 0);
+
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+
+    assert_eq!(delta, DVec2::new(140.0, 150.0));
+    assert_eq!(pos(&network, under), DVec2::new(20.0, 240.0)); // y += 150
+}
+
+#[test]
+fn make_space_leaves_above_and_left_untouched() {
+    // A node above or left of the near corner (one coordinate strictly before
+    // r.UL) is never reached by the rightward/downward growth and stays put.
+    let mut network = NodeNetwork::new_empty();
+
+    let anchor = DVec2::new(0.0, 0.0);
+    let original_size = DVec2::new(160.0, 100.0);
+    let content_size = DVec2::new(300.0, 250.0); // delta = (140, 150)
+
+    let instance = add(&mut network, "union", anchor, 0);
+    let above = add(&mut network, "union", DVec2::new(200.0, -50.0), 0); // y before r.UL
+    let left = add(&mut network, "union", DVec2::new(-50.0, 200.0), 0); // x before r.UL
+
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+
+    assert_eq!(delta, DVec2::new(140.0, 150.0));
+    assert_eq!(pos(&network, above), DVec2::new(200.0, -50.0));
+    assert_eq!(pos(&network, left), DVec2::new(-50.0, 200.0));
+}
+
+#[test]
+fn make_space_shifts_aligned_edge_neighbours() {
+    // The inclusive near-corner gate catches neighbours aligned with the
+    // instance's edges — the common left→right-flow layout where a downstream
+    // node sits at the *same y* as the instance. The old far-corner rule (and a
+    // strict `>` gate) wrongly left these unmoved.
+    let mut network = NodeNetwork::new_empty();
+
+    let anchor = DVec2::new(0.0, 0.0);
+    let original_size = DVec2::new(160.0, 100.0);
+    let content_size = DVec2::new(300.0, 250.0); // delta = (140, 150)
+
+    let instance = add(&mut network, "union", anchor, 0);
+    // Same top row, to the right (p.y == r.UL.y): cross < 0 → shift RIGHT.
+    let same_row = add(&mut network, "union", DVec2::new(400.0, 0.0), 0);
+    // Same left column, below (p.x == r.UL.x): cross > 0 → shift DOWN.
+    let same_col = add(&mut network, "union", DVec2::new(0.0, 400.0), 0);
+
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
+
+    assert_eq!(delta, DVec2::new(140.0, 150.0));
+    assert_eq!(pos(&network, same_row), DVec2::new(540.0, 0.0)); // x += 140
+    assert_eq!(pos(&network, same_col), DVec2::new(0.0, 550.0)); // y += 150
 }
 
 #[test]
@@ -138,15 +212,7 @@ fn make_space_no_move_when_content_fits() {
     let instance = add(&mut network, "union", anchor, 0);
     let far = add(&mut network, "union", DVec2::new(500.0, 500.0), 0);
 
-    let szs = uniform_sizes(&network, DVec2::new(160.0, 80.0));
-    let delta = make_space_for_inline(
-        &mut network,
-        instance,
-        anchor,
-        original_size,
-        content_size,
-        &szs,
-    );
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
 
     assert_eq!(delta, DVec2::ZERO);
     assert_eq!(pos(&network, far), DVec2::new(500.0, 500.0));
@@ -155,88 +221,24 @@ fn make_space_no_move_when_content_fits() {
 
 #[test]
 fn make_space_excludes_only_the_instance() {
-    // A node sharing the instance's lower-right region still moves; only the
-    // instance id is excluded.
+    // Only the instance id is unconditionally exempt. Another node at the exact
+    // same spot is NOT special-cased: it is inside the growth shadow, sits on the
+    // diagonal (cross == 0), and so shifts right.
     let mut network = NodeNetwork::new_empty();
     let anchor = DVec2::new(0.0, 0.0);
     let original_size = DVec2::new(100.0, 100.0);
     let content_size = DVec2::new(200.0, 200.0); // delta = (100, 100)
 
     let instance = add(&mut network, "union", anchor, 0);
-    // Another node at the exact same spot as the instance: it is NOT the
-    // instance, and its position (0,0) is not strictly past the edges, so it
-    // must not move either — confirms the strict `>` comparison.
     let coincident = add(&mut network, "union", anchor, 0);
     let past = add(&mut network, "union", DVec2::new(150.0, 150.0), 0);
 
-    let szs = uniform_sizes(&network, DVec2::new(160.0, 80.0));
-    let delta = make_space_for_inline(
-        &mut network,
-        instance,
-        anchor,
-        original_size,
-        content_size,
-        &szs,
-    );
+    let delta = make_space_for_inline(&mut network, instance, anchor, original_size, content_size);
 
     assert_eq!(delta, DVec2::new(100.0, 100.0));
-    assert_eq!(pos(&network, coincident), anchor);
+    assert_eq!(pos(&network, instance), anchor); // the instance never moves
+    assert_eq!(pos(&network, coincident), DVec2::new(100.0, 0.0)); // cross == 0 → right
     assert_eq!(pos(&network, past), DVec2::new(250.0, 250.0));
-}
-
-#[test]
-fn make_space_uses_node_size_for_safe_zone() {
-    // The content grows right+down from the anchor. A node's safe-zone status is
-    // decided by its FAR edge, not its top-left corner:
-    //  - "completely above" iff bottom edge (y + height) <= anchor.y
-    //  - "completely left"  iff right edge  (x + width)  <= anchor.x
-    // A node that merely straddles the instance's top/left edge sits in the
-    // swept band and MUST shift. A point-only implementation (testing the
-    // top-left corner alone) would wrongly leave the straddling nodes — so this
-    // test only passes with the size-aware algorithm.
-    let mut network = NodeNetwork::new_empty();
-    let anchor = DVec2::new(0.0, 0.0);
-    let original_size = DVec2::new(100.0, 100.0);
-    let content_size = DVec2::new(300.0, 300.0); // delta = (200, 200)
-    let instance = add(&mut network, "union", anchor, 0);
-
-    // Straddles the top edge: top at y=-30, but height 60 → bottom at +30 > 0.
-    // To the right (x=200>100), so it must shift RIGHT.
-    let straddle_top = add(&mut network, "union", DVec2::new(200.0, -30.0), 0);
-    // Straddles the left edge: left at x=-30, but width 60 → right at +30 > 0.
-    // Below (y=200>100), so it must shift DOWN.
-    let straddle_left = add(&mut network, "union", DVec2::new(-30.0, 200.0), 0);
-    // Truly above: bottom = -100 + 40 = -60 <= 0 → safe (no rightward shift).
-    let truly_above = add(&mut network, "union", DVec2::new(200.0, -100.0), 0);
-    // Truly left: right = -100 + 40 = -60 <= 0 → safe (no downward shift).
-    let truly_left = add(&mut network, "union", DVec2::new(-100.0, 200.0), 0);
-
-    let szs: HashMap<u64, DVec2> = [
-        (instance, DVec2::new(100.0, 100.0)),
-        (straddle_top, DVec2::new(50.0, 60.0)),
-        (straddle_left, DVec2::new(60.0, 50.0)),
-        (truly_above, DVec2::new(50.0, 40.0)),
-        (truly_left, DVec2::new(40.0, 50.0)),
-    ]
-    .into_iter()
-    .collect();
-
-    let delta = make_space_for_inline(
-        &mut network,
-        instance,
-        anchor,
-        original_size,
-        content_size,
-        &szs,
-    );
-    assert_eq!(delta, DVec2::new(200.0, 200.0));
-
-    // Straddling nodes are in the swept band → they shift on that axis.
-    assert_eq!(pos(&network, straddle_top), DVec2::new(400.0, -30.0)); // x += 200
-    assert_eq!(pos(&network, straddle_left), DVec2::new(-30.0, 400.0)); // y += 200
-    // Truly-outside nodes are safe → unchanged.
-    assert_eq!(pos(&network, truly_above), DVec2::new(200.0, -100.0));
-    assert_eq!(pos(&network, truly_left), DVec2::new(-100.0, 200.0));
 }
 
 // ---------------------------------------------------------------------------

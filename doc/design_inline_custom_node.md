@@ -59,53 +59,44 @@ fixed and push the lower-right region of the parent outward by exactly the extra
 the content needs.
 
 ```text
-anchor        = I.position                      // top-left, stays fixed
+anchor        = I.position                      // r.UL — top-left, stays fixed
 original_size = (NODE_WIDTH, estimate_node_height(I, ...))   // node_layout.rs
 content_size  = bounding box of the inlined (non-parameter) nodes of N
 delta         = max(DVec2::ZERO, content_size - original_size)   // componentwise
 
-right_edge  = anchor.x + original_size.x
-bottom_edge = anchor.y + original_size.y
-
-node_sizes  = estimate_network_node_sizes(scope, registry)   // per-node (w, h)
+r_ul = anchor                       // near (top-left) corner
+r_lr = anchor + original_size       // far (bottom-right) corner; W,H = original_size
 
 for every other node n in the same scope (n != I):
-    sz = node_sizes[n.id]
-    // size-aware: judged by the node's FAR edge, not its top-left corner
-    completely_above = n.position.y + sz.y <= anchor.y   // whole node above the top
-    completely_left  = n.position.x + sz.x <= anchor.x   // whole node left of the left
-    if n.position.x > right_edge  and not completely_above:  n.position.x += delta.x
-    if n.position.y > bottom_edge and not completely_left:   n.position.y += delta.y
+    p = n.position                  // n's upper-left corner — the only input
+    if p.x > r_lr.x and p.y > r_lr.y:
+        n.position += delta                         // far diagonal: both axes
+    else if p.x >= r_ul.x and p.y >= r_ul.y:        // inclusive near-corner quadrant
+        cross = W * (p.y - r_ul.y) - H * (p.x - r_ul.x)   // side of I's diagonal, y down
+        if cross > 0: n.position.y += delta.y       // below diagonal → down
+        else:         n.position.x += delta.x       // above/on diagonal → right
+    // else (above or left of r.UL): untouched
 ```
 
 Notes:
 
-- The content grows **rightward and downward** from the fixed anchor, so the rightward
-  growth only sweeps the band at or below the instance's top and the downward growth only
-  the band at or right of its left. Hence the **above/left guards**: a node completely
-  above the instance is never reached by the widening and must not be dragged right; a
-  node completely to the left is never reached by the lengthening and must not be dragged
-  down. Without them, an upper-right node would slide right and a lower-left node would
-  slide down even though the content never touches them — distorting the layout.
-- The guards are **size-aware**: "completely above" tests the node's *bottom* edge
-  (`position.y + height ≤ anchor.y`), "completely left" its *right* edge
-  (`position.x + width ≤ anchor.x`). A node that merely *straddles* the instance's top or
-  left edge (its near corner outside, its body dipping into the swept band) is **not**
-  safe and is shifted — a point-only test of the top-left corner would wrongly leave it
-  overlapping the inlined content.
-- A node in the **lower-right quadrant** (past both edges, neither above nor left) is
-  shifted on both axes.
-- The *move* trigger uses the node's near edge (top-left `position`) against the original
-  node's **right/bottom edges**; the *safe-zone* guards use the node's far edge against
-  the instance's **top/left edges**. So nodes that merely overlap the original don't move
-  spuriously, and straddling nodes are handled correctly.
-- Per-node sizes come from `node_inlining::estimate_network_node_sizes`, which calls
-  `node_layout::estimate_node_height` / `NODE_WIDTH` — and `estimate_hof_node_size` for
-  expanded HOFs, whose body region dominates their footprint — mirroring the Flutter
-  `getNodeSize()` / `effectiveNodeSizeLogical` formulas. The orchestrator computes the map
-  under an immutable registry borrow, before taking the mutable borrow it needs to move
-  the nodes. `content_size` is the bounding box of the copied nodes' positions, each
-  expanded by its estimated size.
+- The content grows **rightward and downward** from the fixed anchor. Each neighbour is
+  classified purely by its **upper-left corner `p`** against `I`'s two corners — **no
+  per-node size estimate**, so the rule is robust to imperfect size estimation.
+- A node past the **far** corner on both axes is reached diagonally and shifts on both
+  axes (preserving its offset from `I`'s bottom-right corner).
+- A node in the **inclusive near-corner quadrant** (`p.x >= r.UL.x && p.y >= r.UL.y`) but
+  not past the far corner on both axes — i.e. overlapping or edge-adjacent — shifts in a
+  single direction chosen by which side of `I`'s own diagonal (`r.UL → r.LR`) its corner
+  falls on: below → down, above/on → right.
+- Gating on the **near** corner (`>=`) means a node that merely *overlaps* `I` — or sits a
+  few pixels under it — is still moved, and the common case of a downstream neighbour
+  sharing `I`'s top row (`p.y == r.UL.y`) correctly shifts right. (The earlier rule gated
+  on the *far* corner with a size-aware guard and left a slightly-overlapping node
+  unmoved.) Only `I` itself is exempt, via `instance_id`.
+- `content_size` is still the bounding box of the copied nodes' positions, each expanded
+  by its estimated size (`content_bounding_box` → `estimate_node_size_in_network`); size
+  estimation is needed for *placement*, just not for neighbour classification.
 - The inlined content is placed starting at `anchor`, spanning
   `[anchor, anchor + content_size]`. Because nodes below the original shift down by
   `delta.y = content_height - original_height`, they always end up below

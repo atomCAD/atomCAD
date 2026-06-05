@@ -32,32 +32,33 @@ use super::nodes::parameter::ParameterData;
 ///
 /// The content that will replace the instance is generally larger than the
 /// single node it replaces, and it grows **rightward and downward** from the
-/// fixed anchor. We make room with this rule:
+/// fixed anchor (`r.UL = anchor`, `r.LR = anchor + original_size`). Each other
+/// node is classified purely by its **upper-left corner `p`** — no size estimate
+/// is needed, so the rule is robust to imperfect node-size estimation:
 ///
-/// - Shift a node **right** by the extra width iff its left edge is past the
-///   instance's right edge **and it is not completely above** the instance. The
-///   rightward growth only sweeps the band at or below the instance's top, so a
-///   node whose entire vertical extent lies above that top is safe and stays put.
-/// - Shift a node **down** by the extra height iff its top edge is past the
-///   instance's bottom edge **and it is not completely to the left** of the
-///   instance. The downward growth only sweeps the band at or right of the
-///   instance's left, so a node whose entire horizontal extent lies left of that
-///   left edge is safe and stays put.
+/// - **Past the far corner on both axes** (`p.x > r.LR.x && p.y > r.LR.y`): the
+///   growth reaches it diagonally, so shift it on **both** axes (`p += delta`).
+///   This preserves its offset from the instance's bottom-right corner.
+/// - **In the near-corner quadrant** (`p.x >= r.UL.x && p.y >= r.UL.y`) but not
+///   past the far corner on both axes — i.e. overlapping or edge-adjacent: split
+///   by which side of the instance's own diagonal (the line `r.UL → r.LR`) the
+///   corner falls on. With bottom = positive `y`, the 2D cross product of the
+///   diagonal direction `d = original_size = (W, H)` with `v = p - r.UL` is
+///   `cross = W·v.y − H·v.x`. `cross > 0` ⇒ `p` is **below** the diagonal ⇒ more
+///   "below" the instance ⇒ shift **down**; otherwise (above or on the diagonal)
+///   ⇒ more "to the right" ⇒ shift **right**.
+/// - **Above or left of the near corner** (`p.x < r.UL.x` or `p.y < r.UL.y`): the
+///   growth never reaches it, so it stays put.
 ///
-/// The above/left guards are **size-aware**: "completely above" means the node's
-/// *bottom* edge (`position.y + size.y`) is at or above the instance's top
-/// (`anchor.y`); "completely to the left" means the node's *right* edge
-/// (`position.x + size.x`) is at or left of the instance's left (`anchor.x`).
-/// A node that merely *straddles* the top (its top above `anchor.y` but its body
-/// dipping below) sits in the swept band and is therefore shifted — a point-only
-/// test of the top-left corner would wrongly leave it overlapping the content.
-/// Per-node sizes come from `node_sizes` (see [`estimate_network_node_sizes`]); a
-/// node absent from the map is treated as a zero-size point.
-///
-/// Without the guards, a node in the upper-right would be dragged rightward and
-/// one in the lower-left dragged downward even though the growing content never
-/// reaches them — distorting the layout. A node in the lower-right quadrant
-/// (past both edges, neither above nor left) still shifts on both axes.
+/// The near-corner gate is **inclusive** (`>=`) so the common case of a
+/// downstream neighbour sharing the instance's top row (`p.y == r.UL.y`, to the
+/// right) shifts right, and one sharing its left column (`p.x == r.UL.x`, below)
+/// shifts down. Gating on the **near** corner (`r.UL`) rather than the far one
+/// also means a node that merely *overlaps* the instance — or sits a few pixels
+/// under it — is still moved, fixing the prior far-corner rule that left such a
+/// node unmoved. Only the instance itself is unconditionally exempt (via
+/// `instance_id`); a hypothetical other node coincident with the anchor falls on
+/// the diagonal (`cross == 0`) and shifts right.
 ///
 /// `instance_id` is excluded from the shift (its top-left corner is the anchor).
 /// Returns the `delta` actually applied (componentwise `max(0, content - original)`),
@@ -68,32 +69,35 @@ pub fn make_space_for_inline(
     anchor: DVec2,
     original_size: DVec2,
     content_size: DVec2,
-    node_sizes: &HashMap<u64, DVec2>,
 ) -> DVec2 {
     // Extra space the content needs beyond the original node, never negative.
     let delta = (content_size - original_size).max(DVec2::ZERO);
 
-    let right_edge = anchor.x + original_size.x;
-    let bottom_edge = anchor.y + original_size.y;
+    let r_ul = anchor;
+    let r_lr = anchor + original_size;
 
     for (&id, node) in network.nodes.iter_mut() {
         if id == instance_id {
             continue;
         }
-        // A node whose whole vertical/horizontal extent lies above/left of the
-        // instance is never reached by the content's rightward/downward growth,
-        // so it is left untouched on that axis. Use the node's far edge (bottom
-        // for "above", right for "left") — the near edge alone (its top-left
-        // corner) would misjudge a node straddling the instance's edge.
-        let size = node_sizes.get(&id).copied().unwrap_or(DVec2::ZERO);
-        let completely_above = node.position.y + size.y <= anchor.y;
-        let completely_left = node.position.x + size.x <= anchor.x;
-        if node.position.x > right_edge && !completely_above {
-            node.position.x += delta.x;
+        let p = node.position; // the node's upper-left corner
+
+        if p.x > r_lr.x && p.y > r_lr.y {
+            // Far diagonal region: past both far edges — shift on both axes.
+            node.position += delta;
+        } else if p.x >= r_ul.x && p.y >= r_ul.y {
+            // Overlapping / edge-adjacent: split on the instance's own diagonal.
+            // cross = d × (p - r.UL), d = original_size = (W, H), y positive down.
+            let cross = original_size.x * (p.y - r_ul.y) - original_size.y * (p.x - r_ul.x);
+            if cross > 0.0 {
+                // Below the diagonal → shift down.
+                node.position.y += delta.y;
+            } else {
+                // Above (or on) the diagonal → shift right.
+                node.position.x += delta.x;
+            }
         }
-        if node.position.y > bottom_edge && !completely_left {
-            node.position.y += delta.y;
-        }
+        // Otherwise above-or-left of the near corner: untouched.
     }
 
     delta
@@ -289,21 +293,6 @@ fn rendered_body_size(node: &Node, registry: &NodeTypeRegistry) -> (f64, f64) {
 /// separately so the orchestrator reads as the design's `original_size`.
 pub fn instance_size(instance: &Node, registry: &NodeTypeRegistry) -> DVec2 {
     estimate_node_size_in_network(instance, registry)
-}
-
-/// Estimated rendered size of every node in `network`, keyed by id. Feeds
-/// [`make_space_for_inline`]'s size-aware safe-zone test; the orchestrator
-/// computes this (under an immutable registry borrow) before taking the mutable
-/// borrow it needs to move the nodes.
-pub fn estimate_network_node_sizes(
-    network: &NodeNetwork,
-    registry: &NodeTypeRegistry,
-) -> HashMap<u64, DVec2> {
-    network
-        .nodes
-        .iter()
-        .map(|(&id, node)| (id, estimate_node_size_in_network(node, registry)))
-        .collect()
 }
 
 /// Bounding box of `source`'s non-`parameter` content as `(content_min, content_size)`:

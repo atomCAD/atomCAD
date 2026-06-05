@@ -51,13 +51,16 @@ pub fn make_space_for_inline(
     anchor: DVec2,           // top-left of the growing node (its position)
     original_size: DVec2,    // footprint before growth
     content_size: DVec2,     // footprint after growth
-    node_sizes: &HashMap<u64, DVec2>,
 ) -> DVec2                    // returns the applied delta
 ```
 
 It keeps the growing node's top-left fixed and shifts every other node in
 `network` that lies in the lower-right sweep band by `delta = max(0, content -
-original)`, using a size-aware "completely above / completely left" guard. It
+original)`. Each node is classified purely by its **upper-left corner** against
+the growing node's two corners (no per-node size estimate): nodes past the far
+corner on both axes shift on both; nodes in the inclusive near-corner quadrant
+shift right or down depending on which side of the growing node's diagonal their
+corner falls (so a node merely *overlapping* the growing node is still moved). It
 operates on **one** network level and **mutates positions in place** — it does not
 report *which* nodes moved.
 
@@ -65,10 +68,10 @@ report *which* nodes moved.
 
 `estimate_node_size_in_network(node, registry)` returns a node's true rendered
 size, recursing into zone bodies via `rendered_body_size` (mirrors Flutter's
-`_computeBodySize`). `estimate_network_node_sizes(network, registry)` maps every
-node id to its size. `instance_size(node, registry)` is the single-node form.
-These already exist (added with the closure-conversion fix) and are the sizing
-authority for reflow.
+`_computeBodySize`). `instance_size(node, registry)` is the single-node public
+form — it sizes the *grown* node so reflow can compute `delta`. (The growing
+node's own footprint is the only size reflow needs; `make_space_for_inline`
+classifies neighbours by corner position, not size.)
 
 ### The undo machinery (`undo/`)
 
@@ -192,8 +195,7 @@ loop {
 
     // record sibling positions before, make space, diff to (id, old_pos, new_pos)
     let before = positions of net.nodes (excluding nid);
-    let sizes  = estimate_network_node_sizes(net, registry);
-    make_space_for_inline(net_mut, nid, net.nodes[nid].position, old, new, sizes);
+    make_space_for_inline(net_mut, nid, net.nodes[nid].position, old, new);
     let moves  = before.filter(pos changed).map(|(id, o)| (id, o, net.nodes[id].position));
     if !moves.is_empty() { out.push(ScopedMoves { path, moves }); }
 

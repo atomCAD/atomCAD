@@ -6759,9 +6759,7 @@ impl StructureDesigner {
         node_id: u64,
         old_sizes: &[DVec2],
     ) -> Vec<ScopedMoves> {
-        use super::node_inlining::{
-            estimate_network_node_sizes, instance_size, make_space_for_inline,
-        };
+        use super::node_inlining::{instance_size, make_space_for_inline};
 
         let mut out: Vec<ScopedMoves> = Vec::new();
         let mut path: Vec<u64> = scope_path.to_vec();
@@ -6776,8 +6774,8 @@ impl StructureDesigner {
             };
 
             // Immutable phase: estimate the grown node's new size and, only if it
-            // actually grew, capture the sibling positions + per-node sizes
-            // make_space needs. The registry and the resolved network are both
+            // actually grew, capture the sibling positions to diff against after
+            // make_space. The registry and the resolved network are both
             // borrowed immutably here; the mutable borrow is taken below.
             let prep = {
                 let Some(net) = self.get_scope_network(&path) else {
@@ -6794,18 +6792,17 @@ impl StructureDesigner {
                     // cascade can climb no further.
                     None
                 } else {
-                    let node_sizes = estimate_network_node_sizes(net, &self.node_type_registry);
                     let before: Vec<(u64, DVec2)> = net
                         .nodes
                         .iter()
                         .filter(|&(&id, _)| id != nid)
                         .map(|(&id, n)| (id, n.position))
                         .collect();
-                    Some((anchor, new, node_sizes, before))
+                    Some((anchor, new, before))
                 }
             };
 
-            let Some((anchor, new, node_sizes, before)) = prep else {
+            let Some((anchor, new, before)) = prep else {
                 break;
             };
 
@@ -6815,7 +6812,7 @@ impl StructureDesigner {
                 let Some(net) = self.get_scope_network_mut(&path) else {
                     break;
                 };
-                make_space_for_inline(net, nid, anchor, old, new, &node_sizes);
+                make_space_for_inline(net, nid, anchor, old, new);
                 before
                     .into_iter()
                     .filter_map(|(id, old_pos)| {
@@ -6913,16 +6910,6 @@ impl StructureDesigner {
             (None, self.snapshot_zone_body(&scope_path))
         };
 
-        // Estimate the existing nodes' rendered sizes (immutable registry
-        // borrow) before the mutable target borrow below — `make_space` needs
-        // them for its size-aware safe-zone test.
-        let node_sizes = {
-            let target = self
-                .get_scope_network(&scope_path)
-                .ok_or("Scope not found")?;
-            node_inlining::estimate_network_node_sizes(target, &self.node_type_registry)
-        };
-
         // 6. Run the three helpers on the resolved target network (top-level
         //    active network or a nested body). The helpers touch no registry
         //    state, so a plain `&mut NodeNetwork` borrow suffices.
@@ -6936,7 +6923,6 @@ impl StructureDesigner {
                 anchor,
                 original_size,
                 content_size,
-                &node_sizes,
             );
             let id_mapping = node_inlining::copy_content_into(target, &source, anchor, content_min);
             node_inlining::splice_inline_boundary(target, node_id, &source, &id_mapping);
@@ -7169,13 +7155,12 @@ impl StructureDesigner {
         //     content (`instance_size` → `rendered_body_size`), not its flat
         //     `DEFAULT_BODY_*` placeholder.
         let closure_size = node_inlining::instance_size(&closure_node, &self.node_type_registry);
-        let (anchor, original_size, node_sizes) = {
+        let (anchor, original_size) = {
             let target = self.get_scope_network(&scope_path).unwrap();
             let instance = target.nodes.get(&node_id).unwrap();
             (
                 instance.position,
                 node_inlining::instance_size(instance, &self.node_type_registry),
-                node_inlining::estimate_network_node_sizes(target, &self.node_type_registry),
             )
         };
 
@@ -7194,7 +7179,6 @@ impl StructureDesigner {
                 anchor,
                 original_size,
                 closure_size,
-                &node_sizes,
             );
             conv::redirect_function_consumers(target, node_id);
         }
