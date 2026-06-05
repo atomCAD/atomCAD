@@ -1786,7 +1786,17 @@ class NodeWidget extends StatelessWidget {
       } else if (value == 'extract_to_network') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
-        showExtractClosureToNetworkDialog(context, model, node.id, scopeChain);
+        // Pre-fill the network name with the closure's label, re-qualified
+        // with the active network's namespace (the inverse of *Convert to
+        // Closure*, which labels the closure with the source network's simple
+        // name). Empty label → empty field.
+        final label = node.closureCustomLabel ?? '';
+        final initialName = label.isEmpty
+            ? ''
+            : combineQualifiedName(
+                getNamespace(model.nodeNetworkView?.name ?? ''), label);
+        showExtractClosureToNetworkDialog(context, model, node.id, scopeChain,
+            initialName: initialName);
       } else if (value == 'collapse_auto') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

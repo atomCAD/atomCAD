@@ -225,11 +225,27 @@ pub fn build_closure_from_instance(
     // names are preserved (`closure_data_for_signature` carries types only).
     let mut type_args = closure_param_types.clone();
     type_args.push(ret.clone());
+    // Carry `N`'s identity onto the closure as its display label so the user can
+    // still see which network it came from (and so the inverse *Closure →
+    // Network* conversion can re-suggest the name). The network name is
+    // qualified (`Foo.Bar.Baz`); the label uses the **non-qualified** simple
+    // name (`Baz`) since the title bar has no room for a full namespace path.
+    let simple_name = source
+        .node_type
+        .name
+        .rsplit('.')
+        .next()
+        .unwrap_or(&source.node_type.name);
+    let custom_label = if simple_name.is_empty() {
+        None
+    } else {
+        Some(simple_name.to_string())
+    };
     let closure_data = ClosureData {
         kind: ClosureKind::Custom,
         type_args,
         param_names: closure_param_names,
-        custom_label: None,
+        custom_label,
     };
 
     // Body B: copy N's non-`parameter` content (fresh ids for B-top nodes,

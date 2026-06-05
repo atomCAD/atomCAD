@@ -13,11 +13,18 @@ class ExtractClosureToNetworkDialog extends StatefulWidget {
   final BigInt nodeId;
   final List<BigInt> scopeChain;
 
+  /// Name to pre-fill the network-name field with. The caller derives this
+  /// from the closure's display label, re-qualified with the local namespace
+  /// (so a closure that came from a `Foo.Bar` network suggests `Foo.Bar`
+  /// again). Empty when the closure has no label.
+  final String initialName;
+
   const ExtractClosureToNetworkDialog({
     super.key,
     required this.model,
     required this.nodeId,
     required this.scopeChain,
+    this.initialName = '',
   });
 
   @override
@@ -27,7 +34,14 @@ class ExtractClosureToNetworkDialog extends StatefulWidget {
 
 class _ExtractClosureToNetworkDialogState
     extends State<ExtractClosureToNetworkDialog> {
-  final TextEditingController _nameController = TextEditingController();
+  late final TextEditingController _nameController =
+      TextEditingController(text: widget.initialName)
+        // Select the whole pre-filled name so the user can immediately type
+        // over it or keep it with a single keystroke.
+        ..selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: widget.initialName.length,
+        );
   String? _error;
   bool _isSubmitting = false;
 
@@ -161,8 +175,9 @@ Future<void> showExtractClosureToNetworkDialog(
   BuildContext context,
   StructureDesignerModel model,
   BigInt nodeId,
-  List<BigInt> scopeChain,
-) async {
+  List<BigInt> scopeChain, {
+  String initialName = '',
+}) async {
   await showDialog<bool>(
     context: context,
     barrierDismissible: false,
@@ -170,6 +185,7 @@ Future<void> showExtractClosureToNetworkDialog(
       model: model,
       nodeId: nodeId,
       scopeChain: scopeChain,
+      initialName: initialName,
     ),
   );
 }

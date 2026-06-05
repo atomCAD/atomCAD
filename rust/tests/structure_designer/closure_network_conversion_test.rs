@@ -598,6 +598,8 @@ fn convert_basic_one_param_unwired() {
     assert_eq!(cd.kind, ClosureKind::Custom);
     assert_eq!(cd.param_names, vec!["x".to_string()]);
     assert_eq!(cd.type_args, vec![DataType::Int, DataType::Int]);
+    // The closure carries the source network's name as its display label.
+    assert_eq!(cd.custom_label, Some("inc".to_string()));
 
     // The consumer wire flipped from the function pin to pin 0.
     let map_wire = &designer
@@ -619,6 +621,29 @@ fn convert_basic_one_param_unwired() {
         evaluate_node(&designer, "main", map_id),
     ));
     assert_eq!(after, vec![1, 2, 3]);
+}
+
+/// The closure's display label is the source network's **non-qualified** simple
+/// name, even when the network lives in a namespace (`Math.Util.inc` → `inc`).
+#[test]
+fn convert_label_uses_simple_name_for_namespaced_network() {
+    let mut designer = setup_designer_with_network("main");
+    build_expr_network(
+        &mut designer,
+        "Math.Util.inc",
+        &[("x", DataType::Int)],
+        "x + 1",
+        true,
+    );
+
+    let inst_id = designer.add_node("Math.Util.inc", DVec2::new(150.0, -120.0));
+
+    designer
+        .convert_instance_to_closure(vec![], inst_id)
+        .expect("conversion should succeed");
+
+    let cd = closure_data(&designer, "main", inst_id);
+    assert_eq!(cd.custom_label, Some("inc".to_string()));
 }
 
 /// Mixed pins: a 2-param network (`a + b`) with pin `a` wired to a constant and
