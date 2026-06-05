@@ -117,17 +117,6 @@ fn as_floats(values: Vec<NetworkResult>) -> Vec<f64> {
         .collect()
 }
 
-fn as_ints(values: Vec<NetworkResult>) -> Vec<i32> {
-    values
-        .into_iter()
-        .map(|r| match r {
-            NetworkResult::Int(v) => v,
-            NetworkResult::Error(e) => panic!("expected Int element, got Error: {}", e),
-            other => panic!("expected Int element, got {}", other.to_display_string()),
-        })
-        .collect()
-}
-
 fn as_vec3s(values: Vec<NetworkResult>) -> Vec<(f64, f64, f64)> {
     values
         .into_iter()
@@ -191,15 +180,21 @@ fn test_simple_map_with_capture_evaluates() {
 #[test]
 fn test_simple_filter_with_capture_evaluates() {
     // pred(x: param, t: capture=threshold=2.0) = x > t; pred.-1 → filter.f.
-    // filter over range(0,1,5) = [0,1,2,3,4] → [3, 4]. (range yields Int
-    // elements, which filter passes through unconverted.)
+    // filter over range(0,1,5) = [0,1,2,3,4] → [3, 4]. The filter declares
+    // `element_type: Float` (output `Iter[Float]`), and its source `range`
+    // yields `Iter[Int]`. With lazy `Iter[Int] → Iter[Float]` element
+    // conversion now implemented (open question #2 of
+    // `doc/design_iterators.md`), the source is converted at the filter's
+    // input pin, so the filter correctly emits `Float` elements matching its
+    // declared output type — previously this read was a silent no-op
+    // passthrough that emitted `Int` despite the `Iter[Float]` declaration.
     let registry = load("simple_filter_with_capture.cnnd");
     let main = registry.node_networks.get("Main").unwrap();
     assert!(main.valid, "errors={:?}", error_texts(main));
 
     let filter_id = find_node_id_by_type(main, "filter");
     let result = evaluate_node(&registry, "Main", filter_id, false);
-    assert_eq!(as_ints(drain(&registry, result)), vec![3, 4]);
+    assert_eq!(as_floats(drain(&registry, result)), vec![3.0, 4.0]);
 }
 
 #[test]

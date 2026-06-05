@@ -640,6 +640,24 @@ impl NetworkResult {
                     .collect();
                 return NetworkResult::Iterator(Walker::from_array(converted_items));
             }
+            // `Iter[S] → Iter[T]` lazy element conversion (S ≠ T). Wrap the
+            // source walker in a converting walker that runs `convert_to` per
+            // pulled element. The identity `Iter[T] → Iter[T]` is already
+            // handled by the `source == dest` short-circuit at the top, so by
+            // the time we reach here the inner types genuinely differ. Only
+            // fires when `source_type` is statically known to be `Iter[S]`;
+            // an iterator value whose source type erased to `None` falls
+            // through to the broadcast guard below and passes through
+            // unchanged. See `doc/design_iterators.md` (open question #2).
+            if let DataType::Iterator(source_element_type) = source_type {
+                if let NetworkResult::Iterator(walker) = self {
+                    return NetworkResult::Iterator(Walker::convert(
+                        walker,
+                        (**source_element_type).clone(),
+                        (**target_element_type).clone(),
+                    ));
+                }
+            }
             // Single-value broadcast. Skip if source is itself an iterator —
             // the only valid Iter→Iter form is identity (already handled), and
             // anything else is rejected at validation; fall through.

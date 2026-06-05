@@ -15,6 +15,7 @@
 
 use std::sync::Arc;
 
+use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator,
 };
@@ -79,6 +80,21 @@ enum WalkerKind {
         source: Box<Walker>,
         closure: ZoneClosure,
     },
+    /// Lazy `Iter[S] → Iter[T]` element conversion (`S → T` allowed, `S ≠ T`).
+    /// Per `next()` the walker pulls one element from `source` and runs
+    /// [`NetworkResult::convert_to`] on it from `source_elem_type` to
+    /// `target_elem_type`. The wire layer wraps an iterator source in this
+    /// variant whenever its declared element type differs from the
+    /// destination's (see `network_result::convert_to` and
+    /// `doc/design_iterators.md`, open question #2). No closure or frozen
+    /// captures are involved — element conversion is a pure, stateless
+    /// transform — so clone independence (Invariant 2) holds with just the
+    /// owned `source` walker.
+    Convert {
+        source: Box<Walker>,
+        source_elem_type: DataType,
+        target_elem_type: DataType,
+    },
     /// Cartesian product over `axes` (rightmost varies fastest). Each emitted
     /// element is a record whose field order is given by `field_names` and
     /// whose values come from the most recent pull on each axis.
@@ -142,6 +158,20 @@ impl Walker {
             kind: WalkerKind::FilterZone {
                 source: Box::new(source),
                 closure,
+            },
+            fused: false,
+        }
+    }
+
+    /// Construct a lazy element-converting walker. See `WalkerKind::Convert`.
+    /// Used by `network_result::convert_to` to wrap an iterator source whose
+    /// element type differs from the destination's (`Iter[S] → Iter[T]`).
+    pub fn convert(source: Walker, source_elem_type: DataType, target_elem_type: DataType) -> Self {
+        Self {
+            kind: WalkerKind::Convert {
+                source: Box::new(source),
+                source_elem_type,
+                target_elem_type,
             },
             fused: false,
         }
@@ -332,6 +362,15 @@ impl WalkerKind {
                     }
                 }
             },
+            WalkerKind::Convert {
+                source,
+                source_elem_type,
+                target_elem_type,
+            } => match source.next(evaluator, registry, context) {
+                None => None,
+                Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
+                Some(elem) => Some(elem.convert_to(source_elem_type, target_elem_type, registry)),
+            },
             WalkerKind::Product {
                 axes,
                 field_names,
@@ -418,6 +457,7 @@ impl WalkerKind {
             WalkerKind::Range { emitted, .. } => *emitted = 0,
             WalkerKind::MapZone { source, .. } => source.reset(),
             WalkerKind::FilterZone { source, .. } => source.reset(),
+            WalkerKind::Convert { source, .. } => source.reset(),
             WalkerKind::Product {
                 axes,
                 current,

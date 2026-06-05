@@ -34,7 +34,7 @@ We want stream fusion: `range → map → filter → fold` should pull one eleme
 | Wire-time `[S] → Iter[T]` (S → T allowed) | Implicit. Eagerly converts each item, wraps as `WalkerKind::FromArray`. The array is materialized anyway, so conversion is a one-time O(N) cost — same as today's `[S] → [T]` rule. |
 | Wire-time `Iter[T] → [T]` | **Disallowed.** Force users to write a `collect` node. The whole point is that iterator → array is the expensive operation. |
 | Wire-time `S → Iter[T]` (S → T allowed) | Implicit (1-element broadcast, mirrors today's `T → [T]` rule). Eagerly converts the single value. |
-| Wire-time `Iter[S] → Iter[T]` (S ≠ T) | **Disallowed in v1.** Lazy element conversion across iterator boundaries is deferred (see open questions). Users insert a `map` with the conversion, or `collect` + manual rebuild. The identity case (`Iter[T] → Iter[T]`) is of course allowed. |
+| Wire-time `Iter[S] → Iter[T]` (S ≠ T) | **Implicit** (lazy element conversion) when `S → T`. The wire layer wraps the source walker in a `WalkerKind::Convert` that runs `convert_to` per pulled element — see open question #2, now implemented. The identity case (`Iter[T] → Iter[T]`) passes through unchanged. |
 | Recipe vs Walker | One unified `Walker` tree. No separate immutable recipe type. |
 | Walker shape | `struct Walker { kind: WalkerKind }` with `Box<Walker>` for single children, `Vec<Walker>` for variadic — same template `geo_tree::GeoNode` uses. |
 | Walker mutability | `next(&mut self, ...)` advances. `reset(&mut self)` rewinds. No public `init()` — `Product`'s priming is internal state. |
@@ -136,7 +136,7 @@ Add three rules to `DataType::can_be_converted_to`, in this order:
 
 1. **`[S] → Iter[T]`** (wrap with eager element conversion): if dst is `Iterator(d)` and src is `Array(s)`, recurse on `s → d`. Conversion runs eagerly at wrap time over the materialized array — equivalent cost to today's `[S] → [T]` rule.
 2. **`S → Iter[T]`** (single-element broadcast, mirrors the existing `T → [T]`): if dst is `Iterator(d)`, recurse on `src → d`. The single value is converted eagerly.
-3. **`Iter[T] → Iter[T]`** (identity only): if both sides are `Iterator(_)`, the inner types must be **equal**. Lazy element conversion across iterator boundaries (`Iter[S] → Iter[T]` with `S ≠ T`) is deferred to a follow-up; for v1, users insert a `map` with the conversion or `collect` + manual rebuild.
+3. **`Iter[S] → Iter[T]`** (lazy element conversion when `S → T`): if both sides are `Iterator(_)`, recurse on `S → T`. When `S == T` the identity short-circuit at the top passes the walker through unchanged; when `S ≠ T` (and `S → T` is permitted) the wire wraps the source in a `WalkerKind::Convert` that runs `convert_to` per pulled element (open question #2, now implemented).
 
 There is **no** `Iter[T] → [T]` rule. There is **no** `Iter[T] → T` rule. There is no record/array auto-promotion through iterator boundaries beyond what already exists.
 
@@ -564,13 +564,13 @@ All conversions live in `DataType::can_be_converted_to` and the matching arms in
 | `Array(items)` (elem type S) | `Iter[T]` (where `S → T`) | eagerly convert each item to T, then wrap as `Walker::from_array(converted_items)` |
 | `S` (scalar, where `S → T`) | `Iter[T]` | eagerly convert the value to T, wrap as `Walker::from_array(vec![converted_value])` |
 | `Iter[T]` | `Iter[T]` | identity — pass the walker through unchanged |
-| `Iter[S]` | `Iter[T]` (`S ≠ T`) | **disallowed at validation time** (deferred to a follow-up) |
+| `Iter[S]` | `Iter[T]` (`S ≠ T`, where `S → T`) | wrap the source walker in `Walker::convert(source, S, T)`, which runs `convert_to` lazily per pulled element |
 | `Iter[T]` | `[T]` | **disallowed at validation time** |
 | `Iter[T]` | `T` | **disallowed at validation time** |
 
-Because every wire that produces an iterator value either yields elements of the *exact* declared element type (the wrap rules convert eagerly; the identity rule preserves it) or fails validation, every walker in the runtime tree yields elements of its declared element type. Consumers (`Walker::Map`, `Walker::Filter`, `fold`, `collect`, product axes) feed pulled elements straight to their `FunctionEvaluator` / accumulator / output without any per-element `convert_to` call.
+Every wire that produces an iterator value either yields elements of the declared element type directly (the wrap and identity rules) or wraps the source in a `Walker::convert` that converts each pulled element to the declared type — so every walker in the runtime tree still yields elements of its declared element type. Consumers (`Walker::MapZone`, `Walker::FilterZone`, `fold`, `collect`, product axes) feed pulled elements straight to their closure / accumulator / output without any extra per-element `convert_to` call of their own; the conversion, when needed, lives in the dedicated `Convert` walker rather than being smeared across every consumer.
 
-This is the v1 simplification that buys correctness for free: no converting-walker variant, no per-consumer per-element conversion code, no surprises about *when* conversion runs in a lazy chain. Lazy `Iter[S] → Iter[T]` conversion is a clean future addition (one new walker variant) when there's demand.
+Lazy `Iter[S] → Iter[T]` conversion (open question #2) is implemented as exactly the single additive walker variant the original v1 plan anticipated — `WalkerKind::Convert { source, source_elem_type, target_elem_type }` — with no impact on existing v1 wires or files.
 
 ## Display
 
@@ -965,7 +965,7 @@ See §"Backward compatibility / Tests" for the canonical fixture list (covers ev
 ## Open questions / left for follow-up
 
 1. **`collect` cap?** Should `collect` have an optional `max: Int` property that errors out if exceeded? Useful guardrail; left out of this drop. If we add it later it's a property addition with the existing default-zero semantic, no breaking change.
-2. **Lazy `Iter[S] → Iter[T]` element conversion.** Disallowed in v1. The clean follow-up is a new walker variant (e.g. `WalkerKind::Convert { source: Box<Walker>, source_elem_type, target_elem_type }`) that the wire layer wraps when `S → T` is allowed and `S ≠ T`. Pure additive change — no breaking impact on v1 wires or files. Add when users hit the restriction in practice.
+2. **Lazy `Iter[S] → Iter[T]` element conversion.** ✅ **Implemented** (issue #330). Added the `WalkerKind::Convert { source: Box<Walker>, source_elem_type, target_elem_type }` variant exactly as sketched; the wire layer (`DataType::can_be_converted_to` rule 2 + `NetworkResult::convert_to`'s iterator-source arm) wraps the source walker in it when `S → T` is allowed and `S ≠ T`. The `Convert::next` pulls one element and runs `convert_to(source_elem_type → target_elem_type)`; `reset` cascades to the source. Pure additive change — no breaking impact on v1 wires or files. The strict (no-broadcast) variant used by the drag-aware add-node popup recurses through the same rule for consistency. Tests: `tests/structure_designer/iter_type_test.rs` (type-level + runtime, incl. clone-independence and reset).
 3. **`flat_map`?** Easy to bolt on (`WalkerKind::FlatMap { source, fe, current_inner: Option<Walker> }` — pull from `source`, run `f` on each element to get an inner walker, drain that, then advance). Deferred; not blocking.
 4. **`take` / `skip`?** Same shape as `flat_map`, trivial. Deferred.
 5. **`zip`?** Needs a tuple type or `Record(target)` — cleanest path is an iterator analog of `product` that advances all axes in lockstep. Deferred.

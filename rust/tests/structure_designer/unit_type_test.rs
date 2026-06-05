@@ -113,13 +113,15 @@ fn iter_unit_to_iter_unit_identity_allowed() {
 }
 
 #[test]
-fn iter_float_to_iter_unit_rejected() {
-    // Per design: `Iter[S] → Iter[T]` with `S ≠ T` is disallowed in v1, even
-    // for `T = Unit`. Use a `collect` + scalar discard if you really need it.
+fn iter_float_to_iter_unit_allowed() {
+    // `Iter[S] → Iter[T]` lazy element conversion is now implemented (open
+    // question #2 of `doc/design_iterators.md`), so the iterator case inherits
+    // the universal `T → Unit` discard widening at the element level:
+    // `Iter[Float] → Iter[Unit]` is accepted, yielding a lazy stream of Units.
     let registry = NodeTypeRegistry::new();
     let src = DataType::Iterator(Box::new(DataType::Float));
     let dst = DataType::Iterator(Box::new(DataType::Unit));
-    assert!(!DataType::can_be_converted_to(&src, &dst, &registry));
+    assert!(DataType::can_be_converted_to(&src, &dst, &registry));
 }
 
 // ============================================================================

@@ -46,6 +46,16 @@ fn as_ints(values: Vec<NetworkResult>) -> Vec<i32> {
         .collect()
 }
 
+fn as_floats(values: Vec<NetworkResult>) -> Vec<f64> {
+    values
+        .into_iter()
+        .map(|r| match r {
+            NetworkResult::Float(v) => v,
+            other => panic!("expected Float element, got {}", other.to_display_string()),
+        })
+        .collect()
+}
+
 // ============================================================================
 // Wire-time conversion rules
 // ============================================================================
@@ -90,14 +100,44 @@ fn iter_identity_is_allowed() {
 }
 
 #[test]
-fn iter_to_iter_with_different_element_types_is_rejected() {
+fn iter_to_iter_with_element_widening_is_allowed() {
+    // `Iter[Int] → Iter[Float]`: lazy element conversion (open question #2 of
+    // `doc/design_iterators.md`, now implemented). The runtime wraps the source
+    // walker in `Walker::convert` and runs `convert_to` per pulled element.
     let registry = NodeTypeRegistry::new();
     let src = DataType::Iterator(Box::new(DataType::Int));
     let dst = DataType::Iterator(Box::new(DataType::Float));
-    assert!(
-        !DataType::can_be_converted_to(&src, &dst, &registry),
-        "Iter[Int] â†’ Iter[Float] is reserved for a follow-up; not implicit in v1"
-    );
+    assert!(DataType::can_be_converted_to(&src, &dst, &registry));
+}
+
+#[test]
+fn iter_to_iter_with_element_narrowing_is_allowed() {
+    // The reverse `Iter[Float] → Iter[Int]` is also a permitted scalar
+    // conversion (truncating, mirroring the scalar `Float → Int` rule).
+    let registry = NodeTypeRegistry::new();
+    let src = DataType::Iterator(Box::new(DataType::Float));
+    let dst = DataType::Iterator(Box::new(DataType::Int));
+    assert!(DataType::can_be_converted_to(&src, &dst, &registry));
+}
+
+#[test]
+fn iter_to_iter_with_incompatible_element_types_is_still_rejected() {
+    // The element-level rule still gates: `Int → String` is not a permitted
+    // scalar conversion, so neither is `Iter[Int] → Iter[String]`.
+    let registry = NodeTypeRegistry::new();
+    let src = DataType::Iterator(Box::new(DataType::Int));
+    let dst = DataType::Iterator(Box::new(DataType::String));
+    assert!(!DataType::can_be_converted_to(&src, &dst, &registry));
+}
+
+#[test]
+fn nested_iter_of_iter_element_widening_is_allowed() {
+    // `Iter[Iter[Int]] → Iter[Iter[Float]]` recurses: the outer rule defers to
+    // the inner `Iter[Int] → Iter[Float]`, which is now allowed.
+    let registry = NodeTypeRegistry::new();
+    let src = DataType::Iterator(Box::new(DataType::Iterator(Box::new(DataType::Int))));
+    let dst = DataType::Iterator(Box::new(DataType::Iterator(Box::new(DataType::Float))));
+    assert!(DataType::can_be_converted_to(&src, &dst, &registry));
 }
 
 #[test]
@@ -338,4 +378,163 @@ fn array_value_still_wraps_into_iter_elementwise() {
         &registry,
     );
     assert_eq!(as_ints(drain(&registry, converted)), vec![4, 5]);
+}
+
+// ============================================================================
+// Lazy `Iter[S] → Iter[T]` element conversion (the converting walker)
+// ============================================================================
+//
+// Type-level acceptance is covered above; these tests pin the runtime
+// behavior of the `Walker::convert` variant that `convert_to` installs when an
+// `Iter[S]` value flows into an `Iter[T]` slot with `S ≠ T`.
+
+#[test]
+fn iter_int_value_converts_elementwise_to_iter_float() {
+    let registry = NodeTypeRegistry::new();
+    let value = NetworkResult::Iterator(Walker::from_array(vec![
+        NetworkResult::Int(1),
+        NetworkResult::Int(2),
+        NetworkResult::Int(3),
+    ]));
+    let converted = value.convert_to(
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &DataType::Iterator(Box::new(DataType::Float)),
+        &registry,
+    );
+    assert_eq!(as_floats(drain(&registry, converted)), vec![1.0, 2.0, 3.0]);
+}
+
+#[test]
+fn iter_float_value_converts_elementwise_to_iter_int_truncating() {
+    // Mirrors the scalar `Float → Int` rule: each element is rounded.
+    let registry = NodeTypeRegistry::new();
+    let value = NetworkResult::Iterator(Walker::from_array(vec![
+        NetworkResult::Float(1.4),
+        NetworkResult::Float(2.6),
+        NetworkResult::Float(-0.5),
+    ]));
+    let converted = value.convert_to(
+        &DataType::Iterator(Box::new(DataType::Float)),
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &registry,
+    );
+    // `convert_to` uses `f64::round` (round-half-away-from-zero): -0.5 → -1.
+    assert_eq!(as_ints(drain(&registry, converted)), vec![1, 3, -1]);
+}
+
+#[test]
+fn empty_iter_converts_to_empty_iter() {
+    let registry = NodeTypeRegistry::new();
+    let value = NetworkResult::Iterator(Walker::from_array(vec![]));
+    let converted = value.convert_to(
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &DataType::Iterator(Box::new(DataType::Float)),
+        &registry,
+    );
+    assert!(drain(&registry, converted).is_empty());
+}
+
+/// Pull one element and extract it as `Option<f64>` (`None` = stream end).
+/// `NetworkResult` implements neither `PartialEq` nor `Debug`, so tests
+/// project to a comparable primitive before asserting.
+fn next_float(
+    walker: &mut Walker,
+    evaluator: &NetworkEvaluator,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+) -> Option<f64> {
+    match walker.next(evaluator, registry, context) {
+        None => None,
+        Some(NetworkResult::Float(v)) => Some(v),
+        Some(other) => panic!("expected Float element, got {}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn converting_walker_clone_advances_independently() {
+    // Invariant 2 (clone independence): cloning a converting walker — as every
+    // `NetworkResult` read site does — must yield a walker whose `next`
+    // advances independently of the original.
+    let registry = NodeTypeRegistry::new();
+    let converted = NetworkResult::Iterator(Walker::from_array(vec![
+        NetworkResult::Int(7),
+        NetworkResult::Int(8),
+    ]))
+    .convert_to(
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &DataType::Iterator(Box::new(DataType::Float)),
+        &registry,
+    );
+    let mut walker = match converted {
+        NetworkResult::Iterator(w) => w,
+        other => panic!("expected Iterator, got {}", other.to_display_string()),
+    };
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+
+    // Advance the original by one element, then clone.
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        Some(7.0)
+    );
+    let mut cloned = walker.clone();
+
+    // Draining the clone must not disturb the original's position.
+    assert_eq!(
+        next_float(&mut cloned, &evaluator, &registry, &mut context),
+        Some(8.0)
+    );
+    assert_eq!(
+        next_float(&mut cloned, &evaluator, &registry, &mut context),
+        None
+    );
+
+    // The original still has exactly its own remaining element.
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        Some(8.0)
+    );
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        None
+    );
+}
+
+#[test]
+fn converting_walker_resets() {
+    let registry = NodeTypeRegistry::new();
+    let converted = NetworkResult::Iterator(Walker::from_array(vec![
+        NetworkResult::Int(1),
+        NetworkResult::Int(2),
+    ]))
+    .convert_to(
+        &DataType::Iterator(Box::new(DataType::Int)),
+        &DataType::Iterator(Box::new(DataType::Float)),
+        &registry,
+    );
+    let mut walker = match converted {
+        NetworkResult::Iterator(w) => w,
+        other => panic!("expected Iterator, got {}", other.to_display_string()),
+    };
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        Some(1.0)
+    );
+    walker.reset();
+    // After reset the converted stream replays from the start.
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        Some(1.0)
+    );
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        Some(2.0)
+    );
+    assert_eq!(
+        next_float(&mut walker, &evaluator, &registry, &mut context),
+        None
+    );
 }

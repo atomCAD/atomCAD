@@ -519,12 +519,14 @@ impl DataType {
         // Three rules apply, in this order:
         //   1. `[S] → Iter[T]` when `S → T` (eager wrap; element conversion at
         //      wrap time).
-        //   2. `Iter[T] → Iter[T]` identity only — `Iter[S] → Iter[T]` with
-        //      `S ≠ T` is **disallowed in v1** (lazy element conversion is a
-        //      follow-up). The identity case is already handled by the
+        //   2. `Iter[S] → Iter[T]` (lazy element conversion) when `S → T`. The
+        //      identity case (`S == T`) is already handled by the
         //      `source == dest` short-circuit at the top of this function;
         //      reaching here with two `Iterator(_)` types means inner types
-        //      differ, so we explicitly reject.
+        //      differ, so we recurse on `S → T`. The runtime wraps the source
+        //      walker in a converting walker (`Walker::convert`) that runs
+        //      `convert_to` per pulled element. See
+        //      `doc/design_iterators.md` (open question #2 — now implemented).
         //   3. `S → Iter[T]` (single-element broadcast) when `S → T`.
         //
         // There is **no** `Iter[T] → [T]` and **no** `Iter[T] → T` rule. Both
@@ -540,10 +542,16 @@ impl DataType {
                     false,
                 );
             }
-            // Rule 2 (negative): different iterator element types are not
-            // implicitly convertible.
-            if matches!(source_type, DataType::Iterator(_)) {
-                return false;
+            // Rule 2: iterator-to-iterator with differing element types →
+            // lazy element conversion when `S → T`. (Identity `S == T` was
+            // handled by the `source == dest` short-circuit at the top.)
+            if let DataType::Iterator(source_element_type) = source_type {
+                return Self::can_be_converted_to_impl(
+                    source_element_type,
+                    target_element_type,
+                    registry,
+                    false,
+                );
             }
             // Rule 3: scalar broadcast.
             return Self::can_be_converted_to_impl(
@@ -723,9 +731,11 @@ impl DataType {
             return DataType::can_be_converted_to(source_type, dest_type, registry);
         }
 
-        // Iterator destination: only `Array[S] → Iter[T]` eager wrap and
-        // `Iter[T] → Iter[T]` identity (already handled above). The scalar
-        // broadcast rule `S → Iter[T]` is dropped.
+        // Iterator destination: `Array[S] → Iter[T]` eager wrap,
+        // `Iter[T] → Iter[T]` identity (already handled above), and
+        // `Iter[S] → Iter[T]` lazy element conversion when `S → T` (recursing
+        // strictly so a nested broadcast can't leak in). The scalar broadcast
+        // rule `S → Iter[T]` is dropped.
         if let DataType::Iterator(target_element_type) = dest_type {
             if let DataType::Array(source_element_type) = source_type {
                 return DataType::can_be_converted_to_strict_no_broadcast(
@@ -734,7 +744,13 @@ impl DataType {
                     registry,
                 );
             }
-            // Iter[S] → Iter[T] with S != T rejected (same as permissive).
+            if let DataType::Iterator(source_element_type) = source_type {
+                return DataType::can_be_converted_to_strict_no_broadcast(
+                    source_element_type,
+                    target_element_type,
+                    registry,
+                );
+            }
             // Scalar broadcast rejected.
             return false;
         }
