@@ -303,8 +303,17 @@ fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &Node
 /// Removes wire connections that reference output pins that no longer exist on the source node.
 /// This handles the case where a custom network's return node changes from multi-output to
 /// single-output, leaving dangling wires to pins that were removed.
+///
+/// Recurses into every HOF/closure zone body. `pin_counts` is rebuilt per
+/// network/body because intra-scope (`source_scope_depth == 0`) wires reference
+/// nodes in the *same* network, and `node_id` is only unique within one network
+/// (a body node and a top-level node can share an id). Without the recursion a
+/// dangling wire to a removed output pin survived inside a body — the sibling of
+/// issue #331's `repair_network_arguments` body-skip; see the "bare
+/// `network.nodes` walk skips body nodes" note in `structure_designer/AGENTS.md`.
 fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeTypeRegistry) {
-    // First pass: build a map of node_id -> output_pin_count for all nodes
+    // First pass: build a map of node_id -> output_pin_count for THIS network's
+    // own nodes.
     let pin_counts: HashMap<u64, usize> = network
         .nodes
         .iter()
@@ -315,7 +324,9 @@ fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeT
         })
         .collect();
 
-    // Second pass: remove wires to non-existent output pins
+    // Second pass: remove wires to non-existent output pins, then recurse into
+    // each node's zone body (which resolves its own intra-scope wires against
+    // its own `pin_counts`).
     for node in network.nodes.values_mut() {
         for argument in node.arguments.iter_mut() {
             argument.incoming_wires.retain(|wire| {
@@ -341,6 +352,9 @@ fn repair_output_pin_wires(network: &mut NodeNetwork, node_type_registry: &NodeT
                     true // Unknown source — let validate_wires catch it
                 }
             });
+        }
+        if let Some(body) = node.zone_mut() {
+            repair_output_pin_wires(body, node_type_registry);
         }
     }
 }

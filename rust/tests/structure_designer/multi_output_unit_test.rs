@@ -1218,6 +1218,109 @@ fn test_infer_data_type_none_variants() {
     assert_eq!(NetworkResult::Array(vec![]).infer_data_type(), None);
 }
 
+// ===== Output-pin-wire repair recurses into zone bodies =====
+//
+// Regression: `repair_output_pin_wires` used to walk only the top-level
+// `network.nodes`, so a dangling wire to a removed output pin survived *inside*
+// a HOF/closure body. This is the sibling of issue #331's
+// `repair_network_arguments` body-skip — both repair passes in
+// `validate_network` shared the "bare `network.nodes` loop skips body nodes"
+// flaw. The top-level behavior is covered by
+// `test_custom_network_shrink_output_pins_disconnects_wires`; this asserts the
+// same cleanup happens one scope down, inside a `map` body.
+
+/// Count incoming wires from `source_id` landing on `apply_diff_id.arguments[0]`
+/// inside `map_id`'s body in the "outer" network.
+fn body_wire_count_to_source(
+    designer: &StructureDesigner,
+    map_id: u64,
+    apply_diff_id: u64,
+    source_id: u64,
+) -> usize {
+    let body = designer
+        .node_type_registry
+        .node_networks
+        .get("outer")
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap();
+    body.nodes.get(&apply_diff_id).unwrap().arguments[0]
+        .incoming_wires
+        .iter()
+        .filter(|w| w.source_node_id == source_id)
+        .count()
+}
+
+#[test]
+fn test_custom_network_shrink_disconnects_wires_inside_zone_body() {
+    use rust_lib_flutter_cad::structure_designer::node_data::NoData;
+    use rust_lib_flutter_cad::structure_designer::node_network::{IncomingWire, SourcePin};
+
+    let mut designer = setup_designer_with_network("inner");
+
+    // inner: atom_edit as return node => 2 output pins (result, diff).
+    let atom_edit_id = designer.add_node("atom_edit", DVec2::ZERO);
+    designer.set_return_node_id(Some(atom_edit_id));
+
+    // outer: a `map` HOF whose BODY holds an `inner` instance and a downstream
+    // `apply_diff`, wired from inner's pin 1 (diff). The wire lives one scope
+    // below the top level.
+    designer.add_node_network("outer");
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    let map_id = designer.add_node("map", DVec2::ZERO);
+
+    let (inner_id, apply_diff_id) = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("outer")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let inner_id = body.add_node("inner", DVec2::ZERO, 0, Box::new(NoData {}));
+        let apply_diff_id =
+            body.add_node("apply_diff", DVec2::new(200.0, 0.0), 2, Box::new(NoData {}));
+        body.nodes.get_mut(&apply_diff_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: inner_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 1 },
+                source_scope_depth: 0,
+            });
+        (inner_id, apply_diff_id)
+    };
+
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    designer.validate_active_network();
+    assert_eq!(
+        body_wire_count_to_source(&designer, map_id, apply_diff_id, inner_id),
+        1,
+        "precondition: the body wire to inner.pin1 exists while inner has 2 pins"
+    );
+
+    // Shrink inner to a single output pin (return node => sphere).
+    designer.set_active_node_network_name(Some("inner".to_string()));
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+
+    // Re-validate outer. The body wire now points at a pin that no longer
+    // exists and must be stripped — exactly as it would be at the top level.
+    designer.set_active_node_network_name(Some("outer".to_string()));
+    designer.validate_active_network();
+    assert_eq!(
+        body_wire_count_to_source(&designer, map_id, apply_diff_id, inner_id),
+        0,
+        "repair_output_pin_wires must disconnect a BODY wire to a removed output pin"
+    );
+}
+
 // ===== resolve_output_type tests (step 6.3) =====
 //
 // These tests exercise each PinOutputType variant against a toy NodeType + registry.
