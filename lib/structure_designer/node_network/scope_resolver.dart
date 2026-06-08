@@ -567,7 +567,18 @@ class ScopeResolver {
       // (not `isBodyCollapsed`) is the right predicate. The compact rect is
       // already reflected in the `nodeRect` tested above via
       // `effectiveNodeSizeScreen`.
-      if (node.zone != null) {
+      //
+      // Also gated on `ZoomLevel.normal`: only the normal zoom renders the
+      // body region (with its zone pins and resize handle). In zoomed-out
+      // modes the HOF is drawn as a single solid compact box
+      // (`_buildZoomedOutNodeContent`) with no body region — so the whole
+      // footprint must hit-test as the node. Without this gate, a click in the
+      // center of a zoomed-out HOF/closure box falls through to "empty space",
+      // and the outer Listener starts a rectangle-selection drag in parallel
+      // with the node's own pan gesture; on release the selection's
+      // refreshFromKernel clobbers the uncommitted drag position and the node
+      // bounces back to where it started.
+      if (node.zone != null && zoomLevel == ZoomLevel.normal) {
         final bodyChain = [...scopeChain, node.id];
         if (!layout.isCompact(bodyChain)) {
           final bodyOrigin = layout.lookupOrigin(bodyChain);
