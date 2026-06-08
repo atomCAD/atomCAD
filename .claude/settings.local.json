@@ -272,7 +272,8 @@
       "Bash(cp src/structure_designer/structure_designer.rs /tmp/sd_backup.rs)",
       "Bash(perl -0pi -e 's/\\(node_inlining::make_space_for_inline\\\\\\(\\\\s*target,\\\\s*node_id,\\\\s*anchor,\\\\s*original_size,\\\\s*closure_size,\\\\s*&node_sizes,\\\\s*\\\\\\);\\)/\\\\/\\\\*DISABLED\\\\*\\\\//s' src/structure_designer/structure_designer.rs)",
       "Bash(perl -0pi -e 's/let \\\\\\(body_width, body_height\\\\\\) = rendered_body_size\\\\\\(node, registry\\\\\\);/let \\(body_width, body_height\\) = \\(node.body_width, node.body_height\\);/' src/structure_designer/node_inlining.rs)",
-      "Bash(Get-ChildItem *)"
+      "Bash(Get-ChildItem *)",
+      "Bash(Select-Object -First 30)"
     ]
   }
 }

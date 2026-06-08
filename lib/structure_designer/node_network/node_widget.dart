@@ -865,6 +865,10 @@ class NodeWidget extends StatelessWidget {
       width: nodeSize.width,
       height: zoomLevel == ZoomLevel.normal ? null : nodeSize.height,
       decoration: _getNodeDecoration(),
+      // Border is a foreground decoration, NOT part of `decoration`: a bordered
+      // `BoxDecoration` would inset the child by the border width, overflowing
+      // the fixed-width HOF/zone body. See `_getNodeDecoration`.
+      foregroundDecoration: _getNodeForegroundDecoration(),
       child: nodeContent,
     );
 
@@ -1458,60 +1462,90 @@ class NodeWidget extends StatelessWidget {
   }
 
   /// Returns the decoration for the node container
+  /// State-driven border color/width plus the (background) glow shadow.
+  /// Priority: error > active > selected > normal. Shared by
+  /// [_getNodeDecoration] (uses the shadow) and [_getNodeForegroundDecoration]
+  /// (uses the color/width) so the two stay in lockstep.
+  (Color, double, List<BoxShadow>?) _nodeBorderStyle() {
+    if (node.error != null) {
+      return (
+        NODE_BORDER_COLOR_ERROR,
+        NODE_BORDER_WIDTH_NORMAL,
+        [
+          BoxShadow(
+              color: NODE_BORDER_COLOR_ERROR.withValues(alpha: WIRE_GLOW_OPACITY),
+              blurRadius: WIRE_GLOW_BLUR_RADIUS,
+              spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+        ],
+      );
+    } else if (node.active) {
+      // Active node: thicker border, full glow
+      return (
+        NODE_COLOR_ACTIVE,
+        NODE_BORDER_WIDTH_ACTIVE,
+        [
+          BoxShadow(
+              color: NODE_COLOR_ACTIVE.withValues(alpha: WIRE_GLOW_OPACITY),
+              blurRadius: WIRE_GLOW_BLUR_RADIUS,
+              spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
+        ],
+      );
+    } else if (node.selected) {
+      // Selected but not active
+      return (
+        NODE_COLOR_SELECTED,
+        NODE_BORDER_WIDTH_SELECTED,
+        [
+          BoxShadow(
+              color: NODE_COLOR_SELECTED
+                  .withValues(alpha: WIRE_GLOW_OPACITY * 0.5),
+              blurRadius: WIRE_GLOW_BLUR_RADIUS * 0.7,
+              spreadRadius: WIRE_GLOW_SPREAD_RADIUS * 0.5)
+        ],
+      );
+    } else {
+      // Normal (not selected)
+      return (NODE_BORDER_COLOR_NORMAL, NODE_BORDER_WIDTH_NORMAL, null);
+    }
+  }
+
+  /// Background decoration for the node container: fill, rounded corners, and
+  /// the state glow shadow.
+  ///
+  /// The border is deliberately NOT here — it lives in
+  /// [_getNodeForegroundDecoration]. A `BoxDecoration` with a border makes the
+  /// enclosing `Container` inset its child by the border width on every side
+  /// (`Container` folds `BoxDecoration.padding == border.dimensions` into the
+  /// child's padding). The HOF/zone body (`_buildHofMainBody`) is a
+  /// fixed-width `SizedBox` sized to the full node width, so it could not
+  /// absorb that inset and overflowed by exactly `2 * borderWidth` — the
+  /// "RIGHT OVERFLOWED BY 4.0 PIXELS" (6.0 when active) debug banner seen on
+  /// closures. Drawing the border as a *foreground* decoration paints it over
+  /// the content edge without consuming layout, so the body fills exactly the
+  /// width the scope resolver already assumes and wire endpoints stay aligned.
   BoxDecoration _getNodeDecoration() {
     // Use colored background for special nodes in zoomed-out modes
     final backgroundColor = (zoomLevel != ZoomLevel.normal)
         ? (_getSpecialNodeColor() ?? NODE_BACKGROUND_COLOR)
         : NODE_BACKGROUND_COLOR;
 
-    // Determine border color and width based on state:
-    // Priority: error > active > selected > normal
-    Color borderColor;
-    double borderWidth;
-    List<BoxShadow>? boxShadow;
-
-    if (node.error != null) {
-      borderColor = NODE_BORDER_COLOR_ERROR;
-      borderWidth = NODE_BORDER_WIDTH_NORMAL;
-      boxShadow = [
-        BoxShadow(
-            color: NODE_BORDER_COLOR_ERROR.withValues(alpha: WIRE_GLOW_OPACITY),
-            blurRadius: WIRE_GLOW_BLUR_RADIUS,
-            spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-      ];
-    } else if (node.active) {
-      // Active node: thicker border, full glow
-      borderColor = NODE_COLOR_ACTIVE;
-      borderWidth = NODE_BORDER_WIDTH_ACTIVE;
-      boxShadow = [
-        BoxShadow(
-            color: NODE_COLOR_ACTIVE.withValues(alpha: WIRE_GLOW_OPACITY),
-            blurRadius: WIRE_GLOW_BLUR_RADIUS,
-            spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
-      ];
-    } else if (node.selected) {
-      // Selected but not active
-      borderColor = NODE_COLOR_SELECTED;
-      borderWidth = NODE_BORDER_WIDTH_SELECTED;
-      boxShadow = [
-        BoxShadow(
-            color:
-                NODE_COLOR_SELECTED.withValues(alpha: WIRE_GLOW_OPACITY * 0.5),
-            blurRadius: WIRE_GLOW_BLUR_RADIUS * 0.7,
-            spreadRadius: WIRE_GLOW_SPREAD_RADIUS * 0.5)
-      ];
-    } else {
-      // Normal (not selected)
-      borderColor = NODE_BORDER_COLOR_NORMAL;
-      borderWidth = NODE_BORDER_WIDTH_NORMAL;
-      boxShadow = null;
-    }
+    final (_, _, boxShadow) = _nodeBorderStyle();
 
     return BoxDecoration(
       color: backgroundColor,
       borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
-      border: Border.all(color: borderColor, width: borderWidth),
       boxShadow: boxShadow,
+    );
+  }
+
+  /// Border drawn on *top* of the node content (as the container's
+  /// `foregroundDecoration`) so it does not inset the child — see
+  /// [_getNodeDecoration] for the full rationale.
+  BoxDecoration _getNodeForegroundDecoration() {
+    final (borderColor, borderWidth, _) = _nodeBorderStyle();
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(NODE_BORDER_RADIUS),
+      border: Border.all(color: borderColor, width: borderWidth),
     );
   }
 
