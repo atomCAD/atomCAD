@@ -1205,6 +1205,35 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// body: a body that's collapsed (rendered too small to be readable —
   /// see U6) is skipped, since the HOF widget itself already swaps in the
   /// `[N nodes]` placeholder for that case.
+  /// Build the widget for a single node in [scopeChain]. Comment nodes get the
+  /// special [CommentNodeWidget] rendering at every scope (top level *and*
+  /// inside HOF/closure bodies); all other nodes get the generic [NodeWidget].
+  /// Both widgets are scope-aware (positioning + key + API calls), so the same
+  /// routing works for the top-level walk and the recursive zone-body walk.
+  Widget _buildNodeWidget(
+    NodeView node,
+    List<BigInt> scopeChain,
+    NodeNetworkView rootView,
+  ) {
+    if (node.nodeTypeName == 'Comment') {
+      return CommentNodeWidget(
+        key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain),
+        node: node,
+        panOffset: _panOffset,
+        zoomLevel: _zoomLevel,
+        rootView: rootView,
+        scopeChain: scopeChain,
+      );
+    }
+    return NodeWidget(
+      node: node,
+      panOffset: _panOffset,
+      zoomLevel: _zoomLevel,
+      rootView: rootView,
+      scopeChain: scopeChain,
+    );
+  }
+
   void _appendNodesRecursive(
     List<Widget> children,
     NodeNetworkView view,
@@ -1213,23 +1242,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     ScopeResolver resolver,
   ) {
     for (final entry in view.nodes.entries) {
-      final node = entry.value;
-      if (node.nodeTypeName == 'Comment' && scopeChain.isEmpty) {
-        children.add(CommentNodeWidget(
-          key: ValueKey(node.id),
-          node: node,
-          panOffset: _panOffset,
-          zoomLevel: _zoomLevel,
-        ));
-      } else {
-        children.add(NodeWidget(
-          node: node,
-          panOffset: _panOffset,
-          zoomLevel: _zoomLevel,
-          rootView: rootView,
-          scopeChain: scopeChain,
-        ));
-      }
+      children.add(_buildNodeWidget(entry.value, scopeChain, rootView));
     }
     // Then walk into each HOF's body — body nodes are drawn after their
     // owner HOF so they layer on top. Skip if the body is collapsed.
@@ -1251,14 +1264,7 @@ class NodeNetworkState extends State<NodeNetwork> {
     ScopeResolver resolver,
   ) {
     for (final entry in zone.nodes.entries) {
-      final node = entry.value;
-      children.add(NodeWidget(
-        node: node,
-        panOffset: _panOffset,
-        zoomLevel: _zoomLevel,
-        rootView: rootView,
-        scopeChain: scopeChain,
-      ));
+      children.add(_buildNodeWidget(entry.value, scopeChain, rootView));
     }
     for (final entry in zone.nodes.entries) {
       final node = entry.value;

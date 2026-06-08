@@ -128,7 +128,7 @@ typedef WireDropCallback = void Function(
 /// [PinReference.scopeChain] and the model's `activeScopeChain`) into the
 /// `Uint64List` form expected by the FRB-generated Rust API. Empty input
 /// (the common case throughout phase U2) yields a length-0 `Uint64List`.
-Uint64List _scopeChainToBytes(List<BigInt> scopeChain) {
+Uint64List scopeChainToBytes(List<BigInt> scopeChain) {
   if (scopeChain.isEmpty) return Uint64List(0);
   final out = Uint64List(scopeChain.length);
   for (int i = 0; i < scopeChain.length; i++) {
@@ -226,7 +226,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// The property-editor scope as the `Uint64List` the Rust API expects.
   Uint64List get propertyEditorScopePath =>
-      _scopeChainToBytes(propertyEditorScopeChain);
+      scopeChainToBytes(propertyEditorScopeChain);
 
   StructureDesignerModel();
 
@@ -250,7 +250,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void setZoneSize(
       List<BigInt> scopeChain, BigInt hofNodeId, double width, double height) {
     structure_designer_api.setZoneSize(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       hofNodeId: hofNodeId,
       width: width,
       height: height,
@@ -264,7 +264,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// per-frame [setZoneSize] calls drive the live update.
   void beginZoneResize(List<BigInt> scopeChain, BigInt hofNodeId) {
     structure_designer_api.beginZoneResize(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       hofNodeId: hofNodeId,
     );
   }
@@ -282,7 +282,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void setCollapseMode(
       List<BigInt> scopeChain, BigInt hofNodeId, APICollapseMode mode) {
     structure_designer_api.setCollapseMode(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       hofNodeId: hofNodeId,
       mode: mode,
     );
@@ -351,7 +351,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void clearSelection({List<BigInt> scopeChain = const []}) {
     structure_designer_api.clearSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
     );
     refreshFromKernel();
   }
@@ -372,7 +372,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool toggleNodeSelection(BigInt nodeId,
       {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.toggleNodeSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
     refreshFromKernel();
@@ -382,7 +382,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Add node to selection without clearing existing selection (for Shift+click)
   bool addNodeToSelection(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.addNodeToSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
     refreshFromKernel();
@@ -396,7 +396,7 @@ class StructureDesignerModel extends ChangeNotifier {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
     }
     final result = structure_designer_api.selectNodes(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeIds: uint64Ids,
     );
     refreshFromKernel();
@@ -411,7 +411,7 @@ class StructureDesignerModel extends ChangeNotifier {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
     }
     structure_designer_api.toggleNodesSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeIds: uint64Ids,
     );
     refreshFromKernel();
@@ -427,7 +427,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Move all selected nodes by delta (commits position to kernel)
   void moveSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
     structure_designer_api.moveSelectedNodes(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       deltaX: delta.dx,
       deltaY: delta.dy,
     );
@@ -493,7 +493,7 @@ class StructureDesignerModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     final containerNodes = _nodesAtScope(scopeChain);
     if (containerNodes == null) return;
-    final scopePath = _scopeChainToBytes(scopeChain);
+    final scopePath = scopeChainToBytes(scopeChain);
     for (final node in containerNodes.values) {
       if (node.selected) {
         structure_designer_api.moveNode(
@@ -528,7 +528,7 @@ class StructureDesignerModel extends ChangeNotifier {
       BigInt destNodeId, BigInt destParamIndex,
       {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.toggleWireSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       sourceNodeId: sourceNodeId,
       sourceOutputPinIndex: sourceOutputPinIndex,
       destinationNodeId: destNodeId,
@@ -543,7 +543,7 @@ class StructureDesignerModel extends ChangeNotifier {
       BigInt destNodeId, BigInt destParamIndex,
       {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.addWireToSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       sourceNodeId: sourceNodeId,
       sourceOutputPinIndex: sourceOutputPinIndex,
       destinationNodeId: destNodeId,
@@ -563,7 +563,7 @@ class StructureDesignerModel extends ChangeNotifier {
       uint64Ids[i] = nodeIds[i].toUnsigned(64);
     }
     structure_designer_api.addNodesToSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeIds: uint64Ids,
     );
     refreshFromKernel();
@@ -613,7 +613,7 @@ class StructureDesignerModel extends ChangeNotifier {
             ))
         .toList();
     structure_designer_api.selectNodesAndWires(
-        scopePath: _scopeChainToBytes(scopeChain),
+        scopePath: scopeChainToBytes(scopeChain),
         nodeIds: uint64Ids,
         wires: wireIdentifiers);
     refreshFromKernel();
@@ -635,7 +635,7 @@ class StructureDesignerModel extends ChangeNotifier {
             ))
         .toList();
     structure_designer_api.addNodesAndWiresToSelection(
-        scopePath: _scopeChainToBytes(scopeChain),
+        scopePath: scopeChainToBytes(scopeChain),
         nodeIds: uint64Ids,
         wires: wireIdentifiers);
     refreshFromKernel();
@@ -657,7 +657,7 @@ class StructureDesignerModel extends ChangeNotifier {
             ))
         .toList();
     structure_designer_api.toggleNodesAndWiresSelection(
-        scopePath: _scopeChainToBytes(scopeChain),
+        scopePath: scopeChainToBytes(scopeChain),
         nodeIds: uint64Ids,
         wires: wireIdentifiers);
     refreshFromKernel();
@@ -877,14 +877,14 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Called when a node drag begins. Captures positions for undo coalescing.
   void beginMoveNodes({List<BigInt> scopeChain = const []}) {
     structure_designer_api.beginMoveNodes(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
     );
   }
 
   /// Called when a node drag ends. Creates a single MoveNodes undo command.
   void endMoveNodes({List<BigInt> scopeChain = const []}) {
     structure_designer_api.endMoveNodes(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
     );
   }
 
@@ -906,7 +906,7 @@ class StructureDesignerModel extends ChangeNotifier {
     final node = _findNodeInScope(nodeId, scopeChain);
     if (node == null) return;
     structure_designer_api.moveNode(
-        scopePath: _scopeChainToBytes(scopeChain),
+        scopePath: scopeChainToBytes(scopeChain),
         nodeId: nodeId,
         position: APIVec2(x: node.position.x, y: node.position.y));
     refreshFromKernel();
@@ -1017,7 +1017,7 @@ class StructureDesignerModel extends ChangeNotifier {
     // preserves the U4-era code path exactly.
     if (sourceScopeDepth == 0 && outPin.pinKind != PinKind.zoneInput) {
       return structure_designer_api.canConnectNodes(
-        scopePath: _scopeChainToBytes(inPin.scopeChain),
+        scopePath: scopeChainToBytes(inPin.scopeChain),
         sourceNodeId: outPin.nodeId,
         sourceOutputPinIndex: outPin.pinIndex,
         destNodeId: inPin.nodeId,
@@ -1031,7 +1031,7 @@ class StructureDesignerModel extends ChangeNotifier {
     final sourcePin = _pinReferenceToApiSourcePin(outPin);
     if (sourcePin == null) return false;
     return structure_designer_api.canConnectWire(
-      destScopePath: _scopeChainToBytes(inPin.scopeChain),
+      destScopePath: scopeChainToBytes(inPin.scopeChain),
       sourceNodeId: outPin.nodeId,
       sourcePin: sourcePin,
       sourceScopeDepth: sourceScopeDepth,
@@ -1074,7 +1074,7 @@ class StructureDesignerModel extends ChangeNotifier {
       // → Body return row.
       if (sourceScopeDepth != 0) return;
       structure_designer_api.connectZoneOutputWire(
-        bodyScopePath: _scopeChainToBytes(effectiveDestScope),
+        bodyScopePath: scopeChainToBytes(effectiveDestScope),
         sourceNodeId: outPin.nodeId,
         sourceOutputPinIndex: outPin.pinIndex,
         zoneOutputIndex: BigInt.from(inPin.pinIndex),
@@ -1082,7 +1082,7 @@ class StructureDesignerModel extends ChangeNotifier {
     } else if (sourceScopeDepth == 0 && outPin.pinKind != PinKind.zoneInput) {
       // Same-scope regular wire — preserve the U4 code path.
       structure_designer_api.connectNodes(
-        scopePath: _scopeChainToBytes(inPin.scopeChain),
+        scopePath: scopeChainToBytes(inPin.scopeChain),
         sourceNodeId: outPin.nodeId,
         sourceOutputPinIndex: outPin.pinIndex,
         destNodeId: inPin.nodeId,
@@ -1094,7 +1094,7 @@ class StructureDesignerModel extends ChangeNotifier {
       final sourcePin = _pinReferenceToApiSourcePin(outPin);
       if (sourcePin == null) return;
       structure_designer_api.connectWire(
-        destScopePath: _scopeChainToBytes(inPin.scopeChain),
+        destScopePath: scopeChainToBytes(inPin.scopeChain),
         sourceNodeId: outPin.nodeId,
         sourcePin: sourcePin,
         sourceScopeDepth: sourceScopeDepth,
@@ -1135,7 +1135,7 @@ class StructureDesignerModel extends ChangeNotifier {
     List<BigInt> scopeChain = const [],
   }) {
     final result = structure_designer_api.autoConnectToNode(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       sourceNodeId: sourceNodeId,
       sourcePinIndex: sourcePinIndex,
       sourceIsOutput: sourceIsOutput,
@@ -1150,7 +1150,7 @@ class StructureDesignerModel extends ChangeNotifier {
     final node = _findNodeInScope(nodeId, scopeChain);
     if (node != null && !node.selected) {
       structure_designer_api.selectNode(
-        scopePath: _scopeChainToBytes(scopeChain),
+        scopePath: scopeChainToBytes(scopeChain),
         nodeId: nodeId,
       );
     }
@@ -1378,7 +1378,7 @@ class StructureDesignerModel extends ChangeNotifier {
     if (nodeNetworkView == null) return;
     //TODO: only select a wire if not already selected.
     structure_designer_api.selectWire(
-        scopePath: _scopeChainToBytes(scopeChain),
+        scopePath: scopeChainToBytes(scopeChain),
         sourceNodeId: sourceNodeId,
         sourceOutputPinIndex: sourceOutputPinIndex.toInt(),
         destinationNodeId: destNodeId,
@@ -1392,7 +1392,7 @@ class StructureDesignerModel extends ChangeNotifier {
     if (node == null) return;
 
     structure_designer_api.setNodeDisplay(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
       isDisplayed: !node.displayed,
     );
@@ -1403,7 +1403,7 @@ class StructureDesignerModel extends ChangeNotifier {
       {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     structure_designer_api.toggleOutputPinDisplay(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
       pinIndex: pinIndex,
     );
@@ -1413,7 +1413,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void removeSelected({List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     structure_designer_api.deleteSelected(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
     );
     refreshFromKernel();
   }
@@ -1424,7 +1424,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Returns true if something was copied, false if selection was empty.
   bool copySelection({List<BigInt> scopeChain = const []}) {
     return structure_designer_api.copySelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
     );
   }
 
@@ -1432,7 +1432,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void pasteAtPosition(double x, double y,
       {List<BigInt> scopeChain = const []}) {
     structure_designer_api.pasteAtPosition(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       x: x,
       y: y,
     );
@@ -1443,7 +1443,7 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Returns true if something was cut.
   bool cutSelection({List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.cutSelection(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
     );
     if (result) {
       refreshFromKernel();
@@ -1726,7 +1726,7 @@ class StructureDesignerModel extends ChangeNotifier {
   }) {
     if (nodeNetworkView == null) return BigInt.zero;
     final nodeId = structure_designer_api.addNode(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeTypeName: nodeTypeName,
       position: APIVec2(x: position.dx, y: position.dy),
       dragSource: dragSource,
@@ -1737,7 +1737,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   BigInt duplicateNode(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return BigInt.zero;
-    final scopePath = _scopeChainToBytes(scopeChain);
+    final scopePath = scopeChainToBytes(scopeChain);
     final newNodeId = structure_designer_api.duplicateNode(
       scopePath: scopePath,
       nodeId: nodeId,
@@ -1774,7 +1774,7 @@ class StructureDesignerModel extends ChangeNotifier {
   InlineResult inlineCustomNode(BigInt nodeId,
       {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.inlineCustomNode(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
     refreshFromKernel();
@@ -1787,7 +1787,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool canConvertInstanceToClosure(BigInt nodeId,
       {List<BigInt> scopeChain = const []}) {
     return structure_designer_api.canConvertInstanceToClosure(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
   }
@@ -1797,7 +1797,7 @@ class StructureDesignerModel extends ChangeNotifier {
   bool canExtractClosureToNetwork(BigInt nodeId,
       {List<BigInt> scopeChain = const []}) {
     return structure_designer_api.canExtractClosureToNetwork(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
   }
@@ -1810,7 +1810,7 @@ class StructureDesignerModel extends ChangeNotifier {
   ConversionResult convertInstanceToClosure(BigInt nodeId,
       {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.convertInstanceToClosure(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
     refreshFromKernel();
@@ -1826,7 +1826,7 @@ class StructureDesignerModel extends ChangeNotifier {
   ConversionResult extractClosureToNetwork(BigInt nodeId, String name,
       {List<BigInt> scopeChain = const []}) {
     final result = structure_designer_api.extractClosureToNetwork(
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
       name: name,
     );
@@ -1851,7 +1851,7 @@ class StructureDesignerModel extends ChangeNotifier {
     if (networkName == null) return null;
     final result = structure_designer_api.executeNode(
       networkName: networkName,
-      scopePath: _scopeChainToBytes(scopeChain),
+      scopePath: scopeChainToBytes(scopeChain),
       nodeId: nodeId,
     );
     // An Execute pass might mutate displayed iterators / record state
@@ -1864,7 +1864,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setIntData(BigInt nodeId, APIIntData data) {
     structure_designer_api.setIntData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1872,7 +1872,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setStringData(BigInt nodeId, APIStringData data) {
     structure_designer_api.setStringData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1880,7 +1880,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setRecordConstructData(BigInt nodeId, APIRecordSchemaData data) {
     structure_designer_api.setRecordConstructData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1888,7 +1888,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setRecordDestructureData(BigInt nodeId, APIRecordSchemaData data) {
     structure_designer_api.setRecordDestructureData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1896,7 +1896,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setProductData(BigInt nodeId, APIRecordSchemaData data) {
     structure_designer_api.setProductData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1904,7 +1904,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setBoolData(BigInt nodeId, APIBoolData data) {
     structure_designer_api.setBoolData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1912,7 +1912,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setPrintData(BigInt nodeId, APIPrintData data) {
     structure_designer_api.setPrintData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1920,7 +1920,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFloatData(BigInt nodeId, APIFloatData data) {
     structure_designer_api.setFloatData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1936,7 +1936,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void setCustomNodeLiteral(
       BigInt nodeId, String paramName, APILiteralValue value) {
     structure_designer_api.setCustomNodeLiteral(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         paramName: paramName,
         value: value);
@@ -1945,7 +1945,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void clearCustomNodeLiteral(BigInt nodeId, String paramName) {
     structure_designer_api.clearCustomNodeLiteral(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         paramName: paramName);
     refreshFromKernel();
@@ -1962,7 +1962,7 @@ class StructureDesignerModel extends ChangeNotifier {
   void setRecordConstructLiteral(
       BigInt nodeId, String fieldName, APILiteralValue value) {
     structure_designer_api.setRecordConstructLiteral(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         fieldName: fieldName,
         value: value);
@@ -1971,7 +1971,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void clearRecordConstructLiteral(BigInt nodeId, String fieldName) {
     structure_designer_api.clearRecordConstructLiteral(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         fieldName: fieldName);
     refreshFromKernel();
@@ -1979,7 +1979,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
     structure_designer_api.setIvec2Data(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1987,7 +1987,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setIvec3Data(BigInt nodeId, APIIVec3Data data) {
     structure_designer_api.setIvec3Data(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -1995,7 +1995,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setSupercellData(BigInt nodeId, APISupercellData data) {
     structure_designer_api.setSupercellData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2003,7 +2003,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setImat3RowsData(BigInt nodeId, APIIMat3RowsData data) {
     structure_designer_api.setImat3RowsData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2011,7 +2011,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setImat3ColsData(BigInt nodeId, APIIMat3ColsData data) {
     structure_designer_api.setImat3ColsData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2019,7 +2019,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setImat3DiagData(BigInt nodeId, APIIMat3DiagData data) {
     structure_designer_api.setImat3DiagData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2027,7 +2027,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMat3RowsData(BigInt nodeId, APIMat3RowsData data) {
     structure_designer_api.setMat3RowsData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2035,7 +2035,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMat3ColsData(BigInt nodeId, APIMat3ColsData data) {
     structure_designer_api.setMat3ColsData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2043,7 +2043,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMat3DiagData(BigInt nodeId, APIMat3DiagData data) {
     structure_designer_api.setMat3DiagData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2051,7 +2051,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setRangeData(BigInt nodeId, APIRangeData data) {
     structure_designer_api.setRangeData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2059,7 +2059,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setVec2Data(BigInt nodeId, APIVec2Data data) {
     structure_designer_api.setVec2Data(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2067,7 +2067,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setVec3Data(BigInt nodeId, APIVec3Data data) {
     structure_designer_api.setVec3Data(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2075,7 +2075,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setCuboidData(BigInt nodeId, APICuboidData data) {
     structure_designer_api.setCuboidData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2083,7 +2083,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setSphereData(BigInt nodeId, APISphereData data) {
     structure_designer_api.setSphereData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2091,7 +2091,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setExtrudeData(BigInt nodeId, APIExtrudeData data) {
     structure_designer_api.setExtrudeData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2099,7 +2099,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setHalfSpaceData(BigInt nodeId, APIHalfSpaceData data) {
     structure_designer_api.setHalfSpaceData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2107,7 +2107,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setDrawingPlaneData(BigInt nodeId, APIDrawingPlaneData data) {
     structure_designer_api.setDrawingPlaneData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2115,7 +2115,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setRectData(BigInt nodeId, APIRectData data) {
     structure_designer_api.setRectData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2123,7 +2123,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setCircleData(BigInt nodeId, APICircleData data) {
     structure_designer_api.setCircleData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2131,7 +2131,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setHalfPlaneData(BigInt nodeId, APIHalfPlaneData data) {
     structure_designer_api.setHalfPlaneData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2139,7 +2139,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setRegPolyData(BigInt nodeId, APIRegPolyData data) {
     structure_designer_api.setRegPolyData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2147,7 +2147,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setGeoTransData(BigInt nodeId, APIGeoTransData data) {
     structure_designer_api.setGeoTransData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2160,7 +2160,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setLatticeSymopData(BigInt nodeId, APILatticeSymopData data) {
     structure_designer_api.setLatticeSymopData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2173,7 +2173,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setStructureMoveData(BigInt nodeId, APIStructureMoveData data) {
     structure_designer_api.setStructureMoveData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2186,7 +2186,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setStructureRotData(BigInt nodeId, APIStructureRotData data) {
     structure_designer_api.setStructureRotData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2194,7 +2194,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFreeMoveData(BigInt nodeId, APIFreeMoveData data) {
     structure_designer_api.setFreeMoveData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2202,7 +2202,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFreeRotData(BigInt nodeId, APIFreeRotData data) {
     structure_designer_api.setFreeRotData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2210,7 +2210,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setParameterData(BigInt nodeId, APIParameterData data) {
     structure_designer_api.setParameterData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2218,7 +2218,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMApData(BigInt nodeId, APIMapData data) {
     structure_designer_api.setMapData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2226,7 +2226,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFilterData(BigInt nodeId, APIFilterData data) {
     structure_designer_api.setFilterData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2234,7 +2234,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setForeachData(BigInt nodeId, APIForeachData data) {
     structure_designer_api.setForeachData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2242,7 +2242,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setCollectData(BigInt nodeId, APICollectData data) {
     structure_designer_api.setCollectData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2250,7 +2250,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setArrayAtData(BigInt nodeId, APIArrayAtData data) {
     structure_designer_api.setArrayAtData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2258,7 +2258,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFoldData(BigInt nodeId, APIFoldData data) {
     structure_designer_api.setFoldData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2266,7 +2266,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setClosureData(BigInt nodeId, APIClosureData data) {
     structure_designer_api.setClosureData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2274,7 +2274,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setApplyData(BigInt nodeId, APIApplyData data) {
     structure_designer_api.setApplyData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2287,7 +2287,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setSequenceData(BigInt nodeId, APISequenceData data) {
     structure_designer_api.setSequenceData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2295,7 +2295,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   APIResult setExprData(BigInt nodeId, APIExprData data) {
     final result = structure_designer_api.setExprData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2304,7 +2304,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMotifData(BigInt nodeId, APIMotifData data) {
     structure_designer_api.setMotifData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2317,7 +2317,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMaterializeData(BigInt nodeId, APIMaterializeData data) {
     structure_designer_api.setMaterializeData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2330,7 +2330,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setMotifSubData(BigInt nodeId, APIMotifSubData data) {
     structure_designer_api.setMotifSubData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2353,7 +2353,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setImportXyzData(BigInt nodeId, APIImportXYZData data) {
     structure_designer_api.setImportXyzData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2366,7 +2366,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setExportXyzData(BigInt nodeId, APIExportXYZData data) {
     structure_designer_api.setExportXyzData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2386,7 +2386,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setImportCifData(BigInt nodeId, APIImportCIFData data) {
     structure_designer_api.setImportCifData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2406,7 +2406,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setInferBondsData(BigInt nodeId, APIInferBondsData data) {
     structure_designer_api.setInferBondsData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2419,7 +2419,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setAtomReplaceData(BigInt nodeId, APIAtomReplaceData data) {
     structure_designer_api.setAtomReplaceData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2432,7 +2432,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setApplyDiffData(BigInt nodeId, APIApplyDiffData data) {
     structure_designer_api.setApplyDiffData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2440,7 +2440,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setAtomComposeDiffData(BigInt nodeId, APIAtomComposeDiffData data) {
     structure_designer_api.setAtomComposediffData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2448,7 +2448,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setAtomCutData(BigInt nodeId, APIAtomCutData data) {
     structure_designer_api.setAtomCutData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
@@ -2456,7 +2456,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setLatticeVecsData(BigInt nodeId, APILatticeVecsData data) {
     structure_designer_api.setLatticeVecsData(
-        scopePath: _scopeChainToBytes(propertyEditorScopeChain),
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();

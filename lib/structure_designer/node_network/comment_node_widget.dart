@@ -9,6 +9,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 
 const double COMMENT_MIN_WIDTH = 100.0;
 const double COMMENT_MIN_HEIGHT = 60.0;
@@ -23,11 +24,23 @@ class CommentNodeWidget extends StatefulWidget {
   final Offset panOffset;
   final ZoomLevel zoomLevel;
 
+  /// Root network view, used to build a per-frame [ScopeResolver] so the
+  /// comment is positioned in its body-local frame when it lives inside an
+  /// HOF/closure body (see [scopeChain]).
+  final NodeNetworkView rootView;
+
+  /// Scope chain of the body this comment lives in (`const []` at top level).
+  /// Forwarded to every selection/drag/edit API call so the right node is
+  /// addressed across scopes.
+  final List<BigInt> scopeChain;
+
   const CommentNodeWidget({
     super.key,
     required this.node,
     required this.panOffset,
     required this.zoomLevel,
+    required this.rootView,
+    this.scopeChain = const [],
   });
 
   @override
@@ -45,13 +58,24 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   String get _label => widget.node.commentLabel ?? '';
   String get _text => widget.node.commentText ?? '';
 
+  /// Byte-encoded scope path for FRB API calls that address this comment node.
+  Uint64List get _scopePath => scopeChainToBytes(widget.scopeChain);
+
   @override
   Widget build(BuildContext context) {
     final scale = getZoomScale(widget.zoomLevel);
-    final screenPos = logicalToScreen(
+    // Position via the scope resolver: the comment's stored position lives in
+    // its body-local frame, which the resolver maps to screen. For the
+    // top-level scope (empty chain) this is identical to `logicalToScreen`.
+    final resolver = ScopeResolver(
+      root: widget.rootView,
+      panOffset: widget.panOffset,
+      scale: scale,
+      zoomLevel: widget.zoomLevel,
+    );
+    final screenPos = resolver.scopedToScreen(
+      widget.scopeChain,
       Offset(widget.node.position.x, widget.node.position.y),
-      widget.panOffset,
-      scale,
     );
 
     final scaledWidth = _width * scale;
@@ -181,15 +205,20 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
 
   void _handleTap(BuildContext context) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    final scopeChain = widget.scopeChain;
+
+    // Keyboard ops (delete / copy / paste) act on the active scope, so a click
+    // on a body-scoped comment must make that body active.
+    model.setActiveScopeChain(scopeChain);
 
     if (HardwareKeyboard.instance.isControlPressed) {
-      model.toggleNodeSelection(widget.node.id);
+      model.toggleNodeSelection(widget.node.id, scopeChain: scopeChain);
     } else if (HardwareKeyboard.instance.isShiftPressed) {
-      model.addNodeToSelection(widget.node.id);
+      model.addNodeToSelection(widget.node.id, scopeChain: scopeChain);
     } else if (widget.node.selected && !widget.node.active) {
-      model.addNodeToSelection(widget.node.id);
+      model.addNodeToSelection(widget.node.id, scopeChain: scopeChain);
     } else {
-      model.setSelectedNode(widget.node.id);
+      model.setSelectedNode(widget.node.id, scopeChain: scopeChain);
     }
   }
 
@@ -207,9 +236,10 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
 
     if (widget.node.selected) {
-      model.dragSelectedNodes(logicalDelta);
+      model.dragSelectedNodes(logicalDelta, scopeChain: widget.scopeChain);
     } else {
-      model.dragNodePosition(widget.node.id, logicalDelta);
+      model.dragNodePosition(widget.node.id, logicalDelta,
+          scopeChain: widget.scopeChain);
     }
   }
 
@@ -218,16 +248,15 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
 
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
     if (widget.node.selected) {
-      model.updateSelectedNodesPosition();
+      model.updateSelectedNodesPosition(scopeChain: widget.scopeChain);
     } else {
-      model.updateNodePosition(widget.node.id);
+      model.updateNodePosition(widget.node.id, scopeChain: widget.scopeChain);
     }
   }
 
   void _startResize(DragStartDetails details) {
-    // Comment node widgets render only at the top level (see
-    // `node_network.dart` `_appendNodesRecursive`), so the scope is empty.
-    sd_api.beginEditCommentNode(scopePath: Uint64List(0), nodeId: widget.node.id);
+    sd_api.beginEditCommentNode(
+        scopePath: _scopePath, nodeId: widget.node.id);
     setState(() {
       _isResizing = true;
       _resizeStartWidth = _width;
@@ -248,7 +277,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
         .clamp(COMMENT_MIN_HEIGHT, 1000.0);
 
     sd_api.resizeCommentNode(
-      scopePath: Uint64List(0),
+      scopePath: _scopePath,
       nodeId: widget.node.id,
       width: newWidth,
       height: newHeight,
@@ -267,7 +296,8 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
 
   void _handleContextMenu(BuildContext context, TapDownDetails details) {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
-    model.setSelectedNode(widget.node.id);
+    model.setActiveScopeChain(widget.scopeChain);
+    model.setSelectedNode(widget.node.id, scopeChain: widget.scopeChain);
 
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -293,7 +323,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
       if (value == 'duplicate') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
-        model.duplicateNode(widget.node.id);
+        model.duplicateNode(widget.node.id, scopeChain: widget.scopeChain);
       }
     });
   }

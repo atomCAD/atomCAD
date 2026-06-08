@@ -284,6 +284,12 @@ class ScopeResolver {
   /// inner body grows — required for the nested-zone cascade. See
   /// `doc/design_zones_ui.md` §"Body sizing — Layout pass".
   Size effectiveNodeSizeLogical(NodeView node, List<BigInt> nodeScopeChain) {
+    // Comment nodes carry their own footprint (not the generic pin-derived
+    // node size), so a body's content bbox grows to wrap them. Mirrors the
+    // comment special-case in the find-node hit-test path below.
+    if (node.nodeTypeName == 'Comment') {
+      return Size(node.commentWidth ?? 200.0, node.commentHeight ?? 100.0);
+    }
     final zone = node.zone;
     // A compact HOF reports a regular-node footprint so a parent body's
     // `content_bbox` shrinks around it (size cascade). Read `zone.collapsed`
