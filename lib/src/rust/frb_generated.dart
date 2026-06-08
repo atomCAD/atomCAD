@@ -118,7 +118,7 @@ abstract class RustLibApi extends BaseApi {
       required BigInt nodeId,
       required APIFacet facet});
 
-  void crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
+  String crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
 
   BigInt crateApiStructureDesignerStructureDesignerApiAddNode(
       {required Uint64List scopePath,
@@ -1654,14 +1654,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork() {
+  String crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
+        decodeSuccessData: sse_decode_String,
         decodeErrorData: null,
       ),
       constMeta:

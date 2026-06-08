@@ -295,7 +295,11 @@ List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworksWithValidation();
 
-void addNewNodeNetwork() => RustLib.instance.api
+/// Add a node network with an auto-generated unique name and activate it.
+/// Returns the generated name so the Flutter side can select the new network
+/// (the network registry is a HashMap, so list order is not reliable — issue
+/// #315).
+String addNewNodeNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
 
 /// Add a node network with a specific name.

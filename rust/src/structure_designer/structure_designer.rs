@@ -1244,7 +1244,11 @@ impl StructureDesigner {
 
     // node network methods
 
-    pub fn add_new_node_network(&mut self) {
+    /// Add a node network with an auto-generated unique name.
+    /// Returns the generated name so the caller can activate the new network
+    /// (the registry is a HashMap, so callers cannot reliably recover the new
+    /// name by inspecting list order — see issue #315).
+    pub fn add_new_node_network(&mut self) -> String {
         // Generate a unique name. Skip any name already taken anywhere in the
         // user-type namespace (networks, user record defs, built-in record
         // defs, built-in node types) so the auto-generated name is never a
@@ -1267,9 +1271,11 @@ impl StructureDesigner {
 
         // Push undo command
         self.push_command(super::undo::commands::add_network::AddNetworkCommand {
-            network_name: name,
+            network_name: name.clone(),
             previous_active_network,
         });
+
+        name
     }
 
     /// Add a named node network and push an undo command.

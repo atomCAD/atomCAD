@@ -1591,12 +1591,26 @@ pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidatio
     }
 }
 
+/// Add a node network with an auto-generated unique name and activate it.
+/// Returns the generated name so the Flutter side can select the new network
+/// (the network registry is a HashMap, so list order is not reliable — issue
+/// #315).
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_new_node_network() {
+pub fn add_new_node_network() -> String {
     unsafe {
-        with_mut_cad_instance(|instance| {
-            instance.structure_designer.add_new_node_network();
-        });
+        with_mut_cad_instance_or(
+            |instance| {
+                let name = instance.structure_designer.add_new_node_network();
+                // New networks don't have camera settings, but we still call the method
+                let camera_settings = instance
+                    .structure_designer
+                    .set_active_node_network_name(Some(name.clone()));
+                apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
+                refresh_structure_designer_auto(instance);
+                name
+            },
+            String::new(),
+        )
     }
 }
 

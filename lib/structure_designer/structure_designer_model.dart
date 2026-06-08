@@ -1330,17 +1330,15 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void addNewNodeNetwork() {
-    structure_designer_api.addNewNodeNetwork();
-
-    // Refresh the list of node networks
-    nodeNetworkNames =
-        structure_designer_api.getNodeNetworksWithValidation() ?? [];
-
-    // If we want to automatically set the new network as active,
-    // we would need to get its name first (it's the last one in the list)
-    if (nodeNetworkNames.isNotEmpty) {
-      final newNetworkName = nodeNetworkNames.last.name;
+    // Rust returns the generated name (and has already activated it). The
+    // registry is a HashMap, so we cannot infer the new network from list
+    // order — selecting `nodeNetworkNames.last` picked a random network
+    // (issue #315). Select the returned name explicitly instead.
+    final newNetworkName = structure_designer_api.addNewNodeNetwork();
+    if (newNetworkName.isNotEmpty) {
       setActiveNodeNetwork(newNetworkName);
+    } else {
+      refreshFromKernel();
     }
   }
 

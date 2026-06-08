@@ -802,3 +802,31 @@ fn test_new_project_full_reset() {
         .unwrap();
     assert!(main_network.nodes.is_empty());
 }
+
+// Regression for issue #315: `add_new_node_network` must return the name of
+// the network it actually created, so the caller can select that exact network
+// (the registry is a HashMap, so list order is unreliable).
+#[test]
+fn test_add_new_node_network_returns_created_name() {
+    let mut designer = StructureDesigner::new();
+
+    let first = designer.add_new_node_network();
+    assert_eq!(first, "UNTITLED");
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&first),
+        "returned name must reference a network that exists"
+    );
+
+    // A second call must return a distinct, non-colliding name that also exists.
+    let second = designer.add_new_node_network();
+    assert_ne!(first, second);
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&second)
+    );
+}

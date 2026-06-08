@@ -277,9 +277,9 @@ fn wire__crate__api__structure_designer__structure_designer_api__add_new_node_ne
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok({
-                    crate::api::structure_designer::structure_designer_api::add_new_node_network();
-                })?;
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::structure_designer::structure_designer_api::add_new_node_network(),
+                )?;
                 Ok(output_ok)
             })())
         },
