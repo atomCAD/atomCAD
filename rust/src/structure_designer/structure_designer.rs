@@ -1882,6 +1882,18 @@ impl StructureDesigner {
                 }
             }
             self.set_dirty(true);
+            // A zone-bearing node added inside a body starts with an empty body
+            // (its zone-output pin has no incoming wire), so re-validate to
+            // surface the zone-rule error consistently — same reasoning as the
+            // top-level `add_node_with_drag_source` path.
+            if self
+                .node_type_registry
+                .get_node_type(node_type_name)
+                .map(|nt| nt.has_zone())
+                .unwrap_or(false)
+            {
+                self.validate_active_network();
+            }
             self.push_zone_body_command_with_ancestor_reflow(
                 scope_path,
                 format!("Add {} node", node_type_name),
@@ -2039,14 +2051,28 @@ impl StructureDesigner {
             self.apply_node_display_policy(Some(&dirty_nodes));
 
             // Check if we need to validate the network
-            let should_validate = node_type_name == "parameter" || {
-                // Check if this node references an invalid node network
-                self.node_type_registry
-                    .node_networks
-                    .get(node_type_name)
-                    .map(|network| !network.valid)
+            let should_validate = node_type_name == "parameter"
+                // A freshly added zone-bearing node (`closure`, `map`, `filter`,
+                // `fold`, `foreach`) has an empty body, so its zone-output pin
+                // has no incoming wire — an immediate zone-rule violation. Without
+                // validating here the network stays `valid` and the only feedback
+                // is the eval-time "body has no incoming wire on zone-output pin"
+                // hover message; validating surfaces the canonical validation
+                // error (and blanks the viewport) consistently with every other
+                // path that reaches the same invalid state.
+                || self
+                    .node_type_registry
+                    .get_node_type(node_type_name)
+                    .map(|nt| nt.has_zone())
                     .unwrap_or(false)
-            };
+                || {
+                    // Check if this node references an invalid node network
+                    self.node_type_registry
+                        .node_networks
+                        .get(node_type_name)
+                        .map(|network| !network.valid)
+                        .unwrap_or(false)
+                };
 
             if should_validate {
                 self.validate_active_network();
@@ -4919,7 +4945,21 @@ impl StructureDesigner {
 
         // Collect nodes that will need to be marked as dirty after deletion
         let mut dirty_nodes = HashSet::new();
-        let mut should_validate = false;
+        // If the network is already invalid, the deletion may have removed the
+        // node or wire that caused the error (e.g. a `closure`/HOF whose zone
+        // body had no zone-output wire). The targeted `should_validate`
+        // heuristics below only catch parameter / invalid-network-reference /
+        // function-pin cases, so without this an invalidating node could be
+        // deleted while `network.valid` stays `false` forever — `generate_scene`
+        // would then keep suppressing all viewport output. Re-validate whenever
+        // we start from an invalid state so validity (and the Full refresh wired
+        // into `validate_active_network`) can recover.
+        let mut should_validate = self
+            .node_type_registry
+            .node_networks
+            .get(&node_network_name)
+            .map(|network| !network.valid)
+            .unwrap_or(false);
 
         if let Some(node_network) = self
             .node_type_registry
@@ -6154,6 +6194,17 @@ impl StructureDesigner {
             let interface_changed = validation_result.interface_changed;
 
             if was_valid != is_now_valid || interface_changed {
+                // A network flipping valid⇄invalid (or changing its interface)
+                // changes what *every* displayed node renders: `generate_scene`
+                // short-circuits to `NodeOutput::None` for an invalid network
+                // (and for nodes that depend on an invalid child network), so a
+                // partial refresh keyed only on the edited node would leave
+                // unrelated displayed nodes (e.g. a cuboid in the viewport)
+                // showing stale output. Refresh paths never validate on their
+                // own, so the validity change is only known here — force a Full
+                // refresh so the whole active network re-evaluates.
+                self.mark_full_refresh();
+
                 // Find all parent networks that use this network as a node
                 let parent_networks = self
                     .node_type_registry

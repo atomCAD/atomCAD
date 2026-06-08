@@ -2130,6 +2130,92 @@ fn validation_rule1_zone_output_pin_missing_wire() {
     );
 }
 
+/// Adding a zone-bearing node (here a `closure`) must validate immediately:
+/// its empty body has a zone-output pin with no incoming wire, so the network
+/// flips invalid the moment the node is created — without waiting for a later
+/// edit. Regression test for the "different error message" half of the closure
+/// refresh bug (an unvalidated closure surfaced only the eval-time hover
+/// message, not the canonical validation error).
+#[test]
+fn adding_closure_node_validates_and_marks_full_refresh() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, 0.0));
+    assert!(closure_id != 0, "closure node should have been created");
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(
+        !network.valid,
+        "Adding an empty `closure` should immediately invalidate the network"
+    );
+
+    // A valid⇄invalid flip must upgrade the pending refresh to Full so every
+    // displayed node re-evaluates (and blanks) — not just the new node.
+    assert!(
+        designer.get_pending_changes().is_full(),
+        "Validity change should mark a Full refresh"
+    );
+}
+
+/// Core regression test for the closure refresh bug: deleting the node that
+/// caused a validation error must re-validate the network so it recovers, and
+/// the recovery must mark a Full refresh so suppressed viewport output returns.
+/// Before the fix, `delete_selected` skipped validation for a `closure` (not a
+/// parameter / invalid-network reference), so `network.valid` stayed `false`
+/// forever and the viewport never came back.
+#[test]
+fn deleting_offending_closure_node_recovers_validity() {
+    let mut designer = setup_designer_with_network("main");
+
+    // A plain value node that should display fine on its own.
+    let int_id = designer.add_node("int", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        int_id,
+        Box::new(IntData { value: 7 }),
+    );
+
+    // Adding an empty closure invalidates the network (validated on add).
+    let closure_id = designer.add_node("closure", DVec2::new(200.0, 0.0));
+    assert!(closure_id != 0, "closure node should have been created");
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .valid,
+        "Network should be invalid while the empty closure exists"
+    );
+
+    // Delete the offending closure node.
+    designer.add_node_to_selection(closure_id);
+    designer.delete_selected();
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(
+        network.nodes.get(&closure_id).is_none(),
+        "closure node should be gone after deletion"
+    );
+    assert!(
+        network.valid,
+        "Deleting the offending closure should re-validate the network back to valid"
+    );
+    assert!(
+        designer.get_pending_changes().is_full(),
+        "Recovering validity should mark a Full refresh so suppressed output returns"
+    );
+}
+
 /// Rule 2: a body wire with `source_scope_depth > 0` referencing a node id
 /// that doesn't exist in the ancestor network is invalid.
 #[test]
