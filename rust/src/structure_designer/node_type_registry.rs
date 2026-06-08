@@ -287,6 +287,66 @@ impl NodeTypeRegistry {
         ret
     }
 
+    /// Resolve the `NodeType` a drag candidate would have once instantiated
+    /// with `data`, for verifying an `adapt_for_drag_source` claim.
+    ///
+    /// Most nodes derive their pins from `calculate_custom_node_type`. The
+    /// registry-driven record nodes (`record_construct` / `record_destructure`
+    /// / `product`) instead build their pins from the schema's authored fields
+    /// and return `None` from `calculate_custom_node_type` — so the bare base
+    /// type (with placeholder `Record(Named(""))` pins) would never
+    /// strict-match a concrete record drag. Route those through the same
+    /// registry-aware builders the cache populator uses, so the resolved
+    /// record pin reflects the adapter's chosen schema. See issue #312.
+    pub fn resolve_drag_candidate_type(
+        &self,
+        node_type: &NodeType,
+        data: &dyn crate::structure_designer::node_data::NodeData,
+    ) -> NodeType {
+        use crate::structure_designer::nodes::{product, record_construct, record_destructure};
+        match node_type.name.as_str() {
+            "record_construct" => {
+                if let Some(d) = data
+                    .as_any_ref()
+                    .downcast_ref::<record_construct::RecordConstructData>()
+                {
+                    return record_construct::build_node_type_for_schema_with_defs(
+                        node_type,
+                        &d.schema,
+                        &self.record_type_defs,
+                        &self.built_in_record_type_defs,
+                    );
+                }
+            }
+            "record_destructure" => {
+                if let Some(d) = data
+                    .as_any_ref()
+                    .downcast_ref::<record_destructure::RecordDestructureData>()
+                {
+                    return record_destructure::build_node_type_for_schema_with_defs(
+                        node_type,
+                        &d.schema,
+                        &self.record_type_defs,
+                        &self.built_in_record_type_defs,
+                    );
+                }
+            }
+            "product" => {
+                if let Some(d) = data.as_any_ref().downcast_ref::<product::ProductData>() {
+                    return product::build_node_type_for_target_with_defs(
+                        node_type,
+                        &d.target,
+                        &self.record_type_defs,
+                        &self.built_in_record_type_defs,
+                    );
+                }
+            }
+            _ => {}
+        }
+        data.calculate_custom_node_type(node_type)
+            .unwrap_or_else(|| node_type.clone())
+    }
+
     /// Returns node types that have at least one pin compatible with the given source type.
     ///
     /// - When `dragging_from_output` is true: find nodes with compatible INPUT pins
@@ -339,9 +399,7 @@ impl NodeTypeRegistry {
                 else {
                     return false;
                 };
-                let resolved = adapted
-                    .calculate_custom_node_type(node_type)
-                    .unwrap_or_else(|| (*node_type).clone());
+                let resolved = self.resolve_drag_candidate_type(node_type, adapted.as_ref());
                 static_match_strict(&resolved, source_type, direction, self)
             })
             .map(|(node_type, category)| APINodeTypeView {

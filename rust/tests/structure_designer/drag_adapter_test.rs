@@ -13,7 +13,9 @@ use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::RecordType;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::node_data::{DragDirection, NodeData};
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::node_type_registry::{
+    NodeTypeRegistry, RecordTypeDef,
+};
 use rust_lib_flutter_cad::structure_designer::nodes::array_append::ArrayAppendData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_at::ArrayAtData;
 use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatData;
@@ -26,6 +28,8 @@ use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
 use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
+use rust_lib_flutter_cad::structure_designer::nodes::record_construct::RecordConstructData;
+use rust_lib_flutter_cad::structure_designer::nodes::record_destructure::RecordDestructureData;
 use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::{DragSource, StructureDesigner};
 
@@ -1597,4 +1601,287 @@ fn map_drag_hint_round_trips_through_string_into_closure() {
     let adapted = adapt_closure(reparsed, DragDirection::FromInput).expect("should adapt");
     assert_eq!(adapted.kind, ClosureKind::Map);
     assert_eq!(adapted.type_args, vec![DataType::Int, DataType::Crystal]);
+}
+
+// ============================================================================
+// Record node drag adapters (issue #312)
+//
+// Dragging from `record_construct`'s output (a `Record(Named(..))`) should
+// surface `record_destructure`, and dragging from `record_destructure`'s input
+// should surface `record_construct` — each instantiated with the dragged
+// record's schema already chosen. Both directions are verified against the
+// registry-aware resolved pin layout (`resolve_drag_candidate_type`), not the
+// placeholder `Record(Named(""))` base pins.
+// ============================================================================
+
+fn point_def() -> RecordTypeDef {
+    RecordTypeDef {
+        name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), DataType::Float),
+            ("y".to_string(), DataType::Float),
+        ],
+    }
+}
+
+fn point_type() -> DataType {
+    DataType::Record(RecordType::Named("Point".to_string()))
+}
+
+fn setup_designer_with_point() -> StructureDesigner {
+    let mut designer = setup_designer();
+    designer.add_record_type_def(point_def()).expect("add def");
+    designer
+}
+
+fn names_of(
+    categories: &[rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APINodeCategoryView],
+) -> Vec<&str> {
+    categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect()
+}
+
+fn get_record_construct_data(designer: &StructureDesigner, node_id: u64) -> RecordConstructData {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    net.nodes
+        .get(&node_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<RecordConstructData>()
+        .cloned()
+        .expect("RecordConstructData")
+}
+
+fn get_record_destructure_data(
+    designer: &StructureDesigner,
+    node_id: u64,
+) -> RecordDestructureData {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    net.nodes
+        .get(&node_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<RecordDestructureData>()
+        .cloned()
+        .expect("RecordDestructureData")
+}
+
+// --- Popup filtering ---------------------------------------------------------
+
+#[test]
+fn record_destructure_surfaces_for_record_output_drag() {
+    let designer = setup_designer_with_point();
+    let categories = designer
+        .node_type_registry
+        .get_compatible_node_types(&point_type(), true);
+    let names = names_of(&categories);
+    assert!(
+        names.contains(&"record_destructure"),
+        "expected record_destructure for a record output drag, got {names:?}"
+    );
+}
+
+#[test]
+fn record_construct_surfaces_for_record_input_drag() {
+    let designer = setup_designer_with_point();
+    let categories = designer
+        .node_type_registry
+        .get_compatible_node_types(&point_type(), false);
+    let names = names_of(&categories);
+    assert!(
+        names.contains(&"record_construct"),
+        "expected record_construct for a record input drag, got {names:?}"
+    );
+}
+
+#[test]
+fn record_nodes_respect_drag_direction_in_popup() {
+    // construct only adapts FromInput; destructure only adapts FromOutput.
+    let designer = setup_designer_with_point();
+    let from_output_cats = designer
+        .node_type_registry
+        .get_compatible_node_types(&point_type(), true);
+    let from_input_cats = designer
+        .node_type_registry
+        .get_compatible_node_types(&point_type(), false);
+    let from_output = names_of(&from_output_cats);
+    let from_input = names_of(&from_input_cats);
+    assert!(
+        !from_output.contains(&"record_construct"),
+        "record_construct should not surface dragging from an output pin"
+    );
+    assert!(
+        !from_input.contains(&"record_destructure"),
+        "record_destructure should not surface dragging from an input pin"
+    );
+}
+
+#[test]
+fn unknown_record_name_surfaces_no_record_nodes() {
+    // A dangling named record (no registered def) must not pre-set a schema,
+    // so neither record node should appear.
+    let designer = setup_designer_with_point();
+    let missing = DataType::Record(RecordType::Named("Nope".to_string()));
+    let from_output_cats = designer
+        .node_type_registry
+        .get_compatible_node_types(&missing, true);
+    let from_input_cats = designer
+        .node_type_registry
+        .get_compatible_node_types(&missing, false);
+    let from_output = names_of(&from_output_cats);
+    let from_input = names_of(&from_input_cats);
+    assert!(!from_output.contains(&"record_destructure"));
+    assert!(!from_input.contains(&"record_construct"));
+}
+
+// --- Adapter units -----------------------------------------------------------
+
+#[test]
+fn record_construct_adapter_sets_schema_from_input() {
+    let designer = setup_designer_with_point();
+    let adapted = RecordConstructData::default()
+        .adapt_for_drag_source(
+            &point_type(),
+            DragDirection::FromInput,
+            &designer.node_type_registry,
+        )
+        .expect("should adapt FromInput");
+    let data = adapted
+        .as_any_ref()
+        .downcast_ref::<RecordConstructData>()
+        .expect("RecordConstructData");
+    assert_eq!(data.schema, "Point");
+}
+
+#[test]
+fn record_construct_adapter_rejects_from_output_and_unknowns() {
+    let designer = setup_designer_with_point();
+    let reg = &designer.node_type_registry;
+    // Wrong direction.
+    assert!(
+        RecordConstructData::default()
+            .adapt_for_drag_source(&point_type(), DragDirection::FromOutput, reg)
+            .is_none()
+    );
+    // Unknown named def.
+    assert!(
+        RecordConstructData::default()
+            .adapt_for_drag_source(
+                &DataType::Record(RecordType::Named("Nope".to_string())),
+                DragDirection::FromInput,
+                reg,
+            )
+            .is_none()
+    );
+    // Anonymous record (no def name to store).
+    let anon = DataType::Record(RecordType::anonymous(vec![(
+        "x".to_string(),
+        DataType::Float,
+    )]));
+    assert!(
+        RecordConstructData::default()
+            .adapt_for_drag_source(&anon, DragDirection::FromInput, reg)
+            .is_none()
+    );
+    // Non-record source.
+    assert!(
+        RecordConstructData::default()
+            .adapt_for_drag_source(&DataType::Int, DragDirection::FromInput, reg)
+            .is_none()
+    );
+}
+
+#[test]
+fn record_destructure_adapter_sets_schema_from_output() {
+    let designer = setup_designer_with_point();
+    let adapted = RecordDestructureData::default()
+        .adapt_for_drag_source(
+            &point_type(),
+            DragDirection::FromOutput,
+            &designer.node_type_registry,
+        )
+        .expect("should adapt FromOutput");
+    let data = adapted
+        .as_any_ref()
+        .downcast_ref::<RecordDestructureData>()
+        .expect("RecordDestructureData");
+    assert_eq!(data.schema, "Point");
+}
+
+#[test]
+fn record_destructure_adapter_rejects_from_input() {
+    let designer = setup_designer_with_point();
+    assert!(
+        RecordDestructureData::default()
+            .adapt_for_drag_source(
+                &point_type(),
+                DragDirection::FromInput,
+                &designer.node_type_registry
+            )
+            .is_none()
+    );
+}
+
+// --- Create-time plumbing ----------------------------------------------------
+
+#[test]
+fn add_node_with_drag_source_configures_record_destructure() {
+    let mut designer = setup_designer_with_point();
+    let node_id = designer.add_node_with_drag_source(
+        "record_destructure",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: point_type(),
+            direction: DragDirection::FromOutput,
+        }),
+    );
+    assert_eq!(
+        get_record_destructure_data(&designer, node_id).schema,
+        "Point"
+    );
+}
+
+#[test]
+fn add_node_with_drag_source_configures_record_construct() {
+    let mut designer = setup_designer_with_point();
+    let node_id = designer.add_node_with_drag_source(
+        "record_construct",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: point_type(),
+            direction: DragDirection::FromInput,
+        }),
+    );
+    assert_eq!(
+        get_record_construct_data(&designer, node_id).schema,
+        "Point"
+    );
+}
+
+#[test]
+fn add_node_with_drag_source_record_construct_falls_back_on_wrong_direction() {
+    // construct's adapter rejects FromOutput, so create falls back to default
+    // data (empty schema) rather than mis-configuring the node.
+    let mut designer = setup_designer_with_point();
+    let node_id = designer.add_node_with_drag_source(
+        "record_construct",
+        DVec2::ZERO,
+        Some(DragSource {
+            source_type: point_type(),
+            direction: DragDirection::FromOutput,
+        }),
+    );
+    assert_eq!(get_record_construct_data(&designer, node_id).schema, "");
 }

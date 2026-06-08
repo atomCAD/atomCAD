@@ -1956,9 +1956,9 @@ impl StructureDesigner {
                     drag.direction,
                     &self.node_type_registry,
                 ) {
-                    let resolved = adapted
-                        .calculate_custom_node_type(node_type)
-                        .unwrap_or_else(|| node_type.clone());
+                    let resolved = self
+                        .node_type_registry
+                        .resolve_drag_candidate_type(node_type, adapted.as_ref());
                     if crate::structure_designer::node_type_registry::static_match_strict(
                         &resolved,
                         &drag.source_type,

@@ -4,7 +4,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
@@ -119,6 +119,32 @@ impl NodeData for RecordDestructureData {
                 .to_string();
         }
         Ok(())
+    }
+
+    /// `record_destructure`'s `record` input pin accepts a record, so a record
+    /// dragged off an *output* pin (`FromOutput`) can feed it. Adapt by
+    /// adopting the dragged record's schema name. `FromInput` is not
+    /// adaptable: the node's output pins are the individual fields, not a
+    /// record. See `doc/design_drag_aware_add_node.md` and issue #312.
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        direction: DragDirection,
+        registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        if direction != DragDirection::FromOutput {
+            return None;
+        }
+        // Only named record types carry a registry name we can store as the
+        // schema; anonymous records have no def to reference.
+        let DataType::Record(RecordType::Named(name)) = source_type else {
+            return None;
+        };
+        // Don't pre-set a dangling schema — require the def to resolve.
+        registry.lookup_record_type_def(name)?;
+        Some(Box::new(RecordDestructureData {
+            schema: name.clone(),
+        }))
     }
 }
 
