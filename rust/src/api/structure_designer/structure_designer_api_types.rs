@@ -1326,6 +1326,61 @@ pub struct APITextError {
     pub column: i32,
 }
 
+/// One affected network in a namespace move/rename preview: its current name,
+/// the name it would take, and whether that target name collides with an
+/// existing, non-affected user type.
+#[derive(Debug, Clone)]
+pub struct APINamespaceRenameItem {
+    pub old_name: String,
+    pub new_name: String,
+    pub conflict: bool,
+}
+
+/// Live preview of a namespace move/rename, driving the move-namespace dialog.
+/// `applicable` mirrors `NamespaceRenamePlan::is_applicable` exactly — when
+/// false the dialog disables its commit button and shows why (empty / invalid
+/// / conflicts). An empty target prefix promotes the contents to the root.
+#[derive(Debug, Clone)]
+pub struct APINamespaceRenamePreview {
+    pub items: Vec<APINamespaceRenameItem>,
+    /// True when no network matches the source prefix (nothing to move).
+    pub is_empty: bool,
+    /// True when at least one resulting name is not a valid user name.
+    pub has_invalid_names: bool,
+    /// True when at least one resulting name collides with an existing,
+    /// non-affected user type.
+    pub has_conflicts: bool,
+    /// True when the rename can be applied as-is (non-empty, all names valid,
+    /// no conflicts). Equals `rename_namespace`'s acceptance condition.
+    pub applicable: bool,
+}
+
+impl From<crate::structure_designer::structure_designer::NamespaceRenamePlan>
+    for APINamespaceRenamePreview
+{
+    fn from(plan: crate::structure_designer::structure_designer::NamespaceRenamePlan) -> Self {
+        let is_empty = plan.is_empty();
+        let has_conflicts = plan.has_conflicts();
+        let has_invalid_names = !plan.valid_names;
+        let applicable = plan.is_applicable();
+        Self {
+            items: plan
+                .items
+                .into_iter()
+                .map(|item| APINamespaceRenameItem {
+                    old_name: item.old_name,
+                    new_name: item.new_name,
+                    conflict: item.conflict,
+                })
+                .collect(),
+            is_empty,
+            has_invalid_names,
+            has_conflicts,
+            applicable,
+        }
+    }
+}
+
 /// A candidate node in a viewport pick disambiguation.
 pub struct APICandidateNode {
     pub node_id: u64,

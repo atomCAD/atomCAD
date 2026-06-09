@@ -344,6 +344,28 @@ bool renameNamespace({required String oldPrefix, required String newPrefix}) =>
         .crateApiStructureDesignerStructureDesignerApiRenameNamespace(
             oldPrefix: oldPrefix, newPrefix: newPrefix);
 
+/// Read-only preview of moving/renaming the namespace `old_prefix` to
+/// `new_prefix` (empty `new_prefix` => promote contents to the root). Returns
+/// the full list of affected networks with their resulting names plus
+/// conflict/validity flags so the move-namespace dialog can show the user
+/// exactly what will happen — and whether it is allowed — before committing.
+/// Does not mutate state.
+APINamespaceRenamePreview previewNamespaceRename(
+        {required String oldPrefix, required String newPrefix}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPreviewNamespaceRename(
+            oldPrefix: oldPrefix, newPrefix: newPrefix);
+
+/// Read-only preview of moving/renaming a single network leaf `old_name` to
+/// the fully-qualified `new_name`. Returns the same preview shape as
+/// `preview_namespace_rename` (a single item) so the move dialog can render
+/// both uniformly. Does not mutate state.
+APINamespaceRenamePreview previewNetworkRename(
+        {required String oldName, required String newName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiPreviewNetworkRename(
+            oldName: oldName, newName: newName);
+
 APIResult deleteNamespace({required String prefix}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteNamespace(
         prefix: prefix);

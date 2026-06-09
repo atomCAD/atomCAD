@@ -35,6 +35,7 @@ use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
 use super::structure_designer_api_types::APIMotifSubData;
+use super::structure_designer_api_types::APINamespaceRenamePreview;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIPrintData;
@@ -1790,6 +1791,58 @@ pub fn rename_namespace(old_prefix: &str, new_prefix: &str) -> bool {
                 result
             },
             false,
+        )
+    }
+}
+
+/// Read-only preview of moving/renaming the namespace `old_prefix` to
+/// `new_prefix` (empty `new_prefix` => promote contents to the root). Returns
+/// the full list of affected networks with their resulting names plus
+/// conflict/validity flags so the move-namespace dialog can show the user
+/// exactly what will happen — and whether it is allowed — before committing.
+/// Does not mutate state.
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_namespace_rename(old_prefix: &str, new_prefix: &str) -> APINamespaceRenamePreview {
+    unsafe {
+        with_cad_instance_or(
+            |instance| {
+                instance
+                    .structure_designer
+                    .compute_namespace_rename(old_prefix, new_prefix)
+                    .into()
+            },
+            APINamespaceRenamePreview {
+                items: Vec::new(),
+                is_empty: true,
+                has_invalid_names: false,
+                has_conflicts: false,
+                applicable: false,
+            },
+        )
+    }
+}
+
+/// Read-only preview of moving/renaming a single network leaf `old_name` to
+/// the fully-qualified `new_name`. Returns the same preview shape as
+/// `preview_namespace_rename` (a single item) so the move dialog can render
+/// both uniformly. Does not mutate state.
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_network_rename(old_name: &str, new_name: &str) -> APINamespaceRenamePreview {
+    unsafe {
+        with_cad_instance_or(
+            |instance| {
+                instance
+                    .structure_designer
+                    .compute_network_rename(old_name, new_name)
+                    .into()
+            },
+            APINamespaceRenamePreview {
+                items: Vec::new(),
+                is_empty: true,
+                has_invalid_names: false,
+                has_conflicts: false,
+                applicable: false,
+            },
         )
     }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/move_namespace_dialog.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
@@ -398,11 +399,48 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     for (final ns in _expandedNamespaces) {
       if (ns == oldPrefix || ns.startsWith('$oldPrefix.')) {
         toRemove.add(ns);
-        toAdd.add(ns.replaceFirst(oldPrefix, newPrefix));
+        // Re-root the expanded path under the new prefix. `suffix` is "" for
+        // the namespace itself or ".rest" for a descendant; an empty target
+        // prefix (promote-to-root) drops the leading dot.
+        final suffix = ns.substring(oldPrefix.length);
+        final migrated = newPrefix.isEmpty
+            ? (suffix.startsWith('.') ? suffix.substring(1) : suffix)
+            : '$newPrefix$suffix';
+        if (migrated.isNotEmpty) toAdd.add(migrated);
       }
     }
     _expandedNamespaces.removeAll(toRemove);
     _expandedNamespaces.addAll(toAdd);
+  }
+
+  // --- Move / rename (full-path dialog) ---
+
+  /// Opens the full-path move dialog for a namespace folder or a single
+  /// network leaf. (Record-def leaves never reach here — they're excluded
+  /// from the context menu since they have no hierarchy.)
+  Future<void> _handleMove(
+      BuildContext context, _NodeNetworkTreeNode node) async {
+    final oldPath = node.fullName;
+    if (oldPath == null) return;
+
+    if (node.isLeaf) {
+      // Network leaf: the rename refreshes the panel itself; no namespace
+      // expansion state needs migrating (only the leaf moves).
+      await showMoveNetworkDialog(
+        context: context,
+        model: widget.model,
+        oldName: oldPath,
+      );
+    } else {
+      final newPrefix = await showMoveNamespaceDialog(
+        context: context,
+        model: widget.model,
+        oldPrefix: oldPath,
+      );
+      if (newPrefix != null && mounted) {
+        setState(() => _migrateExpansionState(oldPath, newPrefix));
+      }
+    }
   }
 
   void _cancelRename() {
@@ -572,6 +610,16 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         value: 'rename',
         child: Text('Rename'),
       ),
+      // Namespaces and individual networks offer a full move/rename dialog:
+      // the inline rename only edits this segment in place, while the dialog
+      // can change depth or parent (e.g. shift it rootwards) in one atomic
+      // operation. Record defs are excluded — they are flat (no hierarchy).
+      // See issue #309.
+      if (!node.isLeaf || node.leafKind == _LeafKind.network)
+        const PopupMenuItem(
+          value: 'move',
+          child: Text('Move / rename…'),
+        ),
       const PopupMenuItem(
         value: 'delete',
         child: Text('Delete'),
@@ -588,8 +636,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       position: position,
       items: items,
     ).then((value) {
+      if (!context.mounted) return;
       if (value == 'rename') {
         _startRenaming(node);
+      } else if (value == 'move') {
+        _handleMove(context, node);
       } else if (value == 'delete') {
         _handleDelete(context, node);
       } else if (value == 'toggle_cli_access' && node.fullName != null) {

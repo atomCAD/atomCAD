@@ -1977,6 +1977,196 @@ fn undo_rename_namespace_restores_active_network() {
     );
 }
 
+#[test]
+fn rename_namespace_rootward_one_level() {
+    // Promote everything under "a.b" up one level into "a". This is the
+    // rootward shift from issue #309 — `new_prefix` is a proper prefix of
+    // `old_prefix`.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+    designer.add_node_network("a.b.y");
+    designer.add_node_network("a.c.keep");
+
+    let result = designer.rename_namespace("a.b", "a");
+    assert!(result);
+
+    let networks = &designer.node_type_registry.node_networks;
+    assert!(networks.contains_key("a.x"));
+    assert!(networks.contains_key("a.y"));
+    assert!(!networks.contains_key("a.b.x"));
+    assert!(!networks.contains_key("a.b.y"));
+    // Sibling namespace untouched.
+    assert!(networks.contains_key("a.c.keep"));
+}
+
+#[test]
+fn rename_namespace_promote_to_root() {
+    // Empty target prefix promotes the namespace contents to the top level.
+    // Regression: the old `format!("{}.", new_prefix)` produced ".x".
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("lib.Foo");
+    designer.add_node_network("lib.Bar");
+
+    let result = designer.rename_namespace("lib", "");
+    assert!(result);
+
+    let networks = &designer.node_type_registry.node_networks;
+    assert!(networks.contains_key("Foo"));
+    assert!(networks.contains_key("Bar"));
+    assert!(!networks.contains_key(".Foo"));
+    assert!(!networks.contains_key("lib.Foo"));
+}
+
+#[test]
+fn preview_namespace_rename_reports_conflict() {
+    // Promoting "a.b" into "a" would land "a.b.x" on top of an existing,
+    // non-affected "a.x" — the preview must flag the conflict and the rename
+    // must refuse.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+    designer.add_node_network("a.x");
+
+    let plan = designer.compute_namespace_rename("a.b", "a");
+    assert!(!plan.is_empty());
+    assert!(plan.has_conflicts());
+    assert!(!plan.is_applicable());
+    let item = plan
+        .items
+        .iter()
+        .find(|i| i.old_name == "a.b.x")
+        .expect("a.b.x should be in the plan");
+    assert_eq!(item.new_name, "a.x");
+    assert!(item.conflict);
+
+    // The actual mutation refuses and leaves both networks intact.
+    assert!(!designer.rename_namespace("a.b", "a"));
+    assert!(designer.node_type_registry.node_networks.contains_key("a.b.x"));
+    assert!(designer.node_type_registry.node_networks.contains_key("a.x"));
+}
+
+#[test]
+fn preview_namespace_rename_clean_is_applicable() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+    designer.add_node_network("a.b.y");
+
+    let plan = designer.compute_namespace_rename("a.b", "a");
+    assert!(plan.is_applicable());
+    assert!(!plan.has_conflicts());
+    assert!(plan.valid_names);
+    // Items are sorted by old_name for a deterministic preview.
+    let news: Vec<&str> = plan.items.iter().map(|i| i.new_name.as_str()).collect();
+    assert_eq!(news, vec!["a.x", "a.y"]);
+}
+
+#[test]
+fn preview_namespace_rename_empty_when_no_match() {
+    let designer = StructureDesigner::new();
+    let plan = designer.compute_namespace_rename("nope", "whatever");
+    assert!(plan.is_empty());
+    assert!(!plan.is_applicable());
+}
+
+#[test]
+fn rename_namespace_shuffle_within_set_is_not_a_conflict() {
+    // Renaming "a.b" -> "a.c" maps "a.b.c.x" -> "a.c.c.x"; the target names are
+    // all freshly minted under "a.c", and a name that merely coincides with a
+    // vacating affected name must not count as a collision.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.one");
+    designer.add_node_network("a.b.two");
+
+    let plan = designer.compute_namespace_rename("a.b", "a.c");
+    assert!(plan.is_applicable(), "clean prefix swap should be applicable");
+    assert!(designer.rename_namespace("a.b", "a.c"));
+    assert!(designer.node_type_registry.node_networks.contains_key("a.c.one"));
+    assert!(designer.node_type_registry.node_networks.contains_key("a.c.two"));
+}
+
+#[test]
+fn preview_network_rename_move_rootward() {
+    // Moving a single network leaf up a level: "a.b.x" -> "a.x".
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+
+    let plan = designer.compute_network_rename("a.b.x", "a.x");
+    assert_eq!(plan.items.len(), 1);
+    assert_eq!(plan.items[0].new_name, "a.x");
+    assert!(!plan.items[0].conflict);
+    assert!(plan.is_applicable());
+
+    // The actual mutation is rename_node_network.
+    assert!(designer.rename_node_network("a.b.x", "a.x"));
+    assert!(designer.node_type_registry.node_networks.contains_key("a.x"));
+}
+
+#[test]
+fn preview_network_rename_to_root() {
+    let designer_setup = || {
+        let mut d = StructureDesigner::new();
+        d.add_node_network("lib.Helper");
+        d
+    };
+    let designer = designer_setup();
+    let plan = designer.compute_network_rename("lib.Helper", "Helper");
+    assert_eq!(plan.items[0].new_name, "Helper");
+    assert!(plan.is_applicable());
+}
+
+#[test]
+fn preview_network_rename_conflict() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+    designer.add_node_network("a.x");
+
+    let plan = designer.compute_network_rename("a.b.x", "a.x");
+    assert!(plan.items[0].conflict);
+    assert!(plan.has_conflicts());
+    assert!(!plan.is_applicable());
+}
+
+#[test]
+fn preview_network_rename_noop_is_not_a_conflict() {
+    // The prefilled source name must not show as a self-collision.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+
+    let plan = designer.compute_network_rename("a.b.x", "a.b.x");
+    assert!(!plan.items[0].conflict);
+}
+
+#[test]
+fn preview_network_rename_empty_target_is_invalid() {
+    // A network always needs a name — an empty target is rejected (no
+    // "promote to root by emptying" semantics for leaves, unlike namespaces).
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+
+    let plan = designer.compute_network_rename("a.b.x", "");
+    assert!(!plan.valid_names);
+    assert!(!plan.is_applicable());
+}
+
+#[test]
+fn preview_network_rename_unknown_source_is_empty() {
+    let designer = StructureDesigner::new();
+    let plan = designer.compute_network_rename("nope", "whatever");
+    assert!(plan.is_empty());
+    assert!(!plan.is_applicable());
+}
+
+#[test]
+fn undo_rename_namespace_rootward() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("a.b.x");
+    designer.add_node_network("a.b.y");
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.rename_namespace("a.b", "a");
+    });
+}
+
 // ===== Namespace Delete Tests =====
 
 #[test]

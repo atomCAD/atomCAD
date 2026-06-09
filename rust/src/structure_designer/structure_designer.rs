@@ -65,6 +65,48 @@ pub struct DragSource {
     pub direction: DragDirection,
 }
 
+/// One network affected by a namespace rename/move: its current name and the
+/// name it would take. `conflict` is `true` when `new_name` collides with an
+/// existing user type (network, record def, or built-in) that is *not* itself
+/// part of this rename — i.e. applying the rename as-is would be rejected.
+#[derive(Debug, Clone)]
+pub struct NamespaceRenameItem {
+    pub old_name: String,
+    pub new_name: String,
+    pub conflict: bool,
+}
+
+/// The full plan for shifting every network under one namespace prefix to a
+/// new prefix. Drives both the live preview (`preview_namespace_rename`) and
+/// the actual mutation (`rename_namespace`). An empty target prefix promotes
+/// the contents to the top level (root). Items are sorted by `old_name` for a
+/// deterministic preview.
+#[derive(Debug, Clone)]
+pub struct NamespaceRenamePlan {
+    pub items: Vec<NamespaceRenameItem>,
+    /// `false` if any resulting name fails the user-name rules (empty,
+    /// backtick, control chars, edge whitespace).
+    pub valid_names: bool,
+}
+
+impl NamespaceRenamePlan {
+    /// No network matches the source prefix — there is nothing to rename.
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    /// Any resulting name collides with an existing, non-affected user type.
+    pub fn has_conflicts(&self) -> bool {
+        self.items.iter().any(|item| item.conflict)
+    }
+
+    /// The plan can be applied: it affects at least one network, every
+    /// resulting name is valid, and nothing collides.
+    pub fn is_applicable(&self) -> bool {
+        !self.is_empty() && self.valid_names && !self.has_conflicts()
+    }
+}
+
 pub struct StructureDesigner {
     pub node_type_registry: NodeTypeRegistry,
     pub network_evaluator: NetworkEvaluator,
@@ -1368,46 +1410,106 @@ impl StructureDesigner {
         true
     }
 
-    pub fn rename_namespace(&mut self, old_prefix: &str, new_prefix: &str) -> bool {
-        // Collect affected networks: names starting with "old_prefix."
+    /// Compute the plan for shifting every network under `old_prefix` to
+    /// `new_prefix`, without mutating anything. An empty `new_prefix` promotes
+    /// the contents to the top level (root). This is the single source of
+    /// truth for both the live preview and the actual rename, so the dialog's
+    /// conflict/validity feedback matches exactly what `rename_namespace` will
+    /// accept.
+    pub fn compute_namespace_rename(
+        &self,
+        old_prefix: &str,
+        new_prefix: &str,
+    ) -> NamespaceRenamePlan {
+        // Affected networks: names strictly under "old_prefix." (a leaf
+        // network named exactly `old_prefix` is not part of the namespace).
         let prefix_dot = format!("{}.", old_prefix);
-        let affected: Vec<String> = self
+        let mut affected: Vec<String> = self
             .node_type_registry
             .node_networks
             .keys()
             .filter(|name| name.starts_with(&prefix_dot))
             .cloned()
             .collect();
+        affected.sort();
 
-        if affected.is_empty() {
+        // Names vacated by this rename don't count as collisions — they're
+        // moving out of the way as part of the same atomic operation.
+        let affected_set: HashSet<&str> = affected.iter().map(|s| s.as_str()).collect();
+
+        let mut items = Vec::with_capacity(affected.len());
+        let mut valid_names = true;
+        for old_name in &affected {
+            let suffix = &old_name[prefix_dot.len()..];
+            // Empty target prefix => promote to root (no leading dot).
+            let new_name = if new_prefix.is_empty() {
+                suffix.to_string()
+            } else {
+                format!("{}.{}", new_prefix, suffix)
+            };
+
+            if super::identifier::is_valid_user_name(&new_name).is_err() {
+                valid_names = false;
+            }
+
+            // A collision is any existing user type (network, user/built-in
+            // record def, built-in node type) sharing the target name, except
+            // a network that is itself being renamed away.
+            let conflict =
+                !affected_set.contains(new_name.as_str()) && self.node_type_registry.name_is_taken(&new_name);
+
+            items.push(NamespaceRenameItem {
+                old_name: old_name.clone(),
+                new_name,
+                conflict,
+            });
+        }
+
+        NamespaceRenamePlan { items, valid_names }
+    }
+
+    /// Compute the plan for moving/renaming a single network leaf `old_name`
+    /// to the fully-qualified `new_name`, without mutating anything. Reuses
+    /// the same `NamespaceRenamePlan` shape as `compute_namespace_rename` so
+    /// the move dialog renders both with one code path (a leaf plan always has
+    /// exactly one item). The actual mutation is `rename_node_network`; this is
+    /// its preview, mirroring its acceptance condition (existing source, valid
+    /// target name, no collision). A no-op (`new_name == old_name`) is reported
+    /// as applicable-with-no-conflict; the dialog disables Apply for it.
+    pub fn compute_network_rename(&self, old_name: &str, new_name: &str) -> NamespaceRenamePlan {
+        // Unknown source network => nothing to rename (empty plan).
+        if !self.node_type_registry.node_networks.contains_key(old_name) {
+            return NamespaceRenamePlan {
+                items: Vec::new(),
+                valid_names: true,
+            };
+        }
+
+        let valid_names = super::identifier::is_valid_user_name(new_name).is_ok();
+        // The source name itself doesn't count as a collision (prefilled value).
+        let conflict = new_name != old_name && self.node_type_registry.name_is_taken(new_name);
+
+        NamespaceRenamePlan {
+            items: vec![NamespaceRenameItem {
+                old_name: old_name.to_string(),
+                new_name: new_name.to_string(),
+                conflict,
+            }],
+            valid_names,
+        }
+    }
+
+    pub fn rename_namespace(&mut self, old_prefix: &str, new_prefix: &str) -> bool {
+        let plan = self.compute_namespace_rename(old_prefix, new_prefix);
+        if !plan.is_applicable() {
             return false;
         }
 
-        // Compute rename pairs and validate
-        let new_prefix_dot = format!("{}.", new_prefix);
-        let mut rename_pairs: Vec<(String, String)> = Vec::new();
-        for old_name in &affected {
-            let suffix = &old_name[prefix_dot.len()..];
-            let new_name = format!("{}{}", new_prefix_dot, suffix);
-
-            // Check for collision with existing network or built-in type
-            if self
-                .node_type_registry
-                .node_networks
-                .contains_key(&new_name)
-                && !affected.contains(&new_name)
-            {
-                return false;
-            }
-            if self
-                .node_type_registry
-                .built_in_node_types
-                .contains_key(&new_name)
-            {
-                return false;
-            }
-            rename_pairs.push((old_name.clone(), new_name));
-        }
+        let rename_pairs: Vec<(String, String)> = plan
+            .items
+            .into_iter()
+            .map(|item| (item.old_name, item.new_name))
+            .collect();
 
         // Perform all renames
         for (old_name, new_name) in &rename_pairs {

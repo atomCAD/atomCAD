@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -1983,6 +1983,82 @@ class APIMotifSubData {
               other.parameterElementValueDefinition &&
           error == other.error &&
           availableParameters == other.availableParameters;
+}
+
+/// One affected network in a namespace move/rename preview: its current name,
+/// the name it would take, and whether that target name collides with an
+/// existing, non-affected user type.
+class APINamespaceRenameItem {
+  final String oldName;
+  final String newName;
+  final bool conflict;
+
+  const APINamespaceRenameItem({
+    required this.oldName,
+    required this.newName,
+    required this.conflict,
+  });
+
+  @override
+  int get hashCode => oldName.hashCode ^ newName.hashCode ^ conflict.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINamespaceRenameItem &&
+          runtimeType == other.runtimeType &&
+          oldName == other.oldName &&
+          newName == other.newName &&
+          conflict == other.conflict;
+}
+
+/// Live preview of a namespace move/rename, driving the move-namespace dialog.
+/// `applicable` mirrors `NamespaceRenamePlan::is_applicable` exactly — when
+/// false the dialog disables its commit button and shows why (empty / invalid
+/// / conflicts). An empty target prefix promotes the contents to the root.
+class APINamespaceRenamePreview {
+  final List<APINamespaceRenameItem> items;
+
+  /// True when no network matches the source prefix (nothing to move).
+  final bool isEmpty;
+
+  /// True when at least one resulting name is not a valid user name.
+  final bool hasInvalidNames;
+
+  /// True when at least one resulting name collides with an existing,
+  /// non-affected user type.
+  final bool hasConflicts;
+
+  /// True when the rename can be applied as-is (non-empty, all names valid,
+  /// no conflicts). Equals `rename_namespace`'s acceptance condition.
+  final bool applicable;
+
+  const APINamespaceRenamePreview({
+    required this.items,
+    required this.isEmpty,
+    required this.hasInvalidNames,
+    required this.hasConflicts,
+    required this.applicable,
+  });
+
+  @override
+  int get hashCode =>
+      items.hashCode ^
+      isEmpty.hashCode ^
+      hasInvalidNames.hashCode ^
+      hasConflicts.hashCode ^
+      applicable.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINamespaceRenamePreview &&
+          runtimeType == other.runtimeType &&
+          items == other.items &&
+          isEmpty == other.isEmpty &&
+          hasInvalidNames == other.hasInvalidNames &&
+          hasConflicts == other.hasConflicts &&
+          applicable == other.applicable;
 }
 
 class APINetworkWithValidationErrors {

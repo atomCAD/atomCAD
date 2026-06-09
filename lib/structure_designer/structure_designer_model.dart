@@ -1289,6 +1289,28 @@ class StructureDesignerModel extends ChangeNotifier {
     return success;
   }
 
+  /// Read-only preview of moving/renaming the namespace [oldPrefix] to
+  /// [newPrefix] (empty [newPrefix] promotes its contents to the root).
+  /// Drives the move-namespace dialog; does not mutate state.
+  APINamespaceRenamePreview previewNamespaceRename(
+      String oldPrefix, String newPrefix) {
+    return structure_designer_api.previewNamespaceRename(
+      oldPrefix: oldPrefix,
+      newPrefix: newPrefix,
+    );
+  }
+
+  /// Read-only preview of moving/renaming a single network leaf [oldName] to
+  /// the fully-qualified [newName]. Returns a single-item preview; does not
+  /// mutate state.
+  APINamespaceRenamePreview previewNetworkRename(
+      String oldName, String newName) {
+    return structure_designer_api.previewNetworkRename(
+      oldName: oldName,
+      newName: newName,
+    );
+  }
+
   String? deleteNamespace(String prefix) {
     final result = structure_designer_api.deleteNamespace(prefix: prefix);
     if (result.success) {

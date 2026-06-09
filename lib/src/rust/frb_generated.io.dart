@@ -251,6 +251,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMotifSubData dco_decode_api_motif_sub_data(dynamic raw);
 
   @protected
+  APINamespaceRenameItem dco_decode_api_namespace_rename_item(dynamic raw);
+
+  @protected
+  APINamespaceRenamePreview dco_decode_api_namespace_rename_preview(
+      dynamic raw);
+
+  @protected
   APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
       dynamic raw);
 
@@ -756,6 +763,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIMotifParameterInfo> dco_decode_list_api_motif_parameter_info(
+      dynamic raw);
+
+  @protected
+  List<APINamespaceRenameItem> dco_decode_list_api_namespace_rename_item(
       dynamic raw);
 
   @protected
@@ -1446,6 +1457,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMotifSubData sse_decode_api_motif_sub_data(SseDeserializer deserializer);
 
   @protected
+  APINamespaceRenameItem sse_decode_api_namespace_rename_item(
+      SseDeserializer deserializer);
+
+  @protected
+  APINamespaceRenamePreview sse_decode_api_namespace_rename_preview(
+      SseDeserializer deserializer);
+
+  @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
       SseDeserializer deserializer);
 
@@ -2045,6 +2064,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIMotifParameterInfo> sse_decode_list_api_motif_parameter_info(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APINamespaceRenameItem> sse_decode_list_api_namespace_rename_item(
       SseDeserializer deserializer);
 
   @protected
@@ -2857,6 +2880,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIMotifSubData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_namespace_rename_item(
+      APINamespaceRenameItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_namespace_rename_preview(
+      APINamespaceRenamePreview self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_network_with_validation_errors(
       APINetworkWithValidationErrors self, SseSerializer serializer);
 
@@ -3475,6 +3506,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_motif_parameter_info(
       List<APIMotifParameterInfo> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_namespace_rename_item(
+      List<APINamespaceRenameItem> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_network_with_validation_errors(
