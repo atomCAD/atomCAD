@@ -4,7 +4,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Which kind of user type the move dialog is editing.
-enum _MoveKind { namespace, network }
+enum _MoveKind { namespace, network, record }
 
 /// Opens the "Move / rename namespace" dialog for the namespace [oldPrefix].
 ///
@@ -42,6 +42,19 @@ Future<String?> showMoveNetworkDialog({
   required String oldName,
 }) {
   return _show(context, model, oldName, _MoveKind.network);
+}
+
+/// Opens the "Move / rename record def" dialog for the record-def leaf
+/// [oldName]. Same full-path editing as the network variant — a record def is
+/// now a first-class citizen of the namespace hierarchy, so it can be moved up
+/// a level, to the top level, or into a different namespace in one operation.
+/// Returns the committed full name on success, or `null` on cancel / no-op.
+Future<String?> showMoveRecordDialog({
+  required BuildContext context,
+  required StructureDesignerModel model,
+  required String oldName,
+}) {
+  return _show(context, model, oldName, _MoveKind.record);
 }
 
 Future<String?> _show(
@@ -100,6 +113,10 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
 
   bool get _isNamespace => widget.kind == _MoveKind.namespace;
 
+  /// The user-facing noun for the leaf kind being moved (singular).
+  String get _leafNoun =>
+      widget.kind == _MoveKind.record ? 'record def' : 'network';
+
   @override
   void initState() {
     super.initState();
@@ -132,7 +149,9 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
     } else if (_isNamespace) {
       _preview = widget.model.previewNamespaceRename(widget.oldPath, newPath);
     } else {
-      _preview = widget.model.previewNetworkRename(widget.oldPath, newPath);
+      // Both leaf kinds (network and record def) preview through the same
+      // kind-agnostic backend entry point.
+      _preview = widget.model.previewLeafRename(widget.oldPath, newPath);
     }
   }
 
@@ -147,9 +166,17 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
   void _commit() {
     if (!_canApply) return;
     final newPath = _newPath;
-    final success = _isNamespace
-        ? widget.model.renameNamespace(widget.oldPath, newPath)
-        : widget.model.renameNodeNetwork(widget.oldPath, newPath);
+    final bool success;
+    switch (widget.kind) {
+      case _MoveKind.namespace:
+        success = widget.model.renameNamespace(widget.oldPath, newPath);
+      case _MoveKind.network:
+        success = widget.model.renameNodeNetwork(widget.oldPath, newPath);
+      case _MoveKind.record:
+        // renameRecordTypeDef returns an error message (or null on success).
+        success =
+            widget.model.renameRecordTypeDef(widget.oldPath, newPath) == null;
+    }
     if (!mounted) return;
     if (success) {
       Navigator.of(context).pop(newPath);
@@ -166,15 +193,14 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
     final preview = _preview;
 
     final title =
-        _isNamespace ? 'Move / rename namespace' : 'Move / rename network';
+        _isNamespace ? 'Move / rename namespace' : 'Move / rename $_leafNoun';
     final subtitle = _isNamespace
         ? 'Editing "${widget.oldPath}". '
             'Clear the field to promote its contents to the top level.'
         : 'Editing "${widget.oldPath}". '
             'Use a dotted path to move it into a namespace, '
             'or a bare name for the top level.';
-    final fieldLabel =
-        _isNamespace ? 'New namespace path' : 'New network name';
+    final fieldLabel = _isNamespace ? 'New namespace path' : 'New $_leafNoun name';
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -236,9 +262,12 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
       return const SizedBox.shrink();
     }
     if (preview.isEmpty) {
+      // A namespace folder can hold networks and record defs, so speak of
+      // "items" generically; a leaf names its own kind.
+      final leafCap = widget.kind == _MoveKind.record ? 'Record def' : 'Network';
       final msg = _isNamespace
-          ? 'No networks under this namespace.'
-          : 'Network not found.';
+          ? 'No items under this namespace.'
+          : '$leafCap not found.';
       return _statusLine(theme, msg, theme.hintColor);
     }
     if (preview.hasInvalidNames) {
@@ -260,9 +289,9 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
     if (_isNamespace) {
       final n = preview.items.length;
       return _statusLine(theme,
-          'Will rename $n network${n == 1 ? '' : 's'}.', theme.hintColor);
+          'Will rename $n item${n == 1 ? '' : 's'}.', theme.hintColor);
     }
-    return _statusLine(theme, 'Will move the network.', theme.hintColor);
+    return _statusLine(theme, 'Will move the $_leafNoun.', theme.hintColor);
   }
 
   Widget _statusLine(ThemeData theme, String text, Color color) {

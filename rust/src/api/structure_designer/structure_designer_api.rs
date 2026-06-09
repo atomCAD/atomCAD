@@ -1822,18 +1822,19 @@ pub fn preview_namespace_rename(old_prefix: &str, new_prefix: &str) -> APINamesp
     }
 }
 
-/// Read-only preview of moving/renaming a single network leaf `old_name` to
-/// the fully-qualified `new_name`. Returns the same preview shape as
-/// `preview_namespace_rename` (a single item) so the move dialog can render
-/// both uniformly. Does not mutate state.
+/// Read-only preview of moving/renaming a single leaf `old_name` (a node
+/// network **or** a record type def) to the fully-qualified `new_name`. The
+/// kind is detected by the backend (`compute_leaf_rename`), so the move dialog
+/// can render both kinds uniformly. Returns the same single-item preview shape
+/// as `preview_namespace_rename`. Does not mutate state.
 #[flutter_rust_bridge::frb(sync)]
-pub fn preview_network_rename(old_name: &str, new_name: &str) -> APINamespaceRenamePreview {
+pub fn preview_leaf_rename(old_name: &str, new_name: &str) -> APINamespaceRenamePreview {
     unsafe {
         with_cad_instance_or(
             |instance| {
                 instance
                     .structure_designer
-                    .compute_network_rename(old_name, new_name)
+                    .compute_leaf_rename(old_name, new_name)
                     .into()
             },
             APINamespaceRenamePreview {
@@ -1844,6 +1845,36 @@ pub fn preview_network_rename(old_name: &str, new_name: &str) -> APINamespaceRen
                 applicable: false,
             },
         )
+    }
+}
+
+/// The user record type def currently open in the schema editor, or `None`.
+/// Backend-owned source of truth (see `doc/design_hierarchical_records.md` §8);
+/// the Flutter model mirrors this in `refreshFromKernel` so the selection
+/// survives undo/redo of a record rename/move/delete.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_record_def_name() -> Option<String> {
+    unsafe {
+        with_cad_instance_or(
+            |instance| instance.structure_designer.get_active_record_def_name(),
+            None,
+        )
+    }
+}
+
+/// Set the active record def (the one open in the schema editor). Pass `None`
+/// to clear the selection (fall back to the network editor). This is plain
+/// selection state — not undoable — but it is backend-owned so undo/redo of
+/// record rename/delete can remap/clear it correctly.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_record_def_name(name: Option<String>) {
+    unsafe {
+        with_mut_cad_instance(|instance| {
+            instance
+                .structure_designer
+                .set_active_record_def_name(name);
+            refresh_structure_designer_auto(instance);
+        });
     }
 }
 

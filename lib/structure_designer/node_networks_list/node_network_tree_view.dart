@@ -32,19 +32,27 @@ class _NodeNetworkTreeNode {
   });
 }
 
-/// Builds a tree from networks (with namespace dots) and record def names
-/// (always flat at the root). Record defs do not participate in the
-/// namespace hierarchy in v1.
+/// Builds a tree from networks and record def names. Both kinds participate in
+/// the same dot-delimited namespace hierarchy: a record def named
+/// `Physics.ElementMapping` nests under a `Physics` folder, which a network
+/// `Physics.Spring` can share. Leaves are tagged with their [_LeafKind] so the
+/// view routes activation/rename/delete to the right API.
 List<_NodeNetworkTreeNode> _buildTreeFromNames(
     List<String> networkQualifiedNames, List<String> recordDefNames) {
   // Map to track namespace nodes: full namespace path -> node
   final Map<String, _NodeNetworkTreeNode> namespaceNodes = {};
   final List<_NodeNetworkTreeNode> roots = [];
 
-  // Sort names to process parent namespaces before children
-  final sortedNames = List<String>.from(networkQualifiedNames)..sort();
+  // Combine both kinds into one kind-tagged list, then process uniformly so a
+  // single folder can hold networks and record defs together. Sorting by the
+  // qualified name interleaves the two kinds alphabetically within a folder.
+  final entries = <MapEntry<String, _LeafKind>>[
+    for (final n in networkQualifiedNames) MapEntry(n, _LeafKind.network),
+    for (final r in recordDefNames) MapEntry(r, _LeafKind.recordDef),
+  ]..sort((a, b) => a.key.compareTo(b.key));
 
-  for (final qualifiedName in sortedNames) {
+  for (final entry in entries) {
+    final qualifiedName = entry.key;
     final segments = getSegments(qualifiedName);
 
     // Build all intermediate namespace nodes if needed
@@ -73,13 +81,13 @@ List<_NodeNetworkTreeNode> _buildTreeFromNames(
       }
     }
 
-    // Create leaf node for the actual node network
+    // Create the leaf node (network or record def).
     final leafNode = _NodeNetworkTreeNode(
       label: getSimpleName(qualifiedName),
       fullName: qualifiedName,
-      children: [],
+      children: const [],
       isLeaf: true,
-      leafKind: _LeafKind.network,
+      leafKind: entry.value,
     );
 
     // Add leaf to its parent or roots
@@ -90,18 +98,6 @@ List<_NodeNetworkTreeNode> _buildTreeFromNames(
       final parentNode = namespaceNodes[parentPath]!;
       (parentNode.children as List).add(leafNode);
     }
-  }
-
-  // Record defs appear flat at the root, alphabetical.
-  final sortedRecordDefs = List<String>.from(recordDefNames)..sort();
-  for (final defName in sortedRecordDefs) {
-    roots.add(_NodeNetworkTreeNode(
-      label: defName,
-      fullName: defName,
-      children: const [],
-      isLeaf: true,
-      leafKind: _LeafKind.recordDef,
-    ));
   }
 
   return roots;
@@ -329,20 +325,18 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     String? errorMessage;
 
     if (_editingIsLeaf) {
-      // Find the kind of leaf so we route to the correct API.
-      final leafKind = _findLeafKind(oldFullName);
-      if (leafKind == _LeafKind.recordDef) {
-        // Record defs are flat — no namespace handling.
-        if (newSegment != oldFullName) {
+      // Inline rename only edits the last segment in place — preserve the
+      // leaf's namespace for both kinds. A typed dot adds a hierarchy level.
+      final namespace = getNamespace(oldFullName);
+      final newFullName = combineQualifiedName(namespace, newSegment);
+      if (newFullName != oldFullName) {
+        // Route to the correct API by leaf kind.
+        final leafKind = _findLeafKind(oldFullName);
+        if (leafKind == _LeafKind.recordDef) {
           errorMessage =
-              widget.model.renameRecordTypeDef(oldFullName, newSegment);
+              widget.model.renameRecordTypeDef(oldFullName, newFullName);
           success = errorMessage == null;
-        }
-      } else {
-        // Network leaf — preserve namespace.
-        final namespace = getNamespace(oldFullName);
-        final newFullName = combineQualifiedName(namespace, newSegment);
-        if (newFullName != oldFullName) {
+        } else {
           success = widget.model.renameNodeNetwork(oldFullName, newFullName);
         }
       }
@@ -415,22 +409,30 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   // --- Move / rename (full-path dialog) ---
 
-  /// Opens the full-path move dialog for a namespace folder or a single
-  /// network leaf. (Record-def leaves never reach here — they're excluded
-  /// from the context menu since they have no hierarchy.)
+  /// Opens the full-path move dialog for a namespace folder, a network leaf,
+  /// or a record-def leaf. Record defs are now first-class hierarchy members.
   Future<void> _handleMove(
       BuildContext context, _NodeNetworkTreeNode node) async {
     final oldPath = node.fullName;
     if (oldPath == null) return;
 
     if (node.isLeaf) {
-      // Network leaf: the rename refreshes the panel itself; no namespace
-      // expansion state needs migrating (only the leaf moves).
-      await showMoveNetworkDialog(
-        context: context,
-        model: widget.model,
-        oldName: oldPath,
-      );
+      // Leaf move: the rename refreshes the panel itself; no namespace
+      // expansion state needs migrating (only the leaf moves). Route to the
+      // kind-appropriate dialog (which commits via the right model method).
+      if (node.leafKind == _LeafKind.recordDef) {
+        await showMoveRecordDialog(
+          context: context,
+          model: widget.model,
+          oldName: oldPath,
+        );
+      } else {
+        await showMoveNetworkDialog(
+          context: context,
+          model: widget.model,
+          oldName: oldPath,
+        );
+      }
     } else {
       final newPrefix = await showMoveNamespaceDialog(
         context: context,
@@ -459,9 +461,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       _showDeleteConfirmation(
           context, node.fullName!, node.leafKind ?? _LeafKind.network);
     } else {
-      final affectedNetworks = _collectLeafNames(node);
-      _showNamespaceDeleteConfirmation(
-          context, node.fullName!, affectedNetworks);
+      final affectedItems = _collectLeafNames(node);
+      _showNamespaceDeleteConfirmation(context, node.fullName!, affectedItems);
     }
   }
 
@@ -524,7 +525,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   Future<void> _showNamespaceDeleteConfirmation(
     BuildContext context,
     String prefix,
-    List<String> affectedNetworks,
+    List<String> affectedItems,
   ) async {
     final confirmed = await showDraggableAlertDialog<bool>(
       context: context,
@@ -534,9 +535,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-              'Delete "$prefix" and all ${affectedNetworks.length} network${affectedNetworks.length == 1 ? '' : 's'} within it?'),
+              'Delete "$prefix" and all ${affectedItems.length} item${affectedItems.length == 1 ? '' : 's'} within it?'),
           const SizedBox(height: 8),
-          const Text('Networks to be deleted:',
+          const Text('Items to be deleted:',
               style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           ConstrainedBox(
@@ -545,7 +546,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: affectedNetworks
+                children: affectedItems
                     .map((n) => Padding(
                           padding: const EdgeInsets.only(left: 8),
                           child: Text('\u2022 $n'),
@@ -610,16 +611,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         value: 'rename',
         child: Text('Rename'),
       ),
-      // Namespaces and individual networks offer a full move/rename dialog:
-      // the inline rename only edits this segment in place, while the dialog
-      // can change depth or parent (e.g. shift it rootwards) in one atomic
-      // operation. Record defs are excluded — they are flat (no hierarchy).
-      // See issue #309.
-      if (!node.isLeaf || node.leafKind == _LeafKind.network)
-        const PopupMenuItem(
-          value: 'move',
-          child: Text('Move / rename…'),
-        ),
+      // Namespaces and leaves (networks and record defs alike) offer a full
+      // move/rename dialog: the inline rename only edits this segment in
+      // place, while the dialog can change depth or parent (e.g. shift it
+      // rootwards) in one atomic operation. See issue #309.
+      const PopupMenuItem(
+        value: 'move',
+        child: Text('Move / rename…'),
+      ),
       const PopupMenuItem(
         value: 'delete',
         child: Text('Delete'),

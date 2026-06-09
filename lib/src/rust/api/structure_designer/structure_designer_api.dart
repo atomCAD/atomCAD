@@ -356,15 +356,31 @@ APINamespaceRenamePreview previewNamespaceRename(
         .crateApiStructureDesignerStructureDesignerApiPreviewNamespaceRename(
             oldPrefix: oldPrefix, newPrefix: newPrefix);
 
-/// Read-only preview of moving/renaming a single network leaf `old_name` to
-/// the fully-qualified `new_name`. Returns the same preview shape as
-/// `preview_namespace_rename` (a single item) so the move dialog can render
-/// both uniformly. Does not mutate state.
-APINamespaceRenamePreview previewNetworkRename(
+/// Read-only preview of moving/renaming a single leaf `old_name` (a node
+/// network **or** a record type def) to the fully-qualified `new_name`. The
+/// kind is detected by the backend (`compute_leaf_rename`), so the move dialog
+/// can render both kinds uniformly. Returns the same single-item preview shape
+/// as `preview_namespace_rename`. Does not mutate state.
+APINamespaceRenamePreview previewLeafRename(
         {required String oldName, required String newName}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiPreviewNetworkRename(
+        .crateApiStructureDesignerStructureDesignerApiPreviewLeafRename(
             oldName: oldName, newName: newName);
+
+/// The user record type def currently open in the schema editor, or `None`.
+/// Backend-owned source of truth (see `doc/design_hierarchical_records.md` §8);
+/// the Flutter model mirrors this in `refreshFromKernel` so the selection
+/// survives undo/redo of a record rename/move/delete.
+String? getActiveRecordDefName() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetActiveRecordDefName();
+
+/// Set the active record def (the one open in the schema editor). Pass `None`
+/// to clear the selection (fall back to the network editor). This is plain
+/// selection state — not undoable — but it is backend-owned so undo/redo of
+/// record rename/delete can remap/clear it correctly.
+void setActiveRecordDefName({String? name}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiSetActiveRecordDefName(
+        name: name);
 
 APIResult deleteNamespace({required String prefix}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteNamespace(

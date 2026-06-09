@@ -751,7 +751,8 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void setActiveNodeNetwork(String nodeNetworkName) {
-    activeRecordDefName = null;
+    // The backend clears its own active record def when a network is
+    // activated (§8); `refreshFromKernel` mirrors that back.
     structure_designer_api.setActiveNodeNetwork(
         nodeNetworkName: nodeNetworkName);
     refreshFromKernel();
@@ -759,11 +760,13 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Switch the main content area's bottom panel to the schema editor for
   /// `name`. Pass `null` to clear and fall back to the network editor. The
-  /// active network (and viewport) is untouched.
+  /// active network (and viewport) is untouched. The active record def is
+  /// backend-owned (§8), so this writes it through to the kernel and mirrors
+  /// it back on refresh.
   void setActiveRecordDef(String? name) {
     if (activeRecordDefName == name) return;
-    activeRecordDefName = name;
-    notifyListeners();
+    structure_designer_api.setActiveRecordDefName(name: name);
+    refreshFromKernel();
   }
 
   /// Adds a new record type def with the given name and an empty field list.
@@ -772,7 +775,9 @@ class StructureDesignerModel extends ChangeNotifier {
   String? addRecordTypeDef(String name) {
     final result = structure_designer_api.addRecordTypeDef(name: name);
     if (result.success) {
-      activeRecordDefName = name;
+      // Open the new def in the schema editor. The active record def is
+      // backend-owned (§8), so write it through; `refreshFromKernel` mirrors.
+      structure_designer_api.setActiveRecordDefName(name: name);
       refreshFromKernel();
       return null;
     }
@@ -780,13 +785,11 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Deletes the record type def with the given name. Returns null on
-  /// success, or an error message.
+  /// success, or an error message. The backend clears its own active record
+  /// def when the active one is deleted (§8); we just mirror on refresh.
   String? deleteRecordTypeDef(String name) {
     final result = structure_designer_api.deleteRecordTypeDef(name: name);
     if (result.success) {
-      if (activeRecordDefName == name) {
-        activeRecordDefName = null;
-      }
       refreshFromKernel();
       return null;
     }
@@ -794,13 +797,12 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   /// Renames a record type def. Returns null on success, or an error message.
+  /// The backend remaps its own active record def across the rename (§8); we
+  /// just mirror on refresh.
   String? renameRecordTypeDef(String oldName, String newName) {
     final result = structure_designer_api.renameRecordTypeDef(
         oldName: oldName, newName: newName);
     if (result.success) {
-      if (activeRecordDefName == oldName) {
-        activeRecordDefName = newName;
-      }
       refreshFromKernel();
       return null;
     }
@@ -1300,12 +1302,12 @@ class StructureDesignerModel extends ChangeNotifier {
     );
   }
 
-  /// Read-only preview of moving/renaming a single network leaf [oldName] to
-  /// the fully-qualified [newName]. Returns a single-item preview; does not
+  /// Read-only preview of moving/renaming a single leaf [oldName] — a node
+  /// network or a record type def — to the fully-qualified [newName]. The kind
+  /// is detected by the backend. Returns a single-item preview; does not
   /// mutate state.
-  APINamespaceRenamePreview previewNetworkRename(
-      String oldName, String newName) {
-    return structure_designer_api.previewNetworkRename(
+  APINamespaceRenamePreview previewLeafRename(String oldName, String newName) {
+    return structure_designer_api.previewLeafRename(
       oldName: oldName,
       newName: newName,
     );
@@ -2487,9 +2489,12 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];
     recordTypeDefNames = structure_designer_api.getRecordTypeDefNames() ?? [];
-    // Drop a stale active-record-def reference if the def disappeared (e.g.
-    // undo/redo, project reload, external edit). The schema editor would
-    // otherwise render against a missing def.
+    // The active record def is backend-owned (§8): mirror it here so the
+    // schema-editor selection follows record renames/moves and survives
+    // undo/redo (the backend remaps/clears it inside the relevant commands).
+    activeRecordDefName = structure_designer_api.getActiveRecordDefName();
+    // Defensive: drop a dangling reference if the backend value somehow points
+    // at a def that no longer exists (e.g. undo of an add that auto-activated).
     if (activeRecordDefName != null &&
         !recordTypeDefNames.contains(activeRecordDefName)) {
       activeRecordDefName = null;

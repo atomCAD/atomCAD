@@ -3920,6 +3920,10 @@ impl StructureDesigner {
         self.navigation_history
             .navigate_to(node_network_name.clone());
         self.active_node_network_name = node_network_name;
+        // Activating a network leaves the schema editor: the active record def
+        // is backend-owned (see `doc/design_hierarchical_records.md` §8), so we
+        // clear it here rather than relying on the Flutter side to do it.
+        self.active_record_def_name = None;
         // Switching networks requires full refresh (everything changes)
         self.mark_full_refresh();
         // Return camera settings from the newly active network
