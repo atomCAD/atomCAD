@@ -199,3 +199,114 @@ fn test_flexure_delta_robot_roundtrip() {
 fn test_demolib_proxy_roundtrip() {
     roundtrip_cnnd_file("../samples/demolib+(111)-proxy-generator.cnnd");
 }
+
+/// A user record def at a *dotted* (namespaced) name, referenced by a
+/// `record_construct` node, survives a save → load round-trip with its fields,
+/// the `Named` reference, and the derived pin layout intact. Greenfield —
+/// hierarchical record names did not previously round-trip through `.cnnd`.
+/// See `doc/design_hierarchical_records.md` (Testing → Phase 1).
+#[test]
+fn dotted_record_def_cnnd_roundtrip() {
+    use glam::f64::DVec2;
+    use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::RecordTypeDef;
+    use rust_lib_flutter_cad::structure_designer::nodes::record_construct::RecordConstructData;
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+
+    // Build a designer with a dotted record def + a record_construct referencing it.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    designer
+        .node_type_registry
+        .add_record_type_def(RecordTypeDef {
+            name: "Physics.ElementMapping".to_string(),
+            fields: vec![
+                ("from".to_string(), DataType::Int),
+                ("to".to_string(), DataType::Int),
+            ],
+        })
+        .unwrap();
+    let cons = designer.add_node("record_construct", DVec2::new(0.0, 0.0));
+    // Set the node's schema, then refresh its derived pin cache (re-fetch the
+    // node inside the populate call to avoid an overlapping borrow).
+    {
+        let registry = &mut designer.node_type_registry;
+        registry
+            .node_networks
+            .get_mut("Main")
+            .unwrap()
+            .nodes
+            .get_mut(&cons)
+            .unwrap()
+            .data = Box::new(RecordConstructData {
+            schema: "Physics.ElementMapping".to_string(),
+            ..Default::default()
+        });
+        let node = registry
+            .node_networks
+            .get_mut("Main")
+            .unwrap()
+            .nodes
+            .get_mut(&cons)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Save to a temp file, reload into a fresh registry.
+    let temp_dir = tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("dotted_record.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save");
+
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("reload");
+
+    // The dotted record def survives with its fields intact.
+    let def = registry2
+        .record_type_defs
+        .get("Physics.ElementMapping")
+        .expect("dotted record def missing after roundtrip");
+    assert_eq!(
+        def.fields,
+        vec![
+            ("from".to_string(), DataType::Int),
+            ("to".to_string(), DataType::Int),
+        ]
+    );
+
+    // The record_construct node's `Named` reference (its `schema`) survives,
+    // and its derived pin layout matches the authored field order.
+    let network = registry2.node_networks.get("Main").unwrap();
+    let node = network.nodes.get(&cons).unwrap();
+    let schema = node
+        .data
+        .as_any_ref()
+        .downcast_ref::<RecordConstructData>()
+        .unwrap()
+        .schema
+        .clone();
+    assert_eq!(schema, "Physics.ElementMapping");
+
+    let nt = registry2.get_node_type_for_node(node).unwrap();
+    let pin_names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(pin_names, vec!["from", "to"]);
+    assert_eq!(
+        nt.output_pins[0].fixed_type(),
+        Some(&DataType::Record(RecordType::Named(
+            "Physics.ElementMapping".to_string()
+        )))
+    );
+}

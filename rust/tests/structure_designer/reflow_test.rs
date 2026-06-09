@@ -112,6 +112,7 @@ fn composite_redo_forward_undo_reverse_order() {
     let mut ctx = UndoContext {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
+        active_record_def_name: &mut designer.active_record_def_name,
     };
 
     composite.redo(&mut ctx);

@@ -50,6 +50,10 @@ pub struct UndoContext<'a> {
     pub node_type_registry: &'a mut NodeTypeRegistry,
     /// Mutable so commands like AddNetwork/DeleteNetwork can switch the active network.
     pub active_network_name: &'a mut Option<String>,
+    /// Backend-owned active record def (mirrors `active_network_name`). Record
+    /// rename/move/delete commands remap or clear it so the schema-editor
+    /// selection survives undo/redo. See `doc/design_hierarchical_records.md` §8.
+    pub active_record_def_name: &'a mut Option<String>,
 }
 
 impl<'a> UndoContext<'a> {

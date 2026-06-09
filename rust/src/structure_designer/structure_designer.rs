@@ -12,7 +12,7 @@ use super::node_network::{
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
-use super::node_type_registry::NodeTypeRegistry;
+use super::node_type_registry::{NodeTypeRegistry, UserTypeKind};
 use super::preferences::load_preferences;
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
 use super::undo::snapshot::PendingMove;
@@ -74,6 +74,9 @@ pub struct NamespaceRenameItem {
     pub old_name: String,
     pub new_name: String,
     pub conflict: bool,
+    /// Whether this leaf is a custom network or a user record def. Drives the
+    /// per-kind dispatch in `rename_namespace` and the kind-tagged undo command.
+    pub kind: UserTypeKind,
 }
 
 /// The full plan for shifting every network under one namespace prefix to a
@@ -112,6 +115,12 @@ pub struct StructureDesigner {
     pub network_evaluator: NetworkEvaluator,
     pub gadget: Option<Box<dyn NodeNetworkGadget>>,
     pub active_node_network_name: Option<String>,
+    /// The user record type def currently open in the schema editor, if any.
+    /// Backend-owned (mirrors `active_node_network_name`) so it survives
+    /// undo/redo of a rename/move/delete — the undo commands remap or clear it
+    /// through `UndoContext`. Flutter mirrors this value in `refreshFromKernel`
+    /// (Phase 2). See `doc/design_hierarchical_records.md` §8.
+    pub active_record_def_name: Option<String>,
     pub last_generated_structure_designer_scene: StructureDesignerScene,
     pub preferences: StructureDesignerPreferences,
     pub node_display_policy_resolver: NodeDisplayPolicyResolver,
@@ -172,6 +181,7 @@ impl StructureDesigner {
             network_evaluator,
             gadget: None,
             active_node_network_name: None,
+            active_record_def_name: None,
             last_generated_structure_designer_scene: StructureDesignerScene::new(),
             preferences,
             node_display_policy_resolver,
@@ -500,6 +510,7 @@ impl StructureDesigner {
         let result = stack.undo(&mut UndoContext {
             node_type_registry: &mut self.node_type_registry,
             active_network_name: &mut self.active_node_network_name,
+            active_record_def_name: &mut self.active_record_def_name,
         });
         self.undo_stack = stack;
 
@@ -517,6 +528,7 @@ impl StructureDesigner {
         let result = stack.redo(&mut UndoContext {
             node_type_registry: &mut self.node_type_registry,
             active_network_name: &mut self.active_node_network_name,
+            active_record_def_name: &mut self.active_record_def_name,
         });
         self.undo_stack = stack;
 
@@ -1421,13 +1433,17 @@ impl StructureDesigner {
         old_prefix: &str,
         new_prefix: &str,
     ) -> NamespaceRenamePlan {
-        // Affected networks: names strictly under "old_prefix." (a leaf
-        // network named exactly `old_prefix` is not part of the namespace).
+        // Affected user types: names strictly under "old_prefix." (a leaf
+        // named exactly `old_prefix` is not part of the namespace). Sweeps
+        // BOTH networks and user record defs — records are first-class members
+        // of the same hierarchy (doc/design_hierarchical_records.md). Built-in
+        // record defs live in a separate map and are never affected.
         let prefix_dot = format!("{}.", old_prefix);
         let mut affected: Vec<String> = self
             .node_type_registry
             .node_networks
             .keys()
+            .chain(self.node_type_registry.record_type_defs.keys())
             .filter(|name| name.starts_with(&prefix_dot))
             .cloned()
             .collect();
@@ -1455,35 +1471,44 @@ impl StructureDesigner {
             // A collision is any existing user type (network, user/built-in
             // record def, built-in node type) sharing the target name, except
             // a network that is itself being renamed away.
-            let conflict =
-                !affected_set.contains(new_name.as_str()) && self.node_type_registry.name_is_taken(&new_name);
+            let conflict = !affected_set.contains(new_name.as_str())
+                && self.node_type_registry.name_is_taken(&new_name);
+
+            // Every affected name resolves to a user network or user record def
+            // (it came from one of the two swept maps); default to Network if a
+            // concurrent edit somehow removed it.
+            let kind = self
+                .node_type_registry
+                .user_type_kind(old_name)
+                .unwrap_or(UserTypeKind::Network);
 
             items.push(NamespaceRenameItem {
                 old_name: old_name.clone(),
                 new_name,
                 conflict,
+                kind,
             });
         }
 
         NamespaceRenamePlan { items, valid_names }
     }
 
-    /// Compute the plan for moving/renaming a single network leaf `old_name`
-    /// to the fully-qualified `new_name`, without mutating anything. Reuses
-    /// the same `NamespaceRenamePlan` shape as `compute_namespace_rename` so
-    /// the move dialog renders both with one code path (a leaf plan always has
-    /// exactly one item). The actual mutation is `rename_node_network`; this is
-    /// its preview, mirroring its acceptance condition (existing source, valid
-    /// target name, no collision). A no-op (`new_name == old_name`) is reported
+    /// Compute the plan for moving/renaming a single *leaf* `old_name` (a
+    /// custom network OR a user record def) to the fully-qualified `new_name`,
+    /// without mutating anything. Reuses the same `NamespaceRenamePlan` shape
+    /// as `compute_namespace_rename` so the move dialog renders both with one
+    /// code path (a leaf plan always has exactly one item). The kind is
+    /// detected via `user_type_kind`; an unknown name or a built-in produces an
+    /// empty (non-applicable) plan. A no-op (`new_name == old_name`) is reported
     /// as applicable-with-no-conflict; the dialog disables Apply for it.
-    pub fn compute_network_rename(&self, old_name: &str, new_name: &str) -> NamespaceRenamePlan {
-        // Unknown source network => nothing to rename (empty plan).
-        if !self.node_type_registry.node_networks.contains_key(old_name) {
+    pub fn compute_leaf_rename(&self, old_name: &str, new_name: &str) -> NamespaceRenamePlan {
+        // Unknown source / built-in => nothing to rename (empty plan).
+        let Some(kind) = self.node_type_registry.user_type_kind(old_name) else {
             return NamespaceRenamePlan {
                 items: Vec::new(),
                 valid_names: true,
             };
-        }
+        };
 
         let valid_names = super::identifier::is_valid_user_name(new_name).is_ok();
         // The source name itself doesn't count as a collision (prefilled value).
@@ -1494,9 +1519,16 @@ impl StructureDesigner {
                 old_name: old_name.to_string(),
                 new_name: new_name.to_string(),
                 conflict,
+                kind,
             }],
             valid_names,
         }
+    }
+
+    /// Backward-compatible network-leaf preview. Delegates to the kind-aware
+    /// [`compute_leaf_rename`]; for a network name it behaves exactly as before.
+    pub fn compute_network_rename(&self, old_name: &str, new_name: &str) -> NamespaceRenamePlan {
+        self.compute_leaf_rename(old_name, new_name)
     }
 
     pub fn rename_namespace(&mut self, old_prefix: &str, new_prefix: &str) -> bool {
@@ -1505,48 +1537,80 @@ impl StructureDesigner {
             return false;
         }
 
-        let rename_pairs: Vec<(String, String)> = plan
+        use super::undo::commands::rename_namespace::NamespaceRename;
+        let renames: Vec<NamespaceRename> = plan
             .items
             .into_iter()
-            .map(|item| (item.old_name, item.new_name))
+            .map(|item| NamespaceRename {
+                old_name: item.old_name,
+                new_name: item.new_name,
+                kind: item.kind,
+            })
             .collect();
 
-        // Perform all renames
-        for (old_name, new_name) in &rename_pairs {
-            super::undo::commands::rename_helpers::apply_rename_core(
-                &mut self.node_type_registry,
-                &mut self.active_node_network_name,
-                old_name,
-                new_name,
-            );
+        // Perform all renames, dispatching per kind. Networks go through
+        // `apply_rename_core` (registry move + node_type_name + active-network
+        // remap); records through the infallible `rename_record_type_def_unchecked`
+        // (Helper 1 — registry move + `Named` rewrite). The plan's conflict
+        // check already gated the whole batch as applicable.
+        let mut touched_record = false;
+        for r in &renames {
+            match r.kind {
+                UserTypeKind::Network => {
+                    super::undo::commands::rename_helpers::apply_rename_core(
+                        &mut self.node_type_registry,
+                        &mut self.active_node_network_name,
+                        &r.old_name,
+                        &r.new_name,
+                    );
+                }
+                UserTypeKind::Record => {
+                    self.node_type_registry
+                        .rename_record_type_def_unchecked(&r.old_name, &r.new_name);
+                    // Backend-owned active record def follows the move.
+                    if self.active_record_def_name.as_deref() == Some(r.old_name.as_str()) {
+                        self.active_record_def_name = Some(r.new_name.clone());
+                    }
+                    touched_record = true;
+                }
+            }
         }
 
-        // Update navigation history for all renames
-        for (old_name, new_name) in &rename_pairs {
-            self.navigation_history.rename_network(old_name, new_name);
+        // Update navigation history for network renames (records are not navigated).
+        for r in &renames {
+            if r.kind == UserTypeKind::Network {
+                self.navigation_history
+                    .rename_network(&r.old_name, &r.new_name);
+            }
         }
 
-        // Update clipboard for all renames. Walk into HOF/closure zone bodies
-        // too so a copied body's instance of a renamed network is updated and
-        // doesn't dangle on paste (same body-skip class as the single rename).
+        // Update clipboard node_type_name refs for network renames. Walk into
+        // HOF/closure zone bodies too so a copied body's instance of a renamed
+        // network is updated and doesn't dangle on paste (same body-skip class
+        // as the single rename). Clipboard record refs are out of scope (matches
+        // standalone `rename_record_type_def`).
         if let Some(ref mut clipboard) = self.clipboard {
             crate::structure_designer::node_network::walk_all_nodes_mut(clipboard, &mut |node| {
-                for (old_name, new_name) in &rename_pairs {
-                    if node.node_type_name == *old_name {
-                        node.node_type_name = new_name.clone();
+                for r in &renames {
+                    if r.kind == UserTypeKind::Network && node.node_type_name == r.old_name {
+                        node.node_type_name = r.new_name.clone();
                         break;
                     }
                 }
             });
         }
 
+        // Helper 2: refresh record-node pin layouts if any record moved (the
+        // `Named` rewrite cleared their `custom_node_type`).
+        if touched_record {
+            self.node_type_registry.repair_all_networks();
+        }
+
         self.set_dirty(true);
         self.mark_full_refresh();
 
         self.push_command(
-            super::undo::commands::rename_namespace::RenameNamespaceCommand {
-                renames: rename_pairs,
-            },
+            super::undo::commands::rename_namespace::RenameNamespaceCommand { renames },
         );
 
         true
@@ -1661,65 +1725,158 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// Read-only check that no entity *outside* the deleted set references any
+    /// record in `target_records` via `RecordType::Named`. A surviving entity is
+    /// a network whose name is not in `deleted_networks`, or a user record def
+    /// whose name is not in `target_records`. Walks each surviving network's
+    /// signature + all nodes (incl. zone bodies) and each surviving record
+    /// def's field types. Returns `Err` with a listing if any external
+    /// reference would be left dangling. See `doc/design_hierarchical_records.md`.
+    fn check_record_delete_references(
+        &self,
+        target_records: &std::collections::HashSet<&str>,
+        deleted_networks: &std::collections::HashSet<&str>,
+    ) -> Result<(), String> {
+        let mut blockers: Vec<String> = Vec::new();
+
+        // Surviving networks referencing a deleted record.
+        for (name, network) in self.node_type_registry.node_networks.iter() {
+            if deleted_networks.contains(name.as_str()) {
+                continue;
+            }
+            let mut refs: HashSet<String> = HashSet::new();
+            super::node_type_registry::collect_record_refs_in_network(network, &mut refs);
+            for r in &refs {
+                if target_records.contains(r.as_str()) {
+                    blockers.push(format!("network '{}' references record '{}'", name, r));
+                }
+            }
+        }
+
+        // Surviving user record defs whose fields reference a deleted record.
+        for (name, def) in self.node_type_registry.record_type_defs.iter() {
+            if target_records.contains(name.as_str()) {
+                continue;
+            }
+            let mut refs: HashSet<String> = HashSet::new();
+            for (_, ty) in &def.fields {
+                super::node_type_registry::collect_record_refs_in_type(ty, &mut refs);
+            }
+            for r in &refs {
+                if target_records.contains(r.as_str()) {
+                    blockers.push(format!("record '{}' references record '{}'", name, r));
+                }
+            }
+        }
+
+        if blockers.is_empty() {
+            Ok(())
+        } else {
+            blockers.sort();
+            Err(format!(
+                "Cannot delete namespace because referenced from outside: {}",
+                blockers.join(", ")
+            ))
+        }
+    }
+
     pub fn delete_namespace(&mut self, prefix: &str) -> Result<(), String> {
-        // Collect affected networks: names starting with "prefix."
+        // Collect affected networks AND user record defs: names under "prefix."
         let prefix_dot = format!("{}.", prefix);
-        let affected: Vec<String> = self
+        let affected_networks: Vec<String> = self
             .node_type_registry
             .node_networks
             .keys()
             .filter(|name| name.starts_with(&prefix_dot))
             .cloned()
             .collect();
+        let affected_records: Vec<String> = self
+            .node_type_registry
+            .record_type_defs
+            .keys()
+            .filter(|name| name.starts_with(&prefix_dot))
+            .cloned()
+            .collect();
 
-        if affected.is_empty() {
-            return Err(format!("No networks found under namespace '{}'", prefix));
+        if affected_networks.is_empty() && affected_records.is_empty() {
+            return Err(format!("No items found under namespace '{}'", prefix));
         }
 
-        // Check references: only block on references from outside the set
-        let targets: std::collections::HashSet<&str> =
-            affected.iter().map(|s| s.as_str()).collect();
-        self.check_delete_references(&targets)?;
+        // Reference checks: block on references from outside the deleted set,
+        // for both kinds (chosen policy — a batch delete never silently dangles).
+        let network_targets: std::collections::HashSet<&str> =
+            affected_networks.iter().map(|s| s.as_str()).collect();
+        self.check_delete_references(&network_targets)?;
 
-        // Snapshot all affected networks
+        let record_targets: std::collections::HashSet<&str> =
+            affected_records.iter().map(|s| s.as_str()).collect();
+        self.check_record_delete_references(&record_targets, &network_targets)?;
+
+        // Snapshot all affected networks (for undo).
         let mut network_snapshots = Vec::new();
-        for name in &affected {
+        for name in &affected_networks {
             if let Some(snapshot) = self.snapshot_network(name) {
                 network_snapshots.push((name.clone(), snapshot));
             }
         }
 
-        let active_network_before = self.active_node_network_name.clone();
-
-        // Remove all affected networks
-        for name in &affected {
-            self.node_type_registry.node_networks.remove(name);
+        // Snapshot all affected record defs (RecordTypeDef is Clone).
+        let mut record_snapshots = Vec::new();
+        for name in &affected_records {
+            if let Some(def) = self.node_type_registry.record_type_defs.get(name) {
+                record_snapshots.push((name.clone(), def.clone()));
+            }
         }
 
-        // Update active network if it was under the prefix
+        let active_network_before = self.active_node_network_name.clone();
+        let active_record_def_before = self.active_record_def_name.clone();
+
+        // Remove all affected networks and record defs.
+        for name in &affected_networks {
+            self.node_type_registry.node_networks.remove(name);
+        }
+        for name in &affected_records {
+            self.node_type_registry.record_type_defs.remove(name);
+        }
+
+        // If any record was removed, repair every network so wires that now
+        // resolve through a dangling `Named` ref are disconnected and
+        // record-node pin layouts refresh (Helper 2 — matches forward delete).
+        if !affected_records.is_empty() {
+            self.node_type_registry.repair_all_networks();
+        }
+
+        // Update active network if it was under the prefix.
         if let Some(active_name) = &self.active_node_network_name {
             if active_name.starts_with(&prefix_dot) {
                 self.active_node_network_name = None;
             }
         }
+        // Update active record def if it was under the prefix.
+        if let Some(active_rec) = &self.active_record_def_name
+            && active_rec.starts_with(&prefix_dot)
+        {
+            self.active_record_def_name = None;
+        }
 
-        // Remove from navigation history
-        for name in &affected {
+        // Remove networks from navigation history.
+        for name in &affected_networks {
             self.navigation_history.remove_network(name);
         }
 
-        // Clear clipboard if it references any deleted network
+        // Clear clipboard if it references any deleted network.
         if let Some(ref clipboard) = self.clipboard {
             if clipboard
                 .nodes
                 .values()
-                .any(|n| targets.contains(n.node_type_name.as_str()))
+                .any(|n| network_targets.contains(n.node_type_name.as_str()))
             {
                 self.clipboard = None;
             }
         }
 
         let active_network_after = self.active_node_network_name.clone();
+        let active_record_def_after = self.active_record_def_name.clone();
 
         self.set_dirty(true);
         self.mark_full_refresh();
@@ -1727,8 +1884,11 @@ impl StructureDesigner {
         self.push_command(
             super::undo::commands::delete_namespace::DeleteNamespaceCommand {
                 network_snapshots,
+                record_snapshots,
                 active_network_before,
                 active_network_after,
+                active_record_def_before,
+                active_record_def_after,
             },
         );
 
@@ -1784,17 +1944,13 @@ impl StructureDesigner {
             .delete_record_type_def(name)
             .expect("contains_key checked above");
 
-        let names: Vec<String> = self
-            .node_type_registry
-            .node_networks
-            .keys()
-            .cloned()
-            .collect();
-        for n in names {
-            if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
-                self.node_type_registry.repair_node_network(&mut network);
-                self.node_type_registry.node_networks.insert(n, network);
-            }
+        self.node_type_registry.repair_all_networks();
+
+        // Clear the backend-owned active record def if it was the deleted one
+        // (capture first so undo can restore the schema-editor selection).
+        let was_active = self.active_record_def_name.as_deref() == Some(name);
+        if was_active {
+            self.active_record_def_name = None;
         }
 
         self.set_dirty(true);
@@ -1803,6 +1959,7 @@ impl StructureDesigner {
             super::undo::commands::delete_record_type_def::DeleteRecordTypeDefCommand {
                 def,
                 affected_network_snapshots: snapshots,
+                was_active,
             },
         );
 
@@ -1824,17 +1981,11 @@ impl StructureDesigner {
         self.node_type_registry
             .rename_record_type_def(old_name, new_name)?;
 
-        let names: Vec<String> = self
-            .node_type_registry
-            .node_networks
-            .keys()
-            .cloned()
-            .collect();
-        for n in names {
-            if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
-                self.node_type_registry.repair_node_network(&mut network);
-                self.node_type_registry.node_networks.insert(n, network);
-            }
+        self.node_type_registry.repair_all_networks();
+
+        // Backend-owned active record def follows the rename.
+        if self.active_record_def_name.as_deref() == Some(old_name) {
+            self.active_record_def_name = Some(new_name.to_string());
         }
 
         self.set_dirty(true);
@@ -1877,18 +2028,7 @@ impl StructureDesigner {
         self.node_type_registry
             .update_record_type_def(name, new_fields)?;
 
-        let names: Vec<String> = self
-            .node_type_registry
-            .node_networks
-            .keys()
-            .cloned()
-            .collect();
-        for n in names {
-            if let Some(mut network) = self.node_type_registry.node_networks.remove(&n) {
-                self.node_type_registry.repair_node_network(&mut network);
-                self.node_type_registry.node_networks.insert(n, network);
-            }
-        }
+        self.node_type_registry.repair_all_networks();
 
         self.set_dirty(true);
         self.mark_full_refresh();
@@ -3785,6 +3925,18 @@ impl StructureDesigner {
         // Return camera settings from the newly active network
         self.get_active_node_network()
             .and_then(|n| n.camera_settings.clone())
+    }
+
+    /// The user record type def currently open in the schema editor. Backend-
+    /// owned source of truth (see `doc/design_hierarchical_records.md` §8);
+    /// Flutter mirrors it in `refreshFromKernel` (Phase 2).
+    pub fn get_active_record_def_name(&self) -> Option<String> {
+        self.active_record_def_name.clone()
+    }
+
+    /// Set the active record def. `None` clears the schema-editor selection.
+    pub fn set_active_record_def_name(&mut self, name: Option<String>) {
+        self.active_record_def_name = name;
     }
 
     /// Returns true if the design has been modified since the last save/load

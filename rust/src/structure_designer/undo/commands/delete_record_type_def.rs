@@ -17,6 +17,11 @@ pub struct DeleteRecordTypeDefCommand {
     /// because `NodeNetwork` doesn't derive `Clone` cheaply and the
     /// serialization round-trip is the existing canonical "full snapshot".
     pub affected_network_snapshots: Vec<(String, SerializableNodeNetwork)>,
+    /// Whether the deleted def was the active record def at delete time, so
+    /// redo can clear and undo can restore the schema-editor selection
+    /// (parity with the network active-name handling). See
+    /// `doc/design_hierarchical_records.md` §8.
+    pub was_active: bool,
 }
 
 impl std::fmt::Debug for DeleteRecordTypeDefCommand {
@@ -58,28 +63,30 @@ impl UndoCommand for DeleteRecordTypeDefCommand {
                     .insert(name.clone(), network);
             }
         }
+
+        // Helper 2 — refresh record-node pin layouts now that the `Named`
+        // target exists again (the `Full` refresh does not do this).
+        ctx.node_type_registry.repair_all_networks();
+
+        // Restore the active record def if the deleted def was active.
+        if self.was_active {
+            *ctx.active_record_def_name = Some(self.def.name.clone());
+        }
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        // Re-delete the def, then re-run repair on every previously-affected
-        // network so wires depending on the now-dangling reference are
-        // re-disconnected.
+        // Re-delete the def, then re-run repair on every network so wires
+        // depending on the now-dangling reference are re-disconnected.
         ctx.node_type_registry
             .record_type_defs
             .remove(&self.def.name);
 
-        // Snapshot built-ins out before mutating networks (avoid borrow conflict).
-        let network_names: Vec<String> = self
-            .affected_network_snapshots
-            .iter()
-            .map(|(n, _)| n.clone())
-            .collect();
+        ctx.node_type_registry.repair_all_networks();
 
-        for name in network_names {
-            if let Some(mut network) = ctx.node_type_registry.node_networks.remove(&name) {
-                ctx.node_type_registry.repair_node_network(&mut network);
-                ctx.node_type_registry.node_networks.insert(name, network);
-            }
+        // Clear the active record def if it was the deleted def.
+        if self.was_active && ctx.active_record_def_name.as_deref() == Some(self.def.name.as_str())
+        {
+            *ctx.active_record_def_name = None;
         }
     }
 

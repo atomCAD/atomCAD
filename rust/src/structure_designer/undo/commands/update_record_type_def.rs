@@ -66,17 +66,9 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
         if let Some(def) = ctx.node_type_registry.record_type_defs.get_mut(&self.name) {
             def.fields = self.new_fields.clone();
         }
-        let names: Vec<String> = self
-            .network_snapshots_before
-            .iter()
-            .map(|(n, _)| n.clone())
-            .collect();
-        for name in names {
-            if let Some(mut network) = ctx.node_type_registry.node_networks.remove(&name) {
-                ctx.node_type_registry.repair_node_network(&mut network);
-                ctx.node_type_registry.node_networks.insert(name, network);
-            }
-        }
+        // Helper 2 — repair every network so record-node pin layouts re-derive
+        // and now-incompatible wires re-disconnect (matches the forward update).
+        ctx.node_type_registry.repair_all_networks();
     }
 
     fn refresh_mode(&self) -> UndoRefreshMode {

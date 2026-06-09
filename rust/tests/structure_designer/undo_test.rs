@@ -221,6 +221,7 @@ fn undo_stack_empty_stack_returns_none() {
     let mut ctx = UndoContext {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
+        active_record_def_name: &mut designer.active_record_def_name,
     };
 
     assert!(!stack.can_undo());
@@ -247,6 +248,7 @@ fn undo_stack_push_undo_redo_cursor_behavior() {
     let mut ctx = UndoContext {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
+        active_record_def_name: &mut designer.active_record_def_name,
     };
     assert!(stack.undo(&mut ctx).is_some());
 
@@ -278,6 +280,7 @@ fn undo_stack_redo_tail_truncation_on_push() {
     let mut ctx = UndoContext {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
+        active_record_def_name: &mut designer.active_record_def_name,
     };
 
     stack.push(Box::new(DummyCommand::new("cmd1")));
@@ -316,6 +319,7 @@ fn undo_stack_max_history_eviction() {
     let mut ctx = UndoContext {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
+        active_record_def_name: &mut designer.active_record_def_name,
     };
 
     // Can only undo 3 times (cmd4, cmd3, cmd2), not 4
@@ -356,6 +360,7 @@ fn undo_stack_suppression() {
     let mut ctx = UndoContext {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
+        active_record_def_name: &mut designer.active_record_def_name,
     };
 
     stack.undo(&mut ctx);
@@ -2040,8 +2045,18 @@ fn preview_namespace_rename_reports_conflict() {
 
     // The actual mutation refuses and leaves both networks intact.
     assert!(!designer.rename_namespace("a.b", "a"));
-    assert!(designer.node_type_registry.node_networks.contains_key("a.b.x"));
-    assert!(designer.node_type_registry.node_networks.contains_key("a.x"));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("a.b.x")
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("a.x")
+    );
 }
 
 #[test]
@@ -2077,10 +2092,23 @@ fn rename_namespace_shuffle_within_set_is_not_a_conflict() {
     designer.add_node_network("a.b.two");
 
     let plan = designer.compute_namespace_rename("a.b", "a.c");
-    assert!(plan.is_applicable(), "clean prefix swap should be applicable");
+    assert!(
+        plan.is_applicable(),
+        "clean prefix swap should be applicable"
+    );
     assert!(designer.rename_namespace("a.b", "a.c"));
-    assert!(designer.node_type_registry.node_networks.contains_key("a.c.one"));
-    assert!(designer.node_type_registry.node_networks.contains_key("a.c.two"));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("a.c.one")
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("a.c.two")
+    );
 }
 
 #[test]
@@ -2097,7 +2125,12 @@ fn preview_network_rename_move_rootward() {
 
     // The actual mutation is rename_node_network.
     assert!(designer.rename_node_network("a.b.x", "a.x"));
-    assert!(designer.node_type_registry.node_networks.contains_key("a.x"));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("a.x")
+    );
 }
 
 #[test]

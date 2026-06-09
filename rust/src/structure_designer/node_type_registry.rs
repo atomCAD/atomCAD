@@ -133,6 +133,17 @@ pub enum RecordTypeDefError {
     InvalidName(String, String),
 }
 
+/// Kind of an existing *user-defined* type addressable by the namespace
+/// move/rename machinery. Built-in record defs and built-in node types are not
+/// part of the movable hierarchy and are reported as `None` by
+/// [`NodeTypeRegistry::user_type_kind`]. See
+/// `doc/design_hierarchical_records.md`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum UserTypeKind {
+    Network,
+    Record,
+}
+
 pub struct NodeTypeRegistry {
     pub built_in_node_types: HashMap<String, NodeType>,
     pub node_networks: HashMap<String, NodeNetwork>,
@@ -1089,6 +1100,58 @@ impl NodeTypeRegistry {
     /// guards to reject attempts to add/delete/rename/update a built-in.
     pub fn is_built_in_record_type_def(&self, name: &str) -> bool {
         self.built_in_record_type_defs.contains_key(name)
+    }
+
+    /// Kind of an existing *user-defined* type (custom network or user record
+    /// def). Built-in record defs and built-in node types return `None` —
+    /// they are immutable and not part of the movable namespace hierarchy. The
+    /// namespace move/rename batch operations dispatch per-leaf on this kind.
+    /// See `doc/design_hierarchical_records.md`.
+    pub fn user_type_kind(&self, name: &str) -> Option<UserTypeKind> {
+        if self.node_networks.contains_key(name) {
+            Some(UserTypeKind::Network)
+        } else if self.record_type_defs.contains_key(name) {
+            Some(UserTypeKind::Record)
+        } else {
+            None
+        }
+    }
+
+    /// Infallible record rename for batch/undo paths where validity is already
+    /// established (the preview's `name_is_taken` conflict check gates the user
+    /// action; on undo/redo the target name was just vacated by the symmetric
+    /// rename of the same batch). Mirrors `apply_rename_core` for networks: map
+    /// move + name field update + `rewrite_record_name_in_registry`, with NO
+    /// built-in/collision/missing guards. The user-facing standalone
+    /// `rename_record_type_def` keeps its checks (it is the validating entry
+    /// point); only the batch namespace path and the undo commands call this.
+    /// See `doc/design_hierarchical_records.md` (Helper 1).
+    pub fn rename_record_type_def_unchecked(&mut self, old_name: &str, new_name: &str) {
+        if old_name == new_name {
+            return;
+        }
+        if let Some(mut def) = self.record_type_defs.remove(old_name) {
+            def.name = new_name.to_string();
+            self.record_type_defs.insert(new_name.to_string(), def);
+            rewrite_record_name_in_registry(self, old_name, new_name);
+        }
+    }
+
+    /// Run `repair_node_network` on every stored network. Required after any
+    /// record def add/rename/delete/restore so `record_construct` /
+    /// `record_destructure` / `product` pin layouts (and now-incompatible wires)
+    /// are refreshed — the `Full` undo refresh does NOT do this. Both the
+    /// forward record methods and the undo commands call it through the
+    /// registry they already hold. See `doc/design_hierarchical_records.md`
+    /// (Helper 2).
+    pub fn repair_all_networks(&mut self) {
+        let names: Vec<String> = self.node_networks.keys().cloned().collect();
+        for n in names {
+            if let Some(mut network) = self.node_networks.remove(&n) {
+                self.repair_node_network(&mut network);
+                self.node_networks.insert(n, network);
+            }
+        }
     }
 
     /// Adds a new record type def. Validates: name not already taken, field
@@ -2264,6 +2327,92 @@ fn collect_named_record_refs_in_type(t: &DataType, out: &mut Vec<String>) {
         }
         _ => {}
     }
+}
+
+/// Collect every record-def name referenced via `RecordType::Named` from a
+/// `DataType` (recursing through `Array` / `Function` / `AnyFunction` /
+/// anonymous record fields) into `out`. Read-only analog of the per-type pass
+/// in `rewrite_record_name_in_registry`.
+pub fn collect_record_refs_in_type(t: &DataType, out: &mut HashSet<String>) {
+    let mut v = Vec::new();
+    collect_named_record_refs_in_type(t, &mut v);
+    out.extend(v);
+}
+
+/// Collect every record-def name referenced anywhere in `network`: its
+/// custom-node-type signature (parameter + output-pin `Fixed` types), every
+/// node's embedded `DataType` fields (recursing into HOF zone bodies via
+/// `walk_all_nodes`), and the bare `schema` / `target` record-def names on
+/// `record_construct` / `record_destructure` / `product`. Mirrors the read
+/// surface of `rewrite_record_name_in_registry`. Used by the namespace-delete
+/// reference check. See `doc/design_hierarchical_records.md`.
+pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<String>) {
+    use crate::structure_designer::nodes::array_append::ArrayAppendData;
+    use crate::structure_designer::nodes::array_at::ArrayAtData;
+    use crate::structure_designer::nodes::array_concat::ArrayConcatData;
+    use crate::structure_designer::nodes::array_len::ArrayLenData;
+    use crate::structure_designer::nodes::expr::ExprData;
+    use crate::structure_designer::nodes::filter::FilterData;
+    use crate::structure_designer::nodes::fold::FoldData;
+    use crate::structure_designer::nodes::foreach::ForeachData;
+    use crate::structure_designer::nodes::map::MapData;
+    use crate::structure_designer::nodes::parameter::ParameterData;
+    use crate::structure_designer::nodes::product::ProductData;
+    use crate::structure_designer::nodes::record_construct::RecordConstructData;
+    use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
+    use crate::structure_designer::nodes::sequence::SequenceData;
+
+    // Custom-network signature: parameter types and output pin types.
+    for param in &network.node_type.parameters {
+        collect_record_refs_in_type(&param.data_type, out);
+    }
+    for pin in &network.node_type.output_pins {
+        if let crate::structure_designer::node_type::PinOutputType::Fixed(t) = &pin.data_type {
+            collect_record_refs_in_type(t, out);
+        }
+    }
+
+    crate::structure_designer::node_network::walk_all_nodes(network, &mut |node| {
+        let data: &dyn crate::structure_designer::node_data::NodeData = node.data.as_ref();
+        if let Some(d) = data.as_any_ref().downcast_ref::<ParameterData>() {
+            collect_record_refs_in_type(&d.data_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ExprData>() {
+            for p in &d.parameters {
+                collect_record_refs_in_type(&p.data_type, out);
+            }
+            if let Some(o) = d.output_type.as_ref() {
+                collect_record_refs_in_type(o, out);
+            }
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<MapData>() {
+            collect_record_refs_in_type(&d.input_type, out);
+            collect_record_refs_in_type(&d.output_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<SequenceData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<FilterData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<FoldData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+            collect_record_refs_in_type(&d.accumulator_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ForeachData>() {
+            collect_record_refs_in_type(&d.input_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAtData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAppendData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayConcatData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayLenData>() {
+            collect_record_refs_in_type(&d.element_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordConstructData>() {
+            // A bare-name schema reference. An empty string (unset schema) never
+            // matches a real (dotted) target name, so it is harmless in `out`.
+            out.insert(d.schema.clone());
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordDestructureData>() {
+            out.insert(d.schema.clone());
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ProductData>() {
+            out.insert(d.target.clone());
+        }
+    });
 }
 
 /// Returns `true` if a DFS from `current` (a referenced record name) revisits
