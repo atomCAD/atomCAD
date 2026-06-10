@@ -186,6 +186,22 @@ The exceptions — places where a single-frame walk is intentional — are selec
 
 Design docs: `doc/design_zones.md` (Rust side, phases 1–6) and `doc/design_zones_ui.md` (Flutter side, phases U1–U7).
 
+## Validation errors: blocking vs non-blocking
+
+`ValidationError` carries a `blocking: bool` field (`node_network.rs`). The whole-network gate `NodeNetwork::valid` is computed from the **blocking** errors only — `validate_network` flips `valid = false` via the scattered `ok = false` / boolean-return plumbing, **not** from `validation_errors` being non-empty. `generate_scene` (and the custom-network eval / execute gates) refuse to evaluate a network only when `!valid`. So:
+
+- **Blocking error** (`ValidationError::new(..)`, the default) → flips `valid` → the *entire* network refuses to evaluate, the viewport goes blank. Use only when evaluating the network would be **unsafe or impossible**: cycles, anything that could panic the evaluator or loop forever, structural corruption the repair pass can't neutralize.
+- **Non-blocking error** (`ValidationError::warning(..)`) → leaves `valid == true` → the error still surfaces as a node badge (via `build_node_view` → `NodeView.error`), but the rest of the network keeps evaluating and displaying. Independent/upstream nodes are unaffected; the offending node and its downstream cone go dark naturally **iff** the runtime localizes the failure into a `NetworkResult::Error`.
+
+**The litmus test when you add a new validation rule:** *does the evaluator already turn this condition into a localized `NetworkResult::Error` (cleanly, no panic / no infinite loop) when the node is actually evaluated?*
+
+- **Yes →** make it `ValidationError::warning`. The validation rule is then just an *earlier, spatially-located surfacing* of a failure the runtime already handles per-node. Blocking the whole network would only punish unrelated nodes. (Example: the zone-output-pin "no incoming wire" rule in `validate_zones_recursive` — `zone_closure::build_inline_closure` already returns `Error` for it, so an independent incomplete `closure`/HOF must not blank the viewport.)
+- **No →** keep it `ValidationError::new` (blocking). The validation pass is the *only* thing standing between the user and a panic/hang.
+
+A user does not distinguish "validation error" from "runtime error" — both just mean "this part is broken." The blocking flag is purely about **blast radius**: blocking = whole network, non-blocking = this node + its dependents.
+
+**Interaction with re-validation heuristics.** Anything that re-validates *to clear stale local errors after a structural edit* must key off `!network.validation_errors.is_empty()`, **not** `!network.valid` — a non-blocking error keeps `valid == true`, so a `!valid` check misses it and the stale badge/list entry lingers (this is exactly the `delete_selected` fix). By contrast, every gate that asks *"can this network be evaluated / executed / referenced at all?"* (`generate_scene`, custom-network eval, `execute_node`, the "references an invalid network" propagation in `network_validator.rs`) and the validity-**flip** dependency propagation in `validate_active_network` must stay on `valid` — switching those to `validation_errors` would re-block the network on a non-blocking error and cascade the blanking across network boundaries.
+
 ## Execute action & effect nodes
 
 A small set of nodes (`export_xyz`, `foreach`, future effects) exist for their **side effects** rather than to produce a value. These nodes return `DataType::Unit` so the graph passes them through cleanly without misrepresenting them as data sources, and they fire only when the user explicitly invokes the right-click → Execute action.
