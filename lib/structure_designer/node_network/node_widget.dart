@@ -1724,7 +1724,7 @@ class NodeWidget extends StatelessWidget {
         if (canExtractToNetwork)
           PopupMenuItem(
             value: 'extract_to_network',
-            child: Text('Extract to Network...'),
+            child: Text('Convert Closure to Network...'),
           ),
         // Body collapse-mode radio group (collapsable HOFs only). The
         // check-mark sits on the current `collapseMode`; picking "Auto" is the
@@ -1823,10 +1823,12 @@ class NodeWidget extends StatelessWidget {
         // Pre-fill the network name with the closure's label, re-qualified
         // with the active network's namespace (the inverse of *Convert to
         // Closure*, which labels the closure with the source network's simple
-        // name). Empty label → empty field.
+        // name). When the closure has no label, suggest a unique
+        // `<namespace>.closureN` instead so the new network still lands in the
+        // active network's folder.
         final label = node.closureCustomLabel ?? '';
         final initialName = label.isEmpty
-            ? ''
+            ? suggestClosureNetworkName(model)
             : combineQualifiedName(
                 getNamespace(model.nodeNetworkView?.name ?? ''), label);
         showExtractClosureToNetworkDialog(context, model, node.id, scopeChain,

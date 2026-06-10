@@ -1,7 +1,34 @@
 import 'package:flutter/material.dart';
 import '../common/draggable_dialog.dart';
 import 'identifier_validation.dart';
+import 'namespace_utils.dart';
 import 'structure_designer_model.dart';
+
+/// Suggests a unique, namespace-qualified name for a closure being converted
+/// into a network when the closure has no display label to derive one from.
+///
+/// Mirrors the factor-out-to-subnetwork suggestion: the leaf is `closureN`
+/// (smallest `N ≥ 1` not already taken) and it is prefixed with the namespace
+/// (folder path) of the active network, so a closure converted inside
+/// `Foo.Bar.Baz` suggests `Foo.Bar.closure1`.
+String suggestClosureNetworkName(StructureDesignerModel model) {
+  final namespace = getNamespace(model.nodeNetworkView?.name ?? '');
+
+  // Names already taken across networks and record defs (one namespace).
+  final taken = <String>{
+    ...model.nodeNetworkNames.map((n) => n.name),
+    ...model.recordTypeDefNames,
+  };
+
+  var counter = 1;
+  while (true) {
+    final candidate = combineQualifiedName(namespace, 'closure$counter');
+    if (!taken.contains(candidate)) {
+      return candidate;
+    }
+    counter++;
+  }
+}
 
 /// Dialog for extracting a `closure` node into a new named custom network
 /// (*Closure → Network*). Only the network name is collected — parameter and
@@ -102,7 +129,7 @@ class _ExtractClosureToNetworkDialogState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Extract to Network',
+              'Convert Closure to Network',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 24),

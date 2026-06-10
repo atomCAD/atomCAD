@@ -8107,11 +8107,25 @@ impl StructureDesigner {
     }
 
     /// Generates a unique subnetwork name like "subnetwork1", "subnetwork2", etc.
+    ///
+    /// The name is prefixed with the namespace (folder path) of the active
+    /// network, so a subnetwork factored out of `Foo.Bar.Baz` is suggested as
+    /// `Foo.Bar.subnetwork1`. This keeps the new subnetwork in the same folder
+    /// as the network it was extracted from.
     fn generate_unique_subnetwork_name(&self) -> String {
+        // Derive the folder path (everything up to and including the last '.')
+        // of the active network, if any.
+        let prefix = self
+            .active_node_network_name
+            .as_deref()
+            .and_then(|name| name.rsplit_once('.'))
+            .map(|(namespace, _)| format!("{}.", namespace))
+            .unwrap_or_default();
+
         let base = "subnetwork";
         let mut counter = 1;
         loop {
-            let name = format!("{}{}", base, counter);
+            let name = format!("{}{}{}", prefix, base, counter);
             if self.node_type_registry.get_node_type(&name).is_none() {
                 return name;
             }
