@@ -302,6 +302,22 @@ List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
 String addNewNodeNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiAddNewNodeNetwork();
 
+/// Add a node network with an auto-generated unique name under `namespace`
+/// (a dot-delimited prefix; empty string = root) and activate it. Returns the
+/// generated qualified name so the Flutter side can select the new network.
+String addNewNodeNetworkInNamespace({required String namespace}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNewNodeNetworkInNamespace(
+        namespace: namespace);
+
+/// Add a record type def with an auto-generated unique name under `namespace`
+/// (a dot-delimited prefix; empty string = root) and activate it. Returns the
+/// generated qualified name, or an empty string on failure.
+String addNewRecordTypeDefInNamespace({required String namespace}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddNewRecordTypeDefInNamespace(
+        namespace: namespace);
+
 /// Add a node network with a specific name.
 /// Returns success/error. Auto-activates the new network.
 APIResult addNodeNetworkWithName({required String name}) => RustLib.instance.api

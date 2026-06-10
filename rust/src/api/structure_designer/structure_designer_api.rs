@@ -1615,6 +1615,52 @@ pub fn add_new_node_network() -> String {
     }
 }
 
+/// Add a node network with an auto-generated unique name under `namespace`
+/// (a dot-delimited prefix; empty string = root) and activate it. Returns the
+/// generated qualified name so the Flutter side can select the new network.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_new_node_network_in_namespace(namespace: String) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let name = instance
+                    .structure_designer
+                    .add_new_node_network_in_namespace(&namespace);
+                // New networks don't have camera settings, but we still call the method
+                let camera_settings = instance
+                    .structure_designer
+                    .set_active_node_network_name(Some(name.clone()));
+                apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
+                refresh_structure_designer_auto(instance);
+                name
+            },
+            String::new(),
+        )
+    }
+}
+
+/// Add a record type def with an auto-generated unique name under `namespace`
+/// (a dot-delimited prefix; empty string = root) and activate it. Returns the
+/// generated qualified name, or an empty string on failure.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_new_record_type_def_in_namespace(namespace: String) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| match instance
+                .structure_designer
+                .add_new_record_type_def_in_namespace(&namespace)
+            {
+                Ok(name) => {
+                    refresh_structure_designer_auto(instance);
+                    name
+                }
+                Err(_) => String::new(),
+            },
+            String::new(),
+        )
+    }
+}
+
 /// Add a node network with a specific name.
 /// Returns success/error. Auto-activates the new network.
 #[flutter_rust_bridge::frb(sync)]
@@ -1870,9 +1916,7 @@ pub fn get_active_record_def_name() -> Option<String> {
 pub fn set_active_record_def_name(name: Option<String>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            instance
-                .structure_designer
-                .set_active_record_def_name(name);
+            instance.structure_designer.set_active_record_def_name(name);
             refresh_structure_designer_auto(instance);
         });
     }

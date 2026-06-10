@@ -1366,6 +1366,38 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  /// Adds a new node network with an auto-generated unique name under
+  /// `namespace` (a dot-delimited folder path; empty string = root) and
+  /// activates it. Returns the generated qualified name, or null on failure.
+  String? addNewNodeNetworkInNamespace(String namespace) {
+    final newNetworkName = structure_designer_api.addNewNodeNetworkInNamespace(
+        namespace: namespace);
+    if (newNetworkName.isNotEmpty) {
+      setActiveNodeNetwork(newNetworkName);
+      return newNetworkName;
+    }
+    refreshFromKernel();
+    return null;
+  }
+
+  /// Adds a new empty record type def with an auto-generated unique name under
+  /// `namespace` (a dot-delimited folder path; empty string = root) and
+  /// activates it in the schema editor. Returns the generated qualified name,
+  /// or null on failure.
+  String? addNewRecordTypeDefInNamespace(String namespace) {
+    final newDefName = structure_designer_api.addNewRecordTypeDefInNamespace(
+        namespace: namespace);
+    if (newDefName.isNotEmpty) {
+      // Open the new def in the schema editor. The active record def is
+      // backend-owned (§8), so write it through; `refreshFromKernel` mirrors.
+      structure_designer_api.setActiveRecordDefName(name: newDefName);
+      refreshFromKernel();
+      return newDefName;
+    }
+    refreshFromKernel();
+    return null;
+  }
+
   /// Navigates back in node network history
   bool navigateBack() {
     final success = structure_designer_api.navigateBack();

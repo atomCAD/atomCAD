@@ -416,8 +416,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   /// caller omits it (the field then defaults to the current path), while a
   /// drag-and-drop caller passes the proposed drop target so the dialog opens
   /// pre-filled with the dropped-to location for confirmation.
-  Future<void> _handleMove(
-      BuildContext context, _NodeNetworkTreeNode node,
+  Future<void> _handleMove(BuildContext context, _NodeNetworkTreeNode node,
       {String? initialPath}) async {
     final oldPath = node.fullName;
     if (oldPath == null) return;
@@ -547,8 +546,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           margin: const EdgeInsets.all(4),
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color:
-                highlighted ? accent.withValues(alpha: 0.3) : Colors.transparent,
+            color: highlighted
+                ? accent.withValues(alpha: 0.3)
+                : Colors.transparent,
             border: Border.all(color: highlighted ? accent : Colors.grey),
             borderRadius: BorderRadius.circular(4),
           ),
@@ -719,6 +719,31 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   // --- Context menu ---
 
+  /// Marks `namespacePath` and all of its ancestor prefixes as expanded so the
+  /// folder is open after the tree rebuilds. `_restoreExpansionState` reads
+  /// `_expandedNamespaces` on the next `_updateTree`, which is triggered by the
+  /// model's `notifyListeners` once the new item is created.
+  void _markNamespaceExpanded(String namespacePath) {
+    if (namespacePath.isEmpty) return;
+    final segments = getSegments(namespacePath);
+    for (int i = 1; i <= segments.length; i++) {
+      _expandedNamespaces.add(segments.sublist(0, i).join('.'));
+    }
+  }
+
+  /// Creates a new node network or record def inside the folder `node` (a
+  /// namespace). The simple name is auto-generated to be unique; the user can
+  /// rename it afterwards. The folder is expanded so the new item is visible.
+  void _handleAddInFolder(_NodeNetworkTreeNode node, {required bool isRecord}) {
+    final namespace = node.fullName ?? '';
+    _markNamespaceExpanded(namespace);
+    if (isRecord) {
+      widget.model.addNewRecordTypeDefInNamespace(namespace);
+    } else {
+      widget.model.addNewNodeNetworkInNamespace(namespace);
+    }
+  }
+
   void _showContextMenu(
     BuildContext context,
     _NodeNetworkTreeNode node,
@@ -737,6 +762,20 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         node.fullName != null && widget.model.isCliWriteLocked(node.fullName!);
 
     final items = <PopupMenuEntry<String>>[
+      // Folders offer targeted creation: a new network/record def created here
+      // lands inside this folder rather than at the root (the action-bar
+      // buttons stay root-scoped). See issue on tree-view UX.
+      if (!node.isLeaf) ...[
+        const PopupMenuItem(
+          value: 'add_network_here',
+          child: Text('Add node network'),
+        ),
+        const PopupMenuItem(
+          value: 'add_record_here',
+          child: Text('Add record'),
+        ),
+        const PopupMenuDivider(),
+      ],
       const PopupMenuItem(
         value: 'rename',
         child: Text('Rename'),
@@ -766,7 +805,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       items: items,
     ).then((value) {
       if (!context.mounted) return;
-      if (value == 'rename') {
+      if (value == 'add_network_here') {
+        _handleAddInFolder(node, isRecord: false);
+      } else if (value == 'add_record_here') {
+        _handleAddInFolder(node, isRecord: true);
+      } else if (value == 'rename') {
         _startRenaming(node);
       } else if (value == 'move') {
         _handleMove(context, node);

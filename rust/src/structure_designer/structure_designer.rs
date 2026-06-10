@@ -1303,14 +1303,29 @@ impl StructureDesigner {
     /// (the registry is a HashMap, so callers cannot reliably recover the new
     /// name by inspecting list order — see issue #315).
     pub fn add_new_node_network(&mut self) -> String {
+        self.add_new_node_network_in_namespace("")
+    }
+
+    /// Like [`add_new_node_network`] but places the new network under the given
+    /// `namespace` (a dot-delimited prefix, e.g. `"Physics.Mechanics"`). An
+    /// empty namespace creates the network at the root. The simple name is
+    /// auto-generated to be unique across the whole user-type namespace.
+    pub fn add_new_node_network_in_namespace(&mut self, namespace: &str) -> String {
         // Generate a unique name. Skip any name already taken anywhere in the
         // user-type namespace (networks, user record defs, built-in record
         // defs, built-in node types) so the auto-generated name is never a
         // collision.
-        let mut name = "UNTITLED".to_string();
+        let qualify = |simple: &str| -> String {
+            if namespace.is_empty() {
+                simple.to_string()
+            } else {
+                format!("{}.{}", namespace, simple)
+            }
+        };
+        let mut name = qualify("UNTITLED");
         let mut i = 1;
         while self.node_type_registry.name_is_taken(&name) {
-            name = format!("UNTITLED{}", i);
+            name = qualify(&format!("UNTITLED{}", i));
             i += 1;
         }
 
@@ -1915,6 +1930,36 @@ impl StructureDesigner {
             super::undo::commands::add_record_type_def::AddRecordTypeDefCommand { def: def_clone },
         );
         Ok(())
+    }
+
+    /// Adds a new empty record type def under the given `namespace` (a
+    /// dot-delimited prefix, e.g. `"Physics"`). An empty namespace creates the
+    /// def at the root. The simple name is auto-generated to be unique across
+    /// the whole user-type namespace. Returns the generated qualified name.
+    pub fn add_new_record_type_def_in_namespace(
+        &mut self,
+        namespace: &str,
+    ) -> Result<String, super::node_type_registry::RecordTypeDefError> {
+        let qualify = |simple: &str| -> String {
+            if namespace.is_empty() {
+                simple.to_string()
+            } else {
+                format!("{}.{}", namespace, simple)
+            }
+        };
+        let mut name = qualify("UNTITLED");
+        let mut i = 1;
+        while self.node_type_registry.name_is_taken(&name) {
+            name = qualify(&format!("UNTITLED{}", i));
+            i += 1;
+        }
+
+        let def = super::node_type_registry::RecordTypeDef {
+            name: name.clone(),
+            fields: Vec::new(),
+        };
+        self.add_record_type_def(def)?;
+        Ok(name)
     }
 
     /// Delete a record type def. Snapshots every network beforehand so undo

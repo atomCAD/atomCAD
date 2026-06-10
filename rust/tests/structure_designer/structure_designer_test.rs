@@ -830,3 +830,65 @@ fn test_add_new_node_network_returns_created_name() {
             .contains_key(&second)
     );
 }
+
+// Creating a network into a namespace qualifies the auto-generated name with
+// the folder path and the network exists under that qualified name.
+#[test]
+fn test_add_new_node_network_in_namespace() {
+    let mut designer = StructureDesigner::new();
+
+    let name = designer.add_new_node_network_in_namespace("Physics.Mechanics");
+    assert_eq!(name, "Physics.Mechanics.UNTITLED");
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&name),
+        "qualified network must exist"
+    );
+
+    // A second call into the same namespace must not collide.
+    let second = designer.add_new_node_network_in_namespace("Physics.Mechanics");
+    assert_ne!(name, second);
+    assert!(second.starts_with("Physics.Mechanics."));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&second)
+    );
+
+    // An empty namespace behaves like the root creator.
+    let root = designer.add_new_node_network_in_namespace("");
+    assert!(!root.contains('.'));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&root)
+    );
+}
+
+// The unique-name search spans the whole user-type namespace: a network and a
+// record def created into the same folder must not share a simple name.
+#[test]
+fn test_add_new_record_type_def_in_namespace_avoids_network_collision() {
+    let mut designer = StructureDesigner::new();
+
+    let net = designer.add_new_node_network_in_namespace("NS");
+    assert_eq!(net, "NS.UNTITLED");
+
+    let def = designer
+        .add_new_record_type_def_in_namespace("NS")
+        .expect("record def creation should succeed");
+    // Must dodge the network's "NS.UNTITLED".
+    assert_ne!(def, net);
+    assert!(def.starts_with("NS."));
+    assert!(
+        designer
+            .node_type_registry
+            .record_type_defs
+            .contains_key(&def),
+        "qualified record def must exist"
+    );
+}
