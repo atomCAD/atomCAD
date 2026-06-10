@@ -1612,10 +1612,14 @@ fn validation_hof_f_connected_suspends_zone_output_rule() {
 }
 
 /// Check 2: a `closure` node whose `result` zone-output pin has no incoming
-/// wire is invalid — the closure doesn't deliver its result. (The closure has
-/// no `f` *input* pin, so the suspension above never applies to it.)
+/// wire surfaces a validation error — but a *non-blocking* one. The runtime
+/// already turns the missing wire into a localized `NetworkResult::Error` when
+/// the closure is consumed, so an unconsumed/independent closure must not flip
+/// the network invalid (that would blank unrelated viewport output). The error
+/// is still pushed so the node lights up with a badge. (The closure has no `f`
+/// *input* pin, so the suspension above never applies to it.)
 #[test]
-fn validation_closure_body_incomplete_rejected() {
+fn validation_closure_body_incomplete_is_nonblocking() {
     let mut designer = setup_designer_with_network("main");
 
     let closure_id = designer.add_node("closure", DVec2::new(150.0, 0.0));
@@ -1634,13 +1638,18 @@ fn validation_closure_body_incomplete_rejected() {
     // wire.
 
     let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
-    assert!(!valid, "a closure with no zone-output wire must be invalid");
+    assert!(
+        valid,
+        "a closure with no zone-output wire must NOT invalidate the network \
+         (the error is non-blocking); got errors: {:?}",
+        errors
+    );
     assert!(
         errors.iter().any(|e| {
             let l = e.to_lowercase();
             l.contains("zone-output") && l.contains("no incoming wire")
         }),
-        "expected a missing-zone-output-wire error on the closure; got: {:?}",
+        "expected a missing-zone-output-wire error (badge) on the closure; got: {:?}",
         errors
     );
 }

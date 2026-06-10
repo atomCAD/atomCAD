@@ -5390,20 +5390,21 @@ impl StructureDesigner {
 
         // Collect nodes that will need to be marked as dirty after deletion
         let mut dirty_nodes = HashSet::new();
-        // If the network is already invalid, the deletion may have removed the
-        // node or wire that caused the error (e.g. a `closure`/HOF whose zone
-        // body had no zone-output wire). The targeted `should_validate`
-        // heuristics below only catch parameter / invalid-network-reference /
-        // function-pin cases, so without this an invalidating node could be
-        // deleted while `network.valid` stays `false` forever — `generate_scene`
-        // would then keep suppressing all viewport output. Re-validate whenever
-        // we start from an invalid state so validity (and the Full refresh wired
-        // into `validate_active_network`) can recover.
+        // If the network already carries validation errors, the deletion may
+        // have removed the node or wire that caused one (e.g. a `closure`/HOF
+        // whose zone body had no zone-output wire). The targeted
+        // `should_validate` heuristics below only catch parameter /
+        // invalid-network-reference / function-pin cases, so without this a
+        // stale error could survive the deletion of its offending node. We key
+        // off `validation_errors` (not just `!valid`) so this also clears
+        // *non-blocking* errors (`ValidationError::warning`) — those keep
+        // `network.valid == true`, so a `!valid` check would miss them and the
+        // stale badge/entry would linger until the next unrelated edit.
         let mut should_validate = self
             .node_type_registry
             .node_networks
             .get(&node_network_name)
-            .map(|network| !network.valid)
+            .map(|network| !network.validation_errors.is_empty())
             .unwrap_or(false);
 
         if let Some(node_network) = self

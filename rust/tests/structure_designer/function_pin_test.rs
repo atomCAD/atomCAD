@@ -915,12 +915,15 @@ fn connecting_f_pin_revalidates_and_clears_stale_zone_output_error() {
 
     designer.connect_nodes(range_id, 0, map_id, 0); // xs
 
-    // Before `f`: the empty inline body trips the zone-output rule.
+    // Before `f`: the empty inline body trips the zone-output rule. The error
+    // is non-blocking (the network stays valid), so the discriminating signal
+    // is the *error text*, not the validity flag.
     designer.validate_active_network();
     let (valid_before, errors_before) = read_validity(&designer, "main");
     assert!(
-        !valid_before,
-        "an empty-body map should be invalid before `f` is wired; got {errors_before:?}"
+        valid_before,
+        "the zone-output error is non-blocking, so the network stays valid \
+         before `f` is wired; got {errors_before:?}"
     );
     assert!(
         errors_before.iter().any(|e| {
@@ -937,7 +940,17 @@ fn connecting_f_pin_revalidates_and_clears_stale_zone_output_error() {
     let (valid_after, errors_after) = read_validity(&designer, "main");
     assert!(
         valid_after,
-        "connecting `f` must re-validate and clear the stale zone-output error; got {errors_after:?}"
+        "map with `f` wired and an empty body must be valid; got {errors_after:?}"
+    );
+    // The discriminating check that `connect_nodes` actually re-validated: the
+    // zone-output error must be gone now that the wired `f` suspends the rule.
+    // Before the fix the stale error lingered in the editor.
+    assert!(
+        !errors_after.iter().any(|e| {
+            let l = e.to_lowercase();
+            l.contains("zone-output") && l.contains("no incoming wire")
+        }),
+        "connecting `f` must clear the stale zone-output error; got {errors_after:?}"
     );
 }
 
@@ -945,7 +958,9 @@ fn connecting_f_pin_revalidates_and_clears_stale_zone_output_error() {
 /// with an empty inline body must re-validate so the zone-output rule fires
 /// again. The wire-deletion branch of `delete_selected` skips validation for
 /// ordinary value wires, but a function wire (here, a `-1` source feeding `f`)
-/// requests a re-validate so the network doesn't stay wrongly marked valid.
+/// requests a re-validate so the zone-output error (badge) is restored on the
+/// HOF — the error is non-blocking, so the discriminator is its text, not the
+/// `valid` flag.
 #[test]
 fn disconnecting_f_pin_revalidates_and_restores_zone_output_error() {
     let mut designer = setup_designer_with_network("main");
@@ -983,17 +998,21 @@ fn disconnecting_f_pin_revalidates_and_restores_zone_output_error() {
     }
     designer.delete_selected();
 
+    // Disconnecting `f` must re-validate and restore the (non-blocking)
+    // zone-output error. Validity stays true — the discriminating signal is the
+    // restored error text.
     let (valid_after, errors_after) = read_validity(&designer, "main");
     assert!(
-        !valid_after,
-        "disconnecting `f` must re-validate and restore the zone-output error"
+        valid_after,
+        "the restored zone-output error is non-blocking, so validity stays true; \
+         got {errors_after:?}"
     );
     assert!(
         errors_after.iter().any(|e| {
             let l = e.to_lowercase();
             l.contains("zone-output") && l.contains("no incoming wire")
         }),
-        "expected the zone-output rule error after disconnecting `f`; got {errors_after:?}"
+        "expected the zone-output rule error restored after disconnecting `f`; got {errors_after:?}"
     );
 }
 

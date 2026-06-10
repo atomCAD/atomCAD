@@ -48,13 +48,46 @@ impl NodeDisplayState {
 pub struct ValidationError {
     pub error_text: String,
     pub node_id: Option<u64>,
+    /// Whether this error blocks evaluation of the whole network. A blocking
+    /// error flips `NodeNetwork::valid`, so `generate_scene` refuses to
+    /// evaluate the network and the viewport goes blank. A non-blocking error
+    /// (`blocking == false`) still surfaces as a node badge but leaves `valid`
+    /// untouched, so unrelated/upstream nodes keep evaluating and displaying.
+    ///
+    /// Non-blocking is used for conditions the evaluator already turns into a
+    /// localized `NetworkResult::Error` (e.g. an unconnected zone-output pin on
+    /// an independent HOF/closure): the runtime poisons only that node's output
+    /// and its downstream cone, so there is no reason to blank the whole scene.
+    ///
+    /// Defaults to blocking when missing from older serialized errors.
+    #[serde(default = "default_blocking")]
+    pub blocking: bool,
+}
+
+fn default_blocking() -> bool {
+    true
 }
 
 impl ValidationError {
+    /// A blocking validation error: flips the network's `valid` flag, so the
+    /// whole network refuses to evaluate.
     pub fn new(error_text: String, node_id: Option<u64>) -> Self {
         Self {
             error_text,
             node_id,
+            blocking: true,
+        }
+    }
+
+    /// A non-blocking validation error: surfaces as a node badge but does not
+    /// flip the network's `valid` flag, so the rest of the network still
+    /// evaluates. Use only for conditions the runtime already localizes into a
+    /// `NetworkResult::Error` (see the `blocking` field docs).
+    pub fn warning(error_text: String, node_id: Option<u64>) -> Self {
+        Self {
+            error_text,
+            node_id,
+            blocking: false,
         }
     }
 }

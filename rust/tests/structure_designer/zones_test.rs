@@ -2082,9 +2082,11 @@ fn collect_all_errors(
     out
 }
 
-/// Rule 1: a `map` whose `result` zone-output pin has no incoming wire is
-/// invalid after validation, and the validation error mentions the missing
-/// zone-output wire.
+/// Rule 1: a `map` whose `result` zone-output pin has no incoming wire reports
+/// a validation error mentioning the missing wire — but a *non-blocking* one,
+/// so the network stays valid. The runtime localizes the missing wire into a
+/// `NetworkResult::Error` for the map (and its downstream cone); unrelated
+/// nodes must keep displaying, so this never flips `network.valid`.
 #[test]
 fn validation_rule1_zone_output_pin_missing_wire() {
     let mut designer = setup_designer_with_network("main");
@@ -2114,11 +2116,12 @@ fn validation_rule1_zone_output_pin_missing_wire() {
     designer.connect_nodes(range_id, 0, map_id, 0);
 
     // No body wiring — the map's `result` zone-output pin has no incoming
-    // wire. Validation should report rule 1 violation.
+    // wire. Validation should report rule 1 as a non-blocking error.
     let (valid, errors) = validate_and_get_errors(&mut designer, "main");
     assert!(
-        !valid,
-        "Network should be invalid (missing zone-output wire)"
+        valid,
+        "Network should stay valid (missing zone-output wire is non-blocking); got: {:?}",
+        errors
     );
     assert!(
         errors
@@ -2130,45 +2133,58 @@ fn validation_rule1_zone_output_pin_missing_wire() {
     );
 }
 
-/// Adding a zone-bearing node (here a `closure`) must validate immediately:
-/// its empty body has a zone-output pin with no incoming wire, so the network
-/// flips invalid the moment the node is created — without waiting for a later
-/// edit. Regression test for the "different error message" half of the closure
-/// refresh bug (an unvalidated closure surfaced only the eval-time hover
-/// message, not the canonical validation error).
+/// Adding a zone-bearing node (here a `closure`) must validate immediately so
+/// its badge appears at once — but the empty body's missing zone-output wire is
+/// a *non-blocking* error, so the network stays valid. Regression test for the
+/// "different error message" half of the closure refresh bug (an unvalidated
+/// closure surfaced only the eval-time hover message, not the canonical
+/// validation error), now also asserting the error doesn't blank the network.
 #[test]
-fn adding_closure_node_validates_and_marks_full_refresh() {
+fn adding_closure_node_validates_with_nonblocking_error() {
     let mut designer = setup_designer_with_network("main");
 
     let closure_id = designer.add_node("closure", DVec2::new(0.0, 0.0));
     assert!(closure_id != 0, "closure node should have been created");
 
+    // No explicit validate_active_network() — `add_node` must validate so the
+    // badge is present immediately (not only on eval-hover).
     let network = designer
         .node_type_registry
         .node_networks
         .get("main")
         .unwrap();
     assert!(
-        !network.valid,
-        "Adding an empty `closure` should immediately invalidate the network"
+        network.valid,
+        "An empty `closure` must NOT invalidate the network (its missing \
+         zone-output wire is a non-blocking error)"
     );
-
-    // A valid⇄invalid flip must upgrade the pending refresh to Full so every
-    // displayed node re-evaluates (and blanks) — not just the new node.
+    let badge = network
+        .validation_errors
+        .iter()
+        .find(|e| e.node_id == Some(closure_id));
     assert!(
-        designer.get_pending_changes().is_full(),
-        "Validity change should mark a Full refresh"
+        badge.is_some(),
+        "Adding an empty `closure` should immediately surface a (non-blocking) \
+         validation error on the closure node; errors: {:?}",
+        network
+            .validation_errors
+            .iter()
+            .map(|e| (e.node_id, e.error_text.clone()))
+            .collect::<Vec<_>>(),
+    );
+    assert!(
+        !badge.unwrap().blocking,
+        "the missing zone-output-wire error must be non-blocking"
     );
 }
 
-/// Core regression test for the closure refresh bug: deleting the node that
-/// caused a validation error must re-validate the network so it recovers, and
-/// the recovery must mark a Full refresh so suppressed viewport output returns.
-/// Before the fix, `delete_selected` skipped validation for a `closure` (not a
-/// parameter / invalid-network reference), so `network.valid` stayed `false`
-/// forever and the viewport never came back.
+/// Headline regression for the closure-blanks-the-viewport complaint: an
+/// independent `int` node must keep displaying even while an *incomplete*
+/// closure (empty body, unwired zone-output) exists in the same network. The
+/// closure's error is non-blocking, so `network.valid` stays true the whole
+/// time and the viewport never goes dark; deleting the closure leaves it valid.
 #[test]
-fn deleting_offending_closure_node_recovers_validity() {
+fn independent_incomplete_closure_does_not_block_other_nodes() {
     let mut designer = setup_designer_with_network("main");
 
     // A plain value node that should display fine on its own.
@@ -2180,20 +2196,21 @@ fn deleting_offending_closure_node_recovers_validity() {
         Box::new(IntData { value: 7 }),
     );
 
-    // Adding an empty closure invalidates the network (validated on add).
+    // Adding an empty closure must NOT invalidate the network — the int is
+    // independent of it and must keep displaying.
     let closure_id = designer.add_node("closure", DVec2::new(200.0, 0.0));
     assert!(closure_id != 0, "closure node should have been created");
     assert!(
-        !designer
+        designer
             .node_type_registry
             .node_networks
             .get("main")
             .unwrap()
             .valid,
-        "Network should be invalid while the empty closure exists"
+        "Network must stay valid while an independent incomplete closure exists"
     );
 
-    // Delete the offending closure node.
+    // Delete the incomplete closure node.
     designer.add_node_to_selection(closure_id);
     designer.delete_selected();
 
@@ -2208,11 +2225,16 @@ fn deleting_offending_closure_node_recovers_validity() {
     );
     assert!(
         network.valid,
-        "Deleting the offending closure should re-validate the network back to valid"
+        "Network stays valid after deleting the closure"
     );
     assert!(
-        designer.get_pending_changes().is_full(),
-        "Recovering validity should mark a Full refresh so suppressed output returns"
+        network.validation_errors.is_empty(),
+        "no validation errors should remain after deleting the closure; got: {:?}",
+        network
+            .validation_errors
+            .iter()
+            .map(|e| (e.node_id, e.error_text.clone()))
+            .collect::<Vec<_>>(),
     );
 }
 

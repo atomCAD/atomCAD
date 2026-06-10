@@ -758,8 +758,18 @@ fn validate_zones_recursive(
                     .map(|arg| !arg.incoming_wires.is_empty())
                     .unwrap_or(false);
                 if !has_wire {
-                    ok = false;
-                    network.validation_errors.push(ValidationError::new(
+                    // Non-blocking (does NOT set `ok = false`): the evaluator
+                    // already turns a missing zone-output wire into a localized
+                    // `NetworkResult::Error` (`zone_closure::build_inline_closure`),
+                    // so an independent HOF/closure with an unwired body should
+                    // not blank the whole viewport. We still push the error so
+                    // the node lights up with a badge — but because the runtime
+                    // poisons only this node and its downstream cone, the rest of
+                    // the network stays evaluable. When the closure is actually
+                    // consumed, the consumer goes dark via normal error
+                    // propagation. (closures `doc/design_closures.md`
+                    // §"Validation" check 1 / check 2.)
+                    network.validation_errors.push(ValidationError::warning(
                         format!("Zone-output pin '{}' has no incoming wire", pin.name),
                         Some(node_id),
                     ));
