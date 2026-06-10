@@ -827,6 +827,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         value: 'move',
         child: Text('Move / rename…'),
       ),
+      // Duplicate is network-only: it creates a shallow copy (inline zone
+      // bodies copied, references to other networks kept as references) under
+      // an auto-generated unique name. Not offered for record defs or folders.
+      if (node.isLeaf && node.leafKind == _LeafKind.network)
+        const PopupMenuItem(
+          value: 'duplicate',
+          child: Text('Duplicate'),
+        ),
       const PopupMenuItem(
         value: 'delete',
         child: Text('Delete'),
@@ -854,6 +862,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         _startRenaming(node);
       } else if (value == 'move') {
         _handleMove(context, node);
+      } else if (value == 'duplicate' && node.fullName != null) {
+        widget.model.duplicateNodeNetwork(node.fullName!);
       } else if (value == 'delete') {
         _handleDelete(context, node);
       } else if (value == 'toggle_cli_access' && node.fullName != null) {

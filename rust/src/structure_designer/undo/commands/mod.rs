@@ -13,6 +13,7 @@ pub mod delete_network;
 pub mod delete_nodes;
 pub mod delete_record_type_def;
 pub mod delete_wires;
+pub mod duplicate_network;
 pub mod duplicate_node;
 pub mod edit_zone_body;
 pub mod extract_closure_body;

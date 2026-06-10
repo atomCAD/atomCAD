@@ -1285,6 +1285,24 @@ class StructureDesignerModel extends ChangeNotifier {
     }
   }
 
+  /// Duplicate the node network [sourceName] under an auto-generated unique
+  /// name (`<name>_copy`, then `<name>_copy_2`, …). The copy is shallow: inline
+  /// zone bodies are copied, while references to other named networks stay
+  /// references. The backend activates the new copy. Returns null on success or
+  /// an error message on failure.
+  String? duplicateNodeNetwork(String sourceName) {
+    final result = structure_designer_api.duplicateNodeNetwork(
+      sourceName: sourceName,
+    );
+    if (result.success) {
+      // The backend already activated the copy; refresh picks it up as the
+      // active network view and reloads the network list.
+      refreshFromKernel();
+      return null;
+    }
+    return result.errorMessage;
+  }
+
   bool renameNamespace(String oldPrefix, String newPrefix) {
     final success = structure_designer_api.renameNamespace(
       oldPrefix: oldPrefix,

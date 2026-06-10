@@ -1852,6 +1852,98 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// Duplicate a named node network under a fresh unique name and return that
+    /// name. The new network becomes the active network. Pushes an undo command.
+    ///
+    /// This is a **shallow** duplicate: the network's own content is copied,
+    /// including every inline HOF / closure zone body (recursively — bodies are
+    /// owned `Node.zone` networks that travel with the snapshot). References to
+    /// *other* named custom networks are kept as references (by `node_type_name`)
+    /// and are **not** themselves duplicated. Both behaviors fall out of the
+    /// serialize → deserialize round-trip with no special handling.
+    pub fn duplicate_node_network(&mut self, source_name: &str) -> Result<String, String> {
+        use super::serialization::node_networks_serialization::serializable_to_node_network;
+
+        if !self
+            .node_type_registry
+            .node_networks
+            .contains_key(source_name)
+        {
+            return Err(format!("Node network '{}' does not exist", source_name));
+        }
+
+        // Snapshot the source network.
+        let snapshot = self
+            .snapshot_network(source_name)
+            .ok_or_else(|| format!("Failed to snapshot network '{}'", source_name))?;
+
+        // Pick a unique name for the copy (kept in the source's namespace).
+        let new_name = self.generate_unique_copy_name(source_name);
+
+        // Deserialize a fresh copy and give it the new name (the registry keys
+        // on `node_type.name`, so the internal name must match the key).
+        let mut network = serializable_to_node_network(
+            &snapshot,
+            &self.node_type_registry.built_in_node_types,
+            None,
+        )
+        .map_err(|e| format!("Failed to duplicate network: {}", e))?;
+        network.node_type.name = new_name.clone();
+
+        // Repopulate per-node custom-type caches (incl. nodes inside zone
+        // bodies), mirroring `FactorSelectionCommand::restore_network`.
+        self.node_type_registry
+            .initialize_custom_node_types_for_network(&mut network);
+
+        let previous_active_network = self.active_node_network_name.clone();
+        let pruned_folders = self.node_type_registry.ancestor_folders_present(&new_name);
+
+        self.node_type_registry.add_node_network(network);
+
+        // Snapshot the freshly added (renamed) network for the undo command, so
+        // redo restores it under the correct name.
+        let copy_snapshot = self
+            .snapshot_network(&new_name)
+            .ok_or_else(|| format!("Failed to snapshot duplicated network '{}'", new_name))?;
+
+        // The API layer activates the new copy (so it can apply camera
+        // settings); the undo command captures the active switch on redo/undo.
+
+        self.set_dirty(true);
+        self.mark_full_refresh();
+
+        self.push_command(
+            super::undo::commands::duplicate_network::DuplicateNetworkCommand {
+                network_name: new_name.clone(),
+                network_snapshot: copy_snapshot,
+                previous_active_network,
+                pruned_folders,
+            },
+        );
+
+        Ok(new_name)
+    }
+
+    /// Generate a unique name for a duplicate of `source_name`: `<source>_copy`,
+    /// then `<source>_copy_2`, `<source>_copy_3`, … Collisions are checked
+    /// against the whole user-type namespace via `name_is_taken`. Because the
+    /// suffix is appended to the full dotted name, the copy stays in the source's
+    /// folder/namespace.
+    fn generate_unique_copy_name(&self, source_name: &str) -> String {
+        let first = format!("{}_copy", source_name);
+        if !self.node_type_registry.name_is_taken(&first) {
+            return first;
+        }
+        let mut counter = 2;
+        loop {
+            let name = format!("{}_copy_{}", source_name, counter);
+            if !self.node_type_registry.name_is_taken(&name) {
+                return name;
+            }
+            counter += 1;
+        }
+    }
+
     /// Read-only check that no entity *outside* the deleted set references any
     /// record in `target_records` via `RecordType::Named`. A surviving entity is
     /// a network whose name is not in `deleted_networks`, or a user record def

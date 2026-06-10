@@ -1086,6 +1086,130 @@ fn undo_delete_network_roundtrip() {
 }
 
 #[test]
+fn duplicate_network_creates_copy_with_contents() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Build a source network with content.
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    designer.set_return_node_id(Some(sphere_id));
+    designer.add_node("float", DVec2::new(200.0, 0.0));
+
+    let new_name = designer.duplicate_node_network("helper").unwrap();
+    assert_eq!(new_name, "helper_copy");
+
+    // Source is untouched; copy exists with the same number of nodes.
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("helper")
+    );
+    let original_count = designer
+        .node_type_registry
+        .node_networks
+        .get("helper")
+        .unwrap()
+        .nodes
+        .len();
+    let copy = designer
+        .node_type_registry
+        .node_networks
+        .get("helper_copy")
+        .unwrap();
+    assert_eq!(copy.nodes.len(), original_count);
+    // The copy's internal name matches its registry key.
+    assert_eq!(copy.node_type.name, "helper_copy");
+}
+
+#[test]
+fn duplicate_network_generates_unique_names() {
+    let mut designer = setup_designer_with_network("main");
+    designer.add_node_network("helper");
+
+    let first = designer.duplicate_node_network("helper").unwrap();
+    assert_eq!(first, "helper_copy");
+    let second = designer.duplicate_node_network("helper").unwrap();
+    assert_eq!(second, "helper_copy_2");
+    let third = designer.duplicate_node_network("helper").unwrap();
+    assert_eq!(third, "helper_copy_3");
+}
+
+#[test]
+fn duplicate_network_stays_in_namespace() {
+    let mut designer = setup_designer_with_network("main");
+    designer.add_node_network("Lib.Tools.Widget");
+
+    let copy = designer.duplicate_node_network("Lib.Tools.Widget").unwrap();
+    assert_eq!(copy, "Lib.Tools.Widget_copy");
+}
+
+#[test]
+fn duplicate_network_missing_source_errors() {
+    let mut designer = setup_designer_with_network("main");
+    assert!(designer.duplicate_node_network("nonexistent").is_err());
+}
+
+#[test]
+fn undo_duplicate_network_roundtrip() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Create and populate a network to duplicate.
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    designer.add_node("sphere", DVec2::ZERO);
+    designer.add_node("float", DVec2::new(200.0, 0.0));
+    designer.set_active_node_network_name(Some("main".to_string()));
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.duplicate_node_network("helper").unwrap();
+    });
+}
+
+#[test]
+fn undo_duplicate_network_removes_copy() {
+    let mut designer = setup_designer_with_network("main");
+    designer.add_node_network("helper");
+    designer.set_active_node_network_name(Some("helper".to_string()));
+    designer.add_node("sphere", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    let new_name = designer.duplicate_node_network("helper").unwrap();
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&new_name)
+    );
+
+    // Undo removes the copy and leaves the source.
+    assert!(designer.undo());
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&new_name)
+    );
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key("helper")
+    );
+
+    // Redo re-creates the copy.
+    assert!(designer.redo());
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .contains_key(&new_name)
+    );
+}
+
+#[test]
 fn undo_rename_network() {
     let mut designer = setup_designer_with_network("alpha");
     designer.undo_stack.clear();

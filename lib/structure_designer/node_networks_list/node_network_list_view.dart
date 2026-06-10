@@ -122,6 +122,14 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                       value: 'rename',
                       child: Text('Rename'),
                     ),
+                    // Duplicate is network-only: a shallow copy (inline zone
+                    // bodies copied, references to other networks kept as
+                    // references) under an auto-generated unique name.
+                    if (entry.kind == _UserTypeKind.network)
+                      const PopupMenuItem(
+                        value: 'duplicate',
+                        child: Text('Duplicate'),
+                      ),
                     const PopupMenuItem(
                       value: 'delete',
                       child: Text('Delete'),
@@ -130,6 +138,8 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                 ).then((value) {
                   if (value == 'rename') {
                     _startRenaming(entryName, entry.kind);
+                  } else if (value == 'duplicate') {
+                    widget.model.duplicateNodeNetwork(entryName);
                   } else if (value == 'delete') {
                     _handleDelete(context, entryName, entry.kind);
                   }

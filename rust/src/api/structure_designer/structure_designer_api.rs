@@ -1845,6 +1845,45 @@ pub fn delete_node_network(network_name: &str) -> APIResult {
     }
 }
 
+/// Duplicate a named node network under a fresh unique name (`<name>_copy`,
+/// then `<name>_copy_2`, …). The copy is a shallow duplicate: inline zone
+/// bodies are copied; references to other named networks stay references.
+/// Auto-activates the new copy. Returns success/error.
+#[flutter_rust_bridge::frb(sync)]
+pub fn duplicate_node_network(source_name: &str) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| match instance
+                .structure_designer
+                .duplicate_node_network(source_name)
+            {
+                Ok(new_name) => {
+                    let camera_settings = instance
+                        .structure_designer
+                        .set_active_node_network_name(Some(new_name));
+                    apply_camera_settings(&mut instance.renderer, camera_settings.as_ref());
+                    refresh_structure_designer_auto(instance);
+                    APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    }
+                }
+                Err(e) => {
+                    refresh_structure_designer_auto(instance);
+                    APIResult {
+                        success: false,
+                        error_message: e,
+                    }
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn rename_namespace(old_prefix: &str, new_prefix: &str) -> bool {
     unsafe {

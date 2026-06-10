@@ -361,6 +361,15 @@ APIResult deleteNodeNetwork({required String networkName}) =>
         .crateApiStructureDesignerStructureDesignerApiDeleteNodeNetwork(
             networkName: networkName);
 
+/// Duplicate a named node network under a fresh unique name (`<name>_copy`,
+/// then `<name>_copy_2`, …). The copy is a shallow duplicate: inline zone
+/// bodies are copied; references to other named networks stay references.
+/// Auto-activates the new copy. Returns success/error.
+APIResult duplicateNodeNetwork({required String sourceName}) => RustLib
+    .instance.api
+    .crateApiStructureDesignerStructureDesignerApiDuplicateNodeNetwork(
+        sourceName: sourceName);
+
 bool renameNamespace({required String oldPrefix, required String newPrefix}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiRenameNamespace(
