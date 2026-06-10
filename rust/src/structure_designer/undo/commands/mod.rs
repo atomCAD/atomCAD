@@ -1,3 +1,4 @@
+pub mod add_folder;
 pub mod add_network;
 pub mod add_node;
 pub mod add_record_type_def;

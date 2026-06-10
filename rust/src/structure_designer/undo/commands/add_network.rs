@@ -6,6 +6,10 @@ pub struct AddNetworkCommand {
     pub network_name: String,
     /// The active network before this one was added (restored on undo)
     pub previous_active_network: Option<String>,
+    /// Ancestor empty-folder markers absorbed (pruned) when this network was
+    /// created; restored on undo so the empty folder it filled reappears.
+    /// See `doc/design_empty_folders.md`.
+    pub pruned_folders: Vec<String>,
 }
 
 impl UndoCommand for AddNetworkCommand {
@@ -18,6 +22,11 @@ impl UndoCommand for AddNetworkCommand {
         ctx.node_type_registry
             .node_networks
             .remove(&self.network_name);
+
+        // Restore any empty-folder markers this network's creation absorbed.
+        for f in &self.pruned_folders {
+            ctx.node_type_registry.folders.insert(f.clone());
+        }
 
         // Restore previous active network
         *ctx.active_network_name = self.previous_active_network.clone();

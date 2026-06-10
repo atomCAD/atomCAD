@@ -96,7 +96,7 @@ use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::SourcePin;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
 
 /// Top-level definition of a named record type. Lives in
@@ -159,6 +159,14 @@ pub struct NodeTypeRegistry {
     /// `name_is_taken` consult this map. See
     /// `doc/design_atom_replace_rules_input.md` Phase A.
     pub built_in_record_type_defs: HashMap<String, RecordTypeDef>,
+    /// Deliberately-created, currently-empty folder paths (dot-delimited, e.g.
+    /// `"Physics.Mechanics"`). Folders that contain entities are *derived* from
+    /// the entity names and are NOT stored here; this set only holds folders
+    /// that would otherwise have nothing to derive them. The invariant (only
+    /// leaf-most empty folders) is maintained by `prune_ancestor_folders` on
+    /// every entity/folder add. `BTreeSet` for deterministic serialization.
+    /// See `doc/design_empty_folders.md`.
+    pub folders: BTreeSet<String>,
     pub design_file_name: Option<String>,
 }
 
@@ -186,6 +194,7 @@ impl NodeTypeRegistry {
             node_networks: HashMap::new(),
             record_type_defs: HashMap::new(),
             built_in_record_type_defs: HashMap::new(),
+            folders: BTreeSet::new(),
             design_file_name: None,
         };
 
@@ -1070,19 +1079,91 @@ impl NodeTypeRegistry {
     }
 
     pub fn add_node_network(&mut self, node_network: NodeNetwork) {
-        self.node_networks
-            .insert(node_network.node_type.name.clone(), node_network);
+        let name = node_network.node_type.name.clone();
+        // A new entity gives its ancestor folders content, so they stop being
+        // tracked empty-folder markers (doc/design_empty_folders.md).
+        self.prune_ancestor_folders(&name);
+        self.node_networks.insert(name, node_network);
     }
 
     /// True iff `name` is in use by a user record type def, a built-in record
-    /// type def, a custom node network, or a built-in node type. Used as the
-    /// namespace-collision check before adding or renaming a user-defined
-    /// type.
+    /// type def, a custom node network, a built-in node type, or an empty
+    /// folder marker. Used as the namespace-collision check before adding or
+    /// renaming a user-defined type (or folder).
     pub fn name_is_taken(&self, name: &str) -> bool {
         self.record_type_defs.contains_key(name)
             || self.built_in_record_type_defs.contains_key(name)
             || self.node_networks.contains_key(name)
             || self.built_in_node_types.contains_key(name)
+            || self.folders.contains(name)
+    }
+
+    // ---- Empty folders (doc/design_empty_folders.md) ----
+
+    /// Returns the strict-ancestor folder paths of `child_path` that are
+    /// currently tracked as empty-folder markers. E.g. for `"A.B.C"` it checks
+    /// `"A"` and `"A.B"` (never `"A.B.C"` itself).
+    pub fn ancestor_folders_present(&self, child_path: &str) -> Vec<String> {
+        let segments: Vec<&str> = child_path.split('.').collect();
+        let mut out = Vec::new();
+        for i in 1..segments.len() {
+            let prefix = segments[..i].join(".");
+            if self.folders.contains(&prefix) {
+                out.push(prefix);
+            }
+        }
+        out
+    }
+
+    /// Removes every ancestor empty-folder marker of `child_path`. Called when
+    /// any child (entity or subfolder) is created under those ancestors.
+    pub fn prune_ancestor_folders(&mut self, child_path: &str) {
+        for p in self.ancestor_folders_present(child_path) {
+            self.folders.remove(&p);
+        }
+    }
+
+    /// Adds an empty-folder marker. Prunes ancestor markers first (the new
+    /// folder gives them content). Errors if the path collides with any
+    /// existing user type or folder. The caller is responsible for capturing
+    /// the pruned ancestors (via `ancestor_folders_present` before the call)
+    /// for undo.
+    pub fn add_folder(&mut self, path: &str) -> Result<(), String> {
+        if self.name_is_taken(path) {
+            return Err(format!("Name '{}' is already taken", path));
+        }
+        self.prune_ancestor_folders(path);
+        self.folders.insert(path.to_string());
+        Ok(())
+    }
+
+    /// Sorted list of empty-folder marker paths (for the UI tree).
+    pub fn get_folder_names(&self) -> Vec<String> {
+        self.folders.iter().cloned().collect()
+    }
+
+    /// One-shot reconcile: drop any marker that is redundant because an entity
+    /// (or another marker) already lives at or under it. Run after `.cnnd` load
+    /// — defensive against hand-edited / out-of-order files; in normal
+    /// operation the saved set is already clean.
+    pub fn prune_redundant_folders(&mut self) {
+        let entity_names: Vec<String> = self
+            .node_networks
+            .keys()
+            .chain(self.record_type_defs.keys())
+            .cloned()
+            .collect();
+        let markers: Vec<String> = self.folders.iter().cloned().collect();
+        self.folders.retain(|m| {
+            let dotted = format!("{}.", m);
+            let entity_under = entity_names
+                .iter()
+                .any(|n| n == m || n.starts_with(&dotted));
+            let folder_under = markers
+                .iter()
+                .any(|other| other != m && other.starts_with(&dotted));
+            !(entity_under || folder_under)
+        });
     }
 
     /// Resolves a record type def by name, consulting user-declared defs first
@@ -1171,6 +1252,8 @@ impl NodeTypeRegistry {
         }
         validate_distinct_fields(&def.name, &def.fields)?;
         self.check_no_cycle(&def.name, &def.fields)?;
+        // A new entity gives its ancestor folders content (doc/design_empty_folders.md).
+        self.prune_ancestor_folders(&def.name);
         self.record_type_defs.insert(def.name.clone(), def);
         Ok(())
     }

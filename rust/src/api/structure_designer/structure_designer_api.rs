@@ -1239,6 +1239,26 @@ pub fn get_node_network_names() -> Option<Vec<String>> {
     }
 }
 
+/// Returns the deliberately-created empty-folder paths (sorted). The tree view
+/// merges these with the folders implied by entity names. See
+/// `doc/design_empty_folders.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_folder_names() -> Option<Vec<String>> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                Some(
+                    cad_instance
+                        .structure_designer
+                        .node_type_registry
+                        .get_folder_names(),
+                )
+            },
+            None,
+        )
+    }
+}
+
 /// Returns every **user-declared** record type def name in the project,
 /// sorted alphabetically. Used by the user-types panel so built-in defs are
 /// not listed there. Dropdowns (type selector, `record_construct` /
@@ -1932,6 +1952,35 @@ pub fn delete_namespace(prefix: &str) -> APIResult {
 
                 match result {
                     Ok(_) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// Create an empty folder at `path` (dot-delimited, e.g. `"Physics.Mechanics"`).
+/// Returns success/error (collision or invalid name). See
+/// `doc/design_empty_folders.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_folder(path: String) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |instance| {
+                let result = instance.structure_designer.add_folder(&path);
+                refresh_structure_designer_auto(instance);
+                match result {
+                    Ok(()) => APIResult {
                         success: true,
                         error_message: String::new(),
                     },

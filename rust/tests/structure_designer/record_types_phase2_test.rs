@@ -487,6 +487,7 @@ fn serialize_record_type_defs_emits_sorted_by_name() {
             v.sort_by(|a, b| a.name.cmp(&b.name));
             v
         },
+        folders: std::collections::BTreeSet::new(),
     };
     let json = serde_json::to_value(&container).unwrap();
     let arr = json["record_type_defs"].as_array().unwrap();
@@ -591,6 +592,7 @@ fn registry_snapshot(designer: &mut StructureDesigner) -> serde_json::Value {
         direct_editing_mode: false,
         cli_access_rules: std::collections::HashMap::new(),
         record_type_defs: defs,
+        folders: std::collections::BTreeSet::new(),
     };
     serde_json::to_value(&container).unwrap()
 }

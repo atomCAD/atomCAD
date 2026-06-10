@@ -214,6 +214,12 @@ pub struct SerializableNodeTypeRegistryNetworks {
     /// `doc/design_record_types.md` Phase 2.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub record_type_defs: Vec<RecordTypeDef>,
+    /// Deliberately-created, currently-empty folder paths. Backward-compat:
+    /// missing field deserializes to an empty set, so pre-folder `.cnnd` files
+    /// load unchanged; `BTreeSet` keeps the on-disk order deterministic. See
+    /// `doc/design_empty_folders.md`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub folders: std::collections::BTreeSet<String>,
 }
 
 /// Converts a NodeType to its serializable counterpart
@@ -733,6 +739,8 @@ pub fn save_node_networks_to_file(
         direct_editing_mode,
         cli_access_rules: cli_access_rules.clone(),
         record_type_defs,
+        // `BTreeSet` is already ordered, so the on-disk array is deterministic.
+        folders: registry.folders.clone(),
     };
 
     // Serialize to JSON
@@ -849,6 +857,9 @@ pub fn load_node_networks_from_file(
 
     registry.node_networks.clear();
     registry.record_type_defs.clear();
+    // Empty-folder markers (doc/design_empty_folders.md). Reconciled against the
+    // loaded entities after networks/records are in, below.
+    registry.folders = serializable_registry.folders;
 
     // Load record type defs first so any networks referencing them can resolve
     // schemas during validation. Defensive: a hand-edited file can carry a
@@ -904,6 +915,11 @@ pub fn load_node_networks_from_file(
 
         registry.node_networks.insert(name, network);
     }
+
+    // Drop any empty-folder marker that is redundant because an entity (or
+    // another marker) already lives at or under it — defensive against
+    // hand-edited / out-of-order files. See `doc/design_empty_folders.md`.
+    registry.prune_redundant_folders();
 
     // Set the design file name after successful load
     registry.design_file_name = Some(file_path.to_string());

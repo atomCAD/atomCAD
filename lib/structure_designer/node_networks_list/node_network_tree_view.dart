@@ -4,6 +4,7 @@ import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/move_namespace_dialog.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/new_folder_dialog.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
@@ -32,71 +33,83 @@ class _NodeNetworkTreeNode {
   });
 }
 
-/// Builds a tree from networks and record def names. Both kinds participate in
-/// the same dot-delimited namespace hierarchy: a record def named
-/// `Physics.ElementMapping` nests under a `Physics` folder, which a network
-/// `Physics.Spring` can share. Leaves are tagged with their [_LeafKind] so the
-/// view routes activation/rename/delete to the right API.
+/// Builds a tree from networks, record defs, and explicit empty folders. All
+/// participate in the same dot-delimited namespace hierarchy: a record def
+/// named `Physics.ElementMapping` nests under a `Physics` folder, which a
+/// network `Physics.Spring` can share. Leaves are tagged with their [_LeafKind]
+/// so the view routes activation/rename/delete to the right API.
+///
+/// [folderPaths] are deliberately-created empty folders (see
+/// `doc/design_empty_folders.md`); they contribute folder nodes (and their
+/// derived ancestors) but no leaves, and dedup against folders implied by
+/// entity names through the shared namespace-node map.
 List<_NodeNetworkTreeNode> _buildTreeFromNames(
-    List<String> networkQualifiedNames, List<String> recordDefNames) {
+    List<String> networkQualifiedNames,
+    List<String> recordDefNames,
+    List<String> folderPaths) {
   // Map to track namespace nodes: full namespace path -> node
   final Map<String, _NodeNetworkTreeNode> namespaceNodes = {};
   final List<_NodeNetworkTreeNode> roots = [];
 
-  // Combine both kinds into one kind-tagged list, then process uniformly so a
-  // single folder can hold networks and record defs together. Sorting by the
-  // qualified name interleaves the two kinds alphabetically within a folder.
-  final entries = <MapEntry<String, _LeafKind>>[
+  // Ensures a namespace (folder) node exists at `path`, creating any missing
+  // ancestors. Idempotent via `namespaceNodes`.
+  void ensureNamespace(String path) {
+    final segments = getSegments(path);
+    for (int i = 0; i < segments.length; i++) {
+      final namespacePath = segments.sublist(0, i + 1).join('.');
+      if (namespaceNodes.containsKey(namespacePath)) continue;
+      final namespaceNode = _NodeNetworkTreeNode(
+        label: segments[i],
+        fullName: namespacePath,
+        children: [],
+        isLeaf: false,
+      );
+      namespaceNodes[namespacePath] = namespaceNode;
+      if (i == 0) {
+        roots.add(namespaceNode);
+      } else {
+        final parentPath = segments.sublist(0, i).join('.');
+        (namespaceNodes[parentPath]!.children as List).add(namespaceNode);
+      }
+    }
+  }
+
+  // Combine all three kinds into one path-tagged list (folder = null leafKind),
+  // then process uniformly. Sorting by path interleaves everything
+  // alphabetically within each folder.
+  final entries = <MapEntry<String, _LeafKind?>>[
     for (final n in networkQualifiedNames) MapEntry(n, _LeafKind.network),
     for (final r in recordDefNames) MapEntry(r, _LeafKind.recordDef),
+    for (final f in folderPaths) MapEntry(f, null),
   ]..sort((a, b) => a.key.compareTo(b.key));
 
   for (final entry in entries) {
-    final qualifiedName = entry.key;
-    final segments = getSegments(qualifiedName);
+    final path = entry.key;
+    final leafKind = entry.value;
+    final segments = getSegments(path);
 
-    // Build all intermediate namespace nodes if needed
-    for (int i = 0; i < segments.length - 1; i++) {
-      final namespacePath = segments.sublist(0, i + 1).join('.');
-
-      if (!namespaceNodes.containsKey(namespacePath)) {
-        final namespaceNode = _NodeNetworkTreeNode(
-          label: segments[i],
-          fullName:
-              namespacePath, // Store namespace path for expansion tracking
-          children: [],
-          isLeaf: false,
-        );
-
-        namespaceNodes[namespacePath] = namespaceNode;
-
-        // Add to parent or roots
-        if (i == 0) {
-          roots.add(namespaceNode);
-        } else {
-          final parentPath = segments.sublist(0, i).join('.');
-          final parentNode = namespaceNodes[parentPath]!;
-          (parentNode.children as List).add(namespaceNode);
-        }
-      }
+    if (leafKind == null) {
+      // Explicit empty folder: materialize the folder node (and ancestors).
+      ensureNamespace(path);
+      continue;
     }
 
-    // Create the leaf node (network or record def).
+    // Entity leaf: ensure intermediate namespaces exist, then add the leaf.
+    if (segments.length > 1) {
+      ensureNamespace(segments.sublist(0, segments.length - 1).join('.'));
+    }
     final leafNode = _NodeNetworkTreeNode(
-      label: getSimpleName(qualifiedName),
-      fullName: qualifiedName,
+      label: getSimpleName(path),
+      fullName: path,
       children: const [],
       isLeaf: true,
-      leafKind: entry.value,
+      leafKind: leafKind,
     );
-
-    // Add leaf to its parent or roots
     if (segments.length == 1) {
       roots.add(leafNode);
     } else {
       final parentPath = segments.sublist(0, segments.length - 1).join('.');
-      final parentNode = namespaceNodes[parentPath]!;
-      (parentNode.children as List).add(leafNode);
+      (namespaceNodes[parentPath]!.children as List).add(leafNode);
     }
   }
 
@@ -174,6 +187,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     for (final r in widget.model.recordTypeDefNames) {
       out.add('r:$r');
     }
+    for (final f in widget.model.folderNames) {
+      out.add('f:$f');
+    }
     return out;
   }
 
@@ -189,9 +205,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     final qualifiedNames =
         widget.model.nodeNetworkNames.map((n) => n.name).toList();
     final recordDefs = widget.model.recordTypeDefNames;
+    final folders = widget.model.folderNames;
     _lastNetworkNames = _composeKeyedNames();
 
-    final roots = _buildTreeFromNames(qualifiedNames, recordDefs);
+    final roots = _buildTreeFromNames(qualifiedNames, recordDefs, folders);
 
     _treeController = TreeController<_NodeNetworkTreeNode>(
       roots: roots,
@@ -731,6 +748,24 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
   }
 
+  /// Creates a new empty subfolder inside the folder `node`. Prompts for the
+  /// folder name (folders are about their name), then creates it and expands
+  /// the parent so the new folder is visible. See `doc/design_empty_folders.md`.
+  Future<void> _handleAddFolderIn(_NodeNetworkTreeNode node) async {
+    final parent = node.fullName ?? '';
+    final name =
+        await showNewFolderNameDialog(context: context, parentPath: parent);
+    if (name == null || name.trim().isEmpty || !mounted) return;
+    final fullPath = combineQualifiedName(parent, name.trim());
+    _markNamespaceExpanded(fullPath);
+    final error = widget.model.addFolder(fullPath);
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create folder: $error')),
+      );
+    }
+  }
+
   /// Creates a new node network or record def inside the folder `node` (a
   /// namespace). The simple name is auto-generated to be unique; the user can
   /// rename it afterwards. The folder is expanded so the new item is visible.
@@ -766,6 +801,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       // lands inside this folder rather than at the root (the action-bar
       // buttons stay root-scoped). See issue on tree-view UX.
       if (!node.isLeaf) ...[
+        const PopupMenuItem(
+          value: 'add_folder_here',
+          child: Text('New folder…'),
+        ),
         const PopupMenuItem(
           value: 'add_network_here',
           child: Text('Add node network'),
@@ -805,7 +844,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       items: items,
     ).then((value) {
       if (!context.mounted) return;
-      if (value == 'add_network_here') {
+      if (value == 'add_folder_here') {
+        _handleAddFolderIn(node);
+      } else if (value == 'add_network_here') {
         _handleAddInFolder(node, isRecord: false);
       } else if (value == 'add_record_here') {
         _handleAddInFolder(node, isRecord: true);
@@ -836,8 +877,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
     final nodeNetworks = widget.model.nodeNetworkNames;
     final recordDefs = widget.model.recordTypeDefNames;
+    final folders = widget.model.folderNames;
 
-    if (nodeNetworks.isEmpty && recordDefs.isEmpty) {
+    if (nodeNetworks.isEmpty && recordDefs.isEmpty && folders.isEmpty) {
       return const Center(
         child: Text('No user types defined'),
       );

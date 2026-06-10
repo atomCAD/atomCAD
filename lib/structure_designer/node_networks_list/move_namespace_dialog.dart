@@ -228,7 +228,8 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
         : 'Editing "${widget.oldPath}". '
             'Use a dotted path to move it into a namespace, '
             'or a bare name for the top level.';
-    final fieldLabel = _isNamespace ? 'New namespace path' : 'New $_leafNoun name';
+    final fieldLabel =
+        _isNamespace ? 'New namespace path' : 'New $_leafNoun name';
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -240,8 +241,7 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: theme.textTheme.bodySmall
-                ?.copyWith(color: theme.hintColor),
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -292,7 +292,8 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
     if (preview.isEmpty) {
       // A namespace folder can hold networks and record defs, so speak of
       // "items" generically; a leaf names its own kind.
-      final leafCap = widget.kind == _MoveKind.record ? 'Record def' : 'Network';
+      final leafCap =
+          widget.kind == _MoveKind.record ? 'Record def' : 'Network';
       final msg = _isNamespace
           ? 'No items under this namespace.'
           : '$leafCap not found.';
@@ -316,15 +317,19 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
     }
     if (_isNamespace) {
       final n = preview.items.length;
-      return _statusLine(theme,
-          'Will rename $n item${n == 1 ? '' : 's'}.', theme.hintColor);
+      // An empty folder has no entity items but is still applicable (it moves
+      // the folder marker). See `doc/design_empty_folders.md`.
+      if (n == 0) {
+        return _statusLine(theme, 'Will move the folder.', theme.hintColor);
+      }
+      return _statusLine(
+          theme, 'Will rename $n item${n == 1 ? '' : 's'}.', theme.hintColor);
     }
     return _statusLine(theme, 'Will move the $_leafNoun.', theme.hintColor);
   }
 
   Widget _statusLine(ThemeData theme, String text, Color color) {
-    return Text(text,
-        style: theme.textTheme.bodySmall?.copyWith(color: color));
+    return Text(text, style: theme.textTheme.bodySmall?.copyWith(color: color));
   }
 
   Widget _buildPreviewList(
@@ -332,9 +337,7 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
     // A single-network preview is fully described by the status line + the
     // text field, so the per-row list only adds value for batch (namespace)
     // moves. Keep it for namespaces only.
-    if (!_isNamespace ||
-        preview == null ||
-        preview.items.isEmpty) {
+    if (!_isNamespace || preview == null || preview.items.isEmpty) {
       return const SizedBox.shrink();
     }
     final error = theme.colorScheme.error;
@@ -350,8 +353,7 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
         itemBuilder: (context, index) {
           final item = preview.items[index];
           return Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             child: Row(
               children: [
                 Expanded(

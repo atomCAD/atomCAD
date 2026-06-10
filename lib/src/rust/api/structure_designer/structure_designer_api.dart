@@ -199,6 +199,12 @@ List<APINodeCategoryView>? getCompatibleNodeTypes(
 List<String>? getNodeNetworkNames() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkNames();
 
+/// Returns the deliberately-created empty-folder paths (sorted). The tree view
+/// merges these with the folders implied by entity names. See
+/// `doc/design_empty_folders.md`.
+List<String>? getFolderNames() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetFolderNames();
+
 /// Returns every **user-declared** record type def name in the project,
 /// sorted alphabetically. Used by the user-types panel so built-in defs are
 /// not listed there. Dropdowns (type selector, `record_construct` /
@@ -401,6 +407,12 @@ void setActiveRecordDefName({String? name}) => RustLib.instance.api
 APIResult deleteNamespace({required String prefix}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteNamespace(
         prefix: prefix);
+
+/// Create an empty folder at `path` (dot-delimited, e.g. `"Physics.Mechanics"`).
+/// Returns success/error (collision or invalid name). See
+/// `doc/design_empty_folders.md`.
+APIResult addFolder({required String path}) => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiAddFolder(path: path);
 
 void setNodeDisplay(
         {required Uint64List scopePath,

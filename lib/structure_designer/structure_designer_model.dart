@@ -146,6 +146,11 @@ class StructureDesignerModel extends ChangeNotifier {
   /// alongside `nodeNetworkNames`.
   List<String> recordTypeDefNames = [];
 
+  /// Deliberately-created empty-folder paths (sorted). The tree view merges
+  /// these with the folders implied by entity names. Refreshed from the kernel
+  /// alongside `nodeNetworkNames`. See `doc/design_empty_folders.md`.
+  List<String> folderNames = [];
+
   /// Name of the record type def currently being edited in the main content
   /// area's bottom panel. When non-null, the schema editor replaces the
   /// network editor; the active node network (for the 3D viewport) is
@@ -1380,6 +1385,15 @@ class StructureDesignerModel extends ChangeNotifier {
     return null;
   }
 
+  /// Creates an empty folder at `path` (dot-delimited). Returns null on
+  /// success, or an error message (collision / invalid name). See
+  /// `doc/design_empty_folders.md`.
+  String? addFolder(String path) {
+    final result = structure_designer_api.addFolder(path: path);
+    refreshFromKernel();
+    return result.success ? null : result.errorMessage;
+  }
+
   /// Adds a new empty record type def with an auto-generated unique name under
   /// `namespace` (a dot-delimited folder path; empty string = root) and
   /// activates it in the schema editor. Returns the generated qualified name,
@@ -2521,6 +2535,7 @@ class StructureDesignerModel extends ChangeNotifier {
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];
     recordTypeDefNames = structure_designer_api.getRecordTypeDefNames() ?? [];
+    folderNames = structure_designer_api.getFolderNames() ?? [];
     // The active record def is backend-owned (§8): mirror it here so the
     // schema-editor selection follows record renames/moves and survives
     // undo/redo (the backend remaps/clears it inside the relevant commands).

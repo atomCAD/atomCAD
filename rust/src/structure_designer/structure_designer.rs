@@ -87,24 +87,34 @@ pub struct NamespaceRenameItem {
 #[derive(Debug, Clone)]
 pub struct NamespaceRenamePlan {
     pub items: Vec<NamespaceRenameItem>,
-    /// `false` if any resulting name fails the user-name rules (empty,
-    /// backtick, control chars, edge whitespace).
+    /// `false` if any resulting name (entity or folder) fails the user-name
+    /// rules (empty, backtick, control chars, edge whitespace).
     pub valid_names: bool,
+    /// Empty-folder markers remapped by this move: `(old_marker, new_marker)`
+    /// where `new_marker` is `None` when the folder vanishes (an empty folder
+    /// promoted to root). Lets the move/rename of an *empty* folder be
+    /// applicable even though no entities are affected. See
+    /// `doc/design_empty_folders.md`.
+    pub folder_changes: Vec<(String, Option<String>)>,
+    /// `true` if any remapped folder target collides with an existing,
+    /// non-affected user type or folder.
+    pub folder_conflict: bool,
 }
 
 impl NamespaceRenamePlan {
-    /// No network matches the source prefix — there is nothing to rename.
+    /// Nothing matches the source prefix — no entities and no empty folders to
+    /// rename.
     pub fn is_empty(&self) -> bool {
-        self.items.is_empty()
+        self.items.is_empty() && self.folder_changes.is_empty()
     }
 
     /// Any resulting name collides with an existing, non-affected user type.
     pub fn has_conflicts(&self) -> bool {
-        self.items.iter().any(|item| item.conflict)
+        self.folder_conflict || self.items.iter().any(|item| item.conflict)
     }
 
-    /// The plan can be applied: it affects at least one network, every
-    /// resulting name is valid, and nothing collides.
+    /// The plan can be applied: it affects at least one entity or empty folder,
+    /// every resulting name is valid, and nothing collides.
     pub fn is_applicable(&self) -> bool {
         !self.is_empty() && self.valid_names && !self.has_conflicts()
     }
@@ -1332,6 +1342,10 @@ impl StructureDesigner {
         // Capture previous active network for undo
         let previous_active_network = self.active_node_network_name.clone();
 
+        // Capture ancestor empty-folder markers this network will absorb (so
+        // undo restores them). See `doc/design_empty_folders.md`.
+        let pruned_folders = self.node_type_registry.ancestor_folders_present(&name);
+
         self.add_node_network(&name);
         // Mark design as dirty since we added a new network
         self.set_dirty(true);
@@ -1342,6 +1356,7 @@ impl StructureDesigner {
         self.push_command(super::undo::commands::add_network::AddNetworkCommand {
             network_name: name.clone(),
             previous_active_network,
+            pruned_folders,
         });
 
         name
@@ -1355,12 +1370,34 @@ impl StructureDesigner {
     ) -> Result<(), super::identifier::InvalidNameReason> {
         super::identifier::is_valid_user_name(node_network_name)?;
         let previous_active_network = self.active_node_network_name.clone();
+        let pruned_folders = self
+            .node_type_registry
+            .ancestor_folders_present(node_network_name);
         self.add_node_network(node_network_name);
         self.set_dirty(true);
         self.mark_full_refresh();
         self.push_command(super::undo::commands::add_network::AddNetworkCommand {
             network_name: node_network_name.to_string(),
             previous_active_network,
+            pruned_folders,
+        });
+        Ok(())
+    }
+
+    /// Create an empty folder marker at `path` (dot-delimited). Validates the
+    /// name and rejects collisions with any existing user type or folder.
+    /// Pushes an undo command on success. See `doc/design_empty_folders.md`.
+    pub fn add_folder(&mut self, path: &str) -> Result<(), String> {
+        super::identifier::is_valid_user_name(path)
+            .map_err(|e| format!("Invalid folder name: {}", e))?;
+        // Capture absorbed ancestor markers for undo before the add prunes them.
+        let pruned_ancestors = self.node_type_registry.ancestor_folders_present(path);
+        self.node_type_registry.add_folder(path)?;
+        self.set_dirty(true);
+        self.mark_full_refresh();
+        self.push_command(super::undo::commands::add_folder::AddFolderCommand {
+            path: path.to_string(),
+            pruned_ancestors,
         });
         Ok(())
     }
@@ -1505,7 +1542,64 @@ impl StructureDesigner {
             });
         }
 
-        NamespaceRenamePlan { items, valid_names }
+        // Empty-folder markers affected by this move: the folder itself (marker
+        // named exactly `old_prefix`) plus any empty subfolders under it. These
+        // are NOT caught by the `prefix_dot` entity sweep above (a marker named
+        // exactly `old_prefix` has no trailing dot). See
+        // `doc/design_empty_folders.md`.
+        let mut affected_markers: Vec<String> = self
+            .node_type_registry
+            .folders
+            .iter()
+            .filter(|m| m.as_str() == old_prefix || m.starts_with(&prefix_dot))
+            .cloned()
+            .collect();
+        affected_markers.sort();
+
+        // Names vacated by this move (entity old-names + marker old-names) don't
+        // count as collisions for a folder target.
+        let mut vacating: HashSet<&str> = affected_set.clone();
+        for m in &affected_markers {
+            vacating.insert(m.as_str());
+        }
+
+        let mut folder_changes = Vec::with_capacity(affected_markers.len());
+        let mut folder_conflict = false;
+        for marker in &affected_markers {
+            let new_marker: Option<String> = if marker.as_str() == old_prefix {
+                // The folder itself: promote-to-root (empty target) makes an
+                // empty folder vanish — there is no empty-named root folder.
+                if new_prefix.is_empty() {
+                    None
+                } else {
+                    Some(new_prefix.to_string())
+                }
+            } else {
+                let suffix = &marker[prefix_dot.len()..];
+                Some(if new_prefix.is_empty() {
+                    suffix.to_string()
+                } else {
+                    format!("{}.{}", new_prefix, suffix)
+                })
+            };
+
+            if let Some(nm) = &new_marker {
+                if super::identifier::is_valid_user_name(nm).is_err() {
+                    valid_names = false;
+                }
+                if !vacating.contains(nm.as_str()) && self.node_type_registry.name_is_taken(nm) {
+                    folder_conflict = true;
+                }
+            }
+            folder_changes.push((marker.clone(), new_marker));
+        }
+
+        NamespaceRenamePlan {
+            items,
+            valid_names,
+            folder_changes,
+            folder_conflict,
+        }
     }
 
     /// Compute the plan for moving/renaming a single *leaf* `old_name` (a
@@ -1522,6 +1616,8 @@ impl StructureDesigner {
             return NamespaceRenamePlan {
                 items: Vec::new(),
                 valid_names: true,
+                folder_changes: Vec::new(),
+                folder_conflict: false,
             };
         };
 
@@ -1537,6 +1633,8 @@ impl StructureDesigner {
                 kind,
             }],
             valid_names,
+            folder_changes: Vec::new(),
+            folder_conflict: false,
         }
     }
 
@@ -1553,6 +1651,9 @@ impl StructureDesigner {
         }
 
         use super::undo::commands::rename_namespace::NamespaceRename;
+        // Empty-folder markers moved by this rename (applied below alongside the
+        // entity renames). See `doc/design_empty_folders.md`.
+        let folder_changes = plan.folder_changes.clone();
         let renames: Vec<NamespaceRename> = plan
             .items
             .into_iter()
@@ -1562,6 +1663,14 @@ impl StructureDesigner {
                 kind: item.kind,
             })
             .collect();
+
+        // Remap empty-folder markers (old → new, or remove when promoted to root).
+        for (old, new) in &folder_changes {
+            self.node_type_registry.folders.remove(old);
+            if let Some(n) = new {
+                self.node_type_registry.folders.insert(n.clone());
+            }
+        }
 
         // Perform all renames, dispatching per kind. Networks go through
         // `apply_rename_core` (registry move + node_type_name + active-network
@@ -1625,7 +1734,10 @@ impl StructureDesigner {
         self.mark_full_refresh();
 
         self.push_command(
-            super::undo::commands::rename_namespace::RenameNamespaceCommand { renames },
+            super::undo::commands::rename_namespace::RenameNamespaceCommand {
+                renames,
+                folder_changes,
+            },
         );
 
         true
@@ -1812,8 +1924,21 @@ impl StructureDesigner {
             .filter(|name| name.starts_with(&prefix_dot))
             .cloned()
             .collect();
+        // Empty-folder markers under the prefix: the folder itself (named
+        // exactly `prefix`) plus any empty subfolders. See
+        // `doc/design_empty_folders.md`.
+        let affected_folders: Vec<String> = self
+            .node_type_registry
+            .folders
+            .iter()
+            .filter(|m| m.as_str() == prefix || m.starts_with(&prefix_dot))
+            .cloned()
+            .collect();
 
-        if affected_networks.is_empty() && affected_records.is_empty() {
+        if affected_networks.is_empty()
+            && affected_records.is_empty()
+            && affected_folders.is_empty()
+        {
             return Err(format!("No items found under namespace '{}'", prefix));
         }
 
@@ -1852,6 +1977,10 @@ impl StructureDesigner {
         }
         for name in &affected_records {
             self.node_type_registry.record_type_defs.remove(name);
+        }
+        // Remove affected empty-folder markers.
+        for marker in &affected_folders {
+            self.node_type_registry.folders.remove(marker);
         }
 
         // If any record was removed, repair every network so wires that now
@@ -1904,6 +2033,7 @@ impl StructureDesigner {
                 active_network_after,
                 active_record_def_before,
                 active_record_def_after,
+                folder_markers: affected_folders,
             },
         );
 
@@ -1923,11 +2053,17 @@ impl StructureDesigner {
         def: super::node_type_registry::RecordTypeDef,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
         let def_clone = def.clone();
+        // Capture ancestor empty-folder markers this def will absorb (undo
+        // restores them). See `doc/design_empty_folders.md`.
+        let pruned_folders = self.node_type_registry.ancestor_folders_present(&def.name);
         self.node_type_registry.add_record_type_def(def)?;
         self.set_dirty(true);
         self.mark_full_refresh();
         self.push_command(
-            super::undo::commands::add_record_type_def::AddRecordTypeDefCommand { def: def_clone },
+            super::undo::commands::add_record_type_def::AddRecordTypeDefCommand {
+                def: def_clone,
+                pruned_folders,
+            },
         );
         Ok(())
     }

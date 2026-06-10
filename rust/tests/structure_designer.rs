@@ -321,3 +321,6 @@ mod apply_function_pin_iter_test;
 
 #[path = "structure_designer/hierarchical_records_test.rs"]
 mod hierarchical_records_test;
+
+#[path = "structure_designer/empty_folders_test.rs"]
+mod empty_folders_test;

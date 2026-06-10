@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/new_folder_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 
 /// Action bar for the user-types panel: navigation arrows, plus add/delete
@@ -93,6 +94,25 @@ class NodeNetworksActionBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8.0),
+          // New (root-level) folder button. Subfolders are created from a
+          // folder's right-click menu; this button is the only way to make a
+          // top-level folder. See doc/design_empty_folders.md.
+          Expanded(
+            child: Tooltip(
+              message: 'New folder',
+              child: IconButton(
+                key: const Key('add_folder_button'),
+                onPressed: () => _handleAddFolder(context, model),
+                icon: Icon(
+                  Icons.create_new_folder_outlined,
+                  size: 20,
+                  color: AppColors.primaryAccent,
+                ),
+                padding: const EdgeInsets.all(4.0),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8.0),
           // Delete active item button
           Expanded(
             child: Tooltip(
@@ -145,6 +165,18 @@ class NodeNetworksActionBar extends StatelessWidget {
         await _showDeleteErrorDialog(
             context, errorMessage, 'Cannot Delete Network');
       }
+    }
+  }
+
+  /// Prompts for a name and creates a new empty folder at the top level.
+  /// (Subfolders are created from a folder's right-click menu.)
+  Future<void> _handleAddFolder(
+      BuildContext context, StructureDesignerModel model) async {
+    final name = await showNewFolderNameDialog(context: context);
+    if (name == null || name.trim().isEmpty || !context.mounted) return;
+    final error = model.addFolder(name.trim());
+    if (error != null && context.mounted) {
+      await _showDeleteErrorDialog(context, error, 'Cannot Create Folder');
     }
   }
 

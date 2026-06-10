@@ -22,6 +22,12 @@ pub struct NamespaceRename {
 #[derive(Debug)]
 pub struct RenameNamespaceCommand {
     pub renames: Vec<NamespaceRename>,
+    /// Empty-folder markers affected by this namespace move. Each entry is
+    /// `(old_marker, new_marker)` where `new_marker` is `None` when the folder
+    /// vanishes (e.g. an empty folder promoted to root). Applied alongside the
+    /// entity renames so empty folders move/rename too. See
+    /// `doc/design_empty_folders.md`.
+    pub folder_changes: Vec<(String, Option<String>)>,
 }
 
 impl RenameNamespaceCommand {
@@ -29,6 +35,22 @@ impl RenameNamespaceCommand {
     /// `false` is new→old), remapping the active record def and repairing
     /// record-node pin layouts if any record was touched.
     fn apply(&self, ctx: &mut UndoContext, forward: bool) {
+        // Folder marker remaps. Forward: old → new (removed if None). Reverse:
+        // new → old, restoring a removed marker.
+        for (old, new) in &self.folder_changes {
+            if forward {
+                ctx.node_type_registry.folders.remove(old);
+                if let Some(n) = new {
+                    ctx.node_type_registry.folders.insert(n.clone());
+                }
+            } else {
+                if let Some(n) = new {
+                    ctx.node_type_registry.folders.remove(n);
+                }
+                ctx.node_type_registry.folders.insert(old.clone());
+            }
+        }
+
         let mut touched_record = false;
         for r in &self.renames {
             let (from, to) = if forward {

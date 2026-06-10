@@ -15,6 +15,10 @@ pub struct DeleteNamespaceCommand {
     pub active_network_after: Option<String>,
     pub active_record_def_before: Option<String>,
     pub active_record_def_after: Option<String>,
+    /// Empty-folder markers removed by this delete (the folder itself if empty,
+    /// plus any empty subfolders under the prefix); restored on undo. See
+    /// `doc/design_empty_folders.md`.
+    pub folder_markers: Vec<String>,
 }
 
 // Manual Debug impl because SerializableNodeNetwork doesn't derive Debug.
@@ -71,6 +75,10 @@ impl UndoCommand for DeleteNamespaceCommand {
         if !self.record_snapshots.is_empty() {
             ctx.node_type_registry.repair_all_networks();
         }
+        // Restore removed empty-folder markers.
+        for m in &self.folder_markers {
+            ctx.node_type_registry.folders.insert(m.clone());
+        }
         *ctx.active_network_name = self.active_network_before.clone();
         *ctx.active_record_def_name = self.active_record_def_before.clone();
     }
@@ -85,6 +93,10 @@ impl UndoCommand for DeleteNamespaceCommand {
         }
         if !self.record_snapshots.is_empty() {
             ctx.node_type_registry.repair_all_networks();
+        }
+        // Re-remove the empty-folder markers.
+        for m in &self.folder_markers {
+            ctx.node_type_registry.folders.remove(m);
         }
         *ctx.active_network_name = self.active_network_after.clone();
         *ctx.active_record_def_name = self.active_record_def_after.clone();
