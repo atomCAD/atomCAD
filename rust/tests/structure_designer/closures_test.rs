@@ -1656,9 +1656,12 @@ fn validation_closure_body_incomplete_is_nonblocking() {
 
 /// Check 4: unlike an HOF (whose disconnected `f` falls back to the inline
 /// body), `apply` has no body, so a disconnected required `f` pin is a
-/// validation error attributed to the `apply` node.
+/// validation error attributed to the `apply` node — but a *non-blocking* one.
+/// `apply.eval` returns a clean localized `NetworkResult::Error` when `f` is
+/// open, so an independent `apply` must not invalidate the whole network; the
+/// badge still appears.
 #[test]
-fn validation_apply_disconnected_f_rejected() {
+fn validation_apply_disconnected_f_nonblocking() {
     let mut designer = setup_designer_with_network("main");
 
     let arg_id = add_int(&mut designer, "main", 10, 0.0);
@@ -1676,13 +1679,18 @@ fn validation_apply_disconnected_f_rejected() {
     designer.connect_nodes(arg_id, 0, apply_id, 1); // element only; `f` left open
 
     let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
-    assert!(!valid, "apply with a disconnected `f` must be invalid");
+    assert!(
+        valid,
+        "apply with a disconnected `f` must NOT invalidate the network \
+         (the error is non-blocking); got errors: {:?}",
+        errors
+    );
     assert!(
         errors.iter().any(|e| {
             let l = e.to_lowercase();
             l.contains("apply") && l.contains("f") && l.contains("not connected")
         }),
-        "expected an apply-`f`-not-connected error; got: {:?}",
+        "expected an apply-`f`-not-connected error (badge); got: {:?}",
         errors
     );
 }

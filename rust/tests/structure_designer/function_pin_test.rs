@@ -806,9 +806,12 @@ fn validation_function_pin_type_match_and_mismatch() {
 }
 
 /// `apply`'s required `f` pin is still enforced after the function-pin work:
-/// an `apply` with a disconnected `f` is invalid (closures rule 4 untouched).
+/// an `apply` with a disconnected `f` still surfaces the rule-4 error. The
+/// error is now *non-blocking* (the runtime localizes it into a clean
+/// `NetworkResult::Error`), so the network stays valid; the discriminator is
+/// the error text, not the `valid` flag.
 #[test]
-fn validation_apply_requires_f_unchanged() {
+fn validation_apply_requires_f_still_reported() {
     let mut designer = setup_designer_with_network("main");
     let apply_id = designer.add_node("apply", DVec2::new(0.0, 0.0));
     set_node_data(
@@ -823,10 +826,13 @@ fn validation_apply_requires_f_unchanged() {
     );
 
     let (valid, errors) = validate_and_errors(&mut designer, "main");
-    assert!(!valid, "apply with disconnected f must be invalid");
+    assert!(
+        valid,
+        "apply with disconnected f is non-blocking, so the network stays valid; got {errors:?}"
+    );
     assert!(
         errors.iter().any(|e| e.contains("apply")),
-        "expected the apply-requires-f error, got {errors:?}"
+        "expected the apply-requires-f error (badge), got {errors:?}"
     );
 }
 

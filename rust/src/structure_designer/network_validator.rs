@@ -784,8 +784,13 @@ fn validate_zones_recursive(
         // function-type/shape is checked by `validate_wires` via
         // `can_be_converted_to`, like any other typed wire.
         if node.node_type_name == "apply" && !function_input_pin_connected(node, node_type) {
-            ok = false;
-            network.validation_errors.push(ValidationError::new(
+            // Non-blocking (does NOT set `ok = false`), same rationale as the
+            // zone-output rule above: `apply.eval` returns a clean localized
+            // `NetworkResult::Error("apply: f not connected")` when `f` is
+            // disconnected (`nodes/apply.rs`), so an independent/unconsumed
+            // `apply` with no `f` must not blank the whole network. The badge
+            // still appears; only nodes downstream of this `apply` go dark.
+            network.validation_errors.push(ValidationError::warning(
                 "apply: required `f` (Function) pin is not connected".to_string(),
                 Some(node_id),
             ));
