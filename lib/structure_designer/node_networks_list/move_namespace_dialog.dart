@@ -20,12 +20,19 @@ enum _MoveKind { namespace, network, record }
 /// name conflicts before committing. Returns the committed target prefix on
 /// success (so the caller can migrate UI state such as tree expansion), or
 /// `null` if the user cancelled or nothing changed.
+///
+/// [initialPath] seeds the editable field. It defaults to [oldPrefix] (a plain
+/// move/rename starting point); a drag-and-drop caller passes the proposed drop
+/// target instead, so the dialog opens pre-filled with the dropped-to location
+/// for the user to confirm or tweak.
 Future<String?> showMoveNamespaceDialog({
   required BuildContext context,
   required StructureDesignerModel model,
   required String oldPrefix,
+  String? initialPath,
 }) {
-  return _show(context, model, oldPrefix, _MoveKind.namespace);
+  return _show(context, model, oldPrefix, _MoveKind.namespace,
+      initialPath: initialPath);
 }
 
 /// Opens the "Move / rename network" dialog for the network leaf [oldName].
@@ -36,12 +43,17 @@ Future<String?> showMoveNamespaceDialog({
 /// different namespace (`a.b.x` → `c.x`) in a single operation — none of which
 /// the segment-only inline rename can do. Returns the committed full name on
 /// success, or `null` on cancel / no-op.
+///
+/// [initialPath] seeds the editable field (defaults to [oldName]); a
+/// drag-and-drop caller passes the proposed drop target instead.
 Future<String?> showMoveNetworkDialog({
   required BuildContext context,
   required StructureDesignerModel model,
   required String oldName,
+  String? initialPath,
 }) {
-  return _show(context, model, oldName, _MoveKind.network);
+  return _show(context, model, oldName, _MoveKind.network,
+      initialPath: initialPath);
 }
 
 /// Opens the "Move / rename record def" dialog for the record-def leaf
@@ -49,27 +61,38 @@ Future<String?> showMoveNetworkDialog({
 /// now a first-class citizen of the namespace hierarchy, so it can be moved up
 /// a level, to the top level, or into a different namespace in one operation.
 /// Returns the committed full name on success, or `null` on cancel / no-op.
+///
+/// [initialPath] seeds the editable field (defaults to [oldName]); a
+/// drag-and-drop caller passes the proposed drop target instead.
 Future<String?> showMoveRecordDialog({
   required BuildContext context,
   required StructureDesignerModel model,
   required String oldName,
+  String? initialPath,
 }) {
-  return _show(context, model, oldName, _MoveKind.record);
+  return _show(context, model, oldName, _MoveKind.record,
+      initialPath: initialPath);
 }
 
 Future<String?> _show(
   BuildContext context,
   StructureDesignerModel model,
   String oldPath,
-  _MoveKind kind,
-) {
+  _MoveKind kind, {
+  String? initialPath,
+}) {
   return showDialog<String>(
     context: context,
     barrierDismissible: false,
     builder: (context) => DraggableDialog(
       width: 460,
       dismissible: true,
-      child: _MoveDialogBody(model: model, oldPath: oldPath, kind: kind),
+      child: _MoveDialogBody(
+        model: model,
+        oldPath: oldPath,
+        kind: kind,
+        initialPath: initialPath,
+      ),
     ),
   );
 }
@@ -95,10 +118,14 @@ class _MoveDialogBody extends StatefulWidget {
   final String oldPath;
   final _MoveKind kind;
 
+  /// Pre-fills the editable target field. Null falls back to [oldPath].
+  final String? initialPath;
+
   const _MoveDialogBody({
     required this.model,
     required this.oldPath,
     required this.kind,
+    this.initialPath,
   });
 
   @override
@@ -120,7 +147,8 @@ class _MoveDialogBodyState extends State<_MoveDialogBody> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.oldPath);
+    _controller =
+        TextEditingController(text: widget.initialPath ?? widget.oldPath);
     _focusNode = FocusNode();
     _recompute();
     WidgetsBinding.instance.addPostFrameCallback((_) {

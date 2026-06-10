@@ -411,8 +411,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   /// Opens the full-path move dialog for a namespace folder, a network leaf,
   /// or a record-def leaf. Record defs are now first-class hierarchy members.
+  ///
+  /// [initialPath] seeds the dialog's editable target field; the context-menu
+  /// caller omits it (the field then defaults to the current path), while a
+  /// drag-and-drop caller passes the proposed drop target so the dialog opens
+  /// pre-filled with the dropped-to location for confirmation.
   Future<void> _handleMove(
-      BuildContext context, _NodeNetworkTreeNode node) async {
+      BuildContext context, _NodeNetworkTreeNode node,
+      {String? initialPath}) async {
     final oldPath = node.fullName;
     if (oldPath == null) return;
 
@@ -425,12 +431,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           context: context,
           model: widget.model,
           oldName: oldPath,
+          initialPath: initialPath,
         );
       } else {
         await showMoveNetworkDialog(
           context: context,
           model: widget.model,
           oldName: oldPath,
+          initialPath: initialPath,
         );
       }
     } else {
@@ -438,11 +446,133 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         context: context,
         model: widget.model,
         oldPrefix: oldPath,
+        initialPath: initialPath,
       );
       if (newPrefix != null && mounted) {
         setState(() => _migrateExpansionState(oldPath, newPrefix));
       }
     }
+  }
+
+  // --- Drag-and-drop move ---
+
+  /// True while a tree row is being dragged. Drives the "Move to top level"
+  /// drop bar, which only appears mid-drag.
+  bool _dragging = false;
+
+  /// Destination namespace for a drop landing on [target]: a folder drops into
+  /// itself; a leaf drops into its own containing namespace (file-explorer
+  /// style — dropping onto a sibling means "into this folder").
+  String _dropNamespaceFor(_NodeNetworkTreeNode target) {
+    if (target.isLeaf) {
+      return getNamespace(target.fullName!);
+    }
+    return target.fullName!;
+  }
+
+  /// Whether [dragged] may be dropped into [destNamespace]. Rejects no-ops
+  /// (already there) and dropping a namespace into itself or a descendant
+  /// (which would form a cycle).
+  bool _isValidDrop(_NodeNetworkTreeNode dragged, String destNamespace) {
+    final draggedPath = dragged.fullName;
+    if (draggedPath == null) return false;
+    if (!dragged.isLeaf) {
+      if (destNamespace == draggedPath ||
+          destNamespace.startsWith('$draggedPath.')) {
+        return false;
+      }
+    }
+    final proposed =
+        combineQualifiedName(destNamespace, getSimpleName(draggedPath));
+    if (proposed == draggedPath) return false; // no-op
+    return true;
+  }
+
+  /// Opens the move dialog seeded with the drop target. Reuses [_handleMove]
+  /// so namespace expansion-state migration and kind routing stay shared with
+  /// the context-menu path.
+  void _performDrop(BuildContext context, _NodeNetworkTreeNode dragged,
+      String destNamespace) {
+    final draggedPath = dragged.fullName;
+    if (draggedPath == null) return;
+    final proposed =
+        combineQualifiedName(destNamespace, getSimpleName(draggedPath));
+    _handleMove(context, dragged, initialPath: proposed);
+  }
+
+  /// The chip that follows the cursor during a drag.
+  Widget _buildDragFeedback(_NodeNetworkTreeNode node) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: AppColors.selectionBackground ?? Colors.blueGrey,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              node.isLeaf
+                  ? (node.leafKind == _LeafKind.recordDef
+                      ? Icons.data_object
+                      : Icons.account_tree)
+                  : Icons.folder,
+              size: 14,
+              color: AppColors.selectionForeground,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              node.label,
+              style: AppTextStyles.regular
+                  .copyWith(color: AppColors.selectionForeground),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The bottom "Move to top level" drop bar, shown only mid-drag.
+  Widget _buildRootDropBar() {
+    return DragTarget<_NodeNetworkTreeNode>(
+      onWillAcceptWithDetails: (details) => _isValidDrop(details.data, ''),
+      onAcceptWithDetails: (details) => _performDrop(context, details.data, ''),
+      builder: (context, candidate, rejected) {
+        final highlighted = candidate.isNotEmpty;
+        final accent = AppColors.selectionBackground ?? Colors.blue;
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.all(4),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color:
+                highlighted ? accent.withValues(alpha: 0.3) : Colors.transparent,
+            border: Border.all(color: highlighted ? accent : Colors.grey),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.vertical_align_top,
+                  size: 16,
+                  color: highlighted
+                      ? AppColors.selectionForeground
+                      : Colors.grey),
+              const SizedBox(width: 6),
+              Text(
+                'Move to top level',
+                style: AppTextStyles.regular.copyWith(
+                    color: highlighted
+                        ? AppColors.selectionForeground
+                        : Colors.grey),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _cancelRename() {
@@ -670,7 +800,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       );
     }
 
-    return AnimatedTreeView<_NodeNetworkTreeNode>(
+    final tree = AnimatedTreeView<_NodeNetworkTreeNode>(
       treeController: _treeController,
       nodeBuilder: (context, entry) {
         final node = entry.node;
@@ -686,7 +816,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         final isActive = isActiveNetwork || isActiveRecordDef;
         final isEditing = _editingNodeFullName == node.fullName;
 
-        return GestureDetector(
+        final Widget row = GestureDetector(
           key: Key(node.isLeaf
               ? (node.leafKind == _LeafKind.recordDef
                   ? 'record_def_tree_item_${node.fullName}'
@@ -782,7 +912,49 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
             ),
           ),
         );
+
+        // Every row is a drop target. A folder accepts into itself; a leaf
+        // accepts into its own containing namespace (file-explorer style).
+        final Widget dropTarget = DragTarget<_NodeNetworkTreeNode>(
+          onWillAcceptWithDetails: (details) {
+            if (identical(details.data, node)) return false;
+            return _isValidDrop(details.data, _dropNamespaceFor(node));
+          },
+          onAcceptWithDetails: (details) {
+            _performDrop(context, details.data, _dropNamespaceFor(node));
+          },
+          builder: (context, candidate, rejected) {
+            if (candidate.isEmpty) return row;
+            final accent = AppColors.selectionBackground ?? Colors.blue;
+            return Container(
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: row,
+            );
+          },
+        );
+
+        // Drag the row to move it; disabled while inline-renaming so the text
+        // field keeps its gestures.
+        return Draggable<_NodeNetworkTreeNode>(
+          data: node,
+          maxSimultaneousDrags: isEditing ? 0 : 1,
+          feedback: _buildDragFeedback(node),
+          childWhenDragging: Opacity(opacity: 0.4, child: dropTarget),
+          onDragStarted: () => setState(() => _dragging = true),
+          onDragEnd: (_) => setState(() => _dragging = false),
+          child: dropTarget,
+        );
       },
+    );
+
+    return Column(
+      children: [
+        Expanded(child: tree),
+        if (_dragging) _buildRootDropBar(),
+      ],
     );
   }
 
