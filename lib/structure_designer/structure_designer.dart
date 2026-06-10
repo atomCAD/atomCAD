@@ -40,6 +40,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
   // Resizable sidebar width for direct editing mode
   double _directEditingSidebarWidth = 360;
 
+  // Resizable sidebar width for node network mode (user types / display / camera)
+  double _nodeNetworkSidebarWidth = 200;
+
   // GlobalKey to access the NodeNetwork widget state
   final GlobalKey<NodeNetworkState> nodeNetworkKey =
       GlobalKey<NodeNetworkState>();
@@ -372,77 +375,93 @@ class _StructureDesignerState extends State<StructureDesigner> {
   /// Builds the left sidebar for Node Network Mode.
   /// Contains full Display, Camera Control, and Node Networks panel.
   Widget _buildNodeNetworkSidebar() {
-    return Container(
-      width: 200,
-      decoration: const BoxDecoration(
-        border: Border(
-          right: BorderSide(
-            color: Colors.grey,
-            width: 1,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: _nodeNetworkSidebarWidth,
+          child: _buildNodeNetworkSidebarContent(),
+        ),
+        // Drag handle for resizing the sidebar
+        GestureDetector(
+          onHorizontalDragUpdate: (details) {
+            setState(() {
+              _nodeNetworkSidebarWidth =
+                  (_nodeNetworkSidebarWidth + details.delta.dx).clamp(160, 500);
+            });
+          },
+          child: MouseRegion(
+            cursor: SystemMouseCursors.resizeColumn,
+            child: Container(
+              width: 6,
+              color: Colors.grey.shade300,
+            ),
           ),
         ),
-      ),
-      child: Column(
-        children: [
-          // Display settings section
-          Section(
-            title: 'Display',
-            content: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: Column(
-                children: [
-                  // First row: Geometry visualization and Node display
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      GeometryVisualizationWidget(model: graphModel),
-                      NodeDisplayWidget(model: graphModel),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Second row: Atomic structure visualization + mode switch
-                  Row(
-                    children: [
-                      AtomicStructureVisualizationWidget(model: graphModel),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 1,
-                        height: 20,
-                        color: Colors.grey.shade400,
-                      ),
-                      const SizedBox(width: 8),
-                      ModeToggleButtons(model: graphModel),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            expand: false,
-          ),
-          const SizedBox(height: 8),
-          // Camera Control section
-          Section(
-            title: 'Camera control',
-            content: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              child: CameraControlWidget(model: graphModel),
-            ),
-            expand: false,
-          ),
-          const SizedBox(height: 8),
-          // User types section (node networks + record type defs)
-          Expanded(
-            flex: 5,
-            child: Section(
-              title: 'User types',
-              content: NodeNetworksPanel(model: graphModel),
-              expand: true,
+      ],
+    );
+  }
+
+  /// Builds the content of the node network sidebar (without the resize handle).
+  Widget _buildNodeNetworkSidebarContent() {
+    return Column(
+      children: [
+        // Display settings section
+        Section(
+          title: 'Display',
+          content: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: Column(
+              children: [
+                // First row: Geometry visualization and Node display
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    GeometryVisualizationWidget(model: graphModel),
+                    NodeDisplayWidget(model: graphModel),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Second row: Atomic structure visualization + mode switch
+                Row(
+                  children: [
+                    AtomicStructureVisualizationWidget(model: graphModel),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 1,
+                      height: 20,
+                      color: Colors.grey.shade400,
+                    ),
+                    const SizedBox(width: 8),
+                    ModeToggleButtons(model: graphModel),
+                  ],
+                ),
+              ],
             ),
           ),
-        ],
-      ),
+          expand: false,
+        ),
+        const SizedBox(height: 8),
+        // Camera Control section
+        Section(
+          title: 'Camera control',
+          content: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: CameraControlWidget(model: graphModel),
+          ),
+          expand: false,
+        ),
+        const SizedBox(height: 8),
+        // User types section (node networks + record type defs)
+        Expanded(
+          flex: 5,
+          child: Section(
+            title: 'User types',
+            content: NodeNetworksPanel(model: graphModel),
+            expand: true,
+          ),
+        ),
+      ],
     );
   }
 
