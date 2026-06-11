@@ -175,3 +175,116 @@ fn stored_literal_overrides_default_pin_at_eval() {
         "clearing the literal must restore the default pin value"
     );
 }
+
+#[test]
+fn custom_node_literal_survives_save_load_roundtrip() {
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+
+    let mut designer = StructureDesigner::new();
+    build_inner_subnetwork(&mut designer, true, 7);
+
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let call_id = designer.add_node("Inner", DVec2::new(0.0, 0.0));
+    designer.validate_active_network();
+
+    // Store a literal on the call site.
+    let mut data = designer
+        .get_active_node_network()
+        .and_then(|n| n.nodes.get(&call_id))
+        .and_then(|node| node.data.as_any_ref().downcast_ref::<CustomNodeData>())
+        .cloned()
+        .expect("an Inner call node must carry CustomNodeData");
+    data.literal_values
+        .insert("param0".to_string(), TextValue::Int(20));
+    designer.set_node_network_data(call_id, Box::new(data));
+
+    // Save to a temp .cnnd and reload into a fresh registry.
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("roundtrip.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save failed");
+
+    let mut registry2 =
+        rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("load failed");
+
+    let main2 = registry2.node_networks.get("main").expect("main missing");
+    let call2 = main2.nodes.get(&call_id).expect("call node missing");
+
+    // The reloaded custom node must still carry CustomNodeData with the literal.
+    let custom_data = call2.data.as_any_ref().downcast_ref::<CustomNodeData>();
+    assert!(
+        custom_data.is_some(),
+        "reloaded custom node lost its CustomNodeData (data_type serialized as no_data?)"
+    );
+    assert_eq!(
+        custom_data.unwrap().literal_values.get("param0"),
+        Some(&TextValue::Int(20)),
+        "stored literal value must survive save/load"
+    );
+}
+
+/// Legacy/public `.cnnd` files (saved before custom-node literal persistence
+/// existed) wrote custom node instances with `data_type: "no_data"`. Their
+/// literal values are gone for good, but the node must still load as an
+/// (empty) `CustomNodeData` — not `NoData` — so its parameters stay editable
+/// after load. We simulate a legacy file by saving a normal one and rewriting
+/// the custom node's `data_type` back to `"no_data"` on disk before reloading.
+#[test]
+fn legacy_no_data_custom_node_loads_as_editable_custom_node_data() {
+    use rust_lib_flutter_cad::structure_designer::node_data::CustomNodeData;
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+        load_node_networks_from_file, save_node_networks_to_file,
+    };
+
+    let mut designer = StructureDesigner::new();
+    build_inner_subnetwork(&mut designer, true, 7);
+
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let call_id = designer.add_node("Inner", DVec2::new(0.0, 0.0));
+    designer.validate_active_network();
+
+    let temp_dir = tempfile::tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("legacy.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save failed");
+
+    // Rewrite every "custom_node" data_type back to "no_data" to mimic a file
+    // written by the pre-fix serializer.
+    let json = std::fs::read_to_string(&temp_file).expect("read");
+    let json = json.replace("\"custom_node\"", "\"no_data\"");
+    assert!(
+        json.contains("\"no_data\""),
+        "test setup: expected a custom node to rewrite to no_data"
+    );
+    std::fs::write(&temp_file, json).expect("write");
+
+    let mut registry2 =
+        rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("load failed");
+
+    let main2 = registry2.node_networks.get("main").expect("main missing");
+    let call2 = main2.nodes.get(&call_id).expect("call node missing");
+    assert!(
+        call2
+            .data
+            .as_any_ref()
+            .downcast_ref::<CustomNodeData>()
+            .is_some(),
+        "a legacy no_data custom node must load as editable CustomNodeData, not NoData"
+    );
+}

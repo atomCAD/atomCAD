@@ -23,6 +23,12 @@ use std::sync::Arc;
 // The current version of the serialization format
 const SERIALIZATION_VERSION: u32 = 5;
 
+/// Sentinel `data_type` written for custom (user-network) node instances. Their
+/// `node_type_name` is a key in `node_networks`, not `built_in_node_types`, so
+/// there is no built-in saver/loader to key off — this marks the persisted blob
+/// as a `CustomNodeData` (literal parameter values) on the way back in.
+const CUSTOM_NODE_DATA_TYPE: &str = "custom_node";
+
 /// Camera settings that are saved per node network
 #[derive(Serialize, Deserialize, Clone)]
 pub struct SerializableCameraSettings {
@@ -420,6 +426,21 @@ pub fn node_to_serializable(
     let (data_type, json_data) = if let Some(node_type) = built_in_node_types.get(&node_type_name) {
         let json_data = (node_type.node_data_saver)(node.data.as_mut(), design_dir)?;
         (node_type_name.clone(), json_data)
+    } else if node
+        .data
+        .as_any_ref()
+        .downcast_ref::<CustomNodeData>()
+        .is_some()
+    {
+        // Custom (user-network) node instance: its `node_type_name` is a key in
+        // `node_networks`, not `built_in_node_types`, so it has no built-in
+        // saver. Persist its `CustomNodeData` (literal parameter values) under a
+        // sentinel `data_type` so they survive save/load. Without this, custom
+        // nodes were written as `no_data` and reloaded as `NoData`, silently
+        // dropping every stored literal and making the property panel
+        // non-editable after load.
+        let json_data = generic_node_data_saver::<CustomNodeData>(node.data.as_mut(), design_dir)?;
+        (CUSTOM_NODE_DATA_TYPE.to_string(), json_data)
     } else {
         // Fallback for unknown types
         ("no_data".to_string(), serde_json::json!({}))
@@ -474,8 +495,21 @@ pub fn serializable_to_node(
     let data: Box<dyn NodeData> =
         if let Some(node_type) = built_in_node_types.get(&serializable.data_type) {
             (node_type.node_data_loader)(&serializable.data, design_dir)?
+        } else if serializable.data_type == CUSTOM_NODE_DATA_TYPE {
+            // Custom node saved with persisted literal values (see
+            // `node_to_serializable`).
+            generic_node_data_loader::<CustomNodeData>(&serializable.data, design_dir)?
+        } else if !built_in_node_types.contains_key(&serializable.node_type_name) {
+            // The node's *type* is not built-in, so this is a custom
+            // (user-network) instance — or a reference to a type that no longer
+            // exists. Either way, give it an empty `CustomNodeData` rather than
+            // `NoData` so its literal parameters stay editable. This also
+            // upgrades legacy files where custom nodes were saved as `no_data`
+            // before custom-node literal persistence existed (those carry no
+            // literal values to recover, but become editable again).
+            Box::new(CustomNodeData::default())
         } else {
-            // Default to NoData for unknown types
+            // Default to NoData for unknown data on a known built-in type.
             Box::new(NoData {})
         };
 
