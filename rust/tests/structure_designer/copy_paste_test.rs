@@ -705,6 +705,127 @@ fn test_pasted_nodes_become_selected() {
     assert!(!network.is_node_selected(id2));
 }
 
+// ===== ISSUE #340: PASTE PRESERVES PER-NODE DISPLAY (EYE) STATE =====
+//
+// Copy/paste used to force every pasted node's eye ON (`copy_nodes_from`
+// unconditionally called `set_node_display(.., true)`), ignoring the source
+// node's display state. Pasting a large fragment thus "opened all eyes",
+// causing slow loads and a cluttered viewport. A paste into a top-level
+// network must reproduce the source's visibility; a paste into a zone body
+// (which has no eye UI) must ignore source visibility and use the body default.
+
+#[test]
+fn test_paste_preserves_hidden_display_state_top_level() {
+    // A node hidden at the source must stay hidden when pasted.
+    let mut designer = setup_designer_with_network("test_network");
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test_network")
+            .unwrap();
+        network.set_node_display(float_id, false);
+        assert!(
+            !network.is_node_displayed(float_id),
+            "precondition: source node is hidden"
+        );
+        network.select_node(float_id);
+    }
+    assert!(designer.copy_selection());
+
+    let new_ids = designer.paste_at_position(DVec2::new(200.0, 200.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    assert!(
+        !network.is_node_displayed(new_ids[0]),
+        "issue #340: a hidden source node must paste as hidden, not force the eye on"
+    );
+}
+
+#[test]
+fn test_paste_preserves_mixed_display_state_top_level() {
+    // A selection mixing a shown and a hidden node must paste each with its own
+    // eye state — exactly one of the two pasted nodes should be displayed.
+    let mut designer = setup_designer_with_network("test_network");
+
+    let shown = designer.add_node("float", DVec2::new(0.0, 0.0)); // displayed by default
+    let hidden = designer.add_node("float", DVec2::new(200.0, 0.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test_network")
+            .unwrap();
+        network.set_node_display(hidden, false);
+        network.select_nodes(vec![shown, hidden]);
+    }
+    assert!(designer.copy_selection());
+
+    let new_ids = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    assert_eq!(new_ids.len(), 2);
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    let displayed_count = new_ids
+        .iter()
+        .filter(|id| network.is_node_displayed(**id))
+        .count();
+    assert_eq!(
+        displayed_count, 1,
+        "issue #340: exactly the one displayed source must paste displayed (got {displayed_count})"
+    );
+}
+
+#[test]
+fn test_paste_hidden_display_state_survives_undo_redo() {
+    // The PasteNodesCommand redo path re-creates nodes via `add_node_with_id`,
+    // which force-displays. Redo must restore the hidden state, not the eye.
+    let mut designer = setup_designer_with_network("test_network");
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("test_network")
+            .unwrap();
+        network.set_node_display(float_id, false);
+        network.select_node(float_id);
+    }
+    assert!(designer.copy_selection());
+
+    let new_ids = designer.paste_at_position(DVec2::new(200.0, 200.0));
+    assert_eq!(new_ids.len(), 1);
+    let pasted = new_ids[0];
+
+    assert!(designer.undo());
+    assert!(designer.redo());
+
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("test_network")
+        .unwrap();
+    assert!(
+        network.nodes.contains_key(&pasted),
+        "redo must re-create the pasted node"
+    );
+    assert!(
+        !network.is_node_displayed(pasted),
+        "issue #340: redo must restore the hidden eye state, not force it on"
+    );
+}
+
 // ===== ZONE (HOF body) COPY / PASTE / CUT =====
 //
 // Copy/cut operate on the selection wherever it lives (single-scope
@@ -788,6 +909,133 @@ fn test_copy_body_selection_and_paste_into_same_body() {
         .get("main")
         .unwrap();
     assert_eq!(main.nodes.len(), 1);
+}
+
+#[test]
+fn test_paste_into_body_leaves_node_hidden() {
+    // Issue #340 + zones: there is no eye icon on nodes inside a zone body, so
+    // display state there is dead. A paste into a body must leave the pasted
+    // nodes hidden — both to ignore the source's eye state and, crucially, so
+    // that copying these nodes back out to a rendering scope does not re-open
+    // every eye (the #340 clutter, reached via a copy-out-of-body path). This
+    // holds regardless of the source node's visibility.
+    let (mut designer, map_id) = setup_with_map();
+
+    // Source is VISIBLE at the top level (the default for add_node).
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    assert!(
+        designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .is_node_displayed(float_id),
+        "precondition: top-level source is displayed"
+    );
+    designer.select_node_scoped(&[], float_id);
+    assert!(designer.copy_selection());
+
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(
+        !body.is_node_displayed(new_ids[0]),
+        "issue #340: a node pasted into a zone body must be left hidden"
+    );
+}
+
+#[test]
+fn test_copy_from_body_and_paste_to_top_level_is_hidden() {
+    // Issue #340, copy-out-of-body path: a node ADDED into a zone body is stored
+    // `displayed=true` (dead state — no eye UI in a body). Copying it out to the
+    // top level (a rendering scope) must NOT re-open its eye; copy-from-body
+    // strips the meaningless body display state.
+    let (mut designer, map_id) = setup_with_map();
+
+    let inner = designer.add_node_scoped(&[map_id], "float", DVec2::new(0.0, 0.0), None);
+    // Sanity: added body nodes are stored displayed (the dead state we strip).
+    assert!(
+        designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .is_node_displayed(inner),
+        "precondition: added body node is stored displayed"
+    );
+
+    designer.select_node_scoped(&[map_id], inner);
+    assert!(designer.copy_selection());
+
+    let new_ids = designer.paste_at_position(DVec2::new(300.0, 300.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let main = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(
+        !main.is_node_displayed(new_ids[0]),
+        "issue #340: copying a node out of a zone body must not open its eye at the top level"
+    );
+}
+
+#[test]
+fn test_paste_body_to_body_leaves_node_hidden() {
+    // Rule 2 from a body SOURCE: copying a node out of a body and pasting it
+    // back into a body must also leave it hidden (no eye UI in a body). Exercises
+    // the copy-from-body strip (rule 3) and the paste-into-body hide (rule 2)
+    // together.
+    let (mut designer, map_id) = setup_with_map();
+
+    let inner = designer.add_node_scoped(&[map_id], "float", DVec2::new(0.0, 0.0), None);
+    designer.select_node_scoped(&[map_id], inner);
+    assert!(designer.copy_selection());
+
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(80.0, 80.0));
+    assert_eq!(new_ids.len(), 1);
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(
+        !body.is_node_displayed(new_ids[0]),
+        "a node pasted body→body must be left hidden"
+    );
+}
+
+#[test]
+fn test_scoped_paste_hidden_state_survives_undo_redo() {
+    // The scoped paste records an EditZoneBodyCommand (whole-body snapshot taken
+    // after the paste), so undo/redo must round-trip the pasted node's hidden
+    // display state — not re-show it.
+    let (mut designer, map_id) = setup_with_map();
+
+    let float_id = designer.add_node("float", DVec2::new(0.0, 0.0));
+    designer.select_node_scoped(&[], float_id);
+    designer.copy_selection();
+
+    let new_ids = designer.paste_at_position_scoped(&[map_id], DVec2::new(10.0, 10.0));
+    assert_eq!(new_ids.len(), 1);
+    let pasted = new_ids[0];
+    assert!(
+        !designer
+            .get_scope_network(&[map_id])
+            .unwrap()
+            .is_node_displayed(pasted),
+        "precondition: pasted body node is hidden"
+    );
+
+    assert!(designer.undo());
+    assert!(designer.redo());
+
+    let body = designer.get_scope_network(&[map_id]).unwrap();
+    assert!(
+        body.nodes.contains_key(&pasted),
+        "redo must re-create the pasted body node"
+    );
+    assert!(
+        !body.is_node_displayed(pasted),
+        "redo must restore the pasted body node's hidden state"
+    );
 }
 
 #[test]

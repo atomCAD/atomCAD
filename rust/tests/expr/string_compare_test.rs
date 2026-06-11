@@ -24,14 +24,22 @@ fn eval_with(text: &str, vars: HashMap<String, NetworkResult>) -> NetworkResult 
 fn assert_bool(v: NetworkResult, expected: bool) {
     match v {
         NetworkResult::Bool(b) => assert_eq!(b, expected),
-        other => panic!("expected Bool({}), got {:?}", expected, other.infer_data_type()),
+        other => panic!(
+            "expected Bool({}), got {:?}",
+            expected,
+            other.infer_data_type()
+        ),
     }
 }
 
 fn assert_int(v: NetworkResult, expected: i32) {
     match v {
         NetworkResult::Int(i) => assert_eq!(i, expected),
-        other => panic!("expected Int({}), got {:?}", expected, other.infer_data_type()),
+        other => panic!(
+            "expected Int({}), got {:?}",
+            expected,
+            other.infer_data_type()
+        ),
     }
 }
 

@@ -1105,7 +1105,16 @@ impl NodeNetwork {
             };
 
             self.nodes.insert(new_id, new_node);
-            self.set_node_display(new_id, true);
+            // Preserve the source node's display state (eye on/off + which
+            // output pins are shown) instead of forcing every copy visible.
+            // Forcing visible "opened all eyes" on paste, slowing loads and
+            // cluttering the viewport (issue #340). A source node with no
+            // display entry is hidden and stays hidden. Callers that need a
+            // different policy (e.g. pasting into a zone body, which has no eye
+            // UI) override afterwards. Mirrors `node_inlining`'s display-inherit.
+            if let Some(state) = source.get_node_display_state(old_id) {
+                self.displayed_nodes.insert(new_id, state.clone());
+            }
             new_ids.push(new_id);
         }
 

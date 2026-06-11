@@ -2747,6 +2747,14 @@ impl StructureDesigner {
         // self-contained fragment that pastes cleanly into any scope.
         let mut clipboard = NodeNetwork::new_empty();
         clipboard.copy_nodes_from(source, &selected_ids, -centroid);
+        // Copying *out of a zone body* (non-empty scope): body nodes carry dead
+        // `displayed=true` state (there is no eye UI inside a body), so dropping
+        // it here prevents a copy-from-body → paste-to-top-level from re-opening
+        // every eye (issue #340, copy-out-of-body path). Top-level copies keep
+        // their real eye state so a top→top paste reproduces it.
+        if !scope.is_empty() {
+            clipboard.displayed_nodes.clear();
+        }
         self.clipboard = Some(clipboard);
         true
     }
@@ -2900,6 +2908,14 @@ impl StructureDesigner {
         let new_ids = match self.get_scope_network_mut(scope_path) {
             Some(body) => {
                 let ids = body.copy_nodes_from(&clipboard_snapshot, &snapshot_ids, position);
+                // Nodes inside a zone body have no eye UI, so display state is
+                // dead/meaningless here. `copy_nodes_from` now preserves source
+                // visibility (issue #340); strip it for body targets so the
+                // source's eye state is ignored AND so that later copying these
+                // nodes back out to a rendering scope does not re-open all eyes.
+                for &id in &ids {
+                    body.set_node_display(id, false);
+                }
                 // Keep all body content inside the body rect. The body grows
                 // right/down to fit content but never up/left, so a paste near
                 // the body's top-left corner can place nodes at negative

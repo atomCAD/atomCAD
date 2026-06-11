@@ -73,7 +73,14 @@ impl PasteNodesCommand {
                 }
             }
 
-            // Restore display states
+            // Restore display states. `add_node_with_id` force-displays every
+            // re-created node, but a pasted node may have been hidden (issue
+            // #340), so first clear display on all pasted nodes, then re-apply
+            // only the recorded ones. Without the clear, a hidden pasted node
+            // would wrongly re-show its eye on redo.
+            for snap in &self.pasted_nodes {
+                network.displayed_nodes.remove(&snap.node_id);
+            }
             for &(node_id, display_type) in &self.display_states {
                 network
                     .displayed_nodes
