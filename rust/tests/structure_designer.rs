@@ -64,6 +64,9 @@ mod layout_after_edit_test;
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
 
+#[path = "structure_designer/parameter_wire_stability_regression_test.rs"]
+mod parameter_wire_stability_regression_test;
+
 #[path = "structure_designer/preferences_test.rs"]
 mod preferences_test;
 
