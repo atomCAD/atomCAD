@@ -274,7 +274,10 @@
       "Bash(perl -0pi -e 's/let \\\\\\(body_width, body_height\\\\\\) = rendered_body_size\\\\\\(node, registry\\\\\\);/let \\(body_width, body_height\\) = \\(node.body_width, node.body_height\\);/' src/structure_designer/node_inlining.rs)",
       "Bash(Get-ChildItem *)",
       "Bash(Select-Object -First 30)",
-      "Bash(cargo dl/dev fmt --check)"
+      "Bash(cargo dl/dev fmt --check)",
+      "PowerShell($p = Join-Path $env:TEMP 'pws_f6_heal.cnnd'; \"TEMP = $env:TEMP\"; \"Path = $p\"; if \\(Test-Path $p\\) { \"Exists: YES\"; \"Modified: \" + \\(Get-Item $p\\).LastWriteTime; \"Size: \" + \\(Get-Item $p\\).Length + \" bytes\" } else { \"Exists: NO \\(run the test to generate it\\)\" })",
+      "PowerShell($p = Join-Path $env:TEMP 'pws_f6_heal.cnnd'; \\(Get-Content $p | Select-String -Pattern 'param_id'\\).Line.Trim\\(\\) -join \"`n\")",
+      "PowerShell(Copy-Item *)"
     ]
   }
 }
