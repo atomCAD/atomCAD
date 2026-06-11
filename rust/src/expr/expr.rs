@@ -820,6 +820,16 @@ impl Expr {
             }
         }
 
+        // String equality / inequality. `comparison_op` below only handles
+        // numeric/bool operands, so strings are special-cased here (mirroring
+        // the concat case above). Ordering operators are rejected at validation.
+        if matches!(op, BinOp::Eq | BinOp::Ne) {
+            if let (NetworkResult::String(a), NetworkResult::String(b)) = (&left, &right) {
+                let eq = a == b;
+                return NetworkResult::Bool(if matches!(op, BinOp::Eq) { eq } else { !eq });
+            }
+        }
+
         match op {
             BinOp::Add => Self::arithmetic_op(left, right, |a, b| a + b, |a, b| a + b),
             BinOp::Sub => Self::arithmetic_op(left, right, |a, b| a - b, |a, b| a - b),

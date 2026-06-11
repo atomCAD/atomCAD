@@ -36,3 +36,6 @@ mod template_literal_test;
 
 #[path = "expr/string_concat_test.rs"]
 mod string_concat_test;
+
+#[path = "expr/string_compare_test.rs"]
+mod string_compare_test;
