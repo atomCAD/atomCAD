@@ -126,18 +126,54 @@ Consequences for fixers:
 These can run in parallel threads; contention is low (see §6). F1 is the fix; F2–F5 are the
 "correctness guarantees in a critical spot" the user asked for.
 
-### F1 — Restore `next_param_id` (THE fix)  *(small, do first)*
-Set `next_param_id = max(existing param_id) + 1` (derive from the parameter nodes) at **both**
-reset sites:
-1. `serializable_to_node_network` (`serialization/node_networks_serialization.rs:595-599`) —
-   add the restore next to the `next_node_id` line. Deriving from the loaded params is robust
-   even for old files that never stored the counter; optionally also serialize it for exactness.
-2. `duplicate_node_network` (`structure_designer.rs:1864`) — fix up the copy's counter after the
-   serialize round-trip.
-**Acceptance:** the 3 `regression_*` tests go green; the 6 `guard_*` tests stay green.
-**Files:** `node_networks_serialization.rs`, `structure_designer.rs`.
+### F1 — Restore `next_param_id` (THE fix) — ✅ DONE
+Implemented in `serializable_to_node_network`
+(`serialization/node_networks_serialization.rs`, right after the node-insertion loop): derive
+`next_param_id = max(existing param_id) + 1` from the loaded parameter nodes (`.max(..)` keeps
+the `NodeNetwork::new` floor of 1). This function is the **single deserialize chokepoint**, so
+one fix covers `.cnnd` load, `duplicate_node_network`, zone-body restore, **and every
+undo/snapshot-restore command** (factor / promote / inline / text-edit / convert-to-closure /
+delete-network …) — all of which round-trip through it. No separate edit at
+`duplicate_node_network` was needed.
+**Verified:** the 3 `regression_*` tests now pass; the 6 `guard_*` + 13 existing
+`parameter_wire_preservation` tests stay green; full `structure_designer` (2208) + `integration`
+(75) crates pass. **Does NOT heal files already saved with the bug — see F6.**
 
-### F2 — Enforce `param_id` uniqueness invariant  *(the missing guarantee)*
+### F6 — Heal already-saved corrupted files  *(#2 priority — F1 does NOT fix existing files)*
+
+A file saved by the buggy build can carry **two distinct kinds of damage**, with very different
+recoverability:
+
+- **Damage A — duplicate `param_id` in a network's parameter nodes (structural, RECOVERABLE).**
+  The buggy session created a second param with a recycled id and saved it, so the file's param
+  nodes contain duplicate `param_id`s. F1 sets `next_param_id` above the max, so *future* adds
+  are unique — but the **existing duplicate pair persists**, and the next parameter edit will
+  mis-match again (`repair_call_sites_for_network` collapses two same-id params in its
+  `old_param_id_map`). **Heal this automatically:** a defensive load-time pass that, when a
+  network has duplicate `param_id`s, reassigns fresh unique ids to its parameter nodes
+  (preserve `sort_order`; recompute `next_param_id`). This is **safe and mechanical** — wires are
+  positional and store no `param_id`, so reassigning ids moves no wire; it only restores the
+  identity invariant for future edits. Make it **idempotent and always-on** (no-op when ids are
+  unique) rather than version-gated — buggy files share the current `SERIALIZATION_VERSION`, so a
+  version gate can't distinguish them. Place it next to F1 in `serializable_to_node_network`.
+  This pass is also a **prerequisite for F2 going blocking** — otherwise loading a legacy file
+  would trip the uniqueness error.
+
+- **Damage B — already-corrupted instance wiring in other networks (NOT auto-recoverable).**
+  When the collision fired in the buggy session, a wire was already cloned onto the new pin (and
+  in some cases an original wire was *dropped* — see the duplicate repro's `pin0=[]`), then saved
+  positionally into the instance's `arguments`. F1/F6 cannot recover this: for the cloned-extra
+  case we cannot prove the duplicate wasn't intentional, and for the dropped-wire case the
+  original is simply gone. **Do not attempt silent auto-repair.** Instead **detect and surface**
+  it via F4 (type-mismatched / suspicious auto-wires) so the user reviews and fixes manually.
+  Be explicit in the UI that some projects may need a manual wiring pass.
+
+**Deliverable:** legacy files load with unique `param_id`s (Damage A healed); Damage B is
+flagged, not silently shipped. **Files:** `node_networks_serialization.rs` (the de-dup pass),
+plus F4 for surfacing. **Tests:** a fixture/synthetic `.cnnd` with duplicate `param_id`s that
+loads, heals, and then survives a subsequent parameter edit without jumbling.
+
+### F2 — Enforce `param_id` uniqueness invariant  *(the missing guarantee; backstop after F6)*
 In `validate_parameters` (`network_validator.rs:141`), validate `param_id` uniqueness the same
 way `param_name` uniqueness is already validated, and surface a **blocking** error on a
 duplicate (corrupting the interface has cross-network blast radius — see

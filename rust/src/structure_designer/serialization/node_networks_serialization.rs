@@ -617,6 +617,33 @@ pub fn serializable_to_node_network(
         network.nodes.insert(node.id, node);
     }
 
+    // Restore the parameter-id counter. `next_param_id` is intentionally NOT
+    // part of the serialized form, so derive it from the loaded parameter nodes:
+    // the next id handed out must be strictly greater than every existing
+    // `param_id`. Without this, every deserialize path (`.cnnd` load,
+    // `duplicate_node_network`, and the undo/snapshot-restore commands — all of
+    // which round-trip through this function) would reset `next_param_id` to 1
+    // (`NodeNetwork::new`), so the next parameter added to the network reuses an
+    // existing id; `repair_call_sites_for_network` then resolves the collision to
+    // the first parameter's index and clones its wire onto the new pin, silently
+    // mis-rewiring instances in other networks. See
+    // `doc/design_parameter_wire_stability.md` (F1). `.max(..)` keeps the
+    // `NodeNetwork::new` floor of 1 and never lowers an already-higher counter.
+    let max_param_id = network
+        .nodes
+        .values()
+        .filter_map(|node| {
+            node.data
+                .as_ref()
+                .as_any_ref()
+                .downcast_ref::<crate::structure_designer::nodes::parameter::ParameterData>()
+                .and_then(|p| p.param_id)
+        })
+        .max();
+    if let Some(m) = max_param_id {
+        network.next_param_id = network.next_param_id.max(m + 1);
+    }
+
     // Migration: atom_edit output_diff → displayed_pins
     // For old files where output_diff: true was used to switch to diff view,
     // migrate to displayed_pins: {1} (show diff pin only) if the node wasn't

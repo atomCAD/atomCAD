@@ -18,21 +18,19 @@
 //! reopened (load) or a network is duplicated, which is why it reads as a
 //! regression and every pure in-memory edit path is fine.
 //!
-//! ## What is RED here (the deliverable for fixer threads)
+//! ## Status: FIXED by F1 (these tests now pass and guard against re-introduction)
 //!
-//! The three `regression_*` tests below currently FAIL. They are left genuinely
-//! red (no `#[ignore]`). A fix is correct when all three go green **and** the six
-//! `guard_*` tests stay green. The fix must restore `next_param_id` at BOTH reset
-//! sites (serialization load AND `duplicate_node_network`) — pick a value strictly
-//! greater than the max existing `param_id`, e.g. derive it from the loaded
-//! parameter nodes.
+//! The fix restores `next_param_id` in `serializable_to_node_network` — the single
+//! deserialize chokepoint shared by `.cnnd` load, `duplicate_node_network`, and the
+//! undo/snapshot-restore commands — by deriving it from the loaded parameter nodes
+//! (`max(param_id) + 1`). The three `regression_*` tests below reproduce the bug
+//! (they FAILED before F1); they now pass. Keep them green.
 //!
-//! ## What is GREEN here (coverage the fix must not break)
+//! ## Guards (must also stay green)
 //!
-//! The six `guard_*` tests document parameter-edit paths that already behave
-//! correctly in current HEAD (HOF-body instances, reorder, in-memory save/load
-//! roundtrip, editing an original after duplicating it, undo/redo, two-step
-//! add-then-reorder). They are regression guards for the fix.
+//! The six `guard_*` tests document parameter-edit paths that were already correct
+//! before F1 (HOF-body instances, reorder, in-memory save/load roundtrip, editing
+//! an original after duplicating it, undo/redo, two-step add-then-reorder).
 
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
@@ -64,7 +62,10 @@ fn set_parameter_props(
     let node = network.nodes.get_mut(&node_id).unwrap();
     if let Some(param_data) = node.data.as_any_mut().downcast_mut::<ParameterData>() {
         let mut props = HashMap::new();
-        props.insert("param_name".to_string(), TextValue::String(name.to_string()));
+        props.insert(
+            "param_name".to_string(),
+            TextValue::String(name.to_string()),
+        );
         props.insert("data_type".to_string(), TextValue::DataType(data_type));
         props.insert("sort_order".to_string(), TextValue::Int(sort_order));
         props.insert(
@@ -172,8 +173,13 @@ fn regression_load_then_add_param_clones_neighbor_wire() {
     designer.connect_nodes(i2, 0, f, 1);
 
     let path = temp_path("pws_r1_add_after_load.cnnd");
-    save_node_networks_to_file(&mut designer.node_type_registry, &path, false, &HashMap::new())
-        .unwrap();
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &HashMap::new(),
+    )
+    .unwrap();
 
     let mut loaded = StructureDesigner::new();
     loaded.load_node_networks(path.to_str().unwrap()).unwrap();
@@ -195,9 +201,21 @@ fn regression_load_then_add_param_clones_neighbor_wire() {
         arg_count(&loaded, "main", f),
     );
 
-    assert_eq!(arg_count(&loaded, "main", f), 3, "instance should have 3 pins");
-    assert_eq!(srcs(&loaded, "main", f, 0), vec![i1], "pin0 (first) must STILL carry i1");
-    assert_eq!(srcs(&loaded, "main", f, 1), vec![i2], "pin1 (last) must STILL carry i2");
+    assert_eq!(
+        arg_count(&loaded, "main", f),
+        3,
+        "instance should have 3 pins"
+    );
+    assert_eq!(
+        srcs(&loaded, "main", f, 0),
+        vec![i1],
+        "pin0 (first) must STILL carry i1"
+    );
+    assert_eq!(
+        srcs(&loaded, "main", f, 1),
+        vec![i2],
+        "pin1 (last) must STILL carry i2"
+    );
     assert_eq!(
         srcs(&loaded, "main", f, 2),
         Vec::<u64>::new(),
@@ -229,8 +247,13 @@ fn regression_load_then_add_param_clones_wrong_typed_wire() {
     designer.connect_nodes(n, 0, f, 1);
 
     let path = temp_path("pws_r2_add_after_load_typed.cnnd");
-    save_node_networks_to_file(&mut designer.node_type_registry, &path, false, &HashMap::new())
-        .unwrap();
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &HashMap::new(),
+    )
+    .unwrap();
 
     let mut loaded = StructureDesigner::new();
     loaded.load_node_networks(path.to_str().unwrap()).unwrap();
@@ -287,8 +310,16 @@ fn regression_duplicate_then_add_param_corrupts_instance_wires() {
         srcs(&designer, "main", f, 2),
     );
 
-    assert_eq!(srcs(&designer, "main", f, 0), vec![i1], "pin0 must STILL carry i1");
-    assert_eq!(srcs(&designer, "main", f, 1), vec![i2], "pin1 must STILL carry i2");
+    assert_eq!(
+        srcs(&designer, "main", f, 0),
+        vec![i1],
+        "pin0 must STILL carry i1"
+    );
+    assert_eq!(
+        srcs(&designer, "main", f, 1),
+        vec![i2],
+        "pin1 must STILL carry i2"
+    );
     assert_eq!(
         srcs(&designer, "main", f, 2),
         Vec::<u64>::new(),
@@ -319,13 +350,21 @@ fn guard_hof_body_add_parameter_in_middle() {
     let mid = designer.add_node("parameter", DVec2::new(0.0, 30.0));
     set_parameter_props(&mut designer, "Filt", mid, "middle", DataType::Int, 1);
 
-    assert_eq!(body_srcs(&mut designer, "main", &[map_id], f, 0), vec![i1], "pin0<-i1");
+    assert_eq!(
+        body_srcs(&mut designer, "main", &[map_id], f, 0),
+        vec![i1],
+        "pin0<-i1"
+    );
     assert_eq!(
         body_srcs(&mut designer, "main", &[map_id], f, 1),
         Vec::<u64>::new(),
         "new middle pin empty"
     );
-    assert_eq!(body_srcs(&mut designer, "main", &[map_id], f, 2), vec![i2], "pin2<-i2");
+    assert_eq!(
+        body_srcs(&mut designer, "main", &[map_id], f, 2),
+        vec![i2],
+        "pin2<-i2"
+    );
 }
 
 /// G2: instance inside an HOF body — reorder parameters (swap).
@@ -347,8 +386,16 @@ fn guard_hof_body_reorder_parameters() {
     set_parameter_props(&mut designer, "Filt", pa, "a", DataType::Int, 1);
     set_parameter_props(&mut designer, "Filt", pb, "b", DataType::Int, 0);
 
-    assert_eq!(body_srcs(&mut designer, "main", &[map_id], f, 0), vec![i2], "pin0 is 'b'<-i2");
-    assert_eq!(body_srcs(&mut designer, "main", &[map_id], f, 1), vec![i1], "pin1 is 'a'<-i1");
+    assert_eq!(
+        body_srcs(&mut designer, "main", &[map_id], f, 0),
+        vec![i2],
+        "pin0 is 'b'<-i2"
+    );
+    assert_eq!(
+        body_srcs(&mut designer, "main", &[map_id], f, 1),
+        vec![i1],
+        "pin1 is 'a'<-i1"
+    );
 }
 
 /// G3: in-memory edit then save/load roundtrip preserves the (already-repaired) wires.
@@ -370,14 +417,27 @@ fn guard_save_load_roundtrip_preserves_wires() {
     set_parameter_props(&mut designer, "Filt", mid, "middle", DataType::Int, 1);
 
     let path = temp_path("pws_g3_roundtrip.cnnd");
-    save_node_networks_to_file(&mut designer.node_type_registry, &path, false, &HashMap::new())
-        .unwrap();
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &HashMap::new(),
+    )
+    .unwrap();
     let mut loaded = StructureDesigner::new();
     loaded.load_node_networks(path.to_str().unwrap()).unwrap();
 
-    assert_eq!(arg_count(&loaded, "main", f), 3, "loaded instance has 3 pins");
+    assert_eq!(
+        arg_count(&loaded, "main", f),
+        3,
+        "loaded instance has 3 pins"
+    );
     assert_eq!(srcs(&loaded, "main", f, 0), vec![i1], "loaded pin0<-i1");
-    assert_eq!(srcs(&loaded, "main", f, 1), Vec::<u64>::new(), "loaded middle empty");
+    assert_eq!(
+        srcs(&loaded, "main", f, 1),
+        Vec::<u64>::new(),
+        "loaded middle empty"
+    );
     assert_eq!(srcs(&loaded, "main", f, 2), vec![i2], "loaded pin2<-i2");
 }
 
@@ -402,7 +462,11 @@ fn guard_duplicate_then_edit_original() {
     set_parameter_props(&mut designer, "Filt", mid, "middle", DataType::Int, 1);
 
     assert_eq!(srcs(&designer, "main", f, 0), vec![i1], "pin0<-i1");
-    assert_eq!(srcs(&designer, "main", f, 1), Vec::<u64>::new(), "middle empty");
+    assert_eq!(
+        srcs(&designer, "main", f, 1),
+        Vec::<u64>::new(),
+        "middle empty"
+    );
     assert_eq!(srcs(&designer, "main", f, 2), vec![i2], "pin2<-i2");
 }
 
@@ -427,8 +491,16 @@ fn guard_undo_redo_add_parameter() {
     designer.undo();
     designer.redo();
 
-    assert_eq!(srcs(&designer, "main", f, 0), vec![i1], "pin0<-i1 after undo/redo");
-    assert_eq!(srcs(&designer, "main", f, 1), vec![i2], "pin1<-i2 after undo/redo");
+    assert_eq!(
+        srcs(&designer, "main", f, 0),
+        vec![i1],
+        "pin0<-i1 after undo/redo"
+    );
+    assert_eq!(
+        srcs(&designer, "main", f, 1),
+        vec![i2],
+        "pin1<-i2 after undo/redo"
+    );
 }
 
 /// G6: realistic add-at-end then drag-to-middle (two-step), top level.
@@ -469,7 +541,19 @@ fn guard_add_at_end_then_reorder_to_middle() {
         .unwrap();
     set_parameter_props(&mut designer, "Filt", last_pid, "last", DataType::Int, 2);
 
-    assert_eq!(srcs(&designer, "main", f, 0), vec![i1], "final pin0 (first)<-i1");
-    assert_eq!(srcs(&designer, "main", f, 1), Vec::<u64>::new(), "final pin1 (mid) empty");
-    assert_eq!(srcs(&designer, "main", f, 2), vec![i2], "final pin2 (last)<-i2");
+    assert_eq!(
+        srcs(&designer, "main", f, 0),
+        vec![i1],
+        "final pin0 (first)<-i1"
+    );
+    assert_eq!(
+        srcs(&designer, "main", f, 1),
+        Vec::<u64>::new(),
+        "final pin1 (mid) empty"
+    );
+    assert_eq!(
+        srcs(&designer, "main", f, 2),
+        vec![i2],
+        "final pin2 (last)<-i2"
+    );
 }
