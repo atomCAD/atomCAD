@@ -749,8 +749,16 @@ class StructureDesignerModel extends ChangeNotifier {
     return isDirty ? '$fileName*' : fileName;
   }
 
+  /// Parameter-id repairs performed during the most recent successful load
+  /// (F6 of `doc/design_parameter_wire_stability.md`). Empty when none were
+  /// needed. Read by the file-open handlers to show a one-time "auto-repaired"
+  /// modal.
+  List<String> lastLoadParamIdRepairs = [];
+
   APIResult loadNodeNetworks(String filePath) {
     final result = structure_designer_api.loadNodeNetworks(filePath: filePath);
+    lastLoadParamIdRepairs =
+        result.success ? structure_designer_api.takeLoadParamIdRepairs() : [];
     refreshFromKernel();
     return result;
   }

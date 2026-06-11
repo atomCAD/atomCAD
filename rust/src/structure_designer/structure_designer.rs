@@ -170,6 +170,14 @@ pub struct StructureDesigner {
     // displayed in the Console panel. See `doc/design_node_execution.md`
     // (Phase 4 — Console panel).
     pub print_log: Vec<PrintLogEntry>,
+
+    // Per-load report of parameter-id de-duplication repairs (F6 of
+    // `doc/design_parameter_wire_stability.md`). Populated by
+    // `load_node_networks` when a loaded project contained duplicate `param_id`s
+    // left by the `next_param_id` bug; drained by `take_load_param_id_repairs`
+    // so the UI can show a one-time "auto-repaired" modal. Empty when the loaded
+    // project needed no repair.
+    pub pending_load_param_id_repairs: Vec<String>,
 }
 
 impl Default for StructureDesigner {
@@ -211,6 +219,7 @@ impl StructureDesigner {
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
             print_log: Vec::new(),
+            pending_load_param_id_repairs: Vec::new(),
         }
     }
 }
@@ -270,6 +279,15 @@ impl StructureDesigner {
     /// (Phase 4 — FFI).
     pub fn take_print_log(&mut self) -> Vec<PrintLogEntry> {
         std::mem::take(&mut self.print_log)
+    }
+
+    /// Drains the parameter-id repair messages produced by the most recent
+    /// `load_node_networks` (F6 of `doc/design_parameter_wire_stability.md`).
+    /// Returns an empty vector when the loaded project needed no repair. The UI
+    /// reads this once after a load to decide whether to show the "auto-repaired"
+    /// modal.
+    pub fn take_load_param_id_repairs(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.pending_load_param_id_repairs)
     }
 
     /// Clear the accumulated print log without returning entries (Console
@@ -6576,6 +6594,50 @@ impl StructureDesigner {
             file_path,
         )?;
         let first_network_name = load_result.first_network_name;
+
+        // F6 (`doc/design_parameter_wire_stability.md`): heal "Damage A" left in
+        // projects saved by the `next_param_id` bug — parameter nodes that share a
+        // `param_id`. Runs BEFORE the validate loop so the repair logic below sees
+        // unique ids. Wires are stored positionally, so this never moves a
+        // connection; it only restores parameter identity for future edits. The
+        // collected messages are drained by the UI (`take_load_param_id_repairs`)
+        // for a one-time "auto-repaired" modal, and echoed to the console.
+        self.pending_load_param_id_repairs.clear();
+        let param_id_fixes: Vec<crate::structure_designer::network_validator::ParamIdReassignment> =
+            self.node_type_registry
+                .node_networks
+                .values_mut()
+                .flat_map(|network| {
+                    crate::structure_designer::network_validator::dedupe_param_ids_in_network(
+                        network,
+                    )
+                })
+                .collect();
+        if !param_id_fixes.is_empty() {
+            let mut repaired_networks: std::collections::BTreeSet<String> =
+                std::collections::BTreeSet::new();
+            for fix in &param_id_fixes {
+                let msg = format!(
+                    "Network '{}': parameter '{}' (node {}) had duplicate id {} → reassigned {}",
+                    fix.network_name,
+                    fix.param_name,
+                    fix.param_node_id,
+                    fix.old_param_id,
+                    fix.new_param_id
+                );
+                println!("[load repair] {}", msg);
+                repaired_networks.insert(fix.network_name.clone());
+                self.pending_load_param_id_repairs.push(msg);
+            }
+            println!(
+                "[load repair] Auto-repaired {} duplicate parameter id(s) across {} network(s): {}. \
+                 Some connections in these networks may have been mis-wired by the earlier bug and \
+                 may need manual review.",
+                param_id_fixes.len(),
+                repaired_networks.len(),
+                repaired_networks.into_iter().collect::<Vec<_>>().join(", ")
+            );
+        }
 
         // Validate all networks in dependency order (dependencies first)
         // This ensures call sites can be repaired before validating their parent networks

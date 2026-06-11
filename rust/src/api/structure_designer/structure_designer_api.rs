@@ -6932,6 +6932,20 @@ pub fn clear_print_log() {
     }
 }
 
+/// Drain the parameter-id repair messages from the most recent project load
+/// (F6 of `doc/design_parameter_wire_stability.md`). Returns an empty list when
+/// the loaded project needed no repair. The UI reads this once right after
+/// `load_node_networks` to decide whether to show the "auto-repaired" modal.
+#[flutter_rust_bridge::frb(sync)]
+pub fn take_load_param_id_repairs() -> Vec<String> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.take_load_param_id_repairs(),
+            Vec::new(),
+        )
+    }
+}
+
 /// Apply auto-layout to the active node network.
 ///
 /// This function recomputes positions for all nodes in the active network

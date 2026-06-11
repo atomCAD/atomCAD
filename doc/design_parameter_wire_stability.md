@@ -139,7 +139,16 @@ delete-network …) — all of which round-trip through it. No separate edit at
 `parameter_wire_preservation` tests stay green; full `structure_designer` (2208) + `integration`
 (75) crates pass. **Does NOT heal files already saved with the bug — see F6.**
 
-### F6 — Heal already-saved corrupted files  *(#2 priority — F1 does NOT fix existing files)*
+### F6 — Heal already-saved corrupted files  *(Damage A ✅ DONE; Damage B → F4)*
+
+> **Damage A implemented.** `dedupe_param_ids_in_network` (`network_validator.rs`) runs as an
+> idempotent, always-on pass in `StructureDesigner::load_node_networks` (before the validate
+> loop). Each reassignment is `println!`-ed to the console and collected into
+> `pending_load_param_id_repairs`, drained by `take_load_param_id_repairs()` (API:
+> `take_load_param_id_repairs`). The Flutter file-open handlers show a one-time "Project
+> auto-repaired" modal (with the "some wiring may need review" caveat). Tests: `f6_*` in
+> `parameter_wire_stability_regression_test.rs`. **Damage B is still open → F4.**
+
 
 A file saved by the buggy build can carry **two distinct kinds of damage**, with very different
 recoverability:

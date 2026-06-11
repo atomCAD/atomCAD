@@ -31,9 +31,18 @@
 //! The six `guard_*` tests document parameter-edit paths that were already correct
 //! before F1 (HOF-body instances, reorder, in-memory save/load roundtrip, editing
 //! an original after duplicating it, undo/redo, two-step add-then-reorder).
+//!
+//! ## F6 — healing already-saved corrupted files
+//!
+//! The two `f6_*` tests cover the load-time de-duplication of `param_id`s left in
+//! files saved by the buggy build (`dedupe_param_ids_in_network`): the core pass
+//! (reassign duplicates, keep first, idempotent) and the end-to-end heal (a project
+//! saved with duplicate ids loads healed, reports the repair, and a subsequent
+//! parameter add no longer re-jumbles).
 
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::network_validator::dedupe_param_ids_in_network;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
@@ -153,7 +162,7 @@ fn temp_path(file: &str) -> std::path::PathBuf {
 }
 
 // ###########################################################################
-// REGRESSION (currently RED) — the bug. Fixer threads must turn these green.
+// REGRESSION TESTS (green since F1) — reproduce the bug; must stay green.
 // ###########################################################################
 
 /// R1: reopen a project (.cnnd load), then add a parameter to a network that has
@@ -324,6 +333,155 @@ fn regression_duplicate_then_add_param_corrupts_instance_wires() {
         srcs(&designer, "main", f, 2),
         Vec::<u64>::new(),
         "new pin must be EMPTY, not a clone of an existing pin's wire"
+    );
+}
+
+// ###########################################################################
+// F6 — healing already-saved files with duplicate param_ids (Damage A).
+// ###########################################################################
+
+/// Force a parameter node's `param_id` directly (simulates a file saved by the
+/// buggy build, where two params ended up sharing an id).
+fn force_param_id(designer: &mut StructureDesigner, network: &str, node_id: u64, id: u64) {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap();
+    let node = net.nodes.get_mut(&node_id).unwrap();
+    if let Some(p) = node.data.as_any_mut().downcast_mut::<ParameterData>() {
+        p.param_id = Some(id);
+    }
+}
+
+fn param_id_of(designer: &StructureDesigner, network: &str, node_id: u64) -> Option<u64> {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    node.data
+        .as_any_ref()
+        .downcast_ref::<ParameterData>()
+        .and_then(|p| p.param_id)
+}
+
+/// F6 core: `dedupe_param_ids_in_network` reassigns duplicates, keeps the first
+/// occurrence, and is idempotent.
+#[test]
+fn f6_dedupe_reassigns_duplicate_param_ids() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+    let (pa, pb) = (ids[0], ids[1]);
+
+    // Collide: both parameter nodes share id 1.
+    force_param_id(&mut designer, "Filt", pa, 1);
+    force_param_id(&mut designer, "Filt", pb, 1);
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("Filt")
+        .unwrap();
+    let fixes = dedupe_param_ids_in_network(net);
+    assert_eq!(fixes.len(), 1, "exactly one duplicate should be reassigned");
+
+    let a = param_id_of(&designer, "Filt", pa);
+    let b = param_id_of(&designer, "Filt", pb);
+    assert!(
+        a.is_some() && b.is_some() && a != b,
+        "param ids must be distinct after dedupe, got {a:?} {b:?}"
+    );
+
+    // Idempotent: a second pass is a no-op.
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut("Filt")
+        .unwrap();
+    assert!(
+        dedupe_param_ids_in_network(net).is_empty(),
+        "dedupe must be idempotent on already-unique ids"
+    );
+}
+
+/// F6 end-to-end: a project saved with duplicate param_ids loads healed, reports
+/// the repair, keeps its existing wires, and a subsequent parameter add no longer
+/// re-jumbles (which it WOULD without the heal).
+#[test]
+fn f6_load_heals_duplicates_and_prevents_rejumble() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+    let (pa, pb) = (ids[0], ids[1]);
+
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let i1 = designer.add_node("int", DVec2::new(0.0, 0.0));
+    let i2 = designer.add_node("int", DVec2::new(0.0, 80.0));
+    let f = designer.add_node("Filt", DVec2::new(150.0, 0.0));
+    designer.connect_nodes(i1, 0, f, 0);
+    designer.connect_nodes(i2, 0, f, 1);
+
+    // Simulate the buggy save: two params share id 1.
+    force_param_id(&mut designer, "Filt", pa, 1);
+    force_param_id(&mut designer, "Filt", pb, 1);
+
+    let path = temp_path("pws_f6_heal.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &path,
+        false,
+        &HashMap::new(),
+    )
+    .unwrap();
+
+    let mut loaded = StructureDesigner::new();
+    loaded.load_node_networks(path.to_str().unwrap()).unwrap();
+
+    // The heal happened and was reported (and drains).
+    let repairs = loaded.take_load_param_id_repairs();
+    assert_eq!(
+        repairs.len(),
+        1,
+        "one repair message expected, got {repairs:?}"
+    );
+    assert!(
+        loaded.take_load_param_id_repairs().is_empty(),
+        "repair report should drain on read"
+    );
+
+    // Ids are now distinct.
+    let a = param_id_of(&loaded, "Filt", pa);
+    let b = param_id_of(&loaded, "Filt", pb);
+    assert!(
+        a.is_some() && b.is_some() && a != b,
+        "loaded param ids must be distinct after heal, got {a:?} {b:?}"
+    );
+
+    // Existing wires intact (the heal moves no connection).
+    assert_eq!(srcs(&loaded, "main", f, 0), vec![i1], "post-load pin0<-i1");
+    assert_eq!(srcs(&loaded, "main", f, 1), vec![i2], "post-load pin1<-i2");
+
+    // The payoff: a subsequent parameter add does NOT re-jumble.
+    loaded.set_active_node_network_name(Some("Filt".to_string()));
+    let p3 = loaded.add_node("parameter", DVec2::new(0.0, 120.0));
+    set_parameter_props(&mut loaded, "Filt", p3, "third", DataType::Int, 2);
+
+    assert_eq!(
+        srcs(&loaded, "main", f, 0),
+        vec![i1],
+        "after-heal add: pin0<-i1"
+    );
+    assert_eq!(
+        srcs(&loaded, "main", f, 1),
+        vec![i2],
+        "after-heal add: pin1<-i2"
+    );
+    assert_eq!(
+        srcs(&loaded, "main", f, 2),
+        Vec::<u64>::new(),
+        "after-heal add: new pin empty (no clone)"
     );
 }
 

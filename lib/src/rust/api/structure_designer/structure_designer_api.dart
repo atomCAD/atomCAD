@@ -1801,6 +1801,13 @@ List<APIPrintLogEntry> takePrintLog() => RustLib.instance.api
 void clearPrintLog() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiClearPrintLog();
 
+/// Drain the parameter-id repair messages from the most recent project load
+/// (F6 of `doc/design_parameter_wire_stability.md`). Returns an empty list when
+/// the loaded project needed no repair. The UI reads this once right after
+/// `load_node_networks` to decide whether to show the "auto-repaired" modal.
+List<String> takeLoadParamIdRepairs() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiTakeLoadParamIdRepairs();
+
 /// Apply auto-layout to the active node network.
 ///
 /// This function recomputes positions for all nodes in the active network

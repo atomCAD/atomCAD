@@ -6,7 +6,7 @@ use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOu
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 /// Per-validation-run cache of resolved concrete output types, keyed by
@@ -64,6 +64,84 @@ fn compare_parameters(
         .sort_order
         .cmp(&param_data_b.sort_order)
         .then_with(|| node_id_a.cmp(&node_id_b))
+}
+
+/// A single parameter-id reassignment performed by [`dedupe_param_ids_in_network`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParamIdReassignment {
+    pub network_name: String,
+    pub param_node_id: u64,
+    pub param_name: String,
+    pub old_param_id: u64,
+    pub new_param_id: u64,
+}
+
+/// Heals "Damage A" of the `next_param_id` bug (see
+/// `doc/design_parameter_wire_stability.md`, F6): a project saved by the buggy
+/// build can contain two parameter nodes that share the same `param_id`. On the
+/// next parameter edit that duplicate makes `repair_call_sites_for_network`
+/// mis-match and re-jumble wires. This pass restores the invariant by giving each
+/// later duplicate a fresh unique id — the first occurrence (lowest node id) keeps
+/// its id.
+///
+/// It is **safe**: wires are stored positionally and carry no `param_id`, so
+/// renumbering moves no connection — it only repairs identity for future edits. It
+/// deliberately does NOT touch wiring, so already-corrupted connections ("Damage
+/// B") are unaffected and must be surfaced separately (F4). Idempotent: a no-op
+/// when ids are already unique. Returns the reassignments performed, for logging
+/// and user notification.
+pub fn dedupe_param_ids_in_network(network: &mut NodeNetwork) -> Vec<ParamIdReassignment> {
+    // Collect (node_id, param_id, param_name) for parameter nodes that carry an
+    // id, in ascending node-id order so "keep the first occurrence" is deterministic.
+    let mut params: Vec<(u64, u64, String)> = network
+        .nodes
+        .iter()
+        .filter_map(|(&nid, node)| {
+            node.data
+                .as_ref()
+                .as_any_ref()
+                .downcast_ref::<ParameterData>()
+                .and_then(|p| p.param_id.map(|id| (nid, id, p.param_name.clone())))
+        })
+        .collect();
+    params.sort_by_key(|&(nid, _, _)| nid);
+
+    // Next free id: strictly above every id currently in use and above the counter.
+    let mut next_free = params
+        .iter()
+        .map(|&(_, id, _)| id)
+        .max()
+        .map(|m| m + 1)
+        .unwrap_or(1)
+        .max(network.next_param_id);
+
+    let mut seen: HashSet<u64> = HashSet::new();
+    let mut fixes = Vec::new();
+    for (nid, id, name) in params {
+        if seen.insert(id) {
+            continue; // first occurrence of this id — keep it
+        }
+        // Duplicate: assign a fresh id beyond everything in use.
+        let new_id = next_free;
+        next_free += 1;
+        seen.insert(new_id);
+        if let Some(node) = network.nodes.get_mut(&nid) {
+            if let Some(p) = node.data.as_any_mut().downcast_mut::<ParameterData>() {
+                p.param_id = Some(new_id);
+            }
+        }
+        fixes.push(ParamIdReassignment {
+            network_name: network.node_type.name.clone(),
+            param_node_id: nid,
+            param_name: name,
+            old_param_id: id,
+            new_param_id: new_id,
+        });
+    }
+    if !fixes.is_empty() {
+        network.next_param_id = network.next_param_id.max(next_free);
+    }
+    fixes
 }
 
 /// Repairs call sites when a network's parameter interface changes.

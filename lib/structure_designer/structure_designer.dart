@@ -646,7 +646,62 @@ class _StructureDesignerState extends State<StructureDesigner> {
           ),
         ],
       );
+    } else if (loadResult.success) {
+      _showLoadRepairModalIfNeeded();
     }
+  }
+
+  /// Shows a one-time modal if the most recent load auto-repaired duplicate
+  /// parameter ids (F6 of `doc/design_parameter_wire_stability.md`). Per-id
+  /// details are also written to the console. The modal honestly notes that some
+  /// connections may have been mis-wired before the fix and are worth reviewing.
+  void _showLoadRepairModalIfNeeded() {
+    final repairs = graphModel.lastLoadParamIdRepairs;
+    if (repairs.isEmpty || !mounted) return;
+    final n = repairs.length;
+    showDraggableAlertDialog(
+      context: context,
+      title: const Text('Project auto-repaired'),
+      content: SizedBox(
+        width: 460,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Auto-repaired $n duplicate parameter id${n == 1 ? '' : 's'} left '
+              'by an earlier bug. Existing connections were preserved, but some '
+              'wiring in the affected networks may have been mis-connected before '
+              'the fix and is worth a quick review. Full per-parameter details '
+              'were written to the console.',
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: repairs
+                      .map(
+                        (m) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text('• $m'),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    );
   }
 
   Future<void> _loadDesign() async {
@@ -679,6 +734,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
             ],
           );
         }
+      } else {
+        _showLoadRepairModalIfNeeded();
       }
     } else {
       debugPrint('No design file selected');
