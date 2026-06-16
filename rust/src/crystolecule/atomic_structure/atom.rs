@@ -9,7 +9,7 @@ pub struct Atom {
     pub id: u32,
     pub in_crystal_depth: f32,
     pub atomic_number: i16,
-    pub flags: u16, // Bit 0: selected, Bit 1: hydrogen passivation, Bit 2: frozen, Bits 3-4: hybridization override
+    pub flags: u16, // Bit 0: selected, Bit 1: hydrogen passivation, Bit 2: frozen, Bits 3-4: hybridization override, Bit 5: ghost (display-only, motif_edit), Bit 6: patch-ghost (reserved, see doc/design_surface_patches.md)
 }
 
 const ATOM_FLAG_SELECTED: u16 = 1 << 0;
@@ -18,6 +18,9 @@ const ATOM_FLAG_FROZEN: u16 = 1 << 2;
 const ATOM_FLAG_HYBRIDIZATION_MASK: u16 = 0b11 << 3;
 const ATOM_FLAG_HYBRIDIZATION_SHIFT: u16 = 3;
 const ATOM_FLAG_GHOST: u16 = 1 << 5;
+// Bit 6 reserved for the surface-patch "patch-ghost" flag (durable structural
+// state, distinct from the display-only ATOM_FLAG_GHOST). Allocated by
+// doc/design_surface_patches.md §4; accessors added when the feature lands.
 
 pub const HYBRIDIZATION_AUTO: u8 = 0;
 pub const HYBRIDIZATION_SP3: u8 = 1;

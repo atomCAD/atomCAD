@@ -1,6 +1,8 @@
 # `IMat2` Type + `plane_tiling_vectors` Helper — Design
 
-## Status: Draft (ready to implement)
+## Status: Implemented
+
+(The `IMat2` type, the `imat2_rows`/`imat2_cols`/`imat2_diag` constructor nodes, and the `plane_tiling_vectors` helper all exist in the codebase — see `rust/src/structure_designer/nodes/plane_tiling_vectors.rs`, `rust/src/util/imat2.rs`, and the `imat2_*` nodes. This doc records the design; the code is the source of truth. The deferred `expr` support below was not part of the shipped scope.)
 
 ## Goal
 

@@ -1,14 +1,14 @@
 # Surface Reconstruction Patches (`patch_build`, `patch_latticefill`)
 
-## Status: Draft (for review)
+## Status: Reviewed; ready for implementation (open questions in §8 to settle during build)
 
 ## Depends on / relates to
 
 - **`weld_coincident_atoms`** — one small new primitive in `crystolecule` (§3); the only new core machinery this feature needs.
-- Built-in record infrastructure (`ElementMapping`, `MaterializeRegion`) — the representation precedent (§2).
+- Built-in record infrastructure (`ElementMapping`) — the representation precedent (§2). (`MaterializeRegion` is a proposed, not-yet-implemented built-in record — see `doc/design_materialize_regions.md`.)
 - `materialize` / `fill_lattice` — its hydrogen passivation is reused for residual edge danglers (§5); and the feature is conceptually "fill a region with a patch" the way `materialize` fills a region with a crystal.
 - `DrawingPlane` (`rust/src/crystolecule/drawing_plane.rs`) — supplies the in-plane lattice vectors `u_axis/v_axis` for the common 2D-surface case.
-- `doc/design_imat2_and_plane_tiling.md` — the `IMat2` type and the `plane_tiling_vectors` helper that ergonomically produces `tiling_vectors` from a plane + superlattice (see §4). Separate workstream; not required to ship patches.
+- `plane_tiling_vectors` node (`rust/src/structure_designer/nodes/plane_tiling_vectors.rs`) + the `IMat2` type — the implemented, ergonomic way to produce `tiling_vectors` from a `DrawingPlane` + a 2×2 integer superlattice (see §4).
 
 Background: [atomCAD/atomCAD#347](https://github.com/atomCAD/atomCAD/discussions/347).
 
@@ -28,7 +28,7 @@ The tile is authored in real space and deliberately **includes the atoms it shar
 - a bond crossing a boundary with *no* atom on it (e.g. a dimer bond spanning the cell edge) → the tile also includes a **ghost** copy of the neighbour's bonding atom at its real position; the neighbour's real atom welds onto it;
 - a bond down into the bulk → the tile includes the bulk **collar** atom it attaches to; on application that collar welds onto the surviving substrate atom and inherits its bulk bonds.
 
-The user classifies nothing by hand: the build step flags only the outward atoms as **ghosts** (§4); the rest are real, and everything finer — which real atoms are shared boundaries, which ghosts are neighbour-tile copies vs. bulk collar — is settled by coincidence at weld time.
+The user classifies nothing by hand: the build step flags only the outward atoms as **ghosts** (the *patch-ghost* flag of §4 — and "ghost" means patch-ghost throughout this doc, distinct from the unrelated display-only ghost flag); the rest are real, and everything finer — which real atoms are shared boundaries, which ghosts are neighbour-tile copies vs. bulk collar — is settled by coincidence at weld time.
 
 **Apply** (`patch_latticefill`), over a fill region:
 
@@ -50,7 +50,7 @@ With the weld model every field of a patch is an existing first-class network ty
 |---|---|---|
 | Plumbing | **None** — serialization, FFI, validation, text format, `record_construct`/`record_destructure`, type dropdowns all exist | **Large** — new `DataType` + `NetworkResult` variant, serde, FFI, conversions, validator, text format, editor |
 | Composability | High — assemble/inspect with record nodes; swap the tile or vectors with ordinary nodes | Low — opaque |
-| Precedent | Matches `ElementMapping`, `MaterializeRegion` | None |
+| Precedent | Matches `ElementMapping` (and the proposed `MaterializeRegion`) | None |
 | Behaviour on the type | None needed — the patch is pure data; all behaviour lives in `patch_latticefill` | Would carry behaviour, but there is none to carry |
 | Dedicated preview / compatibility viz | Separate widget keyed on the record def | Natural home on the type |
 
@@ -84,8 +84,9 @@ Why each field:
 // crystolecule
 /// Fuse atoms that occupy the same position (within `tolerance`) into one.
 /// The surviving atom unions both bond lists (dedup by partner; on a duplicate,
-/// assert equal bond order), and unions flags. The result is a ghost only if every
-/// fused atom was a ghost — any real atom in the cluster makes the survivor real.
+/// assert equal bond order), and unions flags. The result keeps the patch-ghost
+/// flag (bit 6) only if every fused atom was a patch-ghost — any real atom in the
+/// cluster makes the survivor real (the flag is cleared).
 /// Used at apply time to realize both periodic (tile↔tile) and bulk (tile↔collar)
 /// bonds; a bulk atom's existing bonds are inherited because they are part of the union.
 fn weld_coincident_atoms(structure: &mut AtomicStructure, tolerance: f64) { … }
@@ -99,7 +100,7 @@ The authoring model is **draw, don't assemble.** The user builds an ordinary big
 
 | Pin | Type | Req | Role |
 |---|---|---|---|
-| `tile` | `Crystal` \| `Molecule` (`HasAtoms`) | Yes | The whole authored slab (reconstruction **on its bulk**); only its atoms are read. Despite the pin name, this is the *source* the tile is extracted from — not the tile itself. |
+| `source` | `Crystal` \| `Molecule` (`HasAtoms`) | Yes | The whole authored slab (reconstruction **on its bulk**); only its atoms are read. This is the *source* the tile is extracted from — the stored `patch.tile` is **computed** from it (§"Extraction"), not equal to it. (Pin is deliberately *not* called `tile`, to avoid confusion with the output record's `tile` field.) |
 | `lattice` | `Crystal` \| `Blueprint` (`HasStructure`) | Yes | Provides `lattice_vecs` to interpret and verify the integer tiling vectors. |
 | `tiling_vectors` | `Array[IVec3]` | Yes | 1–3 periodic directions in `lattice`'s coordinates. |
 | `cut_volume` | `Blueprint` | Yes | Geometry of one tile. Defines the interior at build time **and** is stored in the patch to drive removal at apply time — one volume, two uses. |
@@ -110,7 +111,7 @@ The authoring model is **draw, don't assemble.** The user builds an ordinary big
 `patch_build` computes the patch's `tile` from the slab and the cut volume:
 
 1. **Interior** `I` = slab atoms inside `cut_volume` (membership SDF ≤ build threshold `ε`).
-2. **Ghosts** `G` = slab atoms *outside* `cut_volume` that are bonded to some atom in `I`; copy them and set the **ghost flag** (`Atom` flags bit 5, the existing "neighbouring-cell copy" bit).
+2. **Ghosts** `G` = slab atoms *outside* `cut_volume` that are bonded to some atom in `I`; copy them and set the **patch-ghost flag** (`Atom` flags **bit 6**, a freshly allocated bit — see `atom.rs`). This is deliberately **not** the existing display ghost flag (bit 5, `is_ghost`/`set_ghost`), whose semantics are "display-only neighbouring-cell copy in motif_edit mode": that bit is transient render state, whereas the patch-ghost flag is durable structural state that must survive serialization and drive weld survivorship (§3) and the drop step (§5, step 6) without being clobbered by — or clobbering — motif_edit rendering.
 3. **Bonds** = every slab bond with **at least one endpoint in `I`** (interior–interior and interior–ghost). Ghost–ghost bonds are dropped.
 
 The result `{ I ∪ G, those bonds }` is stored (normalized to a `Molecule`) as `patch.tile`.
@@ -136,13 +137,18 @@ The reference **must be a lattice point, not one of the tile's atoms.** Placemen
 
 `R` is derived deterministically from `cut_volume` — the lattice cell at its reference (min) corner — so `origin` is predictable ("it places the tile's corner cell here"). Any lattice point is correct; the choice only fixes a phase the user then shifts with `origin`. It bakes into the normalized coordinates, so there is no extra stored field and no extra pin.
 
-This requires build `lattice` and apply `region` to be the **same lattice** (same `UnitCellStruct` + motif registration), not merely tiling-commensurate: collar welds coincide with substrate atoms only if the tile's motif sites match the target's. Naturally satisfied when the slab is authored from the crystal it will be applied to.
+This places two distinct requirements, on two different `patch_latticefill` pins:
+
+- **`target`** (the atom source the collar welds onto) must share the build `lattice`'s **full lattice — `UnitCellStruct` *and* motif registration**, not merely be tiling-commensurate: a collar patch-ghost coincides with a surviving substrate atom only if the tile's motif sites land exactly on the target's. The atoms are what weld, so this constraint is on the structure carrying the atoms — `target` — *not* on `region` (which may be a `Blueprint` carrying a lattice but no bulk atoms at all). Because `target` and `region` are separate pins (§5), this is a real, separately-checkable precondition, not automatic.
+- **`region`** (the extent + `lattice_vecs` source) need only supply lattice vectors **commensurate** with `patch.tiling_vectors`, so tiling steps land on lattice points.
+
+Both are naturally satisfied in the common case where the slab is authored from the same crystal that is later passed as both `target` and `region`.
 
 ### Behaviour & caveats
 
-- Validate `1 ≤ len(tiling_vectors) ≤ 3` and linear independence. The substrate the patch is finally tiled onto is `patch_latticefill`'s region, which must share `lattice` (see above).
+- Validate `1 ≤ len(tiling_vectors) ≤ 3` and linear independence. At apply time `patch_latticefill`'s `region` must be tiling-commensurate with build `lattice`, and its `target` must share build `lattice`'s full lattice + motif registration (see above).
 - The `cut_volume`'s translates under `tiling_vectors` should **tile the reconstructed strip without gaps** (else old surface atoms survive between tiles); `patch_build` can warn if they don't.
-- *Ergonomic vectors (optional):* the canonical input is `tiling_vectors: Array[IVec3]`, but the user need not hand-solve the in-plane crystallography. The **`plane_tiling_vectors`** helper node turns a Miller-indexed `DrawingPlane` (which already supplies the in-plane lattice vectors `u_axis/v_axis`) plus a 2×2 integer superlattice into the `Array[IVec3]` — covering `(1×1)`, diagonal `n×m`, and non-diagonal cells (√3×√3 R30°, c(2×2)). It is specified, together with the `IMat2` type it uses, in **`doc/design_imat2_and_plane_tiling.md`**. 2D-surface case only; 1D/3D patches enter `tiling_vectors` directly.
+- *Ergonomic vectors (optional):* the canonical input is `tiling_vectors: Array[IVec3]`, but the user need not hand-solve the in-plane crystallography — the **`plane_tiling_vectors`** node (`rust/src/structure_designer/nodes/plane_tiling_vectors.rs`) produces it. Pins: `plane: DrawingPlane` (supplies the in-plane vectors `u_axis/v_axis`) and an optional `superlattice: IMat2` override (else its stored, UI-editable 2×2); output `Array[IVec3]`. Each superlattice **row** is one tiling vector in the `(u_axis, v_axis)` basis — `(1×1)` = identity, diagonal `n×m` = rows `(n,0),(0,m)`, √3×√3 R30° = `(2,1),(-1,1)`, c(2×2) = `(1,1),(1,-1)`. 2D-surface case only; 1D/3D patches enter `tiling_vectors` directly.
 
 ## 5. Node: `patch_latticefill`
 
@@ -153,7 +159,7 @@ Tiles a patch across a region and welds it in.
 | `target` | `Crystal` \| `Molecule` (`HasAtoms`) | Yes | The structure being reconstructed. |
 | `region` | `Crystal` \| `Blueprint` (`HasStructure`) | No | Where to tile; supplies the substrate `lattice_vecs` and the fill extent. Default: `target`'s extent (then `target` must be a `Crystal`). |
 | `patch` | `Patch` (record) | Yes | From `patch_build`. |
-| `origin` | `IVec3` | No | Target lattice point at which the patch's local origin (its `cut_volume` corner cell, §4) is placed; tiling fills from there. Default: region centre. |
+| `origin` | `IVec3` | No | Target lattice point at which the patch's local origin (its `cut_volume` corner cell, §4) is placed; tiling fills from there. Default: the lattice point nearest the region's centre. |
 | `passivate` | `Bool` | No | Hydrogen-passivate the danglers left after welding (the dropped-ghost reconstruction edges, and any under-coordinated atoms). Default `true`. Set `false` to keep those danglers exposed — e.g. when a later `patch_latticefill` on an adjacent face is meant to bond to them — and passivate once at the end. (Matches `materialize`'s `passivate`.) |
 | `tolerance` | `Float` | No | Weld tolerance (Å). Default 0.1. |
 | → (out) | `Crystal` | — | The reconstructed crystal. |
@@ -173,12 +179,12 @@ For a 2D surface patch the non-periodic axis is the normal `v1 × v2`, and the t
 
 ### Algorithm
 
-1. **Verify commensurability** — each `patch.tiling_vectors[i]` is an integer combination of `region.lattice_vecs` (true by construction when `patch_build`'s `lattice` matched `region`); else error.
+1. **Verify commensurability** — each `patch.tiling_vectors[i]` is an integer combination of `region.lattice_vecs` (true by construction when `patch_build`'s `lattice` matched `region`); else error. (This checks `region` only. The separate requirement that `target` share build `lattice`'s lattice + motif registration (§4) is not verified upfront — a mismatch shows up as collar patch-ghosts that fail to weld, caught by the post-weld compatibility check in §6.)
 2. **Select cells** `P` — the cells `c = origin + Σ kᵢ·vᵢ` satisfying the containment rule above.
 3. **Cut** — for every cell in `P`, remove `target` atoms inside the translated `cut_volume` (dropping their bonds).
 4. **Place** — for every cell in `P`, add a copy of `patch.tile` translated by `c` in real space.
-5. **Weld** — `weld_coincident_atoms(result, tolerance)` over the placed copies *and* the surviving substrate: fuses tile↔tile (periodic bonds) and tile↔bulk (collar, inheriting bulk bonds) in one pass. A weld including any non-ghost atom yields a real atom; a cluster of only ghosts stays a ghost.
-6. **Drop unwelded ghosts** — any atom still flagged ghost found no real twin (it points at a neighbour cell outside `P` — a true reconstruction edge); remove it, leaving a dangling bond on the boundary interior atom.
+5. **Weld** — `weld_coincident_atoms(result, tolerance)` over the placed copies *and* the surviving substrate: fuses tile↔tile (periodic bonds) and tile↔bulk (collar, inheriting bulk bonds) in one pass. A weld including any non-patch-ghost atom yields a real atom; a cluster of only patch-ghosts stays a patch-ghost.
+6. **Drop unwelded patch-ghosts** — any atom still flagged patch-ghost found no real twin (it points at a neighbour cell outside `P` — a true reconstruction edge, or a collar with no substrate partner at a true crystal edge); remove it, leaving a dangling bond on the boundary interior atom.
 7. **Passivate** — if `passivate` (default true), hydrogen-passivate the residual danglers (reusing `materialize`'s hydrogenation). Wrap as `Crystal`.
 
 Cut and place share the same cell set `P`, so the cut never removes substrate it does not then reconstruct. Cells outside `P` keep their original (un-reconstructed) surface; the boundary between them and the reconstructed area is passivated by steps 6–7.
@@ -206,7 +212,77 @@ A **compatibility check** falls out for free: count collar atoms that weld vs. t
 1. **Build threshold `ε`.** The interior/ghost split uses `cut_volume` membership SDF ≤ `ε` (§4). It must be large enough to catch atoms authored right on the cut surface but smaller than the nearest interplanar spacing so it never grabs the layer below — same trade-off as `materialize`'s region margin. Confirm a default.
 2. **Where the cut happens.** `cut_volume` is per-tile and tiled with the patch; alternatively a single region-wide cut. Per-tile is more local and composes with the patch; proposed default.
 3. **Strictness of welding.** On element/flag mismatch or an un-welded collar (floating patch), warn vs. error. Proposed: surface as a non-blocking compatibility badge (§6) by default, with an `error_on_incompatible` flag.
-4. **Compatibility visualization.** Where to show weld/coordination stats (node subtitle badge vs. panel vs. identicons). Out of scope to build in v1; the data is produced by step 4.
+4. **Compatibility visualization.** Where to show weld/coordination stats (node subtitle badge vs. panel vs. identicons). Out of scope to build in v1; the data is produced by the apply algorithm (the weld, §5 step 5, surfaced via `apply_patch`'s `CompatibilityReport` — §9 Phase 3).
 5. **Deriving a default `cut_volume`.** It is required (it defines the interior), but a sensible default — the in-plane tiling cell extruded to a chosen depth — could be offered so the user only draws one when they want a non-prismatic cut. Nice-to-have, not v1.
 6. **Projected containment test (§5).** How exactly to test "cut_volume's periodic footprint ⊆ region's shadow" for arbitrary SDF geometry. Corner-sampling the cell parallelogram is exact for convex region footprints; non-convex regions need denser sampling or a real projection. Settle the sampling density / method; consider whether the region footprint can be precomputed once rather than per cell.
 7. **`rm_single` companion to `passivate`.** `materialize` pairs passivation with a "remove ≤1-bond atoms first" toggle; dropping unwelded ghosts can leave a reconstruction atom with a single bond, which passivation would otherwise cap into something spurious. Decide whether to add a matching `rm_single` pin or fold the cleanup into the drop-ghosts step unconditionally.
+
+## 9. Implementation plan
+
+Four bottom-up phases: each lands a self-contained, independently-testable layer before the one above depends on it. **Per `rust/AGENTS.md`, all Rust tests go in `rust/tests/` (never inline `#[cfg(test)]`), mirror the source hierarchy, and are registered in the parent test-crate file** (e.g. add `#[path = "crystolecule/weld_coincident_atoms_test.rs"] mod weld_coincident_atoms_test;` to `rust/tests/crystolecule.rs`). Run with `cd rust && cargo test`. Each phase is "done" only when its listed tests are green and `cargo fmt && cargo clippy` are clean.
+
+All atom-level correctness lives in Phases 1–3 so the welding model is proven on plain `AtomicStructure`s before any UI work — the hard logic is testable without the node-network machinery.
+
+### Phase 1 — Foundations: `weld_coincident_atoms` + patch-ghost flag + `Patch` record
+
+The one new piece of core machinery (§3), the bit-6 accessors reserved in `atom.rs`, and the built-in record that carries a patch (§2). Bundled because each is small, independently testable, and everything above needs all three.
+
+- **Source:**
+  - `rust/src/crystolecule/atomic_structure/atom.rs` — add `is_patch_ghost()` / `set_patch_ghost()` for `ATOM_FLAG_PATCH_GHOST = 1 << 6` (bit already reserved).
+  - new `rust/src/crystolecule/weld.rs` (declared `pub` in `crystolecule/mod.rs`) — `weld_coincident_atoms(structure: &mut AtomicStructure, tolerance: f64)`: spatial-grid bucket by position (reuse the existing `4.0 Å` grid), cluster atoms within `tolerance`, fuse each cluster into one survivor — union bond lists (dedup by partner, assert equal order), union flags, survivor is patch-ghost iff every member was (else real, flag cleared), rewrite all bond endpoints to the survivor id.
+  - `rust/src/structure_designer/node_type_registry.rs` — `built_in_record_type_defs.insert("Patch", …)` next to `ElementMapping`, fields `tile: Molecule`, `tiling_vectors: Array[IVec3]`, `cut_volume: Blueprint` (per §"Schema").
+- **Rust tests:**
+  - `rust/tests/crystolecule/weld_coincident_atoms_test.rs`:
+    1. two coincident atoms fuse into one; bond lists union; partner ids rewritten.
+    2. atoms farther apart than `tolerance` do **not** merge (no over-merge below smallest bond length).
+    3. real+patch-ghost → survivor is **real** (flag cleared); patch-ghost+patch-ghost → survivor stays patch-ghost.
+    4. duplicate bond to same partner dedups; **conflicting bond order panics/`warn`s** per the strictness flag.
+    5. bulk-bond inheritance: a collar-like atom welds onto a bulk atom and the survivor carries the bulk atom's outward bonds + the collar's inward bond.
+    6. three-way coincident cluster collapses to one survivor.
+    7. flag accessor round-trip: `set_patch_ghost(true/false)` toggles bit 6 only, leaving bits 0–5 untouched.
+  - `rust/tests/structure_designer/patch_record_test.rs`:
+    8. `lookup_record_type_def("Patch")` resolves with the three expected fields and types.
+    9. a network with `record_construct`/`record_destructure` on `Patch` validates and round-trips a value.
+    10. dangling-ref check: a user record referencing `Patch` is **not** flagged dangling (built-in resolves).
+
+### Phase 2 — `patch_build` extraction
+
+The "draw, don't assemble" authoring step (§4): extract the tile from a slab + cut volume, then re-express relative to the reference lattice point `R`.
+
+- **Source:** `rust/src/structure_designer/nodes/patch_build.rs` (+ register in `nodes/mod.rs`, `node_type_registry.rs`). Extraction helpers (interior/ghost split, bond selection, `R`-relative re-expression of atoms **and** `cut_volume`) factored into a plain function so they test without the node wrapper.
+- **Rust tests** — `rust/tests/structure_designer/patch_build_test.rs`:
+  1. **interior split:** atoms with SDF ≤ `ε` are interior (real); atoms outside are not interior.
+  2. **ghost capture:** an outside atom bonded to an interior atom becomes a patch-ghost; an outside atom with no bond into the interior is excluded; **distance-1 only**.
+  3. **bond selection:** interior–interior and interior–ghost bonds kept; ghost–ghost bonds dropped.
+  4. **shared-boundary closure:** an atom on the shared cut face lands inside the cut for both adjacent tiles (within `ε`) and is real in both (not a ghost).
+  5. **coordinate frame:** extracted atoms + `cut_volume` are re-expressed relative to `R` (the cut's min-corner lattice cell); `R` is a lattice point, so a known atom's fractional motif offset is preserved (phase intact).
+  6. **`HasAtoms` input:** a `Crystal` source and a `Molecule` source yield the same tile (only atoms read).
+  7. validation: `1 ≤ len(tiling_vectors) ≤ 3` and linear independence enforced; degenerate vectors error.
+
+### Phase 3 — `patch_latticefill` apply + compatibility stats + round-trip
+
+The core algorithm (§5) plus the two things that fall directly out of it: the compatibility stats (§6) and serialization. This is where the model proves out end to end; keep it node-free-testable via a core `apply_patch(...)` function that also returns the weld/coordination report.
+
+- **Source:** `rust/src/structure_designer/nodes/patch_latticefill.rs` (+ registration). Core `apply_patch(target, region, patch, origin, passivate, tolerance) -> (AtomicStructure, CompatibilityReport)` plus the projected-containment cell-selection helper. The report carries welded-vs-orphaned collar counts and post-weld coordination. `Patch` is a record and both nodes are ordinary node types, so serialization needs **no new plumbing** — the round-trip tests just lock that in.
+- **Rust tests:**
+  - `rust/tests/structure_designer/patch_latticefill_test.rs`:
+    1. **periodic weld (tile↔tile):** two adjacent placed tiles whose shared/ghost atoms coincide weld into a continuous structure; the boundary-crossing (e.g. dimer) bond becomes an ordinary bond; no duplicate atoms remain.
+    2. **bulk weld (tile↔collar):** collar patch-ghosts weld onto surviving substrate atoms and inherit bulk bonds; coordination preserved (`bulk —(inherited)— collar —(tile)— interior`).
+    3. **cut-then-weld coordination:** the cut removes the displaced surface and the collar's bond to it; the collar's inward bond replaces it — no net dangler at a welded collar.
+    4. **drop unwelded patch-ghosts:** a tile at a true edge (no neighbour in `P`) leaves a dangling bond on the boundary interior atom after its ghost is dropped.
+    5. **containment rule:** periodic directions require whole-cell containment (no partial lateral tiles); the non-periodic/normal direction is free (cut_volume may stick out). 1D / 2D / 3D periodicity each exercised.
+    6. **cut == place cell set:** substrate is never removed in a cell that is not also reconstructed.
+    7. **passivate on/off:** `passivate=true` saturates residual danglers; `passivate=false` leaves them exposed.
+    8. **tolerance:** distinct-but-close lattice sites do not over-merge at the default `0.1 Å`.
+    9. **golden end-to-end:** a small hand-built slab + 2×1-style reconstruction tile over a 2-cell region produces the expected atom/bond count and connectivity (snapshot via `insta` if convenient).
+    10. **compatibility stats:** applied too high → orphaned collars > 0; correct depth → zero orphaned, coordination clean; too low → over-coordinated weld flagged.
+  - `rust/tests/integration/patch_roundtrip_test.rs`:
+    11. a network containing `patch_build` + `patch_latticefill` serializes to `.cnnd` and reloads with identical structure (`normalize_json` for HashMap ordering).
+    12. text-format serialize → `edit_network` round-trip is stable.
+    13. a tile `Molecule` with patch-ghost-flagged atoms round-trips with bit 6 intact.
+
+### Phase 4 — Flutter UI
+
+Node editors for `patch_build` / `patch_latticefill` (registry-driven add-node is free), the `cut_volume` / `tiling_vectors` wiring (reuse `plane_tiling_vectors`), and the compatibility badge from Phase 3. Covered by `flutter analyze` + the integration smoke test (`integration_test/`); no new Rust tests. Manual `flutter run` walkthrough left to the user.
+
+**Deferred (post-v1, per §7 / open questions):** multi-face stitching, edges/corners, the compatibility visualization beyond a badge, default-`cut_volume` derivation, and the `rm_single` toggle.
