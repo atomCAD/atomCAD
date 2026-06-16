@@ -197,20 +197,19 @@ fn compute_open_directions_sp3(
             });
 
             if let Some(neighbor_id) = neighbor_id
-                && let Some(ref_perp) = find_dihedral_reference(structure, atom_id, neighbor_id) {
-                    // Use staggered (Primary) positions only
-                    let dots =
-                        compute_sp3_case1_with_dihedral(DVec3::ZERO, bond_dir, ref_perp, 1.0);
-                    return dots
-                        .iter()
-                        .filter(|d| {
-                            d.dot_type
-                                == crate::crystolecule::guided_placement::GuideDotType::Primary
-                        })
-                        .take(needed)
-                        .map(|d| d.position.normalize())
-                        .collect();
-                }
+                && let Some(ref_perp) = find_dihedral_reference(structure, atom_id, neighbor_id)
+            {
+                // Use staggered (Primary) positions only
+                let dots = compute_sp3_case1_with_dihedral(DVec3::ZERO, bond_dir, ref_perp, 1.0);
+                return dots
+                    .iter()
+                    .filter(|d| {
+                        d.dot_type == crate::crystolecule::guided_placement::GuideDotType::Primary
+                    })
+                    .take(needed)
+                    .map(|d| d.position.normalize())
+                    .collect();
+            }
 
             // Fallback: cone at 70.53° from -bond_dir with arbitrary reference
             let cone_axis = -bond_dir;

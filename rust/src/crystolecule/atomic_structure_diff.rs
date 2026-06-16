@@ -282,15 +282,16 @@ fn match_diff_atoms(
 
     for candidate in &candidates {
         if let Some(base_id) = candidate.best_base_id
-            && !matched_base_ids.contains(&base_id) {
-                // Claim this base atom
-                matched_base_ids.insert(base_id);
-                matches.push(DiffMatch {
-                    diff_id: candidate.diff_id,
-                    base_id,
-                });
-                continue;
-            }
+            && !matched_base_ids.contains(&base_id)
+        {
+            // Claim this base atom
+            matched_base_ids.insert(base_id);
+            matches.push(DiffMatch {
+                diff_id: candidate.diff_id,
+                base_id,
+            });
+            continue;
+        }
 
         // Best match was already claimed or no match at all — re-search excluding claimed atoms
         let nearby = base.get_atoms_in_radius(&candidate.match_pos, tolerance_sq.sqrt());

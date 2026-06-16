@@ -140,10 +140,11 @@ pub fn promote_node_to_parameter(
         }
         for arg in &mut consumer.arguments {
             if let Some(pin_idx) = arg.get_source_pin(node_id)
-                && pin_idx == 0 {
-                    arg.remove_source(node_id);
-                    arg.set_source(new_id, 0);
-                }
+                && pin_idx == 0
+            {
+                arg.remove_source(node_id);
+                arg.set_source(new_id, 0);
+            }
         }
     }
 

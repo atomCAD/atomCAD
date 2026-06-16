@@ -325,20 +325,22 @@ fn tessellate_non_lightweight_content(
         }
 
         // Render unit cell wireframe for motif_edit nodes (active node only)
-        if is_active && node_data.show_unit_cell_wireframe
-            && let Some(ref uc) = node_data.unit_cell {
-                let color = preferences.background.unit_cell_wireframe_color;
-                let color_f32 = [
-                    color[0] as f32 / 255.0,
-                    color[1] as f32 / 255.0,
-                    color[2] as f32 / 255.0,
-                ];
-                unit_cell_wireframe_tessellator::tessellate_unit_cell_wireframe_with_color(
-                    &mut wireframe_mesh,
-                    uc,
-                    &color_f32,
-                );
-            }
+        if is_active
+            && node_data.show_unit_cell_wireframe
+            && let Some(ref uc) = node_data.unit_cell
+        {
+            let color = preferences.background.unit_cell_wireframe_color;
+            let color_f32 = [
+                color[0] as f32 / 255.0,
+                color[1] as f32 / 255.0,
+                color[2] as f32 / 255.0,
+            ];
+            unit_cell_wireframe_tessellator::tessellate_unit_cell_wireframe_with_color(
+                &mut wireframe_mesh,
+                uc,
+                &color_f32,
+            );
+        }
     }
 
     (

@@ -469,28 +469,30 @@ impl Lexer {
 
         // Check for exponent
         if let Some(ch) = self.peek()
-            && (ch == 'e' || ch == 'E') {
-                is_float = true;
-                s.push(ch);
+            && (ch == 'e' || ch == 'E')
+        {
+            is_float = true;
+            s.push(ch);
+            self.advance();
+
+            // Handle exponent sign
+            if let Some(sign) = self.peek()
+                && (sign == '+' || sign == '-')
+            {
+                s.push(sign);
                 self.advance();
+            }
 
-                // Handle exponent sign
-                if let Some(sign) = self.peek()
-                    && (sign == '+' || sign == '-') {
-                        s.push(sign);
-                        self.advance();
-                    }
-
-                // Read exponent digits
-                while let Some(ch) = self.peek() {
-                    if ch.is_ascii_digit() {
-                        s.push(ch);
-                        self.advance();
-                    } else {
-                        break;
-                    }
+            // Read exponent digits
+            while let Some(ch) = self.peek() {
+                if ch.is_ascii_digit() {
+                    s.push(ch);
+                    self.advance();
+                } else {
+                    break;
                 }
             }
+        }
 
         if is_float {
             s.parse::<f64>()

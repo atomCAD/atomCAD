@@ -339,3 +339,6 @@ mod empty_folders_test;
 
 #[path = "structure_designer/patch_record_test.rs"]
 mod patch_record_test;
+
+#[path = "structure_designer/patch_build_test.rs"]
+mod patch_build_test;

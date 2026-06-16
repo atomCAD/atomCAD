@@ -1321,9 +1321,10 @@ fn collect_frozen_base_atom_ids(sd: &StructureDesigner) -> std::collections::Has
             }
             // Only include pure base atoms (not ones already covered by diff)
             if let Some(source) = eval_cache.provenance.sources.get(&result_id)
-                && matches!(source, AtomSource::DiffMatchedBase { .. }) {
-                    continue;
-                }
+                && matches!(source, AtomSource::DiffMatchedBase { .. })
+            {
+                continue;
+            }
             result.insert(base_id);
         }
     }

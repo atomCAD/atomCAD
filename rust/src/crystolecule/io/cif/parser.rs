@@ -38,19 +38,20 @@ pub struct CifLoop {
 /// Only strips trailing parenthesized integers from numeric-looking values.
 fn strip_uncertainty(value: &str) -> String {
     if let Some(paren_start) = value.rfind('(')
-        && value.ends_with(')') {
-            let before = &value[..paren_start];
-            let inside = &value[paren_start + 1..value.len() - 1];
-            // Only strip if the part before '(' looks numeric and inside is digits
-            if inside.chars().all(|c| c.is_ascii_digit())
-                && !before.is_empty()
-                && before
-                    .chars()
-                    .all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+')
-            {
-                return before.to_string();
-            }
+        && value.ends_with(')')
+    {
+        let before = &value[..paren_start];
+        let inside = &value[paren_start + 1..value.len() - 1];
+        // Only strip if the part before '(' looks numeric and inside is digits
+        if inside.chars().all(|c| c.is_ascii_digit())
+            && !before.is_empty()
+            && before
+                .chars()
+                .all(|c| c.is_ascii_digit() || c == '.' || c == '-' || c == '+')
+        {
+            return before.to_string();
         }
+    }
     value.to_string()
 }
 

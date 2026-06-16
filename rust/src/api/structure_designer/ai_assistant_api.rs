@@ -416,9 +416,10 @@ fn format_node_type_list(
     for category_view in category_views {
         // Apply category filter if specified
         if let Some(ref filter) = filter_category
-            && &category_view.category != filter {
-                continue;
-            }
+            && &category_view.category != filter
+        {
+            continue;
+        }
 
         if category_view.nodes.is_empty() {
             continue;

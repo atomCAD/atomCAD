@@ -126,9 +126,10 @@ pub fn dedupe_param_ids_in_network(network: &mut NodeNetwork) -> Vec<ParamIdReas
         next_free += 1;
         seen.insert(new_id);
         if let Some(node) = network.nodes.get_mut(&nid)
-            && let Some(p) = node.data.as_any_mut().downcast_mut::<ParameterData>() {
-                p.param_id = Some(new_id);
-            }
+            && let Some(p) = node.data.as_any_mut().downcast_mut::<ParameterData>()
+        {
+            p.param_id = Some(new_id);
+        }
         fixes.push(ParamIdReassignment {
             network_name: network.node_type.name.clone(),
             param_node_id: nid,
@@ -291,9 +292,10 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
 
     for (node_id, new_index) in param_updates {
         if let Some(node) = network.nodes.get_mut(&node_id)
-            && let Some(param_data) = (*node.data).as_any_mut().downcast_mut::<ParameterData>() {
-                param_data.param_index = new_index;
-            }
+            && let Some(param_data) = (*node.data).as_any_mut().downcast_mut::<ParameterData>()
+        {
+            param_data.param_index = new_index;
+        }
     }
 
     true
@@ -305,9 +307,10 @@ fn check_interface_changed(network: &NodeNetwork) -> bool {
 
     for (node_id, node) in &network.nodes {
         if node.node_type_name == "parameter"
-            && let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
-                current_params_with_ids.push((*node_id, param_data));
-            }
+            && let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>()
+        {
+            current_params_with_ids.push((*node_id, param_data));
+        }
     }
 
     // Sort by sort_order (primary) and node_id (secondary) for deterministic comparison
@@ -463,16 +466,17 @@ fn validate_wires(
         if let Some(referenced_network) = node_type_registry
             .node_networks
             .get(&dest_node.node_type_name)
-            && !referenced_network.valid {
-                network.validation_errors.push(ValidationError::new(
-                    format!(
-                        "References invalid node network '{}'",
-                        dest_node.node_type_name
-                    ),
-                    Some(*dest_node_id),
-                ));
-                return false;
-            }
+            && !referenced_network.valid
+        {
+            network.validation_errors.push(ValidationError::new(
+                format!(
+                    "References invalid node network '{}'",
+                    dest_node.node_type_name
+                ),
+                Some(*dest_node_id),
+            ));
+            return false;
+        }
 
         // Get the destination node type to access parameter information
         let dest_node_type = match node_type_registry.get_node_type_for_node(dest_node) {
@@ -547,16 +551,17 @@ fn validate_wires(
                 if let Some(referenced_network) = node_type_registry
                     .node_networks
                     .get(&source_node.node_type_name)
-                    && !referenced_network.valid {
-                        network.validation_errors.push(ValidationError::new(
-                            format!(
-                                "Source node references invalid node network '{}'",
-                                source_node.node_type_name
-                            ),
-                            Some(*source_node_id),
-                        ));
-                        return false;
-                    }
+                    && !referenced_network.valid
+                {
+                    network.validation_errors.push(ValidationError::new(
+                        format!(
+                            "Source node references invalid node network '{}'",
+                            source_node.node_type_name
+                        ),
+                        Some(*source_node_id),
+                    ));
+                    return false;
+                }
 
                 // Get the source node type to access its output type
                 let _source_node_type = match node_type_registry.get_node_type_for_node(source_node)
@@ -652,18 +657,19 @@ fn validate_wires(
             let pin_index = pin_index_usize as i32;
             let resolved = ctx.resolve(network, node_type_registry, *dest_node_id, pin_index);
             if let Some(t) = resolved
-                && matches!(t, DataType::AnyFunction { .. }) {
-                    let pin = &dest_node_type.output_pins[pin_index_usize];
-                    network.validation_errors.push(ValidationError::new(
-                        format!(
-                            "Output pin '{}' resolves to `AnyFunction`; \
+                && matches!(t, DataType::AnyFunction { .. })
+            {
+                let pin = &dest_node_type.output_pins[pin_index_usize];
+                network.validation_errors.push(ValidationError::new(
+                    format!(
+                        "Output pin '{}' resolves to `AnyFunction`; \
                              `AnyFunction` is an input-pin-only type",
-                            pin.name
-                        ),
-                        Some(*dest_node_id),
-                    ));
-                    return false;
-                }
+                        pin.name
+                    ),
+                    Some(*dest_node_id),
+                ));
+                return false;
+            }
         }
     }
 
@@ -1204,7 +1210,6 @@ fn update_network_output_type(
     network.node_type.output_pins = new_output_pins.clone();
 
     // Check if output pins changed (count or types)
-    
 
     old_output_pins.len() != new_output_pins.len()
         || old_output_pins

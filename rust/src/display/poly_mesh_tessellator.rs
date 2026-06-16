@@ -438,16 +438,17 @@ pub fn tessellate_poly_mesh(
         true,
     );
     if poly_mesh.open
-        && let Some(material) = inside_material {
-            tessellate_poly_mesh_one_sided(
-                poly_mesh,
-                mesh,
-                smoothing,
-                material,
-                highlighted_material,
-                false,
-            );
-        }
+        && let Some(material) = inside_material
+    {
+        tessellate_poly_mesh_one_sided(
+            poly_mesh,
+            mesh,
+            smoothing,
+            material,
+            highlighted_material,
+            false,
+        );
+    }
 }
 
 fn tessellate_poly_mesh_one_sided(

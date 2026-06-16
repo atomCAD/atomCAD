@@ -1523,28 +1523,29 @@ impl NetworkEvaluator {
         // are also covered. See `doc/design_node_execution.md` (Phase 2 —
         // Central skip rule for Unit-returning nodes).
         if !context.execute
-            && let Some(node_type) = registry.get_node_type_for_node(node) {
-                let pin_count = node_type.output_pin_count();
-                if pin_count > 0 {
-                    let current_network = network_stack.last().unwrap().node_network;
-                    let all_unit = (0..pin_count).all(|pin_idx| {
-                        registry
-                            .resolve_output_type(node, current_network, pin_idx as i32)
-                            .map(|t| t == DataType::Unit)
-                            .unwrap_or(false)
-                    });
-                    if all_unit {
-                        let results = vec![NetworkResult::Unit; pin_count];
-                        // Record per-pin display strings so the UI renders the
-                        // node consistently with non-skipped passes.
-                        let pin_strings: Vec<String> =
-                            results.iter().map(|r| r.to_display_string()).collect();
-                        let key = context.node_ref(node_id);
-                        context.node_output_strings.insert(key, pin_strings);
-                        return EvalOutput::multi(results);
-                    }
+            && let Some(node_type) = registry.get_node_type_for_node(node)
+        {
+            let pin_count = node_type.output_pin_count();
+            if pin_count > 0 {
+                let current_network = network_stack.last().unwrap().node_network;
+                let all_unit = (0..pin_count).all(|pin_idx| {
+                    registry
+                        .resolve_output_type(node, current_network, pin_idx as i32)
+                        .map(|t| t == DataType::Unit)
+                        .unwrap_or(false)
+                });
+                if all_unit {
+                    let results = vec![NetworkResult::Unit; pin_count];
+                    // Record per-pin display strings so the UI renders the
+                    // node consistently with non-skipped passes.
+                    let pin_strings: Vec<String> =
+                        results.iter().map(|r| r.to_display_string()).collect();
+                    let key = context.node_ref(node_id);
+                    context.node_output_strings.insert(key, pin_strings);
+                    return EvalOutput::multi(results);
                 }
             }
+        }
 
         let eval_output = if registry
             .built_in_node_types
@@ -1616,17 +1617,18 @@ impl NetworkEvaluator {
         let mut eval_output = eval_output;
         for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
             if let Some(t) = result.infer_data_type()
-                && t.is_abstract() {
-                    debug_assert!(
-                        false,
-                        "node {} pin {} produced value with abstract type {:?}",
-                        node_id, pin_idx, t
-                    );
-                    *result = NetworkResult::Error(format!(
-                        "node produced value with abstract type {:?} on pin {}",
-                        t, pin_idx
-                    ));
-                }
+                && t.is_abstract()
+            {
+                debug_assert!(
+                    false,
+                    "node {} pin {} produced value with abstract type {:?}",
+                    node_id, pin_idx, t
+                );
+                *result = NetworkResult::Error(format!(
+                    "node produced value with abstract type {:?} on pin {}",
+                    t, pin_idx
+                ));
+            }
         }
 
         // Record error from primary (pin 0) result
@@ -1719,26 +1721,27 @@ impl NetworkEvaluator {
             // `evaluate` (consumed as another node's input). See
             // `doc/design_node_execution.md` (Phase 2 — Central skip rule).
             if !context.execute
-                && let Some(node_type) = registry.get_node_type_for_node(node) {
-                    let pin_count = node_type.output_pin_count();
-                    if pin_count > 0 {
-                        let current_network = network_stack.last().unwrap().node_network;
-                        let all_unit = (0..pin_count).all(|pin_idx| {
-                            registry
-                                .resolve_output_type(node, current_network, pin_idx as i32)
-                                .map(|t| t == DataType::Unit)
-                                .unwrap_or(false)
-                        });
-                        if all_unit {
-                            let pin_strings: Vec<String> = (0..pin_count)
-                                .map(|_| NetworkResult::Unit.to_display_string())
-                                .collect();
-                            let key = context.node_ref(node_id);
-                            context.node_output_strings.insert(key, pin_strings);
-                            return NetworkResult::Unit;
-                        }
+                && let Some(node_type) = registry.get_node_type_for_node(node)
+            {
+                let pin_count = node_type.output_pin_count();
+                if pin_count > 0 {
+                    let current_network = network_stack.last().unwrap().node_network;
+                    let all_unit = (0..pin_count).all(|pin_idx| {
+                        registry
+                            .resolve_output_type(node, current_network, pin_idx as i32)
+                            .map(|t| t == DataType::Unit)
+                            .unwrap_or(false)
+                    });
+                    if all_unit {
+                        let pin_strings: Vec<String> = (0..pin_count)
+                            .map(|_| NetworkResult::Unit.to_display_string())
+                            .collect();
+                        let key = context.node_ref(node_id);
+                        context.node_output_strings.insert(key, pin_strings);
+                        return NetworkResult::Unit;
                     }
                 }
+            }
 
             if registry
                 .built_in_node_types
@@ -1831,10 +1834,7 @@ impl NetworkEvaluator {
             output_pin_index as usize
         };
         let key = context.node_ref(node_id);
-        let entry = context
-            .node_output_strings
-            .entry(key)
-            .or_default();
+        let entry = context.node_output_strings.entry(key).or_default();
         // Grow the vec if needed
         if entry.len() <= pin_index {
             entry.resize(pin_index + 1, String::new());

@@ -70,9 +70,10 @@ fn save_recent_files(files: &[String]) {
     };
 
     if let Some(parent) = path.parent()
-        && fs::create_dir_all(parent).is_err() {
-            return;
-        }
+        && fs::create_dir_all(parent).is_err()
+    {
+        return;
+    }
 
     if let Ok(json) = serde_json::to_string_pretty(files) {
         let _ = fs::write(&path, json);

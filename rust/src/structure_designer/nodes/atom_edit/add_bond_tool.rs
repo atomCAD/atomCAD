@@ -57,9 +57,10 @@ fn set_add_bond_interaction_state(
     new_state: AddBondInteractionState,
 ) {
     if let Some(data) = get_atom_edit_data_mut_transient(structure_designer)
-        && let AtomEditTool::AddBond(ref mut bond_state) = data.active_tool {
-            bond_state.interaction_state = new_state;
-        }
+        && let AtomEditTool::AddBond(ref mut bond_state) = data.active_tool
+    {
+        bond_state.interaction_state = new_state;
+    }
 }
 
 /// Perform a hit test for atoms only (bonds and empty space are ignored).
@@ -148,9 +149,10 @@ pub fn set_add_bond_order(structure_designer: &mut StructureDesigner, order: u8)
         return; // Reject invalid orders
     }
     if let Some(data) = get_atom_edit_data_mut_transient(structure_designer)
-        && let AtomEditTool::AddBond(ref mut state) = data.active_tool {
-            state.bond_order = order;
-        }
+        && let AtomEditTool::AddBond(ref mut state) = data.active_tool
+    {
+        state.bond_order = order;
+    }
 }
 
 /// Handle pointer-down in the AddBond tool. Performs a hit test for atoms.
@@ -514,10 +516,11 @@ fn get_atom_world_position(
     // position.
     if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache()
         && let Some(eval_cache) = eval_cache.downcast_ref::<AtomEditEvalCache>()
-            && let Some(result_id) = eval_cache.provenance.diff_to_result.get(&diff_atom_id)
-                && let Some(atom) = result_structure.get_atom(*result_id) {
-                    return Some(atom.position);
-                }
+        && let Some(result_id) = eval_cache.provenance.diff_to_result.get(&diff_atom_id)
+        && let Some(atom) = result_structure.get_atom(*result_id)
+    {
+        return Some(atom.position);
+    }
 
     // Second try: the diff_atom_id may be a result atom ID directly (diff view)
     if let Some(atom) = result_structure.get_atom(diff_atom_id) {

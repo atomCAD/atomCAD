@@ -387,12 +387,13 @@ impl AtomEditData {
                     AddBondInteractionState::Idle => state.last_atom_id,
                 };
                 if let Some(diff_id) = mark_diff_id
-                    && let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
-                        result.decorator_mut().set_atom_display_state(
-                            result_id,
-                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
-                        );
-                    }
+                    && let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id)
+                {
+                    result.decorator_mut().set_atom_display_state(
+                        result_id,
+                        crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                    );
+                }
             }
             if let Some(mark_id) = self.measurement_marked_atom_id {
                 result.decorator_mut().set_atom_display_state(
@@ -466,55 +467,57 @@ impl AtomEditData {
     /// Set an atom's atomic_number with recording.
     pub fn set_atomic_number_recorded(&mut self, atom_id: u32, atomic_number: i16) {
         if let Some(ref mut rec) = self.recorder
-            && let Some(atom) = self.diff.get_atom(atom_id) {
-                let old_an = atom.atomic_number;
-                let pos = atom.position;
-                let flags = atom.flags;
-                let anchor = self.diff.anchor_position(atom_id).copied();
-                if old_an != atomic_number {
-                    rec.atom_deltas.push(AtomDelta {
-                        atom_id,
-                        before: Some(AtomState {
-                            atomic_number: old_an,
-                            position: pos,
-                            anchor,
-                            flags,
-                        }),
-                        after: Some(AtomState {
-                            atomic_number,
-                            position: pos,
-                            anchor,
-                            flags,
-                        }),
-                    });
-                }
+            && let Some(atom) = self.diff.get_atom(atom_id)
+        {
+            let old_an = atom.atomic_number;
+            let pos = atom.position;
+            let flags = atom.flags;
+            let anchor = self.diff.anchor_position(atom_id).copied();
+            if old_an != atomic_number {
+                rec.atom_deltas.push(AtomDelta {
+                    atom_id,
+                    before: Some(AtomState {
+                        atomic_number: old_an,
+                        position: pos,
+                        anchor,
+                        flags,
+                    }),
+                    after: Some(AtomState {
+                        atomic_number,
+                        position: pos,
+                        anchor,
+                        flags,
+                    }),
+                });
             }
+        }
         self.diff.set_atomic_number(atom_id, atomic_number);
     }
 
     /// Set an atom's anchor position with recording.
     pub fn set_anchor_recorded(&mut self, atom_id: u32, anchor: DVec3) {
         if let Some(ref mut rec) = self.recorder
-            && let Some(atom) = self.diff.get_atom(atom_id) {
-                let old_anchor = self.diff.anchor_position(atom_id).copied();
-                if old_anchor != Some(anchor) {
-                    rec.atom_deltas.push(AtomDelta {
-                        atom_id,
-                        before: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor: old_anchor,
-                            flags: atom.flags,
-                        }),
-                        after: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor: Some(anchor),
-                            flags: atom.flags,
-                        }),
-                    });
-                }
+            && let Some(atom) = self.diff.get_atom(atom_id)
+        {
+            let old_anchor = self.diff.anchor_position(atom_id).copied();
+            if old_anchor != Some(anchor) {
+                rec.atom_deltas.push(AtomDelta {
+                    atom_id,
+                    before: Some(AtomState {
+                        atomic_number: atom.atomic_number,
+                        position: atom.position,
+                        anchor: old_anchor,
+                        flags: atom.flags,
+                    }),
+                    after: Some(AtomState {
+                        atomic_number: atom.atomic_number,
+                        position: atom.position,
+                        anchor: Some(anchor),
+                        flags: atom.flags,
+                    }),
+                });
             }
+        }
         self.diff.set_anchor_position(atom_id, anchor);
     }
 
@@ -571,42 +574,44 @@ impl AtomEditData {
         });
         self.diff.delete_bond(bond_ref);
         if let Some(ref mut rec) = self.recorder
-            && let Some(order) = old_order {
-                let (a, b) = if bond_ref.atom_id1 < bond_ref.atom_id2 {
-                    (bond_ref.atom_id1, bond_ref.atom_id2)
-                } else {
-                    (bond_ref.atom_id2, bond_ref.atom_id1)
-                };
-                rec.bond_deltas.push(BondDelta {
-                    atom_id1: a,
-                    atom_id2: b,
-                    old_order: Some(order),
-                    new_order: None,
-                });
-            }
+            && let Some(order) = old_order
+        {
+            let (a, b) = if bond_ref.atom_id1 < bond_ref.atom_id2 {
+                (bond_ref.atom_id1, bond_ref.atom_id2)
+            } else {
+                (bond_ref.atom_id2, bond_ref.atom_id1)
+            };
+            rec.bond_deltas.push(BondDelta {
+                atom_id1: a,
+                atom_id2: b,
+                old_order: Some(order),
+                new_order: None,
+            });
+        }
     }
 
     /// Set atom position with recording. For use by minimization etc.
     pub fn set_position_recorded(&mut self, atom_id: u32, new_position: DVec3) {
         if let Some(ref mut rec) = self.recorder
-            && let Some(atom) = self.diff.get_atom(atom_id) {
-                let anchor = self.diff.anchor_position(atom_id).copied();
-                rec.atom_deltas.push(AtomDelta {
-                    atom_id,
-                    before: Some(AtomState {
-                        atomic_number: atom.atomic_number,
-                        position: atom.position,
-                        anchor,
-                        flags: atom.flags,
-                    }),
-                    after: Some(AtomState {
-                        atomic_number: atom.atomic_number,
-                        position: new_position,
-                        anchor,
-                        flags: atom.flags,
-                    }),
-                });
-            }
+            && let Some(atom) = self.diff.get_atom(atom_id)
+        {
+            let anchor = self.diff.anchor_position(atom_id).copied();
+            rec.atom_deltas.push(AtomDelta {
+                atom_id,
+                before: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: atom.flags,
+                }),
+                after: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: new_position,
+                    anchor,
+                    flags: atom.flags,
+                }),
+            });
+        }
         self.diff.set_atom_position(atom_id, new_position);
     }
 
@@ -615,28 +620,29 @@ impl AtomEditData {
     /// to the new diff atom within a recording session.
     pub fn set_flags_recorded(&mut self, atom_id: u32, flags: u16) {
         if let Some(ref mut rec) = self.recorder
-            && let Some(atom) = self.diff.get_atom(atom_id) {
-                let old_flags = atom.flags;
-                // Compare non-selection bits only
-                if (old_flags & !0x1) != (flags & !0x1) {
-                    let anchor = self.diff.anchor_position(atom_id).copied();
-                    rec.atom_deltas.push(AtomDelta {
-                        atom_id,
-                        before: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor,
-                            flags: old_flags,
-                        }),
-                        after: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor,
-                            flags: (old_flags & 0x1) | (flags & !0x1),
-                        }),
-                    });
-                }
+            && let Some(atom) = self.diff.get_atom(atom_id)
+        {
+            let old_flags = atom.flags;
+            // Compare non-selection bits only
+            if (old_flags & !0x1) != (flags & !0x1) {
+                let anchor = self.diff.anchor_position(atom_id).copied();
+                rec.atom_deltas.push(AtomDelta {
+                    atom_id,
+                    before: Some(AtomState {
+                        atomic_number: atom.atomic_number,
+                        position: atom.position,
+                        anchor,
+                        flags: old_flags,
+                    }),
+                    after: Some(AtomState {
+                        atomic_number: atom.atomic_number,
+                        position: atom.position,
+                        anchor,
+                        flags: (old_flags & 0x1) | (flags & !0x1),
+                    }),
+                });
             }
+        }
         // Apply: preserve selection bit, set everything else
         if let Some(atom) = self.diff.get_atom(atom_id) {
             let selected = atom.flags & 0x1;
@@ -655,30 +661,31 @@ impl AtomEditData {
     pub fn set_frozen_recorded(&mut self, atom_id: u32, frozen: bool) {
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
-                && atom.is_frozen() != frozen {
-                    let anchor = self.diff.anchor_position(atom_id).copied();
-                    let mut new_flags = atom.flags;
-                    if frozen {
-                        new_flags |= 1 << 2;
-                    } else {
-                        new_flags &= !(1 << 2);
-                    }
-                    rec.atom_deltas.push(AtomDelta {
-                        atom_id,
-                        before: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor,
-                            flags: atom.flags,
-                        }),
-                        after: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor,
-                            flags: new_flags,
-                        }),
-                    });
-                }
+            && atom.is_frozen() != frozen
+        {
+            let anchor = self.diff.anchor_position(atom_id).copied();
+            let mut new_flags = atom.flags;
+            if frozen {
+                new_flags |= 1 << 2;
+            } else {
+                new_flags &= !(1 << 2);
+            }
+            rec.atom_deltas.push(AtomDelta {
+                atom_id,
+                before: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: atom.flags,
+                }),
+                after: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: new_flags,
+                }),
+            });
+        }
         self.diff.set_atom_frozen(atom_id, frozen);
     }
 
@@ -686,27 +693,28 @@ impl AtomEditData {
     pub fn set_hybridization_override_recorded(&mut self, atom_id: u32, hybridization: u8) {
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
-                && atom.hybridization_override() != hybridization {
-                    let anchor = self.diff.anchor_position(atom_id).copied();
-                    let mut new_flags = atom.flags;
-                    // Clear hybridization bits and set new value
-                    new_flags = (new_flags & !(0b11 << 3)) | (((hybridization as u16) & 0b11) << 3);
-                    rec.atom_deltas.push(AtomDelta {
-                        atom_id,
-                        before: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor,
-                            flags: atom.flags,
-                        }),
-                        after: Some(AtomState {
-                            atomic_number: atom.atomic_number,
-                            position: atom.position,
-                            anchor,
-                            flags: new_flags,
-                        }),
-                    });
-                }
+            && atom.hybridization_override() != hybridization
+        {
+            let anchor = self.diff.anchor_position(atom_id).copied();
+            let mut new_flags = atom.flags;
+            // Clear hybridization bits and set new value
+            new_flags = (new_flags & !(0b11 << 3)) | (((hybridization as u16) & 0b11) << 3);
+            rec.atom_deltas.push(AtomDelta {
+                atom_id,
+                before: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: atom.flags,
+                }),
+                after: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: new_flags,
+                }),
+            });
+        }
         self.diff
             .set_atom_hybridization_override(atom_id, hybridization);
     }
@@ -738,13 +746,14 @@ impl AtomEditData {
         use super::diff_recorder::CrossCellBondDelta;
         let old_value = self.cross_cell_bonds.remove(bond_ref);
         if let Some(ref mut rec) = self.recorder
-            && let Some(info) = old_value {
-                rec.cross_cell_bond_deltas.push(CrossCellBondDelta {
-                    bond_ref: bond_ref.clone(),
-                    old_value: Some(info),
-                    new_value: None,
-                });
-            }
+            && let Some(info) = old_value
+        {
+            rec.cross_cell_bond_deltas.push(CrossCellBondDelta {
+                bond_ref: bond_ref.clone(),
+                old_value: Some(info),
+                new_value: None,
+            });
+        }
     }
 
     // --- Bulk merge ---
@@ -774,9 +783,9 @@ impl AtomEditData {
                 if ext_id < other_ext_id
                     && let (Some(&new_id1), Some(&new_id2)) =
                         (id_map.get(&ext_id), id_map.get(&other_ext_id))
-                    {
-                        self.add_bond_recorded(new_id1, new_id2, bond.bond_order());
-                    }
+                {
+                    self.add_bond_recorded(new_id1, new_id2, bond.bond_order());
+                }
             }
         }
 
@@ -887,16 +896,17 @@ impl AtomEditData {
         self.diff.set_atom_position(atom_id, new_position);
 
         if let Some(ref mut rec) = self.recorder
-            && let Some(old) = old_state {
-                rec.atom_deltas.push(AtomDelta {
-                    atom_id,
-                    before: Some(old.clone()),
-                    after: Some(AtomState {
-                        position: new_position,
-                        ..old
-                    }),
-                });
-            }
+            && let Some(old) = old_state
+        {
+            rec.atom_deltas.push(AtomDelta {
+                atom_id,
+                before: Some(old.clone()),
+                after: Some(AtomState {
+                    position: new_position,
+                    ..old
+                }),
+            });
+        }
     }
 
     /// Add a bond between two atoms in the diff.
@@ -1009,30 +1019,31 @@ impl AtomEditData {
 
         // Record atom removal + bond removals
         if let Some(ref mut rec) = self.recorder
-            && let Some((atom_state, bonds)) = before_state {
-                rec.atom_deltas.push(AtomDelta {
-                    atom_id: diff_atom_id,
-                    before: Some(atom_state),
-                    after: None,
+            && let Some((atom_state, bonds)) = before_state
+        {
+            rec.atom_deltas.push(AtomDelta {
+                atom_id: diff_atom_id,
+                before: Some(atom_state),
+                after: None,
+            });
+            for (other_id, order) in bonds {
+                // Record bond removal with canonical ordering.
+                // No risk of double-recording: delete_atom removes bonds
+                // from both endpoints, so subsequent remove_from_diff calls
+                // on the other atom won't see this bond anymore.
+                let (a, b) = if diff_atom_id < other_id {
+                    (diff_atom_id, other_id)
+                } else {
+                    (other_id, diff_atom_id)
+                };
+                rec.bond_deltas.push(BondDelta {
+                    atom_id1: a,
+                    atom_id2: b,
+                    old_order: Some(order),
+                    new_order: None,
                 });
-                for (other_id, order) in bonds {
-                    // Record bond removal with canonical ordering.
-                    // No risk of double-recording: delete_atom removes bonds
-                    // from both endpoints, so subsequent remove_from_diff calls
-                    // on the other atom won't see this bond anymore.
-                    let (a, b) = if diff_atom_id < other_id {
-                        (diff_atom_id, other_id)
-                    } else {
-                        (other_id, diff_atom_id)
-                    };
-                    rec.bond_deltas.push(BondDelta {
-                        atom_id1: a,
-                        atom_id2: b,
-                        old_order: Some(order),
-                        new_order: None,
-                    });
-                }
             }
+        }
     }
 
     // --- Tool management ---
@@ -1467,19 +1478,19 @@ impl NodeData for AtomEditData {
         if !self.selection.selected_base_atoms.is_empty()
             && !structure_designer.is_selected_node_in_diff_view()
             && let Some(eval_cache) = structure_designer.get_selected_node_eval_cache()
-                && let Some(cache) = eval_cache.downcast_ref::<AtomEditEvalCache>()
-                    && let Some(result) =
-                        structure_designer.get_atomic_structure_from_selected_node()
-                    {
-                        for &base_id in &self.selection.selected_base_atoms {
-                            if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id)
-                                && let Some(atom) = result.get_atom(result_id) {
-                                    // Skip frozen atoms (flag flows through apply_diff)
-                                    if atom.is_frozen() {
-                                        continue;
-                                    }
-                                    // Check if this base atom already has a diff entry
-                                    let existing_diff_id = match cache
+            && let Some(cache) = eval_cache.downcast_ref::<AtomEditEvalCache>()
+            && let Some(result) = structure_designer.get_atomic_structure_from_selected_node()
+        {
+            for &base_id in &self.selection.selected_base_atoms {
+                if let Some(&result_id) = cache.provenance.base_to_result.get(&base_id)
+                    && let Some(atom) = result.get_atom(result_id)
+                {
+                    // Skip frozen atoms (flag flows through apply_diff)
+                    if atom.is_frozen() {
+                        continue;
+                    }
+                    // Check if this base atom already has a diff entry
+                    let existing_diff_id = match cache
                                         .provenance
                                         .sources
                                         .get(&result_id)
@@ -1492,16 +1503,16 @@ impl NodeData for AtomEditData {
                                         ) => Some(*diff_id),
                                         _ => None,
                                     };
-                                    base_atoms_info.push((
-                                        base_id,
-                                        atom.atomic_number,
-                                        atom.position,
-                                        existing_diff_id,
-                                        atom.flags,
-                                    ));
-                                }
-                        }
-                    }
+                    base_atoms_info.push((
+                        base_id,
+                        atom.atomic_number,
+                        atom.position,
+                        existing_diff_id,
+                        atom.flags,
+                    ));
+                }
+            }
+        }
 
         Some(Box::new(AtomEditSelectionGadget::new(
             center,
@@ -2117,19 +2128,20 @@ pub fn atomic_structure_to_motif(
                 && let (Some(&idx1), Some(&idx2)) = (
                     atom_id_to_site_index.get(&atom.id),
                     atom_id_to_site_index.get(&other_id),
-                ) {
-                    bonds.push(MotifBond {
-                        site_1: SiteSpecifier {
-                            site_index: idx1,
-                            relative_cell: glam::IVec3::ZERO,
-                        },
-                        site_2: SiteSpecifier {
-                            site_index: idx2,
-                            relative_cell: glam::IVec3::ZERO,
-                        },
-                        multiplicity: bond.bond_order() as i32,
-                    });
-                }
+                )
+            {
+                bonds.push(MotifBond {
+                    site_1: SiteSpecifier {
+                        site_index: idx1,
+                        relative_cell: glam::IVec3::ZERO,
+                    },
+                    site_2: SiteSpecifier {
+                        site_index: idx2,
+                        relative_cell: glam::IVec3::ZERO,
+                    },
+                    multiplicity: bond.bond_order() as i32,
+                });
+            }
         }
     }
 
@@ -2259,12 +2271,13 @@ pub fn generate_ghost_atoms(
                     let (_, _, _, ref bonds) = primary_atoms[atom_idx];
                     for &(other_primary_id, bond_order) in bonds {
                         if let Some(&other_idx) = id_to_idx.get(&other_primary_id)
-                            && let Some(&other_ghost_id) = primary_idx_to_ghost.get(&other_idx) {
-                                // Only add each bond once (lower ghost ID first)
-                                if ghost_id < other_ghost_id {
-                                    viz.add_bond(ghost_id, other_ghost_id, bond_order);
-                                }
+                            && let Some(&other_ghost_id) = primary_idx_to_ghost.get(&other_idx)
+                        {
+                            // Only add each bond once (lower ghost ID first)
+                            if ghost_id < other_ghost_id {
+                                viz.add_bond(ghost_id, other_ghost_id, bond_order);
                             }
+                        }
                     }
                 }
             }
@@ -2470,16 +2483,18 @@ pub(crate) fn calc_atom_edit_selection_transform(
 
     for &base_id in &selection.selected_base_atoms {
         if let Some(&result_id) = provenance.base_to_result.get(&base_id)
-            && let Some(atom) = result_structure.get_atom(result_id) {
-                positions.push(atom.position);
-            }
+            && let Some(atom) = result_structure.get_atom(result_id)
+        {
+            positions.push(atom.position);
+        }
     }
 
     for &diff_id in &selection.selected_diff_atoms {
         if let Some(&result_id) = provenance.diff_to_result.get(&diff_id)
-            && let Some(atom) = result_structure.get_atom(result_id) {
-                positions.push(atom.position);
-            }
+            && let Some(atom) = result_structure.get_atom(result_id)
+        {
+            positions.push(atom.position);
+        }
     }
 
     calc_transform_from_positions(&positions)
@@ -2593,11 +2608,11 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
 
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer)
         && let Some(recorder) = data.end_recording()
-            && (!recorder.atom_deltas.is_empty()
-                || !recorder.bond_deltas.is_empty()
-                || !recorder.cross_cell_bond_deltas.is_empty())
-            {
-                structure_designer.push_command(
+        && (!recorder.atom_deltas.is_empty()
+            || !recorder.bond_deltas.is_empty()
+            || !recorder.cross_cell_bond_deltas.is_empty())
+    {
+        structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
                         description: "Move atoms".to_string(),
                         network_name: pending.network_name,
@@ -2607,7 +2622,7 @@ pub fn end_atom_edit_drag(structure_designer: &mut StructureDesigner) {
                         cross_cell_bond_deltas: recorder.cross_cell_bond_deltas,
                     },
                 );
-            }
+    }
 }
 
 /// Wrap a mutation on `StructureDesigner` with atom_edit undo recording.
@@ -2643,11 +2658,11 @@ pub fn with_atom_edit_undo<F>(
     // End recording and push command
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer)
         && let Some(recorder) = data.end_recording()
-            && (!recorder.atom_deltas.is_empty()
-                || !recorder.bond_deltas.is_empty()
-                || !recorder.cross_cell_bond_deltas.is_empty())
-            {
-                structure_designer.push_command(
+        && (!recorder.atom_deltas.is_empty()
+            || !recorder.bond_deltas.is_empty()
+            || !recorder.cross_cell_bond_deltas.is_empty())
+    {
+        structure_designer.push_command(
                     crate::structure_designer::undo::commands::atom_edit_mutation::AtomEditMutationCommand {
                         description: description.to_string(),
                         network_name,
@@ -2657,5 +2672,5 @@ pub fn with_atom_edit_undo<F>(
                         cross_cell_bond_deltas: recorder.cross_cell_bond_deltas,
                     },
                 );
-            }
+    }
 }

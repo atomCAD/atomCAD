@@ -369,9 +369,10 @@ impl Gadget for PolygonGadget {
 
         // Update the vertex position if we have a valid lattice point
         if let Some(lattice_point) = self.find_lattice_point_by_ray(&ray_origin, &ray_direction)
-            && let Some(vertex_index) = self.dragged_handle {
-                self.vertices[vertex_index] = lattice_point;
-            }
+            && let Some(vertex_index) = self.dragged_handle
+        {
+            self.vertices[vertex_index] = lattice_point;
+        }
     }
 
     fn end_drag(&mut self) {

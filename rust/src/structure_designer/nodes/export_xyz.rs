@@ -168,14 +168,15 @@ pub fn export_xyz_data_saver(
     if let Some(data) = node_data.as_any_mut().downcast_mut::<ExportXYZData>() {
         // If there's a file name and design directory, try to convert to relative path
         if let (Some(design_dir), file_name) = (design_dir, &data.file_name)
-            && !file_name.is_empty() {
-                let (potentially_relative_path, should_update) =
-                    try_make_relative(file_name, Some(design_dir));
-                if should_update {
-                    // Update the stored path to use relative path for better portability
-                    data.file_name = potentially_relative_path;
-                }
+            && !file_name.is_empty()
+        {
+            let (potentially_relative_path, should_update) =
+                try_make_relative(file_name, Some(design_dir));
+            if should_update {
+                // Update the stored path to use relative path for better portability
+                data.file_name = potentially_relative_path;
             }
+        }
 
         // Now serialize the (potentially modified) data
         serde_json::to_value(data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))

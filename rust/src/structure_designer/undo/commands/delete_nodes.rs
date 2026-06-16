@@ -75,9 +75,10 @@ impl DeleteNodesCommand {
             // Re-establish all wires (for connections to surviving nodes)
             for wire in &self.deleted_wires {
                 if let Some(dest_node) = network.nodes.get_mut(&wire.dest_node_id)
-                    && let Some(arg) = dest_node.arguments.get_mut(wire.dest_param_index) {
-                        arg.set_source(wire.source_node_id, wire.source_output_pin_index);
-                    }
+                    && let Some(arg) = dest_node.arguments.get_mut(wire.dest_param_index)
+                {
+                    arg.set_source(wire.source_node_id, wire.source_output_pin_index);
+                }
             }
 
             // Restore return node

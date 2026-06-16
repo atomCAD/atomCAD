@@ -104,9 +104,10 @@ impl<'a> NetworkSerializer<'a> {
 
         // Step 3: Output statement
         if let Some(return_node_id) = self.network.return_node_id
-            && let Some(return_name) = self.get_node_name(return_node_id) {
-                output.push_str(&format!("output {}\n", format_identifier(return_name)));
-            }
+            && let Some(return_name) = self.get_node_name(return_node_id)
+        {
+            output.push_str(&format!("output {}\n", format_identifier(return_name)));
+        }
 
         // Add footer with node count
         let node_count = sorted_ids.len();
@@ -247,12 +248,13 @@ impl<'a> NetworkSerializer<'a> {
                     } else {
                         // Single input: format as direct reference
                         if let Some((source_id, pin_index)) = argument.iter_source_pins().next()
-                            && let Some(source_name) = self.get_node_name(source_id) {
-                                properties.push((
-                                    param_name.clone(),
-                                    self.format_reference(source_name, pin_index, source_id),
-                                ));
-                            }
+                            && let Some(source_name) = self.get_node_name(source_id)
+                        {
+                            properties.push((
+                                param_name.clone(),
+                                self.format_reference(source_name, pin_index, source_id),
+                            ));
+                        }
                     }
                 }
             }

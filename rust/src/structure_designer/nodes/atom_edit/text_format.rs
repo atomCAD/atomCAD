@@ -142,18 +142,19 @@ pub fn serialize_diff(diff: &AtomicStructure) -> String {
                 && let (Some(&a), Some(&b)) = (
                     atom_id_to_line.get(&atom_id),
                     atom_id_to_line.get(&other_id),
-                ) {
-                    if bond.bond_order() == BOND_DELETED {
-                        lines.push(format!("unbond {}-{}", a, b));
-                    } else {
-                        lines.push(format!(
-                            "bond {}-{} {}",
-                            a,
-                            b,
-                            bond_order_name(bond.bond_order())
-                        ));
-                    }
+                )
+            {
+                if bond.bond_order() == BOND_DELETED {
+                    lines.push(format!("unbond {}-{}", a, b));
+                } else {
+                    lines.push(format!(
+                        "bond {}-{} {}",
+                        a,
+                        b,
+                        bond_order_name(bond.bond_order())
+                    ));
                 }
+            }
         }
     }
 

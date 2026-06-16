@@ -2016,9 +2016,10 @@ fn test_resave_roundtrip_semantically_identical_after_first_v3_save() {
         {
             for entry in networks {
                 if let Some(net) = entry.as_array_mut().and_then(|a| a.get_mut(1))
-                    && let Some(nodes) = net.get_mut("nodes").and_then(|v| v.as_array_mut()) {
-                        nodes.sort_by_key(|n| n.get("id").and_then(|v| v.as_u64()).unwrap_or(0));
-                    }
+                    && let Some(nodes) = net.get_mut("nodes").and_then(|v| v.as_array_mut())
+                {
+                    nodes.sort_by_key(|n| n.get("id").and_then(|v| v.as_u64()).unwrap_or(0));
+                }
             }
         }
         value

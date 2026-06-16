@@ -67,9 +67,10 @@ impl PasteNodesCommand {
             // Re-establish wires between pasted nodes
             for wire in &self.pasted_wires {
                 if let Some(dest_node) = network.nodes.get_mut(&wire.dest_node_id)
-                    && let Some(arg) = dest_node.arguments.get_mut(wire.dest_param_index) {
-                        arg.set_source(wire.source_node_id, wire.source_output_pin_index);
-                    }
+                    && let Some(arg) = dest_node.arguments.get_mut(wire.dest_param_index)
+                {
+                    arg.set_source(wire.source_node_id, wire.source_output_pin_index);
+                }
             }
 
             // Restore display states. `add_node_with_id` force-displays every

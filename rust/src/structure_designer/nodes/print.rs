@@ -23,8 +23,7 @@ use std::time::SystemTime;
 /// here: `eval` runs on every pass that reaches this node, including normal
 /// display passes. The `execute_only` flag inside `eval` is what gates the
 /// actual buffer push when the user wants prints only on Execute.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PrintData {
     /// When `true`, the side-effect push fires only under
     /// `context.execute == true` (i.e. an explicit Execute pass). When
@@ -32,7 +31,6 @@ pub struct PrintData {
     /// is flowing through this wire" debugging.
     pub execute_only: bool,
 }
-
 
 impl NodeData for PrintData {
     fn provide_gadget(

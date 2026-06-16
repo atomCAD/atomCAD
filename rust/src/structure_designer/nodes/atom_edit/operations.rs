@@ -58,9 +58,10 @@ fn delete_selected_in_result_view(structure_designer: &mut StructureDesigner) {
         let mut base_to_delete: Vec<(u32, DVec3)> = Vec::new();
         for &base_id in &atom_edit_data.selection.selected_base_atoms {
             if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id)
-                && let Some(atom) = result_structure.get_atom(result_id) {
-                    base_to_delete.push((base_id, atom.position));
-                }
+                && let Some(atom) = result_structure.get_atom(result_id)
+            {
+                base_to_delete.push((base_id, atom.position));
+            }
         }
 
         // Diff atoms: need to know if they're pure additions or matched base atoms
@@ -302,29 +303,30 @@ fn gather_base_atom_promotion_info_impl(
     let mut info = Vec::new();
     for &base_id in selected_base_atoms {
         if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id)
-            && let Some(atom) = result_structure.get_atom(result_id) {
-                // Skip frozen atoms unless explicitly included
-                if !include_frozen && atom.is_frozen() {
-                    continue;
-                }
-                // Check if this base atom already has a diff entry
-                let existing_diff_id =
-                    if let Some(source) = eval_cache.provenance.sources.get(&result_id) {
-                        match source {
-                            AtomSource::DiffMatchedBase { diff_id, .. } => Some(*diff_id),
-                            _ => None,
-                        }
-                    } else {
-                        None
-                    };
-                info.push(BaseAtomPromotionInfo {
-                    base_id,
-                    atomic_number: atom.atomic_number,
-                    position: atom.position,
-                    existing_diff_id,
-                    flags: atom.flags,
-                });
+            && let Some(atom) = result_structure.get_atom(result_id)
+        {
+            // Skip frozen atoms unless explicitly included
+            if !include_frozen && atom.is_frozen() {
+                continue;
             }
+            // Check if this base atom already has a diff entry
+            let existing_diff_id =
+                if let Some(source) = eval_cache.provenance.sources.get(&result_id) {
+                    match source {
+                        AtomSource::DiffMatchedBase { diff_id, .. } => Some(*diff_id),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+            info.push(BaseAtomPromotionInfo {
+                base_id,
+                atomic_number: atom.atomic_number,
+                position: atom.position,
+                existing_diff_id,
+                flags: atom.flags,
+            });
+        }
     }
     info
 }

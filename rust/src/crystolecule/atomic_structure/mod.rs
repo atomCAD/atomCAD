@@ -463,17 +463,17 @@ impl AtomicStructure {
                     .bonds
                     .iter_mut()
                     .find(|b| b.other_atom_id() == atom_id2)
-                {
-                    bond.set_bond_order(bond_order);
-                }
+            {
+                bond.set_bond_order(bond_order);
+            }
             if let Some(atom) = self.get_atom_mut(atom_id2)
                 && let Some(bond) = atom
                     .bonds
                     .iter_mut()
                     .find(|b| b.other_atom_id() == atom_id1)
-                {
-                    bond.set_bond_order(bond_order);
-                }
+            {
+                bond.set_bond_order(bond_order);
+            }
         } else {
             let bond1 = InlineBond::new(atom_id2, bond_order);
             self.get_atom_mut(atom_id1).unwrap().bonds.push(bond1);

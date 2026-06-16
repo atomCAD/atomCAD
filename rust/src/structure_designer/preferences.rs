@@ -76,14 +76,15 @@ pub fn save_preferences(prefs: &StructureDesignerPreferences) {
 
     // Create the config directory if it doesn't exist
     if let Some(parent) = path.parent()
-        && let Err(e) = fs::create_dir_all(parent) {
-            eprintln!(
-                "[preferences] Failed to create config directory {}: {}",
-                parent.display(),
-                e
-            );
-            return;
-        }
+        && let Err(e) = fs::create_dir_all(parent)
+    {
+        eprintln!(
+            "[preferences] Failed to create config directory {}: {}",
+            parent.display(),
+            e
+        );
+        return;
+    }
 
     // Serialize with pretty printing for human readability
     let json = match serde_json::to_string_pretty(prefs) {

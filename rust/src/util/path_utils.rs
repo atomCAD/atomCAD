@@ -100,7 +100,6 @@ pub fn get_parent_directory(file_path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
 
     #[test]
     fn test_is_absolute_path() {

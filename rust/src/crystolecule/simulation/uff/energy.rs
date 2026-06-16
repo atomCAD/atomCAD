@@ -500,8 +500,7 @@ pub fn torsion_energy_and_gradient(
     // dE/dPhi (from RDKit's getThetaDeriv)
     let n = params.params.order;
     let sin_n = sin_n_phi(cos_phi, sin_phi, sin_phi_sq, n);
-    let de_dphi =
-        -(params.params.force_constant / 2.0 * params.params.cos_term) * n as f64 * sin_n;
+    let de_dphi = -(params.params.force_constant / 2.0 * params.params.cos_term) * n as f64 * sin_n;
 
     // Convert dE/dPhi to chain rule factor for Cartesian gradients.
     // sinTerm = dE/dPhi * (1/sinPhi or 1/cosPhi when sinPhi ≈ 0)

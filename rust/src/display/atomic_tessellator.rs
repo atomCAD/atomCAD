@@ -192,48 +192,48 @@ pub fn tessellate_atomic_structure(
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
                 if atom.id < other_atom_id
-                    && let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
-                        // Skip bond if the other atom is culled
-                        if should_cull_atom(other_atom, atomic_viz_prefs) {
-                            continue;
-                        }
-
-                        // In space-filling mode, only render overstretched bonds
-                        if atomic_viz_prefs.visualization
-                            == AtomicStructureVisualization::SpaceFilling
-                            && !is_bond_overstretched(atom, other_atom)
-                        {
-                            continue;
-                        }
-
-                        // Bond delete markers in diff structures render as red
-                        if bond.is_delete_marker() && atomic_structure.is_diff() {
-                            tessellate_bond_delete_marker(
-                                output_mesh,
-                                atomic_structure,
-                                atom,
-                                other_atom,
-                                params,
-                            );
-                        } else {
-                            let radius_scale = if atomic_viz_prefs.visualization
-                                == AtomicStructureVisualization::SpaceFilling
-                            {
-                                SPACE_FILLING_BOND_RADIUS_SCALE
-                            } else {
-                                1.0
-                            };
-                            tessellate_bond_inline(
-                                output_mesh,
-                                atomic_structure,
-                                atom,
-                                other_atom,
-                                bond.bond_order(),
-                                params,
-                                radius_scale,
-                            );
-                        }
+                    && let Some(other_atom) = atomic_structure.get_atom(other_atom_id)
+                {
+                    // Skip bond if the other atom is culled
+                    if should_cull_atom(other_atom, atomic_viz_prefs) {
+                        continue;
                     }
+
+                    // In space-filling mode, only render overstretched bonds
+                    if atomic_viz_prefs.visualization == AtomicStructureVisualization::SpaceFilling
+                        && !is_bond_overstretched(atom, other_atom)
+                    {
+                        continue;
+                    }
+
+                    // Bond delete markers in diff structures render as red
+                    if bond.is_delete_marker() && atomic_structure.is_diff() {
+                        tessellate_bond_delete_marker(
+                            output_mesh,
+                            atomic_structure,
+                            atom,
+                            other_atom,
+                            params,
+                        );
+                    } else {
+                        let radius_scale = if atomic_viz_prefs.visualization
+                            == AtomicStructureVisualization::SpaceFilling
+                        {
+                            SPACE_FILLING_BOND_RADIUS_SCALE
+                        } else {
+                            1.0
+                        };
+                        tessellate_bond_inline(
+                            output_mesh,
+                            atomic_structure,
+                            atom,
+                            other_atom,
+                            bond.bond_order(),
+                            params,
+                            radius_scale,
+                        );
+                    }
+                }
             }
         }
     }
@@ -854,46 +854,46 @@ pub fn tessellate_atomic_structure_impostors(
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
                 if atom.id < other_atom_id
-                    && let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
-                        // Skip bond if the other atom is culled
-                        if should_cull_atom(other_atom, atomic_viz_prefs) {
-                            continue;
-                        }
-
-                        // In space-filling mode, only render overstretched bonds
-                        if atomic_viz_prefs.visualization
-                            == AtomicStructureVisualization::SpaceFilling
-                            && !is_bond_overstretched(atom, other_atom)
-                        {
-                            continue;
-                        }
-
-                        // Bond delete markers in diff structures render as red
-                        if bond.is_delete_marker() && atomic_structure.is_diff() {
-                            tessellate_bond_delete_marker_impostor(
-                                bond_impostor_mesh,
-                                atomic_structure,
-                                atom,
-                                other_atom,
-                            );
-                        } else {
-                            let radius_scale = if atomic_viz_prefs.visualization
-                                == AtomicStructureVisualization::SpaceFilling
-                            {
-                                SPACE_FILLING_BOND_RADIUS_SCALE
-                            } else {
-                                1.0
-                            };
-                            tessellate_bond_impostor_inline(
-                                bond_impostor_mesh,
-                                atomic_structure,
-                                atom,
-                                other_atom,
-                                bond.bond_order(),
-                                radius_scale,
-                            );
-                        }
+                    && let Some(other_atom) = atomic_structure.get_atom(other_atom_id)
+                {
+                    // Skip bond if the other atom is culled
+                    if should_cull_atom(other_atom, atomic_viz_prefs) {
+                        continue;
                     }
+
+                    // In space-filling mode, only render overstretched bonds
+                    if atomic_viz_prefs.visualization == AtomicStructureVisualization::SpaceFilling
+                        && !is_bond_overstretched(atom, other_atom)
+                    {
+                        continue;
+                    }
+
+                    // Bond delete markers in diff structures render as red
+                    if bond.is_delete_marker() && atomic_structure.is_diff() {
+                        tessellate_bond_delete_marker_impostor(
+                            bond_impostor_mesh,
+                            atomic_structure,
+                            atom,
+                            other_atom,
+                        );
+                    } else {
+                        let radius_scale = if atomic_viz_prefs.visualization
+                            == AtomicStructureVisualization::SpaceFilling
+                        {
+                            SPACE_FILLING_BOND_RADIUS_SCALE
+                        } else {
+                            1.0
+                        };
+                        tessellate_bond_impostor_inline(
+                            bond_impostor_mesh,
+                            atomic_structure,
+                            atom,
+                            other_atom,
+                            bond.bond_order(),
+                            radius_scale,
+                        );
+                    }
+                }
             }
         }
     }

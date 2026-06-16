@@ -125,17 +125,19 @@ fn extract_atom_sites(block: &CifDataBlock) -> Result<Vec<CifAtomSite>, CifError
     for row in &loop_data.rows {
         // Skip dummy atoms (calc_flag = "dum")
         if let Some(idx) = calc_flag_idx
-            && row[idx].eq_ignore_ascii_case("dum") {
-                continue;
-            }
+            && row[idx].eq_ignore_ascii_case("dum")
+        {
+            continue;
+        }
 
         let label = label_idx.map(|i| row[i].clone()).unwrap_or_default();
 
         // Skip dummy atoms based on type_symbol being "."
         if let Some(idx) = type_symbol_idx
-            && row[idx] == "." {
-                continue;
-            }
+            && row[idx] == "."
+        {
+            continue;
+        }
 
         // Determine element: prefer _atom_site_type_symbol, fall back to label
         let element = if let Some(idx) = type_symbol_idx {
@@ -211,9 +213,10 @@ fn extract_symmetry_operations(block: &CifDataBlock) -> Result<Vec<SymmetryOpera
     if let Some(number) = block
         .get_tag("_space_group_it_number")
         .or_else(|| block.get_tag("_symmetry_int_tables_number"))
-        && let Ok(n) = number.parse::<u16>() {
-            return super::space_groups::lookup_symmetry_operations_by_number(n);
-        }
+        && let Ok(n) = number.parse::<u16>()
+    {
+        return super::space_groups::lookup_symmetry_operations_by_number(n);
+    }
 
     // Try Hermann-Mauguin symbol
     if let Some(hm) = block

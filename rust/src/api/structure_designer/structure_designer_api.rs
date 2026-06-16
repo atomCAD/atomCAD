@@ -580,9 +580,9 @@ fn build_node_view(
             .structure_designer
             .last_generated_structure_designer_scene
             .get_node_error(scope_path, node.id)
-        {
-            error_messages.push(eval_error);
-        }
+    {
+        error_messages.push(eval_error);
+    }
     let error = if error_messages.is_empty() {
         None
     } else {
@@ -4080,12 +4080,13 @@ fn compute_selection_measurement(
         for &(prov, id) in &atom_edit_data.selection.selection_order {
             if prov == SelectionProvenance::Diff
                 && atom_edit_data.selection.selected_diff_atoms.contains(&id)
-                && let Some(atom) = result_structure.get_atom(id) {
-                    selected_atoms.push(SelectedAtomInfo {
-                        result_atom_id: id,
-                        position: atom.position,
-                    });
-                }
+                && let Some(atom) = result_structure.get_atom(id)
+            {
+                selected_atoms.push(SelectedAtomInfo {
+                    result_atom_id: id,
+                    position: atom.position,
+                });
+            }
         }
     } else {
         // Result view: resolve through provenance
@@ -4095,22 +4096,24 @@ fn compute_selection_measurement(
                 SelectionProvenance::Base => {
                     if atom_edit_data.selection.selected_base_atoms.contains(&id)
                         && let Some(&result_id) = cache.provenance.base_to_result.get(&id)
-                            && let Some(atom) = result_structure.get_atom(result_id) {
-                                selected_atoms.push(SelectedAtomInfo {
-                                    result_atom_id: result_id,
-                                    position: atom.position,
-                                });
-                            }
+                        && let Some(atom) = result_structure.get_atom(result_id)
+                    {
+                        selected_atoms.push(SelectedAtomInfo {
+                            result_atom_id: result_id,
+                            position: atom.position,
+                        });
+                    }
                 }
                 SelectionProvenance::Diff => {
                     if atom_edit_data.selection.selected_diff_atoms.contains(&id)
                         && let Some(&result_id) = cache.provenance.diff_to_result.get(&id)
-                            && let Some(atom) = result_structure.get_atom(result_id) {
-                                selected_atoms.push(SelectedAtomInfo {
-                                    result_atom_id: result_id,
-                                    position: atom.position,
-                                });
-                            }
+                        && let Some(atom) = result_structure.get_atom(result_id)
+                    {
+                        selected_atoms.push(SelectedAtomInfo {
+                            result_atom_id: result_id,
+                            position: atom.position,
+                        });
+                    }
                 }
             }
         }

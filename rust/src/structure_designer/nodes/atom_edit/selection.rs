@@ -106,15 +106,17 @@ pub(super) fn select_result_atom(
         let mut sel_positions: HashMap<(bool, u32), DVec3> = HashMap::new();
         for &base_id in &atom_edit_data.selection.selected_base_atoms {
             if let Some(&res_id) = eval_cache.provenance.base_to_result.get(&base_id)
-                && let Some(atom) = result_structure.get_atom(res_id) {
-                    sel_positions.insert((false, base_id), atom.position);
-                }
+                && let Some(atom) = result_structure.get_atom(res_id)
+            {
+                sel_positions.insert((false, base_id), atom.position);
+            }
         }
         for &diff_id in &atom_edit_data.selection.selected_diff_atoms {
             if let Some(&res_id) = eval_cache.provenance.diff_to_result.get(&diff_id)
-                && let Some(atom) = result_structure.get_atom(res_id) {
-                    sel_positions.insert((true, diff_id), atom.position);
-                }
+                && let Some(atom) = result_structure.get_atom(res_id)
+            {
+                sel_positions.insert((true, diff_id), atom.position);
+            }
         }
 
         (atom_source, clicked_pos, sel_positions)
@@ -410,13 +412,13 @@ pub(super) fn select_atoms_in_screen_rect(
             if let Some(screen_pos) =
                 project_to_screen(atom.position, view_proj, viewport_width, viewport_height)
                 && screen_pos.x >= screen_min.x
-                    && screen_pos.x <= screen_max.x
-                    && screen_pos.y >= screen_min.y
-                    && screen_pos.y <= screen_max.y
-                {
-                    inside_atom_ids.push(atom_id);
-                    inside_atom_id_set.insert(atom_id);
-                }
+                && screen_pos.x <= screen_max.x
+                && screen_pos.y >= screen_min.y
+                && screen_pos.y <= screen_max.y
+            {
+                inside_atom_ids.push(atom_id);
+                inside_atom_id_set.insert(atom_id);
+            }
         }
 
         // Collect bonds where both endpoints are inside the rectangle
@@ -451,27 +453,29 @@ pub(super) fn select_atoms_in_screen_rect(
             // Result view: resolve provenance
             let eval_cache = structure_designer.get_selected_node_eval_cache();
             if let Some(cache) = eval_cache
-                && let Some(cache) = cache.downcast_ref::<AtomEditEvalCache>() {
-                    for &result_id in &inside_atom_ids {
-                        if let Some(source) = cache.provenance.sources.get(&result_id)
-                            && let Some(atom) = result_structure.get_atom(result_id) {
-                                match source {
-                                    AtomSource::BasePassthrough(base_id) => {
-                                        pos_map.insert((false, *base_id), atom.position);
-                                        targets.push(SelectTarget::Base(*base_id));
-                                    }
-                                    AtomSource::DiffMatchedBase { diff_id, .. } => {
-                                        pos_map.insert((true, *diff_id), atom.position);
-                                        targets.push(SelectTarget::Diff(*diff_id));
-                                    }
-                                    AtomSource::DiffAdded(diff_id) => {
-                                        pos_map.insert((true, *diff_id), atom.position);
-                                        targets.push(SelectTarget::Diff(*diff_id));
-                                    }
-                                }
+                && let Some(cache) = cache.downcast_ref::<AtomEditEvalCache>()
+            {
+                for &result_id in &inside_atom_ids {
+                    if let Some(source) = cache.provenance.sources.get(&result_id)
+                        && let Some(atom) = result_structure.get_atom(result_id)
+                    {
+                        match source {
+                            AtomSource::BasePassthrough(base_id) => {
+                                pos_map.insert((false, *base_id), atom.position);
+                                targets.push(SelectTarget::Base(*base_id));
                             }
+                            AtomSource::DiffMatchedBase { diff_id, .. } => {
+                                pos_map.insert((true, *diff_id), atom.position);
+                                targets.push(SelectTarget::Diff(*diff_id));
+                            }
+                            AtomSource::DiffAdded(diff_id) => {
+                                pos_map.insert((true, *diff_id), atom.position);
+                                targets.push(SelectTarget::Diff(*diff_id));
+                            }
+                        }
                     }
                 }
+            }
         }
 
         // Sort targets by atom ID for deterministic marquee selection order

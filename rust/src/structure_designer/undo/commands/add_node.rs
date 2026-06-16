@@ -115,9 +115,10 @@ impl UndoCommand for AddNodeCommand {
 
             // Update next_param_id for parameter nodes
             if let Some(param_id) = self.param_id
-                && network.next_param_id <= param_id {
-                    network.next_param_id = param_id + 1;
-                }
+                && network.next_param_id <= param_id
+            {
+                network.next_param_id = param_id + 1;
+            }
         }
     }
 

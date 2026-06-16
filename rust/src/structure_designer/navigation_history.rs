@@ -91,9 +91,10 @@ impl NavigationHistory {
     pub fn rename_network(&mut self, old_name: &str, new_name: &str) {
         for entry in &mut self.history {
             if let Some(name) = entry
-                && name == old_name {
-                    *entry = Some(new_name.to_string());
-                }
+                && name == old_name
+            {
+                *entry = Some(new_name.to_string());
+            }
         }
     }
 

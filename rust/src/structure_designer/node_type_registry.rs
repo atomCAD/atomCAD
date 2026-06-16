@@ -63,6 +63,7 @@ use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
+use super::nodes::patch_build::get_node_type as patch_build_get_node_type;
 use super::nodes::plane_tiling_vectors::get_node_type as plane_tiling_vectors_get_node_type;
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
 use super::nodes::print::get_node_type as print_get_node_type;
@@ -264,6 +265,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(imat2_cols_get_node_type());
         ret.add_node_type(imat2_diag_get_node_type());
         ret.add_node_type(plane_tiling_vectors_get_node_type());
+        ret.add_node_type(patch_build_get_node_type());
         ret.add_node_type(imat3_rows_get_node_type());
         ret.add_node_type(imat3_cols_get_node_type());
         ret.add_node_type(imat3_diag_get_node_type());
@@ -485,12 +487,13 @@ impl NodeTypeRegistry {
         let mut result: Vec<APINodeCategoryView> = Vec::new();
         for category in ordered_categories {
             if let Some(nodes) = category_map.get(&category)
-                && !nodes.is_empty() {
-                    result.push(APINodeCategoryView {
-                        category: category.clone(),
-                        nodes: nodes.clone(),
-                    });
-                }
+                && !nodes.is_empty()
+            {
+                result.push(APINodeCategoryView {
+                    category: category.clone(),
+                    nodes: nodes.clone(),
+                });
+            }
         }
 
         result
@@ -553,12 +556,13 @@ impl NodeTypeRegistry {
 
         for category in ordered_categories {
             if let Some(nodes) = category_map.get(&category)
-                && !nodes.is_empty() {
-                    result.push(APINodeCategoryView {
-                        category: category.clone(),
-                        nodes: nodes.clone(),
-                    });
-                }
+                && !nodes.is_empty()
+            {
+                result.push(APINodeCategoryView {
+                    category: category.clone(),
+                    nodes: nodes.clone(),
+                });
+            }
         }
 
         result
@@ -742,18 +746,18 @@ impl NodeTypeRegistry {
                 node.data
                     .as_any_ref()
                     .downcast_ref::<crate::structure_designer::nodes::product::ProductData>()
-            {
-                let target = data.target.clone();
-                let custom =
-                    crate::structure_designer::nodes::product::build_node_type_for_target_with_defs(
-                        base_node_type,
-                        &target,
-                        record_type_defs,
-                        built_in_record_type_defs,
-                    );
-                node.set_custom_node_type(Some(custom), refresh_args);
-                return true;
-            }
+        {
+            let target = data.target.clone();
+            let custom =
+                crate::structure_designer::nodes::product::build_node_type_for_target_with_defs(
+                    base_node_type,
+                    &target,
+                    record_type_defs,
+                    built_in_record_type_defs,
+                );
+            node.set_custom_node_type(Some(custom), refresh_args);
+            return true;
+        }
 
         let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
         let has_custom_node_type = custom_node_type.is_some();
@@ -2159,9 +2163,10 @@ impl NodeTypeRegistry {
 
             // Mutably borrow the body via `zone_mut` (CoW via Arc::make_mut).
             if let Some(node) = network.nodes.get_mut(&hof_id)
-                && let Some(body) = node.zone_mut() {
-                    self.repair_zone_body(body, hof_id, &zone_input_pin_types);
-                }
+                && let Some(body) = node.zone_mut()
+            {
+                self.repair_zone_body(body, hof_id, &zone_input_pin_types);
+            }
         }
     }
 

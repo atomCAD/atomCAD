@@ -699,9 +699,10 @@ pub fn serializable_to_node_network(
                     .as_ref()
                     .as_any_ref()
                     .downcast_ref::<AtomEditData>()
-                    && data.output_diff {
-                        nodes_to_migrate.push(node_id);
-                    }
+                && data.output_diff
+            {
+                nodes_to_migrate.push(node_id);
+            }
         }
         for node_id in nodes_to_migrate {
             if let Some(state) = network.displayed_nodes.get_mut(&node_id) {

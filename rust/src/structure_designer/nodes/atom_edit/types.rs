@@ -73,8 +73,7 @@ pub(super) const DRAG_THRESHOLD: f64 = 5.0;
 
 /// Interaction state machine for the Default tool.
 /// Tracks the current mouse interaction from down → move → up.
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub enum DefaultToolInteractionState {
     #[default]
     Idle,
@@ -107,7 +106,6 @@ pub enum DefaultToolInteractionState {
         current_screen: DVec2,
     },
 }
-
 
 #[derive(Debug)]
 pub struct DefaultToolState {
@@ -180,8 +178,7 @@ pub enum AddAtomToolState {
 
 /// Interaction state machine for the AddBond tool.
 /// Tracks the current pointer interaction from down → move → up.
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub enum AddBondInteractionState {
     #[default]
     Idle,
@@ -195,7 +192,6 @@ pub enum AddBondInteractionState {
         preview_target: Option<u32>,
     },
 }
-
 
 #[derive(Debug)]
 pub struct AddBondToolState {

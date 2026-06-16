@@ -340,9 +340,10 @@ pub fn hit_test_guide_dots(
     for (i, dot) in guide_dots.iter().enumerate() {
         if let Some(distance) =
             hit_test_utils::sphere_hit_test(&dot.position, GUIDE_DOT_HIT_RADIUS, ray_start, ray_dir)
-            && (closest.is_none() || distance < closest.unwrap().1) {
-                closest = Some((i, distance));
-            }
+            && (closest.is_none() || distance < closest.unwrap().1)
+        {
+            closest = Some((i, distance));
+        }
     }
     closest.map(|(i, _)| i)
 }

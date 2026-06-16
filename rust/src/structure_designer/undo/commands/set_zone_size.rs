@@ -21,10 +21,11 @@ pub struct SetZoneSizeCommand {
 impl SetZoneSizeCommand {
     fn apply(&self, ctx: &mut UndoContext, width: f64, height: f64) {
         if let Some(network) = ctx.network_in_scope_mut(&self.network_name, &self.scope_path)
-            && let Some(node) = network.nodes.get_mut(&self.node_id) {
-                node.body_width = width;
-                node.body_height = height;
-            }
+            && let Some(node) = network.nodes.get_mut(&self.node_id)
+        {
+            node.body_width = width;
+            node.body_height = height;
+        }
     }
 }
 

@@ -91,11 +91,12 @@ impl EditAtomData {
         // If the active tool is AddBond and there's a last_atom_id, mark that atom
         if decorate
             && let EditAtomTool::AddBond(state) = &self.active_tool
-                && let Some(atom_id) = state.last_atom_id {
-                    atomic_structure
-                        .decorator_mut()
-                        .set_atom_display_state(atom_id, AtomDisplayState::Marked);
-                }
+            && let Some(atom_id) = state.last_atom_id
+        {
+            atomic_structure
+                .decorator_mut()
+                .set_atom_display_state(atom_id, AtomDisplayState::Marked);
+        }
     }
 
     pub fn add_command(&mut self, command: Box<dyn EditAtomCommand>) -> &dyn EditAtomCommand {
@@ -612,9 +613,10 @@ fn edit_atom_tool_refresh(structure_designer: &mut StructureDesigner) {
     // If the atom doesn't exist, reset the last_atom_id
     if !atom_exists
         && let Some(edit_atom_data) = get_selected_edit_atom_data_mut(structure_designer)
-            && let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool {
-                state.last_atom_id = None;
-            }
+        && let EditAtomTool::AddBond(state) = &mut edit_atom_data.active_tool
+    {
+        state.last_atom_id = None;
+    }
 }
 
 pub fn get_node_type() -> NodeType {

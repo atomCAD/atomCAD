@@ -84,12 +84,13 @@ impl NodeData for CollectData {
         };
 
         if let Some(n) = effective_limit
-            && n < 0 {
-                return EvalOutput::single(NetworkResult::Error(format!(
-                    "collect: limit must be non-negative, got {}",
-                    n
-                )));
-            }
+            && n < 0
+        {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "collect: limit must be non-negative, got {}",
+                n
+            )));
+        }
 
         // Same override pattern as `limit`: wired Int pin replaces stored
         // field; disconnected pin falls through. `0` is a valid no-op.

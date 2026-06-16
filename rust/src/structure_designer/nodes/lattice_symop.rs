@@ -270,10 +270,12 @@ impl NodeData for LatticeSymopData {
         // Only show rotation info if there's actually a rotation
         let has_rotation = self.rotation_axis.is_some() && self.rotation_angle_degrees.abs() > 1e-6;
 
-        if has_rotation && show_rot_axis
-            && let Some(axis) = self.rotation_axis {
-                parts.push(format!("ax: ({:.2},{:.2},{:.2})", axis.x, axis.y, axis.z));
-            }
+        if has_rotation
+            && show_rot_axis
+            && let Some(axis) = self.rotation_axis
+        {
+            parts.push(format!("ax: ({:.2},{:.2},{:.2})", axis.x, axis.y, axis.z));
+        }
 
         if has_rotation && show_rot_angle {
             parts.push(format!("ang: {:.1}°", self.rotation_angle_degrees));
@@ -367,36 +369,36 @@ impl Tessellatable for LatticeSymopGadget {
 
         // Visualize rotation axis if present
         if let Some(axis) = self.rotation_axis
-            && axis.length() > 1e-12 {
-                let normalized_axis = axis.normalize();
-                let cylinder_length = 30.0;
-                let cylinder_radius = 0.1;
+            && axis.length() > 1e-12
+        {
+            let normalized_axis = axis.normalize();
+            let cylinder_length = 30.0;
+            let cylinder_radius = 0.1;
 
-                // Create cylinder endpoints along the rotation axis
-                let half_length = cylinder_length * 0.5;
-                let top_center = self.frame_transform.translation + normalized_axis * half_length;
-                let bottom_center =
-                    self.frame_transform.translation - normalized_axis * half_length;
+            // Create cylinder endpoints along the rotation axis
+            let half_length = cylinder_length * 0.5;
+            let top_center = self.frame_transform.translation + normalized_axis * half_length;
+            let bottom_center = self.frame_transform.translation - normalized_axis * half_length;
 
-                // Use yellow color for the rotation axis
-                let yellow_material = crate::renderer::mesh::Material::new(
-                    &glam::f32::Vec3::new(1.0, 1.0, 0.0), // Yellow color
-                    0.4,
-                    0.8,
-                );
+            // Use yellow color for the rotation axis
+            let yellow_material = crate::renderer::mesh::Material::new(
+                &glam::f32::Vec3::new(1.0, 1.0, 0.0), // Yellow color
+                0.4,
+                0.8,
+            );
 
-                crate::renderer::tessellator::tessellator::tessellate_cylinder(
-                    output_mesh,
-                    &top_center,
-                    &bottom_center,
-                    cylinder_radius,
-                    16, // divisions
-                    &yellow_material,
-                    true, // include top and bottom caps
-                    Some(&yellow_material),
-                    Some(&yellow_material),
-                );
-            }
+            crate::renderer::tessellator::tessellator::tessellate_cylinder(
+                output_mesh,
+                &top_center,
+                &bottom_center,
+                cylinder_radius,
+                16, // divisions
+                &yellow_material,
+                true, // include top and bottom caps
+                Some(&yellow_material),
+                Some(&yellow_material),
+            );
+        }
     }
 
     fn as_tessellatable(&self) -> Box<dyn Tessellatable> {

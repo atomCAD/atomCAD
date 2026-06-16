@@ -313,9 +313,10 @@ impl<'a> NetworkEditor<'a> {
             let param_id = self.network.next_param_id;
             self.network.next_param_id += 1;
             if let Some(node) = self.network.nodes.get_mut(&node_id)
-                && let Some(param_data) = node.data.as_any_mut().downcast_mut::<ParameterData>() {
-                    param_data.param_id = Some(param_id);
-                }
+                && let Some(param_data) = node.data.as_any_mut().downcast_mut::<ParameterData>()
+            {
+                param_data.param_id = Some(param_id);
+            }
         }
 
         // Set node as NOT displayed by default (will be set if visible: true)
@@ -505,11 +506,12 @@ impl<'a> NetworkEditor<'a> {
 
         // Apply to node data
         if !literal_props.is_empty()
-            && let Some(node) = self.network.nodes.get_mut(&node_id) {
-                node.data
-                    .set_text_properties(&literal_props)
-                    .map_err(|e| format!("Error setting properties: {}", e))?;
-            }
+            && let Some(node) = self.network.nodes.get_mut(&node_id)
+        {
+            node.data
+                .set_text_properties(&literal_props)
+                .map_err(|e| format!("Error setting properties: {}", e))?;
+        }
 
         Ok(())
     }
