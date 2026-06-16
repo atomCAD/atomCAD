@@ -7,7 +7,8 @@
 - **`weld_coincident_atoms`** — one small new primitive in `crystolecule` (§3); the only new core machinery this feature needs.
 - Built-in record infrastructure (`ElementMapping`, `MaterializeRegion`) — the representation precedent (§2).
 - `materialize` / `fill_lattice` — its hydrogen passivation is reused for residual edge danglers (§5); and the feature is conceptually "fill a region with a patch" the way `materialize` fills a region with a crystal.
-- `DrawingPlane` (`rust/src/crystolecule/drawing_plane.rs`) — the ergonomic way to obtain `tiling_vectors` for the common 2D-surface case (Miller index + shift → in-plane primitive vectors).
+- `DrawingPlane` (`rust/src/crystolecule/drawing_plane.rs`) — supplies the in-plane lattice vectors `u_axis/v_axis` for the common 2D-surface case.
+- `doc/design_imat2_and_plane_tiling.md` — the `IMat2` type and the `plane_tiling_vectors` helper that ergonomically produces `tiling_vectors` from a plane + superlattice (see §4). Separate workstream; not required to ship patches.
 
 Background: [atomCAD/atomCAD#347](https://github.com/atomCAD/atomCAD/discussions/347).
 
@@ -141,7 +142,7 @@ This requires build `lattice` and apply `region` to be the **same lattice** (sam
 
 - Validate `1 ≤ len(tiling_vectors) ≤ 3` and linear independence. The substrate the patch is finally tiled onto is `patch_latticefill`'s region, which must share `lattice` (see above).
 - The `cut_volume`'s translates under `tiling_vectors` should **tile the reconstructed strip without gaps** (else old surface atoms survive between tiles); `patch_build` can warn if they don't.
-- *Ergonomic vectors:* instead of hand-entering `tiling_vectors`, feed a `DrawingPlane` (Miller + shift) and a superlattice `(n,m)`; `DrawingPlane` yields the in-plane primitive lattice vectors and the patch vectors are `n·u, m·v`.
+- *Ergonomic vectors (optional):* the canonical input is `tiling_vectors: Array[IVec3]`, but the user need not hand-solve the in-plane crystallography. The **`plane_tiling_vectors`** helper node turns a Miller-indexed `DrawingPlane` (which already supplies the in-plane lattice vectors `u_axis/v_axis`) plus a 2×2 integer superlattice into the `Array[IVec3]` — covering `(1×1)`, diagonal `n×m`, and non-diagonal cells (√3×√3 R30°, c(2×2)). It is specified, together with the `IMat2` type it uses, in **`doc/design_imat2_and_plane_tiling.md`**. 2D-surface case only; 1D/3D patches enter `tiling_vectors` directly.
 
 ## 5. Node: `patch_latticefill`
 
@@ -153,6 +154,7 @@ Tiles a patch across a region and welds it in.
 | `region` | `Crystal` \| `Blueprint` (`HasStructure`) | No | Where to tile; supplies the substrate `lattice_vecs` and the fill extent. Default: `target`'s extent (then `target` must be a `Crystal`). |
 | `patch` | `Patch` (record) | Yes | From `patch_build`. |
 | `origin` | `IVec3` | No | Target lattice point at which the patch's local origin (its `cut_volume` corner cell, §4) is placed; tiling fills from there. Default: region centre. |
+| `passivate` | `Bool` | No | Hydrogen-passivate the danglers left after welding (the dropped-ghost reconstruction edges, and any under-coordinated atoms). Default `true`. Set `false` to keep those danglers exposed — e.g. when a later `patch_latticefill` on an adjacent face is meant to bond to them — and passivate once at the end. (Matches `materialize`'s `passivate`.) |
 | `tolerance` | `Float` | No | Weld tolerance (Å). Default 0.1. |
 | → (out) | `Crystal` | — | The reconstructed crystal. |
 
@@ -177,7 +179,7 @@ For a 2D surface patch the non-periodic axis is the normal `v1 × v2`, and the t
 4. **Place** — for every cell in `P`, add a copy of `patch.tile` translated by `c` in real space.
 5. **Weld** — `weld_coincident_atoms(result, tolerance)` over the placed copies *and* the surviving substrate: fuses tile↔tile (periodic bonds) and tile↔bulk (collar, inheriting bulk bonds) in one pass. A weld including any non-ghost atom yields a real atom; a cluster of only ghosts stays a ghost.
 6. **Drop unwelded ghosts** — any atom still flagged ghost found no real twin (it points at a neighbour cell outside `P` — a true reconstruction edge); remove it, leaving a dangling bond on the boundary interior atom.
-7. **Passivate** residual danglers (optional, reusing `materialize`'s hydrogenation), then wrap as `Crystal`.
+7. **Passivate** — if `passivate` (default true), hydrogen-passivate the residual danglers (reusing `materialize`'s hydrogenation). Wrap as `Crystal`.
 
 Cut and place share the same cell set `P`, so the cut never removes substrate it does not then reconstruct. Cells outside `P` keep their original (un-reconstructed) surface; the boundary between them and the reconstructed area is passivated by steps 6–7.
 
@@ -207,3 +209,4 @@ A **compatibility check** falls out for free: count collar atoms that weld vs. t
 4. **Compatibility visualization.** Where to show weld/coordination stats (node subtitle badge vs. panel vs. identicons). Out of scope to build in v1; the data is produced by step 4.
 5. **Deriving a default `cut_volume`.** It is required (it defines the interior), but a sensible default — the in-plane tiling cell extruded to a chosen depth — could be offered so the user only draws one when they want a non-prismatic cut. Nice-to-have, not v1.
 6. **Projected containment test (§5).** How exactly to test "cut_volume's periodic footprint ⊆ region's shadow" for arbitrary SDF geometry. Corner-sampling the cell parallelogram is exact for convex region footprints; non-convex regions need denser sampling or a real projection. Settle the sampling density / method; consider whether the region footprint can be precomputed once rather than per cell.
+7. **`rm_single` companion to `passivate`.** `materialize` pairs passivation with a "remove ≤1-bond atoms first" toggle; dropping unwelded ghosts can leave a reconstruction atom with a single bond, which passivation would otherwise cap into something spurious. Decide whether to add a matching `rm_single` pin or fold the cleanup into the drop-ghosts step unconditionally.
