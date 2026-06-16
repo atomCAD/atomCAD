@@ -479,6 +479,7 @@ mod element_type_eligibility_tests {
             DataType::Vec3,
             DataType::IVec2,
             DataType::IVec3,
+            DataType::IMat2,
             DataType::IMat3,
             DataType::Mat3,
             DataType::LatticeVecs,
@@ -525,6 +526,7 @@ mod element_type_eligibility_tests {
                 | DataType::Vec3
                 | DataType::IVec2
                 | DataType::IVec3
+                | DataType::IMat2
                 | DataType::IMat3
                 | DataType::Mat3
                 | DataType::LatticeVecs

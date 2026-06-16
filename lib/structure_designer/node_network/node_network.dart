@@ -160,6 +160,7 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   // Matrix types. 'IMat3' entry must come before 'Mat3' so that the
   // substring-match loop picks it for the integer variant before the float
   // variant's 'Mat3' key also matches.
+  'IMat2': Color(0xFF7986CB), // Desaturated indigo (integer variant, mirrors IMat3)
   'IMat3': Color(0xFF7986CB), // Desaturated indigo (integer variant)
   'Mat3': Color(0xFF42A5F5), // Saturated blue (float variant)
 

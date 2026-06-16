@@ -685,6 +685,7 @@ enum APIDataTypeBase {
   vec3,
   iVec2,
   iVec3,
+  iMat2,
   iMat3,
   mat3,
   latticeVecs,

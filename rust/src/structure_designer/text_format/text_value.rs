@@ -18,6 +18,8 @@ pub enum TextValue {
     IVec3(IVec3),
     Vec2(DVec2),
     Vec3(DVec3),
+    /// 2x2 integer matrix, row-major (`m[i]` is row i).
+    IMat2([[i32; 2]; 2]),
     /// 3x3 integer matrix, row-major (`m[i]` is row i).
     IMat3([[i32; 3]; 3]),
     /// 3x3 float matrix, row-major (`m[i]` is row i). Stored as a plain
@@ -69,6 +71,10 @@ impl Serialize for TextValue {
             TextValue::Vec3(v) => {
                 map.serialize_entry("type", "Vec3")?;
                 map.serialize_entry("value", &[v.x, v.y, v.z])?;
+            }
+            TextValue::IMat2(m) => {
+                map.serialize_entry("type", "IMat2")?;
+                map.serialize_entry("value", m)?;
             }
             TextValue::IMat3(m) => {
                 map.serialize_entry("type", "IMat3")?;
@@ -166,6 +172,11 @@ impl<'de> Deserialize<'de> for TextValue {
                             serde_json::from_value(value).map_err(serde::de::Error::custom)?;
                         Ok(TextValue::Vec3(DVec3::new(arr[0], arr[1], arr[2])))
                     }
+                    "IMat2" => {
+                        let m: [[i32; 2]; 2] =
+                            serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+                        Ok(TextValue::IMat2(m))
+                    }
                     "IMat3" => {
                         let m: [[i32; 3]; 3] =
                             serde_json::from_value(value).map_err(serde::de::Error::custom)?;
@@ -192,7 +203,7 @@ impl<'de> Deserialize<'de> for TextValue {
                         &type_str,
                         &[
                             "Bool", "Int", "Float", "String", "IVec2", "IVec3", "Vec2", "Vec3",
-                            "IMat3", "Mat3", "DataType", "Array", "Object",
+                            "IMat2", "IMat3", "Mat3", "DataType", "Array", "Object",
                         ],
                     )),
                 }
@@ -278,6 +289,15 @@ impl TextValue {
             TextValue::Vec3(v) => Some(*v),
             // Allow IVec3 to Vec3 conversion
             TextValue::IVec3(v) => Some(DVec3::new(v.x as f64, v.y as f64, v.z as f64)),
+            _ => None,
+        }
+    }
+
+    /// Try to extract an IMat2 value (row-major). `IMat2` has no float
+    /// partner, so this is identity-only (no truncation arm).
+    pub fn as_imat2(&self) -> Option<[[i32; 2]; 2]> {
+        match self {
+            TextValue::IMat2(m) => Some(*m),
             _ => None,
         }
     }
@@ -379,6 +399,11 @@ impl TextValue {
         TextValue::DataType(value)
     }
 
+    /// Create a TextValue from a row-major `[[i32; 2]; 2]` IMat2.
+    pub fn from_imat2(value: [[i32; 2]; 2]) -> Self {
+        TextValue::IMat2(value)
+    }
+
     /// Create a TextValue from a row-major `[[i32; 3]; 3]` IMat3.
     pub fn from_imat3(value: [[i32; 3]; 3]) -> Self {
         TextValue::IMat3(value)
@@ -415,6 +440,7 @@ impl TextValue {
             TextValue::IVec3(_) => DataType::IVec3,
             TextValue::Vec2(_) => DataType::Vec2,
             TextValue::Vec3(_) => DataType::Vec3,
+            TextValue::IMat2(_) => DataType::IMat2,
             TextValue::IMat3(_) => DataType::IMat3,
             TextValue::Mat3(_) => DataType::Mat3,
             TextValue::DataType(_) => DataType::None, // DataType itself is meta
@@ -462,6 +488,7 @@ impl TextValue {
                 v.x as i32, v.y as i32, v.z as i32,
             ))),
             // Matrix identity mappings
+            (TextValue::IMat2(m), DataType::IMat2) => Some(NetworkResult::IMat2(*m)),
             (TextValue::IMat3(m), DataType::IMat3) => Some(NetworkResult::IMat3(*m)),
             (TextValue::Mat3(m), DataType::Mat3) => Some(NetworkResult::Mat3(rows_to_dmat3(m))),
             // Type coercion: IMat3 to Mat3 (lossless)

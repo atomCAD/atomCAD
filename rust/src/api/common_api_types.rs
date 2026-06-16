@@ -23,6 +23,12 @@ pub struct APIIVec3 {
     pub z: i32,
 }
 
+/// 2x2 integer matrix, row-major: `m[i]` is row i.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct APIIMat2 {
+    pub m: [[i32; 2]; 2],
+}
+
 /// 3x3 integer matrix, row-major: `m[i]` is row i.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct APIIMat3 {

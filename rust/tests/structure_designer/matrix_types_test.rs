@@ -269,24 +269,27 @@ fn parser_recognizes_mat3_literal_when_any_component_float() {
 }
 
 #[test]
-fn parser_rejects_matrix_with_wrong_row_count() {
+fn parser_rejects_non_square_matrix_two_rows_of_three() {
+    // 2 rows but width 3 — non-square, rejected. (2x2 and 3x3 are the only
+    // supported shapes since the IMat2 addition generalized the row parser.)
     let src = "n = node { p: ((1, 2, 3), (4, 5, 6)) }";
     let err = Parser::parse(src).expect_err("should fail");
     let msg = err.to_string();
     assert!(
-        msg.contains("Matrix literal must have 3 rows"),
+        msg.contains("same length as the row count"),
         "unexpected error: {}",
         msg
     );
 }
 
 #[test]
-fn parser_rejects_matrix_with_wrong_row_width() {
+fn parser_rejects_non_square_matrix_three_rows_of_two() {
+    // 3 rows but width 2 — non-square, rejected.
     let src = "n = node { p: ((1, 2), (3, 4), (5, 6)) }";
     let err = Parser::parse(src).expect_err("should fail");
     let msg = err.to_string();
     assert!(
-        msg.contains("Matrix row must have 3 components"),
+        msg.contains("same length as the row count"),
         "unexpected error: {}",
         msg
     );

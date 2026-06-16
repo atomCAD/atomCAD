@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -11127,24 +11127,25 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 6 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec3,
 7 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec2,
 8 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec3,
-9 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IMat3,
-10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Mat3,
-11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::LatticeVecs,
-12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::DrawingPlane,
-13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
-14 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint,
-15 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasAtoms,
-16 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Crystal,
-17 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Molecule,
-18 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasStructure,
-19 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps,
-20 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif,
-21 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure,
-22 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit,
-23 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record,
-24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter,
-25 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
-26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+9 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IMat2,
+10 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IMat3,
+11 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Mat3,
+12 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::LatticeVecs,
+13 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::DrawingPlane,
+14 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D,
+15 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint,
+16 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasAtoms,
+17 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Crystal,
+18 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Molecule,
+19 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasStructure,
+20 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps,
+21 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif,
+22 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure,
+23 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit,
+24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record,
+25 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter,
+26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
+27 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -16057,24 +16058,25 @@ impl flutter_rust_bridge::IntoDart
             Self::Vec3 => 6.into_dart(),
             Self::IVec2 => 7.into_dart(),
             Self::IVec3 => 8.into_dart(),
-            Self::IMat3 => 9.into_dart(),
-            Self::Mat3 => 10.into_dart(),
-            Self::LatticeVecs => 11.into_dart(),
-            Self::DrawingPlane => 12.into_dart(),
-            Self::Geometry2D => 13.into_dart(),
-            Self::Blueprint => 14.into_dart(),
-            Self::HasAtoms => 15.into_dart(),
-            Self::Crystal => 16.into_dart(),
-            Self::Molecule => 17.into_dart(),
-            Self::HasStructure => 18.into_dart(),
-            Self::HasFreeLinOps => 19.into_dart(),
-            Self::Motif => 20.into_dart(),
-            Self::Structure => 21.into_dart(),
-            Self::Unit => 22.into_dart(),
-            Self::Record => 23.into_dart(),
-            Self::Iter => 24.into_dart(),
-            Self::Function => 25.into_dart(),
-            Self::Custom => 26.into_dart(),
+            Self::IMat2 => 9.into_dart(),
+            Self::IMat3 => 10.into_dart(),
+            Self::Mat3 => 11.into_dart(),
+            Self::LatticeVecs => 12.into_dart(),
+            Self::DrawingPlane => 13.into_dart(),
+            Self::Geometry2D => 14.into_dart(),
+            Self::Blueprint => 15.into_dart(),
+            Self::HasAtoms => 16.into_dart(),
+            Self::Crystal => 17.into_dart(),
+            Self::Molecule => 18.into_dart(),
+            Self::HasStructure => 19.into_dart(),
+            Self::HasFreeLinOps => 20.into_dart(),
+            Self::Motif => 21.into_dart(),
+            Self::Structure => 22.into_dart(),
+            Self::Unit => 23.into_dart(),
+            Self::Record => 24.into_dart(),
+            Self::Iter => 25.into_dart(),
+            Self::Function => 26.into_dart(),
+            Self::Custom => 27.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -19860,24 +19862,25 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::V
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Vec3 => { 6 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec2 => { 7 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IVec3 => { 8 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IMat3 => { 9 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Mat3 => { 10 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::LatticeVecs => { 11 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::DrawingPlane => { 12 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 13 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint => { 14 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasAtoms => { 15 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Crystal => { 16 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Molecule => { 17 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasStructure => { 18 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps => { 19 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif => { 20 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure => { 21 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit => { 22 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record => { 23 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter => { 24 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 25 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 26 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IMat2 => { 9 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::IMat3 => { 10 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Mat3 => { 11 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::LatticeVecs => { 12 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::DrawingPlane => { 13 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Geometry2D => { 14 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Blueprint => { 15 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasAtoms => { 16 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Crystal => { 17 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Molecule => { 18 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasStructure => { 19 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps => { 20 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif => { 21 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure => { 22 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit => { 23 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record => { 24 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter => { 25 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 26 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 27 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }
@@ -22843,7 +22846,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -22867,7 +22870,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

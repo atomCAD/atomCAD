@@ -978,16 +978,18 @@ impl Parser {
     }
 
     /// Parse the body of a matrix literal after the outer `(` has been consumed.
-    /// Expects three 3-component sub-tuples separated by commas, then a closing `)`.
-    /// Returns `TextValue::IMat3` if all 9 components are integers, otherwise `TextValue::Mat3`.
+    /// Accepts either a 2x2 literal (`((a,b),(c,d))`) → `TextValue::IMat2`, or a
+    /// 3x3 literal (`((a,b,c),...)`) → `TextValue::IMat3` if all 9 components are
+    /// integers, otherwise `TextValue::Mat3`. (`IMat2` has no float partner, so a
+    /// 2x2 literal always resolves to `IMat2`, truncating any float components.)
     fn parse_matrix_literal_body(&mut self) -> Result<TextValue, ParseError> {
         let (start_line, start_col) = self.current_position();
 
-        let mut rows: Vec<[f64; 3]> = Vec::new();
+        let mut rows: Vec<Vec<f64>> = Vec::new();
         let mut all_ints = true;
 
         loop {
-            let (row, row_all_ints) = self.parse_3_tuple_row()?;
+            let (row, row_all_ints) = self.parse_matrix_row()?;
             if !row_all_ints {
                 all_ints = false;
             }
@@ -1013,29 +1015,42 @@ impl Parser {
 
         self.expect(&Token::RightParen)?;
 
-        if rows.len() != 3 {
+        let n = rows.len();
+        // Every row must have exactly `n` components (square matrix).
+        if rows.iter().any(|r| r.len() != n) {
             return Err(ParseError::new(
-                format!("Matrix literal must have 3 rows, found {}", rows.len()),
+                "Matrix literal rows must all have the same length as the row count".to_string(),
                 start_line,
                 start_col,
             ));
         }
 
-        if all_ints {
-            Ok(TextValue::IMat3([
+        match n {
+            2 => Ok(TextValue::IMat2([
+                [rows[0][0] as i32, rows[0][1] as i32],
+                [rows[1][0] as i32, rows[1][1] as i32],
+            ])),
+            3 if all_ints => Ok(TextValue::IMat3([
                 [rows[0][0] as i32, rows[0][1] as i32, rows[0][2] as i32],
                 [rows[1][0] as i32, rows[1][1] as i32, rows[1][2] as i32],
                 [rows[2][0] as i32, rows[2][1] as i32, rows[2][2] as i32],
-            ]))
-        } else {
-            Ok(TextValue::Mat3([rows[0], rows[1], rows[2]]))
+            ])),
+            3 => Ok(TextValue::Mat3([
+                [rows[0][0], rows[0][1], rows[0][2]],
+                [rows[1][0], rows[1][1], rows[1][2]],
+                [rows[2][0], rows[2][1], rows[2][2]],
+            ])),
+            _ => Err(ParseError::new(
+                format!("Matrix literal must be 2x2 or 3x3, found {} rows", n),
+                start_line,
+                start_col,
+            )),
         }
     }
 
-    /// Parse one `(a, b, c)` triple as part of a matrix literal. Returns the
-    /// three components and whether all were integer-typed (no fractional part).
-    fn parse_3_tuple_row(&mut self) -> Result<([f64; 3], bool), ParseError> {
-        let (line, col) = self.current_position();
+    /// Parse one `(a, b, ...)` tuple as part of a matrix literal. Returns the
+    /// components and whether all were integer-typed (no fractional part).
+    fn parse_matrix_row(&mut self) -> Result<(Vec<f64>, bool), ParseError> {
         self.expect(&Token::LeftParen)?;
 
         let mut comps: Vec<f64> = Vec::new();
@@ -1058,15 +1073,7 @@ impl Parser {
 
         self.expect(&Token::RightParen)?;
 
-        if comps.len() != 3 {
-            return Err(ParseError::new(
-                format!("Matrix row must have 3 components, found {}", comps.len()),
-                line,
-                col,
-            ));
-        }
-
-        Ok(([comps[0], comps[1], comps[2]], all_ints))
+        Ok((comps, all_ints))
     }
 
     /// Parse a numeric component, returning (value, is_float)

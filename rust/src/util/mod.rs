@@ -2,6 +2,7 @@ pub mod as_any;
 pub mod box_subdivision;
 pub mod daabox;
 pub mod hit_test_utils;
+pub mod imat2;
 pub mod imat3;
 pub mod mat_utils;
 pub mod memory_bounded_lru_cache;

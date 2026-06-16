@@ -469,6 +469,9 @@ String _apiDataTypeToString(APIDataType dt) {
     case APIDataTypeBase.iVec3:
       base = 'IVec3';
       break;
+    case APIDataTypeBase.iMat2:
+      base = 'IMat2';
+      break;
     case APIDataTypeBase.iMat3:
       base = 'IMat3';
       break;

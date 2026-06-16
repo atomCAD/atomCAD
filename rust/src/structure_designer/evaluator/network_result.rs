@@ -225,6 +225,8 @@ pub enum NetworkResult {
     Vec3(DVec3),
     IVec2(IVec2),
     IVec3(IVec3),
+    /// 2x2 integer matrix, row-major: `[i][j]` is row i, column j.
+    IMat2([[i32; 2]; 2]),
     /// 3x3 integer matrix, row-major: `[i][j]` is row i, column j.
     IMat3([[i32; 3]; 3]),
     /// 3x3 float matrix. `glam::DMat3` is column-major internally; the public
@@ -306,6 +308,7 @@ impl NetworkResult {
             NetworkResult::Vec3(_) => Some(DataType::Vec3),
             NetworkResult::IVec2(_) => Some(DataType::IVec2),
             NetworkResult::IVec3(_) => Some(DataType::IVec3),
+            NetworkResult::IMat2(_) => Some(DataType::IMat2),
             NetworkResult::IMat3(_) => Some(DataType::IMat3),
             NetworkResult::Mat3(_) => Some(DataType::Mat3),
             NetworkResult::LatticeVecs(_) => Some(DataType::LatticeVecs),
@@ -461,6 +464,15 @@ impl NetworkResult {
     pub fn extract_vec3(self) -> Option<DVec3> {
         match self {
             NetworkResult::Vec3(vec) => Some(vec),
+            _ => None,
+        }
+    }
+
+    /// Extracts an IMat2 value (row-major `[[i32; 2]; 2]`) from the NetworkResult,
+    /// returns None if not an IMat2.
+    pub fn extract_imat2(self) -> Option<[[i32; 2]; 2]> {
+        match self {
+            NetworkResult::IMat2(m) => Some(m),
             _ => None,
         }
     }
@@ -801,6 +813,10 @@ impl NetworkResult {
             NetworkResult::Vec3(vec) => format!("({:.6}, {:.6}, {:.6})", vec.x, vec.y, vec.z),
             NetworkResult::IVec2(vec) => format!("({}, {})", vec.x, vec.y),
             NetworkResult::IVec3(vec) => format!("({}, {}, {})", vec.x, vec.y, vec.z),
+            NetworkResult::IMat2(m) => format!(
+                "(({}, {}), ({}, {}))",
+                m[0][0], m[0][1], m[1][0], m[1][1],
+            ),
             NetworkResult::IMat3(m) => format!(
                 "(({}, {}, {}), ({}, {}, {}), ({}, {}, {}))",
                 m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2],
