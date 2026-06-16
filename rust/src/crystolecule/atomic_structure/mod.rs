@@ -219,6 +219,20 @@ impl AtomicStructure {
         }
     }
 
+    pub fn set_atom_patch_ghost(&mut self, atom_id: u32, patch_ghost: bool) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.set_patch_ghost(patch_ghost);
+        }
+    }
+
+    /// Overwrites an atom's entire flag word. Used by `weld_coincident_atoms`
+    /// to install the unioned flags of a fused cluster onto its survivor.
+    pub fn set_atom_flags(&mut self, atom_id: u32, flags: u16) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.flags = flags;
+        }
+    }
+
     pub fn set_atom_hybridization_override(&mut self, atom_id: u32, hybridization: u8) {
         if let Some(atom) = self.get_atom_mut(atom_id) {
             atom.set_hybridization_override(hybridization);

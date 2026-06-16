@@ -336,3 +336,6 @@ mod hierarchical_records_test;
 
 #[path = "structure_designer/empty_folders_test.rs"]
 mod empty_folders_test;
+
+#[path = "structure_designer/patch_record_test.rs"]
+mod patch_record_test;

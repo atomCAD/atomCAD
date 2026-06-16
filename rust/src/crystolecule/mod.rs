@@ -17,3 +17,4 @@ pub mod structure;
 pub mod supercell;
 pub mod unit_cell_struct;
 pub mod unit_cell_symmetries;
+pub mod weld;

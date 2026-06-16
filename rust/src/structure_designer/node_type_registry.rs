@@ -217,6 +217,25 @@ impl NodeTypeRegistry {
             },
         );
 
+        // `Patch` — the tileable surface-reconstruction patch carried by
+        // `patch_build` / `patch_latticefill`. Pure data of existing types, so
+        // a built-in record needs no new plumbing. See
+        // `doc/design_surface_patches.md` §2 ("Schema").
+        ret.built_in_record_type_defs.insert(
+            "Patch".to_string(),
+            RecordTypeDef {
+                name: "Patch".to_string(),
+                fields: vec![
+                    ("tile".to_string(), DataType::Molecule),
+                    (
+                        "tiling_vectors".to_string(),
+                        DataType::Array(Box::new(DataType::IVec3)),
+                    ),
+                    ("cut_volume".to_string(), DataType::Blueprint),
+                ],
+            },
+        );
+
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
 

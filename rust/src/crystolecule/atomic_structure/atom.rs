@@ -18,9 +18,11 @@ const ATOM_FLAG_FROZEN: u16 = 1 << 2;
 const ATOM_FLAG_HYBRIDIZATION_MASK: u16 = 0b11 << 3;
 const ATOM_FLAG_HYBRIDIZATION_SHIFT: u16 = 3;
 const ATOM_FLAG_GHOST: u16 = 1 << 5;
-// Bit 6 reserved for the surface-patch "patch-ghost" flag (durable structural
-// state, distinct from the display-only ATOM_FLAG_GHOST). Allocated by
-// doc/design_surface_patches.md §4; accessors added when the feature lands.
+/// Bit 6: the surface-patch "patch-ghost" flag — durable structural state
+/// (distinct from the display-only [`ATOM_FLAG_GHOST`]). Set by `patch_build`
+/// on the outward atoms of an extracted tile; drives weld survivorship and the
+/// drop-unwelded-ghosts step. See `doc/design_surface_patches.md` §4.
+pub const ATOM_FLAG_PATCH_GHOST: u16 = 1 << 6;
 
 pub const HYBRIDIZATION_AUTO: u8 = 0;
 pub const HYBRIDIZATION_SP3: u8 = 1;
@@ -116,6 +118,24 @@ impl Atom {
             self.flags |= ATOM_FLAG_GHOST;
         } else {
             self.flags &= !ATOM_FLAG_GHOST;
+        }
+    }
+
+    /// Returns true if this atom is a surface-patch ghost (bit 6): an outward
+    /// atom of an extracted tile that welds onto a neighbour-tile or bulk atom
+    /// at apply time. Durable structural state, unrelated to [`Self::is_ghost`]
+    /// (the display-only motif_edit flag). See `doc/design_surface_patches.md`.
+    #[inline]
+    pub fn is_patch_ghost(&self) -> bool {
+        (self.flags & ATOM_FLAG_PATCH_GHOST) != 0
+    }
+
+    #[inline]
+    pub fn set_patch_ghost(&mut self, patch_ghost: bool) {
+        if patch_ghost {
+            self.flags |= ATOM_FLAG_PATCH_GHOST;
+        } else {
+            self.flags &= !ATOM_FLAG_PATCH_GHOST;
         }
     }
 }

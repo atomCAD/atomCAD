@@ -105,3 +105,6 @@ mod compose_diffs_test;
 
 #[path = "crystolecule/simulation/relax_atom_limit_test.rs"]
 mod relax_atom_limit_test;
+
+#[path = "crystolecule/weld_coincident_atoms_test.rs"]
+mod weld_coincident_atoms_test;
