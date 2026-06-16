@@ -720,6 +720,12 @@ APIIMat2DiagData? getImat2DiagData(
         .crateApiStructureDesignerStructureDesignerApiGetImat2DiagData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIPlaneTilingVectorsData? getPlaneTilingVectorsData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetPlaneTilingVectorsData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIIMat3RowsData? getImat3RowsData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1113,6 +1119,14 @@ void setImat2DiagData(
         required APIIMat2DiagData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImat2DiagData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setPlaneTilingVectorsData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIPlaneTilingVectorsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetPlaneTilingVectorsData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setImat3RowsData(

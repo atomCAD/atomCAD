@@ -62,6 +62,7 @@ import 'package:flutter_cad/structure_designer/node_data/supercell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat2_rows_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat2_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat2_diag_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/plane_tiling_vectors_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_rows_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_diag_editor.dart';
@@ -863,6 +864,13 @@ class NodeDataWidget extends StatelessWidget {
         return IMat2DiagEditor(
           nodeId: selectedNode.id,
           data: getImat2DiagData(scopePath: scopePath, nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'plane_tiling_vectors':
+        return PlaneTilingVectorsEditor(
+          nodeId: selectedNode.id,
+          data: getPlaneTilingVectorsData(
+              scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'imat3_rows':

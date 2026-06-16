@@ -226,6 +226,9 @@ mod imat2_nodes_test;
 #[path = "structure_designer/imat2_types_test.rs"]
 mod imat2_types_test;
 
+#[path = "structure_designer/plane_tiling_vectors_test.rs"]
+mod plane_tiling_vectors_test;
+
 #[path = "structure_designer/imat3_nodes_test.rs"]
 mod imat3_nodes_test;
 

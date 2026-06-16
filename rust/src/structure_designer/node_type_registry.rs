@@ -63,6 +63,7 @@ use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
+use super::nodes::plane_tiling_vectors::get_node_type as plane_tiling_vectors_get_node_type;
 use super::nodes::polygon::get_node_type as polygon_get_node_type;
 use super::nodes::print::get_node_type as print_get_node_type;
 use super::nodes::product::get_node_type as product_get_node_type;
@@ -243,6 +244,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(imat2_rows_get_node_type());
         ret.add_node_type(imat2_cols_get_node_type());
         ret.add_node_type(imat2_diag_get_node_type());
+        ret.add_node_type(plane_tiling_vectors_get_node_type());
         ret.add_node_type(imat3_rows_get_node_type());
         ret.add_node_type(imat3_cols_get_node_type());
         ret.add_node_type(imat3_diag_get_node_type());

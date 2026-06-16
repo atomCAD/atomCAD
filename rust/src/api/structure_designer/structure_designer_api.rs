@@ -38,6 +38,7 @@ use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINamespaceRenamePreview;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
+use super::structure_designer_api_types::APIPlaneTilingVectorsData;
 use super::structure_designer_api_types::APIPrintData;
 use super::structure_designer_api_types::APIPrintLogEntry;
 use super::structure_designer_api_types::APIRectData;
@@ -180,6 +181,7 @@ use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
+use crate::structure_designer::nodes::plane_tiling_vectors::PlaneTilingVectorsData;
 use crate::structure_designer::nodes::print::PrintData;
 use crate::structure_designer::nodes::product::ProductData;
 use crate::structure_designer::nodes::range::RangeData;
@@ -2963,6 +2965,31 @@ pub fn get_imat2_diag_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_plane_tiling_vectors_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIPlaneTilingVectorsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let d = node_data
+                    .as_any_ref()
+                    .downcast_ref::<PlaneTilingVectorsData>()?;
+                let m = d.matrix;
+                Some(APIPlaneTilingVectorsData {
+                    a: to_api_ivec2(&glam::IVec2::new(m[0][0], m[0][1])),
+                    b: to_api_ivec2(&glam::IVec2::new(m[1][0], m[1][1])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_imat3_rows_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat3RowsData> {
     unsafe {
         with_cad_instance_or(
@@ -4776,6 +4803,27 @@ pub fn set_imat2_diag_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat2Dia
         with_mut_cad_instance(|cad_instance| {
             let payload = Box::new(IMat2DiagData {
                 v: from_api_ivec2(&data.v),
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_plane_tiling_vectors_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    data: APIPlaneTilingVectorsData,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_ivec2(&data.a);
+            let b = from_api_ivec2(&data.b);
+            let payload = Box::new(PlaneTilingVectorsData {
+                matrix: [[a.x, a.y], [b.x, b.y]],
             });
             cad_instance
                 .structure_designer

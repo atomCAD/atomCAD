@@ -277,6 +277,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIParameterElement dco_decode_api_parameter_element(dynamic raw);
 
   @protected
+  APIPlaneTilingVectorsData dco_decode_api_plane_tiling_vectors_data(
+      dynamic raw);
+
+  @protected
   APIPrintData dco_decode_api_print_data(dynamic raw);
 
   @protected
@@ -570,6 +574,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
+
+  @protected
+  APIPlaneTilingVectorsData
+      dco_decode_box_autoadd_api_plane_tiling_vectors_data(dynamic raw);
 
   @protected
   APIPrintData dco_decode_box_autoadd_api_print_data(dynamic raw);
@@ -1047,6 +1055,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
 
   @protected
+  APIPlaneTilingVectorsData?
+      dco_decode_opt_box_autoadd_api_plane_tiling_vectors_data(dynamic raw);
+
+  @protected
   APIPrintData? dco_decode_opt_box_autoadd_api_print_data(dynamic raw);
 
   @protected
@@ -1517,6 +1529,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIPlaneTilingVectorsData sse_decode_api_plane_tiling_vectors_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIPrintData sse_decode_api_print_data(SseDeserializer deserializer);
 
   @protected
@@ -1872,6 +1888,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIPlaneTilingVectorsData
+      sse_decode_box_autoadd_api_plane_tiling_vectors_data(
+          SseDeserializer deserializer);
 
   @protected
   APIPrintData sse_decode_box_autoadd_api_print_data(
@@ -2444,6 +2465,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIPlaneTilingVectorsData?
+      sse_decode_opt_box_autoadd_api_plane_tiling_vectors_data(
+          SseDeserializer deserializer);
+
+  @protected
   APIPrintData? sse_decode_opt_box_autoadd_api_print_data(
       SseDeserializer deserializer);
 
@@ -2978,6 +3004,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIParameterElement self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_plane_tiling_vectors_data(
+      APIPlaneTilingVectorsData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_print_data(APIPrintData self, SseSerializer serializer);
 
   @protected
@@ -3342,6 +3372,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_parameter_data(
       APIParameterData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_plane_tiling_vectors_data(
+      APIPlaneTilingVectorsData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_print_data(
@@ -3924,6 +3958,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(
       APIParameterData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_plane_tiling_vectors_data(
+      APIPlaneTilingVectorsData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_print_data(

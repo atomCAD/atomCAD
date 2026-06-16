@@ -2272,6 +2272,29 @@ class APIParameterElement {
           color == other.color;
 }
 
+/// `a` / `b` are the two superlattice rows 0 / 1 — same convention as the
+/// text properties exposed by `PlaneTilingVectorsData::get_text_properties`.
+class APIPlaneTilingVectorsData {
+  final APIIVec2 a;
+  final APIIVec2 b;
+
+  const APIPlaneTilingVectorsData({
+    required this.a,
+    required this.b,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPlaneTilingVectorsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b;
+}
+
 /// Property payload for the `print` node. The single field gates the buffer
 /// push to Execute passes only — see `doc/design_node_execution.md` (Phase 4).
 class APIPrintData {

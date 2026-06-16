@@ -2119,6 +2119,15 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setPlaneTilingVectorsData(
+      BigInt nodeId, APIPlaneTilingVectorsData data) {
+    structure_designer_api.setPlaneTilingVectorsData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   void setImat3RowsData(BigInt nodeId, APIIMat3RowsData data) {
     structure_designer_api.setImat3RowsData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

@@ -404,6 +404,13 @@ pub struct APIIMat2DiagData {
     pub v: APIIVec2,
 }
 
+/// `a` / `b` are the two superlattice rows 0 / 1 — same convention as the
+/// text properties exposed by `PlaneTilingVectorsData::get_text_properties`.
+pub struct APIPlaneTilingVectorsData {
+    pub a: APIIVec2,
+    pub b: APIIVec2,
+}
+
 /// `a` / `b` / `c` are rows 0 / 1 / 2 — same convention as the
 /// text properties exposed by `IMat3RowsData::get_text_properties`.
 pub struct APIIMat3RowsData {
