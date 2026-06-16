@@ -702,6 +702,24 @@ APISupercellData? getSupercellData(
         .crateApiStructureDesignerStructureDesignerApiGetSupercellData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIIMat2RowsData? getImat2RowsData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetImat2RowsData(
+            scopePath: scopePath, nodeId: nodeId);
+
+APIIMat2ColsData? getImat2ColsData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetImat2ColsData(
+            scopePath: scopePath, nodeId: nodeId);
+
+APIIMat2DiagData? getImat2DiagData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetImat2DiagData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIIMat3RowsData? getImat3RowsData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1071,6 +1089,30 @@ void setSupercellData(
         required APISupercellData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetSupercellData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setImat2RowsData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIMat2RowsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImat2RowsData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setImat2ColsData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIMat2ColsData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImat2ColsData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setImat2DiagData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIMat2DiagData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImat2DiagData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setImat3RowsData(

@@ -218,10 +218,7 @@ fn serializer_round_trips_imat2_text() {
 fn parser_still_parses_imat3_after_generalization() {
     // Regression: 3x3 literals must still resolve to IMat3.
     let pv = parse_single_literal("((1, 0, 0), (0, 1, 0), (0, 0, 1))");
-    assert!(matches!(
-        pv,
-        PropertyValue::Literal(TextValue::IMat3(_))
-    ));
+    assert!(matches!(pv, PropertyValue::Literal(TextValue::IMat3(_))));
 }
 
 // ---------------------------------------------------------------------------

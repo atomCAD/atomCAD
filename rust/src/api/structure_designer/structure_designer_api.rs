@@ -83,6 +83,9 @@ use crate::api::structure_designer::structure_designer_api_types::APIFreeMoveDat
 use crate::api::structure_designer::structure_designer_api_types::APIFreeRotData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
+use crate::api::structure_designer::structure_designer_api_types::APIIMat2ColsData;
+use crate::api::structure_designer::structure_designer_api_types::APIIMat2DiagData;
+use crate::api::structure_designer::structure_designer_api_types::APIIMat2RowsData;
 use crate::api::structure_designer::structure_designer_api_types::APIIMat3ColsData;
 use crate::api::structure_designer::structure_designer_api_types::APIIMat3DiagData;
 use crate::api::structure_designer::structure_designer_api_types::APIIMat3RowsData;
@@ -155,6 +158,9 @@ use crate::structure_designer::nodes::free_rot::FreeRotData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
+use crate::structure_designer::nodes::imat2_cols::IMat2ColsData;
+use crate::structure_designer::nodes::imat2_diag::IMat2DiagData;
+use crate::structure_designer::nodes::imat2_rows::IMat2RowsData;
 use crate::structure_designer::nodes::imat3_cols::IMat3ColsData;
 use crate::structure_designer::nodes::imat3_diag::IMat3DiagData;
 use crate::structure_designer::nodes::imat3_rows::IMat3RowsData;
@@ -2899,6 +2905,64 @@ pub fn get_supercell_data(scope_path: Vec<u64>, node_id: u64) -> Option<APISuper
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_imat2_rows_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat2RowsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<IMat2RowsData>()?;
+                let m = d.matrix;
+                Some(APIIMat2RowsData {
+                    a: to_api_ivec2(&glam::IVec2::new(m[0][0], m[0][1])),
+                    b: to_api_ivec2(&glam::IVec2::new(m[1][0], m[1][1])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_imat2_cols_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat2ColsData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<IMat2ColsData>()?;
+                let m = d.matrix;
+                Some(APIIMat2ColsData {
+                    a: to_api_ivec2(&glam::IVec2::new(m[0][0], m[1][0])),
+                    b: to_api_ivec2(&glam::IVec2::new(m[0][1], m[1][1])),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_imat2_diag_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat2DiagData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let d = node_data.as_any_ref().downcast_ref::<IMat2DiagData>()?;
+                Some(APIIMat2DiagData {
+                    v: to_api_ivec2(&d.v),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_imat3_rows_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIMat3RowsData> {
     unsafe {
         with_cad_instance_or(
@@ -4667,6 +4731,55 @@ pub fn set_supercell_data(scope_path: Vec<u64>, node_id: u64, data: APISupercell
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, supercell_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_imat2_rows_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat2RowsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_ivec2(&data.a);
+            let b = from_api_ivec2(&data.b);
+            let payload = Box::new(IMat2RowsData {
+                matrix: [[a.x, a.y], [b.x, b.y]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_imat2_cols_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat2ColsData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let a = from_api_ivec2(&data.a);
+            let b = from_api_ivec2(&data.b);
+            let payload = Box::new(IMat2ColsData {
+                matrix: [[a.x, b.x], [a.y, b.y]],
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_imat2_diag_data(scope_path: Vec<u64>, node_id: u64, data: APIIMat2DiagData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let payload = Box::new(IMat2DiagData {
+                v: from_api_ivec2(&data.v),
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, payload);
             refresh_structure_designer_auto(cad_instance);
         });
     }

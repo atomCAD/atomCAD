@@ -2822,6 +2822,70 @@ sealed class APIViewportPickResult with _$APIViewportPickResult {
   const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
 }
 
+/// `a` / `b` are columns 0 / 1 — same convention as the text
+/// properties exposed by `IMat2ColsData::get_text_properties`.
+class APIIMat2ColsData {
+  final APIIVec2 a;
+  final APIIVec2 b;
+
+  const APIIMat2ColsData({
+    required this.a,
+    required this.b,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIMat2ColsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b;
+}
+
+class APIIMat2DiagData {
+  final APIIVec2 v;
+
+  const APIIMat2DiagData({
+    required this.v,
+  });
+
+  @override
+  int get hashCode => v.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIMat2DiagData &&
+          runtimeType == other.runtimeType &&
+          v == other.v;
+}
+
+/// `a` / `b` are rows 0 / 1 — same convention as the
+/// text properties exposed by `IMat2RowsData::get_text_properties`.
+class APIIMat2RowsData {
+  final APIIVec2 a;
+  final APIIVec2 b;
+
+  const APIIMat2RowsData({
+    required this.a,
+    required this.b,
+  });
+
+  @override
+  int get hashCode => a.hashCode ^ b.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIMat2RowsData &&
+          runtimeType == other.runtimeType &&
+          a == other.a &&
+          b == other.b;
+}
+
 /// `a` / `b` / `c` are columns 0 / 1 / 2 — same convention as the text
 /// properties exposed by `IMat3ColsData::get_text_properties`.
 class APIIMat3ColsData {

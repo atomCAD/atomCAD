@@ -59,6 +59,9 @@ import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_vecs_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/supercell_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/imat2_rows_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/imat2_cols_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/imat2_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_rows_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_diag_editor.dart';
@@ -233,7 +236,8 @@ class NodeDataWidget extends StatelessWidget {
     // Based on the node type, show the appropriate editor
     switch (selectedNode.nodeTypeName) {
       case 'Comment':
-        final commentData = getCommentData(scopePath: scopePath, nodeId: selectedNode.id);
+        final commentData =
+            getCommentData(scopePath: scopePath, nodeId: selectedNode.id);
         return CommentEditor(
           nodeId: selectedNode.id,
           data: commentData,
@@ -529,7 +533,8 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'closure':
-        final closureData = getClosureData(scopePath: scopePath, nodeId: selectedNode.id);
+        final closureData =
+            getClosureData(scopePath: scopePath, nodeId: selectedNode.id);
         return ClosureShapeEditor(
           title: 'Closure Properties',
           nodeTypeName: 'closure',
@@ -645,7 +650,8 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'product':
-        final productData = getProductData(scopePath: scopePath, nodeId: selectedNode.id);
+        final productData =
+            getProductData(scopePath: scopePath, nodeId: selectedNode.id);
         return ProductEditor(
           nodeId: selectedNode.id,
           data: productData,
@@ -676,7 +682,8 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'print':
-        final printData = getPrintData(scopePath: scopePath, nodeId: selectedNode.id);
+        final printData =
+            getPrintData(scopePath: scopePath, nodeId: selectedNode.id);
         return PrintEditor(
           nodeId: selectedNode.id,
           data: printData,
@@ -832,11 +839,30 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'supercell':
-        final supercellData = getSupercellData(scopePath: scopePath, nodeId: selectedNode.id);
+        final supercellData =
+            getSupercellData(scopePath: scopePath, nodeId: selectedNode.id);
 
         return SupercellEditor(
           nodeId: selectedNode.id,
           data: supercellData,
+          model: model,
+        );
+      case 'imat2_rows':
+        return IMat2RowsEditor(
+          nodeId: selectedNode.id,
+          data: getImat2RowsData(scopePath: scopePath, nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'imat2_cols':
+        return IMat2ColsEditor(
+          nodeId: selectedNode.id,
+          data: getImat2ColsData(scopePath: scopePath, nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'imat2_diag':
+        return IMat2DiagEditor(
+          nodeId: selectedNode.id,
+          data: getImat2DiagData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'imat3_rows':
@@ -882,8 +908,7 @@ class NodeDataWidget extends StatelessWidget {
         final params = model.getCustomNodeParams(selectedNode.id);
         if (params == null) {
           return Center(
-            child:
-                Text('No editor available for ${selectedNode.nodeTypeName}'),
+            child: Text('No editor available for ${selectedNode.nodeTypeName}'),
           );
         }
         return CustomNodeEditor(

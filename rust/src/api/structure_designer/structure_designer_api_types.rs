@@ -386,6 +386,24 @@ pub struct APISupercellData {
     pub c: APIIVec3,
 }
 
+/// `a` / `b` are rows 0 / 1 — same convention as the
+/// text properties exposed by `IMat2RowsData::get_text_properties`.
+pub struct APIIMat2RowsData {
+    pub a: APIIVec2,
+    pub b: APIIVec2,
+}
+
+/// `a` / `b` are columns 0 / 1 — same convention as the text
+/// properties exposed by `IMat2ColsData::get_text_properties`.
+pub struct APIIMat2ColsData {
+    pub a: APIIVec2,
+    pub b: APIIVec2,
+}
+
+pub struct APIIMat2DiagData {
+    pub v: APIIVec2,
+}
+
 /// `a` / `b` / `c` are rows 0 / 1 / 2 — same convention as the
 /// text properties exposed by `IMat3RowsData::get_text_properties`.
 pub struct APIIMat3RowsData {

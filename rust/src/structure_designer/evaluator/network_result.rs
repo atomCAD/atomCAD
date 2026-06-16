@@ -813,10 +813,9 @@ impl NetworkResult {
             NetworkResult::Vec3(vec) => format!("({:.6}, {:.6}, {:.6})", vec.x, vec.y, vec.z),
             NetworkResult::IVec2(vec) => format!("({}, {})", vec.x, vec.y),
             NetworkResult::IVec3(vec) => format!("({}, {}, {})", vec.x, vec.y, vec.z),
-            NetworkResult::IMat2(m) => format!(
-                "(({}, {}), ({}, {}))",
-                m[0][0], m[0][1], m[1][0], m[1][1],
-            ),
+            NetworkResult::IMat2(m) => {
+                format!("(({}, {}), ({}, {}))", m[0][0], m[0][1], m[1][0], m[1][1],)
+            }
             NetworkResult::IMat3(m) => format!(
                 "(({}, {}, {}), ({}, {}, {}), ({}, {}, {}))",
                 m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2],
