@@ -415,11 +415,10 @@ fn format_node_type_list(
     let mut has_output = false;
     for category_view in category_views {
         // Apply category filter if specified
-        if let Some(ref filter) = filter_category {
-            if &category_view.category != filter {
+        if let Some(ref filter) = filter_category
+            && &category_view.category != filter {
                 continue;
             }
-        }
 
         if category_view.nodes.is_empty() {
             continue;

@@ -37,8 +37,8 @@ pub struct CifLoop {
 /// E.g., `5.4307(2)` → `5.4307`, `90.00(5)` → `90.00`.
 /// Only strips trailing parenthesized integers from numeric-looking values.
 fn strip_uncertainty(value: &str) -> String {
-    if let Some(paren_start) = value.rfind('(') {
-        if value.ends_with(')') {
+    if let Some(paren_start) = value.rfind('(')
+        && value.ends_with(')') {
             let before = &value[..paren_start];
             let inside = &value[paren_start + 1..value.len() - 1];
             // Only strip if the part before '(' looks numeric and inside is digits
@@ -51,7 +51,6 @@ fn strip_uncertainty(value: &str) -> String {
                 return before.to_string();
             }
         }
-    }
     value.to_string()
 }
 

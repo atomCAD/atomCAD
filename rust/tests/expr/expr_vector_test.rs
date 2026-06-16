@@ -24,7 +24,7 @@ mod vector_tests {
             vec![Expr::Float(5.0), Expr::Float(7.0)],
         );
         let variables = HashMap::new();
-        let functions = get_function_signatures();
+        let _functions = get_function_signatures();
 
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
@@ -87,7 +87,7 @@ mod vector_tests {
             vec![Expr::Float(5.0), Expr::Float(6.0)], // Will be converted to int
         );
         let variables = HashMap::new();
-        let functions = get_function_signatures();
+        let _functions = get_function_signatures();
 
         let functions = get_function_signatures();
         let result = expr.validate(&variables, functions);
@@ -620,7 +620,7 @@ mod vector_tests {
     fn test_complex_vector_expression() {
         // Test: vec2(1.0, 2.0) * 3.0 + vec2(4.0, 5.0)
         let variables = HashMap::new();
-        let functions = get_function_implementations();
+        let _functions = get_function_implementations();
 
         let expr = Expr::Binary(
             Box::new(Expr::Binary(
@@ -653,7 +653,7 @@ mod vector_tests {
     fn test_vector_member_access_in_expression() {
         // Test: vec2(3.0, 4.0).x + vec2(1.0, 2.0).y
         let variables = HashMap::new();
-        let functions = get_function_implementations();
+        let _functions = get_function_implementations();
 
         let expr = Expr::Binary(
             Box::new(Expr::MemberAccess(
@@ -917,7 +917,7 @@ mod vector_tests {
     fn test_complex_vector_math_expression() {
         // Test: normalize2(vec2(3.0, 4.0)) * length2(vec2(6.0, 8.0))
         let variables = HashMap::new();
-        let functions = get_function_implementations();
+        let _functions = get_function_implementations();
 
         let expr = Expr::Binary(
             Box::new(Expr::Call(

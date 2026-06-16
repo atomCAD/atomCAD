@@ -314,10 +314,8 @@ impl AtomicStructure {
     }
 
     pub fn clear_all_bonds(&mut self) {
-        for slot in self.atoms.iter_mut() {
-            if let Some(atom) = slot {
-                atom.bonds.clear();
-            }
+        for atom in self.atoms.iter_mut().flatten() {
+            atom.bonds.clear();
         }
         self.num_bonds = 0;
     }
@@ -460,24 +458,22 @@ impl AtomicStructure {
             .any(|bond| bond.other_atom_id() == atom_id2);
 
         if bond_exists {
-            if let Some(atom) = self.get_atom_mut(atom_id1) {
-                if let Some(bond) = atom
+            if let Some(atom) = self.get_atom_mut(atom_id1)
+                && let Some(bond) = atom
                     .bonds
                     .iter_mut()
                     .find(|b| b.other_atom_id() == atom_id2)
                 {
                     bond.set_bond_order(bond_order);
                 }
-            }
-            if let Some(atom) = self.get_atom_mut(atom_id2) {
-                if let Some(bond) = atom
+            if let Some(atom) = self.get_atom_mut(atom_id2)
+                && let Some(bond) = atom
                     .bonds
                     .iter_mut()
                     .find(|b| b.other_atom_id() == atom_id1)
                 {
                     bond.set_bond_order(bond_order);
                 }
-            }
         } else {
             let bond1 = InlineBond::new(atom_id2, bond_order);
             self.get_atom_mut(atom_id1).unwrap().bonds.push(bond1);

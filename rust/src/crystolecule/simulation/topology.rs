@@ -378,7 +378,7 @@ impl MolecularTopology {
     fn is_inversion_center(atomic_number: i16, bonds: &[(usize, u8)]) -> bool {
         match atomic_number {
             // C, N, O: inversion only for sp2 centers
-            6 | 7 | 8 => bonds
+            6..=8 => bonds
                 .iter()
                 .any(|&(_, order)| order == BOND_DOUBLE || order == BOND_AROMATIC),
             // Group 15: pyramidal inversion regardless of bond orders

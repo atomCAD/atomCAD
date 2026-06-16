@@ -464,9 +464,9 @@ impl DataType {
         // guard keeps `() -> T → () -> T` / `→ AnyFunction` flowing through the
         // function arms below as ordinary function values rather than forcing.
         // See `doc/design_nullary_function_coercion.md`.
-        if top_level {
-            if let DataType::Function(src_ft) = source_type {
-                if src_ft.parameter_types.is_empty() && !dest_type.is_function_shape() {
+        if top_level
+            && let DataType::Function(src_ft) = source_type
+                && src_ft.parameter_types.is_empty() && !dest_type.is_function_shape() {
                     return Self::can_be_converted_to_impl(
                         &src_ft.output_type,
                         dest_type,
@@ -474,8 +474,6 @@ impl DataType {
                         false,
                     );
                 }
-            }
-        }
 
         // Records: full width + structural depth subtyping. Two `Named(n)`
         // references resolve to the same def, hence the same fields, by
@@ -489,11 +487,10 @@ impl DataType {
         // `Named(_)` reference (missing from the registry) is incompatible
         // with anything.
         if let (DataType::Record(src), DataType::Record(dst)) = (source_type, dest_type) {
-            if let (RecordType::Named(s), RecordType::Named(d)) = (src, dst) {
-                if s == d {
+            if let (RecordType::Named(s), RecordType::Named(d)) = (src, dst)
+                && s == d {
                     return true;
                 }
-            }
             let Some(src_fields) = src.resolve_fields(registry) else {
                 return false;
             };
@@ -572,11 +569,10 @@ impl DataType {
         }
 
         // Check if we can convert T to [T] (single element to array)
-        if let DataType::Array(target_element_type) = dest_type {
-            if Self::can_be_converted_to_impl(source_type, target_element_type, registry, false) {
+        if let DataType::Array(target_element_type) = dest_type
+            && Self::can_be_converted_to_impl(source_type, target_element_type, registry, false) {
                 return true;
             }
-        }
 
         // Array-to-array element-wise conversion: [S] -> [T] when S -> T.
         // Mirrors the runtime conversion in `NetworkResult::convert_to`. Without
@@ -584,8 +580,7 @@ impl DataType {
         // Molecule -> HasAtoms is a permitted concrete -> abstract upcast.
         if let (DataType::Array(source_element_type), DataType::Array(target_element_type)) =
             (source_type, dest_type)
-        {
-            if Self::can_be_converted_to_impl(
+            && Self::can_be_converted_to_impl(
                 source_element_type,
                 target_element_type,
                 registry,
@@ -593,7 +588,6 @@ impl DataType {
             ) {
                 return true;
             }
-        }
 
         // `AnyFunction` destination: any concrete `Function(_)` whose
         // parameter list starts with `leading_params` (pairwise convertible)

@@ -325,8 +325,8 @@ fn tessellate_non_lightweight_content(
         }
 
         // Render unit cell wireframe for motif_edit nodes (active node only)
-        if is_active && node_data.show_unit_cell_wireframe {
-            if let Some(ref uc) = node_data.unit_cell {
+        if is_active && node_data.show_unit_cell_wireframe
+            && let Some(ref uc) = node_data.unit_cell {
                 let color = preferences.background.unit_cell_wireframe_color;
                 let color_f32 = [
                     color[0] as f32 / 255.0,
@@ -339,7 +339,6 @@ fn tessellate_non_lightweight_content(
                     &color_f32,
                 );
             }
-        }
     }
 
     (

@@ -48,15 +48,14 @@ pub fn apply_rename_core(
                 .description
                 .replace(&old_pattern, &new_pattern);
         }
-        if let Some(ref mut summary) = network.node_type.summary {
-            if summary.contains(&old_pattern) {
+        if let Some(ref mut summary) = network.node_type.summary
+            && summary.contains(&old_pattern) {
                 *summary = summary.replace(&old_pattern, &new_pattern);
             }
-        }
 
         crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
-            if node.node_type_name == "Comment" {
-                if let Some(comment_data) =
+            if node.node_type_name == "Comment"
+                && let Some(comment_data) =
                     node.data
                         .as_any_mut()
                         .downcast_mut::<crate::structure_designer::nodes::comment::CommentData>()
@@ -68,7 +67,6 @@ pub fn apply_rename_core(
                         comment_data.text = comment_data.text.replace(&old_pattern, &new_pattern);
                     }
                 }
-            }
         });
     }
 }

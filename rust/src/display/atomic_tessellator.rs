@@ -191,8 +191,8 @@ pub fn tessellate_atomic_structure(
             for bond in &atom.bonds {
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
-                if atom.id < other_atom_id {
-                    if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
+                if atom.id < other_atom_id
+                    && let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
                             continue;
@@ -234,7 +234,6 @@ pub fn tessellate_atomic_structure(
                             );
                         }
                     }
-                }
             }
         }
     }
@@ -854,8 +853,8 @@ pub fn tessellate_atomic_structure_impostors(
             for bond in &atom.bonds {
                 let other_atom_id = bond.other_atom_id();
                 // Only tessellate each bond once
-                if atom.id < other_atom_id {
-                    if let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
+                if atom.id < other_atom_id
+                    && let Some(other_atom) = atomic_structure.get_atom(other_atom_id) {
                         // Skip bond if the other atom is culled
                         if should_cull_atom(other_atom, atomic_viz_prefs) {
                             continue;
@@ -895,7 +894,6 @@ pub fn tessellate_atomic_structure_impostors(
                             );
                         }
                     }
-                }
             }
         }
     }

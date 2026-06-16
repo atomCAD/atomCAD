@@ -158,7 +158,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
             }
         }
     }
-    bonds.sort_by(|a, b| (a.atom_id1, a.atom_id2).cmp(&(b.atom_id1, b.atom_id2)));
+    bonds.sort_by_key(|a| (a.atom_id1, a.atom_id2));
 
     // Serialize anchor positions
     let mut anchor_positions: Vec<SerializableAnchor> = diff
@@ -214,7 +214,7 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
                     }
                 })
                 .collect();
-            ccb.sort_by(|a, b| (a.atom_id_1, a.atom_id_2).cmp(&(b.atom_id_1, b.atom_id_2)));
+            ccb.sort_by_key(|a| (a.atom_id_1, a.atom_id_2));
             ccb
         },
     })

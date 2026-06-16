@@ -47,7 +47,7 @@ fn roundtrip_cnnd_file(file_path: &str) {
         let network2 = registry2
             .node_networks
             .get(name)
-            .expect(&format!("Network '{}' missing after roundtrip", name));
+            .unwrap_or_else(|| panic!("Network '{}' missing after roundtrip", name));
 
         assert_eq!(
             network1.nodes.len(),
@@ -73,10 +73,8 @@ fn roundtrip_cnnd_file(file_path: &str) {
         );
 
         for (node_id, node1) in &network1.nodes {
-            let node2 = network2.nodes.get(node_id).expect(&format!(
-                "Node {} missing after roundtrip in network '{}'",
-                node_id, name
-            ));
+            let node2 = network2.nodes.get(node_id).unwrap_or_else(|| panic!("Node {} missing after roundtrip in network '{}'",
+                node_id, name));
 
             assert_eq!(
                 node1.node_type_name, node2.node_type_name,
@@ -107,10 +105,8 @@ fn roundtrip_cnnd_file(file_path: &str) {
                     name
                 );
                 for (pin_node_id, pin_index) in arg1.iter_source_pins() {
-                    let pin_index2 = arg2.get_source_pin(pin_node_id).expect(&format!(
-                        "argument {} pin {} missing for node {} in network '{}'",
-                        i, pin_node_id, node_id, name
-                    ));
+                    let pin_index2 = arg2.get_source_pin(pin_node_id).unwrap_or_else(|| panic!("argument {} pin {} missing for node {} in network '{}'",
+                        i, pin_node_id, node_id, name));
                     assert_eq!(
                         pin_index, pin_index2,
                         "argument {} pin {} index mismatch for node {} in network '{}'",

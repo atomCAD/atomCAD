@@ -87,14 +87,13 @@ impl UndoCommand for AddNodeCommand {
         let node_data = match self.load_node_data(ctx) {
             Some(mut data) => {
                 // For parameter nodes, restore the param_id
-                if let Some(param_id) = self.param_id {
-                    if let Some(param_data) = data
+                if let Some(param_id) = self.param_id
+                    && let Some(param_data) = data
                         .as_any_mut()
                         .downcast_mut::<crate::structure_designer::nodes::parameter::ParameterData>()
                     {
                         param_data.param_id = Some(param_id);
                     }
-                }
                 data
             }
             None => return,
@@ -115,11 +114,10 @@ impl UndoCommand for AddNodeCommand {
             }
 
             // Update next_param_id for parameter nodes
-            if let Some(param_id) = self.param_id {
-                if network.next_param_id <= param_id {
+            if let Some(param_id) = self.param_id
+                && network.next_param_id <= param_id {
                     network.next_param_id = param_id + 1;
                 }
-            }
         }
     }
 

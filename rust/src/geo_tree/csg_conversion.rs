@@ -42,11 +42,10 @@ impl GeoNode {
         mut cache: Option<&mut CsgConversionCache>,
     ) -> Option<CSGSketch> {
         // Check cache first
-        if let Some(cache_ref) = cache.as_deref_mut() {
-            if let Some(cached) = cache_ref.get_sketch(self.hash()) {
+        if let Some(cache_ref) = cache.as_deref_mut()
+            && let Some(cached) = cache_ref.get_sketch(self.hash()) {
                 return Some((*cached).clone());
             }
-        }
 
         // Compute if not cached
         let result = match &self.kind {
@@ -79,11 +78,10 @@ impl GeoNode {
         mut cache: Option<&mut CsgConversionCache>,
     ) -> Option<CSGMesh> {
         // Check cache first
-        if let Some(cache_ref) = cache.as_deref_mut() {
-            if let Some(cached) = cache_ref.get_mesh(self.hash()) {
+        if let Some(cache_ref) = cache.as_deref_mut()
+            && let Some(cached) = cache_ref.get_mesh(self.hash()) {
                 return Some((*cached).clone());
             }
-        }
 
         // Compute if not cached
         let result = match &self.kind {

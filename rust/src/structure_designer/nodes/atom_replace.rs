@@ -19,19 +19,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct AtomReplaceData {
     /// List of (from_atomic_number, to_atomic_number) replacement rules.
     /// Each pair maps atoms of element `from` to element `to`.
     pub replacements: Vec<(i16, i16)>,
 }
 
-impl Default for AtomReplaceData {
-    fn default() -> Self {
-        Self {
-            replacements: vec![],
-        }
-    }
-}
 
 fn element_symbol(atomic_number: i16) -> String {
     if atomic_number == 0 {
@@ -180,8 +174,8 @@ impl NodeData for AtomReplaceData {
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
-        if let Some(v) = props.get("replacements") {
-            if let TextValue::Array(items) = v {
+        if let Some(v) = props.get("replacements")
+            && let TextValue::Array(items) = v {
                 self.replacements = items
                     .iter()
                     .map(|item| {
@@ -190,7 +184,6 @@ impl NodeData for AtomReplaceData {
                     })
                     .collect::<Result<Vec<_>, String>>()?;
             }
-        }
         Ok(())
     }
 

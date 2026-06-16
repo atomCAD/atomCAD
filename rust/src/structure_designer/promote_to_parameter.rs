@@ -139,12 +139,11 @@ pub fn promote_node_to_parameter(
             continue;
         }
         for arg in &mut consumer.arguments {
-            if let Some(pin_idx) = arg.get_source_pin(node_id) {
-                if pin_idx == 0 {
+            if let Some(pin_idx) = arg.get_source_pin(node_id)
+                && pin_idx == 0 {
                     arg.remove_source(node_id);
                     arg.set_source(new_id, 0);
                 }
-            }
         }
     }
 

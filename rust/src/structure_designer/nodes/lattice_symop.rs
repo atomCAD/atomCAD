@@ -239,14 +239,14 @@ impl NodeData for LatticeSymopData {
                 GeoNode::transform(tr, Box::new(geo_tree_root))
             };
 
-            return EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+            EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
                 structure: Structure::from_lattice_vecs(structure.lattice_vecs),
                 geo_tree_root: output_geo_tree_root,
                 alignment,
                 alignment_reason,
-            }));
+            }))
         } else {
-            return EvalOutput::single(runtime_type_error_in_input(0));
+            EvalOutput::single(runtime_type_error_in_input(0))
         }
     }
 
@@ -270,11 +270,10 @@ impl NodeData for LatticeSymopData {
         // Only show rotation info if there's actually a rotation
         let has_rotation = self.rotation_axis.is_some() && self.rotation_angle_degrees.abs() > 1e-6;
 
-        if has_rotation && show_rot_axis {
-            if let Some(axis) = self.rotation_axis {
+        if has_rotation && show_rot_axis
+            && let Some(axis) = self.rotation_axis {
                 parts.push(format!("ax: ({:.2},{:.2},{:.2})", axis.x, axis.y, axis.z));
             }
-        }
 
         if has_rotation && show_rot_angle {
             parts.push(format!("ang: {:.1}°", self.rotation_angle_degrees));
@@ -367,8 +366,8 @@ impl Tessellatable for LatticeSymopGadget {
         );
 
         // Visualize rotation axis if present
-        if let Some(axis) = self.rotation_axis {
-            if axis.length() > 1e-12 {
+        if let Some(axis) = self.rotation_axis
+            && axis.length() > 1e-12 {
                 let normalized_axis = axis.normalize();
                 let cylinder_length = 30.0;
                 let cylinder_radius = 0.1;
@@ -398,7 +397,6 @@ impl Tessellatable for LatticeSymopGadget {
                     Some(&yellow_material),
                 );
             }
-        }
     }
 
     fn as_tessellatable(&self) -> Box<dyn Tessellatable> {

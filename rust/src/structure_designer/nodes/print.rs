@@ -24,6 +24,7 @@ use std::time::SystemTime;
 /// display passes. The `execute_only` flag inside `eval` is what gates the
 /// actual buffer push when the user wants prints only on Execute.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct PrintData {
     /// When `true`, the side-effect push fires only under
     /// `context.execute == true` (i.e. an explicit Execute pass). When
@@ -32,13 +33,6 @@ pub struct PrintData {
     pub execute_only: bool,
 }
 
-impl Default for PrintData {
-    fn default() -> Self {
-        Self {
-            execute_only: false,
-        }
-    }
-}
 
 impl NodeData for PrintData {
     fn provide_gadget(

@@ -46,8 +46,8 @@ fn bfs_distances(structure: &AtomicStructure, start: u32) -> rustc_hash::FxHashM
         if let Some(atom) = structure.get_atom(current) {
             for bond in &atom.bonds {
                 let neighbor = bond.other_atom_id();
-                if !distances.contains_key(&neighbor) {
-                    distances.insert(neighbor, current_dist + 1);
+                if let std::collections::hash_map::Entry::Vacant(e) = distances.entry(neighbor) {
+                    e.insert(current_dist + 1);
                     queue.push_back(neighbor);
                 }
             }

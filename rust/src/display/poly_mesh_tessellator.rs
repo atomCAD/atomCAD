@@ -437,8 +437,8 @@ pub fn tessellate_poly_mesh(
         highlighted_material,
         true,
     );
-    if poly_mesh.open {
-        if let Some(material) = inside_material {
+    if poly_mesh.open
+        && let Some(material) = inside_material {
             tessellate_poly_mesh_one_sided(
                 poly_mesh,
                 mesh,
@@ -448,7 +448,6 @@ pub fn tessellate_poly_mesh(
                 false,
             );
         }
-    }
 }
 
 fn tessellate_poly_mesh_one_sided(

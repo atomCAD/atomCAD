@@ -56,11 +56,10 @@ fn set_add_bond_interaction_state(
     structure_designer: &mut StructureDesigner,
     new_state: AddBondInteractionState,
 ) {
-    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer) {
-        if let AtomEditTool::AddBond(ref mut bond_state) = data.active_tool {
+    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer)
+        && let AtomEditTool::AddBond(ref mut bond_state) = data.active_tool {
             bond_state.interaction_state = new_state;
         }
-    }
 }
 
 /// Perform a hit test for atoms only (bonds and empty space are ignored).
@@ -148,11 +147,10 @@ pub fn set_add_bond_order(structure_designer: &mut StructureDesigner, order: u8)
     if order == 0 || order > 7 {
         return; // Reject invalid orders
     }
-    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer) {
-        if let AtomEditTool::AddBond(ref mut state) = data.active_tool {
+    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer)
+        && let AtomEditTool::AddBond(ref mut state) = data.active_tool {
             state.bond_order = order;
         }
-    }
 }
 
 /// Handle pointer-down in the AddBond tool. Performs a hit test for atoms.
@@ -514,15 +512,12 @@ fn get_atom_world_position(
     // This must come first because in result view, the diff_atom_id may
     // coincidentally match a different atom's result ID, giving the wrong
     // position.
-    if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache() {
-        if let Some(eval_cache) = eval_cache.downcast_ref::<AtomEditEvalCache>() {
-            if let Some(result_id) = eval_cache.provenance.diff_to_result.get(&diff_atom_id) {
-                if let Some(atom) = result_structure.get_atom(*result_id) {
+    if let Some(eval_cache) = structure_designer.get_selected_node_eval_cache()
+        && let Some(eval_cache) = eval_cache.downcast_ref::<AtomEditEvalCache>()
+            && let Some(result_id) = eval_cache.provenance.diff_to_result.get(&diff_atom_id)
+                && let Some(atom) = result_structure.get_atom(*result_id) {
                     return Some(atom.position);
                 }
-            }
-        }
-    }
 
     // Second try: the diff_atom_id may be a result atom ID directly (diff view)
     if let Some(atom) = result_structure.get_atom(diff_atom_id) {

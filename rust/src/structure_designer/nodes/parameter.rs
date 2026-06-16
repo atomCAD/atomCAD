@@ -99,13 +99,10 @@ impl NodeData for ParameterData {
             .data
             .as_any_ref()
             .downcast_ref::<CustomNodeData>()
-        {
-            if let Some(text_value) = custom_data.literal_values.get(&self.param_name) {
-                if let Some(result) = text_value.to_network_result(&self.data_type) {
+            && let Some(text_value) = custom_data.literal_values.get(&self.param_name)
+                && let Some(result) = text_value.to_network_result(&self.data_type) {
                     return EvalOutput::single(result);
                 }
-            }
-        }
 
         // Fall back to default pin (lowest priority)
         EvalOutput::single(eval_default(

@@ -94,11 +94,10 @@ fn get_output_type(
     pin_index: i32,
     registry: &NodeTypeRegistry,
 ) -> DataType {
-    if let Some(node) = network.nodes.get(&node_id) {
-        if let Some(node_type) = registry.get_node_type_for_node(node) {
+    if let Some(node) = network.nodes.get(&node_id)
+        && let Some(node_type) = registry.get_node_type_for_node(node) {
             return node_type.get_output_pin_type(pin_index);
         }
-    }
     DataType::None
 }
 
@@ -128,13 +127,11 @@ fn generate_param_name(
     }
 
     // Get destination parameter name from the node type
-    if let Some(dest_node) = nodes.get(&dest_node_id) {
-        if let Some(node_type) = registry.get_node_type_for_node(dest_node) {
-            if let Some(param) = node_type.parameters.get(dest_param_index) {
+    if let Some(dest_node) = nodes.get(&dest_node_id)
+        && let Some(node_type) = registry.get_node_type_for_node(dest_node)
+            && let Some(param) = node_type.parameters.get(dest_param_index) {
                 return param.name.clone();
             }
-        }
-    }
 
     // Fallback to source node name if destination param name is unavailable
     if let Some(node) = nodes.get(&source_node_id) {
@@ -228,11 +225,10 @@ pub fn analyze_selection_for_factoring(
 
     // 2. Check for Parameter nodes in selection
     for &node_id in &network.selected_node_ids {
-        if let Some(node) = network.nodes.get(&node_id) {
-            if node.node_type_name == "parameter" {
+        if let Some(node) = network.nodes.get(&node_id)
+            && node.node_type_name == "parameter" {
                 return invalid("Selection contains Parameter nodes");
             }
-        }
     }
 
     // 3. Find external inputs and outputs
@@ -531,15 +527,14 @@ pub fn create_subnetwork_from_selection(
                 } else {
                     // External input - connect to parameter node
                     let key = (source_id, pin_idx);
-                    if let Some(&param_index) = source_to_param_index.get(&key) {
-                        if let Some(&param_id) = param_node_ids.get(&param_index) {
+                    if let Some(&param_index) = source_to_param_index.get(&key)
+                        && let Some(&param_id) = param_node_ids.get(&param_index) {
                             new_wires.push(
                                 crate::structure_designer::node_network::IncomingWire::node_output(
                                     param_id, 0,
                                 ),
                             ); // Parameter output is pin 0
                         }
-                    }
                 }
             }
 
@@ -548,11 +543,10 @@ pub fn create_subnetwork_from_selection(
     }
 
     // 8. Set return node from the resolved return source.
-    if let Some((src_id, _)) = analysis.return_source {
-        if let Some(&new_return_id) = id_mapping.get(&src_id) {
+    if let Some((src_id, _)) = analysis.return_source
+        && let Some(&new_return_id) = id_mapping.get(&src_id) {
             new_network.return_node_id = Some(new_return_id);
         }
-    }
 
     // Initialize custom node types for all nodes in the new network
     registry.initialize_custom_node_types_for_network(&mut new_network);

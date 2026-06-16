@@ -332,9 +332,8 @@ impl NetworkResult {
             }
             _ => None,
         }
-        .map(|t| {
+        .inspect(|t| {
             debug_assert!(!t.is_abstract(), "infer_data_type returned abstract type");
-            t
         })
     }
 
@@ -661,15 +660,14 @@ impl NetworkResult {
             // an iterator value whose source type erased to `None` falls
             // through to the broadcast guard below and passes through
             // unchanged. See `doc/design_iterators.md` (open question #2).
-            if let DataType::Iterator(source_element_type) = source_type {
-                if let NetworkResult::Iterator(walker) = self {
+            if let DataType::Iterator(source_element_type) = source_type
+                && let NetworkResult::Iterator(walker) = self {
                     return NetworkResult::Iterator(Walker::convert(
                         walker,
                         (**source_element_type).clone(),
                         (**target_element_type).clone(),
                     ));
                 }
-            }
             // Single-value broadcast. Skip if source is itself an iterator —
             // the only valid Iter→Iter form is identity (already handled), and
             // anything else is rejected at validation; fall through.
@@ -692,19 +690,17 @@ impl NetworkResult {
         }
 
         // Check if we can convert T to [T] (single element to array)
-        if let DataType::Array(target_element_type) = target_type {
-            if DataType::can_be_converted_to(source_type, target_element_type, registry) {
+        if let DataType::Array(target_element_type) = target_type
+            && DataType::can_be_converted_to(source_type, target_element_type, registry) {
                 // Convert the single element to the target element type, then wrap in array
                 let converted_element = self.convert_to(source_type, target_element_type, registry);
                 return NetworkResult::Array(vec![converted_element]);
             }
-        }
 
         // Handle array to array conversion (element-wise conversion)
         if let (DataType::Array(source_element_type), DataType::Array(target_element_type)) =
             (source_type, target_type)
-        {
-            if let NetworkResult::Array(elements) = self {
+            && let NetworkResult::Array(elements) = self {
                 let converted_elements: Vec<NetworkResult> = elements
                     .into_iter()
                     .map(|element| {
@@ -713,7 +709,6 @@ impl NetworkResult {
                     .collect();
                 return NetworkResult::Array(converted_elements);
             }
-        }
 
         // Perform basic type conversions
         match (self, target_type) {

@@ -127,11 +127,10 @@ fn rename_data_types_in_network(network: &mut Value) -> Result<(), MigrationErro
                 }
             }
         }
-        if let Some(ot) = node_type.get_mut("output_type") {
-            if !ot.is_null() {
+        if let Some(ot) = node_type.get_mut("output_type")
+            && !ot.is_null() {
                 rename_data_type_string_in_value(ot);
             }
-        }
     }
 
     // Per-node NodeData fields that embed a DataType (four node types).
@@ -159,11 +158,10 @@ fn rename_data_types_in_node(node: &mut Value) {
             if let Some(dt) = data.get_mut("data_type") {
                 rename_data_type_in_value(dt);
             }
-            if let Some(dts) = data.get_mut("data_type_str") {
-                if !dts.is_null() {
+            if let Some(dts) = data.get_mut("data_type_str")
+                && !dts.is_null() {
                     rename_data_type_string_in_value(dts);
                 }
-            }
         }
         "expr" => {
             if let Some(params) = data.get_mut("parameters").and_then(|v| v.as_array_mut()) {
@@ -171,11 +169,10 @@ fn rename_data_types_in_node(node: &mut Value) {
                     if let Some(dt) = p.get_mut("data_type") {
                         rename_data_type_in_value(dt);
                     }
-                    if let Some(dts) = p.get_mut("data_type_str") {
-                        if !dts.is_null() {
+                    if let Some(dts) = p.get_mut("data_type_str")
+                        && !dts.is_null() {
                             rename_data_type_string_in_value(dts);
                         }
-                    }
                 }
             }
         }
@@ -228,8 +225,8 @@ fn rename_data_type_in_value(v: &mut Value) {
             if let Some(inner) = map.get_mut("Array") {
                 rename_data_type_in_value(inner);
             }
-            if let Some(func) = map.get_mut("Function") {
-                if let Some(func_obj) = func.as_object_mut() {
+            if let Some(func) = map.get_mut("Function")
+                && let Some(func_obj) = func.as_object_mut() {
                     if let Some(params) = func_obj
                         .get_mut("parameter_types")
                         .and_then(|v| v.as_array_mut())
@@ -242,7 +239,6 @@ fn rename_data_type_in_value(v: &mut Value) {
                         rename_data_type_in_value(ot);
                     }
                 }
-            }
         }
         _ => {}
     }
@@ -312,36 +308,31 @@ fn rename_node_type_strings(root: &mut Value) -> Result<(), MigrationError> {
         let Some(entry_arr) = entry.as_array_mut() else {
             continue;
         };
-        if let Some(Value::String(key)) = entry_arr.get_mut(0) {
-            if let Some(new) = rename_node_type_name(key) {
+        if let Some(Value::String(key)) = entry_arr.get_mut(0)
+            && let Some(new) = rename_node_type_name(key) {
                 *key = new;
             }
-        }
         let Some(network) = entry_arr.get_mut(1) else {
             continue;
         };
-        if let Some(node_type) = network.get_mut("node_type") {
-            if let Some(Value::String(name)) = node_type.get_mut("name") {
-                if let Some(new) = rename_node_type_name(name) {
+        if let Some(node_type) = network.get_mut("node_type")
+            && let Some(Value::String(name)) = node_type.get_mut("name")
+                && let Some(new) = rename_node_type_name(name) {
                     *name = new;
                 }
-            }
-        }
         if let Some(nodes) = network.get_mut("nodes").and_then(|v| v.as_array_mut()) {
             for node in nodes {
-                if let Some(Value::String(n)) = node.get_mut("node_type_name") {
-                    if let Some(new) = rename_node_type_name(n) {
+                if let Some(Value::String(n)) = node.get_mut("node_type_name")
+                    && let Some(new) = rename_node_type_name(n) {
                         *n = new;
                     }
-                }
                 // `SerializableNode.data_type` is the tag used to dispatch the
                 // polymorphic NodeData loader; it mirrors `node_type_name` and
                 // must track it through the rename.
-                if let Some(Value::String(t)) = node.get_mut("data_type") {
-                    if let Some(new) = rename_node_type_name(t) {
+                if let Some(Value::String(t)) = node.get_mut("data_type")
+                    && let Some(new) = rename_node_type_name(t) {
                         *t = new;
                     }
-                }
             }
         }
     }
@@ -441,11 +432,10 @@ fn drop_deleted_nodes(network_json: &mut Value) -> Result<(), MigrationError> {
         .and_then(|v| v.as_u64())
         .map(|id| deleted_ids.contains(&id))
         .unwrap_or(false);
-    if return_was_deleted {
-        if let Some(obj) = network_json.as_object_mut() {
+    if return_was_deleted
+        && let Some(obj) = network_json.as_object_mut() {
             obj.insert("return_node_id".to_string(), Value::Null);
         }
-    }
 
     retain_display_entries(network_json, "displayed_node_ids", &deleted_ids);
     retain_display_entries(network_json, "displayed_output_pins", &deleted_ids);

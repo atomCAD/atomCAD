@@ -138,8 +138,8 @@ pub fn serialize_diff(diff: &AtomicStructure) -> String {
         let atom = diff.get_atom(atom_id).unwrap();
         for bond in &atom.bonds {
             let other_id = bond.other_atom_id();
-            if atom_id < other_id {
-                if let (Some(&a), Some(&b)) = (
+            if atom_id < other_id
+                && let (Some(&a), Some(&b)) = (
                     atom_id_to_line.get(&atom_id),
                     atom_id_to_line.get(&other_id),
                 ) {
@@ -154,7 +154,6 @@ pub fn serialize_diff(diff: &AtomicStructure) -> String {
                         ));
                     }
                 }
-            }
         }
     }
 

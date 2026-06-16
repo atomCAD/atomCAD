@@ -17,11 +17,10 @@ pub struct SetCollapseModeCommand {
 
 impl SetCollapseModeCommand {
     fn apply(&self, ctx: &mut UndoContext, mode: CollapseMode) {
-        if let Some(network) = ctx.network_in_scope_mut(&self.network_name, &self.scope_path) {
-            if let Some(node) = network.nodes.get_mut(&self.node_id) {
+        if let Some(network) = ctx.network_in_scope_mut(&self.network_name, &self.scope_path)
+            && let Some(node) = network.nodes.get_mut(&self.node_id) {
                 node.collapse_mode = mode;
             }
-        }
     }
 }
 

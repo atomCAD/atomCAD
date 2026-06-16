@@ -205,11 +205,10 @@ impl NodeData for StructureRotData {
         let mut parts = Vec::new();
         let has_rotation = self.axis_index.is_some() && self.step != 0;
 
-        if has_rotation && show_axis_index {
-            if let Some(axis_idx) = self.axis_index {
+        if has_rotation && show_axis_index
+            && let Some(axis_idx) = self.axis_index {
                 parts.push(format!("axis: {}", axis_idx));
             }
-        }
 
         if has_rotation && show_step {
             parts.push(format!("step: {}", self.step));

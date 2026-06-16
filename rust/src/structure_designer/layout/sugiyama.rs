@@ -675,11 +675,10 @@ fn refine_vertical_alignment(
                     // Check if we can move without overlapping
                     if can_move_to_y(
                         node_id, target_y, layer_idx, positions, graph, network, registry,
-                    ) {
-                        if let Some(pos) = positions.get_mut(&node_id) {
+                    )
+                        && let Some(pos) = positions.get_mut(&node_id) {
                             pos.y = target_y;
                         }
-                    }
                 }
             }
         }

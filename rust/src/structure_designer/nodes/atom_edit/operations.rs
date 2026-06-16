@@ -57,11 +57,10 @@ fn delete_selected_in_result_view(structure_designer: &mut StructureDesigner) {
         // Base atoms: need their positions for delete markers
         let mut base_to_delete: Vec<(u32, DVec3)> = Vec::new();
         for &base_id in &atom_edit_data.selection.selected_base_atoms {
-            if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
-                if let Some(atom) = result_structure.get_atom(result_id) {
+            if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id)
+                && let Some(atom) = result_structure.get_atom(result_id) {
                     base_to_delete.push((base_id, atom.position));
                 }
-            }
         }
 
         // Diff atoms: need to know if they're pure additions or matched base atoms
@@ -302,8 +301,8 @@ fn gather_base_atom_promotion_info_impl(
 
     let mut info = Vec::new();
     for &base_id in selected_base_atoms {
-        if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id) {
-            if let Some(atom) = result_structure.get_atom(result_id) {
+        if let Some(&result_id) = eval_cache.provenance.base_to_result.get(&base_id)
+            && let Some(atom) = result_structure.get_atom(result_id) {
                 // Skip frozen atoms unless explicitly included
                 if !include_frozen && atom.is_frozen() {
                     continue;
@@ -326,7 +325,6 @@ fn gather_base_atom_promotion_info_impl(
                     flags: atom.flags,
                 });
             }
-        }
     }
     info
 }
@@ -384,7 +382,7 @@ pub fn drag_selected_by_delta(
             !atom_edit_data
                 .diff
                 .get_atom(**id)
-                .map_or(false, |a| a.is_frozen())
+                .is_some_and(|a| a.is_frozen())
         })
         .copied()
         .collect();

@@ -74,7 +74,9 @@ pub(super) const DRAG_THRESHOLD: f64 = 5.0;
 /// Interaction state machine for the Default tool.
 /// Tracks the current mouse interaction from down → move → up.
 #[derive(Debug)]
+#[derive(Default)]
 pub enum DefaultToolInteractionState {
+    #[default]
     Idle,
     PendingAtom {
         hit_atom_id: u32,
@@ -106,11 +108,6 @@ pub enum DefaultToolInteractionState {
     },
 }
 
-impl Default for DefaultToolInteractionState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
 
 #[derive(Debug)]
 pub struct DefaultToolState {
@@ -184,7 +181,9 @@ pub enum AddAtomToolState {
 /// Interaction state machine for the AddBond tool.
 /// Tracks the current pointer interaction from down → move → up.
 #[derive(Debug)]
+#[derive(Default)]
 pub enum AddBondInteractionState {
+    #[default]
     Idle,
     Pending {
         hit_atom_id: u32,
@@ -197,11 +196,6 @@ pub enum AddBondInteractionState {
     },
 }
 
-impl Default for AddBondInteractionState {
-    fn default() -> Self {
-        Self::Idle
-    }
-}
 
 #[derive(Debug)]
 pub struct AddBondToolState {

@@ -386,13 +386,11 @@ impl StructureDesigner {
             .node_data
             .values()
         {
-            if let Some(interactive_output) = node_data.interactive_output() {
-                if let NodeOutput::Atomic(atomic_structure, _) = interactive_output {
-                    if atomic_structure.decorator().from_selected_node {
+            if let Some(interactive_output) = node_data.interactive_output()
+                && let NodeOutput::Atomic(atomic_structure, _) = interactive_output
+                    && atomic_structure.decorator().from_selected_node {
                         return Some(atomic_structure);
                     }
-                }
-            }
         }
         None
     }
@@ -1232,17 +1230,15 @@ impl StructureDesigner {
         // Step 4.5: Handle selection changes - re-evaluate affected nodes to update from_selected_node flag
         if changes.selection_changed {
             // Add previous selected node (needs from_selected_node set to false)
-            if let Some(prev_node_id) = changes.previous_selection {
-                if network.displayed_nodes.contains_key(&prev_node_id) {
+            if let Some(prev_node_id) = changes.previous_selection
+                && network.displayed_nodes.contains_key(&prev_node_id) {
                     nodes_needing_evaluation.insert(prev_node_id);
                 }
-            }
             // Add current selected node (needs from_selected_node set to true)
-            if let Some(curr_node_id) = changes.current_selection {
-                if network.displayed_nodes.contains_key(&curr_node_id) {
+            if let Some(curr_node_id) = changes.current_selection
+                && network.displayed_nodes.contains_key(&curr_node_id) {
                     nodes_needing_evaluation.insert(curr_node_id);
                 }
-            }
         }
 
         // Track selected node's unit cell
@@ -1829,25 +1825,23 @@ impl StructureDesigner {
         self.node_type_registry.node_networks.remove(network_name);
 
         // Update the active_node_network_name if it was the deleted network
-        if let Some(active_name) = &self.active_node_network_name {
-            if active_name == network_name {
+        if let Some(active_name) = &self.active_node_network_name
+            && active_name == network_name {
                 self.active_node_network_name = None;
             }
-        }
 
         // Remove the deleted network from navigation history
         self.navigation_history.remove_network(network_name);
 
         // Clear clipboard if it references the deleted network type
-        if let Some(ref clipboard) = self.clipboard {
-            if clipboard
+        if let Some(ref clipboard) = self.clipboard
+            && clipboard
                 .nodes
                 .values()
                 .any(|n| n.node_type_name == network_name)
             {
                 self.clipboard = None;
             }
-        }
 
         // Capture active network after deletion
         let active_network_after = self.active_node_network_name.clone();
@@ -2101,11 +2095,10 @@ impl StructureDesigner {
         }
 
         // Update active network if it was under the prefix.
-        if let Some(active_name) = &self.active_node_network_name {
-            if active_name.starts_with(&prefix_dot) {
+        if let Some(active_name) = &self.active_node_network_name
+            && active_name.starts_with(&prefix_dot) {
                 self.active_node_network_name = None;
             }
-        }
         // Update active record def if it was under the prefix.
         if let Some(active_rec) = &self.active_record_def_name
             && active_rec.starts_with(&prefix_dot)
@@ -2119,15 +2112,14 @@ impl StructureDesigner {
         }
 
         // Clear clipboard if it references any deleted network.
-        if let Some(ref clipboard) = self.clipboard {
-            if clipboard
+        if let Some(ref clipboard) = self.clipboard
+            && clipboard
                 .nodes
                 .values()
                 .any(|n| network_targets.contains(n.node_type_name.as_str()))
             {
                 self.clipboard = None;
             }
-        }
 
         let active_network_after = self.active_node_network_name.clone();
         let active_record_def_after = self.active_record_def_name.clone();
@@ -2408,8 +2400,8 @@ impl StructureDesigner {
                         None => None,
                     };
                 }
-                if let Some(network) = current {
-                    if let Some(node) = network.nodes.get_mut(&node_id) {
+                if let Some(network) = current
+                    && let Some(node) = network.nodes.get_mut(&node_id) {
                         NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                             built_in_types,
                             record_type_defs,
@@ -2418,7 +2410,6 @@ impl StructureDesigner {
                             true,
                         );
                     }
-                }
             }
             self.set_dirty(true);
             // A zone-bearing node added inside a body starts with an empty body
@@ -2482,9 +2473,9 @@ impl StructureDesigner {
         // after concurrent network mutations) and keeps create-time
         // behavior in lockstep with the picker. See
         // `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
-        if let Some(drag) = drag_source.as_ref() {
-            if let Some(node_type) = self.node_type_registry.get_node_type(node_type_name) {
-                if let Some(adapted) = node_data.adapt_for_drag_source(
+        if let Some(drag) = drag_source.as_ref()
+            && let Some(node_type) = self.node_type_registry.get_node_type(node_type_name)
+                && let Some(adapted) = node_data.adapt_for_drag_source(
                     &drag.source_type,
                     drag.direction,
                     &self.node_type_registry,
@@ -2501,8 +2492,6 @@ impl StructureDesigner {
                         node_data = adapted;
                     }
                 }
-            }
-        }
 
         // Capture counters before node creation (for undo)
         let (next_node_id_before, next_param_id_before) = self
@@ -2514,8 +2503,8 @@ impl StructureDesigner {
 
         // Special handling for parameter nodes
         let mut assigned_param_id: Option<u64> = None;
-        if node_type_name == "parameter" {
-            if let Some(node_network) = self
+        if node_type_name == "parameter"
+            && let Some(node_network) = self
                 .node_type_registry
                 .node_networks
                 .get_mut(&node_network_name)
@@ -2537,7 +2526,6 @@ impl StructureDesigner {
                     param_data.sort_order = current_param_count as i32;
                 }
             }
-        }
 
         // Early return if the node network doesn't exist
         let node_id = self
@@ -2558,8 +2546,8 @@ impl StructureDesigner {
                 &self.node_type_registry.built_in_record_type_defs,
                 &mut self.node_type_registry.node_networks,
             );
-            if let Some(network) = node_networks.get_mut(&node_network_name) {
-                if let Some(node) = network.nodes.get_mut(&node_id) {
+            if let Some(network) = node_networks.get_mut(&node_network_name)
+                && let Some(node) = network.nodes.get_mut(&node_id) {
                     // Call the populate function with the split borrows
                     NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                         built_in_types,
@@ -2569,7 +2557,6 @@ impl StructureDesigner {
                         true,
                     );
                 }
-            }
         }
 
         // If we successfully added a node, apply the display policy with this node as dirty
@@ -3327,8 +3314,8 @@ impl StructureDesigner {
         // `connect_nodes_scoped` for parity with U4-era callers (display-policy
         // / dirty-flag bookkeeping). Cross-scope / ZoneInput wires use the
         // generalized `connect_wire` on NodeNetwork.
-        if source_scope_depth == 0 {
-            if let crate::structure_designer::node_network::SourcePin::NodeOutput { pin_index } =
+        if source_scope_depth == 0
+            && let crate::structure_designer::node_network::SourcePin::NodeOutput { pin_index } =
                 source_pin
             {
                 self.connect_nodes_scoped(
@@ -3340,7 +3327,6 @@ impl StructureDesigner {
                 );
                 return;
             }
-        }
         // Cross-scope / ZoneInput wire — capture the destination body's
         // before-state for undo (the wire is stored on a body-internal node).
         let before = self.snapshot_zone_body(dest_scope_path);
@@ -3963,14 +3949,13 @@ impl StructureDesigner {
 
         // For expr nodes, validate the expression before setting the data
         let mut expr_validation_errors = Vec::new();
-        if is_expr_node {
-            if let Some(expr_data) =
+        if is_expr_node
+            && let Some(expr_data) =
                 data.as_any_mut()
                     .downcast_mut::<crate::structure_designer::nodes::expr::ExprData>()
             {
                 expr_validation_errors = expr_data.parse_and_validate(node_id);
             }
-        }
 
         // Apply mutation in the resolved scope. The block scopes the
         // `&mut self` borrow held by `get_scope_network_mut` so we can call
@@ -3994,11 +3979,10 @@ impl StructureDesigner {
         }
 
         // Capture after-state and push undo command
-        if let Some(old_json) = old_data_json {
-            if let Some(new_json) =
+        if let Some(old_json) = old_data_json
+            && let Some(new_json) =
                 self.snapshot_node_data_scoped(&network_name, scope_path, node_id)
-            {
-                if old_json != new_json {
+                && old_json != new_json {
                     self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                         description: format!("Edit {}", node_type_name),
                         network_name: network_name.clone(),
@@ -4009,8 +3993,6 @@ impl StructureDesigner {
                         new_data_json: new_json,
                     });
                 }
-            }
-        }
 
         // Cache custom NodeType if needed after data is set. Mirrors the
         // split-borrow pattern used by `add_node_scoped` so the read-only
@@ -4330,8 +4312,8 @@ impl StructureDesigner {
         self.select_node(node_id);
 
         // Set active tool to Add Atom so the user can immediately start placing atoms
-        if let Some(data) = self.get_node_network_data_mut(node_id) {
-            if let Some(atom_edit_data) = data
+        if let Some(data) = self.get_node_network_data_mut(node_id)
+            && let Some(atom_edit_data) = data
                 .as_any_mut()
                 .downcast_mut::<crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData>()
             {
@@ -4340,7 +4322,6 @@ impl StructureDesigner {
                         crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::Idle,
                     );
             }
-        }
 
         // Clear undo stack — new project should have no history
         self.undo_stack.clear();
@@ -4400,9 +4381,9 @@ impl StructureDesigner {
                 let node_id = self
                     .get_active_node_network()
                     .and_then(|n| n.active_node_id);
-                if let Some(node_id) = node_id {
-                    if let Some(data) = self.get_node_network_data_mut(node_id) {
-                        if let Some(atom_edit_data) = data
+                if let Some(node_id) = node_id
+                    && let Some(data) = self.get_node_network_data_mut(node_id)
+                        && let Some(atom_edit_data) = data
                             .as_any_mut()
                             .downcast_mut::<crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData>()
                         {
@@ -4411,8 +4392,6 @@ impl StructureDesigner {
                                     crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::Idle,
                                 );
                         }
-                    }
-                }
             }
         }
     }
@@ -4646,13 +4625,12 @@ impl StructureDesigner {
         if let Some(network) = self.node_type_registry.node_networks.get_mut(network_name) {
             if let Some(node_id) = &network.active_node_id {
                 let data = network.get_node_network_data_mut(*node_id);
-                if let Some(node_data) = data {
-                    if let Some(g) = &self.gadget {
+                if let Some(node_data) = data
+                    && let Some(g) = &self.gadget {
                         g.sync_data(node_data);
                         // Mark design as dirty since gadget data was synced back to node
                         self.set_dirty(true);
                     }
-                }
             }
             true
         } else {
@@ -5545,18 +5523,17 @@ impl StructureDesigner {
                     dirty_nodes.extend(node_network.get_connected_node_ids(selected_node_id));
 
                     // Check if the selected node requires validation
-                    if let Some(node) = node_network.nodes.get(&selected_node_id) {
-                        if node.node_type_name == "parameter" || {
+                    if let Some(node) = node_network.nodes.get(&selected_node_id)
+                        && (node.node_type_name == "parameter" || {
                             // Check if this node references an invalid node network
                             self.node_type_registry
                                 .node_networks
                                 .get(&node.node_type_name)
                                 .map(|network| !network.valid)
                                 .unwrap_or(false)
-                        } {
+                        }) {
                             should_validate = true;
                         }
-                    }
                 }
 
                 // Deleting a node that feeds a *capture* input of a
@@ -5640,15 +5617,14 @@ impl StructureDesigner {
 
         // Snapshot deleted nodes before deletion
         let mut deleted_node_snapshots = Vec::new();
-        if let Some(ref info) = deletion_info {
-            if info.is_node_deletion {
+        if let Some(ref info) = deletion_info
+            && info.is_node_deletion {
                 for &node_id in &info.deleted_node_ids {
                     if let Some(snap) = self.snapshot_node(&node_network_name, node_id) {
                         deleted_node_snapshots.push(snap);
                     }
                 }
             }
-        }
 
         // Case A reflow (doc/design_reflow_on_footprint_change.md): predict which
         // collapsable HOFs will expand once this deletion removes their `f` wire,
@@ -5916,19 +5892,17 @@ impl StructureDesigner {
             .values()
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
-                    if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output
+                    && let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
                         visualization,
                         |atom| get_displayed_atom_radius(atom, &display_visualization),
                         BAS_STICK_RADIUS,
-                    ) {
-                        if closest.as_ref().is_none_or(|c| distance < c.2) {
+                    )
+                        && closest.as_ref().is_none_or(|c| distance < c.2) {
                             closest = Some((atom_id, atomic_structure, distance));
                         }
-                    }
-                }
             }
         }
 
@@ -5968,19 +5942,17 @@ impl StructureDesigner {
             .iter()
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
-                if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
-                    if let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
+                if let NodeOutput::Atomic(atomic_structure, _) = pin_output
+                    && let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
                         visualization,
                         |atom| get_displayed_atom_radius(atom, &display_visualization),
                         BAS_STICK_RADIUS,
-                    ) {
-                        if closest.as_ref().is_none_or(|c| distance < c.3) {
+                    )
+                        && closest.as_ref().is_none_or(|c| distance < c.3) {
                             closest = Some((atom_id, atomic_structure, node_id, distance));
                         }
-                    }
-                }
             }
         }
 
@@ -6046,8 +6018,8 @@ impl StructureDesigner {
                 }
 
                 // Hit-test geometry (SDF)
-                if let Some(geo_tree) = pin_geo_tree {
-                    if let Some(geo_distance) =
+                if let Some(geo_tree) = pin_geo_tree
+                    && let Some(geo_distance) =
                         raytrace_geometry(geo_tree, ray_origin, ray_direction, 1.0)
                     {
                         min_distance = match min_distance {
@@ -6056,7 +6028,6 @@ impl StructureDesigner {
                             _ => min_distance,
                         };
                     }
-                }
             }
 
             if let Some(distance) = min_distance {
@@ -6080,14 +6051,13 @@ impl StructureDesigner {
             .as_ref()
             .and_then(|name| self.node_type_registry.node_networks.get(name));
 
-        if let Some(network) = network {
-            if let Some(node) = network.nodes.get(&node_id) {
+        if let Some(network) = network
+            && let Some(node) = network.nodes.get(&node_id) {
                 if let Some(ref custom_name) = node.custom_name {
                     return custom_name.clone();
                 }
                 return format!("{} #{}", node.node_type_name, node_id);
             }
-        }
 
         format!("node #{}", node_id)
     }
@@ -6105,8 +6075,8 @@ impl StructureDesigner {
     /// * `dirty_node_ids` - The set of node IDs that are dirty, or None to consider all nodes dirty
     pub fn apply_node_display_policy(&mut self, dirty_node_ids: Option<&HashSet<u64>>) {
         // Only apply if there's an active node network
-        if let Some(network_name) = &self.active_node_network_name {
-            if let Some(node_network) = self.node_type_registry.node_networks.get_mut(network_name)
+        if let Some(network_name) = &self.active_node_network_name
+            && let Some(node_network) = self.node_type_registry.node_networks.get_mut(network_name)
             {
                 // Resolve the display policy with the provided dirty_node_ids
                 let changes = self.node_display_policy_resolver.resolve(
@@ -6125,7 +6095,6 @@ impl StructureDesigner {
                     node_network.set_node_display_type(node_id, display_type);
                 }
             }
-        }
     }
 
     /// Sets the preferences for the structure designer and applies necessary updates
@@ -6243,13 +6212,11 @@ impl StructureDesigner {
             // For non-atom_edit nodes, snapshot after and push undo command
             self.end_gadget_drag_snapshot();
             // Ending drag syncs data back to the node
-            if let Some(network_name) = &self.active_node_network_name.clone() {
-                if let Some(network) = self.node_type_registry.node_networks.get(network_name) {
-                    if let Some(node_id) = network.active_node_id {
+            if let Some(network_name) = &self.active_node_network_name.clone()
+                && let Some(network) = self.node_type_registry.node_networks.get(network_name)
+                    && let Some(node_id) = network.active_node_id {
                         self.mark_node_data_changed(node_id);
                     }
-                }
-            }
         }
     }
 
@@ -6299,8 +6266,7 @@ impl StructureDesigner {
         };
 
         if let Some(new_data_json) = self.snapshot_node_data(&pending.network_name, pending.node_id)
-        {
-            if pending.old_data_json != new_data_json {
+            && pending.old_data_json != new_data_json {
                 self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                     description: format!("Edit {}", pending.node_type_name),
                     network_name: pending.network_name,
@@ -6308,10 +6274,9 @@ impl StructureDesigner {
                     node_id: pending.node_id,
                     node_type_name: pending.node_type_name,
                     old_data_json: pending.old_data_json,
-                    new_data_json: new_data_json,
+                    new_data_json,
                 });
             }
-        }
     }
 
     /// Called when a comment node text field gains focus or resize drag begins.
@@ -6354,8 +6319,8 @@ impl StructureDesigner {
             &pending.network_name,
             &pending.scope_path,
             pending.node_id,
-        ) {
-            if pending.old_data_json != new_data_json {
+        )
+            && pending.old_data_json != new_data_json {
                 self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
                     description: format!("Edit {}", pending.node_type_name),
                     network_name: pending.network_name,
@@ -6366,7 +6331,6 @@ impl StructureDesigner {
                     new_data_json,
                 });
             }
-        }
     }
 
     /// Set the stored body size of the HOF identified by (`scope_path`,
@@ -6377,14 +6341,12 @@ impl StructureDesigner {
     pub fn set_zone_size(&mut self, scope_path: &[u64], node_id: u64, width: f64, height: f64) {
         let width = width.max(100.0);
         let height = height.max(60.0);
-        if let Some(network) = self.get_scope_network_mut(scope_path) {
-            if let Some(node) = network.nodes.get_mut(&node_id) {
-                if node.zone.is_some() {
+        if let Some(network) = self.get_scope_network_mut(scope_path)
+            && let Some(node) = network.nodes.get_mut(&node_id)
+                && node.zone.is_some() {
                     node.body_width = width;
                     node.body_height = height;
                 }
-            }
-        }
     }
 
     /// Called when an HOF body resize drag begins. Captures the body's current
@@ -6845,17 +6807,15 @@ impl StructureDesigner {
                 }
 
                 // Clear clipboard if it contains nodes of the changed type
-                if interface_changed {
-                    if let Some(ref clipboard) = self.clipboard {
-                        if clipboard
+                if interface_changed
+                    && let Some(ref clipboard) = self.clipboard
+                        && clipboard
                             .nodes
                             .values()
                             .any(|n| n.node_type_name == current_network_name)
                         {
                             self.clipboard = None;
                         }
-                    }
-                }
             }
         }
 
@@ -7288,8 +7248,8 @@ impl StructureDesigner {
         self.validate_active_network();
 
         // 10. Push undo command
-        if let Some(source_before) = source_network_before {
-            if let (Some(source_after), Some(subnetwork_snap)) = (
+        if let Some(source_before) = source_network_before
+            && let (Some(source_after), Some(subnetwork_snap)) = (
                 self.snapshot_network(&network_name),
                 self.snapshot_network(subnetwork_name),
             ) {
@@ -7302,7 +7262,6 @@ impl StructureDesigner {
                     subnetwork_snapshot: subnetwork_snap,
                 });
             }
-        }
 
         // 11. Mark dirty and schedule refresh
         self.is_dirty = true;
@@ -8175,8 +8134,8 @@ impl StructureDesigner {
             &self.node_type_registry.built_in_record_type_defs,
             &mut self.node_type_registry.node_networks,
         );
-        if let Some(network) = node_networks.get_mut(&network_name) {
-            if let Some(node) = network.nodes.get_mut(&new_id) {
+        if let Some(network) = node_networks.get_mut(&network_name)
+            && let Some(node) = network.nodes.get_mut(&new_id) {
                 NodeTypeRegistry::populate_custom_node_type_cache_with_types(
                     built_in_types,
                     record_type_defs,
@@ -8185,7 +8144,6 @@ impl StructureDesigner {
                     true,
                 );
             }
-        }
 
         // Mark the new parameter as displayed so the user can see it.
         if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {

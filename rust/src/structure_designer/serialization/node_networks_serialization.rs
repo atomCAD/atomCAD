@@ -694,18 +694,14 @@ pub fn serializable_to_node_network(
             if node.node_type_name == "atom_edit"
                 && !nodes_with_explicit_pins.contains(&node_id)
                 && network.displayed_nodes.contains_key(&node_id)
-            {
-                if let Some(data) = node
+                && let Some(data) = node
                     .data
                     .as_ref()
                     .as_any_ref()
                     .downcast_ref::<AtomEditData>()
-                {
-                    if data.output_diff {
+                    && data.output_diff {
                         nodes_to_migrate.push(node_id);
                     }
-                }
-            }
         }
         for node_id in nodes_to_migrate {
             if let Some(state) = network.displayed_nodes.get_mut(&node_id) {

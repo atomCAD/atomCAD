@@ -266,7 +266,7 @@ fn match_diff_atoms(
 
         candidates.push(DiffCandidate {
             diff_id: diff_atom.id,
-            match_pos: match_pos,
+            match_pos,
             best_dist_sq,
             best_base_id,
         });
@@ -281,8 +281,8 @@ fn match_diff_atoms(
     let mut unmatched_diff_ids: Vec<u32> = Vec::new();
 
     for candidate in &candidates {
-        if let Some(base_id) = candidate.best_base_id {
-            if !matched_base_ids.contains(&base_id) {
+        if let Some(base_id) = candidate.best_base_id
+            && !matched_base_ids.contains(&base_id) {
                 // Claim this base atom
                 matched_base_ids.insert(base_id);
                 matches.push(DiffMatch {
@@ -291,7 +291,6 @@ fn match_diff_atoms(
                 });
                 continue;
             }
-        }
 
         // Best match was already claimed or no match at all — re-search excluding claimed atoms
         let nearby = base.get_atoms_in_radius(&candidate.match_pos, tolerance_sq.sqrt());

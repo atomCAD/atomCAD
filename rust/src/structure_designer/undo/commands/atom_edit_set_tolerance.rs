@@ -29,9 +29,9 @@ impl UndoCommand for AtomEditSetToleranceCommand {
 }
 
 fn set_tolerance(ctx: &mut UndoContext, network_name: &str, node_id: u64, value: f64) {
-    if let Some(network) = ctx.network_mut(network_name) {
-        if let Some(node) = network.nodes.get_mut(&node_id) {
-            if let Some(data) = node
+    if let Some(network) = ctx.network_mut(network_name)
+        && let Some(node) = network.nodes.get_mut(&node_id)
+            && let Some(data) = node
                 .data
                 .as_mut()
                 .as_any_mut()
@@ -39,6 +39,4 @@ fn set_tolerance(ctx: &mut UndoContext, network_name: &str, node_id: u64, value:
             {
                 data.tolerance = value;
             }
-        }
-    }
 }

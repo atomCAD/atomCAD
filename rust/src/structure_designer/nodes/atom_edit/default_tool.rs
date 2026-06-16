@@ -26,11 +26,10 @@ fn set_interaction_state(
     structure_designer: &mut StructureDesigner,
     state: DefaultToolInteractionState,
 ) {
-    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer) {
-        if let AtomEditTool::Default(ref mut default_state) = data.active_tool {
+    if let Some(data) = get_atom_edit_data_mut_transient(structure_designer)
+        && let AtomEditTool::Default(ref mut default_state) = data.active_tool {
             default_state.interaction_state = state;
         }
-    }
 }
 
 /// Intersect a ray with a plane. Returns the intersection point, or None if

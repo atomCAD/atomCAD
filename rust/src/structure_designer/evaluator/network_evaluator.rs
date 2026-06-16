@@ -1522,8 +1522,8 @@ impl NetworkEvaluator {
         // (via `resolve_output_type`) so polymorphic pins resolving to Unit
         // are also covered. See `doc/design_node_execution.md` (Phase 2 —
         // Central skip rule for Unit-returning nodes).
-        if !context.execute {
-            if let Some(node_type) = registry.get_node_type_for_node(node) {
+        if !context.execute
+            && let Some(node_type) = registry.get_node_type_for_node(node) {
                 let pin_count = node_type.output_pin_count();
                 if pin_count > 0 {
                     let current_network = network_stack.last().unwrap().node_network;
@@ -1545,7 +1545,6 @@ impl NetworkEvaluator {
                     }
                 }
             }
-        }
 
         let eval_output = if registry
             .built_in_node_types
@@ -1616,8 +1615,8 @@ impl NetworkEvaluator {
         // valid, well-implemented graph.
         let mut eval_output = eval_output;
         for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
-            if let Some(t) = result.infer_data_type() {
-                if t.is_abstract() {
+            if let Some(t) = result.infer_data_type()
+                && t.is_abstract() {
                     debug_assert!(
                         false,
                         "node {} pin {} produced value with abstract type {:?}",
@@ -1628,7 +1627,6 @@ impl NetworkEvaluator {
                         t, pin_idx
                     ));
                 }
-            }
         }
 
         // Record error from primary (pin 0) result
@@ -1720,8 +1718,8 @@ impl NetworkEvaluator {
             // `evaluate_all_outputs` (top-level displayed node) or via
             // `evaluate` (consumed as another node's input). See
             // `doc/design_node_execution.md` (Phase 2 — Central skip rule).
-            if !context.execute {
-                if let Some(node_type) = registry.get_node_type_for_node(node) {
+            if !context.execute
+                && let Some(node_type) = registry.get_node_type_for_node(node) {
                     let pin_count = node_type.output_pin_count();
                     if pin_count > 0 {
                         let current_network = network_stack.last().unwrap().node_network;
@@ -1741,7 +1739,6 @@ impl NetworkEvaluator {
                         }
                     }
                 }
-            }
 
             if registry
                 .built_in_node_types
@@ -1837,7 +1834,7 @@ impl NetworkEvaluator {
         let entry = context
             .node_output_strings
             .entry(key)
-            .or_insert_with(Vec::new);
+            .or_default();
         // Grow the vec if needed
         if entry.len() <= pin_index {
             entry.resize(pin_index + 1, String::new());

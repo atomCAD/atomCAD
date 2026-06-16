@@ -19,40 +19,34 @@ impl UndoCommand for ConnectWireCommand {
     fn undo(&self, ctx: &mut UndoContext) {
         if let Some(network) = ctx.network_mut(&self.network_name) {
             // Remove the wire we added
-            if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id) {
-                if let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
+            if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id)
+                && let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
                     arg.remove_source(self.wire.source_node_id);
                 }
-            }
 
             // Restore the replaced wire if there was one
-            if let Some(replaced) = &self.replaced_wire {
-                if let Some(dest_node) = network.nodes.get_mut(&replaced.dest_node_id) {
-                    if let Some(arg) = dest_node.arguments.get_mut(replaced.dest_param_index) {
+            if let Some(replaced) = &self.replaced_wire
+                && let Some(dest_node) = network.nodes.get_mut(&replaced.dest_node_id)
+                    && let Some(arg) = dest_node.arguments.get_mut(replaced.dest_param_index) {
                         arg.set_source(replaced.source_node_id, replaced.source_output_pin_index);
                     }
-                }
-            }
         }
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
         if let Some(network) = ctx.network_mut(&self.network_name) {
             // If not multi-valued, clear existing connections on this pin first
-            if self.replaced_wire.is_some() {
-                if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id) {
-                    if let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
+            if self.replaced_wire.is_some()
+                && let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id)
+                    && let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
                         arg.clear();
                     }
-                }
-            }
 
             // Re-establish the wire
-            if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id) {
-                if let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
+            if let Some(dest_node) = network.nodes.get_mut(&self.wire.dest_node_id)
+                && let Some(arg) = dest_node.arguments.get_mut(self.wire.dest_param_index) {
                     arg.set_source(self.wire.source_node_id, self.wire.source_output_pin_index);
                 }
-            }
         }
     }
 

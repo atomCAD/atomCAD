@@ -484,14 +484,13 @@ impl NodeTypeRegistry {
 
         let mut result: Vec<APINodeCategoryView> = Vec::new();
         for category in ordered_categories {
-            if let Some(nodes) = category_map.get(&category) {
-                if !nodes.is_empty() {
+            if let Some(nodes) = category_map.get(&category)
+                && !nodes.is_empty() {
                     result.push(APINodeCategoryView {
                         category: category.clone(),
                         nodes: nodes.clone(),
                     });
                 }
-            }
         }
 
         result
@@ -553,14 +552,13 @@ impl NodeTypeRegistry {
         ];
 
         for category in ordered_categories {
-            if let Some(nodes) = category_map.get(&category) {
-                if !nodes.is_empty() {
+            if let Some(nodes) = category_map.get(&category)
+                && !nodes.is_empty() {
                     result.push(APINodeCategoryView {
                         category: category.clone(),
                         nodes: nodes.clone(),
                     });
                 }
-            }
         }
 
         result
@@ -739,8 +737,8 @@ impl NodeTypeRegistry {
                 node.set_custom_node_type(Some(custom), refresh_args);
                 return true;
             }
-        } else if node.node_type_name == "product" {
-            if let Some(data) =
+        } else if node.node_type_name == "product"
+            && let Some(data) =
                 node.data
                     .as_any_ref()
                     .downcast_ref::<crate::structure_designer::nodes::product::ProductData>()
@@ -756,7 +754,6 @@ impl NodeTypeRegistry {
                 node.set_custom_node_type(Some(custom), refresh_args);
                 return true;
             }
-        }
 
         let custom_node_type = node.data.calculate_custom_node_type(base_node_type);
         let has_custom_node_type = custom_node_type.is_some();
@@ -2161,11 +2158,10 @@ impl NodeTypeRegistry {
                 .unwrap_or_default();
 
             // Mutably borrow the body via `zone_mut` (CoW via Arc::make_mut).
-            if let Some(node) = network.nodes.get_mut(&hof_id) {
-                if let Some(body) = node.zone_mut() {
+            if let Some(node) = network.nodes.get_mut(&hof_id)
+                && let Some(body) = node.zone_mut() {
                     self.repair_zone_body(body, hof_id, &zone_input_pin_types);
                 }
-            }
         }
     }
 

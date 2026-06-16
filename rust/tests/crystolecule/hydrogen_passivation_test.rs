@@ -37,7 +37,7 @@ fn count_h_bonded_to(s: &AtomicStructure, atom_id: u32) -> usize {
         .filter(|b| !b.is_delete_marker())
         .filter(|b| {
             s.get_atom(b.other_atom_id())
-                .map_or(false, |a| a.atomic_number == 1)
+                .is_some_and(|a| a.atomic_number == 1)
         })
         .count()
 }
@@ -261,7 +261,7 @@ fn sp2_carbon_2_bonds_h_at_120_degrees() {
         .filter(|b| !b.is_delete_marker())
         .filter(|b| {
             s.get_atom(b.other_atom_id())
-                .map_or(false, |a| a.atomic_number == 1)
+                .is_some_and(|a| a.atomic_number == 1)
         })
         .count();
     assert_eq!(c1_h_count, 1, "sp2 C with 2 bonds should get 1 H");

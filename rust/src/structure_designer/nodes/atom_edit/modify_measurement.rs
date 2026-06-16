@@ -336,11 +336,10 @@ pub fn compute_default_bond_length(
         BondLengthMode::Crystal => {
             // Crystal table only has single-bond lattice lengths; for non-single
             // bonds, skip it and use UFF which accounts for bond order.
-            if bond.bond_order() == BOND_SINGLE {
-                if let Some(d) = crystal_bond_length(atom1.atomic_number, atom2.atomic_number) {
+            if bond.bond_order() == BOND_SINGLE
+                && let Some(d) = crystal_bond_length(atom1.atomic_number, atom2.atomic_number) {
                     return Some(d);
                 }
-            }
             // Fall back to UFF with actual bond order
             uff_bond_length_for_atoms(atom1, atom2, bond_order)
         }
@@ -464,14 +463,12 @@ fn gather_measurement_data(structure_designer: &StructureDesigner) -> Result<Gat
         for &(prov, id) in &atom_edit_data.selection.selection_order {
             if prov == SelectionProvenance::Diff
                 && atom_edit_data.selection.selected_diff_atoms.contains(&id)
-            {
-                if let Some(atom) = result_structure.get_atom(id) {
+                && let Some(atom) = result_structure.get_atom(id) {
                     selected_atoms.push(SelectedAtomInfo {
                         result_atom_id: id,
                         position: atom.position,
                     });
                 }
-            }
         }
     } else {
         let cache = eval_cache.as_ref().unwrap();
@@ -479,28 +476,24 @@ fn gather_measurement_data(structure_designer: &StructureDesigner) -> Result<Gat
         for &(prov, id) in &atom_edit_data.selection.selection_order {
             match prov {
                 SelectionProvenance::Base => {
-                    if atom_edit_data.selection.selected_base_atoms.contains(&id) {
-                        if let Some(&result_id) = cache.provenance.base_to_result.get(&id) {
-                            if let Some(atom) = result_structure.get_atom(result_id) {
+                    if atom_edit_data.selection.selected_base_atoms.contains(&id)
+                        && let Some(&result_id) = cache.provenance.base_to_result.get(&id)
+                            && let Some(atom) = result_structure.get_atom(result_id) {
                                 selected_atoms.push(SelectedAtomInfo {
                                     result_atom_id: result_id,
                                     position: atom.position,
                                 });
                             }
-                        }
-                    }
                 }
                 SelectionProvenance::Diff => {
-                    if atom_edit_data.selection.selected_diff_atoms.contains(&id) {
-                        if let Some(&result_id) = cache.provenance.diff_to_result.get(&id) {
-                            if let Some(atom) = result_structure.get_atom(result_id) {
+                    if atom_edit_data.selection.selected_diff_atoms.contains(&id)
+                        && let Some(&result_id) = cache.provenance.diff_to_result.get(&id)
+                            && let Some(atom) = result_structure.get_atom(result_id) {
                                 selected_atoms.push(SelectedAtomInfo {
                                     result_atom_id: result_id,
                                     position: atom.position,
                                 });
                             }
-                        }
-                    }
                 }
             }
         }
@@ -590,14 +583,12 @@ fn apply_position_updates(
         if let Some(diff_id) = entry.diff_id {
             // Atom already in diff. If it's an UNCHANGED marker, promote it
             // to a real atom first (set atomic_number and anchor).
-            if let Some(atom) = atom_edit_data.diff.get_atom(diff_id) {
-                if atom.is_unchanged_marker() {
-                    if let Some((atomic_number, old_position)) = entry.identity {
+            if let Some(atom) = atom_edit_data.diff.get_atom(diff_id)
+                && atom.is_unchanged_marker()
+                    && let Some((atomic_number, old_position)) = entry.identity {
                         atom_edit_data.set_atomic_number_recorded(diff_id, atomic_number);
                         atom_edit_data.set_anchor_recorded(diff_id, old_position);
                     }
-                }
-            }
             atom_edit_data.move_in_diff(diff_id, new_position);
         } else if let Some((atomic_number, old_position)) = entry.identity {
             // Base pass-through atom — promote to diff with anchor, then move.

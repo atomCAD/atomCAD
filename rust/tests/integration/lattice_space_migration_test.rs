@@ -1386,7 +1386,7 @@ fn test_roundtrip_frame_transform_dropped() {
 /// migration is accidentally re-invoked on its own output.
 #[test]
 fn test_double_migration_is_idempotent() {
-    let raw = std::fs::read_to_string(&format!("{}/atom_fill_split.cnnd", FIXTURE_DIR))
+    let raw = std::fs::read_to_string(format!("{}/atom_fill_split.cnnd", FIXTURE_DIR))
         .expect("read atom_fill_split fixture");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("parse fixture");
 
@@ -2015,11 +2015,10 @@ fn test_resave_roundtrip_semantically_identical_after_first_v3_save() {
             .and_then(|v| v.as_array_mut())
         {
             for entry in networks {
-                if let Some(net) = entry.as_array_mut().and_then(|a| a.get_mut(1)) {
-                    if let Some(nodes) = net.get_mut("nodes").and_then(|v| v.as_array_mut()) {
+                if let Some(net) = entry.as_array_mut().and_then(|a| a.get_mut(1))
+                    && let Some(nodes) = net.get_mut("nodes").and_then(|v| v.as_array_mut()) {
                         nodes.sort_by_key(|n| n.get("id").and_then(|v| v.as_u64()).unwrap_or(0));
                     }
-                }
             }
         }
         value

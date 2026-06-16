@@ -90,11 +90,10 @@ impl NavigationHistory {
     /// Updates all occurrences of an old network name to a new name
     pub fn rename_network(&mut self, old_name: &str, new_name: &str) {
         for entry in &mut self.history {
-            if let Some(name) = entry {
-                if name == old_name {
+            if let Some(name) = entry
+                && name == old_name {
                     *entry = Some(new_name.to_string());
                 }
-            }
         }
     }
 

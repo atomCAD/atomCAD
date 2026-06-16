@@ -196,8 +196,8 @@ fn compute_open_directions_sp3(
                     .map(|b| b.other_atom_id())
             });
 
-            if let Some(neighbor_id) = neighbor_id {
-                if let Some(ref_perp) = find_dihedral_reference(structure, atom_id, neighbor_id) {
+            if let Some(neighbor_id) = neighbor_id
+                && let Some(ref_perp) = find_dihedral_reference(structure, atom_id, neighbor_id) {
                     // Use staggered (Primary) positions only
                     let dots =
                         compute_sp3_case1_with_dihedral(DVec3::ZERO, bond_dir, ref_perp, 1.0);
@@ -211,7 +211,6 @@ fn compute_open_directions_sp3(
                         .map(|d| d.position.normalize())
                         .collect();
                 }
-            }
 
             // Fallback: cone at 70.53° from -bond_dir with arbitrary reference
             let cone_axis = -bond_dir;

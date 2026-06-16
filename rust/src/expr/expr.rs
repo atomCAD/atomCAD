@@ -814,21 +814,19 @@ impl Expr {
 
         // String concatenation: `+` on two strings. Validation guarantees this
         // is the only String-involving arithmetic that reaches evaluation.
-        if matches!(op, BinOp::Add) {
-            if let (NetworkResult::String(a), NetworkResult::String(b)) = (&left, &right) {
+        if matches!(op, BinOp::Add)
+            && let (NetworkResult::String(a), NetworkResult::String(b)) = (&left, &right) {
                 return NetworkResult::String(format!("{}{}", a, b));
             }
-        }
 
         // String equality / inequality. `comparison_op` below only handles
         // numeric/bool operands, so strings are special-cased here (mirroring
         // the concat case above). Ordering operators are rejected at validation.
-        if matches!(op, BinOp::Eq | BinOp::Ne) {
-            if let (NetworkResult::String(a), NetworkResult::String(b)) = (&left, &right) {
+        if matches!(op, BinOp::Eq | BinOp::Ne)
+            && let (NetworkResult::String(a), NetworkResult::String(b)) = (&left, &right) {
                 let eq = a == b;
                 return NetworkResult::Bool(if matches!(op, BinOp::Eq) { eq } else { !eq });
             }
-        }
 
         match op {
             BinOp::Add => Self::arithmetic_op(left, right, |a, b| a + b, |a, b| a + b),

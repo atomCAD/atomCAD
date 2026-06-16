@@ -47,7 +47,7 @@ fn test_load_old_builtin_only() {
     );
 
     // Verify built-in node types resolve from registry
-    for (_id, node) in &network.nodes {
+    for node in network.nodes.values() {
         let node_type = registry
             .get_node_type(&node.node_type_name)
             .unwrap_or_else(|| panic!("Node type '{}' not found in registry", node.node_type_name));

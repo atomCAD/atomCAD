@@ -619,11 +619,10 @@ fn remap_body_wires_to_pasted_scope(
             .chain(node.zone_output_arguments.iter_mut())
         {
             for wire in &mut arg.incoming_wires {
-                if wire.source_scope_depth == nesting {
-                    if let Some(&mapped_id) = old_to_new.get(&wire.source_node_id) {
+                if wire.source_scope_depth == nesting
+                    && let Some(&mapped_id) = old_to_new.get(&wire.source_node_id) {
                         wire.source_node_id = mapped_id;
                     }
-                }
             }
         }
 
@@ -640,7 +639,7 @@ impl Node {
     /// edits must go through this accessor so callers don't reach into the
     /// `Arc` directly and accidentally break sharing.
     pub fn zone_mut(&mut self) -> Option<&mut NodeNetwork> {
-        self.zone.as_mut().map(|arc| Arc::make_mut(arc))
+        self.zone.as_mut().map(Arc::make_mut)
     }
 
     /// In debug builds, panic if this node's zone state is inconsistent with
@@ -773,11 +772,10 @@ impl Node {
                         };
 
                         // Copy argument connections from old position to new position
-                        if let Some(old_idx) = old_index {
-                            if old_idx < self.arguments.len() {
+                        if let Some(old_idx) = old_index
+                            && old_idx < self.arguments.len() {
                                 new_arguments[new_index] = self.arguments[old_idx].clone();
                             }
-                        }
                     }
                 }
 
@@ -1167,13 +1165,11 @@ impl NodeNetwork {
     pub fn generate_unique_display_name(&self, node_type: &str) -> String {
         let mut max_counter = 0;
         for node in self.nodes.values() {
-            if let Some(ref name) = node.custom_name {
-                if let Some(num_str) = name.strip_prefix(node_type) {
-                    if let Ok(num) = num_str.parse::<u32>() {
+            if let Some(ref name) = node.custom_name
+                && let Some(num_str) = name.strip_prefix(node_type)
+                    && let Ok(num) = num_str.parse::<u32>() {
                         max_counter = max_counter.max(num);
                     }
-                }
-            }
         }
         format!("{}{}", node_type, max_counter + 1)
     }
@@ -1564,11 +1560,10 @@ impl NodeNetwork {
             }
         }
         // Update active node if removed
-        if let Some(active) = self.active_node_id {
-            if !self.selected_node_ids.contains(&active) {
+        if let Some(active) = self.active_node_id
+            && !self.selected_node_ids.contains(&active) {
                 self.active_node_id = self.selected_node_ids.iter().next().copied();
             }
-        }
     }
 
     /// Add multiple nodes to selection (for Shift+rectangle)
@@ -1580,11 +1575,10 @@ impl NodeNetwork {
             }
         }
         // Set active to last node in list (if valid)
-        if let Some(last_id) = node_ids.last() {
-            if self.selected_node_ids.contains(last_id) {
+        if let Some(last_id) = node_ids.last()
+            && self.selected_node_ids.contains(last_id) {
                 self.active_node_id = Some(*last_id);
             }
-        }
     }
 
     /// Check if a node is selected
@@ -1780,11 +1774,10 @@ impl NodeNetwork {
                 w.source_node_id,
                 w.destination_node_id,
                 w.destination_argument_index,
-            ) {
-                if !self.selected_wires.contains(&wire) {
+            )
+                && !self.selected_wires.contains(&wire) {
                     self.selected_wires.push(wire);
                 }
-            }
         }
     }
 
@@ -1797,11 +1790,10 @@ impl NodeNetwork {
                 w.source_node_id,
                 w.destination_node_id,
                 w.destination_argument_index,
-            ) {
-                if !self.selected_wires.contains(&wire) {
+            )
+                && !self.selected_wires.contains(&wire) {
                     self.selected_wires.push(wire);
                 }
-            }
         }
     }
 
@@ -1838,11 +1830,10 @@ impl NodeNetwork {
             }
         }
         // Set active to last node in list (if valid)
-        if let Some(last_id) = node_ids.last() {
-            if self.selected_node_ids.contains(last_id) {
+        if let Some(last_id) = node_ids.last()
+            && self.selected_node_ids.contains(last_id) {
                 self.active_node_id = Some(*last_id);
             }
-        }
 
         // Add wires (canonicalized from storage)
         for w in wires {
@@ -1850,11 +1841,10 @@ impl NodeNetwork {
                 w.source_node_id,
                 w.destination_node_id,
                 w.destination_argument_index,
-            ) {
-                if !self.selected_wires.contains(&wire) {
+            )
+                && !self.selected_wires.contains(&wire) {
                     self.selected_wires.push(wire);
                 }
-            }
         }
     }
 
@@ -1867,11 +1857,10 @@ impl NodeNetwork {
             }
         }
         // Set active to last node in list (if valid)
-        if let Some(last_id) = node_ids.last() {
-            if self.selected_node_ids.contains(last_id) {
+        if let Some(last_id) = node_ids.last()
+            && self.selected_node_ids.contains(last_id) {
                 self.active_node_id = Some(*last_id);
             }
-        }
 
         // Add wires without clearing existing selection (canonicalized)
         for w in wires {
@@ -1879,11 +1868,10 @@ impl NodeNetwork {
                 w.source_node_id,
                 w.destination_node_id,
                 w.destination_argument_index,
-            ) {
-                if !self.selected_wires.contains(&wire) {
+            )
+                && !self.selected_wires.contains(&wire) {
                     self.selected_wires.push(wire);
                 }
-            }
         }
     }
 
@@ -1901,11 +1889,10 @@ impl NodeNetwork {
             }
         }
         // Update active node if removed
-        if let Some(active) = self.active_node_id {
-            if !self.selected_node_ids.contains(&active) {
+        if let Some(active) = self.active_node_id
+            && !self.selected_node_ids.contains(&active) {
                 self.active_node_id = self.selected_node_ids.iter().next().copied();
             }
-        }
 
         // Toggle wires (canonicalized from storage)
         for w in wires {
@@ -1953,11 +1940,10 @@ impl NodeNetwork {
         &self,
         structure_designer: &StructureDesigner,
     ) -> Option<Box<dyn NodeNetworkGadget>> {
-        if let Some(node_id) = self.active_node_id {
-            if let Some(node) = self.nodes.get(&node_id) {
+        if let Some(node_id) = self.active_node_id
+            && let Some(node) = self.nodes.get(&node_id) {
                 return node.data.provide_gadget(structure_designer);
             }
-        }
         None
     }
 
@@ -1991,11 +1977,10 @@ impl NodeNetwork {
             }
 
             // Check if return node is among deleted
-            if let Some(return_id) = self.return_node_id {
-                if self.selected_node_ids.contains(&return_id) {
+            if let Some(return_id) = self.return_node_id
+                && self.selected_node_ids.contains(&return_id) {
                     info.was_return_node = Some(return_id);
                 }
-            }
 
             // Collect display states of deleted nodes
             for &node_id in &self.selected_node_ids {
@@ -2050,13 +2035,12 @@ impl NodeNetwork {
             let wires_to_delete: Vec<Wire> = self.selected_wires.drain(..).collect();
 
             for wire in wires_to_delete {
-                if let Some(dest_node) = self.nodes.get_mut(&wire.destination_node_id) {
-                    if let Some(argument) =
+                if let Some(dest_node) = self.nodes.get_mut(&wire.destination_node_id)
+                    && let Some(argument) =
                         dest_node.arguments.get_mut(wire.destination_argument_index)
                     {
                         argument.remove_source(wire.source_node_id);
                     }
-                }
             }
         }
     }

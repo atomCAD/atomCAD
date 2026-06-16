@@ -4,7 +4,6 @@
 use rust_lib_flutter_cad::expr::expr::{BinOp, Expr, UnOp};
 use rust_lib_flutter_cad::expr::validation::get_function_signatures;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use std::collections::HashMap;
 
 #[cfg(test)]

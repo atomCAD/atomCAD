@@ -860,7 +860,7 @@ fn test_inversion_permutations() {
     }
 
     // Each neighbor should appear exactly once as idx4 (out-of-plane atom)
-    let mut idx4_counts = vec![0; 4];
+    let mut idx4_counts = [0; 4];
     for inv in &topo.inversions {
         idx4_counts[inv.idx4] += 1;
     }

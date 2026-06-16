@@ -628,7 +628,7 @@ fn test_large_structure_performance() {
     // Test spatial queries are fast
     let center = DVec3::new(10.0, 10.0, 10.0);
     let nearby = structure.get_atoms_in_radius(&center, 5.0);
-    assert!(nearby.len() > 0);
+    assert!(!nearby.is_empty());
     assert!(nearby.len() < 1000);
 }
 

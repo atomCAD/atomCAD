@@ -229,15 +229,13 @@ pub fn add_hydrogen_atom_edit(
             // Key by base_id (not parent_result_id) because the mutation phase
             // looks up by base_id from AtomSource::BasePassthrough(base_id).
             // These IDs differ when the base structure has gaps from deleted atoms.
-            if let AtomSource::BasePassthrough(base_id) = &parent_source {
-                if let std::collections::hash_map::Entry::Vacant(e) = base_parents.entry(*base_id) {
-                    if let Some(parent_atom) = result_structure.get_atom(parent_result_id) {
+            if let AtomSource::BasePassthrough(base_id) = &parent_source
+                && let std::collections::hash_map::Entry::Vacant(e) = base_parents.entry(*base_id)
+                    && let Some(parent_atom) = result_structure.get_atom(parent_result_id) {
                         e.insert(BaseParentInfo {
                             position: parent_atom.position,
                         });
                     }
-                }
-            }
 
             placement_list.push(HPlacement {
                 h_position,

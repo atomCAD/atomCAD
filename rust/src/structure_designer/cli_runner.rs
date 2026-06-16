@@ -169,8 +169,8 @@ fn export_with_directory_creation(
     indent: &str,
 ) -> Result<(), String> {
     // Create parent directory if it doesn't exist
-    if let Some(parent) = std::path::Path::new(output_file).parent() {
-        if !parent.exists() {
+    if let Some(parent) = std::path::Path::new(output_file).parent()
+        && !parent.exists() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 format!(
                     "Failed to create output directory '{}': {}",
@@ -180,7 +180,6 @@ fn export_with_directory_creation(
             })?;
             println!("{}Created directory: {}", indent, parent.display());
         }
-    }
 
     designer
         .export_visible_atomic_structures(output_file)
