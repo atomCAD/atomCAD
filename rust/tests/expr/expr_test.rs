@@ -1,3 +1,6 @@
+// Test data uses float literals like 3.14 that are not meant to be PI.
+#![allow(clippy::approx_constant)]
+
 use rust_lib_flutter_cad::expr::lexer::{Token, tokenize};
 use rust_lib_flutter_cad::expr::parser::parse;
 

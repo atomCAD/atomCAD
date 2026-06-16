@@ -1,3 +1,6 @@
+// Test data uses float literals like 3.14 that are not meant to be PI.
+#![allow(clippy::approx_constant)]
+
 use glam::f64::{DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
 use rust_lib_flutter_cad::expr::expr::{BinOp, Expr};

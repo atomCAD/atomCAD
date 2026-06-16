@@ -278,7 +278,8 @@
       "PowerShell($p = Join-Path $env:TEMP 'pws_f6_heal.cnnd'; \"TEMP = $env:TEMP\"; \"Path = $p\"; if \\(Test-Path $p\\) { \"Exists: YES\"; \"Modified: \" + \\(Get-Item $p\\).LastWriteTime; \"Size: \" + \\(Get-Item $p\\).Length + \" bytes\" } else { \"Exists: NO \\(run the test to generate it\\)\" })",
       "PowerShell($p = Join-Path $env:TEMP 'pws_f6_heal.cnnd'; \\(Get-Content $p | Select-String -Pattern 'param_id'\\).Line.Trim\\(\\) -join \"`n\")",
       "PowerShell(Copy-Item *)",
-      "PowerShell(Out-File *)"
+      "PowerShell(Out-File *)",
+      "PowerShell(cargo clippy *)"
     ]
   }
 }

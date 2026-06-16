@@ -1,3 +1,6 @@
+// Test data uses float literals like 3.14 that are not meant to be PI.
+#![allow(clippy::approx_constant)]
+
 use rust_lib_flutter_cad::expr::expr::{BinOp, Expr, UnOp};
 use rust_lib_flutter_cad::expr::validation::get_function_implementations;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;

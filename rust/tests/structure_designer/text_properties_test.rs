@@ -1,3 +1,6 @@
+// Test data uses float literals like 3.14 / 2.718 that are not meant to be PI/E.
+#![allow(clippy::approx_constant)]
+
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;

@@ -1,3 +1,6 @@
+// Test data uses float literals like 3.14 that are not meant to be PI.
+#![allow(clippy::approx_constant)]
+
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::text_format::{
@@ -2428,11 +2431,9 @@ mod custom_name_tests {
         );
 
         // This should update the existing node (since name matches in incremental mode)
-        // OR create a new node - either way serialization should work
-        assert!(
-            result.success || !result.success,
-            "Either outcome is acceptable"
-        );
+        // OR create a new node - either outcome is acceptable; we only require that the
+        // edit completed without panicking, then verify serialization below.
+        let _ = result.success;
 
         // Serialize should not crash and should produce valid output
         let serialized = serialize_network(&network, &registry, None);
