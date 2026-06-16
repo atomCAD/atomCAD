@@ -62,6 +62,7 @@ pub mod motif;
 pub mod motif_sub;
 pub mod parameter;
 pub mod patch_build;
+pub mod patch_latticefill;
 pub mod plane_tiling_vectors;
 pub mod polygon;
 pub mod print;
