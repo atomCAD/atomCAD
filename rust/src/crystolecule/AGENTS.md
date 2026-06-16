@@ -20,6 +20,7 @@ crystolecule/
 ├── motif_parser.rs                 # Text format parser for motifs
 ├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
 ├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
+├── weld.rs                         # weld_coincident_atoms(): fuse atoms at the same position (surface patches)
 ├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
 ├── unit_cell_symmetries.rs         # Crystal system classification (7 systems)
@@ -63,7 +64,7 @@ crystolecule/
 | Type | Location | Purpose |
 |------|----------|---------|
 | `AtomicStructure` | `atomic_structure/mod.rs` | Main container: atoms (Vec with optional slots), spatial grid, bonds |
-| `Atom` | `atomic_structure/atom.rs` | id(u32), position(DVec3), atomic_number(i16), bonds(SmallVec<[InlineBond;4]>), flags(u16). Flags layout: bit 0 selected, bit 1 hydrogen_passivation, bit 2 frozen, bits 3-4 hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1) |
+| `Atom` | `atomic_structure/atom.rs` | id(u32), position(DVec3), atomic_number(i16), bonds(SmallVec<[InlineBond;4]>), flags(u16). Flags layout: bit 0 selected, bit 1 hydrogen_passivation, bit 2 frozen, bits 3-4 hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1), bit 5 display-ghost (`is_ghost`/`set_ghost` — transient motif_edit neighbour-cell render state), bit 6 patch-ghost (`is_patch_ghost`/`set_patch_ghost` — durable surface-patch flag; survives serialization, drives weld survivorship; distinct from bit 5) |
 | `InlineBond` | `atomic_structure/inline_bond.rs` | 4-byte bond: 29-bit atom_id + 3-bit order. Supports 7 bond types |
 | `BondReference` | `atomic_structure/bond_reference.rs` | Unordered (atom_id1, atom_id2) pair, hashable |
 | `UnitCellStruct` | `unit_cell_struct.rs` | Basis vectors (a,b,c), lattice↔real coordinate conversion |

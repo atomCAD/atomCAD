@@ -36,6 +36,7 @@ Supported basic data types include:
 - `IVec3` — 3D integer vector
 - `Mat3` — 3×3 floating-point matrix (row-major)
 - `IMat3` — 3×3 integer matrix (row-major)
+- `IMat2` — 2×2 integer matrix (row-major); used to describe an in-plane superlattice for the `plane_tiling_vectors` node. There is no floating-point `Mat2` counterpart.
 - `LatticeVecs` — three lattice basis vectors `(a, b, c, α, β, γ)`
 - `Structure` — a crystal structure: lattice basis + motif + motif offset
 - `Geometry2D`
@@ -98,7 +99,7 @@ Pins are colored by their data type:
 | Type family | Color |
 |---|---|
 | `Bool`, `Int`, `Float` | warm orange |
-| `Vec2`, `Vec3`, `IVec2`, `IVec3`, `Mat3`, `IMat3` | cool blue |
+| `Vec2`, `Vec3`, `IVec2`, `IVec3`, `Mat3`, `IMat3`, `IMat2` | cool blue |
 | `Blueprint`, `Geometry2D` | purple |
 | `Crystal`, `Molecule` | green |
 | `LatticeVecs`, `Structure`, `Motif` | teal / cyan |

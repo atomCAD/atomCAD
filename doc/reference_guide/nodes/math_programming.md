@@ -80,6 +80,57 @@ Floating-point counterpart of `imat3_cols`: three `Vec3` columns → `Mat3`.
 
 Floating-point counterpart of `imat3_diag`: `Vec3 → Mat3` (`diag(v.x, v.y, v.z)`).
 
+## imat2_rows
+
+Outputs an `IMat2` (2×2 integer matrix, row-major) built from two row vectors. The `IMat2` type exists mainly to describe an in-plane **superlattice** for the [`plane_tiling_vectors`](#plane_tiling_vectors) node; there is no floating-point `Mat2` counterpart.
+
+**Input pins** (both optional, default to identity rows)
+
+- `a: IVec2` — row 0 (default `(1, 0)`)
+- `b: IVec2` — row 1 (default `(0, 1)`)
+
+**Stored property**
+
+- A 2×2 integer grid that supplies the row defaults when an input pin is unwired. Default is identity, so an unwired `imat2_rows` is the identity (the conventional `1×1` cell).
+
+## imat2_cols
+
+Same as `imat2_rows` but the two input vectors are interpreted as **columns** instead of rows.
+
+## imat2_diag
+
+Outputs a diagonal `IMat2` from a single `IVec2`: the result is `diag(v.x, v.y)`.
+
+**Input pin**
+
+- `v: IVec2` (optional, default `(1, 1)`)
+
+## plane_tiling_vectors
+
+Turns a Miller-indexed `DrawingPlane` plus a 2×2 integer superlattice into the `Array[IVec3]` tiling vectors consumed by [`patch_build`](./atomic.md#patch_build)'s `tiling_vectors` pin. This is the ergonomic way to produce surface-patch tiling vectors without hand-solving the in-plane crystallography. (2D-surface case; 1D-edge and 3D-twin patches feed `tiling_vectors` directly.)
+
+The plane supplies the in-plane lattice basis vectors `u_axis`, `v_axis`. Each **row** of the superlattice gives one tiling vector as an integer combination of `u` and `v` (row 0 = `a`, row 1 = `b`):
+
+| Superlattice | Rows | Pattern |
+|---|---|---|
+| `1×1` | `(1,0)`, `(0,1)` | conventional cell (identity) |
+| `n×m` (diagonal) | `(n,0)`, `(0,m)` | rectangular supercell |
+| √3×√3 R30° | `(2,1)`, `(-1,1)` | e.g. Si(111) |
+| c(2×2) | `(1,1)`, `(1,-1)` | centred |
+
+**Input pins**
+
+- `plane: DrawingPlane` — supplies the in-plane lattice basis. Must be built from the same crystal (`UnitCellStruct`) you later pass as `patch_build`'s `lattice`.
+- `superlattice: IMat2` (optional) — overrides the node's stored 2×2 matrix when wired (typically from an `imat2_*` node).
+
+**Stored property**
+
+- A 2×2 integer superlattice grid (rows `a`, `b`), editable inline. Default identity. The subtitle shows `det = N` (or `det = ?` when the `superlattice` pin is wired).
+
+**Output (single pin)**
+
+- `Array[IVec3]` — the two tiling vectors. Degenerate (linearly dependent) rows are not rejected here; `patch_build`'s linear-independence check reports them.
+
 ## bool
 
 Outputs a Bool value (`true` or `false`).
@@ -755,7 +806,12 @@ Record-typed pins render in a single neutral color (no per-name hashing — the 
 
 Record defs may freely contain other record types as field types, but the dependency graph among defs must be acyclic. `Tree = { children: [Record(Tree)] }` is rejected; build recursive shapes by linking records via integer IDs in arrays instead.
 
-Some node types ship with **built-in record defs** — schemas baked into the application that you don't have to author yourself. The first example is `ElementMapping = {from: Int, to: Int}`, which is the element type of `atom_replace`'s optional `rules` input. Built-in defs share one namespace with user defs and participate in the same bare-identifier lookup (so `ElementMapping` works as a type expression in `expr` parameters and in the schema dropdowns), but they cannot be edited or deleted from the User Types panel, and the User Types panel will reject attempts to create, rename, or delete a user def with the same name.
+Some node types ship with **built-in record defs** — schemas baked into the application that you don't have to author yourself. Two examples ship today:
+
+- `ElementMapping = {from: Int, to: Int}` — the element type of `atom_replace`'s optional `rules` input.
+- `Patch = {tile: Molecule, tiling_vectors: Array[IVec3], cut_volume: Blueprint}` — the surface-reconstruction patch produced by [`patch_build`](./atomic.md#patch_build) and consumed by [`patch_latticefill`](./atomic.md#patch_latticefill). Because a patch is a plain record of existing types, you can `record_destructure` one to swap its tile or tiling vectors with ordinary nodes.
+
+Built-in defs share one namespace with user defs and participate in the same bare-identifier lookup (so `ElementMapping` and `Patch` work as type expressions in `expr` parameters and in the schema dropdowns), but they cannot be edited or deleted from the User Types panel, and the User Types panel will reject attempts to create, rename, or delete a user def with the same name.
 
 ## record_construct
 
