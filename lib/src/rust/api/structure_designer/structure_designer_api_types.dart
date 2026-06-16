@@ -614,6 +614,43 @@ class APICommentData {
           height == other.height;
 }
 
+/// Welded/orphaned/over-coordination stats from a `patch_latticefill` apply,
+/// surfaced as a compatibility badge (§6).
+class APICompatibilityReport {
+  /// Patch-ghosts that found a real twin and fused (realized periodic / collar
+  /// bonds).
+  final BigInt weldedGhosts;
+
+  /// Patch-ghosts with no real twin, dropped as true reconstruction edges. A
+  /// high count at the expected depth means the patch was applied too high.
+  final BigInt orphanedGhosts;
+
+  /// Real atoms left over-coordinated after welding (the "applied too low /
+  /// sub-surface" failure mode).
+  final BigInt overcoordinatedAtoms;
+
+  const APICompatibilityReport({
+    required this.weldedGhosts,
+    required this.orphanedGhosts,
+    required this.overcoordinatedAtoms,
+  });
+
+  @override
+  int get hashCode =>
+      weldedGhosts.hashCode ^
+      orphanedGhosts.hashCode ^
+      overcoordinatedAtoms.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICompatibilityReport &&
+          runtimeType == other.runtimeType &&
+          weldedGhosts == other.weldedGhosts &&
+          orphanedGhosts == other.orphanedGhosts &&
+          overcoordinatedAtoms == other.overcoordinatedAtoms;
+}
+
 class APICuboidData {
   final APIIVec3 minCorner;
   final APIIVec3 extent;
@@ -2270,6 +2307,59 @@ class APIParameterElement {
           defaultAtomicNumber == other.defaultAtomicNumber &&
           reservedAtomicNumber == other.reservedAtomicNumber &&
           color == other.color;
+}
+
+/// Editable state of a `patch_build` node (surface-reconstruction patch
+/// extraction). See `doc/design_surface_patches.md` §4.
+class APIPatchBuildData {
+  /// Build threshold `ε` (Å) for the interior/ghost split.
+  final double epsilon;
+
+  const APIPatchBuildData({
+    required this.epsilon,
+  });
+
+  @override
+  int get hashCode => epsilon.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPatchBuildData &&
+          runtimeType == other.runtimeType &&
+          epsilon == other.epsilon;
+}
+
+/// Editable state of a `patch_latticefill` node plus the compatibility stats
+/// from its most recent evaluation. See `doc/design_surface_patches.md` §5–6.
+class APIPatchLatticeFillData {
+  /// Hydrogen-passivate the residual danglers after welding.
+  final bool passivate;
+
+  /// Weld tolerance in Å.
+  final double tolerance;
+
+  /// Compatibility stats from the last successful evaluation, or `None` if the
+  /// node has not evaluated yet (or the last evaluation errored).
+  final APICompatibilityReport? report;
+
+  const APIPatchLatticeFillData({
+    required this.passivate,
+    required this.tolerance,
+    this.report,
+  });
+
+  @override
+  int get hashCode => passivate.hashCode ^ tolerance.hashCode ^ report.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPatchLatticeFillData &&
+          runtimeType == other.runtimeType &&
+          passivate == other.passivate &&
+          tolerance == other.tolerance &&
+          report == other.report;
 }
 
 /// `a` / `b` are the two superlattice rows 0 / 1 — same convention as the

@@ -38,6 +38,7 @@ fn patch_nodes_cnnd_roundtrip() {
         Box::new(PatchLatticeFillData {
             passivate: false,
             tolerance: 0.05,
+            ..Default::default()
         }),
     );
 

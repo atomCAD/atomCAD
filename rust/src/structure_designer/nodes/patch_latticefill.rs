@@ -42,6 +42,7 @@ use crate::util::daabox::DAABox;
 use glam::f64::{DQuat, DVec3};
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// Default weld tolerance (Å). Below the smallest interatomic spacing so
@@ -79,6 +80,12 @@ pub struct PatchLatticeFillData {
     /// Weld tolerance in Å (default 0.1).
     #[serde(default = "default_tolerance")]
     pub tolerance: f64,
+    /// Compatibility stats from the most recent successful evaluation (§6),
+    /// surfaced to the property panel as a compatibility badge. Interior
+    /// mutability because `eval` takes `&self`; transient (not serialized) and
+    /// repopulated on the next evaluation. `None` until the node has evaluated.
+    #[serde(skip)]
+    pub last_report: RefCell<Option<CompatibilityReport>>,
 }
 
 fn default_true() -> bool {
@@ -94,6 +101,7 @@ impl Default for PatchLatticeFillData {
         Self {
             passivate: true,
             tolerance: DEFAULT_WELD_TOLERANCE,
+            last_report: RefCell::new(None),
         }
     }
 }
@@ -474,6 +482,11 @@ impl NodeData for PatchLatticeFillData {
         _decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
+        // Clear the cached compatibility stats; only a successful apply below
+        // repopulates them, so an error path leaves the badge hidden rather than
+        // showing stats from a previous, now-invalid input.
+        *self.last_report.borrow_mut() = None;
+
         // Pin 0: target (HasAtoms) — the structure being reconstructed.
         let target_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
@@ -580,7 +593,7 @@ impl NodeData for PatchLatticeFillData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        let (atoms, _report) = apply_patch(
+        let (atoms, report) = apply_patch(
             &target_atoms,
             &region_lattice,
             region_geo.as_ref(),
@@ -592,6 +605,9 @@ impl NodeData for PatchLatticeFillData {
             passivate,
             tolerance,
         );
+
+        // Cache the compatibility stats for the property-panel badge (§6).
+        *self.last_report.borrow_mut() = Some(report);
 
         EvalOutput::single(NetworkResult::Crystal(CrystalData {
             structure: out_structure,

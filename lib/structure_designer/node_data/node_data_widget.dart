@@ -63,6 +63,8 @@ import 'package:flutter_cad/structure_designer/node_data/imat2_rows_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/imat2_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat2_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/plane_tiling_vectors_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/patch_build_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/patch_latticefill_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_rows_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_cols_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/imat3_diag_editor.dart';
@@ -870,6 +872,19 @@ class NodeDataWidget extends StatelessWidget {
         return PlaneTilingVectorsEditor(
           nodeId: selectedNode.id,
           data: getPlaneTilingVectorsData(
+              scopePath: scopePath, nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'patch_build':
+        return PatchBuildEditor(
+          nodeId: selectedNode.id,
+          data: getPatchBuildData(scopePath: scopePath, nodeId: selectedNode.id),
+          model: model,
+        );
+      case 'patch_latticefill':
+        return PatchLatticeFillEditor(
+          nodeId: selectedNode.id,
+          data: getPatchLatticefillData(
               scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );

@@ -118,6 +118,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICommentData dco_decode_api_comment_data(dynamic raw);
 
   @protected
+  APICompatibilityReport dco_decode_api_compatibility_report(dynamic raw);
+
+  @protected
   APICuboidData dco_decode_api_cuboid_data(dynamic raw);
 
   @protected
@@ -277,6 +280,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterElement dco_decode_api_parameter_element(dynamic raw);
+
+  @protected
+  APIPatchBuildData dco_decode_api_patch_build_data(dynamic raw);
+
+  @protected
+  APIPatchLatticeFillData dco_decode_api_patch_lattice_fill_data(dynamic raw);
 
   @protected
   APIPlaneTilingVectorsData dco_decode_api_plane_tiling_vectors_data(
@@ -461,6 +470,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICommentData dco_decode_box_autoadd_api_comment_data(dynamic raw);
 
   @protected
+  APICompatibilityReport dco_decode_box_autoadd_api_compatibility_report(
+      dynamic raw);
+
+  @protected
   APICuboidData dco_decode_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
@@ -576,6 +589,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
+
+  @protected
+  APIPatchBuildData dco_decode_box_autoadd_api_patch_build_data(dynamic raw);
+
+  @protected
+  APIPatchLatticeFillData dco_decode_box_autoadd_api_patch_lattice_fill_data(
+      dynamic raw);
 
   @protected
   APIPlaneTilingVectorsData
@@ -938,6 +958,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICommentData? dco_decode_opt_box_autoadd_api_comment_data(dynamic raw);
 
   @protected
+  APICompatibilityReport? dco_decode_opt_box_autoadd_api_compatibility_report(
+      dynamic raw);
+
+  @protected
   APICuboidData? dco_decode_opt_box_autoadd_api_cuboid_data(dynamic raw);
 
   @protected
@@ -1055,6 +1079,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
+
+  @protected
+  APIPatchBuildData? dco_decode_opt_box_autoadd_api_patch_build_data(
+      dynamic raw);
+
+  @protected
+  APIPatchLatticeFillData?
+      dco_decode_opt_box_autoadd_api_patch_lattice_fill_data(dynamic raw);
 
   @protected
   APIPlaneTilingVectorsData?
@@ -1356,6 +1388,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICommentData sse_decode_api_comment_data(SseDeserializer deserializer);
 
   @protected
+  APICompatibilityReport sse_decode_api_compatibility_report(
+      SseDeserializer deserializer);
+
+  @protected
   APICuboidData sse_decode_api_cuboid_data(SseDeserializer deserializer);
 
   @protected
@@ -1528,6 +1564,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterElement sse_decode_api_parameter_element(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPatchBuildData sse_decode_api_patch_build_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPatchLatticeFillData sse_decode_api_patch_lattice_fill_data(
       SseDeserializer deserializer);
 
   @protected
@@ -1743,6 +1787,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICompatibilityReport sse_decode_box_autoadd_api_compatibility_report(
+      SseDeserializer deserializer);
+
+  @protected
   APICuboidData sse_decode_box_autoadd_api_cuboid_data(
       SseDeserializer deserializer);
 
@@ -1889,6 +1937,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPatchBuildData sse_decode_box_autoadd_api_patch_build_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPatchLatticeFillData sse_decode_box_autoadd_api_patch_lattice_fill_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2319,6 +2375,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICompatibilityReport? sse_decode_opt_box_autoadd_api_compatibility_report(
+      SseDeserializer deserializer);
+
+  @protected
   APICuboidData? sse_decode_opt_box_autoadd_api_cuboid_data(
       SseDeserializer deserializer);
 
@@ -2465,6 +2525,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIParameterData? sse_decode_opt_box_autoadd_api_parameter_data(
       SseDeserializer deserializer);
+
+  @protected
+  APIPatchBuildData? sse_decode_opt_box_autoadd_api_patch_build_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPatchLatticeFillData?
+      sse_decode_opt_box_autoadd_api_patch_lattice_fill_data(
+          SseDeserializer deserializer);
 
   @protected
   APIPlaneTilingVectorsData?
@@ -2806,6 +2875,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICommentData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_compatibility_report(
+      APICompatibilityReport self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_cuboid_data(APICuboidData self, SseSerializer serializer);
 
   @protected
@@ -3004,6 +3077,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_parameter_element(
       APIParameterElement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_patch_build_data(
+      APIPatchBuildData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_patch_lattice_fill_data(
+      APIPatchLatticeFillData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_plane_tiling_vectors_data(
@@ -3224,6 +3305,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICommentData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_compatibility_report(
+      APICompatibilityReport self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_cuboid_data(
       APICuboidData self, SseSerializer serializer);
 
@@ -3374,6 +3459,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_parameter_data(
       APIParameterData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_patch_build_data(
+      APIPatchBuildData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_patch_lattice_fill_data(
+      APIPatchLatticeFillData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_plane_tiling_vectors_data(
@@ -3814,6 +3907,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICommentData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_compatibility_report(
+      APICompatibilityReport? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_cuboid_data(
       APICuboidData? self, SseSerializer serializer);
 
@@ -3960,6 +4057,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(
       APIParameterData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_patch_build_data(
+      APIPatchBuildData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_patch_lattice_fill_data(
+      APIPatchLatticeFillData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_plane_tiling_vectors_data(

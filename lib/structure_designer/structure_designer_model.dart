@@ -2375,6 +2375,22 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setPatchBuildData(BigInt nodeId, APIPatchBuildData data) {
+    structure_designer_api.setPatchBuildData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  void setPatchLatticefillData(BigInt nodeId, APIPatchLatticeFillData data) {
+    structure_designer_api.setPatchLatticefillData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   void setArrayAtData(BigInt nodeId, APIArrayAtData data) {
     structure_designer_api.setArrayAtData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

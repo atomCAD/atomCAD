@@ -11,6 +11,7 @@ use super::structure_designer_api_types::APIClosureKind;
 use super::structure_designer_api_types::APICollapseMode;
 use super::structure_designer_api_types::APICollectData;
 use super::structure_designer_api_types::APICommentData;
+use super::structure_designer_api_types::APICompatibilityReport;
 use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDerivedShapeView;
 use super::structure_designer_api_types::APIDragSource;
@@ -38,6 +39,8 @@ use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINamespaceRenamePreview;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
+use super::structure_designer_api_types::APIPatchBuildData;
+use super::structure_designer_api_types::APIPatchLatticeFillData;
 use super::structure_designer_api_types::APIPlaneTilingVectorsData;
 use super::structure_designer_api_types::APIPrintData;
 use super::structure_designer_api_types::APIPrintLogEntry;
@@ -181,6 +184,10 @@ use crate::structure_designer::nodes::materialize::MaterializeData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
+use crate::structure_designer::nodes::patch_build::PatchBuildData;
+use crate::structure_designer::nodes::patch_latticefill::{
+    CompatibilityReport, PatchLatticeFillData,
+};
 use crate::structure_designer::nodes::plane_tiling_vectors::PlaneTilingVectorsData;
 use crate::structure_designer::nodes::print::PrintData;
 use crate::structure_designer::nodes::product::ProductData;
@@ -4402,6 +4409,61 @@ pub fn get_foreach_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIForeach
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_patch_build_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPatchBuildData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let data = node_data.as_any_ref().downcast_ref::<PatchBuildData>()?;
+
+                Some(APIPatchBuildData {
+                    epsilon: data.epsilon,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_patch_latticefill_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIPatchLatticeFillData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let data = node_data
+                    .as_any_ref()
+                    .downcast_ref::<PatchLatticeFillData>()?;
+
+                let report = data
+                    .last_report
+                    .borrow()
+                    .as_ref()
+                    .map(|r: &CompatibilityReport| APICompatibilityReport {
+                        welded_ghosts: r.welded_ghosts,
+                        orphaned_ghosts: r.orphaned_ghosts,
+                        overcoordinated_atoms: r.overcoordinated_atoms,
+                    });
+
+                Some(APIPatchLatticeFillData {
+                    passivate: data.passivate,
+                    tolerance: data.tolerance,
+                    report,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_collect_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICollectData> {
     unsafe {
         with_cad_instance_or(
@@ -5912,6 +5974,46 @@ pub fn set_foreach_data(scope_path: Vec<u64>, node_id: u64, data: APIForeachData
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, foreach_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_patch_build_data(scope_path: Vec<u64>, node_id: u64, data: APIPatchBuildData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let patch_build_data = Box::new(PatchBuildData {
+                epsilon: data.epsilon,
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, patch_build_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_patch_latticefill_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    data: APIPatchLatticeFillData,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            // The cached compatibility report is transient; it repopulates on
+            // the next evaluation, so a fresh default is correct here.
+            let patch_data = Box::new(PatchLatticeFillData {
+                passivate: data.passivate,
+                tolerance: data.tolerance,
+                ..Default::default()
+            });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, patch_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

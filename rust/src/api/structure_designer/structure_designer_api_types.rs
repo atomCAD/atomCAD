@@ -1074,6 +1074,39 @@ pub struct APICollectData {
     pub offset: i32,
 }
 
+/// Editable state of a `patch_build` node (surface-reconstruction patch
+/// extraction). See `doc/design_surface_patches.md` §4.
+pub struct APIPatchBuildData {
+    /// Build threshold `ε` (Å) for the interior/ghost split.
+    pub epsilon: f64,
+}
+
+/// Editable state of a `patch_latticefill` node plus the compatibility stats
+/// from its most recent evaluation. See `doc/design_surface_patches.md` §5–6.
+pub struct APIPatchLatticeFillData {
+    /// Hydrogen-passivate the residual danglers after welding.
+    pub passivate: bool,
+    /// Weld tolerance in Å.
+    pub tolerance: f64,
+    /// Compatibility stats from the last successful evaluation, or `None` if the
+    /// node has not evaluated yet (or the last evaluation errored).
+    pub report: Option<APICompatibilityReport>,
+}
+
+/// Welded/orphaned/over-coordination stats from a `patch_latticefill` apply,
+/// surfaced as a compatibility badge (§6).
+pub struct APICompatibilityReport {
+    /// Patch-ghosts that found a real twin and fused (realized periodic / collar
+    /// bonds).
+    pub welded_ghosts: usize,
+    /// Patch-ghosts with no real twin, dropped as true reconstruction edges. A
+    /// high count at the expected depth means the patch was applied too high.
+    pub orphaned_ghosts: usize,
+    /// Real atoms left over-coordinated after welding (the "applied too low /
+    /// sub-surface" failure mode).
+    pub overcoordinated_atoms: usize,
+}
+
 pub struct APIFoldData {
     pub element_type: APIDataType,
     pub accumulator_type: APIDataType,

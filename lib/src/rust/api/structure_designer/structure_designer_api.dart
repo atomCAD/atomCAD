@@ -936,6 +936,18 @@ APIForeachData? getForeachData(
         .crateApiStructureDesignerStructureDesignerApiGetForeachData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIPatchBuildData? getPatchBuildData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetPatchBuildData(
+            scopePath: scopePath, nodeId: nodeId);
+
+APIPatchLatticeFillData? getPatchLatticefillData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetPatchLatticefillData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APICollectData? getCollectData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1493,6 +1505,22 @@ void setForeachData(
         required APIForeachData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetForeachData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setPatchBuildData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIPatchBuildData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetPatchBuildData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setPatchLatticefillData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIPatchLatticeFillData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetPatchLatticefillData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setCollectData(

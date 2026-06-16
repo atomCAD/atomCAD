@@ -281,8 +281,13 @@ The core algorithm (§5) plus the two things that fall directly out of it: the c
     12. text-format serialize → `edit_network` round-trip is stable.
     13. a tile `Molecule` with patch-ghost-flagged atoms round-trips with bit 6 intact.
 
-### Phase 4 — Flutter UI
+### Phase 4 — Flutter UI ✅ DONE (2026-06-16)
 
 Node editors for `patch_build` / `patch_latticefill` (registry-driven add-node is free), the `cut_volume` / `tiling_vectors` wiring (reuse `plane_tiling_vectors`), and the compatibility badge from Phase 3. Covered by `flutter analyze` + the integration smoke test (`integration_test/`); no new Rust tests. Manual `flutter run` walkthrough left to the user.
+
+**Implementation notes:**
+- **API layer** (`api/structure_designer/structure_designer_api{,_types}.rs`): `APIPatchBuildData { epsilon }`, `APIPatchLatticeFillData { passivate, tolerance, report: Option<APICompatibilityReport> }`, `APICompatibilityReport { welded_ghosts, orphaned_ghosts, overcoordinated_atoms }` (`usize` → Dart `BigInt`). Scope-aware getters/setters `get_/set_patch_build_data`, `get_/set_patch_latticefill_data`, mirroring `get_/set_collect_data`.
+- **Compatibility badge plumbing**: `PatchLatticeFillData` gained `#[serde(skip)] last_report: RefCell<Option<CompatibilityReport>>` (interior mutability — `eval` takes `&self`, same pattern as `MaterializeData::available_parameters`). `eval` clears it at the top and stores the report after a successful `apply_patch` (previously discarded as `_report`); the setter rebuilds with `..Default::default()` since the report is transient.
+- **Flutter**: `node_data/patch_build_editor.dart` (ε `FloatInput` + wiring hint), `node_data/patch_latticefill_editor.dart` (passivate checkbox + tolerance `FloatInput` + `_CompatibilityBadge`: green "Compatible" when no orphaned collars and no over-coordination, amber "Check fit" with too-high / too-low hints otherwise, "not yet evaluated" when the node hasn't been displayed). Routed in `node_data_widget.dart`; model setters `setPatchBuildData` / `setPatchLatticefillData`.
 
 **Deferred (post-v1, per §7 / open questions):** multi-face stitching, edges/corners, the compatibility visualization beyond a badge, default-`cut_volume` derivation, and the `rm_single` toggle.
