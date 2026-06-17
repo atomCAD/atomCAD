@@ -1205,6 +1205,25 @@ impl NetworkEvaluator {
         // Get the expected input type for this parameter
         let expected_type = registry.get_node_param_data_type(node, parameter_index);
 
+        // Defensive guard against an `arguments` / parameter-count desync.
+        // `node.arguments` is supposed to carry one slot per declared parameter,
+        // but it can transiently lag the node's parameter list: the slots are
+        // grown to match by `repair_network_arguments` (top-level *and* body
+        // nodes) which only runs inside `validate_network`, while the load-time
+        // `repair_node_network` grows only top-level `network.nodes`. Switching
+        // the active network (`set_active_node_network_name`) marks a full
+        // refresh but does **not** validate, so `generate_scene` can evaluate a
+        // freshly-activated, not-yet-validated network whose node has
+        // `parameters.len() > arguments.len()` — most easily an `expr` node,
+        // whose `eval` iterates its own `self.parameters` and calls us with a
+        // `parameter_index` past the end of `arguments`. Treat a missing slot as
+        // "nothing connected" (the meaning of an empty slot) rather than
+        // panicking with an out-of-bounds index. The next validate pass repairs
+        // the desync permanently.
+        if parameter_index >= node.arguments.len() {
+            return NetworkResult::None;
+        }
+
         // Clone the wires list so we can iterate while passing
         // `context: &mut` and `network_stack: &` into evaluate calls. The
         // wires list is generally small (often 1) and `IncomingWire` is plain

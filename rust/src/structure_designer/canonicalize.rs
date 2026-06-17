@@ -63,6 +63,21 @@ pub fn canonicalize_network(network: &mut NodeNetwork) {
         // The per-node `custom_node_type` cache is recomputed from the (now
         // canonical) stored data by the next type-resolution pass; clear it
         // defensively so any stale non-canonical type isn't observable.
+        //
+        // SAFETY CONSTRAINT (Change 2 fallback,
+        // doc/design_custom_node_type_cache_invariant.md): this leaves derived
+        // nodes in the stale `None` cache state (B). It is safe ONLY because
+        // `canonicalize_network` is always immediately followed by
+        // `initialize_custom_node_types_for_network` (which repopulates every
+        // cache with `refresh_args = false`, preserving wires positionally) —
+        // canonicalize is only ever called on the `.cnnd` load path, never
+        // before a `repair_all_networks` / `refresh_args = true` pass. Unlike
+        // `rewrite_record_name_in_registry`, this function only receives a
+        // `&mut NodeNetwork` and has no access to the registry's type maps, so
+        // an in-place recompute would require threading them through every
+        // caller. Should such a `canonicalize -> repair(refresh_args = true)`
+        // path ever be introduced, Change 1's positional-preservation net in
+        // `set_custom_node_type` now stops it from dropping wires regardless.
         node.custom_node_type = None;
     });
 }

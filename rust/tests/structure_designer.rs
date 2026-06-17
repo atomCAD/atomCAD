@@ -49,8 +49,14 @@ mod node_layout_test;
 #[path = "structure_designer/evaluate_node_test.rs"]
 mod evaluate_node_test;
 
+#[path = "structure_designer/evaluate_arg_desync_regression_test.rs"]
+mod evaluate_arg_desync_regression_test;
+
 #[path = "structure_designer/serialization_test.rs"]
 mod serialization_test;
+
+#[path = "structure_designer/rename_wire_loss_regression_test.rs"]
+mod rename_wire_loss_regression_test;
 
 #[path = "structure_designer/layout_topological_grid_test.rs"]
 mod layout_topological_grid_test;

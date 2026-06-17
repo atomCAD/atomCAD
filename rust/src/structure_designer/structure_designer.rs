@@ -687,6 +687,22 @@ impl StructureDesigner {
             }
             UndoRefreshMode::Full => {
                 self.mark_full_refresh();
+                // Rebuild the per-node `custom_node_type` cache for the active
+                // network. It is `#[serde(skip)]`, so a snapshot-restoring
+                // command (`PromoteToParameterCommand`, …) loses it, and the
+                // in-place re-add commands (`AddNodeCommand::redo`,
+                // `DeleteNodesCommand::undo`) re-create nodes via
+                // `add_node_with_id` without it — unlike the live `add_node`
+                // path. Left unpopulated, a derived-layout node (parameter /
+                // expr / HOF / closure / …) is observed in the stale `None`
+                // cache state (B): the next `refresh_args = true` repair pass
+                // mis-types it and drops its wires (the same class as the
+                // rename wire-loss bug). Repopulating here — alongside the
+                // existing display-policy / output_type derived-state rebuild —
+                // keeps the invariant. Uses `refresh_args = false` (preserves
+                // wires positionally) and recurses into HOF bodies. See
+                // `doc/design_custom_node_type_cache_invariant.md`.
+                self.repopulate_active_network_custom_node_types();
                 // Reapply display policy so the display state matches what
                 // the original mutation methods would have produced.
                 self.apply_node_display_policy(None);
@@ -695,6 +711,25 @@ impl StructureDesigner {
             }
         }
         self.set_dirty(true);
+    }
+
+    /// Repopulate every node's `custom_node_type` cache in the active network
+    /// (recursing into HOF bodies) from the current per-node data + registry.
+    /// Used by the undo/redo `Full` refresh path: restored / re-added nodes
+    /// arrive with the `#[serde(skip)]` cache cleared, and that derived state
+    /// must be rebuilt before validation/evaluation observes it. `refresh_args
+    /// = false` (via `initialize_custom_node_types_for_network`) preserves the
+    /// positional `arguments` so no wire is lost. No-op when there is no active
+    /// network. See `doc/design_custom_node_type_cache_invariant.md`.
+    fn repopulate_active_network_custom_node_types(&mut self) {
+        let Some(name) = self.active_node_network_name.clone() else {
+            return;
+        };
+        if let Some(mut network) = self.node_type_registry.node_networks.remove(&name) {
+            self.node_type_registry
+                .initialize_custom_node_types_for_network(&mut network);
+            self.node_type_registry.node_networks.insert(name, network);
+        }
     }
 
     /// Scope-aware variant of [`snapshot_node_data`]. Walks `scope_path` from
@@ -4224,6 +4259,21 @@ impl StructureDesigner {
         self.active_record_def_name = None;
         // Switching networks requires full refresh (everything changes)
         self.mark_full_refresh();
+        // Validate (and thereby repair) the newly active network *before* the
+        // caller's refresh evaluates it. Refresh paths never validate on their
+        // own (see `doc/design_..` / the refresh contract), and a freshly
+        // *loaded* network has only been through the load-time
+        // `repair_node_network`, which grows `arguments` to match parameter
+        // counts for top-level `network.nodes` only — body (HOF/zone) nodes are
+        // grown solely by `repair_network_arguments`, which runs only inside
+        // `validate_network`. Without this call, switching to such a network
+        // would `generate_scene` over an unrepaired graph: a node with
+        // `parameters.len() > arguments.len()` (most easily an `expr`) read a
+        // missing argument slot, which used to panic and now silently evaluates
+        // as "unconnected" — either way the displayed output was wrong until the
+        // user poked the canvas and something *else* triggered a validate. This
+        // makes the activated network correct on the first frame.
+        self.validate_active_network();
         // Return camera settings from the newly active network
         self.get_active_node_network()
             .and_then(|n| n.camera_settings.clone())

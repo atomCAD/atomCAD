@@ -778,10 +778,58 @@ pub fn validate_network(
     // be resolved fall back to DataType::None.
     let output_type_changed = update_network_output_type(network, node_type_registry, &mut ctx);
 
+    // Change 3 (doc/design_custom_node_type_cache_invariant.md): enforce the
+    // cache invariant now that initialization is guaranteed complete. Debug-only.
+    #[cfg(debug_assertions)]
+    debug_assert_custom_node_type_cache_invariant(network, node_type_registry);
+
     NetworkValidationResult {
         valid: network.valid,
         interface_changed: interface_changed || output_type_changed,
     }
+}
+
+/// Change 3 (doc/design_custom_node_type_cache_invariant.md): debug-only check
+/// that the `custom_node_type` cache invariant holds across the whole network
+/// tree. For any node whose data's `calculate_custom_node_type` returns `Some`
+/// (a *derived-layout* node — `parameter`, `expr`, the HOFs, `collect`, …), the
+/// `custom_node_type` cache MUST be populated (`Some`). A `None` cache on such a
+/// node is the stale state (B) that a later `refresh_args = true` repair pass
+/// mis-types and whose wires it drops — the catastrophic rename wire-loss bug.
+/// Catching it here converts that whole class from silent data loss into a loud
+/// test failure.
+///
+/// Placement matters: this runs at the END of `validate_network`, where
+/// initialization is guaranteed complete — NOT in `get_node_type_for_node`,
+/// which is legitimately called during the post-deserialize / pre-init
+/// transient where derived nodes still correctly hold `None`.
+///
+/// Note the record nodes (`record_construct` / `record_destructure` / `product`)
+/// derive their type through the registry-aware populator, not
+/// `calculate_custom_node_type` (which returns `None` for them), so they never
+/// trip this check — exactly as intended.
+#[cfg(debug_assertions)]
+fn debug_assert_custom_node_type_cache_invariant(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+) {
+    crate::structure_designer::node_network::walk_all_nodes(network, &mut |node| {
+        // Only built-in node types have a base type and can be derived-layout;
+        // custom-network instances are looked up elsewhere and carry `NoData`.
+        let Some(base) = registry.built_in_node_types.get(&node.node_type_name) else {
+            return;
+        };
+        if node.data.calculate_custom_node_type(base).is_some() {
+            debug_assert!(
+                node.custom_node_type.is_some(),
+                "custom_node_type cache invariant violated: node {} ('{}') has a \
+                 derived custom node type but its cache is None. See \
+                 doc/design_custom_node_type_cache_invariant.md",
+                node.id,
+                node.node_type_name,
+            );
+        }
+    });
 }
 
 /// Recursively validate zone-related rules in `network` and every nested

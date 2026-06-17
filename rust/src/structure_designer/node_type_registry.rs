@@ -2607,7 +2607,24 @@ fn rewrite_record_name_in_registry(
         }
     }
 
-    for network in registry.node_networks.values_mut() {
+    // Split-borrow the registry so the read-only type maps
+    // (`built_in_node_types`, `record_type_defs`, `built_in_record_type_defs`)
+    // can be borrowed alongside `&mut node_networks`. This lets us recompute
+    // each node's `custom_node_type` cache IN PLACE (Change 2,
+    // doc/design_custom_node_type_cache_invariant.md) instead of the old
+    // defensive `node.custom_node_type = None;` clear — the clear left derived
+    // nodes in the stale `None` state (B), which the following
+    // `repair_all_networks` pass (`refresh_args = true`) mis-typed and whose
+    // wires it dropped.
+    let NodeTypeRegistry {
+        built_in_node_types,
+        node_networks,
+        record_type_defs,
+        built_in_record_type_defs,
+        ..
+    } = registry;
+
+    for network in node_networks.values_mut() {
         // Custom-network signature: parameter types and output pin types.
         for param in network.node_type.parameters.iter_mut() {
             walk_data_type_record_names_mut(&mut param.data_type, &mut rename);
@@ -2679,10 +2696,21 @@ fn rewrite_record_name_in_registry(
                 }
             }
 
-            // Cached `custom_node_type` is regenerated on next type-resolution
-            // call from the (now-renamed) inputs; clear it defensively so any
-            // stale `Named(old)` reference is not observable in the meantime.
-            node.custom_node_type = None;
+            // Recompute the cached `custom_node_type` IN PLACE from the
+            // (now-renamed) per-node data, using the split-borrowed type maps.
+            // `refresh_args = false` because a record rename is
+            // structure-preserving (it never changes a node's pin count or
+            // order — only the type-name strings inside pins), so `arguments`
+            // stay positionally valid: types follow, wires stay. This keeps the
+            // invariant — the cache is never observably `None` for a derived
+            // node (Change 2, doc/design_custom_node_type_cache_invariant.md).
+            NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+                built_in_node_types,
+                record_type_defs,
+                built_in_record_type_defs,
+                node,
+                false,
+            );
         });
     }
 }

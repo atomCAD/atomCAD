@@ -279,7 +279,11 @@
       "PowerShell($p = Join-Path $env:TEMP 'pws_f6_heal.cnnd'; \\(Get-Content $p | Select-String -Pattern 'param_id'\\).Line.Trim\\(\\) -join \"`n\")",
       "PowerShell(Copy-Item *)",
       "PowerShell(Out-File *)",
-      "PowerShell(cargo clippy *)"
+      "PowerShell(cargo clippy *)",
+      "Bash(export PYTHONIOENCODING=utf-8)",
+      "Bash(sed -n '/fn calculate_custom_node_type/,/^    }/p' src/structure_designer/nodes/collect.rs)",
+      "Bash(sed -n '/fn calculate_custom_node_type/,/^    }/p' src/structure_designer/nodes/sequence.rs)",
+      "Bash(sed -n '/fn calculate_custom_node_type/,+12p' src/structure_designer/nodes/map.rs)"
     ]
   }
 }

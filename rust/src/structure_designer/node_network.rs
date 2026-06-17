@@ -738,50 +738,71 @@ impl Node {
             if (!refresh_args) || can_preserve {
                 // Parameters match exactly, keep existing arguments
                 // (no changes to self.arguments)
-            } else {
-                // Parameters changed, need to rebuild arguments array
+            } else if let Some(ref old_node_type) = self.custom_node_type {
+                // Parameters changed and we have an old node type to copy from.
+                // Rebuild the arguments array, preserving connections using
+                // ID-based matching (primary) or name-based (fallback).
                 let mut new_arguments = vec![Argument::new(); new_node_type.parameters.len()];
 
-                // Try to preserve connections using ID-based matching (primary) or name-based (fallback)
-                if let Some(ref old_node_type) = self.custom_node_type {
-                    // Build ID map for old parameters
-                    let old_id_map: std::collections::HashMap<u64, usize> = old_node_type
-                        .parameters
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(idx, p)| p.id.map(|id| (id, idx)))
-                        .collect();
+                // Build ID map for old parameters
+                let old_id_map: std::collections::HashMap<u64, usize> = old_node_type
+                    .parameters
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, p)| p.id.map(|id| (id, idx)))
+                    .collect();
 
-                    for (new_index, new_param) in new_node_type.parameters.iter().enumerate() {
-                        // First try ID-based matching (handles renames)
-                        let old_index = if let Some(new_id) = new_param.id {
-                            if let Some(&idx) = old_id_map.get(&new_id) {
-                                Some(idx)
-                            } else {
-                                // Fall back to name-based matching
-                                old_node_type
-                                    .parameters
-                                    .iter()
-                                    .position(|old_param| old_param.name == new_param.name)
-                            }
+                for (new_index, new_param) in new_node_type.parameters.iter().enumerate() {
+                    // First try ID-based matching (handles renames)
+                    let old_index = if let Some(new_id) = new_param.id {
+                        if let Some(&idx) = old_id_map.get(&new_id) {
+                            Some(idx)
                         } else {
-                            // No ID, use name-based matching (backwards compatibility)
+                            // Fall back to name-based matching
                             old_node_type
                                 .parameters
                                 .iter()
                                 .position(|old_param| old_param.name == new_param.name)
-                        };
-
-                        // Copy argument connections from old position to new position
-                        if let Some(old_idx) = old_index
-                            && old_idx < self.arguments.len()
-                        {
-                            new_arguments[new_index] = self.arguments[old_idx].clone();
                         }
+                    } else {
+                        // No ID, use name-based matching (backwards compatibility)
+                        old_node_type
+                            .parameters
+                            .iter()
+                            .position(|old_param| old_param.name == new_param.name)
+                    };
+
+                    // Copy argument connections from old position to new position
+                    if let Some(old_idx) = old_index
+                        && old_idx < self.arguments.len()
+                    {
+                        new_arguments[new_index] = self.arguments[old_idx].clone();
                     }
                 }
 
                 self.arguments = new_arguments;
+            } else {
+                // Change 1 (doc/design_custom_node_type_cache_invariant.md):
+                // there is NO old node type to copy from (the cache was `None`,
+                // i.e. the stale/not-yet-computed state). The previous behaviour
+                // here was to replace `self.arguments` with a fresh vector of
+                // empty `Argument`s — silently dropping every incoming wire.
+                // That is exactly the catastrophic wire loss triggered when a
+                // record-def rename clears the cache and a later
+                // `refresh_args = true` repair pass observes the `None`.
+                //
+                // Instead, preserve the existing arguments POSITIONALLY (resize
+                // to the new parameter count). On a consistent graph the
+                // arguments are already correctly ordered, so positional
+                // preservation is correct — this generalizes the `apply`
+                // positional-preservation carve-out. A `None` cache at repair
+                // time can therefore no longer drop wires.
+                let want = new_node_type.parameters.len();
+                if self.arguments.len() < want {
+                    self.arguments.resize_with(want, Argument::new);
+                } else if self.arguments.len() > want {
+                    self.arguments.truncate(want);
+                }
             }
         }
         self.custom_node_type = custom_node_type;
