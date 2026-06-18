@@ -111,7 +111,8 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
                 const SizedBox(width: 8.0),
                 Expanded(
                   child: Text(
-                    'The XYZ file will be exported when the node network is evaluated. Specify a file path above to set the export destination.',
+                    'The XYZ file will be exported when the node network is evaluated. Specify a file path above to set the export destination. '
+                    'Wire a record into the optional "metadata" pin to also write a "<file>.xyz.params.json" sidecar containing those generation parameters plus a BLAKE3 hash of the XYZ file.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 14.0,

@@ -880,3 +880,130 @@ fn foreach_body_returning_non_error_value_is_discarded_as_unit() {
         outcome.to_display_string()
     );
 }
+
+// ============================================================================
+// export_xyz generation-parameters sidecar
+// ============================================================================
+//
+// When a record is wired into the optional `metadata` pin, export_xyz writes a
+// `<file>.xyz.params.json` sidecar containing the parameters plus a BLAKE3 hash
+// of the XYZ file. When the pin is unconnected, behaviour is unchanged (no
+// sidecar). The pin type is an empty anonymous record, so any record shape
+// flows in via width subtyping and all fields pass through at eval.
+
+/// Adds a top-level `expr` node holding a (parameter-free) record literal and
+/// returns its id. The node's output is the evaluated record value.
+fn add_record_literal_expr(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    expression: &str,
+) -> u64 {
+    use rust_lib_flutter_cad::structure_designer::nodes::expr::ExprData;
+
+    let mut expr_data = ExprData {
+        parameters: vec![],
+        expression: expression.to_string(),
+        expr: None,
+        error: None,
+        output_type: None,
+    };
+    let _ = expr_data.parse_and_validate(0);
+
+    let expr_id = designer.add_node("expr", DVec2::new(-200.0, 150.0));
+    let registry = &mut designer.node_type_registry;
+    let network = registry.node_networks.get_mut(network_name).unwrap();
+    let node = network.nodes.get_mut(&expr_id).unwrap();
+    node.data = Box::new(expr_data);
+    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        &registry.built_in_node_types,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+        node,
+        true,
+    );
+    expr_id
+}
+
+#[test]
+fn export_xyz_metadata_pin_is_registered() {
+    let registry = NodeTypeRegistry::new();
+    let nt = registry
+        .get_node_type("export_xyz")
+        .expect("export_xyz should be registered");
+    assert_eq!(nt.parameters.len(), 3);
+    assert_eq!(nt.parameters[0].name, "molecule");
+    assert_eq!(nt.parameters[1].name, "file_name");
+    assert_eq!(nt.parameters[2].name, "metadata");
+    assert!(matches!(nt.parameters[2].data_type, DataType::Record(_)));
+}
+
+#[test]
+fn export_xyz_writes_generation_parameters_sidecar() {
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    // Wire a record literal into the optional `metadata` pin (index 2).
+    let expr_id =
+        add_record_literal_expr(&mut designer, "main", "{width: 4, height: 2, spacing: 1.5}");
+    designer.connect_nodes(expr_id, 0, export_id, 2);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("slab.xyz");
+    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    assert!(
+        matches!(result, NetworkResult::Unit),
+        "expected Unit (got {})",
+        result.to_display_string()
+    );
+    assert!(out_path.exists(), "xyz should exist");
+
+    let sidecar_path = PathBuf::from(format!("{}.params.json", out_path.to_str().unwrap()));
+    assert!(
+        sidecar_path.exists(),
+        "sidecar {:?} should exist next to the xyz",
+        sidecar_path
+    );
+
+    let json_text = std::fs::read_to_string(&sidecar_path).expect("read sidecar");
+    let doc: serde_json::Value = serde_json::from_str(&json_text).expect("sidecar is valid JSON");
+
+    assert_eq!(doc["format"], "atomcad-generation-parameters");
+    assert_eq!(doc["version"], 1);
+    assert_eq!(doc["xyz_file"], "slab.xyz");
+
+    // The recorded hash must match the actual bytes on disk.
+    let xyz_bytes = std::fs::read(&out_path).expect("read xyz");
+    let expected_hash = blake3::hash(&xyz_bytes).to_hex().to_string();
+    assert_eq!(doc["xyz_blake3"], expected_hash);
+
+    // Parameters round-tripped structurally from the record literal.
+    assert_eq!(doc["parameters"]["width"], 4);
+    assert_eq!(doc["parameters"]["height"], 2);
+    assert_eq!(doc["parameters"]["spacing"], 1.5);
+}
+
+#[test]
+fn export_xyz_writes_no_sidecar_when_metadata_unconnected() {
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("plain.xyz");
+    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    assert!(matches!(result, NetworkResult::Unit));
+    assert!(out_path.exists(), "xyz should exist");
+
+    let sidecar_path = PathBuf::from(format!("{}.params.json", out_path.to_str().unwrap()));
+    assert!(
+        !sidecar_path.exists(),
+        "no sidecar should be written when the metadata pin is unconnected"
+    );
+}
