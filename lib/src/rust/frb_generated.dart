@@ -13982,16 +13982,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMaterializeData dco_decode_api_materialize_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return APIMaterializeData(
       parameterElementValueDefinition: dco_decode_String(arr[0]),
       hydrogenPassivation: dco_decode_bool(arr[1]),
-      removeSingleBondAtomsBeforePassivation: dco_decode_bool(arr[2]),
-      surfaceReconstruction: dco_decode_bool(arr[3]),
-      invertPhase: dco_decode_bool(arr[4]),
-      error: dco_decode_opt_String(arr[5]),
-      availableParameters: dco_decode_list_api_motif_parameter_info(arr[6]),
+      removeUnbondedAtoms: dco_decode_bool(arr[2]),
+      removeSingleBondAtomsBeforePassivation: dco_decode_bool(arr[3]),
+      surfaceReconstruction: dco_decode_bool(arr[4]),
+      invertPhase: dco_decode_bool(arr[5]),
+      error: dco_decode_opt_String(arr[6]),
+      availableParameters: dco_decode_list_api_motif_parameter_info(arr[7]),
     );
   }
 
@@ -17659,6 +17660,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_parameterElementValueDefinition = sse_decode_String(deserializer);
     var var_hydrogenPassivation = sse_decode_bool(deserializer);
+    var var_removeUnbondedAtoms = sse_decode_bool(deserializer);
     var var_removeSingleBondAtomsBeforePassivation =
         sse_decode_bool(deserializer);
     var var_surfaceReconstruction = sse_decode_bool(deserializer);
@@ -17669,6 +17671,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIMaterializeData(
         parameterElementValueDefinition: var_parameterElementValueDefinition,
         hydrogenPassivation: var_hydrogenPassivation,
+        removeUnbondedAtoms: var_removeUnbondedAtoms,
         removeSingleBondAtomsBeforePassivation:
             var_removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: var_surfaceReconstruction,
@@ -21843,6 +21846,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.parameterElementValueDefinition, serializer);
     sse_encode_bool(self.hydrogenPassivation, serializer);
+    sse_encode_bool(self.removeUnbondedAtoms, serializer);
     sse_encode_bool(self.removeSingleBondAtomsBeforePassivation, serializer);
     sse_encode_bool(self.surfaceReconstruction, serializer);
     sse_encode_bool(self.invertPhase, serializer);

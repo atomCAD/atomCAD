@@ -71,8 +71,9 @@ The motif and motif offset used for filling come from the input Blueprint's `Str
 - `rm_single: Bool` (optional) — see *Remove single-bond atoms* below.
 - `surf_recon: Bool` (optional) — see *Surface reconstruction* below.
 - `invert_phase: Bool` (optional) — see *Invert phase* below.
+- `rm_unbonded: Bool` (optional) — see *Remove unbonded atoms* below.
 
-The four boolean inputs default to the values set on the node properties; wiring an input overrides the property.
+The boolean inputs default to the values set on the node properties; wiring an input overrides the property.
 
 > **Note on the rename:** `materialize` was previously called `atom_fill`. The old `motif` and `m_offset` input pins are gone — both come from the input Blueprint's structure now. Older `.cnnd` files that still reference `atom_fill` will be migrated automatically.
 
@@ -84,11 +85,10 @@ Motifs declare *parameter elements* — placeholder slots like `PRIMARY` or `SEC
 
 When a motif is edited inside `motif_edit`, parameter atoms (which carry non-physical atomic numbers) **simulate as their default element** for the purpose of force-field minimization, guided placement, and hydrogen passivation — a `PRIMARY` atom whose default is carbon will be treated as carbon for bond-length and hybridization calculations. This keeps the motif geometry realistic during interactive editing even before any concrete substitutions are chosen in `materialize`. Hovering over such an atom in the viewport shows an extra *Effective element: …* line in the tooltip whenever the displayed atomic number differs from the simulated one.
 
-If the geometry cut is done such a way that an atom has no bonds that is removed automatically. (Lone atom removal.)
-
 You can switch on or off the following checkboxes:
 
-- *Remove single-bond atoms:* If turned on, atoms which only have one bond after the cut are removed. This is done recursively until there is no such atom in the atomic structure.
+- *Remove unbonded atoms:* If turned on (the default), atoms left with no bonds after the cut are removed automatically (lone atom removal). Turn it off to keep unbonded atoms — useful for debugging what is actually being cut, dumping atoms for repackaging into a new structure or patch, or materializing salts such as NaCl whose ions are not covalently bonded.
+- *Remove single-bond atoms:* If turned on, atoms which only have one bond after the cut are removed. This is done recursively until there is no such atom in the atomic structure. Note that this recursive cleanup **also removes unbonded (zero-bond) atoms** — both atoms that are already unbonded and atoms that become unbonded as the recursion peels away their neighbors. In other words, *Remove single-bond atoms* implies *Remove unbonded atoms*: enabling it removes lone atoms regardless of the *Remove unbonded atoms* setting.
 - *Surface reconstruction:* Real crystalline surfaces are rarely ideal bulk terminations; instead, they typically undergo *surface reconstructions* that lower their surface energy. atomCAD will support several reconstruction types depending on the crystal structure. At present, reconstruction is implemented only for **cubic diamond** crystals (carbon and silicon) and only for the most important one: the **(100) 2×1 dimer reconstruction**.
   If reconstruction is enabled for any other crystal type, the setting has no effect.
   The (100) 2×1 reconstruction automatically removes single-bond (dangling) atoms even if the *Remove single-bond atoms* option is not enabled. Surface reconstruction can be used together with hydrogen passivation or on its own.

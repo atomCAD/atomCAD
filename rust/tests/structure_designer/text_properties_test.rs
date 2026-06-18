@@ -996,6 +996,7 @@ fn test_materialize_roundtrip() {
     test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "C=6".to_string(),
         hydrogen_passivation: true,
+        remove_unbonded_atoms: true,
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,
@@ -1006,6 +1007,7 @@ fn test_materialize_roundtrip() {
     test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "".to_string(),
         hydrogen_passivation: false,
+        remove_unbonded_atoms: false,
         remove_single_bond_atoms_before_passivation: true,
         surface_reconstruction: true,
         invert_phase: true,

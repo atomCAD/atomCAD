@@ -43,7 +43,7 @@ cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1) }
 get_structure1 = get_structure { input: cuboid1 }
 structure1 = structure { structure: get_structure1, motif: motif1 }
 with_structure1 = with_structure { shape: cuboid1, structure: structure1 }
-materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: true, rm_unbonded: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
 atom_fill_halfshift1 = atom_fill_halfshift { geometry: cuboid1, motif: motif1 }
 output motif1
 

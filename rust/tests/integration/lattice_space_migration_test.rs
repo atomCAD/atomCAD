@@ -827,8 +827,9 @@ fn test_roundtrip_primitive_with_lattice() {
 /// Expected post-migration state (case A):
 /// - the v2 `atom_fill` is renamed to `materialize` (both `node_type_name`
 ///   and the `data_type` dispatch tag);
-/// - `materialize.arguments` has 5 slots in v3 order: shape (now wired to W,
-///   not directly to cuboid), then the four Bool flag wires;
+/// - `materialize.arguments` has 6 slots in v3 order: shape (now wired to W,
+///   not directly to cuboid), then the four Bool flag wires, then the newer
+///   unwired `rm_unbonded` optional pin;
 /// - a `with_structure` (W) node sits between the cuboid and `materialize`,
 ///   reading the patched Structure from a `structure` (S) override node, which
 ///   in turn reads its base Structure from a `get_structure` (G) node fed by
@@ -970,7 +971,9 @@ fn test_load_atom_fill_split() {
 
     // Materialize args, in v3 order: shape (now W, not cuboid directly),
     // passivate (id 5), rm_single (id 6), surf_recon (id 7), invert_phase (id 8).
-    assert_eq!(materialize.arguments.len(), 5);
+    // A 6th slot (rm_unbonded) is appended unwired by the argument-repair pass —
+    // it is a newer optional pin the v2 fixture predates.
+    assert_eq!(materialize.arguments.len(), 6);
     assert_eq!(
         materialize.arguments[0]
             .argument_output_pins()
@@ -1016,6 +1019,9 @@ fn test_load_atom_fill_split() {
     assert!(mat_data.remove_single_bond_atoms_before_passivation);
     assert!(!mat_data.surface_reconstruction);
     assert!(mat_data.invert_phase);
+    // `remove_unbonded_atoms` defaults to true (v2 atom_fill always removed
+    // unbonded atoms), preserving the migrated node's behavior.
+    assert!(mat_data.remove_unbonded_atoms);
 
     // next_node_id advances past every synthesised id â€” primitive adapter (1)
     // + W/G/S triplet (3). With v2 next_node_id=10, post-migration must be â‰¥ 14.
@@ -1195,20 +1201,21 @@ fn test_load_shared_unit_cell_composes_passes() {
 
     // The materialize node (renamed atom_fill, id 4) has its shape wire
     // pointing at the cuboid (id 2) â€” case B preserves the original shape wire
-    // verbatim. The four Bool flag args are unwired (no flag wires here).
+    // verbatim. The five Bool flag args are unwired (no flag wires here);
+    // the 5th (rm_unbonded) is a newer optional pin appended by the repair pass.
     let materialize = network
         .nodes
         .values()
         .find(|n| n.node_type_name == "materialize")
         .expect("materialize node missing");
     assert_eq!(materialize.id, 4);
-    assert_eq!(materialize.arguments.len(), 5);
+    assert_eq!(materialize.arguments.len(), 6);
     assert_eq!(
         materialize.arguments[0].argument_output_pins().get(&2),
         Some(&0),
         "case B: materialize.shape (arg 0) must still point at cuboid (id 2, pin 0)"
     );
-    for i in 1..5 {
+    for i in 1..6 {
         assert!(
             materialize.arguments[i].argument_output_pins().is_empty(),
             "materialize Bool arg {} should be unwired in this fixture",
@@ -1852,14 +1859,15 @@ fn test_load_motif_offset_only_unchained_case_c() {
          re-index must not silently overwrite it"
     );
 
-    // Materialize.shape stays empty in case C, and the four Bool flag args
-    // are also empty (this fixture wires nothing besides motif_offset).
+    // Materialize.shape stays empty in case C, and the five Bool flag args
+    // are also empty (this fixture wires nothing besides motif_offset). The
+    // 5th flag (rm_unbonded) is a newer optional pin appended unwired.
     let materialize = network
         .nodes
         .values()
         .find(|n| n.node_type_name == "materialize")
         .unwrap();
-    assert_eq!(materialize.arguments.len(), 5);
+    assert_eq!(materialize.arguments.len(), 6);
     for (i, a) in materialize.arguments.iter().enumerate() {
         assert!(
             a.argument_output_pins().is_empty(),

@@ -189,6 +189,7 @@ site 1 C 0.0 0.0 0.0
 
     let options = LatticeFillOptions {
         hydrogen_passivation: false,
+        remove_unbonded_atoms: true,
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
@@ -235,6 +236,7 @@ bond 1 ..-2
 
     let options = LatticeFillOptions {
         hydrogen_passivation: false,
+        remove_unbonded_atoms: true,
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
@@ -257,4 +259,61 @@ bond 1 ..-2
     for atom in result.atomic_structure.atoms_values() {
         assert_eq!(atom.atomic_number, 6, "All atoms should be carbon");
     }
+}
+
+/// The `remove_unbonded_atoms` flag controls whether zero-bond atoms are
+/// removed in the cleanup phase. A bond-free motif produces only unbonded
+/// atoms, so the flag fully determines whether any atoms survive.
+#[test]
+fn test_remove_unbonded_atoms_flag() {
+    let sphere = GeoNode::sphere(DVec3::ZERO, 10.0);
+    let unit_cell = UnitCellStruct::cubic_diamond();
+
+    // A motif with a single site and no bonds: every placed atom is unbonded.
+    let motif_text = "
+site 1 C 0.0 0.0 0.0
+";
+    let motif = parse_motif(motif_text).unwrap();
+
+    let config = LatticeFillConfig {
+        unit_cell,
+        motif,
+        parameter_element_values: HashMap::new(),
+        geometry: sphere,
+        motif_offset: DVec3::ZERO,
+    };
+
+    let fill_region = DAABox::new(
+        DVec3::new(-15.0, -15.0, -15.0),
+        DVec3::new(15.0, 15.0, 15.0),
+    );
+
+    // With removal enabled, all (unbonded) atoms are stripped out.
+    let options_remove = LatticeFillOptions {
+        hydrogen_passivation: false,
+        remove_unbonded_atoms: true,
+        remove_single_bond_atoms: false,
+        reconstruct_surface: false,
+        invert_phase: false,
+    };
+    let result_remove = fill_lattice(&config, &options_remove, &fill_region);
+    assert_eq!(
+        result_remove.atomic_structure.get_num_of_atoms(),
+        0,
+        "With remove_unbonded_atoms = true, unbonded atoms should be removed"
+    );
+
+    // With removal disabled, the unbonded atoms are kept.
+    let options_keep = LatticeFillOptions {
+        hydrogen_passivation: false,
+        remove_unbonded_atoms: false,
+        remove_single_bond_atoms: false,
+        reconstruct_surface: false,
+        invert_phase: false,
+    };
+    let result_keep = fill_lattice(&config, &options_keep, &fill_region);
+    assert!(
+        result_keep.atomic_structure.get_num_of_atoms() > 0,
+        "With remove_unbonded_atoms = false, unbonded atoms should be kept"
+    );
 }

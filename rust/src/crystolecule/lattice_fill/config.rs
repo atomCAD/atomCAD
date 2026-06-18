@@ -32,6 +32,9 @@ pub struct LatticeFillOptions {
     /// Whether to add hydrogen atoms to dangling bonds
     pub hydrogen_passivation: bool,
 
+    /// Whether to remove unbonded (zero-bond) atoms before passivation
+    pub remove_unbonded_atoms: bool,
+
     /// Whether to remove single-bond atoms before passivation
     pub remove_single_bond_atoms: bool,
 

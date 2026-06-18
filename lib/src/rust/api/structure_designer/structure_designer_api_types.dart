@@ -1814,6 +1814,7 @@ class APIMat3RowsData {
 class APIMaterializeData {
   final String parameterElementValueDefinition;
   final bool hydrogenPassivation;
+  final bool removeUnbondedAtoms;
   final bool removeSingleBondAtomsBeforePassivation;
   final bool surfaceReconstruction;
   final bool invertPhase;
@@ -1823,6 +1824,7 @@ class APIMaterializeData {
   const APIMaterializeData({
     required this.parameterElementValueDefinition,
     required this.hydrogenPassivation,
+    required this.removeUnbondedAtoms,
     required this.removeSingleBondAtomsBeforePassivation,
     required this.surfaceReconstruction,
     required this.invertPhase,
@@ -1834,6 +1836,7 @@ class APIMaterializeData {
   int get hashCode =>
       parameterElementValueDefinition.hashCode ^
       hydrogenPassivation.hashCode ^
+      removeUnbondedAtoms.hashCode ^
       removeSingleBondAtomsBeforePassivation.hashCode ^
       surfaceReconstruction.hashCode ^
       invertPhase.hashCode ^
@@ -1848,6 +1851,7 @@ class APIMaterializeData {
           parameterElementValueDefinition ==
               other.parameterElementValueDefinition &&
           hydrogenPassivation == other.hydrogenPassivation &&
+          removeUnbondedAtoms == other.removeUnbondedAtoms &&
           removeSingleBondAtomsBeforePassivation ==
               other.removeSingleBondAtomsBeforePassivation &&
           surfaceReconstruction == other.surfaceReconstruction &&

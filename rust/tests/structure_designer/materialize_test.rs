@@ -88,7 +88,7 @@ fn materialize_node_type_output_is_crystal() {
 }
 
 /// `materialize` exposes only `shape`, `passivate`, `rm_single`,
-/// `surf_recon`, `invert_phase` — no `motif` or `m_offset` pins.
+/// `surf_recon`, `invert_phase`, `rm_unbonded` — no `motif` or `m_offset` pins.
 #[test]
 fn materialize_has_no_motif_or_offset_pins() {
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -107,7 +107,8 @@ fn materialize_has_no_motif_or_offset_pins() {
             "passivate",
             "rm_single",
             "surf_recon",
-            "invert_phase"
+            "invert_phase",
+            "rm_unbonded"
         ],
         "materialize parameter pins"
     );

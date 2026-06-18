@@ -27,10 +27,18 @@ use std::collections::HashMap;
 // Import the lattice fill algorithm
 use crate::crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MaterializeData {
     pub parameter_element_value_definition: String,
     pub hydrogen_passivation: bool,
+    /// Whether to remove unbonded (zero-bond) atoms before passivation.
+    /// Defaults to `true` to preserve the historical hardcoded behavior.
+    #[serde(default = "default_true")]
+    pub remove_unbonded_atoms: bool,
     #[serde(default)]
     pub remove_single_bond_atoms_before_passivation: bool,
     #[serde(default)]
@@ -50,6 +58,8 @@ pub struct MaterializeData {
 struct MaterializeDataDeserialized {
     pub parameter_element_value_definition: String,
     pub hydrogen_passivation: bool,
+    #[serde(default = "default_true")]
+    pub remove_unbonded_atoms: bool,
     #[serde(default)]
     pub remove_single_bond_atoms_before_passivation: bool,
     #[serde(default)]
@@ -68,6 +78,7 @@ impl<'de> Deserialize<'de> for MaterializeData {
         let mut data = MaterializeData {
             parameter_element_value_definition: de.parameter_element_value_definition,
             hydrogen_passivation: de.hydrogen_passivation,
+            remove_unbonded_atoms: de.remove_unbonded_atoms,
             remove_single_bond_atoms_before_passivation: de
                 .remove_single_bond_atoms_before_passivation,
             surface_reconstruction: de.surface_reconstruction,
@@ -229,6 +240,20 @@ impl NodeData for MaterializeData {
             Err(error) => return EvalOutput::single(error),
         };
 
+        // Evaluate rm_unbonded input (with default)
+        let remove_unbonded_atoms = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            5,
+            self.remove_unbonded_atoms,
+            NetworkResult::extract_bool,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
         // Calculate effective parameter element values (fill in defaults for missing values)
         let effective_parameter_values =
             motif.get_effective_parameter_element_values(&self.parameter_element_values);
@@ -244,6 +269,7 @@ impl NodeData for MaterializeData {
 
         let options = LatticeFillOptions {
             hydrogen_passivation,
+            remove_unbonded_atoms,
             remove_single_bond_atoms,
             reconstruct_surface: surface_reconstruction,
             invert_phase,
@@ -290,6 +316,10 @@ impl NodeData for MaterializeData {
                 TextValue::Bool(self.hydrogen_passivation),
             ),
             (
+                "rm_unbonded".to_string(),
+                TextValue::Bool(self.remove_unbonded_atoms),
+            ),
+            (
                 "rm_single".to_string(),
                 TextValue::Bool(self.remove_single_bond_atoms_before_passivation),
             ),
@@ -328,6 +358,11 @@ impl NodeData for MaterializeData {
             self.hydrogen_passivation = v
                 .as_bool()
                 .ok_or_else(|| "passivate must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("rm_unbonded") {
+            self.remove_unbonded_atoms = v
+                .as_bool()
+                .ok_or_else(|| "rm_unbonded must be a boolean".to_string())?;
         }
         if let Some(v) = props.get("rm_single") {
             self.remove_single_bond_atoms_before_passivation = v
@@ -386,6 +421,11 @@ pub fn get_node_type() -> NodeType {
               name: "invert_phase".to_string(),
               data_type: DataType::Bool,
           },
+          Parameter {
+              id: None,
+              name: "rm_unbonded".to_string(),
+              data_type: DataType::Bool,
+          },
       ],
       output_pins: OutputPinDefinition::single_fixed(DataType::Crystal),
       zone_input_pins: vec![],
@@ -394,6 +434,7 @@ pub fn get_node_type() -> NodeType {
       node_data_creator: || Box::new(MaterializeData {
         parameter_element_value_definition: String::new(),
         hydrogen_passivation: true,
+        remove_unbonded_atoms: true,
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,

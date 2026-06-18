@@ -135,8 +135,12 @@ pub fn fill_lattice(
 
     {
         let _cleanup_timer = Timer::new("LatticeFill cleanup and passivation");
-        // Remove lone atoms before hydrogen passivation (passivation will bond them)
-        remove_lone_atoms(&mut atomic_structure);
+        // Remove unbonded (lone) atoms before hydrogen passivation if enabled.
+        // Defaults to enabled; disabling keeps zero-bond atoms (useful for debugging
+        // cuts, dumping atoms, or salts like NaCl that have unbonded ions).
+        if options.remove_unbonded_atoms {
+            remove_lone_atoms(&mut atomic_structure);
+        }
 
         // Remove single bond atoms before hydrogen passivation if enabled
         // This is useful for removing methyl groups on crystal surfaces

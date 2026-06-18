@@ -2520,6 +2520,7 @@ fn create_diamond_cuboid_with_options(
 
     let options = LatticeFillOptions {
         hydrogen_passivation,
+        remove_unbonded_atoms: true,
         remove_single_bond_atoms,
         reconstruct_surface: surface_reconstruction,
         invert_phase: false,

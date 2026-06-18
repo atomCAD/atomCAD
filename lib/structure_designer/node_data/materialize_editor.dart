@@ -24,6 +24,7 @@ class MaterializeEditor extends StatefulWidget {
 class _MaterializeEditorState extends State<MaterializeEditor> {
   late String _parameterElementValueDefinition;
   late bool _hydrogenPassivation;
+  late bool _removeUnbondedAtoms;
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
   late bool _invertPhase;
@@ -38,6 +39,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
       APIMaterializeData(
         parameterElementValueDefinition: _parameterElementValueDefinition,
         hydrogenPassivation: _hydrogenPassivation,
+        removeUnbondedAtoms: _removeUnbondedAtoms,
         removeSingleBondAtomsBeforePassivation:
             _removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: _surfaceReconstruction,
@@ -54,6 +56,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
     _parameterElementValueDefinition =
         widget.data?.parameterElementValueDefinition ?? '';
     _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
+    _removeUnbondedAtoms = widget.data?.removeUnbondedAtoms ?? true;
     _removeSingleBondAtomsBeforePassivation =
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
@@ -71,6 +74,10 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
     if (oldWidget.data?.hydrogenPassivation !=
         widget.data?.hydrogenPassivation) {
       _hydrogenPassivation = widget.data?.hydrogenPassivation ?? true;
+    }
+    if (oldWidget.data?.removeUnbondedAtoms !=
+        widget.data?.removeUnbondedAtoms) {
+      _removeUnbondedAtoms = widget.data?.removeUnbondedAtoms ?? true;
     }
     if (oldWidget.data?.removeSingleBondAtomsBeforePassivation !=
         widget.data?.removeSingleBondAtomsBeforePassivation) {
@@ -117,9 +124,31 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
 
           const SizedBox(height: 8),
 
+          // Remove unbonded atoms checkbox
+          CheckboxListTile(
+            title: const Text('Remove unbonded atoms'),
+            subtitle:
+                const Text('Remove atoms left with no bonds after the cut'),
+            value: _removeUnbondedAtoms,
+            onChanged: (value) {
+              final newValue = value ?? true;
+              setState(() {
+                _removeUnbondedAtoms = newValue;
+              });
+
+              _commitChanges();
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
           // Remove single-bond atoms checkbox
           CheckboxListTile(
             title: const Text('Remove single-bond atoms'),
+            subtitle: const Text(
+              'Recursive; also removes unbonded atoms regardless of the option above',
+            ),
             value: _removeSingleBondAtomsBeforePassivation,
             onChanged: (value) {
               final newValue = value ?? false;

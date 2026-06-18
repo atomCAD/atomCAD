@@ -12070,6 +12070,7 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_parameterElementValueDefinition = <String>::sse_decode(deserializer);
         let mut var_hydrogenPassivation = <bool>::sse_decode(deserializer);
+        let mut var_removeUnbondedAtoms = <bool>::sse_decode(deserializer);
         let mut var_removeSingleBondAtomsBeforePassivation = <bool>::sse_decode(deserializer);
         let mut var_surfaceReconstruction = <bool>::sse_decode(deserializer);
         let mut var_invertPhase = <bool>::sse_decode(deserializer);
@@ -12080,6 +12081,7 @@ impl SseDecode
         return crate::api::structure_designer::structure_designer_api_types::APIMaterializeData {
             parameter_element_value_definition: var_parameterElementValueDefinition,
             hydrogen_passivation: var_hydrogenPassivation,
+            remove_unbonded_atoms: var_removeUnbondedAtoms,
             remove_single_bond_atoms_before_passivation: var_removeSingleBondAtomsBeforePassivation,
             surface_reconstruction: var_surfaceReconstruction,
             invert_phase: var_invertPhase,
@@ -17597,6 +17599,7 @@ impl flutter_rust_bridge::IntoDart
                 .into_into_dart()
                 .into_dart(),
             self.hydrogen_passivation.into_into_dart().into_dart(),
+            self.remove_unbonded_atoms.into_into_dart().into_dart(),
             self.remove_single_bond_atoms_before_passivation
                 .into_into_dart()
                 .into_dart(),
@@ -20938,6 +20941,7 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.parameter_element_value_definition, serializer);
         <bool>::sse_encode(self.hydrogen_passivation, serializer);
+        <bool>::sse_encode(self.remove_unbonded_atoms, serializer);
         <bool>::sse_encode(self.remove_single_bond_atoms_before_passivation, serializer);
         <bool>::sse_encode(self.surface_reconstruction, serializer);
         <bool>::sse_encode(self.invert_phase, serializer);

@@ -304,6 +304,17 @@ fn delete_atoms_with_at_most_one_bond(
     all_neighbors
 }
 
+/// Removes atoms with one bond, peeling recursively (when `recursive`) until no
+/// such atoms remain.
+///
+/// Note: the filter is `bonds.len() <= 1`, so this **also removes unbonded
+/// (zero-bond) atoms** — both atoms that are already unbonded and atoms that
+/// become unbonded as the recursion strips away their neighbors. This is
+/// intentional: the recursive cleanup would otherwise strand atoms that drop
+/// straight from 2+ bonds to 0 in a single batch round (e.g. a central atom
+/// whose only neighbors are themselves single-bonded). As a consequence,
+/// enabling single-bond removal in `materialize` implies lone-atom removal
+/// regardless of the separate `rm_unbonded` flag. See issue #363.
 pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool) {
     // First iteration: find ALL atoms with at most one bond (0 or 1 bonds)
     let mut atoms_with_at_most_one_bond: Vec<u32> = structure

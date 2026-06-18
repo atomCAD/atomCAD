@@ -283,7 +283,8 @@
       "Bash(export PYTHONIOENCODING=utf-8)",
       "Bash(sed -n '/fn calculate_custom_node_type/,/^    }/p' src/structure_designer/nodes/collect.rs)",
       "Bash(sed -n '/fn calculate_custom_node_type/,/^    }/p' src/structure_designer/nodes/sequence.rs)",
-      "Bash(sed -n '/fn calculate_custom_node_type/,+12p' src/structure_designer/nodes/map.rs)"
+      "Bash(sed -n '/fn calculate_custom_node_type/,+12p' src/structure_designer/nodes/map.rs)",
+      "Bash(INSTA_UPDATE=always cargo test --test structure_designer text_format_snapshot_test)"
     ]
   }
 }

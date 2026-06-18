@@ -6348,6 +6348,7 @@ pub fn get_materialize_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMat
                         .parameter_element_value_definition
                         .clone(),
                     hydrogen_passivation: materialize_data.hydrogen_passivation,
+                    remove_unbonded_atoms: materialize_data.remove_unbonded_atoms,
                     remove_single_bond_atoms_before_passivation: materialize_data
                         .remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: materialize_data.surface_reconstruction,
@@ -6373,6 +6374,7 @@ pub fn set_materialize_data(
                 let mut materialize_data = Box::new(MaterializeData {
                     parameter_element_value_definition: data.parameter_element_value_definition,
                     hydrogen_passivation: data.hydrogen_passivation,
+                    remove_unbonded_atoms: data.remove_unbonded_atoms,
                     remove_single_bond_atoms_before_passivation: data
                         .remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: data.surface_reconstruction,
