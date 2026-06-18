@@ -2459,11 +2459,23 @@ pub fn collect_record_refs_in_type(t: &DataType, out: &mut HashSet<String>) {
 /// `record_construct` / `record_destructure` / `product`. Mirrors the read
 /// surface of `rewrite_record_name_in_registry`. Used by the namespace-delete
 /// reference check. See `doc/design_hierarchical_records.md`.
+///
+/// **Keep the node-data downcast list below in sync with the authoritative
+/// list in `canonicalize::canonicalize_node_data` and with
+/// `rewrite_record_name_in_registry`.** All three must cover every node-data
+/// variant that embeds a `DataType` (`closure`/`apply` `type_args`, `collect`
+/// `element_type`, the `map`/`filter`/… element/input/output types, …). A
+/// missing variant here silently under-counts references; a missing variant in
+/// the rewriter leaves a stale `Record(Named(old))` after a record rename
+/// (regression: `rename_wire_loss_regression_test`).
 pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<String>) {
+    use crate::structure_designer::nodes::apply::ApplyData;
     use crate::structure_designer::nodes::array_append::ArrayAppendData;
     use crate::structure_designer::nodes::array_at::ArrayAtData;
     use crate::structure_designer::nodes::array_concat::ArrayConcatData;
     use crate::structure_designer::nodes::array_len::ArrayLenData;
+    use crate::structure_designer::nodes::closure::ClosureData;
+    use crate::structure_designer::nodes::collect::CollectData;
     use crate::structure_designer::nodes::expr::ExprData;
     use crate::structure_designer::nodes::filter::FilterData;
     use crate::structure_designer::nodes::fold::FoldData;
@@ -2489,6 +2501,16 @@ pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<S
         let data: &dyn crate::structure_designer::node_data::NodeData = node.data.as_ref();
         if let Some(d) = data.as_any_ref().downcast_ref::<ParameterData>() {
             collect_record_refs_in_type(&d.data_type, out);
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ClosureData>() {
+            for t in &d.type_args {
+                collect_record_refs_in_type(t, out);
+            }
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<ApplyData>() {
+            for t in &d.type_args {
+                collect_record_refs_in_type(t, out);
+            }
+        } else if let Some(d) = data.as_any_ref().downcast_ref::<CollectData>() {
+            collect_record_refs_in_type(&d.element_type, out);
         } else if let Some(d) = data.as_any_ref().downcast_ref::<ExprData>() {
             for p in &d.parameters {
                 collect_record_refs_in_type(&p.data_type, out);
@@ -2569,19 +2591,27 @@ fn dfs_cycle_check(
 /// field, and every existing record def's field types — and rewrites
 /// `RecordType::Named(old_name)` to `RecordType::Named(new_name)`.
 ///
-/// The walker is feature-complete the moment Phase 3 lands its
-/// `record_construct` / `record_destructure` / `product` nodes (which carry a
-/// bare-name `schema` / `target` `String` property). Adding the corresponding
-/// downcasts to those node-data types is the only change required there.
+/// **The node-data downcast chain below must cover every node-data variant that
+/// embeds a `DataType`.** The authoritative list is
+/// `canonicalize::canonicalize_node_data`; this function and the read-mirror
+/// `collect_record_refs_in_network` must stay in sync with it. A missing
+/// variant leaves a stale `Record(Named(old_name))` reference behind after a
+/// rename — the node then points at a non-existent def (dangling reference,
+/// red validation error on reload). `closure` / `apply` (`type_args`) and
+/// `collect` (`element_type`) were the variants originally missed; see
+/// `rename_wire_loss_regression_test::record_rename_rewrites_closure_and_collect_type_fields`.
 fn rewrite_record_name_in_registry(
     registry: &mut NodeTypeRegistry,
     old_name: &str,
     new_name: &str,
 ) {
+    use crate::structure_designer::nodes::apply::ApplyData;
     use crate::structure_designer::nodes::array_append::ArrayAppendData;
     use crate::structure_designer::nodes::array_at::ArrayAtData;
     use crate::structure_designer::nodes::array_concat::ArrayConcatData;
     use crate::structure_designer::nodes::array_len::ArrayLenData;
+    use crate::structure_designer::nodes::closure::ClosureData;
+    use crate::structure_designer::nodes::collect::CollectData;
     use crate::structure_designer::nodes::expr::ExprData;
     use crate::structure_designer::nodes::filter::FilterData;
     use crate::structure_designer::nodes::fold::FoldData;
@@ -2650,6 +2680,16 @@ fn rewrite_record_name_in_registry(
                 if d.data_type_str.is_some() {
                     d.data_type_str = Some(d.data_type.to_string());
                 }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ClosureData>() {
+                for t in d.type_args.iter_mut() {
+                    walk_data_type_record_names_mut(t, &mut rename);
+                }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ApplyData>() {
+                for t in d.type_args.iter_mut() {
+                    walk_data_type_record_names_mut(t, &mut rename);
+                }
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<CollectData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ExprData>() {
                 for p in d.parameters.iter_mut() {
                     walk_data_type_record_names_mut(&mut p.data_type, &mut rename);

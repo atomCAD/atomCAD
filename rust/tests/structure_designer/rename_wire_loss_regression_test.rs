@@ -39,9 +39,12 @@
 
 use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::canonicalize;
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::node_network::{IncomingWire, Node, NodeNetwork};
 use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, Parameter};
+use rust_lib_flutter_cad::structure_designer::node_type_registry::RecordTypeDef;
+use rust_lib_flutter_cad::structure_designer::nodes::closure::ClosureData;
+use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
 const FIXTURE: &str = "tests/fixtures/rename_wire_loss/before.cnnd";
@@ -481,6 +484,144 @@ fn set_custom_node_type_with_old_cache_reorder_still_moves_wires_by_id() {
 // debug-only `debug_assert!` at the end of `validate_network` must fire. Gated
 // to debug builds, where `debug_assert!` is active (the full suite runs in
 // debug; this only documents that the assert has teeth).
+
+// ---------------------------------------------------------------------------
+// (T8) Rename must rewrite EVERY node-data DataType field, not just the subset
+// the original walker knew about.
+// ---------------------------------------------------------------------------
+//
+// `rewrite_record_name_in_registry` (and its read-mirror
+// `collect_record_refs_in_network`) downcast to a hand-maintained list of
+// node-data variants. Three derived-layout types that embed a `DataType` were
+// missing from that list: `closure` / `apply` (`type_args: Vec<DataType>`) and
+// `collect` (`element_type: DataType`). The complete reference list is
+// `canonicalize::canonicalize_node_data`.
+//
+// The user-observed symptom: after renaming a record def into a namespace and
+// reloading, body-internal `record_destructure` schemas (which WERE rewritten)
+// resolved fine but the enclosing `closure`'s `type_args` (which were NOT)
+// still pointed at the old name → a dangling `Record(Named(old))` reference →
+// red validation error / wire fragility when the user reverted the rename.
+//
+// This test builds a `closure` and a `collect` node that both embed
+// `Record(Named("R"))`, renames `R → R2`, and asserts the embedded references
+// followed the rename (no stale `"R"` left behind).
+
+fn record_named(name: &str) -> DataType {
+    DataType::Record(RecordType::Named(name.to_string()))
+}
+
+/// Returns every record-def name embedded in `dt` via `RecordType::Named`.
+fn named_refs(dt: &DataType, out: &mut Vec<String>) {
+    use rust_lib_flutter_cad::structure_designer::data_type::walk_data_type_record_names_mut;
+    // No read-only walker exists; the `_mut` one only reads here (we never
+    // mutate the name), so clone and walk the copy.
+    let mut copy = dt.clone();
+    walk_data_type_record_names_mut(&mut copy, &mut |n| out.push(n.clone()));
+}
+
+#[test]
+fn record_rename_rewrites_closure_and_collect_type_fields() {
+    let mut designer = StructureDesigner::new();
+
+    // A record def to rename.
+    designer
+        .add_record_type_def(RecordTypeDef {
+            name: "R".to_string(),
+            fields: vec![("x".to_string(), DataType::Int)],
+        })
+        .expect("add record def R");
+
+    // A network with a `closure` (type_args reference R) and a `collect`
+    // (element_type references R) — the two node types that the rename walker
+    // previously skipped.
+    let mut net = NodeNetwork::new_empty();
+    net.node_type.name = "victim".to_string();
+
+    let closure_data = Box::new(ClosureData {
+        type_args: vec![record_named("R")],
+        ..Default::default()
+    });
+    let closure_id = net.add_node("closure", DVec2::ZERO, 0, closure_data);
+
+    let collect_data = Box::new(CollectData {
+        element_type: record_named("R"),
+        ..Default::default()
+    });
+    let collect_id = net.add_node("collect", DVec2::new(200.0, 0.0), 1, collect_data);
+
+    designer
+        .node_type_registry
+        .node_networks
+        .insert("victim".to_string(), net);
+
+    // Precondition: both embed "R".
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("victim")
+            .unwrap();
+        let mut refs = Vec::new();
+        let cd = net.nodes[&closure_id]
+            .data
+            .as_any_ref()
+            .downcast_ref::<ClosureData>()
+            .unwrap();
+        for t in &cd.type_args {
+            named_refs(t, &mut refs);
+        }
+        let col = net.nodes[&collect_id]
+            .data
+            .as_any_ref()
+            .downcast_ref::<CollectData>()
+            .unwrap();
+        named_refs(&col.element_type, &mut refs);
+        assert_eq!(refs, vec!["R", "R"], "precondition: both nodes reference R");
+    }
+
+    // The rename.
+    designer
+        .rename_record_type_def("R", "R2")
+        .expect("rename R -> R2");
+
+    // Both embedded references must have followed the rename — no stale "R".
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("victim")
+        .unwrap();
+
+    let cd = net.nodes[&closure_id]
+        .data
+        .as_any_ref()
+        .downcast_ref::<ClosureData>()
+        .unwrap();
+    let mut closure_refs = Vec::new();
+    for t in &cd.type_args {
+        named_refs(t, &mut closure_refs);
+    }
+    assert_eq!(
+        closure_refs,
+        vec!["R2"],
+        "closure.type_args still references the old record name after rename \
+         (rewrite_record_name_in_registry missed ClosureData)"
+    );
+
+    let col = net.nodes[&collect_id]
+        .data
+        .as_any_ref()
+        .downcast_ref::<CollectData>()
+        .unwrap();
+    let mut collect_refs = Vec::new();
+    named_refs(&col.element_type, &mut collect_refs);
+    assert_eq!(
+        collect_refs,
+        vec!["R2"],
+        "collect.element_type still references the old record name after rename \
+         (rewrite_record_name_in_registry missed CollectData)"
+    );
+}
 
 #[cfg(debug_assertions)]
 #[test]
