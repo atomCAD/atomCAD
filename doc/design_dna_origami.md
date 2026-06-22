@@ -140,15 +140,49 @@ materializes atoms; everything upstream stays abstract.
 
 ## Node pipeline
 
-```
-[shape sources] ──► DnaLatticeShape ──► dna_solve ──► DnaOrigamiSolved ──┬─► dna_materialize ─► Crystal | Molecule
-   • dna_lattice_edit (editor)              ▲                            ├─► (staple list export)
-   • dna_lattice_fill (from Geometry)       │                            └─► (report / validity badge)
-   • dna_rect, … (future)            scaffold sequence (default M13)
+```mermaid
+flowchart LR
+    edit["dna_lattice_edit<br/>(hand editor)"]
+    fill["dna_lattice_fill<br/>(from Geometry)"]
+    rect["dna_rect, … (future)"]
+    scaffold[/"scaffold sequence<br/>(default M13)"/]
 
-   (DnaLatticeShape and DnaOrigamiSolved each render abstractly — footprint and
-    helix/strand views — without going through dna_materialize.)
+    shape{{"DnaLatticeShape"}}
+    solve(["dna_solve"])
+    solved{{"DnaOrigamiSolved"}}
+    materialize(["dna_materialize"])
+
+    atoms["Crystal | Molecule"]
+    export["staple list export<br/>(CSV, caDNAno/oxDNA…)"]
+    report["report /<br/>validity badge"]
+
+    footprint["footprint view"]
+    strands["helix / strand view"]
+
+    edit --> shape
+    fill --> shape
+    rect --> shape
+
+    shape --> solve
+    scaffold --> solve
+    solve --> solved
+    solve -.-> report
+
+    solved --> materialize --> atoms
+    solved --> export
+
+    shape -. "abstract display<br/>(no atoms)" .-> footprint
+    solved -. "abstract display<br/>(no atoms)" .-> strands
+
+    classDef datatype fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#111;
+    classDef proc fill:#f1f5f9,stroke:#475569,color:#111;
+    class shape,solved datatype;
+    class solve,materialize proc;
 ```
+
+(The two **data types** — `DnaLatticeShape` and `DnaOrigamiSolved` — are the highlighted
+hexagons; both render abstractly as their own views without going through
+`dna_materialize`. `dna_solve` and `dna_materialize` are the processing nodes.)
 
 - **Shape sources** produce a `DnaLatticeShape` — the hand editor first; procedural
   generators (fill a `Geometry` footprint, etc.) later.
