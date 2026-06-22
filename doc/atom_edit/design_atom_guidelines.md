@@ -33,7 +33,9 @@ decision (all additive later if a real need appears):
 
 A guideline is `{ origin: DVec3, direction: DVec3 }` (direction normalized),
 plus a current 1D **position** `t` (signed Å, measured from `origin` along
-`direction`). All of it is transient state on the node.
+`direction`) and a transient **`snapped`** mode bit (see *The "Snap to guideline"
+checkbox*). All of it is transient state on the node — the full stored shape is
+`Guideline { origin, direction, t, snapped }`.
 
 `t` is surfaced as a numeric **position field** in the panel and as a marker on
 the line in the viewport. It is the single control the user manipulates, and
@@ -179,8 +181,10 @@ line) → position it with the field or by dragging:
     the live projection `t` and the off-line distance.
 
 For the 1-atom *Directional* line the reference atom already lies on the line, so
-snapping is a no-op and the field becomes a pure "slide along the direction"
-control.
+checking Snap performs no *position* change (offset is already zero) and the field
+becomes a pure "slide along the direction" control. The snap bit still has its
+usual **drag** effect, though: checked → drag stays constrained to the line;
+unchecked → drag is free 3D.
 
 (If the selected atom is a base atom not yet in the diff, any move promotes it to
 the diff first — the existing promotion machinery, same as a normal drag.)
@@ -281,8 +285,12 @@ testing policy.
 
 The math, isolated from all interaction. No `AtomEditData` wiring yet.
 
-- New module `rust/src/structure_designer/nodes/atom_edit/guideline.rs` (or a
-  `crystolecule` geometry helper if it stays domain-free):
+- New module `rust/src/structure_designer/nodes/atom_edit/guideline.rs`. (Keep it
+  here: the `Guideline` struct carries interaction state — `t` / `snapped` — so it
+  is *not* domain-free. If the *pure* helpers below prove reusable, factor only
+  those into a `crystolecule` geometry util later; the struct stays in atom_edit.)
+  Register `mod guideline;` in `atom_edit/mod.rs` with a re-export, per the
+  module's backward-compat pattern.
   - `Guideline { origin: DVec3, direction: DVec3 (unit), t: f64, snapped: bool }`.
   - `from_three_atoms(a,b,c) -> Result<(origin,dir), GuidelineError>` — circumcenter
     + triangle normal, tolerance-based degeneracy.
@@ -295,8 +303,9 @@ The math, isolated from all interaction. No `AtomEditData` wiring yet.
     point; `None` when parallel.
 - `GuidelineError` (`thiserror`): `Collinear`, `Coincident`, `ZeroDirection`.
 
-**Tests** (`rust/tests/structure_designer/atom_edit/guideline_test.rs`, registered
-in `tests/structure_designer.rs`):
+**Tests** (`rust/tests/structure_designer/atom_edit_guideline_test.rs` — flat file
+matching the existing `atom_edit_*_test.rs` convention; register the module in
+`tests/structure_designer.rs`):
 - circumcenter of a known triangle (equilateral, right triangle) — origin
   equidistant from all three; normal ⟂ both edges.
 - midpoint + direction sign follows selection order (a→b vs b→a flips sign of `t`).
@@ -324,11 +333,16 @@ Wire the type into the node; no rendering, no drag, no Flutter.
     promote if base); OFF: no geometric change.
   - `place_atom_on_guideline()` — create a **free** atom (no bonds) at `point_at(t)`.
   - `clear_guideline()`.
-  - Reset hooks: clear `snapped` (and optionally the guideline) at the existing
-    selection-change, deselect, and **undo/redo** sites.
+  - Reset hooks (two distinct scopes, per *Modal lifecycle*):
+    - **Clear only `snapped`** on selection-change and on **undo/redo**. The
+      undo/redo reset is a call into the active node's guideline from the undo/redo
+      API path (after the command is applied), since global undo can move the atom
+      out from under the bit.
+    - **Clear the whole guideline** (`clear_guideline()`) on Cancel, Escape, and
+      node-deselect/leave. Nothing else clears the guideline itself.
 - Wrap mutating entry points in `with_atom_edit_undo`.
 
-**Tests** (`rust/tests/structure_designer/atom_edit/guideline_state_test.rs`):
+**Tests** (`rust/tests/structure_designer/atom_edit_guideline_state_test.rs`):
 - setup from 1/2/3-atom selection populates `guideline`; degenerate selection
   leaves it `None` and returns `Err`.
 - `place_atom_on_guideline` adds a pure-addition atom at the expected position with
@@ -366,8 +380,8 @@ Wire the type into the node; no rendering, no drag, no Flutter.
   minimization (atom frozen at its constrained position).
 - Not-snapped and multi-atom drags fall through to the existing `ScreenPlaneDragging`.
 
-**Tests** (`guideline_drag_test.rs` — exercise the projection + apply, not pointer
-plumbing):
+**Tests** (`rust/tests/structure_designer/atom_edit_guideline_drag_test.rs` —
+exercise the projection + apply, not pointer plumbing):
 - given a guideline and a cursor ray, the constrained drag target equals
   `point_at(closest_t_to_ray(ray))`; off-line component is zero after the move.
 - a not-snapped single-atom drag is unaffected (still free 3D).
@@ -404,5 +418,3 @@ roundtrip-style assertion only if a wrapper carries non-trivial mapping logic
 **Tests:** `flutter analyze` clean; optional smoke in `integration_test/`; manual
 walkthrough via `flutter run` (setup from 3 atoms → place several atoms → select
 one → snap → field-iterate → drag constrained → Cancel/Escape).
-</content>
-</invoke>
