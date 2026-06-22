@@ -23,6 +23,11 @@ decision (all additive later if a real need appears):
   afterwards with the Add Bond tool is trivial and would only pollute it.
 - No composable constraints, no Miller-normal direction gizmo, no expr-based
   generic placement.
+- **No draggable placement marker.** In Place sub-mode the marker is a read-only
+  visual driven by the numeric field; placement is numeric-field + Add-Atom-click
+  only. Dragging the marker handle along the line is additive later.
+- **No group-along-line.** Dragging ≥ 2 selected atoms is unconstrained (see
+  *Moving multiple selected atoms*).
 
 ## The guideline value
 
@@ -48,9 +53,15 @@ whose label and behavior depend on the current selection:
 | 1 atom | **Directional line** | `origin` = the atom; `direction` = a Vec3 the user enters. A direction field appears with a "Normalize" affordance. |
 
 The direction sign is deterministic (selection order, or the entered vector) so
-the `t` coordinate is reproducible. Degenerate input — 3 collinear atoms (no
-circumcircle), or a zero-length direction — is rejected with a SnackBar and no
-guideline is created.
+the `t` coordinate is reproducible. **Degenerate input is rejected (SnackBar, no
+guideline created), using tolerances rather than exact tests:**
+
+- 3 atoms whose circumradius is undefined *or numerically unstable* — i.e. the
+  triangle is collinear or nearly so (area below an epsilon, equivalently the
+  circumradius above a large cap). An exact collinearity test is insufficient.
+- 2 atoms that are coincident or near-coincident (the `atom₁→atom₂` direction is
+  below a length epsilon).
+- 1 atom with a zero-/near-zero-length entered direction.
 
 Once set up, the **selection is no longer relevant**: it may be changed or
 cleared freely. The line is a frozen snapshot.
@@ -95,9 +106,19 @@ When exactly one atom is selected, the card shows a **Snap to guideline**
 checkbox that represents whether the atom is locked onto the line. It is the
 *only* control that ever moves an atom onto the line.
 
-- **Auto-resets to OFF** whenever the selection changes (or on entering the
-  mode). A freshly selected atom is never moved just by clicking it — snapping
-  is always a deliberate action.
+The snapped state is a **transient mode bit** on the guideline (not serialized,
+not undoable). It cannot be derived purely from geometry — unchecking is a
+geometric no-op (the atom stays at offset 0), so a "snapped ⟺ offset≈0" rule
+could not distinguish *released-but-on-line* from *snapped*. Because the bit is
+independent of atom positions, it must be **explicitly invalidated** whenever an
+atom can move out from under it:
+
+- **Auto-resets to OFF** whenever the selection changes, on entering the mode,
+  **on any undo/redo**, and on leaving/deselecting the node. (The undo/redo reset
+  is load-bearing: undoing a snap-move restores the atom to its off-line position,
+  and a stale ON bit would otherwise silently re-constrain the next drag.) A
+  freshly selected atom is never moved just by clicking it — snapping is always a
+  deliberate action.
 - **Check (OFF→ON):** snaps the atom onto the line — sets its perpendicular
   offset to zero, moving it to `origin + t · direction` at its current
   projection `t`. From then on, dragging it is **constrained to the line**.
@@ -136,9 +157,10 @@ In **Place sub-mode**, both paths create a **free atom (no bonds)** of the
 panel-selected element, as a single undo step. The guideline **stays active**
 afterward, so several atoms can be placed in sequence.
 
-- **Numeric (exact, reproducible):** set `t` in the position field (or drag the
-  placement marker along the line), then click **Place atom**. The atom is
-  created at `origin + t · direction`.
+- **Numeric (exact, reproducible):** set `t` in the position field, then click
+  **Place atom**. The atom is created at `origin + t · direction`. (The placement
+  marker is a non-draggable visual driven by the field; dragging the marker along
+  the line is **out of scope for v1** — see *Out of scope*.)
 - **Viewport (quick, with the Add Atom tool):** click anywhere → the atom is
   placed at the point on the line closest to the click ray (snap-to-line), and
   the field updates to that `t`.
@@ -186,8 +208,9 @@ can be added later if it proves necessary.
 
 - Normal **selection** still works while modal — click an atom to select it
   (needed before a single-atom constrained drag), click empty space to
-  deselect. The cursor dot has **hit priority** over atoms so it stays
-  grabbable. Selection changes never clear the guideline.
+  deselect. Selection changes never clear the guideline. (The placement marker is
+  not interactive in v1, so atom hit-testing is unchanged — no dot hit-priority
+  rule is needed.)
 - The **Add Bond** tool behaves normally; it ignores the guideline.
 
 ## Summary of cases
@@ -213,20 +236,173 @@ can be added later if it proves necessary.
 Kept intentionally small; reuses existing machinery:
 
 - **State:** one transient (non-serialized) `Option<Guideline>` field on
-  `AtomEditData`, alongside `selection` / `active_tool`. No undo plumbing.
-- **Geometry:** circumcenter / midpoint / normal helpers; closest-point-on-line
-  (ray and point projection).
-- **Rendering:** one decorator visual (line + cursor dot), tessellated in the
-  `eval(decorate=true)` phase next to the existing `GuidePlacementVisuals` —
-  same pattern as the wireframe sphere/ring guides.
+  `AtomEditData`, alongside `selection` / `active_tool`. The `Guideline` carries
+  `{ origin, direction, t, snapped: bool }`. No undo plumbing for the guideline
+  itself; atom *mutations* it triggers reuse the existing `with_atom_edit_undo`
+  path. The `snapped` bit resets on selection change / undo-redo / node-deselect
+  (see *The "Snap to guideline" checkbox*).
+- **Geometry:** circumcenter / midpoint / triangle-normal helpers (tolerance-based
+  degeneracy); point→line decomposition (`t` + perpendicular offset); ray↔line
+  closest point (with a parallel-ray fallback that ignores the click). These are
+  **pure functions** and carry the bulk of the test coverage.
+- **Rendering:** one decorator visual `GuidelineVisuals { origin, direction,
+  marker_t, ... }` on `AtomicStructureDecorator`, populated in
+  `eval(decorate=true)` (applied to **both** the result and diff outputs, mirroring
+  `apply_guided_placement_decoration`) and tessellated in `atomic_tessellator.rs`
+  next to the existing `GuidePlacementVisuals` (line cylinder + marker dot in a
+  distinct guide color).
+- **Refresh plumbing:** panel-driven edits (`t`, snap, element) have no pointer
+  event, so the model→API path **must explicitly request a redecorate refresh**
+  (`Lightweight`/`Partial`) after mutating transient state — `get_*_mut_transient`
+  does not mark the node changed, so a naive reuse leaves a stale viewport.
 - **Drag:** a single-atom, line-constrained branch in the Default tool's drag
-  (a 1D reduction of the existing `ScreenPlaneDragging` projection). Multi-atom
-  drag is untouched.
+  (a 1D reduction of the existing `ScreenPlaneDragging` projection), taken only
+  when exactly one atom is selected and `snapped == true`. Multi-atom and
+  not-snapped drag are untouched. (No marker-handle drag in v1.)
 - **API:** `set_guideline_from_selection`, `set_guideline_position`,
-  `place_atom_on_guideline`, `clear_guideline` (+ a viewport snap-place path for
-  the Add Atom tool).
+  `set_guideline_snapped`, `place_atom_on_guideline`, `clear_guideline` (+ a
+  viewport snap-place path for the Add Atom tool). Thin wrappers over `AtomEditData`
+  methods; tests target the core methods, not the wrappers.
 - **Flutter:** one "Guideline" card in `atom_edit_editor.dart`; Escape handling
   and snap dispatch in `structure_designer_viewport.dart` (mirrors the existing
-  guided-placement dispatcher).
+  guided-placement dispatcher). **Escape precedence:** if Add-Atom guided
+  placement is active, Escape cancels that first; a second Escape clears the
+  guideline.
+
+## Phased implementation plan
+
+Each phase is independently committable, ends green (`cargo test`, `cargo clippy`,
+`flutter analyze`), and lands its own tests. Tests live in `rust/tests/...` (never
+inline `#[cfg(test)]`); the geometry and state-transition phases carry the real
+coverage, since API wrappers, tessellation, and Flutter are exempt per the
+testing policy.
+
+### Phase 1 — Pure geometry + `Guideline` type (foundation)
+
+The math, isolated from all interaction. No `AtomEditData` wiring yet.
+
+- New module `rust/src/structure_designer/nodes/atom_edit/guideline.rs` (or a
+  `crystolecule` geometry helper if it stays domain-free):
+  - `Guideline { origin: DVec3, direction: DVec3 (unit), t: f64, snapped: bool }`.
+  - `from_three_atoms(a,b,c) -> Result<(origin,dir), GuidelineError>` — circumcenter
+    + triangle normal, tolerance-based degeneracy.
+  - `from_two_atoms(a,b) -> Result<…>` — midpoint + normalized `a→b`.
+  - `from_one_atom(p, dir) -> Result<…>` — origin = atom, normalized `dir`.
+  - `decompose(point) -> (t, offset_vec)` — `t = (point-origin)·dir`,
+    `offset = (point-origin) - t·dir`.
+  - `point_at(t) -> DVec3` = `origin + t·dir`.
+  - `closest_t_to_ray(ray_origin, ray_dir) -> Option<f64>` — ray↔line closest
+    point; `None` when parallel.
+- `GuidelineError` (`thiserror`): `Collinear`, `Coincident`, `ZeroDirection`.
+
+**Tests** (`rust/tests/structure_designer/atom_edit/guideline_test.rs`, registered
+in `tests/structure_designer.rs`):
+- circumcenter of a known triangle (equilateral, right triangle) — origin
+  equidistant from all three; normal ⟂ both edges.
+- midpoint + direction sign follows selection order (a→b vs b→a flips sign of `t`).
+- one-atom: origin == atom, direction normalized.
+- **degeneracy:** exact-collinear, *near*-collinear (tiny area → `Collinear`),
+  coincident pair (→ `Coincident`), zero/near-zero entered direction
+  (→ `ZeroDirection`).
+- `decompose`/`point_at` round-trip: `decompose(point_at(t))` recovers `t`,
+  offset ≈ 0; off-line point recovers correct `t` and offset length == distance.
+- `closest_t_to_ray`: a ray crossing the line returns the foot; parallel ray → `None`.
+
+### Phase 2 — Transient state on `AtomEditData` + core mutations
+
+Wire the type into the node; no rendering, no drag, no Flutter.
+
+- Add `guideline: Option<Guideline>` to `AtomEditData` transient state (not
+  serialized; mirror `selection`/`active_tool`; handle in `clone_box`).
+- Methods:
+  - `set_guideline_from_selection()` — reads current selection (1/2/3 atoms),
+    builds via Phase-1 helpers, returns `Result` for SnackBar surfacing.
+  - `set_guideline_position(t)` — updates `t`; if a single atom is selected, moves
+    it: snapped → onto line (`point_at(t)`); not-snapped → preserve current offset
+    (`point_at(t) + offset`). Uses recorded mutations + promotion for base atoms.
+  - `set_guideline_snapped(bool)` — ON: zero the selected atom's offset (one move,
+    promote if base); OFF: no geometric change.
+  - `place_atom_on_guideline()` — create a **free** atom (no bonds) at `point_at(t)`.
+  - `clear_guideline()`.
+  - Reset hooks: clear `snapped` (and optionally the guideline) at the existing
+    selection-change, deselect, and **undo/redo** sites.
+- Wrap mutating entry points in `with_atom_edit_undo`.
+
+**Tests** (`rust/tests/structure_designer/atom_edit/guideline_state_test.rs`):
+- setup from 1/2/3-atom selection populates `guideline`; degenerate selection
+  leaves it `None` and returns `Err`.
+- `place_atom_on_guideline` adds a pure-addition atom at the expected position with
+  **zero bonds** and **no anchor** (PureAddition per the anchor invariant).
+- `set_guideline_position` snapped: atom lands exactly on the line (offset ≈ 0).
+- `set_guideline_position` not-snapped: atom's perpendicular offset is preserved,
+  `t` changes (moves parallel to the line).
+- `set_guideline_snapped(true)` zeroes offset and promotes a base atom to the diff
+  (anchor set once); `set_guideline_snapped(false)` is a geometric no-op.
+- **undo/redo:** placing then undo removes the atom; a snap-move then undo restores
+  the off-line position **and** the `snapped` bit is reset OFF (the issue-#1 guard).
+- guideline survives a Default↔AddAtom tool switch (not stored in `active_tool`).
+
+### Phase 3 — Rendering (decorator visual + tessellation)
+
+- Add `GuidelineVisuals` to `AtomicStructureDecorator` + `guideline_visuals:
+  Option<…>` field (default `None`).
+- Populate it in `eval(decorate=true)` for both result and diff outputs from
+  `self.guideline` (new `apply_guideline_decoration` helper alongside
+  `apply_guided_placement_decoration`).
+- Tessellate in `atomic_tessellator.rs`: a thin cylinder for the line + a marker
+  dot at `point_at(marker_t)` in a distinct guide color.
+
+**Tests** (logic only — tessellation/GPU is exempt):
+- `eval(decorate=true)` with a guideline set populates `decorator.guideline_visuals`
+  with the right origin/direction/marker; `decorate=false` leaves it `None`;
+  no guideline → `None`.
+
+### Phase 4 — Default-tool constrained drag
+
+- In `default_tool.rs`, when starting a drag with exactly one atom selected and
+  `guideline.snapped`, enter a line-constrained drag: project the cursor ray onto
+  the guideline (`closest_t_to_ray`) and move the atom to `point_at(t)`; update the
+  live `t`. Reuse drag coalescing (`begin/end_atom_edit_drag`) and continuous
+  minimization (atom frozen at its constrained position).
+- Not-snapped and multi-atom drags fall through to the existing `ScreenPlaneDragging`.
+
+**Tests** (`guideline_drag_test.rs` — exercise the projection + apply, not pointer
+plumbing):
+- given a guideline and a cursor ray, the constrained drag target equals
+  `point_at(closest_t_to_ray(ray))`; off-line component is zero after the move.
+- a not-snapped single-atom drag is unaffected (still free 3D).
+- a ≥2-atom drag is unaffected.
+
+### Phase 5 — API layer + FFI
+
+- `rust/src/api/structure_designer/atom_edit_api.rs`: `set_guideline_from_selection`,
+  `set_guideline_position`, `set_guideline_snapped`, `place_atom_on_guideline`,
+  `clear_guideline`, plus a viewport snap-place path for the Add-Atom tool (click →
+  `closest_t_to_ray` → place). Each follows the three-phase borrow pattern and
+  requests the redecorate refresh after mutating transient state. Return a small
+  view struct (`Option<APIGuideline { origin, direction, t, off_line_distance,
+  snapped, sub_mode }>`) for the panel.
+- `flutter_rust_bridge_codegen generate`.
+
+**Tests:** API wrappers are exempt (thin); coverage is the Phase 1/2/4 core. Add a
+roundtrip-style assertion only if a wrapper carries non-trivial mapping logic
+(e.g. selection-count → sub-mode).
+
+### Phase 6 — Flutter UI
+
+- "Guideline" card in `atom_edit_editor.dart`: context-sensitive setup button
+  (label from selection count), 1D position field (two-way bound, labeled per
+  sub-mode), `off-line: X Å` readout, Snap checkbox (Move sub-mode only), element
+  selector, Place button (Place sub-mode only), Cancel. SnackBar on degenerate
+  setup.
+- `structure_designer_viewport.dart`: Escape handling (precedence: guided
+  placement → guideline) and Add-Atom snap-place dispatch, mirroring the existing
+  guided-placement dispatcher.
+- Model methods on `StructureDesignerModel` forward `propertyEditorScopeChain` and
+  call `refreshFromKernel()` + `notifyListeners()`.
+
+**Tests:** `flutter analyze` clean; optional smoke in `integration_test/`; manual
+walkthrough via `flutter run` (setup from 3 atoms → place several atoms → select
+one → snap → field-iterate → drag constrained → Cancel/Escape).
 </content>
 </invoke>
