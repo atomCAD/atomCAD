@@ -15,8 +15,11 @@ needs **no folding prediction and no machine learning** to produce a complete,
 manufacturable result:
 
 - **Geometry is canonical.** A DNA double helix is the same regular shape regardless
-  of sequence (~10.5 bp/turn, 0.34 nm rise). Once we know which helix a base sits on
-  and its index along that helix, its 3D position is pure arithmetic.
+  of sequence (~0.34 nm rise per base; ~10.5 bp/turn). Once we know which helix a base
+  sits on and its index along that helix, its 3D position is pure arithmetic. (The exact
+  twist density and crossover spacing are lattice-dependent constants — honeycomb uses
+  10.5 bp/turn with crossovers every 7 bases, square uses 10.67 bp/turn every 8 bases;
+  the latter is why square-lattice bundles carry a known residual global twist.)
 - **Sequence is computed, not designed.** The scaffold sequence is fixed (a known
   virus genome). Each staple sequence is simply the Watson–Crick complement of the
   scaffold bases it covers.
@@ -64,8 +67,10 @@ nodes and edited in a dedicated **editor node** (in the spirit of `atom_edit`): 
 Two validity rules the editor should surface (not hard constraints on the type, but
 feedback):
 
-- **Neighbor overlap** — two adjacent "on" cells must overlap enough in z to host a
-  crossover, or they aren't actually connected.
+- **Neighbor overlap** — two adjacent "on" cells must overlap in z to host a crossover.
+  Note this is necessary but not sufficient: crossovers can only land at the discrete,
+  lattice-phase-aligned z positions where the two backbones come into contact (the
+  7/8-base spacing above), so the overlap must actually *contain* such a site.
 - **Length budget** — the total length of all helices can't exceed the scaffold
   length (~7,249 bases for M13). The editor should track "bases used / budget."
 
@@ -159,8 +164,12 @@ materializes atoms; everything upstream stays abstract.
 ## Why this is a good base
 
 - It mirrors the proven caDNAno decomposition (author a shape, solve a routing).
-- The hard parts are **discrete and deterministic** — no solver, no ML, exact and
-  testable.
+- The work is **discrete and combinatorial — no physics solver, no ML.** Two distinct
+  parts: geometry and sequence are *exact arithmetic* (the real win over protein
+  folding), while scaffold routing is a *graph search* — trivial for solid rectangles
+  (boustrophedon), but a genuine combinatorial problem that can need search or be
+  impossible for shapes with holes (hence the `dna_solve` report). Both are
+  deterministic and testable; only the second is algorithmically hard.
 - It reuses existing atomCAD infrastructure: lattice/tiling for cross-sections,
   motif templates for base→atoms, the renderer for display, the `atom_edit`-style
   node-with-editor pattern, and the report-badge pattern.
