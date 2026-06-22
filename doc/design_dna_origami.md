@@ -38,6 +38,8 @@ We target the mainstream **lattice-based** style only:
 - Helix cross-sections sit on a fixed **2D lattice** (square or honeycomb).
 - Each helix is a straight helical extrusion along z.
 
+![Helix cross-sections on a square vs honeycomb 2D lattice, viewed down the helix axis](img/dna_lattice_cross_section.svg)
+
 Explicitly **out of scope for now**: wireframe/mesh origami (helices along polyhedron
 edges, not parallel) and intentionally curved/twisted bundles. Both can be added later
 without disturbing this model.
@@ -95,6 +97,8 @@ What it does:
    crossovers between adjacent helices.
 3. **Assign sequences** — scaffold from the input; each staple = complement of the
    scaffold bases it covers.
+
+![Side view of scaffold routing: one continuous scaffold threading every helix in a boustrophedon, staples crossing between adjacent helices, with crossovers landing only at fixed-spacing sites](img/dna_scaffold_routing.svg)
 
 ### 3. `DnaOrigamiSolved` — the solved design
 

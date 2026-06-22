@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 440" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="720" height="440" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="360" y="26" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">
+    Helix cross-sections on a 2D lattice (looking down the helix axis, z)
+  </text>
+
+  <!-- divider -->
+  <line x1="360" y1="48" x2="360" y2="378" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- ===================== PANEL A: SQUARE ===================== -->
+  <text x="170" y="62" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">Square lattice</text>
+  <text x="170" y="81" text-anchor="middle" font-size="12" fill="#475569">4 neighbors &#183; 10.67 bp/turn &#183; crossover every 8 bp</text>
+
+  <!-- lattice bonds (grey) -->
+  <g stroke="#cbd5e1" stroke-width="6" stroke-linecap="round">
+    <line x1="95" y1="165" x2="245" y2="165"/>
+    <line x1="95" y1="230" x2="245" y2="230"/>
+    <line x1="95" y1="295" x2="245" y2="295"/>
+    <line x1="95" y1="165" x2="95" y2="295"/>
+    <line x1="170" y1="165" x2="170" y2="295"/>
+    <line x1="245" y1="165" x2="245" y2="295"/>
+  </g>
+  <!-- central crossover directions (bold) -->
+  <g stroke="#b45309" stroke-width="6" stroke-linecap="round">
+    <line x1="170" y1="230" x2="170" y2="165"/>
+    <line x1="170" y1="230" x2="170" y2="295"/>
+    <line x1="170" y1="230" x2="95" y2="230"/>
+    <line x1="170" y1="230" x2="245" y2="230"/>
+  </g>
+  <!-- helix circles -->
+  <g fill="#dbeafe" stroke="#2563eb" stroke-width="2">
+    <circle cx="95" cy="165" r="22"/><circle cx="170" cy="165" r="22"/><circle cx="245" cy="165" r="22"/>
+    <circle cx="95" cy="230" r="22"/><circle cx="245" cy="230" r="22"/>
+    <circle cx="95" cy="295" r="22"/><circle cx="170" cy="295" r="22"/><circle cx="245" cy="295" r="22"/>
+  </g>
+  <!-- central highlighted -->
+  <circle cx="170" cy="230" r="22" fill="#fcd34d" stroke="#b45309" stroke-width="3"/>
+  <text x="170" y="352" text-anchor="middle" font-size="12" fill="#0f172a">central helix + its <tspan font-weight="700">4</tspan> crossover neighbors</text>
+
+  <!-- ===================== PANEL B: HONEYCOMB ===================== -->
+  <text x="525" y="62" text-anchor="middle" font-size="15" font-weight="700" fill="#0f172a">Honeycomb lattice</text>
+  <text x="525" y="81" text-anchor="middle" font-size="12" fill="#475569">3 neighbors &#183; 10.5 bp/turn &#183; crossover every 7 bp</text>
+
+  <!-- faint continuation bonds -->
+  <g stroke="#cbd5e1" stroke-width="5" stroke-linecap="round">
+    <line x1="525" y1="165" x2="473" y2="135"/>
+    <line x1="525" y1="165" x2="577" y2="135"/>
+    <line x1="473" y1="255" x2="421" y2="225"/>
+    <line x1="473" y1="255" x2="473" y2="315"/>
+    <line x1="577" y1="255" x2="629" y2="225"/>
+    <line x1="577" y1="255" x2="577" y2="315"/>
+  </g>
+  <!-- central crossover directions (bold) -->
+  <g stroke="#b45309" stroke-width="6" stroke-linecap="round">
+    <line x1="525" y1="225" x2="525" y2="165"/>
+    <line x1="525" y1="225" x2="473" y2="255"/>
+    <line x1="525" y1="225" x2="577" y2="255"/>
+  </g>
+  <!-- helix circles -->
+  <g fill="#dbeafe" stroke="#2563eb" stroke-width="2">
+    <circle cx="525" cy="165" r="18"/>
+    <circle cx="473" cy="255" r="18"/>
+    <circle cx="577" cy="255" r="18"/>
+    <circle cx="473" cy="135" r="18"/><circle cx="577" cy="135" r="18"/>
+    <circle cx="421" cy="225" r="18"/><circle cx="473" cy="315" r="18"/>
+    <circle cx="629" cy="225" r="18"/><circle cx="577" cy="315" r="18"/>
+  </g>
+  <!-- central highlighted -->
+  <circle cx="525" cy="225" r="18" fill="#fcd34d" stroke="#b45309" stroke-width="3"/>
+  <text x="525" y="352" text-anchor="middle" font-size="12" fill="#0f172a">central helix + its <tspan font-weight="700">3</tspan> crossover neighbors</text>
+
+  <!-- footer -->
+  <text x="360" y="404" text-anchor="middle" font-size="12" fill="#475569">
+    Each circle = one double-helix cross-section. Bold = crossover directions to nearest neighbors;
+  </text>
+  <text x="360" y="422" text-anchor="middle" font-size="12" fill="#475569">
+    neighbor count (4 vs 3) and twist density differ by lattice.
+  </text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 440" font-family="-apple-system, Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="780" height="440" fill="#ffffff"/>
+
+  <!-- title -->
+  <text x="390" y="26" text-anchor="middle" font-size="17" font-weight="700" fill="#0f172a">
+    Scaffold routing (side view): one scaffold, many staples, crossovers at fixed sites
+  </text>
+
+  <!-- crossover site label -->
+  <text x="400" y="60" text-anchor="middle" font-size="12" fill="#475569">crossover sites — fixed spacing (~7&#8211;8 bp)</text>
+
+  <!-- crossover site dashed verticals -->
+  <g stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="4 4">
+    <line x1="160" y1="70" x2="160" y2="350"/>
+    <line x1="240" y1="70" x2="240" y2="350"/>
+    <line x1="320" y1="70" x2="320" y2="350"/>
+    <line x1="400" y1="70" x2="400" y2="350"/>
+    <line x1="480" y1="70" x2="480" y2="350"/>
+    <line x1="560" y1="70" x2="560" y2="350"/>
+    <line x1="640" y1="70" x2="640" y2="350"/>
+  </g>
+
+  <!-- helix bands -->
+  <g fill="#eef2f7" stroke="#cbd5e1" stroke-width="1.5">
+    <rect x="120" y="95"  width="580" height="40" rx="8"/>
+    <rect x="120" y="195" width="580" height="40" rx="8"/>
+    <rect x="120" y="295" width="580" height="40" rx="8"/>
+  </g>
+  <g font-size="12" fill="#475569" text-anchor="end">
+    <text x="108" y="119">helix 0</text>
+    <text x="108" y="219">helix 1</text>
+    <text x="108" y="319">helix 2</text>
+  </g>
+
+  <!-- staples (orange) : complementary strand, each crosses at one site -->
+  <g fill="none" stroke="#ea580c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="160,131 240,131 240,231 340,231"/>
+    <polyline points="340,231 400,231 400,331 500,331"/>
+    <polyline points="480,131 560,131 560,231 660,231"/>
+  </g>
+
+  <!-- scaffold (blue): single continuous boustrophedon down the centre of each band -->
+  <polyline points="140,115 640,115 640,215 160,215 160,315 660,315"
+            fill="none" stroke="#2563eb" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- legend -->
+  <g font-size="12.5" fill="#0f172a">
+    <line x1="130" y1="372" x2="170" y2="372" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+    <text x="180" y="376">scaffold — one continuous strand threading every helix (up/down boustrophedon)</text>
+
+    <line x1="130" y1="394" x2="170" y2="394" stroke="#ea580c" stroke-width="3" stroke-linecap="round"/>
+    <text x="180" y="398">staples — short complementary strands; each crosses between adjacent helices</text>
+
+    <line x1="130" y1="416" x2="170" y2="416" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="4 4"/>
+    <text x="180" y="420">crossover sites — crossovers land only here; z-overlap alone is not enough</text>
+  </g>
+</svg>
