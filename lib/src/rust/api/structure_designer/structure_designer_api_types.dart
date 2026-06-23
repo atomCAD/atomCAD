@@ -233,6 +233,10 @@ class APIAtomEditData {
   final bool hasSelectedBonds;
   final int selectedBondCount;
 
+  /// Number of currently selected atoms (base + diff). Drives the guideline setup
+  /// button label (1 → Directional, 2 → Center, 3 → Equidistant line; #368).
+  final int selectedAtomCount;
+
   /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
   final int? selectedBondOrder;
   final bool hasSelection;
@@ -273,6 +277,7 @@ class APIAtomEditData {
     required this.hasSelectedAtoms,
     required this.hasSelectedBonds,
     required this.selectedBondCount,
+    required this.selectedAtomCount,
     this.selectedBondOrder,
     required this.hasSelection,
     this.selectionTransform,
@@ -302,6 +307,7 @@ class APIAtomEditData {
       hasSelectedAtoms.hashCode ^
       hasSelectedBonds.hashCode ^
       selectedBondCount.hashCode ^
+      selectedAtomCount.hashCode ^
       selectedBondOrder.hashCode ^
       hasSelection.hashCode ^
       selectionTransform.hashCode ^
@@ -333,6 +339,7 @@ class APIAtomEditData {
           hasSelectedAtoms == other.hasSelectedAtoms &&
           hasSelectedBonds == other.hasSelectedBonds &&
           selectedBondCount == other.selectedBondCount &&
+          selectedAtomCount == other.selectedAtomCount &&
           selectedBondOrder == other.selectedBondOrder &&
           hasSelection == other.hasSelection &&
           selectionTransform == other.selectionTransform &&

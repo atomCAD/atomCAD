@@ -13443,8 +13443,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIAtomEditData dco_decode_api_atom_edit_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 25)
-      throw Exception('unexpected arr length: expect 25 but see ${arr.length}');
+    if (arr.length != 26)
+      throw Exception('unexpected arr length: expect 26 but see ${arr.length}');
     return APIAtomEditData(
       activeTool: dco_decode_api_atom_edit_tool(arr[0]),
       bondToolLastAtomId: dco_decode_opt_box_autoadd_u_32(arr[1]),
@@ -13454,23 +13454,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       hasSelectedAtoms: dco_decode_bool(arr[5]),
       hasSelectedBonds: dco_decode_bool(arr[6]),
       selectedBondCount: dco_decode_u_32(arr[7]),
-      selectedBondOrder: dco_decode_opt_box_autoadd_u_8(arr[8]),
-      hasSelection: dco_decode_bool(arr[9]),
-      selectionTransform: dco_decode_opt_box_autoadd_api_transform(arr[10]),
-      outputDiff: dco_decode_bool(arr[11]),
-      showAnchorArrows: dco_decode_bool(arr[12]),
-      includeBaseBondsInDiff: dco_decode_bool(arr[13]),
-      tolerance: dco_decode_f_64(arr[14]),
-      errorOnStaleEntries: dco_decode_bool(arr[15]),
-      showGadget: dco_decode_bool(arr[16]),
-      diffStats: dco_decode_api_diff_stats(arr[17]),
-      measurement: dco_decode_opt_box_autoadd_api_measurement(arr[18]),
-      lastSelectedResultAtomId: dco_decode_opt_box_autoadd_u_32(arr[19]),
-      hasFrozenAtoms: dco_decode_bool(arr[20]),
-      continuousMinimization: dco_decode_bool(arr[21]),
-      isMotifMode: dco_decode_bool(arr[22]),
-      parameterElements: dco_decode_list_api_parameter_element(arr[23]),
-      neighborDepth: dco_decode_f_64(arr[24]),
+      selectedAtomCount: dco_decode_u_32(arr[8]),
+      selectedBondOrder: dco_decode_opt_box_autoadd_u_8(arr[9]),
+      hasSelection: dco_decode_bool(arr[10]),
+      selectionTransform: dco_decode_opt_box_autoadd_api_transform(arr[11]),
+      outputDiff: dco_decode_bool(arr[12]),
+      showAnchorArrows: dco_decode_bool(arr[13]),
+      includeBaseBondsInDiff: dco_decode_bool(arr[14]),
+      tolerance: dco_decode_f_64(arr[15]),
+      errorOnStaleEntries: dco_decode_bool(arr[16]),
+      showGadget: dco_decode_bool(arr[17]),
+      diffStats: dco_decode_api_diff_stats(arr[18]),
+      measurement: dco_decode_opt_box_autoadd_api_measurement(arr[19]),
+      lastSelectedResultAtomId: dco_decode_opt_box_autoadd_u_32(arr[20]),
+      hasFrozenAtoms: dco_decode_bool(arr[21]),
+      continuousMinimization: dco_decode_bool(arr[22]),
+      isMotifMode: dco_decode_bool(arr[23]),
+      parameterElements: dco_decode_list_api_parameter_element(arr[24]),
+      neighborDepth: dco_decode_f_64(arr[25]),
     );
   }
 
@@ -17181,6 +17182,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_hasSelectedAtoms = sse_decode_bool(deserializer);
     var var_hasSelectedBonds = sse_decode_bool(deserializer);
     var var_selectedBondCount = sse_decode_u_32(deserializer);
+    var var_selectedAtomCount = sse_decode_u_32(deserializer);
     var var_selectedBondOrder = sse_decode_opt_box_autoadd_u_8(deserializer);
     var var_hasSelection = sse_decode_bool(deserializer);
     var var_selectionTransform =
@@ -17211,6 +17213,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         hasSelectedAtoms: var_hasSelectedAtoms,
         hasSelectedBonds: var_hasSelectedBonds,
         selectedBondCount: var_selectedBondCount,
+        selectedAtomCount: var_selectedAtomCount,
         selectedBondOrder: var_selectedBondOrder,
         hasSelection: var_hasSelection,
         selectionTransform: var_selectionTransform,
@@ -21586,6 +21589,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.hasSelectedAtoms, serializer);
     sse_encode_bool(self.hasSelectedBonds, serializer);
     sse_encode_u_32(self.selectedBondCount, serializer);
+    sse_encode_u_32(self.selectedAtomCount, serializer);
     sse_encode_opt_box_autoadd_u_8(self.selectedBondOrder, serializer);
     sse_encode_bool(self.hasSelection, serializer);
     sse_encode_opt_box_autoadd_api_transform(

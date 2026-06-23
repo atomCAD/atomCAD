@@ -3873,6 +3873,11 @@ pub fn get_atom_edit_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomE
                 // Compute selected bond info
                 let selected_bond_count = atom_edit_data.selection.selected_bonds.len() as u32;
                 let has_selected_bonds = selected_bond_count > 0;
+
+                // Number of selected atoms (base + diff) for the guideline setup button.
+                let selected_atom_count = (atom_edit_data.selection.selected_base_atoms.len()
+                    + atom_edit_data.selection.selected_diff_atoms.len())
+                    as u32;
                 let selected_bond_order = if has_selected_bonds {
                     // Look up bond orders from the result structure
                     let mut unique_order: Option<u8> = None;
@@ -3972,6 +3977,7 @@ pub fn get_atom_edit_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomE
                     has_selected_atoms,
                     has_selected_bonds,
                     selected_bond_count,
+                    selected_atom_count,
                     selected_bond_order,
                     has_selection,
                     selection_transform: atom_edit_data

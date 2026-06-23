@@ -94,6 +94,29 @@ A **Modify** button on the measurement card opens a dialog where you can enter a
 
 **Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it. The tooltip also reports the atom's hybridization: when an explicit override is set the line reads e.g. *Hybridization: sp2 (override)*; when hybridization is left on auto the line shows the auto-inferred value in parentheses, e.g. *Hybridization: auto (sp3)*. For atoms whose displayed atomic number is a non-physical parameter element, an *Effective element: …* line shows the real element used for simulation, guided placement, and passivation (see the parameter element note in the [`materialize`](./nodes/atomic.md#materialize) section).
 
+### Placement guidelines
+
+A **guideline** is a temporary line in 3D space that constrains atom placement to positions that are hard to hit by free clicking — for example the ad-atom site of a Si(111) √3×√3 R30° reconstruction, which sits equidistant from three surface atoms. The **Guideline** card appears in the atom editor while the Default or Add Atom tool is active.
+
+A guideline is **transient**: it is *not* saved to the project file and is *not* part of undo/redo. It is a frozen snapshot — it does not move if the atoms it was derived from later move. It is cleared by the **Cancel** button, the `Escape` key, or leaving/deselecting the node.
+
+**Setting one up** is selection-driven; the card shows one button whose label depends on how many atoms are selected:
+
+- **3 atoms → Equidistant line:** runs through the circumcenter of the triangle, perpendicular to it. Every point on the line is equidistant from all three atoms.
+- **2 atoms → Center line:** passes through the midpoint, directed from the first to the second selected atom.
+- **1 atom → Directional line:** originates at the atom; you enter the direction as a vector (a **Normalize** button rescales it to unit length).
+
+Degenerate input (three near-collinear atoms, two coincident atoms, or a zero-length direction) is rejected with a notification and no guideline is created. Once set up, the selection no longer matters — you can change or clear it freely.
+
+The card shows a **position field** (the signed distance `t` in Å along the line from its origin) and an **off-line** readout (the perpendicular distance of the selected atom from the line). What you do with it depends on the selection:
+
+- **Place sub-mode (0 atoms selected):** the field positions a marker for the *next new* atom. Click **Place atom** to create a free atom (no bonds) of the selected element at that exact position, or — with the Add Atom tool — just click in the viewport to drop one at the point on the line closest to the click. The guideline stays active so you can place several atoms in a row.
+- **Move sub-mode (exactly 1 atom selected):** the field and a **Snap to guideline** checkbox operate on that atom. Checking *Snap* moves the atom onto the line; from then on dragging it is constrained to slide along the line, and editing the field slides it to an exact `t`. Unchecking releases it (it stays put) so dragging is free 3D motion again; editing the field then moves it parallel to the line, preserving its perpendicular offset.
+
+Placing atoms via a guideline never creates bonds — use the Add Bond tool afterward if you need them. With two or more atoms selected, dragging is unconstrained as usual.
+
+If a guided placement is in progress when you press `Escape`, the first `Escape` cancels that and a second clears the guideline.
+
 ### Rim highlights
 
 The atom editor uses colored rim highlights to convey atom state while preserving element colors:

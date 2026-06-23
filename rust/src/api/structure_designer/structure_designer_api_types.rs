@@ -712,6 +712,9 @@ pub struct APIAtomEditData {
     pub has_selected_atoms: bool,
     pub has_selected_bonds: bool,
     pub selected_bond_count: u32,
+    /// Number of currently selected atoms (base + diff). Drives the guideline setup
+    /// button label (1 → Directional, 2 → Center, 3 → Equidistant line; #368).
+    pub selected_atom_count: u32,
     /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
     pub selected_bond_order: Option<u8>,
     pub has_selection: bool,

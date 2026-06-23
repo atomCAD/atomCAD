@@ -1791,6 +1791,57 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  // ===== PLACEMENT GUIDELINE (issue #368) =====
+
+  /// Build the guideline from the current selection (1/2/3 atoms). The entered
+  /// direction is only used for the 1-atom directional line. Returns an empty
+  /// string on success or an error message (for a SnackBar) on degenerate input.
+  String atomEditSetGuidelineFromSelection(APIVec3 enteredDirection) {
+    final error = atom_edit_api.atomEditSetGuidelineFromSelection(
+        enteredDirection: enteredDirection);
+    refreshFromKernel();
+    notifyListeners();
+    return error;
+  }
+
+  void atomEditSetGuidelinePosition(double t) {
+    atom_edit_api.atomEditSetGuidelinePosition(t: t);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  void atomEditSetGuidelineSnapped(bool snapped) {
+    atom_edit_api.atomEditSetGuidelineSnapped(snapped: snapped);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  bool atomEditPlaceAtomOnGuideline() {
+    final placed = atom_edit_api.atomEditPlaceAtomOnGuideline();
+    refreshFromKernel();
+    notifyListeners();
+    return placed;
+  }
+
+  bool atomEditPlaceAtomOnGuidelineByRay(
+    vector_math.Vector3 rayStart,
+    vector_math.Vector3 rayDir,
+  ) {
+    final placed = atom_edit_api.atomEditPlaceAtomOnGuidelineByRay(
+      rayStart: vector3ToApiVec3(rayStart),
+      rayDir: vector3ToApiVec3(rayDir),
+    );
+    refreshFromKernel();
+    notifyListeners();
+    return placed;
+  }
+
+  void atomEditClearGuideline() {
+    atom_edit_api.atomEditClearGuideline();
+    refreshFromKernel();
+    notifyListeners();
+  }
+
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;

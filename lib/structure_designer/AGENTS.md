@@ -97,6 +97,17 @@ Model methods: `atomEditModifyDistance`, `atomEditModifyAngle`, `atomEditModifyD
 
 Design doc: `doc/atom_edit/design_modify_measurement.md`.
 
+## Placement Guidelines (in atom_edit panel + viewport)
+
+A **guideline** is a transient line that constrains atom placement to hard-to-hit positions (issue #368). The **Guideline card** (`atom_edit_editor.dart`, `_buildGuidelineCard`) renders for `atom_edit` (not motif) under the Default/Add Atom tools. The guideline is transient — not serialized, not undoable — and is cleared by Cancel, Escape, or leaving the node.
+
+- **Setup branch** (no guideline yet): a context-sensitive button labeled from `APIAtomEditData.selectedAtomCount` — 3 → "Equidistant line", 2 → "Center line", 1 → "Directional line" (adds a direction `Vec3Input` + Normalize button); else a disabled hint. A non-empty error string from `atomEditSetGuidelineFromSelection` is shown as a SnackBar (degenerate input).
+- **Active branch**: a two-way-bound position `FloatInput` (keyed `guideline_position`, reflects `APIGuideline.t` and commits on submit/blur), an `off-line: X Å` readout, a **Snap to guideline** checkbox (Move sub-mode only), an element selector + **Place atom** button (Place sub-mode only), and **Cancel**. Sub-mode comes from `APIGuideline.subMode` (Move = exactly 1 atom selected; Place = 0 or ≥2).
+- **Model methods** (`structure_designer_model.dart`): `atomEditSetGuidelineFromSelection` (returns the error string), `atomEditSetGuidelinePosition`, `atomEditSetGuidelineSnapped`, `atomEditPlaceAtomOnGuideline`, `atomEditPlaceAtomOnGuidelineByRay`, `atomEditClearGuideline`. The guideline FFI is global (operates on the active node), so these take no `scope_path`.
+- **Viewport** (`structure_designer_viewport.dart`): **Escape precedence** — an active guided placement is cancelled first; a second Escape (or the first when no guided placement is active) clears the guideline (`getAtomEditGuideline() != null`). **Add-Atom snap-place dispatch** — in `onAtomEditClick`, when a guideline is active a click routes to `atomEditPlaceAtomOnGuidelineByRay` (snap to nearest point on the line) and takes precedence over guided placement.
+
+Design doc: `doc/atom_edit/design_atom_guidelines.md`.
+
 ## Click-to-Activate (in viewport)
 
 When multiple nodes are visible, clicking on a non-active node's rendered output in the 3D viewport activates that node (two-step interaction: first click activates, second click performs the normal action). The interception happens in `onPointerDown` before delegate dispatch, calling `viewport_pick()` (Rust API) which returns `ActivateNode`, `Disambiguation`, `ActiveNodeHit`, or `NoHit`. A performance guard skips the pick when only 0–1 nodes are displayed.

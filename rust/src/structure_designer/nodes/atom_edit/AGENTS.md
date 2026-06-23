@@ -24,6 +24,7 @@ atom_edit/
 ├── minimization.rs       # UFF energy minimization (batch + continuous during drag)
 ├── hydrogen_passivation.rs # General-purpose hydrogen passivation
 ├── atom_edit_gadget.rs   # XYZ selection gadget (translation gizmo)
+├── guideline.rs          # Pure placement-guideline geometry + `Guideline` type (#368)
 └── text_format.rs        # Human-readable diff text format (AI integration)
 ```
 
@@ -128,6 +129,16 @@ Drag operations use `begin_atom_edit_drag()`/`end_atom_edit_drag()` for coalesci
 
 - `AtomEditMutationCommand` — incremental atom/bond deltas (all diff mutations, including flag changes like frozen and hybridization override via `set_frozen_recorded` / `set_hybridization_override_recorded`)
 - `AtomEditToggleFlagCommand` — boolean flag toggles (output_diff, show_anchor_arrows, etc.)
+
+## Placement Guideline (#368)
+
+A **guideline** is a transient line that constrains atom placement (e.g. the equidistant ad-atom site of a Si(111) √3×√3 reconstruction). Design doc: `doc/atom_edit/design_atom_guidelines.md`.
+
+- **Pure geometry** lives in `guideline.rs`: `Guideline { origin, direction (unit), t, snapped }` plus tolerance-based constructors (`from_three_atoms` circumcenter, `from_two_atoms` midpoint, `from_one_atom`) returning `Result<_, GuidelineError>` (`Collinear` / `Coincident` / `ZeroDirection`), and the helpers `decompose` / `point_at` / `closest_t_to_ray`. These are domain-light and carry the bulk of the test coverage (`tests/structure_designer/atom_edit_guideline_test.rs`).
+- **State** is a single transient `guideline: Option<Guideline>` on `AtomEditData` — **not serialized, not undoable**. Mutations (`set_guideline_position`, `set_guideline_snapped`, `place_atom_on_guideline*`) go through `with_atom_edit_undo` because the *atom* moves/additions they cause are undoable, even though the guideline itself is not. `set_guideline_from_selection` / `clear_guideline` are **not** wrapped.
+- **`snapped` reset**: the bit can't be derived from geometry, so it is explicitly cleared on undo/redo via `reset_active_atom_edit_guideline_snapped` (called from `structure_designer.rs`). **Known gap:** clear-on-node-deselect and snapped-reset-on-selection-change are not yet wired (the Phase-4 `was_selected` drag guard compensates for the latter).
+- **Mutation entry points** for the API live in `operations.rs` (three-phase-borrow wrappers `set_guideline_from_selection` / `set_guideline_position` / `set_guideline_snapped` / `drag_selected_along_guideline`), mirroring the other operations.
+- **API view**: `get_atom_edit_data` exposes `selected_atom_count` (drives the Flutter setup-button label); `build_api_guideline` (in `api/.../atom_edit_api.rs`) returns `APIGuideline { origin, direction, t, off_line_distance, snapped, sub_mode }` where `sub_mode` is `Move` (exactly 1 selected) vs `Place` (0 or ≥2).
 
 ## Adding Features
 

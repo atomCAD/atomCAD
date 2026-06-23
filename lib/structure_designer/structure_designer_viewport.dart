@@ -442,13 +442,20 @@ class _StructureDesignerViewportState
       return KeyEventResult.ignored;
     }
 
-    // Escape: cancel guided placement
+    // Escape: cancel guided placement first, then clear the guideline (#368).
+    // Precedence: an active guided placement is cancelled before the guideline.
     if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.escape &&
-        atom_edit_api.atomEditIsInGuidedPlacement()) {
-      widget.graphModel.atomEditCancelGuidedPlacement();
-      renderingNeeded();
-      return KeyEventResult.handled;
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      if (atom_edit_api.atomEditIsInGuidedPlacement()) {
+        widget.graphModel.atomEditCancelGuidedPlacement();
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
+      if (atom_edit_api.getAtomEditGuideline() != null) {
+        widget.graphModel.atomEditClearGuideline();
+        renderingNeeded();
+        return KeyEventResult.handled;
+      }
     }
 
     // Delete / Backspace: delete selected atoms/bonds
@@ -935,6 +942,17 @@ class _StructureDesignerViewportState
 
       if (atomEditData != null) {
         final atomicNumber = atomEditData.selectedAtomicNumber;
+
+        // Guideline snap-place (#368) takes precedence: when a guideline is
+        // active, a click places a free atom on the line closest to the ray.
+        if (atom_edit_api.getAtomEditGuideline() != null) {
+          widget.graphModel.atomEditPlaceAtomOnGuidelineByRay(
+            ray.start,
+            ray.direction,
+          );
+          renderingNeeded();
+          return;
+        }
 
         if (atomEditData.isInGuidedPlacement) {
           // Already in guided placement — try placing at a guide dot

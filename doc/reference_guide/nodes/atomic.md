@@ -357,7 +357,7 @@ The badge reads green **Compatible** when there are no orphaned collars and no o
 
 ## atom_edit
 
-The `atom_edit` node provides the same atom editing tools described in the [Direct Editing Mode](../direct_editing.md#the-atom-editor) section above — all tools, keyboard shortcuts, hydrogen passivation, energy minimization, freeze, and measurements work identically. When an `atom_edit` node is selected in the node network, the atom editor appears in the Node Properties panel.
+The `atom_edit` node provides the same atom editing tools described in the [Direct Editing Mode](../direct_editing.md#the-atom-editor) section above — all tools, keyboard shortcuts, hydrogen passivation, energy minimization, freeze, measurements, and [placement guidelines](../direct_editing.md#placement-guidelines) work identically. When an `atom_edit` node is selected in the node network, the atom editor appears in the Node Properties panel.
 
 This section covers the additional aspects of `atom_edit` that are specific to node-network workflows.
 
