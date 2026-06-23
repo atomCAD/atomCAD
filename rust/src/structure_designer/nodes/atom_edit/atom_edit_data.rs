@@ -1,4 +1,5 @@
 use super::diff_recorder::{AtomDelta, AtomState, BondDelta, DiffRecorder};
+use super::guideline::{Guideline, GuidelineError};
 use super::text_format::{parse_diff_text, serialize_diff};
 use super::types::*;
 use crate::api::common_api_types::SelectModifier;
@@ -113,6 +114,12 @@ pub struct AtomEditData {
     /// Result-space atom ID to highlight while the modify measurement dialog is open.
     /// Set by `atom_edit_set_measurement_mark`, cleared by `atom_edit_clear_measurement_mark`.
     pub measurement_marked_atom_id: Option<u32>,
+    /// Transient placement guideline (issue #368). `None` when guideline mode is
+    /// inactive. NOT serialized and NOT part of undo/redo history. The `snapped`
+    /// bit resets on selection change / undo-redo / node-deselect; the whole
+    /// guideline clears on Cancel / Escape / leaving the node. See
+    /// `doc/atom_edit/design_atom_guidelines.md`.
+    pub guideline: Option<Guideline>,
     /// Active recorder. When Some, mutations are recorded for undo/redo.
     pub(super) recorder: Option<DiffRecorder>,
 
@@ -165,6 +172,7 @@ impl AtomEditData {
             last_stats: None,
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: None,
+            guideline: None,
             recorder: None,
             is_motif_mode: false,
             parameter_elements: Vec::new(),
@@ -205,6 +213,7 @@ impl AtomEditData {
             error_on_stale_entries,
             continuous_minimization,
             measurement_marked_atom_id: None,
+            guideline: None,
             selection: AtomEditSelection::new(),
             active_tool: AtomEditTool::Default(DefaultToolState {
                 interaction_state: DefaultToolInteractionState::default(),
@@ -1441,6 +1450,228 @@ impl AtomEditData {
         }
         self.selection.clear_bonds();
     }
+
+    // --- Guideline (issue #368) ---
+
+    /// Build the transient guideline from the current selection. Reads the
+    /// selected atoms in selection order; `base_positions` supplies the world
+    /// position of every selected *base* atom (diff atoms resolve from `self.diff`).
+    /// `entered_direction` is used only for the 1-atom (directional) line.
+    ///
+    /// Returns `Err` for degenerate input (collinear / coincident / zero-direction),
+    /// leaving the previous guideline untouched so the caller can surface a
+    /// SnackBar. A resolved count outside 1..=3 is a no-op success (the UI only
+    /// offers the setup button for valid counts).
+    pub fn set_guideline_from_selection(
+        &mut self,
+        base_positions: &HashMap<u32, DVec3>,
+        entered_direction: DVec3,
+    ) -> Result<(), GuidelineError> {
+        // Resolve selected-atom world positions in selection order — the order
+        // makes the direction sign deterministic (2-atom a→b, 3-atom normal).
+        let mut positions: Vec<DVec3> = Vec::new();
+        for &(prov, id) in &self.selection.selection_order {
+            match prov {
+                SelectionProvenance::Diff => {
+                    if self.selection.selected_diff_atoms.contains(&id)
+                        && let Some(atom) = self.diff.get_atom(id)
+                    {
+                        positions.push(atom.position);
+                    }
+                }
+                SelectionProvenance::Base => {
+                    if self.selection.selected_base_atoms.contains(&id)
+                        && let Some(p) = base_positions.get(&id)
+                    {
+                        positions.push(*p);
+                    }
+                }
+            }
+        }
+
+        let (origin, direction) = match positions.len() {
+            1 => Guideline::from_one_atom(positions[0], entered_direction)?,
+            2 => Guideline::from_two_atoms(positions[0], positions[1])?,
+            3 => Guideline::from_three_atoms(positions[0], positions[1], positions[2])?,
+            _ => return Ok(()),
+        };
+        self.guideline = Some(Guideline::new(origin, direction));
+        Ok(())
+    }
+
+    /// Resolve the single selected atom (Move sub-mode) and its current world
+    /// position. `base_promotion`, when supplied, provides the world position of
+    /// a selected *base* atom (a diff atom resolves from `self.diff`). Returns
+    /// `None` in Place sub-mode (0 or ≥2 atoms selected) or when a base atom is
+    /// selected without matching promotion info.
+    fn single_guideline_atom(
+        &self,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) -> Option<(GuidelineAtom, DVec3)> {
+        let n_base = self.selection.selected_base_atoms.len();
+        let n_diff = self.selection.selected_diff_atoms.len();
+        if n_base + n_diff != 1 {
+            return None;
+        }
+        if n_diff == 1 {
+            let diff_id = *self.selection.selected_diff_atoms.iter().next().unwrap();
+            let pos = self.diff.get_atom(diff_id)?.position;
+            Some((GuidelineAtom::Diff(diff_id), pos))
+        } else {
+            let base_id = *self.selection.selected_base_atoms.iter().next().unwrap();
+            let info = base_promotion?;
+            if info.base_id != base_id {
+                return None;
+            }
+            Some((GuidelineAtom::Base, info.position))
+        }
+    }
+
+    /// Move the single selected guideline atom to `new_pos`, promoting a base
+    /// atom to the diff first if necessary (anchor + metadata + selection
+    /// migration — mirrors `apply_transform`).
+    fn move_guideline_atom(
+        &mut self,
+        atom: &GuidelineAtom,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+        new_pos: DVec3,
+    ) {
+        match atom {
+            GuidelineAtom::Diff(diff_id) => {
+                self.move_in_diff(*diff_id, new_pos);
+            }
+            GuidelineAtom::Base => {
+                let info = match base_promotion {
+                    Some(i) => i,
+                    None => return,
+                };
+                // Anchor is set here at promotion time so apply_diff matches the
+                // new diff atom back to its base atom. See the Anchor Invariant.
+                let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                    self.set_atomic_number_recorded(existing_id, info.atomic_number);
+                    self.set_anchor_recorded(existing_id, info.position);
+                    self.move_in_diff(existing_id, new_pos);
+                    existing_id
+                } else {
+                    let new_diff_id = self.add_atom_recorded(info.atomic_number, new_pos);
+                    self.set_anchor_recorded(new_diff_id, info.position);
+                    new_diff_id
+                };
+                self.selection.selected_base_atoms.remove(&info.base_id);
+                self.selection.selected_diff_atoms.insert(diff_id);
+                self.selection.update_order_provenance(
+                    SelectionProvenance::Base,
+                    info.base_id,
+                    SelectionProvenance::Diff,
+                    diff_id,
+                );
+                self.promote_base_atom_metadata(info.flags, diff_id);
+            }
+        }
+    }
+
+    /// Set the guideline's along-line position `t`. In Place sub-mode (0 or ≥2
+    /// atoms selected) only the marker moves. In Move sub-mode (exactly 1 atom
+    /// selected) the atom moves so its projection becomes `t`: snapped → onto the
+    /// line, not-snapped → parallel (perpendicular offset preserved). Supply
+    /// `base_promotion` when the selected atom is a base atom not yet in the diff.
+    pub fn set_guideline_position(
+        &mut self,
+        t: f64,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) {
+        let mut g = match self.guideline {
+            Some(g) => g,
+            None => return,
+        };
+        g.t = t;
+        self.guideline = Some(g);
+
+        let (atom, p) = match self.single_guideline_atom(base_promotion) {
+            Some(target) => target,
+            None => return, // Place sub-mode: marker only, no atom moves.
+        };
+        let (_, offset) = g.decompose(p);
+        let new_pos = if g.snapped {
+            g.point_at(t)
+        } else {
+            g.point_at(t) + offset
+        };
+        self.move_guideline_atom(&atom, base_promotion, new_pos);
+    }
+
+    /// Set the guideline `snapped` mode bit. ON: snap the single selected atom
+    /// onto the line (zero its perpendicular offset at its current projection),
+    /// promoting a base atom to the diff if necessary. OFF: release in place (no
+    /// geometric change). `base_promotion` is consulted only on the ON path when
+    /// a base atom is selected.
+    pub fn set_guideline_snapped(
+        &mut self,
+        snapped: bool,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) {
+        let mut g = match self.guideline {
+            Some(g) => g,
+            None => return,
+        };
+
+        if !snapped {
+            // Release in place — no move, just clear the bit.
+            g.snapped = false;
+            self.guideline = Some(g);
+            return;
+        }
+
+        // ON: snap the selected atom onto the line at its current projection.
+        if let Some((atom, p)) = self.single_guideline_atom(base_promotion) {
+            let (t_cur, offset) = g.decompose(p);
+            g.t = t_cur;
+            g.snapped = true;
+            self.guideline = Some(g);
+            // Skip a no-op move for a diff atom already on the line (e.g. the
+            // 1-atom directional line); a base atom is still promoted so apply_diff
+            // tracks it.
+            let already_on_line = matches!(atom, GuidelineAtom::Diff(_)) && offset.length() < 1e-9;
+            if !already_on_line {
+                let new_pos = g.point_at(t_cur);
+                self.move_guideline_atom(&atom, base_promotion, new_pos);
+            }
+        } else {
+            g.snapped = true;
+            self.guideline = Some(g);
+        }
+    }
+
+    /// Place a free atom (no bonds, no anchor → pure addition) of the
+    /// panel-selected element at the guideline's current position `point_at(t)`.
+    /// The guideline stays active so several atoms can be placed in sequence.
+    /// Returns the new diff atom ID, or `None` if no guideline is active.
+    pub fn place_atom_on_guideline(&mut self) -> Option<u32> {
+        let g = self.guideline?;
+        let pos = g.point_at(g.t);
+        Some(self.add_atom_to_diff(self.selected_atomic_number, pos))
+    }
+
+    /// Clear the guideline entirely (Cancel / Escape / leaving the node).
+    pub fn clear_guideline(&mut self) {
+        self.guideline = None;
+    }
+
+    /// Reset only the transient `snapped` bit (selection change / undo-redo).
+    /// The atom is not moved — see the design doc's "Snap to guideline" section.
+    pub fn reset_guideline_snapped(&mut self) {
+        if let Some(g) = &mut self.guideline {
+            g.snapped = false;
+        }
+    }
+}
+
+/// Identifies the single atom a Move-sub-mode guideline operation acts on.
+enum GuidelineAtom {
+    /// Atom already in the diff (pure addition or matched base).
+    Diff(u32),
+    /// Base atom not yet in the diff — promote via the supplied promotion info.
+    Base,
 }
 
 impl NodeData for AtomEditData {
@@ -1816,6 +2047,7 @@ impl NodeData for AtomEditData {
             last_stats: self.last_stats.clone(),
             cached_input: Mutex::new(None),
             measurement_marked_atom_id: self.measurement_marked_atom_id,
+            guideline: self.guideline,
             recorder: None, // Never clone an active recorder
             is_motif_mode: self.is_motif_mode,
             parameter_elements: self.parameter_elements.clone(),
@@ -2543,6 +2775,17 @@ fn get_atom_edit_node_info(structure_designer: &StructureDesigner) -> Option<(St
         .clone();
     let node_id = get_selected_atom_edit_family_node_id(structure_designer)?;
     Some((network_name, node_id))
+}
+
+/// Reset the `snapped` bit on the active atom_edit node's guideline, if any.
+///
+/// Called from the undo/redo path: undoing a snap-move restores the atom to its
+/// off-line position, so a stale ON bit would otherwise silently re-constrain the
+/// next move. The guideline itself is left intact (only the transient bit clears).
+pub fn reset_active_atom_edit_guideline_snapped(structure_designer: &mut StructureDesigner) {
+    if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
+        data.reset_guideline_snapped();
+    }
 }
 
 /// Get mutable access to AtomEditData for recording setup/teardown.
