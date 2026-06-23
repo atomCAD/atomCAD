@@ -72,6 +72,43 @@ pub fn to_display_preferences(
             display_camera_target: preferences
                 .geometry_visualization_preferences
                 .display_camera_target,
+            wireframe_active_color: [
+                preferences
+                    .geometry_visualization_preferences
+                    .wireframe_active_color
+                    .x as f32
+                    / 255.0,
+                preferences
+                    .geometry_visualization_preferences
+                    .wireframe_active_color
+                    .y as f32
+                    / 255.0,
+                preferences
+                    .geometry_visualization_preferences
+                    .wireframe_active_color
+                    .z as f32
+                    / 255.0,
+            ],
+            wireframe_inactive_color: [
+                preferences
+                    .geometry_visualization_preferences
+                    .wireframe_inactive_color
+                    .x as f32
+                    / 255.0,
+                preferences
+                    .geometry_visualization_preferences
+                    .wireframe_inactive_color
+                    .y as f32
+                    / 255.0,
+                preferences
+                    .geometry_visualization_preferences
+                    .wireframe_inactive_color
+                    .z as f32
+                    / 255.0,
+            ],
+            hide_coplanar_edges: preferences
+                .geometry_visualization_preferences
+                .hide_coplanar_wireframe_edges,
         },
         atomic_structure_visualization: display_prefs::AtomicStructureVisualizationPreferences {
             visualization: to_display_atomic_structure_visualization(

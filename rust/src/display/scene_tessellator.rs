@@ -183,9 +183,9 @@ fn tessellate_non_lightweight_content(
                             NodeOutput::PolyMesh(poly_mesh) => {
                                 if preferences.geometry_visualization.wireframe_geometry {
                                     let wireframe_color = if is_active {
-                                        [1.0, 1.0, 1.0]
+                                        preferences.geometry_visualization.wireframe_active_color
                                     } else {
-                                        [0.5, 0.55, 0.6]
+                                        preferences.geometry_visualization.wireframe_inactive_color
                                     };
                                     tessellate_poly_mesh_to_line_mesh(
                                         poly_mesh,
@@ -193,6 +193,7 @@ fn tessellate_non_lightweight_content(
                                         preferences.geometry_visualization.mesh_smoothing.clone(),
                                         wireframe_color,
                                         wireframe_color,
+                                        preferences.geometry_visualization.hide_coplanar_edges,
                                     );
                                 } else {
                                     tessellate_poly_mesh(
@@ -297,9 +298,9 @@ fn tessellate_non_lightweight_content(
                 NodeOutput::PolyMesh(poly_mesh) => {
                     if preferences.geometry_visualization.wireframe_geometry {
                         let wireframe_color = if is_active {
-                            [1.0, 1.0, 1.0]
+                            preferences.geometry_visualization.wireframe_active_color
                         } else {
-                            [0.5, 0.55, 0.6]
+                            preferences.geometry_visualization.wireframe_inactive_color
                         };
                         tessellate_poly_mesh_to_line_mesh(
                             poly_mesh,
@@ -307,6 +308,7 @@ fn tessellate_non_lightweight_content(
                             preferences.geometry_visualization.mesh_smoothing.clone(),
                             wireframe_color,
                             wireframe_color,
+                            preferences.geometry_visualization.hide_coplanar_edges,
                         );
                     } else {
                         tessellate_poly_mesh(

@@ -30,6 +30,12 @@ pub struct GeometryVisualizationPreferences {
     pub wireframe_geometry: bool,
     pub mesh_smoothing: MeshSmoothing,
     pub display_camera_target: bool,
+    /// Wireframe line color for the active node's geometry (RGB, 0.0-1.0).
+    pub wireframe_active_color: [f32; 3],
+    /// Wireframe line color for non-active nodes' geometry (RGB, 0.0-1.0).
+    pub wireframe_inactive_color: [f32; 3],
+    /// When true, edges shared by two near-coplanar faces are not drawn in wireframe mode.
+    pub hide_coplanar_edges: bool,
 }
 
 #[derive(Clone, Debug)]

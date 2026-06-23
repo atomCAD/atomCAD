@@ -292,6 +292,17 @@ fn test_non_default_values_roundtrip() {
             mesh_smoothing: MeshSmoothing::Sharp,
             display_camera_target: true,
             show_geometry_shell_for_atomic: false,
+            wireframe_active_color: APIIVec3 {
+                x: 10,
+                y: 20,
+                z: 30,
+            },
+            wireframe_inactive_color: APIIVec3 {
+                x: 40,
+                y: 50,
+                z: 60,
+            },
+            hide_coplanar_wireframe_edges: false,
         },
         node_display_preferences: NodeDisplayPreferences {
             display_policy: NodeDisplayPolicy::PreferFrontier,
@@ -394,6 +405,31 @@ fn test_non_default_values_roundtrip() {
         loaded
             .geometry_visualization_preferences
             .display_camera_target
+    );
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .wireframe_active_color,
+        APIIVec3 {
+            x: 10,
+            y: 20,
+            z: 30,
+        }
+    );
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .wireframe_inactive_color,
+        APIIVec3 {
+            x: 40,
+            y: 50,
+            z: 60,
+        }
+    );
+    assert!(
+        !loaded
+            .geometry_visualization_preferences
+            .hide_coplanar_wireframe_edges
     );
 
     assert_eq!(

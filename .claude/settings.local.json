@@ -286,7 +286,11 @@
       "Bash(sed -n '/fn calculate_custom_node_type/,+12p' src/structure_designer/nodes/map.rs)",
       "Bash(INSTA_UPDATE=always cargo test --test structure_designer text_format_snapshot_test)",
       "Bash(ls -d atom_edit*)",
-      "Bash(ls -d */)"
+      "Bash(ls -d */)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(winget install *)",
+      "PowerShell($gh = \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; & $gh --version; Write-Output \"---\"; & $gh auth status 2>&1)",
+      "PowerShell($gh = \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; & $gh issue view 368 --repo atomCAD/atomCAD 2>&1 | Select-Object -First 20)"
     ]
   }
 }

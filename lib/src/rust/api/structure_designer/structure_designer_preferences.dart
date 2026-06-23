@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`
+// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 enum AtomicRenderingMethod {
@@ -151,6 +151,16 @@ class GeometryVisualizationPreferences {
   bool displayCameraTarget;
   bool showGeometryShellForAtomic;
 
+  /// Wireframe line color for the active node's geometry (RGB, 0-255).
+  APIIVec3 wireframeActiveColor;
+
+  /// Wireframe line color for non-active nodes' geometry (RGB, 0-255).
+  APIIVec3 wireframeInactiveColor;
+
+  /// When true, edges shared by two near-coplanar faces are not drawn in
+  /// wireframe mode (hides interior triangulation lines for better visibility).
+  bool hideCoplanarWireframeEdges;
+
   GeometryVisualizationPreferences({
     required this.geometryVisualization,
     required this.wireframeGeometry,
@@ -159,6 +169,9 @@ class GeometryVisualizationPreferences {
     required this.meshSmoothing,
     required this.displayCameraTarget,
     required this.showGeometryShellForAtomic,
+    required this.wireframeActiveColor,
+    required this.wireframeInactiveColor,
+    required this.hideCoplanarWireframeEdges,
   });
 
   static Future<GeometryVisualizationPreferences> default_() => RustLib
@@ -173,7 +186,10 @@ class GeometryVisualizationPreferences {
       sharpnessAngleThresholdDegree.hashCode ^
       meshSmoothing.hashCode ^
       displayCameraTarget.hashCode ^
-      showGeometryShellForAtomic.hashCode;
+      showGeometryShellForAtomic.hashCode ^
+      wireframeActiveColor.hashCode ^
+      wireframeInactiveColor.hashCode ^
+      hideCoplanarWireframeEdges.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -187,7 +203,10 @@ class GeometryVisualizationPreferences {
               other.sharpnessAngleThresholdDegree &&
           meshSmoothing == other.meshSmoothing &&
           displayCameraTarget == other.displayCameraTarget &&
-          showGeometryShellForAtomic == other.showGeometryShellForAtomic;
+          showGeometryShellForAtomic == other.showGeometryShellForAtomic &&
+          wireframeActiveColor == other.wireframeActiveColor &&
+          wireframeInactiveColor == other.wireframeInactiveColor &&
+          hideCoplanarWireframeEdges == other.hideCoplanarWireframeEdges;
 }
 
 /// Layout algorithm preference for full network auto-layout operations.

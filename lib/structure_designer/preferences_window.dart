@@ -21,6 +21,12 @@ class PreferencesKeys {
   static const Key sharpnessThresholdInput =
       Key('pref_sharpness_threshold_input');
   static const Key meshRenderingDropdown = Key('pref_mesh_rendering_dropdown');
+  static const Key wireframeActiveColorInput =
+      Key('pref_wireframe_active_color_input');
+  static const Key wireframeInactiveColorInput =
+      Key('pref_wireframe_inactive_color_input');
+  static const Key hideCoplanarWireframeEdgesCheckbox =
+      Key('pref_hide_coplanar_wireframe_edges_checkbox');
   static const Key showGeometryShellForAtomicCheckbox =
       Key('pref_show_geometry_shell_for_atomic_checkbox');
 
@@ -372,6 +378,74 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                     _applyPreferences();
                                   }
                                 },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Wireframe line color (active node)
+                          IVec3Input(
+                            key: PreferencesKeys.wireframeActiveColorInput,
+                            label: 'Wireframe color – active node (RGB)',
+                            value: _preferences.geometryVisualizationPreferences
+                                .wireframeActiveColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.geometryVisualizationPreferences
+                                    .wireframeActiveColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Wireframe line color (non-active nodes)
+                          IVec3Input(
+                            key: PreferencesKeys.wireframeInactiveColorInput,
+                            label: 'Wireframe color – other nodes (RGB)',
+                            value: _preferences.geometryVisualizationPreferences
+                                .wireframeInactiveColor,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.geometryVisualizationPreferences
+                                    .wireframeInactiveColor = value;
+                              });
+                              _applyPreferences();
+                            },
+                            minimumValue: const APIIVec3(x: 0, y: 0, z: 0),
+                            maximumValue:
+                                const APIIVec3(x: 255, y: 255, z: 255),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Hide interior lines between coplanar faces
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys
+                                    .hideCoplanarWireframeEdgesCheckbox,
+                                value: _preferences
+                                    .geometryVisualizationPreferences
+                                    .hideCoplanarWireframeEdges,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences
+                                          .geometryVisualizationPreferences
+                                          .hideCoplanarWireframeEdges = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Hide wireframe lines between coplanar faces',
+                                ),
                               ),
                             ],
                           ),

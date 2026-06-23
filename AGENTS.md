@@ -22,6 +22,8 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 
 **Repository:** https://github.com/atomCAD/atomCAD
 
+**Reading GitHub issues/PRs:** Use the `gh` CLI, e.g. `gh issue view <number> --repo atomCAD/atomCAD` (add `--comments` for discussion). `gh` requires authentication even for this public repo, so if it errors with "not logged in," ask the user to run `gh auth login` rather than falling back to scraping the web UI.
+
 ## Architecture
 
 ```

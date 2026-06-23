@@ -544,6 +544,35 @@ pub fn tessellate_quad_mesh(
     )
 }
 
+/// Angle (in degrees) below which the two faces sharing an edge are considered
+/// coplanar. Such edges are interior triangulation lines on a flat region and
+/// can be hidden in wireframe mode for better visibility (issue #366). Kept
+/// small so that genuinely curved surfaces (whose facets are more than this
+/// far apart) still show their wireframe.
+const COPLANAR_ANGLE_THRESHOLD_DEGREES: f64 = 1.0;
+
+/// Returns true when this edge sits between exactly two near-coplanar faces and
+/// so represents an interior line on a flat region rather than a real feature
+/// edge. Boundary edges (1 face) and non-manifold edges (>2 faces) are never
+/// considered coplanar — they are always real feature edges worth drawing.
+///
+/// The test is computed directly from the adjacent face normals (rather than
+/// reusing the precomputed `Edge::is_sharp` flag) so it is independent of the
+/// display smoothing mode and degrades safely: if a face normal were ever
+/// unset (zero), the dot product is 0, the edge reads as non-coplanar, and it
+/// is kept — wireframe never silently blanks.
+fn edge_is_coplanar_interior(poly_mesh: &PolyMesh, edge: &crate::display::poly_mesh::Edge) -> bool {
+    if edge.face_indices.len() != 2 {
+        return false;
+    }
+    let cos_threshold = COPLANAR_ANGLE_THRESHOLD_DEGREES.to_radians().cos();
+    let face_indices: Vec<u32> = edge.face_indices.iter().copied().collect();
+    let normal1 = poly_mesh.faces[face_indices[0] as usize].normal;
+    let normal2 = poly_mesh.faces[face_indices[1] as usize].normal;
+    let dot_product = normal1.dot(normal2).clamp(-1.0, 1.0);
+    dot_product >= cos_threshold
+}
+
 /// Converts a PolyMesh into a LineMesh with lines representing the edges
 /// Sharp edges will be rendered with a different color to highlight them
 ///
@@ -553,12 +582,14 @@ pub fn tessellate_quad_mesh(
 /// * `smoothing` - Controls how edges are interpreted (affects what's considered a sharp edge)
 /// * `sharp_edge_color` - The color for sharp edges [r, g, b]
 /// * `normal_edge_color` - The color for non-sharp edges [r, g, b]
+/// * `hide_coplanar_edges` - When true, edges between two near-coplanar faces are skipped
 pub fn tessellate_poly_mesh_to_line_mesh(
     poly_mesh: &PolyMesh,
     line_mesh: &mut LineMesh,
     smoothing: MeshSmoothing,
     sharp_edge_color: [f32; 3],
     normal_edge_color: [f32; 3],
+    hide_coplanar_edges: bool,
 ) {
     // Set of edges already processed to avoid duplicates
     let mut processed_edges = std::collections::HashSet::new();
@@ -575,6 +606,11 @@ pub fn tessellate_poly_mesh_to_line_mesh(
 
         // Mark as processed
         processed_edges.insert((*v1_idx, *v2_idx));
+
+        // Skip interior lines between coplanar faces when requested (issue #366)
+        if hide_coplanar_edges && edge_is_coplanar_interior(poly_mesh, edge) {
+            continue;
+        }
 
         // Get vertex positions
         let v1_pos = poly_mesh.vertices[*v1_idx as usize].position.as_vec3();
@@ -613,5 +649,6 @@ pub fn tessellate_quad_mesh_to_line_mesh(
         smoothing,
         sharp_edge_color,
         normal_edge_color,
+        false,
     )
 }

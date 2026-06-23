@@ -62,6 +62,19 @@ pub struct GeometryVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_show_geometry_shell_for_atomic")]
     pub show_geometry_shell_for_atomic: bool,
+    /// Wireframe line color for the active node's geometry (RGB, 0-255).
+    #[frb(non_final)]
+    #[serde(default = "default_wireframe_active_color")]
+    pub wireframe_active_color: APIIVec3,
+    /// Wireframe line color for non-active nodes' geometry (RGB, 0-255).
+    #[frb(non_final)]
+    #[serde(default = "default_wireframe_inactive_color")]
+    pub wireframe_inactive_color: APIIVec3,
+    /// When true, edges shared by two near-coplanar faces are not drawn in
+    /// wireframe mode (hides interior triangulation lines for better visibility).
+    #[frb(non_final)]
+    #[serde(default = "default_hide_coplanar_wireframe_edges")]
+    pub hide_coplanar_wireframe_edges: bool,
 }
 
 fn default_samples_per_unit_cell() -> i32 {
@@ -71,6 +84,23 @@ fn default_sharpness_angle_threshold() -> f64 {
     29.0
 }
 fn default_show_geometry_shell_for_atomic() -> bool {
+    true
+}
+fn default_wireframe_active_color() -> APIIVec3 {
+    APIIVec3 {
+        x: 255,
+        y: 255,
+        z: 255,
+    }
+}
+fn default_wireframe_inactive_color() -> APIIVec3 {
+    APIIVec3 {
+        x: 128,
+        y: 140,
+        z: 153,
+    }
+}
+fn default_hide_coplanar_wireframe_edges() -> bool {
     true
 }
 
@@ -84,6 +114,9 @@ impl Default for GeometryVisualizationPreferences {
             mesh_smoothing: MeshSmoothing::SmoothingGroupBased,
             display_camera_target: false,
             show_geometry_shell_for_atomic: true,
+            wireframe_active_color: default_wireframe_active_color(),
+            wireframe_inactive_color: default_wireframe_inactive_color(),
+            hide_coplanar_wireframe_edges: true,
         }
     }
 }

@@ -15711,8 +15711,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_geometry_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return GeometryVisualizationPreferences(
       geometryVisualization: dco_decode_geometry_visualization(arr[0]),
       wireframeGeometry: dco_decode_bool(arr[1]),
@@ -15721,6 +15721,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       meshSmoothing: dco_decode_mesh_smoothing(arr[4]),
       displayCameraTarget: dco_decode_bool(arr[5]),
       showGeometryShellForAtomic: dco_decode_bool(arr[6]),
+      wireframeActiveColor: dco_decode_apii_vec_3(arr[7]),
+      wireframeInactiveColor: dco_decode_apii_vec_3(arr[8]),
+      hideCoplanarWireframeEdges: dco_decode_bool(arr[9]),
     );
   }
 
@@ -19448,6 +19451,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_meshSmoothing = sse_decode_mesh_smoothing(deserializer);
     var var_displayCameraTarget = sse_decode_bool(deserializer);
     var var_showGeometryShellForAtomic = sse_decode_bool(deserializer);
+    var var_wireframeActiveColor = sse_decode_apii_vec_3(deserializer);
+    var var_wireframeInactiveColor = sse_decode_apii_vec_3(deserializer);
+    var var_hideCoplanarWireframeEdges = sse_decode_bool(deserializer);
     return GeometryVisualizationPreferences(
         geometryVisualization: var_geometryVisualization,
         wireframeGeometry: var_wireframeGeometry,
@@ -19455,7 +19461,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sharpnessAngleThresholdDegree: var_sharpnessAngleThresholdDegree,
         meshSmoothing: var_meshSmoothing,
         displayCameraTarget: var_displayCameraTarget,
-        showGeometryShellForAtomic: var_showGeometryShellForAtomic);
+        showGeometryShellForAtomic: var_showGeometryShellForAtomic,
+        wireframeActiveColor: var_wireframeActiveColor,
+        wireframeInactiveColor: var_wireframeInactiveColor,
+        hideCoplanarWireframeEdges: var_hideCoplanarWireframeEdges);
   }
 
   @protected
@@ -23518,6 +23527,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_mesh_smoothing(self.meshSmoothing, serializer);
     sse_encode_bool(self.displayCameraTarget, serializer);
     sse_encode_bool(self.showGeometryShellForAtomic, serializer);
+    sse_encode_apii_vec_3(self.wireframeActiveColor, serializer);
+    sse_encode_apii_vec_3(self.wireframeInactiveColor, serializer);
+    sse_encode_bool(self.hideCoplanarWireframeEdges, serializer);
   }
 
   @protected
