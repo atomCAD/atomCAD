@@ -442,6 +442,42 @@ Flutter. The whole feature is exercisable from tests after this phase.
 Make the tool work in the 3D view. Both halves are the "viewport" layer; the
 pointer math stays unit-testable independent of rendering.
 
+> **✅ STATUS — Phase 2 DONE (2026-06-23), implemented ADDITIVELY. Phase 3 author:
+> read this first.**
+>
+> Like Phase 1, Phase 2 *added* the new viewport layer **beside** the still-working
+> v1 modal guideline, so the build stayed green with **zero** API/Flutter/FRB churn.
+> The v1 viewport deletions the bullets/Migration section call for (the
+> `default_tool.rs` `GuidelineDragging` path, `drag_selected_along_guideline`,
+> `place_atom_on_guideline_by_ray`) were therefore **not** removed — `place_atom_on_guideline_by_ray`
+> still has a live v1 API caller (`atom_edit_place_atom_on_guideline_by_ray`) wired
+> into FRB, so a clean Phase-2 deletion would bleed into the Phase-3 API/FRB removal.
+> All v1 removals stay batched into **Phase 3**, when the API/Flutter/FRB swap is atomic.
+>
+> What exists after Phase 2 (new, additive):
+> - **Rendering:** `apply_guideline_decoration` now reads `guideline_active()` (the
+>   tool's `Active` line) and falls back to the legacy `self.guideline` field.
+>   `Define` draws nothing. New `apply_guideline_tool_highlight_{diff,result}` mark
+>   the defining atoms (Define) / picked atom (Move) via the existing display-state
+>   path. All in `atom_edit_data.rs::eval(decorate=true)`.
+> - **Pointer state machine:** new file **`guideline_tool.rs`** with
+>   `guideline_pointer_{down,move,up}` + `guideline_reset_interaction`, mirroring
+>   `default_tool.rs`. Transient state added to `types.rs`: `GuidelinePending`
+>   (pre-threshold press, lives on `GuidelineTool::pending`) and two new
+>   `GuidelineDragState` variants (`GhostDragging`, `PickedDragging`). Constrained
+>   drag math is on `AtomEditData` (`guideline_drag_picked_to_ray` /
+>   `guideline_drag_ghost_to_ray`) so it is unit-testable; pick coalesces with the
+>   subsequent slide into one undo step via `begin/end_atom_edit_drag`.
+> - **Deferred to Phase 3 (API + Flutter):** these pointer fns are pure Rust and not
+>   yet API-exposed — Flutter dispatches to them once `APIAtomEditTool::Guideline`
+>   lands and the per-tool `guideline_pointer_*` API wrappers + refresh plumbing are
+>   added (the existing tools each have their own `*_pointer_down/move/up` API fns;
+>   there is **no** single Rust dispatcher — Flutter picks by active tool).
+> - **Not unit-tested (by design, matches `default_tool.rs`):** the
+>   `guideline_pointer_*` dispatch itself (it needs a selected node + populated eval
+>   cache for hit-testing — the same reason `default_tool.rs` has no direct tests).
+>   The pointer **math** is covered via the `AtomEditData`-level drag helpers.
+
 - **Rendering:** populate `GuidelineVisuals` from the tool state in
   `eval(decorate=true)` for both result and diff outputs — line cylinder + marker
   dot at `point_at(t)`; highlight the defining atoms (Define) and the picked atom
@@ -457,26 +493,65 @@ pointer math stays unit-testable independent of rendering.
   equals `point_at(closest_t_to_ray(ray))` with off-line component zero; parallel
   ray is a no-op; ghost drag sets `t` without mutating atoms.
 
-### Phase 3 — API + Flutter UI
+### Phase 3 — API + Flutter UI **+ the v1 teardown**
 
-The thin FFI surface and the panel/toolbar that drive it.
+The thin FFI surface and the panel/toolbar that drive it — **plus the complete v1
+removal**, which Phases 1–2 deferred (both were landed additively to keep the build
+green with zero FRB churn). This phase is the atomic API/Flutter/FRB swap, so it is
+the only safe place to delete v1.
 
-- **API + FFI:** add the `Guideline` variant to `APIAtomEditTool`; add
-  `guideline_create_from_defining` (empty string or SnackBar error),
-  `guideline_set_position`, `guideline_place_atom`, `guideline_clear`,
-  `guideline_set_entered_direction`, and the `APIGuidelineToolView` builder. Each
-  follows the three-phase borrow pattern and requests the redecorate refresh after
-  mutating transient state. Run `flutter_rust_bridge_codegen generate`.
+> **⚠️ SCOPE NOTE — what Phase 2's additive choice moved into Phase 3.** Phase 2
+> built the new pointer machine (`guideline_tool.rs`) and tool-state rendering but
+> **deleted no v1 code**, because the v1 viewport fns it was nominally going to
+> delete are not self-contained: `place_atom_on_guideline_by_ray` has a live v1 API
+> caller wired into FRB (`atom_edit_place_atom_on_guideline_by_ray`), so deleting it
+> cleanly requires the API/FRB removal that only happens here. Consequently Phase 3
+> now also performs the **viewport deletions** originally listed under Phase 2
+> (`default_tool.rs` `GuidelineDragging` path + `drag_selected_along_guideline`,
+> the `place_atom_on_guideline*` methods). See the Migration status note below for
+> the full still-present-v1 list.
+
+- **Pointer API wrappers (NEW — required because Phase 2's pointer machine is pure
+  Rust and not yet FFI-exposed):** there is **no single atom_edit pointer dispatcher**
+  — each tool has its own `*_pointer_down/move/up` API fns and Flutter routes by the
+  active tool. So add `guideline_pointer_down` / `guideline_pointer_move` /
+  `guideline_pointer_up` API fns that forward the screen pos + ray to the existing
+  `guideline_tool::guideline_pointer_*` functions, and a `guideline_reset_interaction`
+  wrapper (call on pointer cancel / tool switch). Each requests a redecorate refresh
+  after the call (the pointer fns mutate transient tool state and, on pick/place/drag,
+  the diff). The Flutter pointer handler dispatches to these when the Guideline tool
+  is active.
+- **Panel API + FFI:** add the `Guideline` variant to `APIAtomEditTool` (and replace
+  the placeholder `get_active_tool` arm `Guideline(_) → Default`); wire
+  `set_active_tool` to construct a fresh `GuidelineTool` (and clear the shared
+  selection on entry); add `guideline_create_from_defining` (empty string or SnackBar
+  error), `guideline_set_position`, `guideline_place_atom`, `guideline_clear`
+  (→ `guideline_tool_clear`), `guideline_set_entered_direction`, and the
+  `APIGuidelineToolView` builder. Each follows the three-phase borrow pattern and
+  requests the redecorate refresh after mutating transient state. Run
+  `flutter_rust_bridge_codegen generate`.
+- **Delete v1 (the whole Migration list):** the `AtomEditData.guideline` field,
+  `Guideline.snapped` + its reset hooks, the `single_guideline_atom`/
+  `move_guideline_atom`/`GuidelineAtom` helpers, all `set_guideline_*` /
+  `place_atom_on_guideline*` / `set_guideline_from_selection` methods + their
+  `operations.rs` wrappers, the `default_tool.rs` `GuidelineDragging` path +
+  `drag_selected_along_guideline`, the v1 API (`APIGuideline`, `APIGuidelineSubMode`,
+  `build_api_guideline`, the `atom_edit_*guideline*` FFI fns) and the v1 Flutter card.
+  After this, `apply_guideline_decoration` reads **only** `guideline_active()` (drop
+  the `.or(self.guideline)` fallback Phase 2 added).
 - **Flutter:** fourth tool button in the atom_edit toolbar; phase-driven Guideline
   panel card (Define / Place / Move as above); SnackBar on degenerate Create;
   Escape handling (Active → Clear/Define, Define → clear set). Model methods on
   `StructureDesignerModel` forward the scope chain and call `refreshFromKernel()` +
   `notifyListeners()`.
 - **Tests:** API wrappers exempt (add a roundtrip assertion only for non-trivial
-  mapping, e.g. defining-count → `can_create` / `needs_direction`); `flutter
-  analyze` clean; optional smoke in `integration_test/`; manual walkthrough via
-  `flutter run` (enter tool → pick 3 atoms → Create → Place atom → tune by
-  drag/field → click empty → place another → Clear → switch tool clears the line).
+  mapping, e.g. defining-count → `can_create` / `needs_direction`); delete the v1
+  `atom_edit_guideline_state_test.rs` (and the v1 cases in the render/drag test files
+  — the `data.guideline` / `drag_along_guideline` / `snapped` ones — leaving the
+  Phase 2 tool-based cases); `flutter analyze` clean; optional smoke in
+  `integration_test/`; manual walkthrough via `flutter run` (enter tool → pick 3
+  atoms → Create → Place atom → tune by drag/field → click empty → place another →
+  Clear → switch tool clears the line).
 
 ## Migration from the previous implementation
 
@@ -484,23 +559,35 @@ The guideline already exists in the codebase as a modal state on `AtomEditData`.
 This is the complete list of what changes to reach the design above. (Everything
 else in this doc is the target spec, independent of how the old version worked.)
 
-> **Migration status (after Phase 1, additive).** None of the *removals* below
-> have happened yet — Phase 1 only **added** the new tool core beside the v1 modal
-> system (see the Phase 1 STATUS note). So every bullet that says "delete" / "remove"
-> / "loses" is still **outstanding work for Phase 2 (viewport bullets) and Phase 3
-> (API/Flutter bullets)**. The "New tool variant", "Place auto-picks", "Setup reads
-> tool-local defining set", and "Lifecycle tool-bound" bullets are **done** (in the
-> new core); their v1 counterparts still coexist until the corresponding remove-bullet
-> is executed. Concretely still-present v1 code to delete: `AtomEditData.guideline`
+> **Migration status (after Phase 2, still additive).** None of the *removals* below
+> have happened yet — Phases 1–2 only **added** the new tool (core + viewport) beside
+> the v1 modal system (see the Phase 1 & Phase 2 STATUS notes). So every bullet that
+> says "delete" / "remove" / "loses" is **outstanding work for Phase 3** — including
+> the viewport deletions originally slated for Phase 2, which were deferred because
+> `place_atom_on_guideline_by_ray` has a live v1 API caller and so can only be removed
+> in the atomic Phase-3 API/FRB swap. The "New tool variant", "Place auto-picks",
+> "Setup reads tool-local defining set", "Lifecycle tool-bound", and the rendering +
+> pointer-machine bullets are **done** (in the new tool); their v1 counterparts still
+> coexist until the corresponding remove-bullet is executed in Phase 3.
+>
+> Concretely still-present v1 code to delete in Phase 3: `AtomEditData.guideline`
 > field, `Guideline.snapped`, `set_guideline_snapped`/`reset_guideline_snapped`/
 > `reset_active_atom_edit_guideline_snapped`, `single_guideline_atom`/
 > `move_guideline_atom`/`GuidelineAtom`, `place_atom_on_guideline*`,
 > `set_guideline_from_selection`/`set_guideline_position`, the `default_tool.rs`
 > `GuidelineDragging` path + `drag_selected_along_guideline`, the v1 API
 > (`APIGuideline`, `APIGuidelineSubMode`, `build_api_guideline`, the `atom_edit_*guideline*`
-> FFI fns), and the v1 Flutter guideline card. Also replace the placeholder
+> FFI fns), and the v1 Flutter guideline card. Also: replace the placeholder
 > `get_active_tool` arm (`Guideline(_) → Default`) once `APIAtomEditTool::Guideline`
-> lands.
+> lands, and drop the `.or(self.guideline)` v1 fallback that Phase 2 added to
+> `apply_guideline_decoration`.
+>
+> **New Phase-3 work created by Phase 2's additive choice (not in the original
+> bullets):** the pointer machine exists in Rust (`guideline_tool.rs`) but is **not
+> FFI-exposed** — Phase 3 must add `guideline_pointer_{down,move,up}` +
+> `guideline_reset_interaction` API wrappers forwarding to it (there is no single
+> pointer dispatcher; Flutter routes per active tool), each requesting a redecorate
+> refresh. See the Phase 3 section.
 
 - **New tool variant** `AtomEditTool::Guideline(GuidelineTool)`. The guideline
   value moves **off `AtomEditData`** into `GuidelineTool::Active`; the

@@ -50,6 +50,7 @@ fn enter_active_picked(data: &mut AtomEditData, g: Guideline, picked: Option<Ato
         },
         entered_direction: DVec3::ZERO,
         remembered_t: g.t,
+        pending: None,
     });
 }
 
@@ -98,7 +99,8 @@ fn create_from_three_diff_atoms_populates_active() {
     data.guideline_toggle_defining(AtomRef::Diff(ib));
     data.guideline_toggle_defining(AtomRef::Diff(ic));
 
-    data.guideline_create_from_defining(&HashMap::new()).unwrap();
+    data.guideline_create_from_defining(&HashMap::new())
+        .unwrap();
 
     let g = data.guideline_active().expect("active guideline");
     let centroid = (a + b + c) / 3.0; // == circumcenter for equilateral
@@ -126,7 +128,8 @@ fn create_from_two_diff_atoms_direction_follows_pick_order() {
             data.guideline_toggle_defining(AtomRef::Diff(i1));
             data.guideline_toggle_defining(AtomRef::Diff(i0));
         }
-        data.guideline_create_from_defining(&HashMap::new()).unwrap();
+        data.guideline_create_from_defining(&HashMap::new())
+            .unwrap();
         data.guideline_active().unwrap()
     };
 
@@ -144,7 +147,8 @@ fn create_from_one_atom_uses_entered_direction() {
     data.guideline_toggle_defining(AtomRef::Diff(id));
     data.guideline_set_entered_direction(DVec3::new(0.0, 0.0, 3.0));
 
-    data.guideline_create_from_defining(&HashMap::new()).unwrap();
+    data.guideline_create_from_defining(&HashMap::new())
+        .unwrap();
 
     let g = data.guideline_active().unwrap();
     assert!((g.origin - p).length() < 1e-9);
@@ -162,7 +166,8 @@ fn create_resolves_base_atoms_via_supplied_positions() {
     base_positions.insert(10, DVec3::new(0.0, 0.0, 0.0));
     base_positions.insert(20, DVec3::new(2.0, 0.0, 0.0));
 
-    data.guideline_create_from_defining(&base_positions).unwrap();
+    data.guideline_create_from_defining(&base_positions)
+        .unwrap();
 
     let g = data.guideline_active().unwrap();
     assert!((g.origin - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-9);
@@ -335,7 +340,8 @@ fn direction_and_distance_persist_across_clear_and_rebuild() {
     let id_a = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
     data.guideline_toggle_defining(AtomRef::Diff(id_a));
     data.guideline_set_entered_direction(DVec3::new(0.0, 0.0, 2.0)); // non-unit
-    data.guideline_create_from_defining(&HashMap::new()).unwrap();
+    data.guideline_create_from_defining(&HashMap::new())
+        .unwrap();
     data.guideline_set_position(3.5, None); // remembers the distance (Place mode)
 
     // Clear back to Define and rebuild from a DIFFERENT anchor without
@@ -344,7 +350,8 @@ fn direction_and_distance_persist_across_clear_and_rebuild() {
     assert!(data.guideline_active().is_none());
     let id_b = data.diff.add_atom(6, DVec3::new(10.0, 0.0, 0.0));
     data.guideline_toggle_defining(AtomRef::Diff(id_b));
-    data.guideline_create_from_defining(&HashMap::new()).unwrap();
+    data.guideline_create_from_defining(&HashMap::new())
+        .unwrap();
 
     let g = data.guideline_active().unwrap();
     assert!((g.origin - DVec3::new(10.0, 0.0, 0.0)).length() < EPS); // new anchor

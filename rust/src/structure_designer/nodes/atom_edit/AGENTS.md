@@ -25,6 +25,7 @@ atom_edit/
 ├── hydrogen_passivation.rs # General-purpose hydrogen passivation
 ├── atom_edit_gadget.rs   # XYZ selection gadget (translation gizmo)
 ├── guideline.rs          # Pure placement-guideline geometry + `Guideline` type (#368)
+├── guideline_tool.rs     # Guideline TOOL pointer state machine (#368, Phase 2 viewport)
 └── text_format.rs        # Human-readable diff text format (AI integration)
 ```
 
@@ -139,6 +140,13 @@ A **guideline** is a transient line that constrains atom placement (e.g. the equ
 - **`snapped` reset**: the bit can't be derived from geometry, so it is explicitly cleared on undo/redo via `reset_active_atom_edit_guideline_snapped` (called from `structure_designer.rs`). **Known gap:** clear-on-node-deselect and snapped-reset-on-selection-change are not yet wired (the Phase-4 `was_selected` drag guard compensates for the latter).
 - **Mutation entry points** for the API live in `operations.rs` (three-phase-borrow wrappers `set_guideline_from_selection` / `set_guideline_position` / `set_guideline_snapped` / `drag_selected_along_guideline`), mirroring the other operations.
 - **API view**: `get_atom_edit_data` exposes `selected_atom_count` (drives the Flutter setup-button label); `build_api_guideline` (in `api/.../atom_edit_api.rs`) returns `APIGuideline { origin, direction, t, off_line_distance, snapped, sub_mode }` where `sub_mode` is `Move` (exactly 1 selected) vs `Place` (0 or ≥2). In Move sub-mode it recomputes `t` and the offset from the atom's **live position** (`g.decompose`) so the panel field tracks the atom during a drag — snapped keeps the stored `g.t` (clean, exactly tracked by the constrained drag), not-snapped reflects the live projection. The Flutter drag handler must trigger a panel rebuild per move frame for this to show live (it does, via `notifyGuidelineDragSync`).
+
+### Tool-based redesign (v2, #368) — supersedes the v1 modal guideline above
+
+The guideline is being reworked into a dedicated **fourth tool** (`AtomEditTool::Guideline(GuidelineTool)`) that fully owns pointer interaction and is self-contained (clears on tool switch / node deselect). It is being landed phase-by-phase **additively** — v1 and v2 coexist until Phase 3 removes v1. Design + per-phase status: `doc/atom_edit/design_atom_guidelines.md`.
+
+- **Phase 1 (core, DONE):** `GuidelineTool` state machine (`Define` / `Active` phases, tool-local `defining` set + frozen `Guideline` + `picked: Option<AtomRef>` + remembered `entered_direction`/`remembered_t`) and the `guideline_*` mutators on `AtomEditData` (`guideline_create_from_defining`, `guideline_place_atom`, `guideline_pick_atom`, `guideline_set_position`, `guideline_unpick`, `guideline_tool_clear`, …). Undo auto-unpick + clear-on-deselect hooks wired.
+- **Phase 2 (viewport, DONE):** rendering reads `guideline_active()` (falls back to the v1 `guideline` field); defining/picked atoms highlighted via the display-state path. Pointer state machine in **`guideline_tool.rs`** (`guideline_pointer_{down,move,up}` + `guideline_reset_interaction`), mirroring `default_tool.rs`. Pre-threshold press tracked in `GuidelineTool::pending` (`GuidelinePending`); active drag in the extended `GuidelineDragState` (`GhostDragging` / `PickedDragging`). Constrained-drag math is on `AtomEditData` (`guideline_drag_picked_to_ray` / `guideline_drag_ghost_to_ray`) for unit-testing; pick + slide coalesce into one undo step. **Not yet API-exposed** (Phase 3 wires `APIAtomEditTool::Guideline` + per-tool `guideline_pointer_*` API fns + Flutter dispatch, and removes all v1 code listed in the doc's Migration section).
 
 ## Adding Features
 

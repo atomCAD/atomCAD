@@ -236,12 +236,36 @@ pub enum AtomRef {
     Diff(u32),
 }
 
-/// Transient pointer sub-state for the Guideline tool. The pointer state machine
-/// is wired in Phase 2; Phase 1 only needs the resting `Idle` state.
+/// Active-phase drag sub-state for the Guideline tool (Phase 2 viewport). Tracks
+/// the in-progress drag mode once the click-vs-drag threshold has been crossed;
+/// the resting state is `Idle`. The pre-threshold "pointer is down" bookkeeping
+/// lives in `GuidelineTool::pending` (which also covers the `Define` phase, where
+/// there is no drag).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum GuidelineDragState {
     #[default]
     Idle,
+    /// Place mode: dragging the ghost marker along the line (sets `t`, no atom
+    /// mutation).
+    GhostDragging,
+    /// Move mode: line-constrained drag of the picked atom (it rides the line,
+    /// tracking the cursor ray's projection).
+    PickedDragging,
+}
+
+/// Transient "pointer is down, not yet dragging" bookkeeping for the Guideline
+/// tool (Phase 2 viewport). Captured on `pointer_down`, consumed on `pointer_up`
+/// (a click) or promoted to a `GuidelineDragState` once the drag threshold is
+/// crossed in `pointer_move`. Lives on `GuidelineTool` (not a phase) so it serves
+/// both `Define` (click toggles/clears the defining set) and `Active` (click
+/// picks/unpicks). Not serialized; reset on clone.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GuidelinePending {
+    /// Screen position at press time (for the click-vs-drag threshold).
+    pub mouse_down: DVec2,
+    /// The atom under the cursor at press time, if any (`None` = pressed empty
+    /// space or the marker dot).
+    pub hit: Option<AtomRef>,
 }
 
 /// The two phases of the Guideline tool. See
@@ -273,6 +297,10 @@ pub struct GuidelineTool {
     /// tracks the active point, so placing at the same distance from a different
     /// anchor needs no re-entry. Also persists across Clear / re-Define (#368).
     pub remembered_t: f64,
+    /// Transient pointer bookkeeping between `pointer_down` and the matching
+    /// `pointer_up` / drag-threshold crossing (Phase 2 viewport). Not serialized;
+    /// reset on clone.
+    pub pending: Option<GuidelinePending>,
 }
 
 impl GuidelineTool {
@@ -285,6 +313,7 @@ impl GuidelineTool {
             },
             entered_direction: DVec3::ZERO,
             remembered_t: 0.0,
+            pending: None,
         }
     }
 }

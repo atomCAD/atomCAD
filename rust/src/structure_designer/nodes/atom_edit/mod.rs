@@ -4,6 +4,7 @@ mod atom_edit_data;
 mod default_tool;
 pub mod diff_recorder;
 pub mod guideline;
+mod guideline_tool;
 mod hydrogen_passivation;
 pub mod measurement;
 mod minimization;
@@ -23,6 +24,7 @@ pub mod atom_edit {
     pub use super::atom_edit_data::*;
     pub use super::default_tool::*;
     pub use super::guideline::*;
+    pub use super::guideline_tool::*;
     pub use super::hydrogen_passivation::*;
     pub use super::measurement::*;
     pub use super::minimization::*;

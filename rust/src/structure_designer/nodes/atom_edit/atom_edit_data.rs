@@ -1268,12 +1268,62 @@ impl AtomEditData {
     fn apply_guideline_decoration(&self, output: &mut AtomicStructure) {
         use crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals;
 
-        if let Some(g) = self.guideline {
+        // The new Guideline tool's `Active` line takes precedence; fall back to
+        // the legacy modal `guideline` field (removed in Phase 3). In the tool's
+        // `Define` phase there is no line yet, so nothing is drawn.
+        if let Some(g) = self.guideline_active().or(self.guideline) {
             output.decorator_mut().guideline_visuals = Some(GuidelineVisuals {
                 origin: g.origin,
                 direction: g.direction,
                 marker_t: g.t,
             });
+        }
+    }
+
+    /// The tool-local atoms to highlight while the Guideline tool is active: the
+    /// defining set in `Define`, the picked atom in `Active`/Move (issue #368).
+    /// Empty for any other tool or in Place mode (no atom picked).
+    fn guideline_tool_highlight_refs(&self) -> Vec<AtomRef> {
+        match &self.active_tool {
+            AtomEditTool::Guideline(tool) => match &tool.phase {
+                GuidelinePhase::Define { defining } => defining.clone(),
+                GuidelinePhase::Active { picked, .. } => picked.iter().copied().collect(),
+            },
+            _ => Vec::new(),
+        }
+    }
+
+    /// Highlight the Guideline tool's defining / picked atoms on the **diff**
+    /// output (diff atom ids are output ids directly; base refs aren't shown).
+    fn apply_guideline_tool_highlight_diff(&self, output: &mut AtomicStructure) {
+        use crate::crystolecule::atomic_structure::AtomDisplayState;
+        for r in self.guideline_tool_highlight_refs() {
+            if let AtomRef::Diff(id) = r {
+                output
+                    .decorator_mut()
+                    .set_atom_display_state(id, AtomDisplayState::Marked);
+            }
+        }
+    }
+
+    /// Highlight the Guideline tool's defining / picked atoms on the **result**
+    /// output, mapping each tool-local `AtomRef` through the eval provenance.
+    fn apply_guideline_tool_highlight_result(
+        &self,
+        output: &mut AtomicStructure,
+        provenance: &DiffProvenance,
+    ) {
+        use crate::crystolecule::atomic_structure::AtomDisplayState;
+        for r in self.guideline_tool_highlight_refs() {
+            let result_id = match r {
+                AtomRef::Base(id) => provenance.base_to_result.get(&id).copied(),
+                AtomRef::Diff(id) => provenance.diff_to_result.get(&id).copied(),
+            };
+            if let Some(rid) = result_id {
+                output
+                    .decorator_mut()
+                    .set_atom_display_state(rid, AtomDisplayState::Marked);
+            }
         }
     }
 
@@ -2045,6 +2095,54 @@ impl AtomEditData {
             };
         }
     }
+
+    /// Move-mode constrained drag (Phase 2 viewport): project the cursor ray onto
+    /// the line and slide the picked atom to that foot. The off-line component is
+    /// zero by construction (the atom rides the line). Returns `false` — the
+    /// caller does nothing this frame — when not in Move mode (no atom picked),
+    /// outside the `Active` phase, or when the ray is parallel to the line
+    /// (`closest_t_to_ray == None`).
+    pub fn guideline_drag_picked_to_ray(
+        &mut self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) -> bool {
+        let g = match self.guideline_active() {
+            Some(g) => g,
+            None => return false,
+        };
+        if self.guideline_picked().is_none() {
+            return false;
+        }
+        let t = match g.closest_t_to_ray(ray_origin, ray_direction) {
+            Some(t) => t,
+            None => return false,
+        };
+        self.guideline_set_position(t, base_promotion);
+        true
+    }
+
+    /// Place-mode ghost drag (Phase 2 viewport): set the active point `t` to the
+    /// cursor ray's projection onto the line **without mutating any atom** (the
+    /// ghost has no backing atom). Returns `false` when an atom is picked (Move
+    /// mode), outside the `Active` phase, or when the ray is parallel to the line.
+    pub fn guideline_drag_ghost_to_ray(&mut self, ray_origin: DVec3, ray_direction: DVec3) -> bool {
+        let g = match self.guideline_active() {
+            Some(g) => g,
+            None => return false,
+        };
+        if self.guideline_picked().is_some() {
+            return false;
+        }
+        let t = match g.closest_t_to_ray(ray_origin, ray_direction) {
+            Some(t) => t,
+            None => return false,
+        };
+        // Place mode: no picked atom, so this only moves the ghost marker.
+        self.guideline_set_position(t, None);
+        true
+    }
 }
 
 /// Identifies the single atom a Move-sub-mode guideline operation acts on.
@@ -2297,6 +2395,8 @@ impl NodeData for AtomEditData {
 
             // Store guideline visuals (issue #368)
             self.apply_guideline_decoration(&mut diff_clone);
+            // Highlight the Guideline tool's defining / picked atoms (issue #368).
+            self.apply_guideline_tool_highlight_diff(&mut diff_clone);
         }
 
         // --- Pin 0 (result): apply selection/tool decorations ---
@@ -2361,6 +2461,8 @@ impl NodeData for AtomEditData {
 
             // Store guideline visuals (issue #368)
             self.apply_guideline_decoration(&mut result);
+            // Highlight the Guideline tool's defining / picked atoms (issue #368).
+            self.apply_guideline_tool_highlight_result(&mut result, &diff_result.provenance);
         }
 
         // Store provenance and stats in eval cache for root-level evaluations
@@ -2446,6 +2548,7 @@ impl NodeData for AtomEditData {
                     },
                     entered_direction: tool.entered_direction,
                     remembered_t: tool.remembered_t,
+                    pending: None,
                 }),
             },
             selected_atomic_number: self.selected_atomic_number,
