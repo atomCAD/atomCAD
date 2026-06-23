@@ -264,6 +264,16 @@ fn tessellate_non_lightweight_content(
                             );
                         }
                     }
+
+                    // Render the placement guideline (issue #368) as impostors,
+                    // shared between rendering methods (mirrors guide placement).
+                    if let Some(visuals) = &atomic_structure.decorator().guideline_visuals {
+                        atomic_tessellator::tessellate_guideline_impostors(
+                            &mut atom_impostor_mesh,
+                            &mut bond_impostor_mesh,
+                            visuals,
+                        );
+                    }
                 }
 
                 NodeOutput::SurfacePointCloud(point_cloud) => {

@@ -151,6 +151,9 @@ mod atom_edit_guideline_test;
 #[path = "structure_designer/atom_edit_guideline_state_test.rs"]
 mod atom_edit_guideline_state_test;
 
+#[path = "structure_designer/atom_edit_guideline_render_test.rs"]
+mod atom_edit_guideline_render_test;
+
 #[path = "structure_designer/continuous_minimization_test.rs"]
 mod continuous_minimization_test;
 

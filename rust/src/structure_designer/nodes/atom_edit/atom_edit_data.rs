@@ -366,6 +366,7 @@ impl AtomEditData {
                 );
             }
             self.apply_guided_placement_decoration(&mut diff_clone, None);
+            self.apply_guideline_decoration(&mut diff_clone);
         }
 
         // 5. Build display visualization (pin 0 display override)
@@ -411,6 +412,7 @@ impl AtomEditData {
                 );
             }
             self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
+            self.apply_guideline_decoration(&mut result);
         }
 
         // 5b. Generate ghost atoms for neighboring cells
@@ -1242,6 +1244,24 @@ impl AtomEditData {
         }
     }
 
+    /// Store the transient guideline visuals (issue #368) on the output's
+    /// decorator so the tessellator draws the line + position marker. Applied to
+    /// both the result and diff outputs during `eval(decorate=true)`, mirroring
+    /// `apply_guided_placement_decoration`. No-op when no guideline is active.
+    /// The visual is a read-only snapshot of `self.guideline` — no atom display
+    /// state is touched, so it is independent of any provenance mapping.
+    fn apply_guideline_decoration(&self, output: &mut AtomicStructure) {
+        use crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals;
+
+        if let Some(g) = self.guideline {
+            output.decorator_mut().guideline_visuals = Some(GuidelineVisuals {
+                origin: g.origin,
+                direction: g.direction,
+                marker_t: g.t,
+            });
+        }
+    }
+
     // --- Core mutation methods (testable without StructureDesigner) ---
 
     /// Convert a matched diff atom to a delete marker.
@@ -1913,6 +1933,9 @@ impl NodeData for AtomEditData {
 
             // Mark guided placement anchor and store guide visuals
             self.apply_guided_placement_decoration(&mut diff_clone, None);
+
+            // Store guideline visuals (issue #368)
+            self.apply_guideline_decoration(&mut diff_clone);
         }
 
         // --- Pin 0 (result): apply selection/tool decorations ---
@@ -1974,6 +1997,9 @@ impl NodeData for AtomEditData {
 
             // Mark guided placement anchor and store guide visuals
             self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
+
+            // Store guideline visuals (issue #368)
+            self.apply_guideline_decoration(&mut result);
         }
 
         // Store provenance and stats in eval cache for root-level evaluations

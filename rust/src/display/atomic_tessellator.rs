@@ -1070,6 +1070,33 @@ const GUIDE_DOT_PRIMARY_RADIUS: f64 = 0.20;
 /// Radius for secondary guide dots (Angstroms)
 const GUIDE_DOT_SECONDARY_RADIUS: f64 = 0.15;
 
+/// Color for the placement guideline line + marker (cyan; distinct from the
+/// magenta guide dots and orange anchor arrows). Issue #368.
+const GUIDELINE_COLOR: Vec3 = Vec3::new(0.1, 0.8, 1.0);
+/// Radius of the guideline cylinder (Angstroms) — thin, like an anchor arrow.
+const GUIDELINE_LINE_RADIUS: f64 = 0.04;
+/// Radius of the guideline position marker dot (Angstroms).
+const GUIDELINE_MARKER_RADIUS: f64 = 0.18;
+/// Default half-length (Angstroms) of the rendered guideline segment, centered
+/// on `origin`. Extended when the marker sits beyond it so the marker is always
+/// on the drawn segment.
+const GUIDELINE_HALF_LENGTH: f64 = 20.0;
+/// Extra length (Angstroms) drawn past the marker when it falls outside the
+/// default segment.
+const GUIDELINE_MARKER_MARGIN: f64 = 2.0;
+
+/// The rendered guideline segment endpoints, robust to a marker `t` beyond the
+/// default half-length: the line is centered on `origin` and grown if needed so
+/// the marker is always on the drawn segment.
+fn guideline_segment_endpoints(
+    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
+) -> (DVec3, DVec3) {
+    let half = GUIDELINE_HALF_LENGTH.max(visuals.marker_t.abs() + GUIDELINE_MARKER_MARGIN);
+    let start = visuals.origin - half * visuals.direction;
+    let end = visuals.origin + half * visuals.direction;
+    (start, end)
+}
+
 /// Tessellate guide placement visuals (guide dot spheres + anchor-to-dot cylinders)
 /// into the triangle mesh. Called after atom/bond tessellation.
 pub fn tessellate_guide_placement(
@@ -1142,4 +1169,66 @@ pub fn tessellate_guide_placement_impostors(
             &ANCHOR_ARROW_COLOR.to_array(),
         );
     }
+}
+
+/// Tessellate the placement guideline (issue #368) into the triangle mesh: a thin
+/// cylinder for the line + a marker sphere at the current position `marker_t`, in
+/// a distinct guide color. Called after atom/bond tessellation.
+pub fn tessellate_guideline(
+    output_mesh: &mut Mesh,
+    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
+    params: &AtomicTessellatorParams,
+) {
+    let (start, end) = guideline_segment_endpoints(visuals);
+
+    // The guideline cylinder.
+    tessellator::tessellate_cylinder(
+        output_mesh,
+        &start,
+        &end,
+        GUIDELINE_LINE_RADIUS,
+        params.cylinder_divisions,
+        &Material::new(&GUIDELINE_COLOR, 0.3, 0.0),
+        false,
+        None,
+        None,
+    );
+
+    // Marker dot at the current position.
+    let marker_pos = visuals.origin + visuals.marker_t * visuals.direction;
+    tessellator::tessellate_sphere(
+        output_mesh,
+        &marker_pos,
+        GUIDELINE_MARKER_RADIUS,
+        params.ball_and_stick_sphere_horizontal_divisions,
+        params.ball_and_stick_sphere_vertical_divisions,
+        &Material::new(&GUIDELINE_COLOR, 0.3, 0.0),
+    );
+}
+
+/// Tessellate the placement guideline using impostor rendering: a bond quad for
+/// the line + an atom quad for the position marker.
+pub fn tessellate_guideline_impostors(
+    atom_impostor_mesh: &mut AtomImpostorMesh,
+    bond_impostor_mesh: &mut BondImpostorMesh,
+    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
+) {
+    let (start, end) = guideline_segment_endpoints(visuals);
+
+    bond_impostor_mesh.add_bond_quad(
+        &start.as_vec3(),
+        &end.as_vec3(),
+        GUIDELINE_LINE_RADIUS as f32,
+        &GUIDELINE_COLOR.to_array(),
+    );
+
+    let marker_pos = visuals.origin + visuals.marker_t * visuals.direction;
+    atom_impostor_mesh.add_atom_quad(
+        &marker_pos.as_vec3(),
+        GUIDELINE_MARKER_RADIUS as f32,
+        &GUIDELINE_COLOR.to_array(),
+        0.3,
+        0.0,
+        &NO_RIM,
+    );
 }

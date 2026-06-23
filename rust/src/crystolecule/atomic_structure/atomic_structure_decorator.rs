@@ -46,6 +46,22 @@ pub struct WireframeRingVisuals {
     pub radius: f64,
 }
 
+/// Visual data for rendering an atom-placement **guideline** (issue #368): a
+/// frozen line (`origin` + unit `direction`) plus a marker at the current
+/// along-line position `marker_t`. Populated from `AtomEditData::guideline`
+/// during `eval(decorate=true)` and tessellated as a thin cylinder + marker dot
+/// in a distinct guide color. See `doc/atom_edit/design_atom_guidelines.md`.
+#[derive(Debug, Clone)]
+pub struct GuidelineVisuals {
+    /// A point on the line.
+    pub origin: DVec3,
+    /// Unit direction along the line.
+    pub direction: DVec3,
+    /// Along-line position (signed Å from `origin`) of the placement/selection
+    /// marker — the line point `origin + marker_t · direction`.
+    pub marker_t: f64,
+}
+
 #[derive(Debug, Clone)]
 pub struct AtomicStructureDecorator {
     pub atom_display_states: FxHashMap<u32, AtomDisplayState>,
@@ -56,6 +72,8 @@ pub struct AtomicStructureDecorator {
     pub show_anchor_arrows: bool,
     /// Transient rendering hint: guide placement visuals for the Add Atom tool
     pub guide_placement_visuals: Option<GuidePlacementVisuals>,
+    /// Transient rendering hint: atom-placement guideline visuals (issue #368).
+    pub guideline_visuals: Option<GuidelineVisuals>,
     /// Display name overrides by atomic number. When present, hover tooltips
     /// and other UI consumers use these instead of the standard element names.
     /// Used by motif_edit to label parameter element atoms with user-defined names.
@@ -81,6 +99,7 @@ impl AtomicStructureDecorator {
             selection_transform: None,
             show_anchor_arrows: false,
             guide_placement_visuals: None,
+            guideline_visuals: None,
             element_name_overrides: FxHashMap::default(),
             ghost_atom_metadata: FxHashMap::default(),
         }
