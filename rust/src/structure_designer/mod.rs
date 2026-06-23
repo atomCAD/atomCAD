@@ -9,6 +9,7 @@ pub mod data_type;
 pub mod evaluator;
 pub mod identifier;
 pub mod implicit_eval;
+pub mod invariants;
 pub mod layout;
 pub mod navigation_history;
 pub mod network_validator;

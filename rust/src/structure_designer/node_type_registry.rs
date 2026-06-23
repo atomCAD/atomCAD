@@ -94,7 +94,8 @@ use crate::api::structure_designer::structure_designer_api_types::APINodeCategor
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::{
-    DataType, FunctionType, RecordType, walk_data_type_record_names_mut,
+    DataType, FunctionType, RecordType, walk_data_type_record_names,
+    walk_data_type_record_names_mut,
 };
 use crate::structure_designer::node_network::Argument;
 use crate::structure_designer::node_network::IncomingWire;
@@ -2452,23 +2453,36 @@ pub fn collect_record_refs_in_type(t: &DataType, out: &mut HashSet<String>) {
     out.extend(v);
 }
 
-/// Collect every record-def name referenced anywhere in `network`: its
-/// custom-node-type signature (parameter + output-pin `Fixed` types), every
-/// node's embedded `DataType` fields (recursing into HOF zone bodies via
-/// `walk_all_nodes`), and the bare `schema` / `target` record-def names on
-/// `record_construct` / `record_destructure` / `product`. Mirrors the read
-/// surface of `rewrite_record_name_in_registry`. Used by the namespace-delete
-/// reference check. See `doc/design_hierarchical_records.md`.
+/// Where a record-def name is referenced from a node's data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordRefSite {
+    /// A `RecordType::Named` embedded inside a node-data `DataType` field
+    /// (parameter type, `element_type`, `type_args`, `expr` param/return
+    /// types, …). The name follows a record rename via the `DataType` walk.
+    EmbeddedType,
+    /// A bare schema/target string property naming a record def
+    /// (`record_construct` / `record_destructure` `schema`, `product`
+    /// `target`). May be the empty string when the user has not yet picked a
+    /// schema — callers that resolve the name must treat `""` as "no reference".
+    Schema,
+}
+
+/// Invokes `f(name, site)` for every record-def name referenced by `node`'s
+/// data. This is the **single** enumeration of "which node-data variants embed
+/// a record-def reference"; both `collect_record_refs_in_network` (the
+/// dependency-closure read) and the Phase 0 invariant checker
+/// (`structure_designer::invariants`) route through it, so the hand-maintained
+/// downcast list can never drift between the two again — that drift is the bug
+/// class this whole effort traces back to (the `closure`/`collect` rename
+/// omission; see `doc/design_identity_vs_naming_phase0.md` §9).
 ///
-/// **Keep the node-data downcast list below in sync with the authoritative
-/// list in `canonicalize::canonicalize_node_data` and with
-/// `rewrite_record_name_in_registry`.** All three must cover every node-data
-/// variant that embeds a `DataType` (`closure`/`apply` `type_args`, `collect`
-/// `element_type`, the `map`/`filter`/… element/input/output types, …). A
-/// missing variant here silently under-counts references; a missing variant in
-/// the rewriter leaves a stale `Record(Named(old))` after a record rename
-/// (regression: `rename_wire_loss_regression_test`).
-pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<String>) {
+/// **Keep this list in sync with `canonicalize::canonicalize_node_data` and
+/// `rewrite_record_name_in_registry`** — every node-data variant that embeds a
+/// `DataType` or a schema/target name must appear here.
+pub fn collect_record_refs_in_node(
+    node: &crate::structure_designer::node_network::Node,
+    f: &mut impl FnMut(&str, RecordRefSite),
+) {
     use crate::structure_designer::nodes::apply::ApplyData;
     use crate::structure_designer::nodes::array_append::ArrayAppendData;
     use crate::structure_designer::nodes::array_at::ArrayAtData;
@@ -2487,6 +2501,77 @@ pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<S
     use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
     use crate::structure_designer::nodes::sequence::SequenceData;
 
+    // Emit every `Named` record name embedded in a `DataType` field.
+    let emit = |t: &DataType, f: &mut dyn FnMut(&str, RecordRefSite)| {
+        walk_data_type_record_names(t, &mut |n| f(n, RecordRefSite::EmbeddedType));
+    };
+
+    let data: &dyn crate::structure_designer::node_data::NodeData = node.data.as_ref();
+    if let Some(d) = data.as_any_ref().downcast_ref::<ParameterData>() {
+        emit(&d.data_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ClosureData>() {
+        for t in &d.type_args {
+            emit(t, f);
+        }
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ApplyData>() {
+        for t in &d.type_args {
+            emit(t, f);
+        }
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<CollectData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ExprData>() {
+        for p in &d.parameters {
+            emit(&p.data_type, f);
+        }
+        if let Some(o) = d.output_type.as_ref() {
+            emit(o, f);
+        }
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<MapData>() {
+        emit(&d.input_type, f);
+        emit(&d.output_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<SequenceData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<FilterData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<FoldData>() {
+        emit(&d.element_type, f);
+        emit(&d.accumulator_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ForeachData>() {
+        emit(&d.input_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAtData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAppendData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayConcatData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayLenData>() {
+        emit(&d.element_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordConstructData>() {
+        f(&d.schema, RecordRefSite::Schema);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordDestructureData>() {
+        f(&d.schema, RecordRefSite::Schema);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ProductData>() {
+        f(&d.target, RecordRefSite::Schema);
+    }
+}
+
+/// Collect every record-def name referenced anywhere in `network`: its
+/// custom-node-type signature (parameter + output-pin `Fixed` types), every
+/// node's embedded `DataType` fields (recursing into HOF zone bodies via
+/// `walk_all_nodes`), and the bare `schema` / `target` record-def names on
+/// `record_construct` / `record_destructure` / `product`. Mirrors the read
+/// surface of `rewrite_record_name_in_registry`. Used by the namespace-delete
+/// reference check. See `doc/design_hierarchical_records.md`.
+///
+/// **Keep the node-data downcast list below in sync with the authoritative
+/// list in `canonicalize::canonicalize_node_data` and with
+/// `rewrite_record_name_in_registry`.** All three must cover every node-data
+/// variant that embeds a `DataType` (`closure`/`apply` `type_args`, `collect`
+/// `element_type`, the `map`/`filter`/… element/input/output types, …). A
+/// missing variant here silently under-counts references; a missing variant in
+/// the rewriter leaves a stale `Record(Named(old))` after a record rename
+/// (regression: `rename_wire_loss_regression_test`).
+pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<String>) {
     // Custom-network signature: parameter types and output pin types.
     for param in &network.node_type.parameters {
         collect_record_refs_in_type(&param.data_type, out);
@@ -2497,56 +2582,15 @@ pub fn collect_record_refs_in_network(network: &NodeNetwork, out: &mut HashSet<S
         }
     }
 
+    // Per-node embedded references, via the single shared enumerator (so the
+    // downcast list cannot drift from the invariant checker's). Schema/target
+    // names — including the empty string for an unset schema — are inserted
+    // verbatim; an empty string never matches a real (dotted) def name, so it
+    // is harmless here.
     crate::structure_designer::node_network::walk_all_nodes(network, &mut |node| {
-        let data: &dyn crate::structure_designer::node_data::NodeData = node.data.as_ref();
-        if let Some(d) = data.as_any_ref().downcast_ref::<ParameterData>() {
-            collect_record_refs_in_type(&d.data_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ClosureData>() {
-            for t in &d.type_args {
-                collect_record_refs_in_type(t, out);
-            }
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ApplyData>() {
-            for t in &d.type_args {
-                collect_record_refs_in_type(t, out);
-            }
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<CollectData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ExprData>() {
-            for p in &d.parameters {
-                collect_record_refs_in_type(&p.data_type, out);
-            }
-            if let Some(o) = d.output_type.as_ref() {
-                collect_record_refs_in_type(o, out);
-            }
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<MapData>() {
-            collect_record_refs_in_type(&d.input_type, out);
-            collect_record_refs_in_type(&d.output_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<SequenceData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<FilterData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<FoldData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-            collect_record_refs_in_type(&d.accumulator_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ForeachData>() {
-            collect_record_refs_in_type(&d.input_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAtData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAppendData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayConcatData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayLenData>() {
-            collect_record_refs_in_type(&d.element_type, out);
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordConstructData>() {
-            // A bare-name schema reference. An empty string (unset schema) never
-            // matches a real (dotted) target name, so it is harmless in `out`.
-            out.insert(d.schema.clone());
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<RecordDestructureData>() {
-            out.insert(d.schema.clone());
-        } else if let Some(d) = data.as_any_ref().downcast_ref::<ProductData>() {
-            out.insert(d.target.clone());
-        }
+        collect_record_refs_in_node(node, &mut |name, _site| {
+            out.insert(name.to_string());
+        });
     });
 }
 

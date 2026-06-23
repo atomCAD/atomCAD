@@ -363,3 +363,6 @@ mod patch_build_test;
 
 #[path = "structure_designer/patch_latticefill_test.rs"]
 mod patch_latticefill_test;
+
+#[path = "structure_designer/invariants_test.rs"]
+mod invariants_test;

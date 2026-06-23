@@ -220,6 +220,41 @@ where
     }
 }
 
+/// Read-only mirror of [`walk_data_type_record_names_mut`]. Applies `f` to every
+/// `RecordType::Named(_)` name reachable through `Array`, `Iterator`,
+/// `Function`, `AnyFunction`, and nested `Record::Anonymous` shapes — without
+/// cloning. The recursion arms MUST stay byte-for-byte aligned with the `_mut`
+/// version so the two never diverge (a divergence reintroduces the
+/// "walker misses a case" leaf-level bug class). Used by the Phase 0 invariant
+/// checker (`structure_designer::invariants`).
+pub fn walk_data_type_record_names<F>(t: &DataType, f: &mut F)
+where
+    F: FnMut(&str),
+{
+    match t {
+        DataType::Array(inner) => walk_data_type_record_names(inner, f),
+        DataType::Iterator(inner) => walk_data_type_record_names(inner, f),
+        DataType::Function(func) => {
+            for p in &func.parameter_types {
+                walk_data_type_record_names(p, f);
+            }
+            walk_data_type_record_names(&func.output_type, f);
+        }
+        DataType::AnyFunction { leading_params } => {
+            for p in leading_params {
+                walk_data_type_record_names(p, f);
+            }
+        }
+        DataType::Record(RecordType::Named(name)) => f(name),
+        DataType::Record(RecordType::Anonymous(fields)) => {
+            for (_, ty) in fields {
+                walk_data_type_record_names(ty, f);
+            }
+        }
+        _ => {}
+    }
+}
+
 impl RecordType {
     pub fn named(name: String) -> Self {
         RecordType::Named(name)

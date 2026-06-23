@@ -1,0 +1,232 @@
+{
+  "node_networks": [
+    [
+      "Sub",
+      {
+        "next_node_id": 4,
+        "node_type": {
+          "name": "Sub",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [
+            {
+              "name": "p0",
+              "data_type": "Int"
+            },
+            {
+              "name": "p1",
+              "data_type": "Int"
+            }
+          ],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "Int"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "int",
+            "custom_name": "int1",
+            "position": [
+              200.0,
+              0.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 1,
+            "node_type_name": "parameter",
+            "custom_name": "parameter1",
+            "position": [
+              0.0,
+              0.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_id": 1,
+              "param_index": 0,
+              "param_name": "p0",
+              "sort_order": 0
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 2,
+            "node_type_name": "parameter",
+            "custom_name": "parameter2",
+            "position": [
+              0.0,
+              100.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": []
+              }
+            ],
+            "data_type": "parameter",
+            "data": {
+              "data_type": "Int",
+              "data_type_str": null,
+              "param_id": 2,
+              "param_index": 1,
+              "param_name": "p1",
+              "sort_order": 1
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          }
+        ],
+        "return_node_id": 3,
+        "displayed_node_ids": [
+          [
+            2,
+            "Normal"
+          ],
+          [
+            1,
+            "Normal"
+          ],
+          [
+            3,
+            "Normal"
+          ]
+        ]
+      }
+    ],
+    [
+      "main",
+      {
+        "next_node_id": 4,
+        "node_type": {
+          "name": "main",
+          "description": "",
+          "summary": null,
+          "category": "Custom",
+          "parameters": [],
+          "output_pins": [
+            {
+              "name": "result",
+              "data_type": "None"
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "id": 3,
+            "node_type_name": "Sub",
+            "custom_name": "Sub1",
+            "position": [
+              200.0,
+              0.0
+            ],
+            "arguments": [
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 1,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              },
+              {
+                "incoming_wires": [
+                  {
+                    "source_node_id": 2,
+                    "source_pin": {
+                      "NodeOutput": {
+                        "pin_index": 0
+                      }
+                    },
+                    "source_scope_depth": 0
+                  }
+                ]
+              }
+            ],
+            "data_type": "custom_node",
+            "data": {},
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 1,
+            "node_type_name": "int",
+            "custom_name": "int1",
+            "position": [
+              0.0,
+              0.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          },
+          {
+            "id": 2,
+            "node_type_name": "int",
+            "custom_name": "int2",
+            "position": [
+              0.0,
+              100.0
+            ],
+            "arguments": [],
+            "data_type": "int",
+            "data": {
+              "value": 0
+            },
+            "body_width": 320.0,
+            "body_height": 180.0,
+            "collapse_mode": "Auto"
+          }
+        ],
+        "return_node_id": null,
+        "displayed_node_ids": [
+          [
+            3,
+            "Normal"
+          ],
+          [
+            1,
+            "Normal"
+          ],
+          [
+            2,
+            "Normal"
+          ]
+        ]
+      }
+    ]
+  ],
+  "version": 5,
+  "direct_editing_mode": true
+}
