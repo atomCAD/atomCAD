@@ -526,6 +526,14 @@ impl StructureDesigner {
     ) {
         self.pending_changes
             .mark_selection_changed(previous_selection, current_selection);
+        // Leaving an atom_edit node drops its transient Guideline tool state (#368).
+        if previous_selection != current_selection
+            && let Some(prev_id) = previous_selection
+        {
+            crate::structure_designer::nodes::atom_edit::atom_edit::clear_guideline_tool_on_node_deselect(
+                self, prev_id,
+            );
+        }
     }
 
     // --- Undo/Redo ---
@@ -546,6 +554,9 @@ impl StructureDesigner {
             // A snap-move that was just undone restores the atom to its off-line
             // position, so the transient guideline `snapped` bit must reset (#368).
             crate::structure_designer::nodes::atom_edit::atom_edit::reset_active_atom_edit_guideline_snapped(self);
+            // The picked atom of the new Guideline tool may have moved/vanished;
+            // auto-unpick to avoid a stale constrained-drag state (#368).
+            crate::structure_designer::nodes::atom_edit::atom_edit::auto_unpick_active_atom_edit_guideline(self);
             true
         } else {
             false
@@ -567,6 +578,9 @@ impl StructureDesigner {
             // Mirror the undo path: any redo can move the atom out from under a
             // stale `snapped` bit, so reset it (#368).
             crate::structure_designer::nodes::atom_edit::atom_edit::reset_active_atom_edit_guideline_snapped(self);
+            // The picked atom of the new Guideline tool may have moved/vanished;
+            // auto-unpick to avoid a stale constrained-drag state (#368).
+            crate::structure_designer::nodes::atom_edit::atom_edit::auto_unpick_active_atom_edit_guideline(self);
             true
         } else {
             false

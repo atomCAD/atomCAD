@@ -7,6 +7,8 @@ use std::collections::HashSet;
 
 use crate::util::transform::Transform;
 
+use super::guideline::Guideline;
+
 /// Default positional matching tolerance in Angstroms.
 pub const DEFAULT_TOLERANCE: f64 = 0.1;
 
@@ -213,6 +215,84 @@ pub enum AtomEditTool {
     Default(DefaultToolState),
     AddAtom(AddAtomToolState),
     AddBond(AddBondToolState),
+    /// Placement guideline tool (issue #368): constrains atom placement to a
+    /// transient line. Fully self-contained — the guideline lives inside the
+    /// tool variant, so switching tools (replacing the variant) drops it.
+    Guideline(GuidelineTool),
+}
+
+// =============================================================================
+// Guideline tool (issue #368)
+// =============================================================================
+
+/// A provenance-tagged atom reference — the same stable identity the selection
+/// model uses (`SelectionProvenance` + id), but stored on the Guideline tool
+/// rather than in the shared `AtomEditSelection`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomRef {
+    /// An atom from the base (input) structure, by immutable base atom id.
+    Base(u32),
+    /// An atom in the diff, by diff atom id.
+    Diff(u32),
+}
+
+/// Transient pointer sub-state for the Guideline tool. The pointer state machine
+/// is wired in Phase 2; Phase 1 only needs the resting `Idle` state.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum GuidelineDragState {
+    #[default]
+    Idle,
+}
+
+/// The two phases of the Guideline tool. See
+/// `doc/atom_edit/design_atom_guidelines.md`.
+#[derive(Debug)]
+pub enum GuidelinePhase {
+    /// No guideline yet: the user picks 1–3 atoms (the tool-local `defining`
+    /// set) to define the line.
+    Define { defining: Vec<AtomRef> },
+    /// A frozen guideline exists. `picked` is the active atom being moved (Move
+    /// mode) or `None` (Place mode, where `guideline.t` positions the ghost).
+    Active {
+        guideline: Guideline,
+        picked: Option<AtomRef>,
+        drag: GuidelineDragState,
+    },
+}
+
+/// State for the Guideline tool. Not serialized, not part of undo/redo — the
+/// guideline value is transient and vanishes when the tool variant is replaced.
+#[derive(Debug)]
+pub struct GuidelineTool {
+    pub phase: GuidelinePhase,
+    /// Remembered direction for the 1-atom directional line. Lives on the tool
+    /// (not in `Define`) so it **persists across Clear / re-Define**: rebuilding
+    /// a same-direction line from a different anchor needs no re-entry (#368).
+    pub entered_direction: DVec3,
+    /// Remembered along-line distance. Seeds a freshly-created line's `t` and
+    /// tracks the active point, so placing at the same distance from a different
+    /// anchor needs no re-entry. Also persists across Clear / re-Define (#368).
+    pub remembered_t: f64,
+}
+
+impl GuidelineTool {
+    /// Enter the tool in `Define` with an empty defining set and no remembered
+    /// settings.
+    pub fn new() -> Self {
+        Self {
+            phase: GuidelinePhase::Define {
+                defining: Vec::new(),
+            },
+            entered_direction: DVec3::ZERO,
+            remembered_t: 0.0,
+        }
+    }
+}
+
+impl Default for GuidelineTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // --- Selection model ---

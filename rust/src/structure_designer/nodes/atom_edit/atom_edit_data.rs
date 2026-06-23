@@ -1064,7 +1064,22 @@ impl AtomEditData {
             AtomEditTool::Default(_) => APIAtomEditTool::Default,
             AtomEditTool::AddAtom(_) => APIAtomEditTool::AddAtom,
             AtomEditTool::AddBond(_) => APIAtomEditTool::AddBond,
+            // The dedicated `APIAtomEditTool::Guideline` variant + `set_active_tool`
+            // wiring arrive with the API/Flutter layer in Phase 3 (issue #368). Until
+            // then the Guideline tool is test-only (constructed directly in Rust
+            // tests), so this arm is unreachable in production; map it to `Default`
+            // to keep the enum mapping total.
+            AtomEditTool::Guideline(_) => APIAtomEditTool::Default,
         }
+    }
+
+    /// Reset the active tool to the Default tool. Used by the node-deselect hook
+    /// to drop the transient Guideline tool state (issue #368).
+    pub fn reset_to_default_tool(&mut self) {
+        self.active_tool = AtomEditTool::Default(DefaultToolState {
+            interaction_state: DefaultToolInteractionState::default(),
+            show_gadget: false,
+        });
     }
 
     pub fn set_active_tool(&mut self, api_tool: APIAtomEditTool) {
@@ -1737,6 +1752,299 @@ impl AtomEditData {
             g.snapped = false;
         }
     }
+
+    // =========================================================================
+    // Guideline TOOL state machine (issue #368, new tool-based design)
+    //
+    // These operate on `AtomEditTool::Guideline`'s tool-local state (the
+    // `defining` set, the frozen `Guideline`, and the `picked` atom) — never on
+    // the shared `AtomEditSelection`. They are independent of the legacy modal
+    // `guideline` field above, which is removed once the new viewport + UI
+    // layers land (Phases 2–3). See `doc/atom_edit/design_atom_guidelines.md`.
+    // =========================================================================
+
+    /// The active `Guideline`, if the Guideline tool is in its `Active` phase.
+    pub fn guideline_active(&self) -> Option<Guideline> {
+        match &self.active_tool {
+            AtomEditTool::Guideline(GuidelineTool {
+                phase: GuidelinePhase::Active { guideline, .. },
+                ..
+            }) => Some(*guideline),
+            _ => None,
+        }
+    }
+
+    /// The currently picked atom (Move mode), if any.
+    pub fn guideline_picked(&self) -> Option<AtomRef> {
+        match &self.active_tool {
+            AtomEditTool::Guideline(GuidelineTool {
+                phase: GuidelinePhase::Active { picked, .. },
+                ..
+            }) => *picked,
+            _ => None,
+        }
+    }
+
+    /// The tool-local defining set, if the Guideline tool is in its `Define`
+    /// phase (otherwise empty).
+    pub fn guideline_defining(&self) -> Vec<AtomRef> {
+        match &self.active_tool {
+            AtomEditTool::Guideline(GuidelineTool {
+                phase: GuidelinePhase::Define { defining },
+                ..
+            }) => defining.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Toggle an atom in the tool-local defining set (capped at 3). No-op
+    /// outside the `Define` phase. "On atom" gesture in Define.
+    pub fn guideline_toggle_defining(&mut self, atom: AtomRef) {
+        if let AtomEditTool::Guideline(GuidelineTool {
+            phase: GuidelinePhase::Define { defining },
+            ..
+        }) = &mut self.active_tool
+        {
+            if let Some(pos) = defining.iter().position(|&a| a == atom) {
+                defining.remove(pos);
+            } else if defining.len() < 3 {
+                defining.push(atom);
+            }
+        }
+    }
+
+    /// Clear the entire defining set ("start over" — click on empty in Define).
+    pub fn guideline_clear_defining(&mut self) {
+        if let AtomEditTool::Guideline(GuidelineTool {
+            phase: GuidelinePhase::Define { defining },
+            ..
+        }) = &mut self.active_tool
+        {
+            defining.clear();
+        }
+    }
+
+    /// Set the entered direction used for the 1-atom directional line. Stored on
+    /// the tool so it persists across Clear / re-Define (issue #368). No-op
+    /// outside the Guideline tool.
+    pub fn guideline_set_entered_direction(&mut self, dir: DVec3) {
+        if let AtomEditTool::Guideline(tool) = &mut self.active_tool {
+            tool.entered_direction = dir;
+        }
+    }
+
+    /// Build the frozen line from the tool-local defining set (1/2/3 atoms, in
+    /// pick order so the direction sign is deterministic) and transition
+    /// `Define → Active`. `base_positions` supplies world positions for defining
+    /// atoms that are *base* atoms (diff atoms resolve from `self.diff`).
+    /// Returns `Err` and stays in `Define` on degenerate input; a no-op `Ok` for
+    /// an empty/oversized set or outside the `Define` phase.
+    pub fn guideline_create_from_defining(
+        &mut self,
+        base_positions: &HashMap<u32, DVec3>,
+    ) -> Result<(), GuidelineError> {
+        let (defining, entered_direction) = match &self.active_tool {
+            AtomEditTool::Guideline(GuidelineTool {
+                phase: GuidelinePhase::Define { defining },
+                entered_direction,
+                ..
+            }) => (defining.clone(), *entered_direction),
+            _ => return Ok(()),
+        };
+
+        let mut positions: Vec<DVec3> = Vec::new();
+        for atom in &defining {
+            let p = match atom {
+                AtomRef::Diff(id) => self.diff.get_atom(*id).map(|a| a.position),
+                AtomRef::Base(id) => base_positions.get(id).copied(),
+            };
+            match p {
+                Some(p) => positions.push(p),
+                None => return Ok(()), // missing position — leave in Define
+            }
+        }
+
+        let (origin, direction) = match positions.len() {
+            1 => Guideline::from_one_atom(positions[0], entered_direction)?,
+            2 => Guideline::from_two_atoms(positions[0], positions[1])?,
+            3 => Guideline::from_three_atoms(positions[0], positions[1], positions[2])?,
+            _ => return Ok(()), // 0 or >3 — nothing to build
+        };
+
+        if let AtomEditTool::Guideline(tool) = &mut self.active_tool {
+            let mut guideline = Guideline::new(origin, direction);
+            // Seed the new line at the remembered distance so "place at the same
+            // distance from a different anchor" needs no re-entry (issue #368).
+            guideline.t = tool.remembered_t;
+            tool.phase = GuidelinePhase::Active {
+                guideline,
+                picked: None,
+                drag: GuidelineDragState::Idle,
+            };
+        }
+        Ok(())
+    }
+
+    /// Overwrite the `Active` guideline value (internal helper). Also syncs the
+    /// tool's remembered distance to the new `t` so it persists across a later
+    /// Clear / re-Define (issue #368).
+    fn set_guideline_tool_value(&mut self, value: Guideline) {
+        if let AtomEditTool::Guideline(tool) = &mut self.active_tool {
+            let mut applied = false;
+            if let GuidelinePhase::Active { guideline, .. } = &mut tool.phase {
+                *guideline = value;
+                applied = true;
+            }
+            if applied {
+                tool.remembered_t = value.t;
+            }
+        }
+    }
+
+    /// Set the picked atom (internal helper).
+    fn set_guideline_tool_picked(&mut self, value: Option<AtomRef>) {
+        if let AtomEditTool::Guideline(GuidelineTool {
+            phase: GuidelinePhase::Active { picked, .. },
+            ..
+        }) = &mut self.active_tool
+        {
+            *picked = value;
+        }
+    }
+
+    /// Move the picked atom to `new_pos` (always on the line). A `Diff` ref is a
+    /// plain `move_in_diff` (no anchor — honours the pure-addition invariant for
+    /// atoms placed on the line). A `Base` ref is promoted to the diff (anchor at
+    /// its original base position via the supplied promotion info), and the
+    /// picked ref is migrated to the new diff id.
+    fn guideline_move_picked(
+        &mut self,
+        atom: AtomRef,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+        new_pos: DVec3,
+    ) {
+        match atom {
+            AtomRef::Diff(diff_id) => {
+                self.move_in_diff(diff_id, new_pos);
+            }
+            AtomRef::Base(_base_id) => {
+                let info = match base_promotion {
+                    Some(i) => i,
+                    None => return,
+                };
+                // Anchor is set here at promotion time so apply_diff matches the
+                // new diff atom back to its base atom (Anchor Invariant).
+                let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                    self.set_atomic_number_recorded(existing_id, info.atomic_number);
+                    self.set_anchor_recorded(existing_id, info.position);
+                    self.move_in_diff(existing_id, new_pos);
+                    existing_id
+                } else {
+                    let new_diff_id = self.add_atom_recorded(info.atomic_number, new_pos);
+                    self.set_anchor_recorded(new_diff_id, info.position);
+                    new_diff_id
+                };
+                self.promote_base_atom_metadata(info.flags, diff_id);
+                self.set_guideline_tool_picked(Some(AtomRef::Diff(diff_id)));
+            }
+        }
+    }
+
+    /// Set the active point's along-line position `t`. In Move mode (an atom is
+    /// picked) this slides the picked atom onto `point_at(t)`; in Place mode it
+    /// only moves the ghost marker. `base_promotion` is consulted when the picked
+    /// atom is a base atom not yet in the diff. No-op outside the `Active` phase.
+    pub fn guideline_set_position(
+        &mut self,
+        t: f64,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) {
+        let mut g = match self.guideline_active() {
+            Some(g) => g,
+            None => return,
+        };
+        g.t = t;
+        self.set_guideline_tool_value(g);
+        if let Some(atom) = self.guideline_picked() {
+            let new_pos = g.point_at(t);
+            self.guideline_move_picked(atom, base_promotion, new_pos);
+        }
+    }
+
+    /// Place a free atom (no bonds, no anchor → pure addition) of the panel
+    /// element at `point_at(t)`, then **auto-pick** it (transition to Move with
+    /// the just-placed atom picked). Returns the new diff atom id, or `None`
+    /// outside the `Active` phase.
+    pub fn guideline_place_atom(&mut self) -> Option<u32> {
+        let g = self.guideline_active()?;
+        let pos = g.point_at(g.t);
+        let id = self.add_atom_to_diff(self.selected_atomic_number, pos);
+        self.set_guideline_tool_picked(Some(AtomRef::Diff(id)));
+        Some(id)
+    }
+
+    /// Pick an existing atom and **snap it onto the line** (zero its perpendicular
+    /// offset at its current projection `t_proj`; `t` then reads `t_proj`). A base
+    /// atom is promoted to the diff first (anchor set once). A pure-addition diff
+    /// atom already on the line is left in place. No-op outside the `Active` phase
+    /// or when a base atom is picked without matching promotion info.
+    pub fn guideline_pick_atom(
+        &mut self,
+        atom: AtomRef,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) {
+        let mut g = match self.guideline_active() {
+            Some(g) => g,
+            None => return,
+        };
+        let pos = match atom {
+            AtomRef::Diff(id) => match self.diff.get_atom(id) {
+                Some(a) => a.position,
+                None => return,
+            },
+            AtomRef::Base(base_id) => match base_promotion {
+                Some(info) if info.base_id == base_id => info.position,
+                _ => return,
+            },
+        };
+        let (t_proj, offset) = g.decompose(pos);
+        g.t = t_proj;
+        self.set_guideline_tool_value(g);
+        self.set_guideline_tool_picked(Some(atom));
+        // Skip a no-op move for a diff atom already on the line; a base atom is
+        // still promoted so apply_diff tracks it.
+        let already_on_line = matches!(atom, AtomRef::Diff(_)) && offset.length() < 1e-9;
+        if !already_on_line {
+            let new_pos = g.point_at(t_proj);
+            self.guideline_move_picked(atom, base_promotion, new_pos);
+        }
+    }
+
+    /// Unpick (Move → Place). The atom stays where it is, on the line; the ghost
+    /// marker remains at the current `t`. No-op outside the `Active` phase.
+    pub fn guideline_unpick(&mut self) {
+        self.set_guideline_tool_picked(None);
+    }
+
+    /// Auto-unpick after an undo/redo: the picked atom may have been moved or
+    /// removed by the (un)done command, so a stale picked state must not silently
+    /// re-constrain the next drag. Uniform rule for both directions (issue #368).
+    pub fn guideline_auto_unpick(&mut self) {
+        self.set_guideline_tool_picked(None);
+    }
+
+    /// Clear the guideline and return to `Define` (Clear button / Escape). The
+    /// tool stays active so a new line can be built. No-op outside the Guideline
+    /// tool.
+    pub fn guideline_tool_clear(&mut self) {
+        if let AtomEditTool::Guideline(tool) = &mut self.active_tool {
+            // `entered_direction` and `remembered_t` deliberately persist so the
+            // next line built from a different anchor reuses them (issue #368).
+            tool.phase = GuidelinePhase::Define {
+                defining: Vec::new(),
+            };
+        }
+    }
 }
 
 /// Identifies the single atom a Move-sub-mode guideline operation acts on.
@@ -2120,6 +2428,24 @@ impl NodeData for AtomEditData {
                     bond_order: state.bond_order,
                     interaction_state: AddBondInteractionState::default(),
                     last_atom_id: state.last_atom_id,
+                }),
+                // Preserve the guideline/defining state; reset only the transient
+                // pointer sub-state (issue #368).
+                AtomEditTool::Guideline(tool) => AtomEditTool::Guideline(GuidelineTool {
+                    phase: match &tool.phase {
+                        GuidelinePhase::Define { defining } => GuidelinePhase::Define {
+                            defining: defining.clone(),
+                        },
+                        GuidelinePhase::Active {
+                            guideline, picked, ..
+                        } => GuidelinePhase::Active {
+                            guideline: *guideline,
+                            picked: *picked,
+                            drag: GuidelineDragState::Idle,
+                        },
+                    },
+                    entered_direction: tool.entered_direction,
+                    remembered_t: tool.remembered_t,
                 }),
             },
             selected_atomic_number: self.selected_atomic_number,
@@ -2864,6 +3190,47 @@ fn get_atom_edit_node_info(structure_designer: &StructureDesigner) -> Option<(St
 pub fn reset_active_atom_edit_guideline_snapped(structure_designer: &mut StructureDesigner) {
     if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
         data.reset_guideline_snapped();
+    }
+}
+
+/// Auto-unpick the active atom_edit Guideline tool after an undo/redo (issue
+/// #368). The picked atom may have been moved or removed by the (un)done
+/// command, so a stale picked state must not silently re-constrain the next
+/// drag. Called from `StructureDesigner::{undo,redo}` after the command applies.
+pub fn auto_unpick_active_atom_edit_guideline(structure_designer: &mut StructureDesigner) {
+    if let Some(data) = get_atom_edit_data_for_recording(structure_designer) {
+        data.guideline_auto_unpick();
+    }
+}
+
+/// Drop the transient Guideline tool state when an atom_edit node is
+/// deselected/left (issue #368): if `node_id` (in the active top-level network)
+/// is an atom_edit node currently in the Guideline tool, reset it to the Default
+/// tool so the guideline and all tool-local state vanish. No-op otherwise.
+pub fn clear_guideline_tool_on_node_deselect(
+    structure_designer: &mut StructureDesigner,
+    node_id: u64,
+) {
+    let network_name = match &structure_designer.active_node_network_name {
+        Some(name) => name.clone(),
+        None => return,
+    };
+    let network = match structure_designer
+        .node_type_registry
+        .node_networks
+        .get_mut(&network_name)
+    {
+        Some(network) => network,
+        None => return,
+    };
+    let node_data = match network.get_node_network_data_mut(node_id) {
+        Some(data) => data,
+        None => return,
+    };
+    if let Some(data) = node_data.as_any_mut().downcast_mut::<AtomEditData>()
+        && matches!(data.active_tool, AtomEditTool::Guideline(_))
+    {
+        data.reset_to_default_tool();
     }
 }
 
