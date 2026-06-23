@@ -1741,9 +1741,14 @@ fn build_api_guideline(sd: &StructureDesigner) -> Option<APIGuideline> {
         APIGuidelineSubMode::Place
     };
 
-    // Off-line distance is only meaningful in Move sub-mode; in Place sub-mode the
-    // marker sits at offset zero.
-    let off_line_distance = if n_sel == 1 {
+    // In Move sub-mode (exactly one selected atom) both `t` and the perpendicular
+    // offset are recomputed from the atom's CURRENT position, so the panel tracks
+    // the atom live during a drag. Snapped: keep the stored `t` (authoritative and
+    // exactly tracked by the constrained drag — avoids float noise from
+    // re-projection); the offset is ~0 by construction. Not snapped: reflect the
+    // atom's live projection. In Place sub-mode there is no atom — fall back to the
+    // stored marker `t` with zero offset.
+    let (t, off_line_distance) = if n_sel == 1 {
         let world_pos = if n_diff == 1 {
             let diff_id = *data.selection.selected_diff_atoms.iter().next().unwrap();
             data.diff.get_atom(diff_id).map(|a| a.position)
@@ -1755,15 +1760,22 @@ fn build_api_guideline(sd: &StructureDesigner) -> Option<APIGuideline> {
                 .first()
                 .map(|i| i.position)
         };
-        world_pos.map_or(0.0, |p| g.decompose(p).1.length())
+        match world_pos {
+            Some(p) => {
+                let (t_proj, offset) = g.decompose(p);
+                let t = if g.snapped { g.t } else { t_proj };
+                (t, offset.length())
+            }
+            None => (g.t, 0.0),
+        }
     } else {
-        0.0
+        (g.t, 0.0)
     };
 
     Some(APIGuideline {
         origin: to_api_vec3(&g.origin),
         direction: to_api_vec3(&g.direction),
-        t: g.t,
+        t,
         off_line_distance,
         snapped: g.snapped,
         sub_mode,

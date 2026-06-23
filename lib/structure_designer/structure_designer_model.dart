@@ -1842,6 +1842,15 @@ class StructureDesignerModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Lightweight panel rebuild during a guideline drag so the position field and
+  /// off-line readout track the atom live (#368). Deliberately does NOT call
+  /// `refreshFromKernel()` — the guideline card re-reads its state directly via
+  /// FFI on rebuild, so a plain notify is enough and avoids a per-frame re-fetch
+  /// of the whole node-network view.
+  void notifyGuidelineDragSync() {
+    notifyListeners();
+  }
+
   void addAtomByRay(int atomicNumber, vector_math.Vector3 planeNormal,
       vector_math.Vector3 rayStart, vector_math.Vector3 rayDir) {
     if (nodeNetworkView == null) return;

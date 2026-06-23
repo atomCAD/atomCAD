@@ -94,6 +94,14 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
           );
       }
       _viewport.renderingNeeded();
+      // Live-sync the guideline position field / off-line readout while dragging a
+      // single selected atom (#368). Move sub-mode only — Place mode and normal
+      // multi-atom drags don't change the field, so they skip the rebuild.
+      final guideline = atom_edit_api.getAtomEditGuideline();
+      if (guideline != null &&
+          guideline.subMode == APIGuidelineSubMode.move) {
+        _viewport.widget.graphModel.notifyGuidelineDragSync();
+      }
     }
     return true;
   }
