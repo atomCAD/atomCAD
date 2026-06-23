@@ -148,9 +148,6 @@ mod atom_edit_undo_test;
 #[path = "structure_designer/atom_edit_guideline_test.rs"]
 mod atom_edit_guideline_test;
 
-#[path = "structure_designer/atom_edit_guideline_state_test.rs"]
-mod atom_edit_guideline_state_test;
-
 #[path = "structure_designer/atom_edit_guideline_tool_test.rs"]
 mod atom_edit_guideline_tool_test;
 

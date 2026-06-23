@@ -143,6 +143,17 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
                   Icons.link,
                 ),
               ),
+              // Guideline tool is atom_edit-only (#368) — motif_edit is out of scope.
+              if (!_stagedData!.isMotifMode)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: _buildToolButton(
+                    context,
+                    APIAtomEditTool.guideline,
+                    'Guideline (F5)',
+                    Icons.timeline,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.small),
@@ -153,11 +164,6 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             const SizedBox(height: AppSpacing.large),
             _buildMeasurementDisplay(_stagedData!.measurement!),
           ],
-          // Placement guideline (issue #368) — atom_edit only, Default/AddAtom tools.
-          if (!_stagedData!.isMotifMode &&
-              (_stagedData!.activeTool == APIAtomEditTool.default_ ||
-                  _stagedData!.activeTool == APIAtomEditTool.addAtom))
-            _buildGuidelineCard(),
           // Parameter elements section (motif_edit only)
           if (_stagedData!.isMotifMode) ...[
             const SizedBox(height: AppSpacing.large),
@@ -341,6 +347,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
         return _buildAddAtomToolUI();
       case APIAtomEditTool.addBond:
         return _buildAddBondToolUI();
+      case APIAtomEditTool.guideline:
+        return _buildGuidelinePanel();
     }
   }
 
@@ -600,184 +608,176 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   }
 
   // ===========================================================================
-  // Placement guideline (issue #368)
+  // Placement guideline tool (issue #368)
   // ===========================================================================
 
-  Widget _buildGuidelineCard() {
-    final guideline = atom_edit_api.getAtomEditGuideline();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.large),
-        Card(
-          elevation: 0,
-          margin: EdgeInsets.zero,
-          color: guideline != null ? Colors.amber[50] : Colors.grey[50],
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.medium),
-            child: guideline == null
-                ? _buildGuidelineSetup()
-                : _buildGuidelineActive(guideline),
-          ),
-        ),
-      ],
+  /// Phase-driven Guideline tool panel (Define / Place / Move). Reads the
+  /// tool view via FFI each build; `null` (tool not active) renders nothing.
+  Widget _buildGuidelinePanel() {
+    final view = atom_edit_api.getGuidelineToolView();
+    final bool active = view != null && view.phase != APIGuidelinePhase.define;
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: active ? Colors.amber[50] : Colors.grey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.medium),
+        child: view == null
+            ? const SizedBox.shrink()
+            : switch (view.phase) {
+                APIGuidelinePhase.define => _buildGuidelineDefine(view),
+                APIGuidelinePhase.place => _buildGuidelinePlace(view),
+                APIGuidelinePhase.move => _buildGuidelineMove(view),
+              },
+      ),
     );
   }
 
-  Widget _buildGuidelineHeader([String? badge]) {
+  Widget _buildGuidelineHeader(String badge) {
     return Row(
       children: [
         Icon(Icons.timeline, size: 18, color: Colors.grey[700]),
         const SizedBox(width: 8),
         Text('Guideline', style: TextStyle(fontWeight: FontWeight.w500)),
-        if (badge != null) ...[
-          const Spacer(),
-          Text(badge, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-        ],
+        const Spacer(),
+        Text(badge, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
       ],
     );
   }
 
-  /// Setup state: a context-sensitive button whose label depends on the selection
-  /// count (1 → Directional, 2 → Center, 3 → Equidistant line).
-  Widget _buildGuidelineSetup() {
-    final count = _stagedData!.selectedAtomCount;
-    final String? label = count == 3
+  /// Define: pick 1–3 atoms in the viewport, then Create. The button label
+  /// tracks the defining count (1 → Directional, 2 → Center, 3 → Equidistant).
+  Widget _buildGuidelineDefine(APIGuidelineToolView view) {
+    final count = view.definingCount;
+    final String label = count == 3
         ? 'Equidistant line'
         : count == 2
             ? 'Center line'
             : count == 1
                 ? 'Directional line'
-                : null;
+                : 'Pick 1–3 atoms';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildGuidelineHeader(),
+        _buildGuidelineHeader('Define'),
         const SizedBox(height: AppSpacing.small),
-        if (label == null)
-          Text(
-            'Select 1, 2, or 3 atoms to set up a placement guideline.',
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-          )
-        else ...[
-          if (count == 1) ...[
-            Vec3Input(
-              label: 'Direction',
-              value: _guidelineDirection,
-              onChanged: (value) {
-                setState(() => _guidelineDirection = value);
-              },
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: _normalizeGuidelineDirection,
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 28),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                child: const Text('Normalize', style: TextStyle(fontSize: 12)),
+        Text(
+          'Click 1–3 atoms in the viewport to define a guideline. '
+          'Click empty space to start over.',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        if (view.needsDirection) ...[
+          Vec3Input(
+            label: 'Direction',
+            value: _guidelineDirection,
+            onChanged: (value) {
+              setState(() => _guidelineDirection = value);
+            },
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _normalizeGuidelineDirection,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
-            ),
-            const SizedBox(height: AppSpacing.small),
-          ],
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _setupGuideline,
-              child: Text(label),
+              child: const Text('Normalize', style: TextStyle(fontSize: 12)),
             ),
           ),
+          const SizedBox(height: AppSpacing.small),
         ],
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: view.canCreate ? _createGuideline : null,
+            child: Text(view.canCreate ? label : 'Pick 1–3 atoms'),
+          ),
+        ),
       ],
     );
   }
 
-  /// Active state: position field, off-line readout, snap checkbox (Move only),
-  /// element selector + Place button (Place only), and Cancel.
-  Widget _buildGuidelineActive(APIGuideline g) {
-    final isMove = g.subMode == APIGuidelineSubMode.move;
+  /// Place: ghost marker position field, element selector, Place atom + Clear.
+  Widget _buildGuidelinePlace(APIGuidelineToolView view) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildGuidelineHeader(isMove ? 'Move' : 'Place'),
+        _buildGuidelineHeader('Place'),
         const SizedBox(height: AppSpacing.small),
         FloatInput(
           key: const ValueKey('guideline_position'),
-          label: isMove ? 'Selected atom position (Å)' : 'New atom position (Å)',
-          value: g.t,
-          onChanged: (value) {
-            widget.model.atomEditSetGuidelinePosition(value);
+          label: 'New atom position (Å)',
+          value: view.t,
+          onChanged: (value) => widget.model.guidelineSetPosition(value),
+        ),
+        const SizedBox(height: AppSpacing.medium),
+        SelectElementWidget(
+          value: _selectedAtomicNumber,
+          onChanged: (int? newValue) {
+            setState(() {
+              _selectedAtomicNumber = newValue;
+            });
+            if (newValue != null) {
+              widget.model.setAtomEditSelectedElement(newValue);
+            }
           },
+          label: 'Element to place:',
+          hint: 'Select an element',
+          required: true,
+          parameterElements: _motifParams,
         ),
-        const SizedBox(height: AppSpacing.small),
-        Text(
-          'off-line: ${g.offLineDistance.toStringAsFixed(3)} Å',
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-        ),
-        if (isMove) ...[
-          const SizedBox(height: AppSpacing.small),
-          Row(
-            children: [
-              SizedBox(
-                height: 24,
-                width: 24,
-                child: Checkbox(
-                  value: g.snapped,
-                  onChanged: (_) {
-                    widget.model.atomEditSetGuidelineSnapped(!g.snapped);
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text('Snap to guideline'),
-            ],
-          ),
-        ],
-        if (!isMove) ...[
-          const SizedBox(height: AppSpacing.medium),
-          SelectElementWidget(
-            value: _selectedAtomicNumber,
-            onChanged: (int? newValue) {
-              setState(() {
-                _selectedAtomicNumber = newValue;
-              });
-              if (newValue != null) {
-                widget.model.setAtomEditSelectedElement(newValue);
-              }
-            },
-            label: 'Element to place:',
-            hint: 'Select an element',
-            required: true,
-            parameterElements: _motifParams,
-          ),
-        ],
         const SizedBox(height: AppSpacing.medium),
         Row(
           children: [
-            if (!isMove) ...[
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _selectedAtomicNumber != null
-                      ? () {
-                          widget.model.atomEditPlaceAtomOnGuideline();
-                        }
-                      : null,
-                  style: AppButtonStyles.primary,
-                  child: const Text('Place atom'),
-                ),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _selectedAtomicNumber != null
+                    ? () => widget.model.guidelinePlaceAtom()
+                    : null,
+                style: AppButtonStyles.primary,
+                child: const Text('Place atom'),
               ),
-              const SizedBox(width: 8),
-            ],
+            ),
+            const SizedBox(width: 8),
             OutlinedButton(
-              onPressed: () {
-                widget.model.atomEditClearGuideline();
-              },
-              child: const Text('Cancel'),
+              onPressed: () => widget.model.guidelineClear(),
+              child: const Text('Clear'),
             ),
           ],
+        ),
+      ],
+    );
+  }
+
+  /// Move: the picked atom's along-line position field + Clear.
+  Widget _buildGuidelineMove(APIGuidelineToolView view) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildGuidelineHeader('Move'),
+        const SizedBox(height: AppSpacing.small),
+        FloatInput(
+          key: const ValueKey('guideline_position'),
+          label: 'Picked atom position (Å)',
+          value: view.t,
+          onChanged: (value) => widget.model.guidelineSetPosition(value),
+        ),
+        const SizedBox(height: AppSpacing.small),
+        Text(
+          'Drag the atom along the line, or click empty space to place another.',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+        const SizedBox(height: AppSpacing.medium),
+        Align(
+          alignment: Alignment.centerRight,
+          child: OutlinedButton(
+            onPressed: () => widget.model.guidelineClear(),
+            child: const Text('Clear'),
+          ),
         ),
       ],
     );
@@ -788,14 +788,13 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     final len = sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
     if (len < 1e-9) return;
     setState(() {
-      _guidelineDirection =
-          APIVec3(x: v.x / len, y: v.y / len, z: v.z / len);
+      _guidelineDirection = APIVec3(x: v.x / len, y: v.y / len, z: v.z / len);
     });
   }
 
-  void _setupGuideline() {
+  void _createGuideline() {
     final error =
-        widget.model.atomEditSetGuidelineFromSelection(_guidelineDirection);
+        widget.model.guidelineCreateFromDefining(_guidelineDirection);
     if (error.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()

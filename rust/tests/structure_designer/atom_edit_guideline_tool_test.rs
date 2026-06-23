@@ -1,12 +1,9 @@
-//! Phase 1 tests for the **tool-based** atom placement guideline (issue #368).
+//! Tests for the **tool-based** atom placement guideline (issue #368).
 //!
 //! Exercises the `AtomEditTool::Guideline` state machine — the `Define` phase
 //! (defining set + create), the `Active` phase (place / pick / set-position /
 //! unpick / clear), and the undo + node-deselect hooks — entirely from Rust.
-//! See `doc/atom_edit/design_atom_guidelines.md` (Phase 1).
-//!
-//! The legacy modal-guideline tests live in `atom_edit_guideline_state_test.rs`;
-//! this file covers the new tool that will replace it.
+//! See `doc/atom_edit/design_atom_guidelines.md`.
 
 use glam::f64::DVec3;
 use std::collections::HashMap;

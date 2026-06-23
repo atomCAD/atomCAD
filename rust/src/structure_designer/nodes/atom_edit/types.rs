@@ -107,11 +107,6 @@ pub enum DefaultToolInteractionState {
         start_screen: DVec2,
         current_screen: DVec2,
     },
-    /// Line-constrained single-atom drag (issue #368). Entered when a drag starts
-    /// on the already-selected atom of a `snapped` guideline; the atom rides the
-    /// guideline tracking the cursor ray's projection. The guideline (and live `t`)
-    /// live on `AtomEditData`, so no per-frame anchor state is needed here.
-    GuidelineDragging,
 }
 
 #[derive(Debug)]

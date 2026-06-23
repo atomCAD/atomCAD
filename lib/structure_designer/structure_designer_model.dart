@@ -1791,63 +1791,55 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  // ===== PLACEMENT GUIDELINE (issue #368) =====
+  // ===== PLACEMENT GUIDELINE TOOL (issue #368) =====
 
-  /// Build the guideline from the current selection (1/2/3 atoms). The entered
-  /// direction is only used for the 1-atom directional line. Returns an empty
+  /// Build the frozen line from the tool-local defining set (1/2/3 atoms).
+  /// `direction` is used only for the 1-atom directional line. Returns an empty
   /// string on success or an error message (for a SnackBar) on degenerate input.
-  String atomEditSetGuidelineFromSelection(APIVec3 enteredDirection) {
-    final error = atom_edit_api.atomEditSetGuidelineFromSelection(
-        enteredDirection: enteredDirection);
+  String guidelineCreateFromDefining(APIVec3 direction) {
+    final error =
+        atom_edit_api.guidelineCreateFromDefining(direction: direction);
     refreshFromKernel();
     notifyListeners();
     return error;
   }
 
-  void atomEditSetGuidelinePosition(double t) {
-    atom_edit_api.atomEditSetGuidelinePosition(t: t);
+  /// Set the active point's along-line position `t` (slides the picked atom in
+  /// Move mode, the ghost marker in Place mode).
+  void guidelineSetPosition(double t) {
+    atom_edit_api.guidelineSetPosition(t: t);
     refreshFromKernel();
     notifyListeners();
   }
 
-  void atomEditSetGuidelineSnapped(bool snapped) {
-    atom_edit_api.atomEditSetGuidelineSnapped(snapped: snapped);
-    refreshFromKernel();
-    notifyListeners();
-  }
-
-  bool atomEditPlaceAtomOnGuideline() {
-    final placed = atom_edit_api.atomEditPlaceAtomOnGuideline();
+  /// Place a free atom of the panel element at the ghost marker (→ Move).
+  bool guidelinePlaceAtom() {
+    final placed = atom_edit_api.guidelinePlaceAtom();
     refreshFromKernel();
     notifyListeners();
     return placed;
   }
 
-  bool atomEditPlaceAtomOnGuidelineByRay(
-    vector_math.Vector3 rayStart,
-    vector_math.Vector3 rayDir,
-  ) {
-    final placed = atom_edit_api.atomEditPlaceAtomOnGuidelineByRay(
-      rayStart: vector3ToApiVec3(rayStart),
-      rayDir: vector3ToApiVec3(rayDir),
-    );
-    refreshFromKernel();
-    notifyListeners();
-    return placed;
-  }
-
-  void atomEditClearGuideline() {
-    atom_edit_api.atomEditClearGuideline();
+  /// Clear the guideline and return to `Define` (Clear button / Escape).
+  void guidelineClear() {
+    atom_edit_api.guidelineClear();
     refreshFromKernel();
     notifyListeners();
   }
 
-  /// Lightweight panel rebuild during a guideline drag so the position field and
-  /// off-line readout track the atom live (#368). Deliberately does NOT call
-  /// `refreshFromKernel()` — the guideline card re-reads its state directly via
+  /// Remember the 1-atom direction (persists across Clear / re-Define).
+  void guidelineSetEnteredDirection(APIVec3 direction) {
+    atom_edit_api.guidelineSetEnteredDirection(direction: direction);
+    refreshFromKernel();
+    notifyListeners();
+  }
+
+  /// Lightweight panel rebuild during a guideline drag so the position field
+  /// tracks the marker / atom live (#368). Deliberately does NOT call
+  /// `refreshFromKernel()` — the Guideline card re-reads its view directly via
   /// FFI on rebuild, so a plain notify is enough and avoids a per-frame re-fetch
   /// of the whole node-network view.
-  void notifyGuidelineDragSync() {
+  void notifyGuidelineToolSync() {
     notifyListeners();
   }
 

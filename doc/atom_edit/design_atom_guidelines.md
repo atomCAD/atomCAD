@@ -495,6 +495,31 @@ pointer math stays unit-testable independent of rendering.
 
 ### Phase 3 — API + Flutter UI **+ the v1 teardown**
 
+> **✅ STATUS — Phase 3 DONE (2026-06-23). The feature is COMPLETE.**
+>
+> The thin FFI surface, the panel/toolbar, AND the complete v1 removal all landed
+> together. What exists now:
+> - **API** (`api/.../atom_edit_api.rs`): `APIAtomEditTool::Guideline` (wired into
+>   `get_active_tool` / `set_active_tool`, which constructs a fresh `GuidelineTool`
+>   and clears the shared selection). Panel fns `guideline_create_from_defining(dir)
+>   -> String`, `guideline_set_position`, `guideline_place_atom`, `guideline_clear`,
+>   `guideline_set_entered_direction`; view builder `get_guideline_tool_view ->
+>   Option<APIGuidelineToolView>` (`{phase, defining_count, can_create,
+>   needs_direction, t}`, `t` derived from the picked atom's live projection in
+>   Move). Pointer fns `guideline_pointer_{down,move,up}` + `guideline_reset_interaction`.
+> - **v1 deleted:** `AtomEditData.guideline` field, `Guideline.snapped` (+ resets),
+>   `single_guideline_atom`/`move_guideline_atom`/`GuidelineAtom`,
+>   `set_guideline_*`/`place_atom_on_guideline*`/`drag_*_along_guideline`, the
+>   `default_tool.rs` `GuidelineDragging` path, the v1 API (`APIGuideline`,
+>   `APIGuidelineSubMode`, `build_api_guideline`, the `atom_edit_*guideline*` FFI
+>   fns), the v1 Flutter card + model methods + viewport hooks, and the
+>   `atom_edit_guideline_state_test.rs` test file (+ the v1 render/drag cases).
+> - **Flutter:** 4th toolbar button (`Icons.timeline`, F5, atom_edit-only), the
+>   phase-driven `_buildGuidelinePanel` (Define/Place/Move), `_AtomEditGuidelineDelegate`
+>   pointer dispatch, Escape → `guidelineClear`. Model methods `guideline*` +
+>   `notifyGuidelineToolSync`.
+> - All 2300+ Rust tests green; `flutter analyze` clean (pre-existing info lints only).
+
 The thin FFI surface and the panel/toolbar that drive it — **plus the complete v1
 removal**, which Phases 1–2 deferred (both were landed additively to keep the build
 green with zero FRB churn). This phase is the atomic API/Flutter/FRB swap, so it is

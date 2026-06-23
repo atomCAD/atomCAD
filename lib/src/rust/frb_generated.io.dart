@@ -188,10 +188,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
 
   @protected
-  APIGuideline dco_decode_api_guideline(dynamic raw);
+  APIGuidelinePhase dco_decode_api_guideline_phase(dynamic raw);
 
   @protected
-  APIGuidelineSubMode dco_decode_api_guideline_sub_mode(dynamic raw);
+  APIGuidelineToolView dco_decode_api_guideline_tool_view(dynamic raw);
 
   @protected
   APIHalfPlaneData dco_decode_api_half_plane_data(dynamic raw);
@@ -537,7 +537,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData dco_decode_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
-  APIGuideline dco_decode_box_autoadd_api_guideline(dynamic raw);
+  APIGuidelineToolView dco_decode_box_autoadd_api_guideline_tool_view(
+      dynamic raw);
 
   @protected
   APIHalfPlaneData dco_decode_box_autoadd_api_half_plane_data(dynamic raw);
@@ -1026,7 +1027,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData? dco_decode_opt_box_autoadd_api_geo_trans_data(dynamic raw);
 
   @protected
-  APIGuideline? dco_decode_opt_box_autoadd_api_guideline(dynamic raw);
+  APIGuidelineToolView? dco_decode_opt_box_autoadd_api_guideline_tool_view(
+      dynamic raw);
 
   @protected
   APIHalfPlaneData? dco_decode_opt_box_autoadd_api_half_plane_data(dynamic raw);
@@ -1474,10 +1476,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
 
   @protected
-  APIGuideline sse_decode_api_guideline(SseDeserializer deserializer);
+  APIGuidelinePhase sse_decode_api_guideline_phase(
+      SseDeserializer deserializer);
 
   @protected
-  APIGuidelineSubMode sse_decode_api_guideline_sub_mode(
+  APIGuidelineToolView sse_decode_api_guideline_tool_view(
       SseDeserializer deserializer);
 
   @protected
@@ -1883,7 +1886,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIGuideline sse_decode_box_autoadd_api_guideline(
+  APIGuidelineToolView sse_decode_box_autoadd_api_guideline_tool_view(
       SseDeserializer deserializer);
 
   @protected
@@ -2472,7 +2475,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  APIGuideline? sse_decode_opt_box_autoadd_api_guideline(
+  APIGuidelineToolView? sse_decode_opt_box_autoadd_api_guideline_tool_view(
       SseDeserializer deserializer);
 
   @protected
@@ -2987,11 +2990,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_guideline(APIGuideline self, SseSerializer serializer);
+  void sse_encode_api_guideline_phase(
+      APIGuidelinePhase self, SseSerializer serializer);
 
   @protected
-  void sse_encode_api_guideline_sub_mode(
-      APIGuidelineSubMode self, SseSerializer serializer);
+  void sse_encode_api_guideline_tool_view(
+      APIGuidelineToolView self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_half_plane_data(
@@ -3417,8 +3421,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_api_guideline(
-      APIGuideline self, SseSerializer serializer);
+  void sse_encode_box_autoadd_api_guideline_tool_view(
+      APIGuidelineToolView self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_half_plane_data(
@@ -4019,8 +4023,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIGeoTransData? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_api_guideline(
-      APIGuideline? self, SseSerializer serializer);
+  void sse_encode_opt_box_autoadd_api_guideline_tool_view(
+      APIGuidelineToolView? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_half_plane_data(

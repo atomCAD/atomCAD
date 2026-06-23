@@ -1,10 +1,10 @@
-//! Phase 3 tests for the atom placement guideline (issue #368).
+//! Rendering-decoration tests for the placement guideline tool (issue #368).
 //!
-//! Rendering decoration: `eval(decorate=true)` populates the output's
-//! `decorator.guideline_visuals` from the transient `AtomEditData::guideline`
-//! (applied to both the result and diff pins); `decorate=false` and a missing
-//! guideline both leave it `None`. Tessellation/GPU is exempt per the testing
-//! policy. See `doc/atom_edit/design_atom_guidelines.md`.
+//! `eval(decorate=true)` populates the output's `decorator.guideline_visuals`
+//! from the active Guideline tool's `Active` line (applied to both the result and
+//! diff pins); `Define`, `decorate=false`, and no Guideline tool all leave it
+//! `None`. Tessellation/GPU is exempt per the testing policy. See
+//! `doc/atom_edit/design_atom_guidelines.md`.
 
 use glam::f64::{DVec2, DVec3};
 
@@ -86,43 +86,6 @@ fn sample_guideline() -> Guideline {
 // =============================================================================
 // Tests
 // =============================================================================
-
-#[test]
-fn decorate_true_populates_result_pin_visuals() {
-    let (mut designer, node_id) = setup_atom_edit();
-    data_mut(&mut designer, node_id).guideline = Some(sample_guideline());
-
-    let visuals = eval_guideline_visuals(&designer, node_id, 0, true)
-        .expect("result pin should carry guideline visuals when decorating");
-
-    assert!((visuals.origin - DVec3::new(1.0, 2.0, 3.0)).length() < EPS);
-    assert!((visuals.direction - DVec3::new(0.0, 0.0, 1.0)).length() < EPS);
-    assert!((visuals.marker_t - 4.0).abs() < EPS);
-}
-
-#[test]
-fn decorate_true_populates_diff_pin_visuals() {
-    let (mut designer, node_id) = setup_atom_edit();
-    data_mut(&mut designer, node_id).guideline = Some(sample_guideline());
-
-    // Pin 1 is the diff output.
-    let visuals = eval_guideline_visuals(&designer, node_id, 1, true)
-        .expect("diff pin should carry guideline visuals when decorating");
-
-    assert!((visuals.origin - DVec3::new(1.0, 2.0, 3.0)).length() < EPS);
-    assert!((visuals.direction - DVec3::new(0.0, 0.0, 1.0)).length() < EPS);
-    assert!((visuals.marker_t - 4.0).abs() < EPS);
-}
-
-#[test]
-fn decorate_false_leaves_visuals_none() {
-    let (mut designer, node_id) = setup_atom_edit();
-    data_mut(&mut designer, node_id).guideline = Some(sample_guideline());
-
-    // Even with a guideline set, a non-decorating pass adds no visuals.
-    assert!(eval_guideline_visuals(&designer, node_id, 0, false).is_none());
-    assert!(eval_guideline_visuals(&designer, node_id, 1, false).is_none());
-}
 
 #[test]
 fn no_guideline_leaves_visuals_none() {

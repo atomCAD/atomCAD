@@ -54,11 +54,11 @@ pub enum GuidelineError {
 }
 
 /// A placement guideline: a frozen line (`origin` + unit `direction`) plus the
-/// current 1D position `t` (signed Å from `origin` along `direction`) and a
-/// transient `snapped` mode bit.
+/// current 1D position `t` (signed Å from `origin` along `direction`).
 ///
 /// All fields are transient interaction state — a `Guideline` is *not* serialized
-/// to `.cnnd` and is *not* part of undo/redo history.
+/// to `.cnnd` and is *not* part of undo/redo history. Picking always snaps the
+/// atom onto the line, so there is no off-line "snapped" mode bit to track.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Guideline {
     /// A point on the line.
@@ -68,21 +68,17 @@ pub struct Guideline {
     pub direction: DVec3,
     /// Current 1D position along the line (signed Å from `origin`).
     pub t: f64,
-    /// Whether the selected atom is locked onto the line. Transient mode bit; see
-    /// the design doc's "Snap to guideline" section.
-    pub snapped: bool,
 }
 
 impl Guideline {
-    /// Build a guideline from a frozen `origin` and unit `direction`, with `t = 0`
-    /// and `snapped = false`. `direction` is assumed already normalized (the
-    /// `from_*` constructors below produce unit directions).
+    /// Build a guideline from a frozen `origin` and unit `direction`, with `t = 0`.
+    /// `direction` is assumed already normalized (the `from_*` constructors below
+    /// produce unit directions).
     pub fn new(origin: DVec3, direction: DVec3) -> Self {
         Self {
             origin,
             direction,
             t: 0.0,
-            snapped: false,
         }
     }
 
