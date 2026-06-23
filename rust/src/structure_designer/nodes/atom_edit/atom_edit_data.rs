@@ -1620,6 +1620,42 @@ impl AtomEditData {
         self.move_guideline_atom(&atom, base_promotion, new_pos);
     }
 
+    /// Constrained-drag move (Default tool): slide the single selected atom to the
+    /// point on the guideline closest to the cursor ray
+    /// (`ray_origin` + s·`ray_direction`), updating the live `t`. A 1D reduction of
+    /// the screen-plane drag, taken only when the guideline is `snapped` and exactly
+    /// one atom is selected (Move sub-mode).
+    ///
+    /// Returns `false` — signalling the caller to fall through to the free
+    /// screen-plane drag — when there is no snapped guideline, when the selection is
+    /// not a single atom, or when the ray is parallel to the line (no unique foot).
+    /// `base_promotion` promotes a selected base atom if needed, though snapping has
+    /// normally already promoted it to the diff. See the design doc's
+    /// "Moving one atom" section.
+    pub fn drag_along_guideline(
+        &mut self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        base_promotion: Option<&super::operations::BaseAtomPromotionInfo>,
+    ) -> bool {
+        let g = match self.guideline {
+            Some(g) if g.snapped => g,
+            _ => return false,
+        };
+        // Move sub-mode only: exactly one selected atom.
+        if self.selection.selected_base_atoms.len() + self.selection.selected_diff_atoms.len() != 1
+        {
+            return false;
+        }
+        let t = match g.closest_t_to_ray(ray_origin, ray_direction) {
+            Some(t) => t,
+            None => return false, // Ray parallel to the line — ignore this frame.
+        };
+        // Snapped move: lands the atom on the line at `point_at(t)` and updates `t`.
+        self.set_guideline_position(t, base_promotion);
+        true
+    }
+
     /// Set the guideline `snapped` mode bit. ON: snap the single selected atom
     /// onto the line (zero its perpendicular offset at its current projection),
     /// promoting a base atom to the diff if necessary. OFF: release in place (no

@@ -1,6 +1,8 @@
 use super::atom_edit_data::*;
 use super::minimization::{continuous_minimize_during_drag, continuous_minimize_settle};
-use super::operations::{change_bond_order, cycle_bond_order, drag_selected_by_delta};
+use super::operations::{
+    change_bond_order, cycle_bond_order, drag_selected_along_guideline, drag_selected_by_delta,
+};
 use super::selection::*;
 use super::types::*;
 use crate::api::common_api_types::SelectModifier;
@@ -51,6 +53,25 @@ fn ray_plane_intersect(
     Some(*ray_origin + *ray_direction * t)
 }
 
+/// Run one continuous-minimization frame if enabled (selected atoms stay frozen
+/// at their current position while neighbors relax). Shared by the screen-plane
+/// and guideline-constrained drag paths.
+fn continuous_minimize_frame_if_enabled(structure_designer: &mut StructureDesigner) {
+    if !get_active_atom_edit_data(structure_designer).is_some_and(|d| d.continuous_minimization) {
+        return;
+    }
+    // Take promoted_base_atoms out of the pending drag to avoid a borrow conflict.
+    let mut promoted = structure_designer
+        .pending_atom_edit_drag
+        .as_mut()
+        .map(|p| std::mem::take(&mut p.promoted_base_atoms))
+        .unwrap_or_default();
+    let _ = continuous_minimize_during_drag(structure_designer, &mut promoted);
+    if let Some(pending) = &mut structure_designer.pending_atom_edit_drag {
+        pending.promoted_base_atoms = promoted;
+    }
+}
+
 /// Compute an LTWH rectangle from two corner points (handles any drag direction).
 fn screen_rect_from_corners(a: DVec2, b: DVec2) -> (f64, f64, f64, f64) {
     let x = a.x.min(b.x);
@@ -79,6 +100,7 @@ pub fn default_tool_reset_interaction(structure_designer: &mut StructureDesigner
                 matches!(
                     state.interaction_state,
                     DefaultToolInteractionState::ScreenPlaneDragging { .. }
+                        | DefaultToolInteractionState::GuidelineDragging
                 )
             }
             _ => false,
@@ -296,6 +318,7 @@ pub fn default_tool_pointer_move(
             start_world_pos: DVec3,
             last_world_pos: DVec3,
         },
+        ContinueGuidelineDrag,
         ThresholdExceededOnMarquee {
             start_screen: DVec2,
         },
@@ -351,6 +374,7 @@ pub fn default_tool_pointer_move(
                 start_world_pos: *start_world_pos,
                 last_world_pos: *last_world_pos,
             },
+            DefaultToolInteractionState::GuidelineDragging => MoveAction::ContinueGuidelineDrag,
             // Bonds are not draggable; threshold doesn't change behavior
             DefaultToolInteractionState::PendingBond { .. } | DefaultToolInteractionState::Idle => {
                 MoveAction::None
@@ -378,6 +402,30 @@ pub fn default_tool_pointer_move(
 
             // Begin undo recording for the drag
             begin_atom_edit_drag(structure_designer);
+
+            // Guideline-constrained drag (issue #368): when dragging the
+            // already-selected atom of a `snapped` guideline (exactly one atom
+            // selected), the atom rides the line instead of the screen plane. The
+            // `was_selected` guard ensures a freshly-clicked atom — whose selection
+            // just changed — is never silently re-constrained; multi-atom and
+            // not-snapped drags fall through to the screen-plane path below.
+            if was_selected
+                && drag_selected_along_guideline(structure_designer, *ray_origin, *ray_direction)
+            {
+                continuous_minimize_frame_if_enabled(structure_designer);
+                set_interaction_state(
+                    structure_designer,
+                    DefaultToolInteractionState::GuidelineDragging,
+                );
+                return PointerMoveResult {
+                    kind: PointerMoveResultKind::Dragging,
+                    marquee_rect_x: 0.0,
+                    marquee_rect_y: 0.0,
+                    marquee_rect_w: 0.0,
+                    marquee_rect_h: 0.0,
+                    frozen_drag_status: DragFrozenStatus::NoneFrozen,
+                };
+            }
 
             // Compute the constraint plane: camera-parallel, through selection centroid
             let plane_normal = *camera_forward;
@@ -438,21 +486,7 @@ pub fn default_tool_pointer_move(
                 frozen_status = drag_selected_by_delta(structure_designer, delta);
 
                 // Continuous minimization: relax neighbors per frame
-                if get_active_atom_edit_data(structure_designer)
-                    .is_some_and(|d| d.continuous_minimization)
-                {
-                    // Take promoted_base_atoms out of pending drag to avoid borrow conflict
-                    let mut promoted = structure_designer
-                        .pending_atom_edit_drag
-                        .as_mut()
-                        .map(|p| std::mem::take(&mut p.promoted_base_atoms))
-                        .unwrap_or_default();
-                    let _ = continuous_minimize_during_drag(structure_designer, &mut promoted);
-                    // Put it back
-                    if let Some(pending) = &mut structure_designer.pending_atom_edit_drag {
-                        pending.promoted_base_atoms = promoted;
-                    }
-                }
+                continuous_minimize_frame_if_enabled(structure_designer);
 
                 // Update the last_world_pos in the interaction state
                 set_interaction_state(
@@ -473,6 +507,22 @@ pub fn default_tool_pointer_move(
                 marquee_rect_w: 0.0,
                 marquee_rect_h: 0.0,
                 frozen_drag_status: frozen_status,
+            }
+        }
+        MoveAction::ContinueGuidelineDrag => {
+            // Re-project the cursor ray onto the guideline and slide the atom to the
+            // foot. A parallel ray (closest_t == None) leaves the atom put for this
+            // frame; the live `t` updates inside `drag_along_guideline`.
+            if drag_selected_along_guideline(structure_designer, *ray_origin, *ray_direction) {
+                continuous_minimize_frame_if_enabled(structure_designer);
+            }
+            PointerMoveResult {
+                kind: PointerMoveResultKind::Dragging,
+                marquee_rect_x: 0.0,
+                marquee_rect_y: 0.0,
+                marquee_rect_w: 0.0,
+                marquee_rect_h: 0.0,
+                frozen_drag_status: DragFrozenStatus::NoneFrozen,
             }
         }
         MoveAction::ThresholdExceededOnMarquee { start_screen } => {
@@ -562,7 +612,8 @@ pub fn default_tool_pointer_up(
                     start_screen: *start_screen,
                     end_screen: *current_screen,
                 }),
-                DefaultToolInteractionState::ScreenPlaneDragging { .. } => {
+                DefaultToolInteractionState::ScreenPlaneDragging { .. }
+                | DefaultToolInteractionState::GuidelineDragging => {
                     Some(PendingClickInfo::DragCompleted)
                 }
                 DefaultToolInteractionState::Idle => None,

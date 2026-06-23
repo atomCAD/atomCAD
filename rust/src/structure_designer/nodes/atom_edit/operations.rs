@@ -449,6 +449,50 @@ pub fn drag_selected_by_delta(
     }
 }
 
+/// Constrained guideline drag (Default tool): move the single selected atom to
+/// the point on the active node's guideline closest to the cursor ray, promoting
+/// a selected base atom to the diff if necessary.
+///
+/// Returns `false` — caller falls through to the free screen-plane drag — unless
+/// the active node has a `snapped` guideline with exactly one selected atom and
+/// the ray is not parallel to the line. Mirrors `drag_selected_by_delta`'s
+/// three-phase borrow pattern.
+pub fn drag_selected_along_guideline(
+    structure_designer: &mut StructureDesigner,
+    ray_origin: DVec3,
+    ray_direction: DVec3,
+) -> bool {
+    // Phase 1: Gather (snapped flag + selected base atoms for promotion).
+    let (snapped, selected_base_atoms) = {
+        let data = match get_active_atom_edit_data(structure_designer) {
+            Some(d) => d,
+            None => return false,
+        };
+        (
+            data.guideline.is_some_and(|g| g.snapped),
+            data.selection.selected_base_atoms.clone(),
+        )
+    };
+    if !snapped {
+        return false;
+    }
+
+    // In diff view there are no base atoms to promote.
+    let base_info: Vec<BaseAtomPromotionInfo> =
+        if structure_designer.is_selected_node_in_diff_view() {
+            Vec::new()
+        } else {
+            gather_base_atom_promotion_info(structure_designer, &selected_base_atoms)
+        };
+
+    // Phase 2: Mutate.
+    let data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(d) => d,
+        None => return false,
+    };
+    data.drag_along_guideline(ray_origin, ray_direction, base_info.first())
+}
+
 /// Info needed to change a bond's order: diff atom IDs for both endpoints
 /// (with identity info for base-passthrough atoms that need promotion).
 #[derive(Debug)]
