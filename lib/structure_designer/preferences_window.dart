@@ -206,10 +206,18 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
 
   @override
   Widget build(BuildContext context) {
+    // Size the dialog dynamically from the available screen space so it grows
+    // on large monitors but never fills (or overflows) a small one. The content
+    // is a single scrollable column, so width stays modest while height makes
+    // use of the extra vertical room. The clamps keep it within safe bounds.
+    final screenSize = MediaQuery.of(context).size;
+    final dialogWidth = (screenSize.width * 0.4).clamp(440.0, 600.0);
+    final dialogHeight = (screenSize.height * 0.85).clamp(420.0, 880.0);
+
     return DraggableDialog(
       key: PreferencesKeys.preferencesDialog,
-      width: 400,
-      height: 500,
+      width: dialogWidth,
+      height: dialogHeight,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.medium),
         child: Column(
