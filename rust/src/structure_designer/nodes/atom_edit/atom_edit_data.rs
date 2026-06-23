@@ -1708,6 +1708,23 @@ impl AtomEditData {
         Some(self.add_atom_to_diff(self.selected_atomic_number, pos))
     }
 
+    /// Place a free atom on the guideline at the point closest to the cursor ray
+    /// (Add-Atom tool viewport click — "snap to line"). Updates the guideline's `t`
+    /// to that foot, then places via `place_atom_on_guideline`. Returns the new diff
+    /// atom ID, or `None` if no guideline is active or the ray is parallel to the
+    /// line (no unique foot).
+    pub fn place_atom_on_guideline_by_ray(
+        &mut self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+    ) -> Option<u32> {
+        let mut g = self.guideline?;
+        let t = g.closest_t_to_ray(ray_origin, ray_direction)?;
+        g.t = t;
+        self.guideline = Some(g);
+        self.place_atom_on_guideline()
+    }
+
     /// Clear the guideline entirely (Cancel / Escape / leaving the node).
     pub fn clear_guideline(&mut self) {
         self.guideline = None;

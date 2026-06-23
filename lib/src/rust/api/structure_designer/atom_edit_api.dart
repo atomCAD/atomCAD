@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-// These functions are ignored because they are not marked as `pub`: `collect_frozen_base_atom_ids`, `gather_frozen_base_atoms_promotion_info`, `gather_selected_base_promotion_info_including_frozen`, `gather_selected_base_promotion_info`, `mutate_parameter_elements`, `toggle_atom_edit_flag`
+// These functions are ignored because they are not marked as `pub`: `build_api_guideline`, `collect_frozen_base_atom_ids`, `gather_frozen_base_atoms_promotion_info`, `gather_selected_base_promotion_info_including_frozen`, `gather_selected_base_promotion_info`, `mutate_parameter_elements`, `toggle_atom_edit_flag`
 
 bool atomEditSelectByRay(
         {required APIVec3 rayStart,
@@ -360,3 +360,48 @@ int atomEditGetSelectedHybridization() => RustLib.instance.api
 /// Returns -2 if selected atoms have differing inferred hybridizations (mixed).
 int atomEditGetSelectedInferredHybridization() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditGetSelectedInferredHybridization();
+
+/// Build the guideline from the current selection (1/2/3 atoms). `entered_direction`
+/// is used only for the 1-atom directional line. Returns an empty string on success
+/// or an error message (for a SnackBar) on degenerate input — the previous guideline
+/// is left untouched on error.
+String atomEditSetGuidelineFromSelection({required APIVec3 enteredDirection}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditSetGuidelineFromSelection(
+            enteredDirection: enteredDirection);
+
+/// Set the guideline's along-line position `t`. In Move sub-mode this moves the
+/// selected atom (one undo step); in Place sub-mode it only moves the marker.
+void atomEditSetGuidelinePosition({required double t}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditSetGuidelinePosition(t: t);
+
+/// Set the guideline `snapped` bit. ON snaps the selected atom onto the line (one
+/// undo step); OFF releases it in place (no move).
+void atomEditSetGuidelineSnapped({required bool snapped}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditSetGuidelineSnapped(
+            snapped: snapped);
+
+/// Place a free atom (no bonds) of the panel-selected element at the guideline's
+/// current position `t`. The guideline stays active. Returns true if an atom was
+/// placed. One undo step.
+bool atomEditPlaceAtomOnGuideline() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditPlaceAtomOnGuideline();
+
+/// Viewport snap-place (Add Atom tool): place a free atom on the guideline at the
+/// point closest to the cursor ray, updating the live `t`. Returns true if an atom
+/// was placed (false if no guideline is active or the ray is parallel to the line).
+/// One undo step.
+bool atomEditPlaceAtomOnGuidelineByRay(
+        {required APIVec3 rayStart, required APIVec3 rayDir}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerAtomEditApiAtomEditPlaceAtomOnGuidelineByRay(
+            rayStart: rayStart, rayDir: rayDir);
+
+/// Clear the guideline entirely (Cancel button / Escape / leaving the node).
+void atomEditClearGuideline() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditClearGuideline();
+
+/// Read the active guideline for the panel. `None` when guideline mode is not active.
+APIGuideline? getAtomEditGuideline() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiGetAtomEditGuideline();

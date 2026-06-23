@@ -904,6 +904,36 @@ pub enum GuidedPlacementApiResult {
     },
 }
 
+/// Which sub-mode the active placement guideline (issue #368) is in. Keyed off the
+/// selection count: exactly one atom selected → `Move`; zero or ≥2 → `Place`.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIGuidelineSubMode {
+    /// Exactly one atom selected: the field/snap operate on that atom.
+    Move,
+    /// Zero or ≥2 atoms selected: the field drives the next-new-atom placement marker.
+    Place,
+}
+
+/// Read-only view of the active placement guideline for the panel (issue #368).
+/// `None` (a missing `Option<APIGuideline>`) means guideline mode is not active.
+#[flutter_rust_bridge::frb]
+pub struct APIGuideline {
+    /// A point on the frozen line.
+    pub origin: APIVec3,
+    /// Unit direction along the line.
+    pub direction: APIVec3,
+    /// Current 1D position along the line (signed Å from `origin`).
+    pub t: f64,
+    /// Orthogonal distance of the selected atom from the line (Move sub-mode); zero
+    /// in Place sub-mode and when snapped.
+    pub off_line_distance: f64,
+    /// Whether the selected atom is locked onto the line (Move sub-mode bit).
+    pub snapped: bool,
+    /// Move vs. Place sub-mode (derived from the selection count).
+    pub sub_mode: APIGuidelineSubMode,
+}
+
 pub struct APIRegPolyData {
     pub num_sides: i32,
     pub radius: i32,

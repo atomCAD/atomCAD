@@ -3,12 +3,15 @@ use crate::api::api_common::refresh_structure_designer_auto;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::{from_api_transform, from_api_vec2};
+use crate::api::api_common::to_api_vec3;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAddBondMoveResult;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
+use crate::api::structure_designer::structure_designer_api_types::APIGuideline;
+use crate::api::structure_designer::structure_designer_api_types::APIGuidelineSubMode;
 use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
 use crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
 use crate::api::structure_designer::structure_designer_api_types::PointerDownResult;
@@ -1718,6 +1721,196 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
                 common.unwrap_or(0) as i8
             },
             -1,
+        )
+    }
+}
+
+// --- Placement guideline API (issue #368) ---
+
+/// Build the read-only panel view of the active guideline, resolving the off-line
+/// distance of the selected atom (Move sub-mode) through provenance for base atoms.
+fn build_api_guideline(sd: &StructureDesigner) -> Option<APIGuideline> {
+    let data = atom_edit::get_active_atom_edit_data(sd)?;
+    let g = data.guideline?;
+    let n_diff = data.selection.selected_diff_atoms.len();
+    let n_base = data.selection.selected_base_atoms.len();
+    let n_sel = n_diff + n_base;
+    let sub_mode = if n_sel == 1 {
+        APIGuidelineSubMode::Move
+    } else {
+        APIGuidelineSubMode::Place
+    };
+
+    // Off-line distance is only meaningful in Move sub-mode; in Place sub-mode the
+    // marker sits at offset zero.
+    let off_line_distance = if n_sel == 1 {
+        let world_pos = if n_diff == 1 {
+            let diff_id = *data.selection.selected_diff_atoms.iter().next().unwrap();
+            data.diff.get_atom(diff_id).map(|a| a.position)
+        } else {
+            // Single base atom — resolve its world position from the result structure.
+            let base_id = *data.selection.selected_base_atoms.iter().next().unwrap();
+            let set: std::collections::HashSet<u32> = std::iter::once(base_id).collect();
+            atom_edit::gather_base_atom_promotion_info_including_frozen(sd, &set)
+                .first()
+                .map(|i| i.position)
+        };
+        world_pos.map_or(0.0, |p| g.decompose(p).1.length())
+    } else {
+        0.0
+    };
+
+    Some(APIGuideline {
+        origin: to_api_vec3(&g.origin),
+        direction: to_api_vec3(&g.direction),
+        t: g.t,
+        off_line_distance,
+        snapped: g.snapped,
+        sub_mode,
+    })
+}
+
+/// Build the guideline from the current selection (1/2/3 atoms). `entered_direction`
+/// is used only for the 1-atom directional line. Returns an empty string on success
+/// or an error message (for a SnackBar) on degenerate input — the previous guideline
+/// is left untouched on error.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_set_guideline_from_selection(entered_direction: APIVec3) -> String {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let dir = from_api_vec3(&entered_direction);
+                let result = atom_edit::set_guideline_from_selection(
+                    &mut cad_instance.structure_designer,
+                    dir,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => String::new(),
+                    Err(e) => e.to_string(),
+                }
+            },
+            "Error: no active instance".to_string(),
+        )
+    }
+}
+
+/// Set the guideline's along-line position `t`. In Move sub-mode this moves the
+/// selected atom (one undo step); in Place sub-mode it only moves the marker.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_set_guideline_position(t: f64) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Position atom on guideline",
+                |sd| {
+                    atom_edit::set_guideline_position(sd, t);
+                },
+            );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Set the guideline `snapped` bit. ON snaps the selected atom onto the line (one
+/// undo step); OFF releases it in place (no move).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_set_guideline_snapped(snapped: bool) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::with_atom_edit_undo(
+                &mut cad_instance.structure_designer,
+                "Snap atom to guideline",
+                |sd| {
+                    atom_edit::set_guideline_snapped(sd, snapped);
+                },
+            );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Place a free atom (no bonds) of the panel-selected element at the guideline's
+/// current position `t`. The guideline stays active. Returns true if an atom was
+/// placed. One undo step.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_place_atom_on_guideline() -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let mut placed = false;
+                atom_edit::with_atom_edit_undo(
+                    &mut cad_instance.structure_designer,
+                    "Place atom on guideline",
+                    |sd| {
+                        if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                            placed = data.place_atom_on_guideline().is_some();
+                        }
+                    },
+                );
+                refresh_structure_designer_auto(cad_instance);
+                placed
+            },
+            false,
+        )
+    }
+}
+
+/// Viewport snap-place (Add Atom tool): place a free atom on the guideline at the
+/// point closest to the cursor ray, updating the live `t`. Returns true if an atom
+/// was placed (false if no guideline is active or the ray is parallel to the line).
+/// One undo step.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_place_atom_on_guideline_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let ray_origin = from_api_vec3(&ray_start);
+                let ray_direction = from_api_vec3(&ray_dir);
+                let mut placed = false;
+                atom_edit::with_atom_edit_undo(
+                    &mut cad_instance.structure_designer,
+                    "Place atom on guideline",
+                    |sd| {
+                        if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                            placed = data
+                                .place_atom_on_guideline_by_ray(ray_origin, ray_direction)
+                                .is_some();
+                        }
+                    },
+                );
+                refresh_structure_designer_auto(cad_instance);
+                placed
+            },
+            false,
+        )
+    }
+}
+
+/// Clear the guideline entirely (Cancel button / Escape / leaving the node).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_clear_guideline() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                data.clear_guideline();
+            }
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Read the active guideline for the panel. `None` when guideline mode is not active.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_edit_guideline() -> Option<APIGuideline> {
+    use crate::api::api_common::with_cad_instance_or;
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| build_api_guideline(&cad_instance.structure_designer),
+            None,
         )
     }
 }

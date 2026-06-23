@@ -493,6 +493,79 @@ pub fn drag_selected_along_guideline(
     data.drag_along_guideline(ray_origin, ray_direction, base_info.first())
 }
 
+/// Build the placement guideline from the current selection (API/Flutter entry
+/// point, issue #368). Gathers the world positions of selected *base* atoms from
+/// the result structure (via provenance) so the geometry helpers can read them,
+/// then delegates to `AtomEditData::set_guideline_from_selection`. `entered_direction`
+/// is used only for the 1-atom directional line. Returns `Err` on degenerate input
+/// (collinear / coincident / zero-direction) for SnackBar surfacing.
+pub fn set_guideline_from_selection(
+    structure_designer: &mut StructureDesigner,
+    entered_direction: DVec3,
+) -> Result<(), super::guideline::GuidelineError> {
+    // Phase 1: gather selected base atom world positions. We include frozen atoms
+    // here because this only reads positions — nothing is moved.
+    let selected_base = match get_active_atom_edit_data(structure_designer) {
+        Some(d) => d.selection.selected_base_atoms.clone(),
+        None => return Ok(()),
+    };
+    let base_info = if structure_designer.is_selected_node_in_diff_view() {
+        Vec::new()
+    } else {
+        gather_base_atom_promotion_info_including_frozen(structure_designer, &selected_base)
+    };
+    let base_positions: HashMap<u32, DVec3> =
+        base_info.iter().map(|i| (i.base_id, i.position)).collect();
+
+    // Phase 2: mutate.
+    let data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(d) => d,
+        None => return Ok(()),
+    };
+    data.set_guideline_from_selection(&base_positions, entered_direction)
+}
+
+/// Set the guideline's along-line position `t` (API/Flutter entry point). In Move
+/// sub-mode (exactly one atom selected) the atom moves; a selected base atom is
+/// promoted to the diff first. Mirrors `drag_selected_along_guideline`'s three-phase
+/// borrow pattern.
+pub fn set_guideline_position(structure_designer: &mut StructureDesigner, t: f64) {
+    let base_info = gather_guideline_move_promotion_info(structure_designer);
+    let data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(d) => d,
+        None => return,
+    };
+    data.set_guideline_position(t, base_info.first());
+}
+
+/// Set the guideline `snapped` bit (API/Flutter entry point). ON snaps the single
+/// selected atom onto the line (promoting a base atom first); OFF is a geometric
+/// no-op. Mirrors `drag_selected_along_guideline`'s three-phase borrow pattern.
+pub fn set_guideline_snapped(structure_designer: &mut StructureDesigner, snapped: bool) {
+    let base_info = gather_guideline_move_promotion_info(structure_designer);
+    let data = match get_selected_atom_edit_data_mut(structure_designer) {
+        Some(d) => d,
+        None => return,
+    };
+    data.set_guideline_snapped(snapped, base_info.first());
+}
+
+/// Gather promotion info for the selected base atoms used by the Move-sub-mode
+/// guideline operations (position / snap). Frozen atoms are skipped (matching the
+/// drag path); empty in diff view (no base atoms to promote).
+fn gather_guideline_move_promotion_info(
+    structure_designer: &StructureDesigner,
+) -> Vec<BaseAtomPromotionInfo> {
+    if structure_designer.is_selected_node_in_diff_view() {
+        return Vec::new();
+    }
+    let selected_base = match get_active_atom_edit_data(structure_designer) {
+        Some(d) => d.selection.selected_base_atoms.clone(),
+        None => return Vec::new(),
+    };
+    gather_base_atom_promotion_info(structure_designer, &selected_base)
+}
+
 /// Info needed to change a bond's order: diff atom IDs for both endpoints
 /// (with identity info for base-passthrough atoms that need promotion).
 #[derive(Debug)]

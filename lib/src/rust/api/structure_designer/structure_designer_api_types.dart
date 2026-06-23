@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -1308,6 +1308,70 @@ class APIGeoTransData {
           translation == other.translation &&
           rotation == other.rotation &&
           transformOnlyFrame == other.transformOnlyFrame;
+}
+
+/// Read-only view of the active placement guideline for the panel (issue #368).
+/// `None` (a missing `Option<APIGuideline>`) means guideline mode is not active.
+class APIGuideline {
+  /// A point on the frozen line.
+  final APIVec3 origin;
+
+  /// Unit direction along the line.
+  final APIVec3 direction;
+
+  /// Current 1D position along the line (signed Å from `origin`).
+  final double t;
+
+  /// Orthogonal distance of the selected atom from the line (Move sub-mode); zero
+  /// in Place sub-mode and when snapped.
+  final double offLineDistance;
+
+  /// Whether the selected atom is locked onto the line (Move sub-mode bit).
+  final bool snapped;
+
+  /// Move vs. Place sub-mode (derived from the selection count).
+  final APIGuidelineSubMode subMode;
+
+  const APIGuideline({
+    required this.origin,
+    required this.direction,
+    required this.t,
+    required this.offLineDistance,
+    required this.snapped,
+    required this.subMode,
+  });
+
+  @override
+  int get hashCode =>
+      origin.hashCode ^
+      direction.hashCode ^
+      t.hashCode ^
+      offLineDistance.hashCode ^
+      snapped.hashCode ^
+      subMode.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIGuideline &&
+          runtimeType == other.runtimeType &&
+          origin == other.origin &&
+          direction == other.direction &&
+          t == other.t &&
+          offLineDistance == other.offLineDistance &&
+          snapped == other.snapped &&
+          subMode == other.subMode;
+}
+
+/// Which sub-mode the active placement guideline (issue #368) is in. Keyed off the
+/// selection count: exactly one atom selected → `Move`; zero or ≥2 → `Place`.
+enum APIGuidelineSubMode {
+  /// Exactly one atom selected: the field/snap operate on that atom.
+  move,
+
+  /// Zero or ≥2 atoms selected: the field drives the next-new-atom placement marker.
+  place,
+  ;
 }
 
 class APIHalfPlaneData {

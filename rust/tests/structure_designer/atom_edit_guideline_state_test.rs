@@ -208,6 +208,48 @@ fn place_atom_without_guideline_is_none() {
     assert_eq!(data.diff.get_num_of_atoms(), 0);
 }
 
+#[test]
+fn place_atom_by_ray_snaps_to_closest_point_and_updates_t() {
+    let mut data = AtomEditData::new();
+    data.selected_atomic_number = 6;
+    data.guideline = Some(x_axis_guideline());
+
+    // A ray crossing the x-axis guideline at x = 4 (origin above, pointing down).
+    let id = data
+        .place_atom_on_guideline_by_ray(DVec3::new(4.0, 5.0, 0.0), DVec3::new(0.0, -1.0, 0.0))
+        .expect("atom placed");
+
+    let atom = data.diff.get_atom(id).unwrap();
+    // Snapped to the foot on the line: (4, 0, 0).
+    assert!((atom.position - DVec3::new(4.0, 0.0, 0.0)).length() < EPS);
+    // The live `t` follows the foot.
+    assert!((data.guideline.unwrap().t - 4.0).abs() < EPS);
+    // Pure addition, no bonds.
+    assert_eq!(data.diff.get_num_of_bonds(), 0);
+}
+
+#[test]
+fn place_atom_by_ray_parallel_ray_is_none() {
+    let mut data = AtomEditData::new();
+    data.guideline = Some(x_axis_guideline());
+
+    // A ray parallel to the +x guideline has no unique foot.
+    let result =
+        data.place_atom_on_guideline_by_ray(DVec3::new(0.0, 1.0, 0.0), DVec3::new(1.0, 0.0, 0.0));
+    assert!(result.is_none());
+    assert_eq!(data.diff.get_num_of_atoms(), 0);
+}
+
+#[test]
+fn place_atom_by_ray_without_guideline_is_none() {
+    let mut data = AtomEditData::new();
+    assert!(
+        data.place_atom_on_guideline_by_ray(DVec3::ZERO, DVec3::new(0.0, -1.0, 0.0))
+            .is_none()
+    );
+    assert_eq!(data.diff.get_num_of_atoms(), 0);
+}
+
 // =============================================================================
 // set_guideline_position (Move sub-mode)
 // =============================================================================
