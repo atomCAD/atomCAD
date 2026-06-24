@@ -233,10 +233,6 @@ class APIAtomEditData {
   final bool hasSelectedBonds;
   final int selectedBondCount;
 
-  /// Number of currently selected atoms (base + diff). Drives the guideline setup
-  /// button label (1 → Directional, 2 → Center, 3 → Equidistant line; #368).
-  final int selectedAtomCount;
-
   /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
   final int? selectedBondOrder;
   final bool hasSelection;
@@ -277,7 +273,6 @@ class APIAtomEditData {
     required this.hasSelectedAtoms,
     required this.hasSelectedBonds,
     required this.selectedBondCount,
-    required this.selectedAtomCount,
     this.selectedBondOrder,
     required this.hasSelection,
     this.selectionTransform,
@@ -307,7 +302,6 @@ class APIAtomEditData {
       hasSelectedAtoms.hashCode ^
       hasSelectedBonds.hashCode ^
       selectedBondCount.hashCode ^
-      selectedAtomCount.hashCode ^
       selectedBondOrder.hashCode ^
       hasSelection.hashCode ^
       selectionTransform.hashCode ^
@@ -339,7 +333,6 @@ class APIAtomEditData {
           hasSelectedAtoms == other.hasSelectedAtoms &&
           hasSelectedBonds == other.hasSelectedBonds &&
           selectedBondCount == other.selectedBondCount &&
-          selectedAtomCount == other.selectedAtomCount &&
           selectedBondOrder == other.selectedBondOrder &&
           hasSelection == other.hasSelection &&
           selectionTransform == other.selectionTransform &&
@@ -363,6 +356,10 @@ enum APIAtomEditTool {
   default_,
   addAtom,
   addBond,
+
+  /// Placement guideline tool (issue #368): constrains atom placement to a
+  /// transient line. Self-contained — clears on tool switch / node deselect.
+  guideline,
   ;
 }
 
@@ -1317,68 +1314,67 @@ class APIGeoTransData {
           transformOnlyFrame == other.transformOnlyFrame;
 }
 
-/// Read-only view of the active placement guideline for the panel (issue #368).
-/// `None` (a missing `Option<APIGuideline>`) means guideline mode is not active.
-class APIGuideline {
-  /// A point on the frozen line.
-  final APIVec3 origin;
+/// Which user-visible state the Guideline tool (issue #368) is in. Derived from
+/// the tool phase plus whether an atom is picked.
+enum APIGuidelinePhase {
+  /// No guideline yet — the user picks 1–3 defining atoms.
+  define,
 
-  /// Unit direction along the line.
-  final APIVec3 direction;
+  /// A frozen line exists, no atom picked (the ghost marker is the active point).
+  place,
 
-  /// Current 1D position along the line (signed Å from `origin`).
+  /// A frozen line exists, an atom is picked (it is the active point).
+  move,
+  ;
+}
+
+/// Read-only view of the active Guideline tool for the panel (issue #368).
+/// `None` (a missing `Option<APIGuidelineToolView>`) means the Guideline tool is
+/// not active (some other tool, or no atom_edit node selected).
+class APIGuidelineToolView {
+  /// Which user-visible state the tool is in.
+  final APIGuidelinePhase phase;
+
+  /// Number of atoms in the tool-local defining set (Define phase; 0 otherwise).
+  /// Drives the Create button label: 1 → Directional, 2 → Center, 3 → Equidistant.
+  final int definingCount;
+
+  /// Whether the Create button is enabled (1–3 defining atoms).
+  final bool canCreate;
+
+  /// Whether the 1-atom direction field should be shown (`defining_count == 1`).
+  final bool needsDirection;
+
+  /// The active point's along-line position `t` (signed Å from origin). The ghost
+  /// marker in Place; the picked atom's live projection in Move; 0 in Define.
   final double t;
 
-  /// Orthogonal distance of the selected atom from the line (Move sub-mode); zero
-  /// in Place sub-mode and when snapped.
-  final double offLineDistance;
-
-  /// Whether the selected atom is locked onto the line (Move sub-mode bit).
-  final bool snapped;
-
-  /// Move vs. Place sub-mode (derived from the selection count).
-  final APIGuidelineSubMode subMode;
-
-  const APIGuideline({
-    required this.origin,
-    required this.direction,
+  const APIGuidelineToolView({
+    required this.phase,
+    required this.definingCount,
+    required this.canCreate,
+    required this.needsDirection,
     required this.t,
-    required this.offLineDistance,
-    required this.snapped,
-    required this.subMode,
   });
 
   @override
   int get hashCode =>
-      origin.hashCode ^
-      direction.hashCode ^
-      t.hashCode ^
-      offLineDistance.hashCode ^
-      snapped.hashCode ^
-      subMode.hashCode;
+      phase.hashCode ^
+      definingCount.hashCode ^
+      canCreate.hashCode ^
+      needsDirection.hashCode ^
+      t.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is APIGuideline &&
+      other is APIGuidelineToolView &&
           runtimeType == other.runtimeType &&
-          origin == other.origin &&
-          direction == other.direction &&
-          t == other.t &&
-          offLineDistance == other.offLineDistance &&
-          snapped == other.snapped &&
-          subMode == other.subMode;
-}
-
-/// Which sub-mode the active placement guideline (issue #368) is in. Keyed off the
-/// selection count: exactly one atom selected → `Move`; zero or ≥2 → `Place`.
-enum APIGuidelineSubMode {
-  /// Exactly one atom selected: the field/snap operate on that atom.
-  move,
-
-  /// Zero or ≥2 atoms selected: the field drives the next-new-atom placement marker.
-  place,
-  ;
+          phase == other.phase &&
+          definingCount == other.definingCount &&
+          canCreate == other.canCreate &&
+          needsDirection == other.needsDirection &&
+          t == other.t;
 }
 
 class APIHalfPlaneData {

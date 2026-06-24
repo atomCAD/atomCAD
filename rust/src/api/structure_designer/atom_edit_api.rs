@@ -1,6 +1,5 @@
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_structure_designer_auto;
-use crate::api::api_common::to_api_vec3;
 use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::api_common::{from_api_transform, from_api_vec2};
@@ -10,8 +9,8 @@ use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAddBondMoveResult;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
-use crate::api::structure_designer::structure_designer_api_types::APIGuideline;
-use crate::api::structure_designer::structure_designer_api_types::APIGuidelineSubMode;
+use crate::api::structure_designer::structure_designer_api_types::APIGuidelinePhase;
+use crate::api::structure_designer::structure_designer_api_types::APIGuidelineToolView;
 use crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode;
 use crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
 use crate::api::structure_designer::structure_designer_api_types::PointerDownResult;
@@ -1725,99 +1724,141 @@ pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
     }
 }
 
-// --- Placement guideline API (issue #368) ---
+// --- Placement guideline tool API (issue #368) ---
 
-/// Build the read-only panel view of the active guideline, resolving the off-line
-/// distance of the selected atom (Move sub-mode) through provenance for base atoms.
-fn build_api_guideline(sd: &StructureDesigner) -> Option<APIGuideline> {
+/// Build the read-only panel view of the active Guideline tool. In Move mode `t`
+/// is derived from the picked atom's live projection onto the line (so the field
+/// tracks the atom through drags and undo/redo). Returns `None` when the Guideline
+/// tool is not active (some other tool, or no atom_edit node selected).
+fn build_api_guideline_tool_view(sd: &StructureDesigner) -> Option<APIGuidelineToolView> {
     let data = atom_edit::get_active_atom_edit_data(sd)?;
-    let g = data.guideline?;
-    let n_diff = data.selection.selected_diff_atoms.len();
-    let n_base = data.selection.selected_base_atoms.len();
-    let n_sel = n_diff + n_base;
-    let sub_mode = if n_sel == 1 {
-        APIGuidelineSubMode::Move
-    } else {
-        APIGuidelineSubMode::Place
+    let tool = match &data.active_tool {
+        atom_edit::AtomEditTool::Guideline(tool) => tool,
+        _ => return None,
     };
-
-    // In Move sub-mode (exactly one selected atom) both `t` and the perpendicular
-    // offset are recomputed from the atom's CURRENT position, so the panel tracks
-    // the atom live during a drag. Snapped: keep the stored `t` (authoritative and
-    // exactly tracked by the constrained drag — avoids float noise from
-    // re-projection); the offset is ~0 by construction. Not snapped: reflect the
-    // atom's live projection. In Place sub-mode there is no atom — fall back to the
-    // stored marker `t` with zero offset.
-    let (t, off_line_distance) = if n_sel == 1 {
-        let world_pos = if n_diff == 1 {
-            let diff_id = *data.selection.selected_diff_atoms.iter().next().unwrap();
-            data.diff.get_atom(diff_id).map(|a| a.position)
-        } else {
-            // Single base atom — resolve its world position from the result structure.
-            let base_id = *data.selection.selected_base_atoms.iter().next().unwrap();
-            let set: std::collections::HashSet<u32> = std::iter::once(base_id).collect();
-            atom_edit::gather_base_atom_promotion_info_including_frozen(sd, &set)
-                .first()
-                .map(|i| i.position)
-        };
-        match world_pos {
-            Some(p) => {
-                let (t_proj, offset) = g.decompose(p);
-                let t = if g.snapped { g.t } else { t_proj };
-                (t, offset.length())
-            }
-            None => (g.t, 0.0),
+    match &tool.phase {
+        atom_edit::GuidelinePhase::Define { defining } => {
+            let n = defining.len();
+            Some(APIGuidelineToolView {
+                phase: APIGuidelinePhase::Define,
+                defining_count: n as u32,
+                can_create: (1..=3).contains(&n),
+                needs_direction: n == 1,
+                t: 0.0,
+            })
         }
-    } else {
-        (g.t, 0.0)
-    };
-
-    Some(APIGuideline {
-        origin: to_api_vec3(&g.origin),
-        direction: to_api_vec3(&g.direction),
-        t,
-        off_line_distance,
-        snapped: g.snapped,
-        sub_mode,
-    })
+        atom_edit::GuidelinePhase::Active {
+            guideline, picked, ..
+        } => match picked {
+            None => Some(APIGuidelineToolView {
+                phase: APIGuidelinePhase::Place,
+                defining_count: 0,
+                can_create: false,
+                needs_direction: false,
+                t: guideline.t,
+            }),
+            Some(atom) => {
+                // Derive `t` from the picked atom's CURRENT world position — the
+                // diff atom is the single source of truth (robust against undo /
+                // external moves that bypass the tool). Fall back to the stored `t`
+                // if the position can't be resolved.
+                let world = match atom {
+                    atom_edit::AtomRef::Diff(id) => data.diff.get_atom(*id).map(|a| a.position),
+                    atom_edit::AtomRef::Base(base_id) => {
+                        let set: std::collections::HashSet<u32> = std::iter::once(*base_id).collect();
+                        atom_edit::gather_base_atom_promotion_info_including_frozen(sd, &set)
+                            .first()
+                            .map(|i| i.position)
+                    }
+                };
+                let t = world.map(|p| guideline.decompose(p).0).unwrap_or(guideline.t);
+                Some(APIGuidelineToolView {
+                    phase: APIGuidelinePhase::Move,
+                    defining_count: 0,
+                    can_create: false,
+                    needs_direction: false,
+                    t,
+                })
+            }
+        },
+    }
 }
 
-/// Build the guideline from the current selection (1/2/3 atoms). `entered_direction`
-/// is used only for the 1-atom directional line. Returns an empty string on success
-/// or an error message (for a SnackBar) on degenerate input — the previous guideline
-/// is left untouched on error.
+/// Read the active Guideline tool view for the panel. `None` when the Guideline
+/// tool is not active.
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_set_guideline_from_selection(entered_direction: APIVec3) -> String {
+pub fn get_guideline_tool_view() -> Option<APIGuidelineToolView> {
+    use crate::api::api_common::with_cad_instance_or;
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| build_api_guideline_tool_view(&cad_instance.structure_designer),
+            None,
+        )
+    }
+}
+
+/// Build the frozen line from the tool-local defining set (1/2/3 atoms, in pick
+/// order). `direction` is used only for the 1-atom directional line and is
+/// remembered on the tool. Returns an empty string on success or an error message
+/// (for a SnackBar) on degenerate input — the tool stays in `Define` on error.
+#[flutter_rust_bridge::frb(sync)]
+pub fn guideline_create_from_defining(direction: APIVec3) -> String {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                let dir = from_api_vec3(&entered_direction);
-                let result = atom_edit::set_guideline_from_selection(
-                    &mut cad_instance.structure_designer,
-                    dir,
-                );
-                refresh_structure_designer_auto(cad_instance);
-                match result {
-                    Ok(()) => String::new(),
-                    Err(e) => e.to_string(),
+                let sd = &mut cad_instance.structure_designer;
+                let dir = from_api_vec3(&direction);
+                // Phase 1: gather world positions of defining *base* atoms.
+                let defining = match atom_edit::get_active_atom_edit_data(sd) {
+                    Some(d) => d.guideline_defining(),
+                    None => return "Error: no active atom_edit node".to_string(),
+                };
+                let base_ids: std::collections::HashSet<u32> = defining
+                    .iter()
+                    .filter_map(|a| match a {
+                        atom_edit::AtomRef::Base(id) => Some(*id),
+                        atom_edit::AtomRef::Diff(_) => None,
+                    })
+                    .collect();
+                let base_positions: std::collections::HashMap<u32, glam::f64::DVec3> =
+                    if base_ids.is_empty() {
+                        std::collections::HashMap::new()
+                    } else {
+                        atom_edit::gather_base_atom_promotion_info_including_frozen(sd, &base_ids)
+                            .into_iter()
+                            .map(|i| (i.base_id, i.position))
+                            .collect()
+                    };
+                // Phase 2: remember the direction + build the line. Pure transient
+                // tool state (no atom mutation → no undo step).
+                let mut result = String::new();
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    data.guideline_set_entered_direction(dir);
+                    if let Err(e) = data.guideline_create_from_defining(&base_positions) {
+                        result = e.to_string();
+                    }
                 }
+                refresh_structure_designer_auto(cad_instance);
+                result
             },
             "Error: no active instance".to_string(),
         )
     }
 }
 
-/// Set the guideline's along-line position `t`. In Move sub-mode this moves the
-/// selected atom (one undo step); in Place sub-mode it only moves the marker.
+/// Set the active point's along-line position `t`. In Move mode this slides the
+/// picked atom (one undo step); in Place mode it only moves the ghost marker.
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_set_guideline_position(t: f64) {
+pub fn guideline_set_position(t: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             atom_edit::with_atom_edit_undo(
                 &mut cad_instance.structure_designer,
                 "Position atom on guideline",
                 |sd| {
-                    atom_edit::set_guideline_position(sd, t);
+                    if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                        data.guideline_set_position(t, None);
+                    }
                 },
             );
             refresh_structure_designer_auto(cad_instance);
@@ -1825,29 +1866,10 @@ pub fn atom_edit_set_guideline_position(t: f64) {
     }
 }
 
-/// Set the guideline `snapped` bit. ON snaps the selected atom onto the line (one
-/// undo step); OFF releases it in place (no move).
+/// Place a free atom (no bonds) of the panel element at the ghost marker, then
+/// auto-pick it (→ Move). Returns true if an atom was placed. One undo step.
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_set_guideline_snapped(snapped: bool) {
-    unsafe {
-        with_mut_cad_instance(|cad_instance| {
-            atom_edit::with_atom_edit_undo(
-                &mut cad_instance.structure_designer,
-                "Snap atom to guideline",
-                |sd| {
-                    atom_edit::set_guideline_snapped(sd, snapped);
-                },
-            );
-            refresh_structure_designer_auto(cad_instance);
-        });
-    }
-}
-
-/// Place a free atom (no bonds) of the panel-selected element at the guideline's
-/// current position `t`. The guideline stays active. Returns true if an atom was
-/// placed. One undo step.
-#[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_place_atom_on_guideline() -> bool {
+pub fn guideline_place_atom() -> bool {
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -1857,7 +1879,7 @@ pub fn atom_edit_place_atom_on_guideline() -> bool {
                     "Place atom on guideline",
                     |sd| {
                         if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                            placed = data.place_atom_on_guideline().is_some();
+                            placed = data.guideline_place_atom().is_some();
                         }
                     },
                 );
@@ -1869,60 +1891,133 @@ pub fn atom_edit_place_atom_on_guideline() -> bool {
     }
 }
 
-/// Viewport snap-place (Add Atom tool): place a free atom on the guideline at the
-/// point closest to the cursor ray, updating the live `t`. Returns true if an atom
-/// was placed (false if no guideline is active or the ray is parallel to the line).
-/// One undo step.
+/// Clear the guideline and return to `Define` (Clear button / Escape in Active).
+/// The tool stays active; the remembered settings persist.
 #[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_place_atom_on_guideline_by_ray(ray_start: APIVec3, ray_dir: APIVec3) -> bool {
-    unsafe {
-        with_mut_cad_instance_or(
-            |cad_instance| {
-                let ray_origin = from_api_vec3(&ray_start);
-                let ray_direction = from_api_vec3(&ray_dir);
-                let mut placed = false;
-                atom_edit::with_atom_edit_undo(
-                    &mut cad_instance.structure_designer,
-                    "Place atom on guideline",
-                    |sd| {
-                        if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
-                            placed = data
-                                .place_atom_on_guideline_by_ray(ray_origin, ray_direction)
-                                .is_some();
-                        }
-                    },
-                );
-                refresh_structure_designer_auto(cad_instance);
-                placed
-            },
-            false,
-        )
-    }
-}
-
-/// Clear the guideline entirely (Cancel button / Escape / leaving the node).
-#[flutter_rust_bridge::frb(sync)]
-pub fn atom_edit_clear_guideline() {
+pub fn guideline_clear() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             if let Some(data) =
                 atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
             {
-                data.clear_guideline();
+                data.guideline_tool_clear();
             }
             refresh_structure_designer_auto(cad_instance);
         });
     }
 }
 
-/// Read the active guideline for the panel. `None` when guideline mode is not active.
+/// Set the remembered 1-atom direction (persists across Clear / re-Define).
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_atom_edit_guideline() -> Option<APIGuideline> {
-    use crate::api::api_common::with_cad_instance_or;
+pub fn guideline_set_entered_direction(direction: APIVec3) {
     unsafe {
-        with_cad_instance_or(
-            |cad_instance| build_api_guideline(&cad_instance.structure_designer),
-            None,
+        with_mut_cad_instance(|cad_instance| {
+            let dir = from_api_vec3(&direction);
+            if let Some(data) =
+                atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
+            {
+                data.guideline_set_entered_direction(dir);
+            }
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+// --- Guideline tool pointer event API ---
+
+/// Guideline tool pointer down. Records the press (hit-tested to an atom or empty);
+/// no mutation yet — a click commits on up, a drag once the threshold is crossed.
+#[flutter_rust_bridge::frb(sync)]
+pub fn guideline_pointer_down(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                atom_edit::guideline_pointer_down(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                )
+            },
+            false,
         )
     }
 }
+
+/// Guideline tool pointer move. Crosses the click/drag threshold and drives the
+/// in-progress drag. Refreshes (redecorate) when something visible changed.
+#[flutter_rust_bridge::frb(sync)]
+pub fn guideline_pointer_move(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let changed = atom_edit::guideline_pointer_move(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                );
+                if changed {
+                    // Re-eval the atom_edit node so the marker / atom position
+                    // updates; skip downstream dependents for drag performance.
+                    cad_instance.structure_designer.mark_skip_downstream();
+                    refresh_structure_designer_auto(cad_instance);
+                }
+                changed
+            },
+            false,
+        )
+    }
+}
+
+/// Guideline tool pointer up. Commits a click (defining toggle / pick / unpick) or
+/// ends a drag. Always requests a redecorate refresh so the tool-local highlight
+/// (which the transient toggle/unpick paths do not flag as changed) updates.
+#[flutter_rust_bridge::frb(sync)]
+pub fn guideline_pointer_up(
+    screen_pos: APIVec2,
+    ray_origin: APIVec3,
+    ray_direction: APIVec3,
+) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let changed = atom_edit::guideline_pointer_up(
+                    &mut cad_instance.structure_designer,
+                    from_api_vec2(&screen_pos),
+                    &from_api_vec3(&ray_origin),
+                    &from_api_vec3(&ray_direction),
+                );
+                // Force a redecorate: defining-toggle / unpick mutate only transient
+                // tool state, so mark the node changed to refresh the highlight.
+                let _ = atom_edit::get_selected_atom_edit_data_mut(
+                    &mut cad_instance.structure_designer,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                changed
+            },
+            false,
+        )
+    }
+}
+
+/// Reset the Guideline tool's transient interaction state (pointer cancel / tool
+/// switch mid-drag). Ends any open drag-undo session.
+#[flutter_rust_bridge::frb(sync)]
+pub fn guideline_reset_interaction() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            atom_edit::guideline_reset_interaction(&mut cad_instance.structure_designer);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+

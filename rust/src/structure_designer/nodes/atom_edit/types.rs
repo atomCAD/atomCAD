@@ -7,6 +7,8 @@ use std::collections::HashSet;
 
 use crate::util::transform::Transform;
 
+use super::guideline::Guideline;
+
 /// Default positional matching tolerance in Angstroms.
 pub const DEFAULT_TOLERANCE: f64 = 0.1;
 
@@ -105,11 +107,6 @@ pub enum DefaultToolInteractionState {
         start_screen: DVec2,
         current_screen: DVec2,
     },
-    /// Line-constrained single-atom drag (issue #368). Entered when a drag starts
-    /// on the already-selected atom of a `snapped` guideline; the atom rides the
-    /// guideline tracking the cursor ray's projection. The guideline (and live `t`)
-    /// live on `AtomEditData`, so no per-frame anchor state is needed here.
-    GuidelineDragging,
 }
 
 #[derive(Debug)]
@@ -213,6 +210,113 @@ pub enum AtomEditTool {
     Default(DefaultToolState),
     AddAtom(AddAtomToolState),
     AddBond(AddBondToolState),
+    /// Placement guideline tool (issue #368): constrains atom placement to a
+    /// transient line. Fully self-contained — the guideline lives inside the
+    /// tool variant, so switching tools (replacing the variant) drops it.
+    Guideline(GuidelineTool),
+}
+
+// =============================================================================
+// Guideline tool (issue #368)
+// =============================================================================
+
+/// A provenance-tagged atom reference — the same stable identity the selection
+/// model uses (`SelectionProvenance` + id), but stored on the Guideline tool
+/// rather than in the shared `AtomEditSelection`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomRef {
+    /// An atom from the base (input) structure, by immutable base atom id.
+    Base(u32),
+    /// An atom in the diff, by diff atom id.
+    Diff(u32),
+}
+
+/// Active-phase drag sub-state for the Guideline tool (Phase 2 viewport). Tracks
+/// the in-progress drag mode once the click-vs-drag threshold has been crossed;
+/// the resting state is `Idle`. The pre-threshold "pointer is down" bookkeeping
+/// lives in `GuidelineTool::pending` (which also covers the `Define` phase, where
+/// there is no drag).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum GuidelineDragState {
+    #[default]
+    Idle,
+    /// Place mode: dragging the ghost marker along the line (sets `t`, no atom
+    /// mutation).
+    GhostDragging,
+    /// Move mode: line-constrained drag of the picked atom (it rides the line,
+    /// tracking the cursor ray's projection).
+    PickedDragging,
+}
+
+/// Transient "pointer is down, not yet dragging" bookkeeping for the Guideline
+/// tool (Phase 2 viewport). Captured on `pointer_down`, consumed on `pointer_up`
+/// (a click) or promoted to a `GuidelineDragState` once the drag threshold is
+/// crossed in `pointer_move`. Lives on `GuidelineTool` (not a phase) so it serves
+/// both `Define` (click toggles/clears the defining set) and `Active` (click
+/// picks/unpicks). Not serialized; reset on clone.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GuidelinePending {
+    /// Screen position at press time (for the click-vs-drag threshold).
+    pub mouse_down: DVec2,
+    /// The atom under the cursor at press time, if any (`None` = pressed empty
+    /// space or the marker dot).
+    pub hit: Option<AtomRef>,
+}
+
+/// The two phases of the Guideline tool. See
+/// `doc/atom_edit/design_atom_guidelines.md`.
+#[derive(Debug)]
+pub enum GuidelinePhase {
+    /// No guideline yet: the user picks 1–3 atoms (the tool-local `defining`
+    /// set) to define the line.
+    Define { defining: Vec<AtomRef> },
+    /// A frozen guideline exists. `picked` is the active atom being moved (Move
+    /// mode) or `None` (Place mode, where `guideline.t` positions the ghost).
+    Active {
+        guideline: Guideline,
+        picked: Option<AtomRef>,
+        drag: GuidelineDragState,
+    },
+}
+
+/// State for the Guideline tool. Not serialized, not part of undo/redo — the
+/// guideline value is transient and vanishes when the tool variant is replaced.
+#[derive(Debug)]
+pub struct GuidelineTool {
+    pub phase: GuidelinePhase,
+    /// Remembered direction for the 1-atom directional line. Lives on the tool
+    /// (not in `Define`) so it **persists across Clear / re-Define**: rebuilding
+    /// a same-direction line from a different anchor needs no re-entry (#368).
+    pub entered_direction: DVec3,
+    /// Remembered along-line distance. Seeds a freshly-created line's `t` and
+    /// tracks the active point, so placing at the same distance from a different
+    /// anchor needs no re-entry. Also persists across Clear / re-Define (#368).
+    pub remembered_t: f64,
+    /// Transient pointer bookkeeping between `pointer_down` and the matching
+    /// `pointer_up` / drag-threshold crossing (Phase 2 viewport). Not serialized;
+    /// reset on clone.
+    pub pending: Option<GuidelinePending>,
+}
+
+impl GuidelineTool {
+    /// Enter the tool in `Define` with an empty defining set and no remembered
+    /// settings.
+    pub fn new() -> Self {
+        Self {
+            phase: GuidelinePhase::Define {
+                defining: Vec::new(),
+            },
+            entered_direction: DVec3::ZERO,
+            remembered_t: 0.0,
+            pending: None,
+        }
+    }
+}
+
+impl Default for GuidelineTool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // --- Selection model ---

@@ -582,6 +582,9 @@ pub enum APIAtomEditTool {
     Default,
     AddAtom,
     AddBond,
+    /// Placement guideline tool (issue #368): constrains atom placement to a
+    /// transient line. Self-contained — clears on tool switch / node deselect.
+    Guideline,
 }
 
 /// Freeze mode for atom_edit energy minimization.
@@ -712,9 +715,6 @@ pub struct APIAtomEditData {
     pub has_selected_atoms: bool,
     pub has_selected_bonds: bool,
     pub selected_bond_count: u32,
-    /// Number of currently selected atoms (base + diff). Drives the guideline setup
-    /// button label (1 → Directional, 2 → Center, 3 → Equidistant line; #368).
-    pub selected_atom_count: u32,
     /// Bond order of selected bonds (1-7), or None if no bonds selected or mixed orders.
     pub selected_bond_order: Option<u8>,
     pub has_selection: bool,
@@ -907,34 +907,36 @@ pub enum GuidedPlacementApiResult {
     },
 }
 
-/// Which sub-mode the active placement guideline (issue #368) is in. Keyed off the
-/// selection count: exactly one atom selected → `Move`; zero or ≥2 → `Place`.
+/// Which user-visible state the Guideline tool (issue #368) is in. Derived from
+/// the tool phase plus whether an atom is picked.
 #[flutter_rust_bridge::frb]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum APIGuidelineSubMode {
-    /// Exactly one atom selected: the field/snap operate on that atom.
-    Move,
-    /// Zero or ≥2 atoms selected: the field drives the next-new-atom placement marker.
+pub enum APIGuidelinePhase {
+    /// No guideline yet — the user picks 1–3 defining atoms.
+    Define,
+    /// A frozen line exists, no atom picked (the ghost marker is the active point).
     Place,
+    /// A frozen line exists, an atom is picked (it is the active point).
+    Move,
 }
 
-/// Read-only view of the active placement guideline for the panel (issue #368).
-/// `None` (a missing `Option<APIGuideline>`) means guideline mode is not active.
+/// Read-only view of the active Guideline tool for the panel (issue #368).
+/// `None` (a missing `Option<APIGuidelineToolView>`) means the Guideline tool is
+/// not active (some other tool, or no atom_edit node selected).
 #[flutter_rust_bridge::frb]
-pub struct APIGuideline {
-    /// A point on the frozen line.
-    pub origin: APIVec3,
-    /// Unit direction along the line.
-    pub direction: APIVec3,
-    /// Current 1D position along the line (signed Å from `origin`).
+pub struct APIGuidelineToolView {
+    /// Which user-visible state the tool is in.
+    pub phase: APIGuidelinePhase,
+    /// Number of atoms in the tool-local defining set (Define phase; 0 otherwise).
+    /// Drives the Create button label: 1 → Directional, 2 → Center, 3 → Equidistant.
+    pub defining_count: u32,
+    /// Whether the Create button is enabled (1–3 defining atoms).
+    pub can_create: bool,
+    /// Whether the 1-atom direction field should be shown (`defining_count == 1`).
+    pub needs_direction: bool,
+    /// The active point's along-line position `t` (signed Å from origin). The ghost
+    /// marker in Place; the picked atom's live projection in Move; 0 in Define.
     pub t: f64,
-    /// Orthogonal distance of the selected atom from the line (Move sub-mode); zero
-    /// in Place sub-mode and when snapped.
-    pub off_line_distance: f64,
-    /// Whether the selected atom is locked onto the line (Move sub-mode bit).
-    pub snapped: bool,
-    /// Move vs. Place sub-mode (derived from the selection count).
-    pub sub_mode: APIGuidelineSubMode,
 }
 
 pub struct APIRegPolyData {

@@ -1,10 +1,10 @@
-//! Phase 3 tests for the atom placement guideline (issue #368).
+//! Rendering-decoration tests for the placement guideline tool (issue #368).
 //!
-//! Rendering decoration: `eval(decorate=true)` populates the output's
-//! `decorator.guideline_visuals` from the transient `AtomEditData::guideline`
-//! (applied to both the result and diff pins); `decorate=false` and a missing
-//! guideline both leave it `None`. Tessellation/GPU is exempt per the testing
-//! policy. See `doc/atom_edit/design_atom_guidelines.md`.
+//! `eval(decorate=true)` populates the output's `decorator.guideline_visuals`
+//! from the active Guideline tool's `Active` line (applied to both the result and
+//! diff pins); `Define`, `decorate=false`, and no Guideline tool all leave it
+//! `None`. Tessellation/GPU is exempt per the testing policy. See
+//! `doc/atom_edit/design_atom_guidelines.md`.
 
 use glam::f64::{DVec2, DVec3};
 
@@ -13,7 +13,8 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    AtomEditData, Guideline,
+    AtomEditData, AtomEditTool, AtomRef, Guideline, GuidelineDragState, GuidelinePhase,
+    GuidelineTool,
 };
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
@@ -87,46 +88,109 @@ fn sample_guideline() -> Guideline {
 // =============================================================================
 
 #[test]
-fn decorate_true_populates_result_pin_visuals() {
-    let (mut designer, node_id) = setup_atom_edit();
-    data_mut(&mut designer, node_id).guideline = Some(sample_guideline());
-
-    let visuals = eval_guideline_visuals(&designer, node_id, 0, true)
-        .expect("result pin should carry guideline visuals when decorating");
-
-    assert!((visuals.origin - DVec3::new(1.0, 2.0, 3.0)).length() < EPS);
-    assert!((visuals.direction - DVec3::new(0.0, 0.0, 1.0)).length() < EPS);
-    assert!((visuals.marker_t - 4.0).abs() < EPS);
-}
-
-#[test]
-fn decorate_true_populates_diff_pin_visuals() {
-    let (mut designer, node_id) = setup_atom_edit();
-    data_mut(&mut designer, node_id).guideline = Some(sample_guideline());
-
-    // Pin 1 is the diff output.
-    let visuals = eval_guideline_visuals(&designer, node_id, 1, true)
-        .expect("diff pin should carry guideline visuals when decorating");
-
-    assert!((visuals.origin - DVec3::new(1.0, 2.0, 3.0)).length() < EPS);
-    assert!((visuals.direction - DVec3::new(0.0, 0.0, 1.0)).length() < EPS);
-    assert!((visuals.marker_t - 4.0).abs() < EPS);
-}
-
-#[test]
-fn decorate_false_leaves_visuals_none() {
-    let (mut designer, node_id) = setup_atom_edit();
-    data_mut(&mut designer, node_id).guideline = Some(sample_guideline());
-
-    // Even with a guideline set, a non-decorating pass adds no visuals.
-    assert!(eval_guideline_visuals(&designer, node_id, 0, false).is_none());
-    assert!(eval_guideline_visuals(&designer, node_id, 1, false).is_none());
-}
-
-#[test]
 fn no_guideline_leaves_visuals_none() {
     let (designer, node_id) = setup_atom_edit();
     // No guideline set on the node.
     assert!(eval_guideline_visuals(&designer, node_id, 0, true).is_none());
     assert!(eval_guideline_visuals(&designer, node_id, 1, true).is_none());
+}
+
+// =============================================================================
+// Phase 2 — rendering from the new tool state (AtomEditTool::Guideline)
+// =============================================================================
+
+/// Put the data into the Guideline tool's `Active` phase with the given line.
+fn enter_active_tool(data: &mut AtomEditData, g: Guideline) {
+    data.active_tool = AtomEditTool::Guideline(GuidelineTool {
+        phase: GuidelinePhase::Active {
+            guideline: g,
+            picked: None,
+            drag: GuidelineDragState::Idle,
+        },
+        entered_direction: DVec3::ZERO,
+        remembered_t: g.t,
+        pending: None,
+    });
+}
+
+#[test]
+fn tool_active_populates_both_pin_visuals() {
+    let (mut designer, node_id) = setup_atom_edit();
+    enter_active_tool(data_mut(&mut designer, node_id), sample_guideline());
+
+    for pin in [0, 1] {
+        let visuals = eval_guideline_visuals(&designer, node_id, pin, true)
+            .expect("Active tool should carry guideline visuals on both pins");
+        assert!((visuals.origin - DVec3::new(1.0, 2.0, 3.0)).length() < EPS);
+        assert!((visuals.direction - DVec3::new(0.0, 0.0, 1.0)).length() < EPS);
+        assert!((visuals.marker_t - 4.0).abs() < EPS);
+    }
+}
+
+#[test]
+fn tool_define_phase_leaves_visuals_none() {
+    let (mut designer, node_id) = setup_atom_edit();
+    // Entering the tool starts in `Define` — no line yet, so nothing is drawn.
+    data_mut(&mut designer, node_id).active_tool = AtomEditTool::Guideline(GuidelineTool::new());
+
+    assert!(eval_guideline_visuals(&designer, node_id, 0, true).is_none());
+    assert!(eval_guideline_visuals(&designer, node_id, 1, true).is_none());
+}
+
+#[test]
+fn tool_active_decorate_false_leaves_visuals_none() {
+    let (mut designer, node_id) = setup_atom_edit();
+    enter_active_tool(data_mut(&mut designer, node_id), sample_guideline());
+
+    assert!(eval_guideline_visuals(&designer, node_id, 0, false).is_none());
+    assert!(eval_guideline_visuals(&designer, node_id, 1, false).is_none());
+}
+
+#[test]
+fn tool_picked_atom_is_highlighted_in_diff_view() {
+    let (mut designer, node_id) = setup_atom_edit();
+    let data = data_mut(&mut designer, node_id);
+    let id = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 4.0));
+    let mut g = Guideline::new(DVec3::ZERO, DVec3::new(0.0, 0.0, 1.0));
+    g.t = 4.0;
+    data.active_tool = AtomEditTool::Guideline(GuidelineTool {
+        phase: GuidelinePhase::Active {
+            guideline: g,
+            picked: Some(AtomRef::Diff(id)),
+            drag: GuidelineDragState::Idle,
+        },
+        entered_direction: DVec3::ZERO,
+        remembered_t: g.t,
+        pending: None,
+    });
+
+    // Pin 1 (diff): the picked diff atom should carry a non-Normal display state.
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get("test").unwrap();
+    let evaluator =
+        rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::NetworkEvaluator::new(
+        );
+    let mut context =
+        rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext::new(
+        );
+    let network_stack = vec![
+        rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::NetworkStackElement {
+            node_network: network,
+            node_id: 0,
+        },
+    ];
+    let result = evaluator.evaluate(&network_stack, node_id, 1, registry, true, &mut context);
+    let atoms = match result {
+        NetworkResult::Molecule(m) => m.atoms,
+        other => panic!("expected molecule diff, got {:?}", other.infer_data_type()),
+    };
+    let state = atoms.decorator().get_atom_display_state(id);
+    assert!(
+        !matches!(
+            state,
+            rust_lib_flutter_cad::crystolecule::atomic_structure::AtomDisplayState::Normal
+        ),
+        "picked atom should be highlighted, got {:?}",
+        state
+    );
 }

@@ -94,14 +94,6 @@ class _AtomEditDefaultDelegate implements PrimaryPointerDelegate {
           );
       }
       _viewport.renderingNeeded();
-      // Live-sync the guideline position field / off-line readout while dragging a
-      // single selected atom (#368). Move sub-mode only — Place mode and normal
-      // multi-atom drags don't change the field, so they skip the rebuild.
-      final guideline = atom_edit_api.getAtomEditGuideline();
-      if (guideline != null &&
-          guideline.subMode == APIGuidelineSubMode.move) {
-        _viewport.widget.graphModel.notifyGuidelineDragSync();
-      }
     }
     return true;
   }
@@ -188,6 +180,64 @@ class _AtomEditAddBondDelegate implements PrimaryPointerDelegate {
   void onPrimaryCancel() {
     atom_edit_api.addBondPointerCancel();
     _viewport._setAddBondPreview(null);
+    _viewport.refreshFromKernel();
+    _viewport.renderingNeeded();
+  }
+}
+
+/// Delegate that handles primary mouse button events for the atom_edit Guideline
+/// tool (issue #368). Forwards pointer down/move/up to the Rust guideline tool
+/// state machine: defining toggle (Define), pick + constrained drag (Move),
+/// ghost drag (Place), unpick (empty click in Move).
+class _AtomEditGuidelineDelegate implements PrimaryPointerDelegate {
+  final _StructureDesignerViewportState _viewport;
+
+  _AtomEditGuidelineDelegate(this._viewport);
+
+  @override
+  bool onPrimaryDown(Offset pos) {
+    final ray = _viewport.getRayFromPointerPos(pos);
+    atom_edit_api.guidelinePointerDown(
+      screenPos: offsetToApiVec2(pos),
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    return true;
+  }
+
+  @override
+  bool onPrimaryMove(Offset pos) {
+    final ray = _viewport.getRayFromPointerPos(pos);
+    final changed = atom_edit_api.guidelinePointerMove(
+      screenPos: offsetToApiVec2(pos),
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    if (changed) {
+      _viewport.renderingNeeded();
+      // Rebuild the panel so the `t` field tracks the marker / atom live (a plain
+      // notify — the Guideline card re-reads its view via FFI on rebuild).
+      _viewport.widget.graphModel.notifyGuidelineToolSync();
+    }
+    return true;
+  }
+
+  @override
+  bool onPrimaryUp(Offset pos) {
+    final ray = _viewport.getRayFromPointerPos(pos);
+    atom_edit_api.guidelinePointerUp(
+      screenPos: offsetToApiVec2(pos),
+      rayOrigin: vector3ToApiVec3(ray.start),
+      rayDirection: vector3ToApiVec3(ray.direction),
+    );
+    _viewport.refreshFromKernel();
+    _viewport.renderingNeeded();
+    return true;
+  }
+
+  @override
+  void onPrimaryCancel() {
+    atom_edit_api.guidelineResetInteraction();
     _viewport.refreshFromKernel();
     _viewport.renderingNeeded();
   }
@@ -372,6 +422,7 @@ class _StructureDesignerViewportState
     extends CadViewportState<StructureDesignerViewport> {
   _AtomEditDefaultDelegate? _atomEditDefaultDelegate;
   _AtomEditAddBondDelegate? _atomEditAddBondDelegate;
+  _AtomEditGuidelineDelegate? _atomEditGuidelineDelegate;
   Rect? _marqueeRect;
   APIAddBondMoveResult? _addBondPreview;
   Offset? _cursorPosition;
@@ -459,8 +510,10 @@ class _StructureDesignerViewportState
         renderingNeeded();
         return KeyEventResult.handled;
       }
-      if (atom_edit_api.getAtomEditGuideline() != null) {
-        widget.graphModel.atomEditClearGuideline();
+      // Guideline tool (#368): Escape clears the active line (→ Define) or, in
+      // Define, clears the defining set — `guidelineClear` does both.
+      if (atom_edit_api.getGuidelineToolView() != null) {
+        widget.graphModel.guidelineClear();
         renderingNeeded();
         return KeyEventResult.handled;
       }
@@ -506,6 +559,17 @@ class _StructureDesignerViewportState
       if (currentTool != null && currentTool != APIAtomEditTool.addBond) {
         _elementAccumulator.reset();
         widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.addBond);
+        _clearHoverTooltip();
+        return KeyEventResult.handled;
+      }
+    }
+
+    // F5: switch to Guideline tool (#368)
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.f5) {
+      final currentTool = atom_edit_api.getActiveAtomEditTool();
+      if (currentTool != null && currentTool != APIAtomEditTool.guideline) {
+        _elementAccumulator.reset();
+        widget.graphModel.setActiveAtomEditTool(APIAtomEditTool.guideline);
         _clearHoverTooltip();
         return KeyEventResult.handled;
       }
@@ -878,22 +942,31 @@ class _StructureDesignerViewportState
     if (!widget.graphModel.isAtomEditLikeActive) {
       _atomEditDefaultDelegate = null;
       _atomEditAddBondDelegate = null;
+      _atomEditGuidelineDelegate = null;
       return null;
     }
 
     final tool = atom_edit_api.getActiveAtomEditTool();
     if (tool == APIAtomEditTool.default_) {
       _atomEditAddBondDelegate = null;
+      _atomEditGuidelineDelegate = null;
       _atomEditDefaultDelegate ??= _AtomEditDefaultDelegate(this);
       return _atomEditDefaultDelegate;
     } else if (tool == APIAtomEditTool.addBond) {
       _atomEditDefaultDelegate = null;
+      _atomEditGuidelineDelegate = null;
       _atomEditAddBondDelegate ??= _AtomEditAddBondDelegate(this);
       return _atomEditAddBondDelegate;
+    } else if (tool == APIAtomEditTool.guideline) {
+      _atomEditDefaultDelegate = null;
+      _atomEditAddBondDelegate = null;
+      _atomEditGuidelineDelegate ??= _AtomEditGuidelineDelegate(this);
+      return _atomEditGuidelineDelegate;
     }
 
     _atomEditDefaultDelegate = null;
     _atomEditAddBondDelegate = null;
+    _atomEditGuidelineDelegate = null;
     return null;
   }
 
@@ -950,17 +1023,6 @@ class _StructureDesignerViewportState
 
       if (atomEditData != null) {
         final atomicNumber = atomEditData.selectedAtomicNumber;
-
-        // Guideline snap-place (#368) takes precedence: when a guideline is
-        // active, a click places a free atom on the line closest to the ray.
-        if (atom_edit_api.getAtomEditGuideline() != null) {
-          widget.graphModel.atomEditPlaceAtomOnGuidelineByRay(
-            ray.start,
-            ray.direction,
-          );
-          renderingNeeded();
-          return;
-        }
 
         if (atomEditData.isInGuidedPlacement) {
           // Already in guided placement — try placing at a guide dot

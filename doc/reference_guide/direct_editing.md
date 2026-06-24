@@ -15,7 +15,7 @@ When you first launch atomCAD, you start in Direct Editing Mode. This mode hides
 
 The atom editor is the central tool for building and modifying atomic structures in atomCAD. In Direct Editing Mode the atom editor occupies the left sidebar; in Node Network Mode the same editor appears in the Node Properties panel when an `atom_edit` node is selected. The tools and features described below work identically in both modes (with minor simplifications in Direct Editing Mode, such as the hidden `diff` output pin and other node-network-specific affordances).
 
-The editor is based on **tools** — one tool can be active at a time. The active tool determines how you interact with the atomic structure in the viewport. You can switch tools using keyboard shortcuts: `F2` (Default tool), `F3` (Add atom tool), `F4` or `J` (Add bond tool).
+The editor is based on **tools** — one tool can be active at a time. The active tool determines how you interact with the atomic structure in the viewport. You can switch tools using keyboard shortcuts: `F2` (Default tool), `F3` (Add atom tool), `F4` or `J` (Add bond tool), `F5` (Guideline tool).
 
 ### Default tool
 
@@ -82,6 +82,26 @@ The Default tool includes one-click hydrogen passivation and depassivation:
 - Use keyboard shortcuts `1`–`7` to select the bond order: `1` single, `2` double, `3` triple, `4` quadruple, `5` aromatic, `6` dative, `7` metallic.
 - Clicking an existing bond cycles through the common orders (single → double → triple → single).
 
+### Guideline tool
+
+A **guideline** is a temporary line in 3D space that constrains atom placement to positions that are hard to hit by free clicking — for example the ad-atom site of a Si(111) √3×√3 R30° reconstruction, which sits equidistant from three surface atoms. The Guideline tool (`F5`) fully owns the viewport while active and walks through three states: **Define** the line, **Place** atoms on it, and **Move** an atom along it.
+
+A guideline is **transient**: it is *not* saved to the project file and is *not* part of undo/redo (the atoms you place or move *are* undoable). It is a frozen snapshot — it does not move if the atoms it was derived from later move. The line is dropped when you switch to another tool, deselect the node, or press **Clear** / `Escape` (which returns you to Define so you can build another).
+
+**Define — building the line.** Click 1–3 atoms in the viewport to pick the atoms that define the line (click an already-picked atom to drop it, or click empty space to start over). The panel's **Create** button is labeled by how many atoms you picked:
+
+- **3 atoms → Equidistant line:** runs through the circumcenter of the triangle, perpendicular to it. Every point on the line is equidistant from all three atoms.
+- **2 atoms → Center line:** passes through the midpoint, directed from the first to the second picked atom.
+- **1 atom → Directional line:** originates at the atom; you enter the direction as a vector (a **Normalize** button rescales it to unit length).
+
+Degenerate input (three near-collinear atoms, two coincident atoms, or a zero-length direction) is rejected with a notification and no line is created. After **Create**, the picked atoms no longer matter — the line is frozen.
+
+**Place — adding atoms on the line.** Once the line exists, the panel shows a **position field** (the signed distance `t` in Å along the line from its origin) and an element selector. Drag the marker dot — or anywhere in empty space — to slide it along the line, then click **Place atom** to create a free atom (no bonds) of the selected element at that position. After placing, the tool automatically switches to **Move** with the new atom selected, so you can fine-tune it; to start another atom, click empty space (this returns to Place, with the marker where you left it).
+
+**Move — adjusting an atom on the line.** Click an existing atom to pick it: it snaps onto the line and becomes the active point. Drag it to slide it along the line, or type an exact `t` in the position field. Click a different atom to pick that one instead, or click empty space to release it (returning to Place). Picking always snaps the atom onto the line — there is no off-line offset to manage; free 3D motion is the Default tool's job.
+
+Placing atoms via a guideline never creates bonds — switch to the Add bond tool afterward if you need them. Viewport clicks never place an atom on their own (the **Place atom** button does), which keeps "click an atom to pick it" unambiguous.
+
 ### Measurements
 
 When 2–4 atoms are selected the UI displays a measurement card. Measurements are available regardless of which tool is active.
@@ -93,29 +113,6 @@ When 2–4 atoms are selected the UI displays a measurement card. Measurements a
 A **Modify** button on the measurement card opens a dialog where you can enter a precise target value. Atoms are moved along bond axes, rotated around vertices, or rotated around torsion axes to achieve the target value. A "move connected atoms" option (on by default) moves the fragment attached to the moving atom rather than just the single atom.
 
 **Atom info on hover:** Hovering over an atom shows a tooltip with its element, position, and which node produced it. The tooltip also reports the atom's hybridization: when an explicit override is set the line reads e.g. *Hybridization: sp2 (override)*; when hybridization is left on auto the line shows the auto-inferred value in parentheses, e.g. *Hybridization: auto (sp3)*. For atoms whose displayed atomic number is a non-physical parameter element, an *Effective element: …* line shows the real element used for simulation, guided placement, and passivation (see the parameter element note in the [`materialize`](./nodes/atomic.md#materialize) section).
-
-### Placement guidelines
-
-A **guideline** is a temporary line in 3D space that constrains atom placement to positions that are hard to hit by free clicking — for example the ad-atom site of a Si(111) √3×√3 R30° reconstruction, which sits equidistant from three surface atoms. The **Guideline** card appears in the atom editor while the Default or Add Atom tool is active.
-
-A guideline is **transient**: it is *not* saved to the project file and is *not* part of undo/redo. It is a frozen snapshot — it does not move if the atoms it was derived from later move. It is cleared by the **Cancel** button, the `Escape` key, or leaving/deselecting the node.
-
-**Setting one up** is selection-driven; the card shows one button whose label depends on how many atoms are selected:
-
-- **3 atoms → Equidistant line:** runs through the circumcenter of the triangle, perpendicular to it. Every point on the line is equidistant from all three atoms.
-- **2 atoms → Center line:** passes through the midpoint, directed from the first to the second selected atom.
-- **1 atom → Directional line:** originates at the atom; you enter the direction as a vector (a **Normalize** button rescales it to unit length).
-
-Degenerate input (three near-collinear atoms, two coincident atoms, or a zero-length direction) is rejected with a notification and no guideline is created. Once set up, the selection no longer matters — you can change or clear it freely.
-
-The card shows a **position field** (the signed distance `t` in Å along the line from its origin) and an **off-line** readout (the perpendicular distance of the selected atom from the line). What you do with it depends on the selection:
-
-- **Place sub-mode (0 atoms selected):** the field positions a marker for the *next new* atom. Click **Place atom** to create a free atom (no bonds) of the selected element at that exact position, or — with the Add Atom tool — just click in the viewport to drop one at the point on the line closest to the click. The guideline stays active so you can place several atoms in a row.
-- **Move sub-mode (exactly 1 atom selected):** the field and a **Snap to guideline** checkbox operate on that atom. Checking *Snap* moves the atom onto the line; from then on dragging it is constrained to slide along the line, and editing the field slides it to an exact `t`. Unchecking releases it (it stays put) so dragging is free 3D motion again; editing the field then moves it parallel to the line, preserving its perpendicular offset.
-
-Placing atoms via a guideline never creates bonds — use the Add Bond tool afterward if you need them. With two or more atoms selected, dragging is unconstrained as usual.
-
-If a guided placement is in progress when you press `Escape`, the first `Escape` cancels that and a second clears the guideline.
 
 ### Rim highlights
 
