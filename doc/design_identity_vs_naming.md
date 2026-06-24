@@ -1,342 +1,541 @@
-# Design: Identity vs. Naming vs. Position (the reference architecture)
+# Design: Identity vs. Naming — record defs referenced by id
 
-**Status:** Proposal / architecture north-star. Not yet implemented.
-**Scope:** Cross-cutting. Touches `node_network`, `node_type`, `data_type`,
-`node_type_registry`, `network_validator`, `serialization`, the text format, and
-the FFI/Flutter boundary.
-**Supersedes-by-subsuming:** the "Non-goals" of
-`doc/design_custom_node_type_cache_invariant.md` ("positional → id-keyed wire
-destinations") and the long-term half of `doc/design_parameter_wire_stability.md`
-(F1–F6 are the tactical fix; this doc is the strategic end-state).
+**Status:** Proposal / implementation brief. Phase 0 (the invariant checker,
+`doc/design_identity_vs_naming_phase0.md`) is **shipped**. This document
+specifies the **one** refactor we intend to implement in the near term:
+**referencing named record type defs by a stable id instead of by name.**
+**Scope (near-term):** `data_type.rs` (`RecordType`), `node_type_registry.rs`
+(record-def storage, rename, the rewrite walk), the three record nodes'
+schema/target fields, the serialization boundary, and the type-rendering paths.
+**Explicitly out of scope** (see §9): node-type ids, parameter/argument ids,
+and record-*field* renaming.
 
----
-
-## 0. Why this document exists
-
-We have hit the same class of bug repeatedly:
-
-- **Record rename drops wires across unrelated networks** (the
-  `custom_node_type` cache-invariant bug, then the `closure`/`apply`/`collect`
-  rewrite-walk omission — two separate failures of *the same* hand-maintained
-  walk list).
-- **Adding/reordering a parameter jumbles wires in calling networks**
-  (`design_parameter_wire_stability.md`: a recycled `param_id` after load).
-- **Repair passes that "guess" how to realign wires** after a layout change,
-  and silently drop or mis-route them.
-
-Each of these is a symptom of one root architectural confusion. This document
-names that confusion, states the principle that removes it, and lays out an
-incremental, safe migration.
+> **Representation decision (the spine of this doc):** a record reference in
+> memory carries **identity, never a name**. Concretely
+> `RecordType::Named(RecordRef)` with
+> `RecordRef::Resolved(RecordDefId) | RecordRef::Dangling(String)` — a **sum**
+> (exactly one of id *or* orphan-name), never a struct holding both. The on-disk
+> and on-screen *name* is **derived from the registry** at the boundary, the way
+> atomCAD already derives every other on-disk shape from its in-memory editing
+> types (the `Serializable*` DTO family). See §4.2.
 
 ---
 
-## 1. The confusion: three concepts stored as one
+## 1. The principle, and the one place we apply it now
 
-The system conflates three distinct concepts:
+> **References store identity. Names are a derived/presentation view — never the
+> binding.**
 
-| Concept      | What it should be                              | Mutates when…           |
-| ------------ | ---------------------------------------------- | ----------------------- |
-| **Identity** | a stable, opaque id, allocated once, never reused | never                |
-| **Name**     | a mutable, human-facing label                  | the user renames        |
-| **Position** | a derived ordering for layout & evaluation     | the user reorders       |
+We have repeatedly shipped the same bug: a **record rename leaves stale
+`Record(Named(old))` references** scattered through the graph, because the rename
+is implemented as a hand-maintained walk that rewrites every embedded copy of the
+name, and that walk has drifted out of sync with reality (the `closure` / `apply`
+/ `collect` omissions — see
+`rename_wire_loss_regression_test::record_rename_rewrites_closure_and_collect_type_fields`).
 
-Today, **names and positions are used *as* identity**:
+The root cause is that **a record def's name is used as its identity**. A
+`DataType` references a record def via `RecordType::Named(String)`; the registry
+is keyed by that same string. So renaming the def forces the system to *find and
+rewrite every place that used the old name*. That walk
+(`rewrite_record_name_in_registry`) is:
 
-- A wire's destination is the **index** of its `Argument` in
-  `node.arguments: Vec<Argument>` — *position is identity*.
-- A `DataType` references a record def via `RecordType::Named(String)`, a node
-  references its type via `node_type_name: String`, a record field is referenced
-  by field name — *name is identity*.
+- **fragile** — correctness depends on a hand-maintained downcast list being
+  *exhaustive*, and nothing enforces it (it has silently missed node types
+  twice); and
+- **needlessly global** — a pure relabel touches the whole document.
 
-Because name and position are not stable, every rename and every reorder forces
-the system to *find and rewrite every place that used the old name/position*.
-That rewrite is:
+A record def's name is a **safe** thing to demote to a pure label, because
+**records are structurally typed**: `Named("Box")` and `Named("Crate")` with the
+same fields are already interchangeable, and a named def is interchangeable with
+a matching anonymous record. The name does **not** gate type compatibility (only
+the *fields* do). So making the def name a mutable label with no binding power
+changes no typing semantics — it only deletes the rewrite walk.
 
-- **brittle** — it is a hand-maintained list of node-data downcasts
-  (`rewrite_record_name_in_registry`) that has drifted out of sync with reality
-  twice; and
-- **lossy** — the positional realignment (`repair_call_sites_for_network`,
-  `repair_network_arguments`, the `set_custom_node_type(refresh_args=true)`
-  rebuild) guesses, and a wrong guess silently deletes or mis-routes a wire.
-
----
-
-## 2. The principle
-
-> **References store identity. Names and positions are derived/presentation
-> views — never the binding.**
-
-Apply it and three expensive, dangerous operations become trivial:
-
-- **Rename** → mutate one `name` field on the definition. **No reference
-  rewrite, no cross-network walk.** Deletes `rewrite_record_name_in_registry`,
-  `collect_record_refs_in_network`, the `rename_node_network` rewrite walk, and
-  the obligation to keep all three in sync with
-  `canonicalize::canonicalize_node_data`.
-- **Reorder** parameters / fields / output pins → a **no-op for every wire**,
-  because wires point at ids, not slots. Only the derived positional view is
-  recomputed. Deletes `repair_call_sites_for_network`'s index translation.
-- **Wire repair** → shrinks to a single clean rule: *drop a wire iff its
-  endpoint id no longer exists, or the endpoint types are no longer
-  compatible.* No index realignment, no guessing.
+> **Why not also node-type names, parameter positions, record *fields*?**
+> Those are deliberately deferred or rejected — see §9.
 
 ---
 
-## 3. The two axes (separate blast radius)
+## 2. What this deletes, and what it moves (the honest payoff)
 
-The principle is one, but the work splits along two axes with very different
-cost, so we track them separately.
+When the refactor lands:
 
-### Axis A — name-based cross-references (the *rename* pain)
+- **`rewrite_record_name_in_registry`** (`node_type_registry.rs:~1342` site +
+  the ~154-line downcast chain) — **deleted**.
+- **`NodeTypeRegistry::rename_record_type_def`** + `_unchecked`'s rewrite call —
+  the rename body collapses from "move key + rewrite the whole registry" to "set
+  the def's `name` field + update one reverse-index entry" (~30 lines → ~6). The
+  rename undo command shrinks to a name+index swap (no graph snapshot).
+- **The three-way hand-maintained downcast list** (the rewriter's `&mut` list,
+  the read enumerator `collect_record_refs_in_node`, and `canonicalize_node_data`
+  that must "stay in sync") collapses to **one** shared traversal used by the
+  serialization-boundary conversion (§4.3). The drift bug class is structurally
+  eliminated.
+- **The per-rename `repair_all_networks` cascade** for renames goes away (renames
+  no longer change any pin layout — only field edits do, which keep their
+  existing `repair` path).
 
-Records, record fields, and node types are referenced by **name strings embedded
-throughout the graph** (inside `DataType`s on `parameter`/`expr`/`map`/`closure`/
-`collect`/… node data, inside `record_construct.schema`, inside every network's
-parameter/output-pin signature). Rename ⇒ rewrite every embedded copy.
-
-This is the walk in `rewrite_record_name_in_registry`. Its fragility is
-structural: correctness depends on the downcast list being **exhaustive**, and
-nothing enforces that. It has silently missed node types twice.
-
-### Axis B — position-based bindings (the *reorder* pain)
-
-A wire's destination is its index in `node.arguments`. Insert / remove / reorder
-a parameter and the indices shift.
-
-**Important nuance (from `design_parameter_wire_stability.md`):** positional
-storage *works correctly* as long as the parameter's `param_id` is unique and
-persistent — the validator reconciles old→new positions by id. The actual
-corruption there was an **identity-allocation** failure (`next_param_id` reset to
-`1` on load → a recycled id → the reconciler matched the wrong parameter). So
-Axis B is really: *we already have ids on the definition side, but (a) the wire
-itself doesn't store the destination id, and (b) id allocation isn't airtight.*
-
----
-
-## 4. The reference classes and the id each needs
-
-| # | Reference site            | Today                                | Proposed                              | Eval-hot? |
-| - | ------------------------- | ------------------------------------ | ------------------------------------- | --------- |
-| 1 | wire → destination param  | index into `arguments: Vec<Argument>`| `dest_param_id: ParamId` on the wire  | **yes**   |
-| 2 | wire → source pin         | `SourcePin::NodeOutput{pin_index}`   | `OutputPinId`                         | yes       |
-| 3 | node → its type           | `node_type_name: String`             | `TypeId` (name moves to the def)      | no        |
-| 4 | `DataType` → record def   | `RecordType::Named(String)`          | `RecordDefId` (interned, see §6)      | no        |
-| 5 | record value / pin → field| field **name**                       | `FieldId`                             | partially |
-
-Source **nodes** are already id-keyed (`IncomingWire::source_node_id: u64`) — and
-that is precisely why the source side never suffered the rename bug. We are
-extending the discipline that already works for source nodes to the other five
-sites.
+But be honest about what *moves* rather than disappears. Deleting the rename walk
+means embedded refs are never rewritten on rename, so **a resolved ref no longer
+carries a usable name at all** — and therefore every place that renders a record
+*name* (serialization, text format, FFI labels, type-mismatch messages) must
+**resolve `id → name` through the registry** instead of reading it off the type.
+That rendering change is **not optional and not specific to this representation**:
+even if we kept a name embedded in the ref, it would be *stale the instant a
+rename runs* (the rename is O(1) and never visits it), so authoritative name
+rendering has to go through the registry either way. This refactor simply makes
+that truth explicit. The net is therefore **roughly LOC-neutral** (§10) — the win
+is **correctness and architecture**, not line count: the silent-drift class is
+gone, the live graph holds **zero** duplicated names, and a rename is reflected
+everywhere instantly because nothing caches the old name.
 
 ---
 
-## 5. Keeping evaluation fast: id-keyed truth, index-keyed eval view
+## 3. The reference sites (today) and the target
 
-The constraint "evaluation must stay fast" is real: the evaluator reads
-`arguments[i]` in a hot loop and must not pay a hash lookup per argument. The
-resolution reuses a pattern the code already relies on for `custom_node_type`:
+| # | Reference site | Today | Target (in memory) | On disk / text |
+| - | -------------- | ----- | ------------------ | -------------- |
+| 1 | embedded type ref | `RecordType::Named(String)` in any `DataType` | `RecordType::Named(RecordRef)` (id, or orphan-name if dangling) | **name** (unchanged, readable) |
+| 2 | `record_construct.schema` | `String` | `RecordRef` | **name** |
+| 3 | `record_destructure.schema` | `String` | `RecordRef` | **name** |
+| 4 | `product.target` | `String` | `RecordRef` | **name** |
+| 5 | registry storage | `HashMap<String, RecordTypeDef>` | unchanged key + `id` field + `id→name` reverse index | n/a |
 
-- **Source of truth is id-keyed.** The wire carries `dest_param_id`; a record
-  value is field-id-keyed.
-- **The eval view stays a plain `Vec`.** `arguments: Vec<Argument>` becomes a
-  **derived cache**, materialized in the node type's current parameter order. It
-  is recomputed only when the layout changes — which is *exactly* when
-  `calculate_custom_node_type` already re-runs. The hot loop remains a `Vec`
-  index; **zero per-eval hashing.**
-
-So "reorder" means "recompute the derived index view." Wires never move because
-they were never keyed on the index in the first place. Same idea for records:
-store the payload field-id-keyed, materialize a fixed-order tuple per def when an
-eval actually needs positional access.
+Anonymous records (`RecordType::Anonymous(Vec<(String, DataType)>)`) are **not
+touched** — they have no def to rename, and they remain name-keyed structural
+schemas (§4.8).
 
 ---
 
-## 6. The external boundary stays name-based (by design)
+## 4. The design in detail
 
-Internally by id, externally by full name. This is not a compromise — it is the
-correct separation, and it is where names *should* remain authoritative:
+### 4.1 The id, its allocation, and the registry indices
 
-- The **`.cnnd` human/AI text format**, the **FFI / Flutter UI**, and
-  **library import** stay name-based. We add a thin **name↔id resolution layer at
-  the boundary**: a per-document **name table**. Parse/import resolves names →
-  ids; serialize/display resolves ids → names.
-- **Import disambiguation by full name falls out for free.** Ids are unique only
-  *within a document*. Importing a library **remaps** its ids to fresh local ids,
-  and uses **full names** to decide "same logical type → merge" vs. "name clash →
-  rename-on-conflict." This is the one place names *must* stay authoritative, and
-  it is external — exactly where we want them.
-- **Built-ins** get fixed, well-known ids; they are never renamed.
+```rust
+/// Document-scoped stable surrogate key for a named record def. Allocated once,
+/// never reused within a document, remapped on cross-document import.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct RecordDefId(pub u64);
+```
 
-Net effect: human naming is **decoupled** from internal identity. Renaming a
-record, field, parameter, network, or pin is a pure UI/label operation with no
-graph-wide consequences.
+`RecordTypeDef` gains an `id`:
+
+```rust
+pub struct RecordTypeDef {
+    pub id: RecordDefId,          // NEW — stable identity
+    pub name: String,             // now a pure mutable label
+    pub fields: Vec<(String, DataType)>,
+}
+```
+
+`NodeTypeRegistry` **keeps the existing `record_type_defs: HashMap<String,
+RecordTypeDef>` name-keyed map** (so the ~16 `lookup_record_type_def(name)` call
+sites are unchanged) and adds a reverse index plus an allocator:
+
+```rust
+pub record_def_name_by_id: HashMap<RecordDefId, String>, // id → current name
+pub next_record_def_id: u64,                             // monotonic; floor recomputed on load
+```
+
+> **On the two registry maps (the "is this redundant?" question).** This is the
+> *benign* kind of duplication, and it is the only place names are duplicated at
+> all. The single source of truth is the `RecordTypeDef` (it owns both `id` and
+> `name`); `record_type_defs` (name→def) and `record_def_name_by_id` (id→name)
+> are just two lookup directions over that one object, updated **together in the
+> one `rename` method**, and the whole thing is O(number of defs) — a few dozen,
+> not graph-scale. That is standard bidirectional indexing, not drift-prone
+> duplication. The dangerous, graph-scale duplication — a name copied into every
+> embedded ref — is exactly what §4.2 removes.
+
+- **Allocation invariant** (mirrors the F1 `next_param_id` discipline): on add,
+  hand out `next_record_def_id` then bump; on load, recompute
+  `next_record_def_id = max(existing id) + 1`; never recycle.
+- **Built-in record defs** (`built_in_record_type_defs`, e.g. `ElementMapping`)
+  get **fixed, well-known ids** assigned at registry construction. Never renamed.
+- Accessors: `lookup_record_type_def_by_id(id) -> Option<&RecordTypeDef>` (chains
+  through `record_def_name_by_id` then `record_type_defs`),
+  `record_def_id(name) -> Option<RecordDefId>`,
+  `record_def_name(id) -> Option<&str>`.
+
+A thin **`RecordNameResolver`** view (`record_def_id(name)` / `record_def_name(id)`)
+is the only capability the serialization/rendering boundary needs; the registry
+implements it. Threading a narrow resolver — rather than the whole registry — keeps
+the boundary honest about what it touches.
+
+### 4.2 The in-memory reference: a sum, not a struct
+
+The crux. A resolved reference carries **only** identity. A reference that failed
+to resolve at load time carries **only** its orphan name (so it round-trips and
+produces a good error). Never both — so there is nothing to keep in sync.
+
+```rust
+/// A reference to a named record def. Exactly one of two states; they never
+/// coexist, so there is no id/name pair to drift.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum RecordRef {
+    /// Bound to a registry def by stable id. Carries NO name — the display /
+    /// on-disk name is derived from the registry (`record_def_name(id)`).
+    Resolved(RecordDefId),
+
+    /// A load-time (or hand-edited-file) reference whose name matched no def.
+    /// Keeps the orphan name verbatim for round-trip + error messages; never
+    /// acquires an id. Surfaces as today's dangling-ref type error.
+    Dangling(String),
+}
+
+pub enum RecordType {
+    Named(RecordRef),                      // was: Named(String)
+    Anonymous(Vec<(String, DataType)>),    // unchanged
+}
+```
+
+**Equality/hashing derive cleanly and are correct by construction:** two
+`Resolved` refs are equal iff their ids match; two `Dangling` refs iff their
+orphan names match; a `Resolved` is never equal to a `Dangling`. `DataType`
+derives `PartialEq`/`Eq`/`Hash` (used in `ValidationContext` keys and dedup) and
+keeps working with **no hand-written impls** — a `u64` and a `String` both have
+sound derives, and there is no name-shadow field to accidentally fold into
+identity. (This deletes the "must hand-write id-only `Eq`/`Hash`" hazard a
+prior `{ id, name }` draft carried.)
+
+Constructors: `RecordRef::resolved(id)`, `RecordRef::dangling(name)`. The parser
+and the deserialize path produce a transitional name-only form that the
+post-load resolve pass (§4.3) turns into `Resolved` or `Dangling`.
+
+### 4.3 The serialization & rendering boundary: derive the name, don't store it
+
+Names are derived from the registry at exactly two kinds of boundary — when
+bytes/characters cross in or out, and when a name is shown to the user. atomCAD
+already concentrates "on-disk shape ≠ in-memory shape" in its `Serializable*`
+DTO family and the `to_string`/`from_string` type-string seam; this slots in
+there.
+
+**(a) Load (`name → RecordRef`).** The `.cnnd` deserializer already produces a
+name-shaped reference; the conversion functions resolve it:
+`record_def_id(name)` → `Resolved(id)` if found, else `Dangling(name)`. Two
+sub-paths:
+
+- **Signature types** (`SerializableParameter.data_type` /
+  `SerializableOutputPin.data_type` / zone pins) already round-trip via
+  `DataType::from_string` (see `node_type_to_serializable`). Give them a
+  resolver-aware sibling `DataType::from_type_string(s, &resolver)` that emits
+  `Resolved`/`Dangling` for the record arm. (Plain `from_string` stays for
+  contexts with no resolver and yields `Dangling`, which the next validate pass
+  re-resolves.)
+- **Node-data blob** (`SerializableNode.data: serde_json::Value`, produced by the
+  per-node-type `node_data_loader`): see the `SaveContext` note below.
+
+**(b) Save (`RecordRef → name`).** The mirror: `Resolved(id)` →
+`record_def_name(id)` (always current — a rename updated the registry, so this is
+fresh by construction); `Dangling(name)` → its preserved orphan name. Same two
+sub-paths (`to_type_string(&resolver)` for signatures; `node_data_saver` for the
+blob).
+
+**(c) Render (`RecordRef → name`, on screen).** The text-format serializer
+(`text_format/serializer.rs` renders `DataType` via `to_string()`), the FFI type
+labels, `node_type_introspection`, and type-mismatch error messages must render
+the **current** name. These switch to `to_type_string(&resolver)` (or a small
+`DataType::display_with(&resolver)` helper). The bare `impl fmt::Display for
+DataType` stays total for registry-less contexts (`Debug`, internal asserts,
+logs) but renders a **resolved** record as `Record(#<id>)` — explicitly a
+debug-only form, never written to `.cnnd` or shown in the UI — while a
+**dangling** record still renders `Record(<name>)` from its own payload.
+
+> **Why the render change is unavoidable (not a wart of this representation).** A
+> rename is O(1) and never visits embedded refs, so *any* cached name on a ref
+> would be stale until the next save. Authoritative names therefore *must* be
+> pulled from the registry by id at render time. The `{ id, name }` struct a
+> prior draft proposed would have shown **stale** names in the UI after a rename
+> until a save/reload cycle. The id-only ref makes the only correct behaviour the
+> only available one.
+
+**The `SaveContext` thread (the node-data blob).** Per-node data is serialized by
+the fn-pointer `node_data_saver` / `node_data_loader` on `NodeType`, which run
+serde on the concrete data struct (`RecordConstructData`, `ExprData`, `MapData`,
+…) and have **no registry**. They already take a non-serde context parameter —
+`design_dir: Option<&str>` — for exactly this reason (serde can't reach external
+state). Generalize that one parameter into a context struct:
+
+```rust
+struct SaveContext<'a> {
+    design_dir: Option<&'a str>,
+    record_names: &'a dyn RecordNameResolver,
+}
+```
+
+Widen the saver/loader signature from `(…, design_dir)` to `(…, ctx)` — a
+one-time, mechanical touch across the ~47 node types, of which only the
+**record-bearing** ones (`record_construct` / `record_destructure` / `product`
+for their schema/target field; `expr` / `map` / `filter` / `fold` for embedded
+`DataType`s that may be `Record(Named)`) actually read `record_names`. Those
+savers convert `Resolved(id) → name` on save and `name → Resolved/Dangling` on
+load; everyone else ignores the new field. Bundling into a struct means the *next*
+"savers need context X" never re-touches all 47 again.
+
+Both directions are driven by **one** `walk_record_refs_in_*_mut` enumerator (the
+single authoritative downcast list) — the read-only `collect_record_refs_in_node`
+becomes a thin wrapper over it. So there is now exactly **one** ref-traversal list
+total, exercised on both load and save; a node type missing from it fails
+**loudly** (its refs never resolve → they sit `Dangling` → the §7 invariant and
+the existing dangling-ref error fire at load), rather than silently corrupting on
+a future rename.
+
+### 4.4 The three schema/target fields
+
+`record_construct.schema`, `record_destructure.schema`, and `product.target`
+become `RecordRef` (replacing the bare `String`). They are already visited by
+`collect_record_refs_in_node` under `RecordRefSite::Schema`, so the unified `_mut`
+enumerator covers them on both boundaries (§4.3). Their `eval` / pin-layout code
+that currently does `registry.lookup_record_type_def(&self.schema)` switches on
+the ref: `Resolved(id) => lookup_record_type_def_by_id(id)`, `Dangling(_) =>`
+empty-schema fallback (preserving the current "unset / unknown schema" behaviour).
+
+### 4.5 Updates inside `data_type.rs` (mechanical, ~one file)
+
+Every `RecordType::Named(name)` site changes to bind the `RecordRef`. The notable
+ones:
+
+- **`resolve_fields`** (the hot resolution): `Named(RecordRef::Resolved(id)) =>
+  registry.lookup_record_type_def_by_id(id)`; `Dangling(_) => None` (dangling, as
+  today).
+- **`can_be_converted_to` record arm:** the `Named(s) == Named(d)` short-circuit
+  becomes `Resolved(a) == Resolved(b)` by id (cleaner and faster). The structural
+  fallback (resolve both to canonical field lists, match fields by name) is
+  **unchanged** — field matching stays name-based, which is correct (§9).
+- **`fmt::Display`** → `Record(#<id>)` for `Resolved` (debug-only), `Record(<name>)`
+  for `Dangling`; the user-facing/round-trip name comes from
+  `to_type_string(&resolver)` (§4.3 (c)).
+- **`from_string` / parser:** constructs the name-only transitional form; the
+  resolver-aware `from_type_string` (or the post-parse resolve step) turns it into
+  `Resolved`/`Dangling`.
+- **`walk_data_type_record_names` / `_mut`:** the closure type changes from `&str`
+  / `&mut String` to `&RecordRef` / `&mut RecordRef`. Recursion arms unchanged.
+  (Keep the two in byte-for-byte sync as the existing comment demands.)
+
+This is the bulk of the mechanical edit (~38 match sites), all inside one file,
+compiler-driven once the enum payload changes.
+
+### 4.6 Rename becomes O(1)
+
+```rust
+pub fn rename_record_type_def(&mut self, old: &str, new: &str)
+    -> Result<(), RecordTypeDefError>
+{
+    // …existing built-in / not-found / collision guards, unchanged…
+    let mut def = self.record_type_defs.remove(old).unwrap();
+    def.name = new.to_string();
+    self.record_def_name_by_id.insert(def.id, new.to_string()); // reverse index
+    self.record_type_defs.insert(new.to_string(), def);
+    Ok(()) // NO rewrite_record_name_in_registry, NO repair_all_networks cascade
+}
+```
+
+Embedded refs hold `id`; they are unaffected. Every render and every save resolves
+`id → name` fresh, so the new name appears **immediately and everywhere** — no
+stale-name window, no walk. `rename_record_type_def_unchecked` (undo/batch) loses
+its rewrite call identically; the rename undo command shrinks to "swap the def's
+name + reverse-index entry."
+
+> **Field edits** (`update_record_type_def`) are unaffected and keep their
+> `repair_node_network` pass: changing a def's *fields* still re-derives
+> `record_construct`/`destructure`/`product` pin layouts and disconnects
+> now-incompatible wires (an id-stable ref automatically sees the new schema).
+
+### 4.7 Import / paste-from-library (remap)
+
+Importing a `.cnnd` library brings in record defs with *their* document's ids.
+On import: allocate fresh local ids for each imported def, build an
+`imported_id → local_id` map, and remap every imported `RecordRef::Resolved(id)`
+through it. **Name-based merge/conflict stays the policy at the boundary:** if an
+imported def's name matches an existing local def, merge or rename-on-conflict per
+the existing import rules — names remain authoritative *across documents*. A
+`Dangling` import stays dangling unless its name happens to match a local def, in
+which case the import resolve binds it. Because in-memory refs are already
+id-based post-load, the remap is a single pass over the imported subgraph using
+the same `_mut` enumerator. This is the one new sharp edge and earns a dedicated
+test (§8).
+
+### 4.8 Anonymous records: unchanged
+
+`RecordType::Anonymous` stays `Vec<(String, DataType)>`, name-keyed, no id.
+Structural subtyping between a `Named(Resolved(id))` and an anonymous record
+resolves the named side to its fields and matches **by field name** against the
+anonymous side. Field-level matching therefore stays name-based on both sides —
+the correct, intended semantics (§9).
 
 ---
 
-## 7. The one new global invariant: id allocation
+## 5. Implementation phases (each independently shippable)
 
-Ids are **document-scoped surrogate keys**. The whole architecture rests on one
-rule:
+> Each phase compiles and passes the suite. Land in order; stop after any phase
+> and the system is strictly better.
 
-> **Never recycle an id within a document. Remap on every cross-document move
-> (import / paste-from-library / duplicate-network).**
+**Phase R1 — ids on defs + registry index (no behaviour change).**
+Add `RecordDefId`, `RecordTypeDef.id`, `record_def_name_by_id`,
+`next_record_def_id`, the allocator + floor-on-load, built-in fixed ids, the
+`*_by_id` / `record_def_id` / `record_def_name` accessors, and the
+`RecordNameResolver` view. `RecordType::Named` still carries a `String`.
+Everything else unchanged. Pure addition; wire "every def has a unique stable id,
+recomputed on load, never recycled" into the Phase 0 invariant checker
+(`DuplicateRecordDefId`, `RecordDefIdFloor`).
 
-The parameter-wire bug *was* a recycling failure, so allocation must be
-structured so recycling is impossible:
+**Phase R2 — `RecordRef` sum + the boundary (resolve / refresh / render).**
+Change `RecordType::Named(String) → Named(RecordRef)` and the three
+schema/target fields. Add the unified `walk_record_refs_in_*_mut` enumerator. Add
+`DataType::from_type_string` / `to_type_string(&resolver)` and route the signature
+seam through them. Introduce `SaveContext` and widen the `node_data_saver` /
+`node_data_loader` signature; convert id↔name in the record-bearing savers. Switch
+the render sites (text format, FFI labels, introspection, error messages) to the
+resolver-aware path; leave bare `Display` as the `#id` debug fallback. Update
+`data_type.rs` (§4.5) and the three record nodes (§4.4). At this point the
+rewriter still exists but is **dead on rename** — verify by routing rename through
+the new O(1) body while keeping `rewrite_record_name_in_registry` only until R3.
 
-- **Prefer document-level monotonic allocators** (one per id-class) over
-  per-network counters. The current per-network `next_param_id` and per-body
-  `next_node_id` are the exact shape that produced both the recycling bug *and*
-  the "body id numerically collides with a top-level id" pitfall documented in
-  `rust/AGENTS.md`. A single per-document allocator per class is the simplest
-  thing that cannot recycle. (A composite `(scope, local_counter)` key also
-  works but is more moving parts.)
-- **Always recompute the floor on load** as a backstop
-  (`next_id = max(existing) + 1`). `design_parameter_wire_stability.md` F1
-  already does this for `param_id`; generalize the discipline to every id-class.
-- **Remap-on-import** becomes the single new sharp edge. It gets its own
-  invariant-test module (see Phase 0).
+**Phase R3 — delete the walk.**
+Remove `rewrite_record_name_in_registry`, drop its call from
+`rename_record_type_def` / `_unchecked`, drop the now-unneeded
+`repair_all_networks` *on rename* (keep it on field-edit/delete). Collapse the
+read enumerator to share the R2 traversal. Simplify the rename undo command.
 
----
-
-## 8. What this deletes
-
-When the migration is complete, these disappear or collapse to a one-liner:
-
-- `rewrite_record_name_in_registry` — gone. Record rename = set
-  `record_type_defs[id].name`.
-- `collect_record_refs_in_network` — gone (or reduced to "ids referencing this
-  def," a trivial id scan with no node-type knowledge).
-- the `rename_node_network` reference-rewriting walk — gone.
-- the obligation to keep the three node-data downcast lists
-  (`canonicalize_node_data`, the rewriter, the collector) in sync — gone.
-- `repair_call_sites_for_network`'s positional old→new translation — gone (wires
-  carry `dest_param_id`).
-- `set_custom_node_type(refresh_args=true)`'s lossy `arguments` rebuild — reduces
-  to "recompute the derived index view; keep id-keyed bindings."
-- `repair_network_arguments` count/index pad-truncate — reduces to "drop wires
-  whose `dest_param_id` no longer exists."
+**Phase R4 — import remap + hardening.**
+Implement §4.7 (fresh-id remap on import/paste-from-library), the dedicated remap
+test module, and the dangling-ref round-trip test.
 
 ---
 
-## 9. Incremental, safe rollout
+## 6. Migration / backward compatibility
 
-Every phase is independently shippable. Each follows the same safe shape:
-
-> **add id alongside name (dual representation) → migrate existing files
-> deterministically → flip readers to id → delete the name-walk.**
-
-You can stop after any phase and the system is strictly better, never
-half-broken.
-
-### Phase 0 — Invariant checkers + property tests *(do first; cheap; de-risks all the rest)*
-
-> **Implementation spec:** `doc/design_identity_vs_naming_phase0.md` — a
-> self-contained, hand-to-an-assistant brief for this phase (violation catalogue,
-> checker signatures, wiring point, test plan, staged rollout). The summary below
-> is the rationale; that doc is the build instructions.
-
-This phase ships *no* representation change. It makes every later phase safe and
-catches today's bugs loudly.
-
-- A debug invariant run after every structural mutation (end of
-  `validate_network`, alongside the existing cache-invariant `debug_assert`):
-  **no wire dangles; every type / record / field reference resolves.** Converts
-  the entire silent-corruption class into a loud failure *today*.
-- The property suite from `design_parameter_wire_stability.md` F5, generalized:
-  for arbitrary sequences of `{add, remove, reorder, rename, retype}` over
-  params / fields / record defs / node types, **crossed with**
-  `{fresh, after-load, after-duplicate, after-import}`, assert every surviving
-  wire preserves its `(source-identity, destination-identity)` pair and no wire
-  changes which parameter/pin it feeds. This is the **acceptance bar** for every
-  later phase.
-
-### Phase 1 — Parameter-id-keyed wire destinations *(Axis B)*
-
-Highest value, self-contained, already half-designed. Land
-`design_parameter_wire_stability.md` F1–F6 (several already done), then:
-
-- store `dest_param_id` on the wire/argument;
-- make `Parameter.id` non-`Option` (permanent, allocated once);
-- make the positional `arguments` a derived view of the id-keyed binding (§5).
-
-Kills the parameter-order repair class.
-
-### Phase 2 — Record-def ids *(Axis A — deletes the walk we keep re-fighting)*
-
-The most pervasive change, because `DataType` is everywhere. Do it by
-**interning, not by reshaping the enum**:
-
-- Keep `RecordType::Named(String)` as the *serialized / text-format* form.
-- At load, **intern each name to a `RecordDefId`** in the document name table;
-  in-memory references carry the id (e.g. a resolved-id cache on the `DataType`,
-  or a parallel `RecordType::Ref(RecordDefId)` used in memory only).
-- Rename = set one `name` field; the walk disappears.
-
-Interning is far smaller blast radius than rewriting `DataType`'s variants across
-serialization, text format, FFI, and every walk.
-
-### Phase 3 — Record field ids
-
-Same interning approach, scoped to **named** defs. Anonymous records stay
-structural (no ids — nothing to rename). Field rename and field reorder become
-no-ops for `record_construct` / `record_destructure` / `product` wiring.
-
-### Phase 4 — Node-type ids + import remap
-
-Node stores `TypeId`; registry keyed by id; name becomes a def field; import
-remaps ids and dedups/renames by full name (§6). Built-ins get fixed ids.
-
-### Phase 5 — Output-pin ids
-
-Smallest remaining piece. Matters mainly for `record_destructure` multi-output
-reorder and any future multi-output node whose pins can be reordered.
+**No `.cnnd` format change.** On disk, record references remain names
+(`Record(Name)` in type strings; `"schema": "Name"` on the record nodes). Old
+files load unchanged: deserialize yields names, the load resolve assigns
+`Resolved`/`Dangling`, save writes names back. A name that doesn't resolve
+(hand-edited or genuinely dangling file) becomes `Dangling(name)` and surfaces as
+today's dangling-ref type error, with the original name preserved in the message
+and on re-save. **No version bump, no migration shim, no determinism worry.**
 
 ---
 
-## 10. Honest cost / risk
+## 7. Interaction with the Phase 0 invariant checker
 
-- **Biggest cost is Phases 2–3.** `DataType`, the text format, and the FFI all
-  touch record/field names. The interning mitigation (string form on the wire
-  format, ids in memory) is what makes it tractable. The name table must be
-  threaded where `&NodeTypeRegistry` already is — which is most resolution sites,
-  so the threading largely exists already.
-- **Migration determinism.** Assigning ids to existing files must be
-  deterministic and stable, or every re-save churns the file. Rule: assign ids
-  from current order/name on first load; persist thereafter; never re-derive.
-- **Remap-on-import** is the new global invariant and the most likely home for a
-  future bug. It earns a dedicated test module.
-- **Anonymous records** need no ids and get no special-casing beyond "ids apply
-  to named defs only."
+Add to `invariants.rs`:
+- `DuplicateRecordDefId` (Tier 1) — two defs share an id.
+- `RecordDefIdFloor` (id-counter floor, like `ParamIdFloor`: fatal in
+  `check_document_invariants`, excluded from the hot debug assert).
+- `UnresolvedRecordRef` — a `RecordRef::Dangling(name)` whose `name` *does*
+  resolve in the registry (i.e. a resolve pass was skipped or an enumerator site
+  was missed). This catches a missed boundary traversal loudly. (A `Dangling`
+  whose name does **not** resolve is a legitimate user-reachable dangling ref and
+  stays accounted-for, not fatal.)
 
----
-
-## 11. If the full migration is too expensive: the 80/20
-
-If only two things ship, ship these — cheap, and they kill most of the pain:
-
-1. **Phase 0 invariant checker.** Turns the entire silent-corruption class into
-   loud test/assert failures immediately, independent of any representation
-   change.
-2. **Phase 2 interning.** Record (and later type) rename becomes O(1) and the
-   fragile, twice-broken hand-maintained walk lists are deleted — *without*
-   reshaping `DataType`.
-
-Axis B (parameter order) is already substantially contained once
-`design_parameter_wire_stability.md` F1–F6 land, so the full `dest_param_id`
-change is the cleanest *eventual* state but the lowest *marginal* pain today.
+The existing `UnresolvedRecordName` / schema checks keep working (they consult
+`lookup_record_type_def` by name, which still exists).
 
 ---
 
-## 12. Relationship to existing docs
+## 8. Test plan
 
-- `doc/design_parameter_wire_stability.md` — the **tactical** fix for Axis B's
-  acute bug (recycled `param_id`). Its F5 property suite is this doc's Phase 0
-  acceptance bar; its F1/F6 floor-recompute is this doc's §7 generalized.
-- `doc/design_custom_node_type_cache_invariant.md` — the tactical fix for one
-  Axis A failure mode (stale `custom_node_type` cache during a rename). Its
-  "Non-goals" explicitly name "positional → id-keyed wire destinations" as the
-  deeper fix; this doc is that deeper fix, generalized to all five reference
-  classes.
-- `doc/design_record_types.md` — defines the record/field model this doc
-  proposes to id-key.
+1. **Rename no longer rewrites embedded refs:** the existing
+   `rename_wire_loss_regression_test` (esp.
+   `record_rename_rewrites_closure_and_collect_type_fields`) must pass with the
+   rewriter **deleted** — proving id-stability, not exhaustive-walk correctness.
+2. **Rename reflects everywhere instantly:** rename `Foo→Bar`, then *without
+   saving* assert the rendered type strings (text format / FFI label path) read
+   `Bar` — proving render-through-registry, not a cached name.
+3. **Round-trip:** save→load a network whose nodes embed `Record(Foo)` in
+   `parameter` / `expr` / `map` / `closure` / `apply` / `collect` / record nodes;
+   assert all refs re-resolve to the same id and the on-disk names match the def's
+   current name.
+4. **Rename then save:** rename `Foo→Bar`, save, assert every embedded reference
+   serialized as `Bar`, and reload resolves them to one id.
+5. **Dangling round-trip:** a ref to a missing def stays `Dangling`, keeps its name
+   across save/load, and surfaces a dangling-ref error (no panic, no silent drop).
+6. **Field edit still repairs:** `update_record_type_def` changing a field type
+   still disconnects now-incompatible record-node wires (unchanged path).
+7. **Import remap:** import a library whose defs' ids collide numerically with
+   local ids; assert no cross-contamination and name-based merge/rename-on-conflict.
+8. **Phase 0 invariants** extended (§7) run across the property/round-trip axis.
+
+---
+
+## 9. Non-goals (explicit, with rationale)
+
+- **Node-type ids (`node_type_name` → `TypeId`).** Deferred indefinitely. It is
+  the *most pervasive* change in the codebase: `node_type_name` is on every
+  `Node`, the registry is name-keyed (80+ lookup sites), it is compared against
+  string literals in ~35 places, and it is a serialization / text-format / FFI
+  token (~180 edit sites total). The network-rename cascade it would delete
+  (`apply_rename_core` rewriting `node_type_name`) is real but **not fragile**
+  (one field, one walk) — unlike the record rewriter's drifting 17-type list. Low
+  value-to-cost; treat as a separate future effort if ever justified.
+
+- **Parameter / argument ids (positional wire destinations).** Dropped. The acute
+  bug (parameter reorder/add jumbling wires across networks) is **already fixed**
+  by the landed F1–F6 of `doc/design_parameter_wire_stability.md` (regression
+  tests green). Removing it leaves no open bug.
+
+- **Record *field* renaming.** Rejected as a relabel-style change. A record field
+  name is **structural type identity**, not a label: `can_be_converted_to` matches
+  record fields **by name**, and anonymous records (`{x: Int}`) carry *only* names
+  with no def to host an id. So renaming a field genuinely produces a different
+  type (`{x: Int}` ≠ `{y: Int}`) — correctly handled today as a *schema edit*
+  (`update_record_type_def` → `repair_node_network`), not a free rename.
+
+---
+
+## 10. Honest cost / line tally
+
+The earlier draft claimed a net deletion. With the rendering boundary surfaced
+(§2, §4.3 (c)) that is **no longer true**, and pretending otherwise would
+mis-sell the change. The accounting:
+
+| Area | Δ |
+| --- | --- |
+| Delete `rewrite_record_name_in_registry` + downcast chain | **−154** |
+| Rename method/undo collapse (rewrite call + cascade gone) | **−25** |
+| Add `RecordDefId`, registry `id`/reverse-index/allocator/accessors/`RecordNameResolver` | **+50** |
+| `RecordRef` sum type (derives — **no** manual `Eq`/`Hash`) | **+12** |
+| Unified `walk_record_refs_*_mut` (replaces 3 lists with 1) | **+10 net** |
+| Load resolve + save refresh, folded into DTO conversion | **+35** |
+| `SaveContext` + saver/loader signature widen (~47 mechanical sites) | **+30** |
+| `to_type_string`/`from_type_string` + render sites switched to resolver | **+55** |
+| `data_type.rs` Named-payload edits (~38 sites, mechanical) | **+25** |
+| 3 record nodes: `String` schema/target → `RecordRef` | **+15** |
+| Import remap (Phase R4) | **+30** |
+| **Net** | **≈ +80 to +110 source lines** |
+
+So: a **modest net increase in LOC**, concentrated in mechanical signature/render
+churn. The justification is **not** line count — it is:
+
+1. the fragile, twice-broken, three-way-synchronized rename walk is gone, and the
+   entire "stale `Record(Named(old))` after rename" bug class is eliminated **by
+   construction** (a missed traversal site now fails loudly at load, not silently
+   on a later rename);
+2. the live graph holds **zero** duplicated record names — identity and naming are
+   cleanly separated, with the name derived from the one source of truth (the
+   registry) at every boundary; and
+3. a rename is reflected **instantly and everywhere**, because nothing anywhere
+   caches the old name.
+
+The blast radius is concentrated in `data_type.rs`, the record registry, the
+serialization conversion functions, and the type-render sites — and crucially, **the
+`.cnnd` format, the text format on disk, and every name-based *lookup* site are
+untouched.**
+
+---
+
+## 11. Relationship to existing docs
+
+- `doc/design_identity_vs_naming_phase0.md` — the shipped invariant checker; §7
+  here extends it with record-def-id invariants.
+- `doc/design_parameter_wire_stability.md` — the tactical fix for the
+  parameter-order bug; §9 here explains why the strategic argument-id change is
+  dropped (F1–F6 already contain the acute bug).
+- `doc/design_record_types.md` — defines the record/field model this doc id-keys;
+  the structural-typing semantics in §9 ("fields match by name") come from there.
+- `doc/design_custom_node_type_cache_invariant.md` — its "Non-goals" named the
+  deeper fix; this doc delivers it for the record-name axis (and explains in §9
+  why the node-type axis is deferred).
+- The `Serializable*` DTO family (`serialization/node_networks_serialization.rs`)
+  and the `node_data_saver`/`design_dir` precedent are the house pattern §4.3
+  builds on: in-memory editing types never derive `Serialize`; on-disk shape is
+  produced by explicit, context-carrying conversion functions.
