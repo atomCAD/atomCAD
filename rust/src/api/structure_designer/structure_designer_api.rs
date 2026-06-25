@@ -147,6 +147,7 @@ use crate::structure_designer::nodes::collect::CollectData;
 use crate::structure_designer::nodes::comment::CommentData;
 use crate::structure_designer::nodes::cuboid::CuboidData;
 use crate::structure_designer::nodes::drawing_plane::DrawingPlaneData;
+use crate::structure_designer::nodes::drawing_plane::DrawingPlaneEvalCache;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
 use crate::structure_designer::nodes::export_xyz::ExportXYZData;
@@ -3526,16 +3527,31 @@ pub fn get_drawing_plane_data(scope_path: Vec<u64>, node_id: u64) -> Option<APID
                         Some(data) => data,
                         None => return None,
                     };
+                // Expose the *resolved* Miller index from the eval cache (derived
+                // in case D) for read-only display. Only available when this node
+                // is the selected node, since the eval cache is per-selection.
+                let resolved_miller_index = if cad_instance
+                    .structure_designer
+                    .get_selected_node_id_with_type("drawing_plane")
+                    == Some(node_id)
+                {
+                    cad_instance
+                        .structure_designer
+                        .get_selected_node_eval_cache()
+                        .and_then(|cache| cache.downcast_ref::<DrawingPlaneEvalCache>())
+                        .map(|cache| to_api_ivec3(&cache.resolved_miller))
+                } else {
+                    None
+                };
                 Some(APIDrawingPlaneData {
                     max_miller_index: drawing_plane_data.max_miller_index,
-                    // Phase 2 interim bridge: the API still exposes a non-nullable
-                    // Miller index; Phase 3 makes it nullable and adds `u`/`v`.
-                    miller_index: to_api_ivec3(
-                        &drawing_plane_data.miller_index.unwrap_or_default(),
-                    ),
+                    miller_index: drawing_plane_data.miller_index.as_ref().map(to_api_ivec3),
                     center: to_api_ivec3(&drawing_plane_data.center),
                     shift: drawing_plane_data.shift,
                     subdivision: drawing_plane_data.subdivision,
+                    u_axis: drawing_plane_data.u_axis.as_ref().map(to_api_ivec3),
+                    v_axis: drawing_plane_data.v_axis.as_ref().map(to_api_ivec3),
+                    resolved_miller_index,
                 })
             },
             None,
@@ -5152,23 +5168,14 @@ pub fn set_half_space_data(scope_path: Vec<u64>, node_id: u64, data: APIHalfSpac
 pub fn set_drawing_plane_data(scope_path: Vec<u64>, node_id: u64, data: APIDrawingPlaneData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            // Phase 2 interim bridge: the API does not yet expose the explicit
-            // `u`/`v` axes (Phase 3 does), so preserve whatever is already stored
-            // on the node rather than wiping it on every save.
-            let (u_axis, v_axis) = cad_instance
-                .structure_designer
-                .get_node_network_data_scoped(&scope_path, node_id)
-                .and_then(|d| d.as_any_ref().downcast_ref::<DrawingPlaneData>())
-                .map(|d| (d.u_axis, d.v_axis))
-                .unwrap_or((None, None));
             let drawing_plane_data = Box::new(DrawingPlaneData {
                 max_miller_index: data.max_miller_index,
-                miller_index: Some(from_api_ivec3(&data.miller_index)),
+                miller_index: data.miller_index.as_ref().map(from_api_ivec3),
                 center: from_api_ivec3(&data.center),
                 shift: data.shift,
                 subdivision: data.subdivision,
-                u_axis,
-                v_axis,
+                u_axis: data.u_axis.as_ref().map(from_api_ivec3),
+                v_axis: data.v_axis.as_ref().map(from_api_ivec3),
             });
             cad_instance
                 .structure_designer

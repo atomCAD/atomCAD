@@ -13825,14 +13825,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIDrawingPlaneData dco_decode_api_drawing_plane_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return APIDrawingPlaneData(
       maxMillerIndex: dco_decode_i_32(arr[0]),
-      millerIndex: dco_decode_apii_vec_3(arr[1]),
+      millerIndex: dco_decode_opt_box_autoadd_apii_vec_3(arr[1]),
       center: dco_decode_apii_vec_3(arr[2]),
       shift: dco_decode_i_32(arr[3]),
       subdivision: dco_decode_i_32(arr[4]),
+      uAxis: dco_decode_opt_box_autoadd_apii_vec_3(arr[5]),
+      vAxis: dco_decode_opt_box_autoadd_apii_vec_3(arr[6]),
+      resolvedMillerIndex: dco_decode_opt_box_autoadd_apii_vec_3(arr[7]),
     );
   }
 
@@ -17577,16 +17580,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_maxMillerIndex = sse_decode_i_32(deserializer);
-    var var_millerIndex = sse_decode_apii_vec_3(deserializer);
+    var var_millerIndex = sse_decode_opt_box_autoadd_apii_vec_3(deserializer);
     var var_center = sse_decode_apii_vec_3(deserializer);
     var var_shift = sse_decode_i_32(deserializer);
     var var_subdivision = sse_decode_i_32(deserializer);
+    var var_uAxis = sse_decode_opt_box_autoadd_apii_vec_3(deserializer);
+    var var_vAxis = sse_decode_opt_box_autoadd_apii_vec_3(deserializer);
+    var var_resolvedMillerIndex =
+        sse_decode_opt_box_autoadd_apii_vec_3(deserializer);
     return APIDrawingPlaneData(
         maxMillerIndex: var_maxMillerIndex,
         millerIndex: var_millerIndex,
         center: var_center,
         shift: var_shift,
-        subdivision: var_subdivision);
+        subdivision: var_subdivision,
+        uAxis: var_uAxis,
+        vAxis: var_vAxis,
+        resolvedMillerIndex: var_resolvedMillerIndex);
   }
 
   @protected
@@ -21911,10 +21921,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIDrawingPlaneData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.maxMillerIndex, serializer);
-    sse_encode_apii_vec_3(self.millerIndex, serializer);
+    sse_encode_opt_box_autoadd_apii_vec_3(self.millerIndex, serializer);
     sse_encode_apii_vec_3(self.center, serializer);
     sse_encode_i_32(self.shift, serializer);
     sse_encode_i_32(self.subdivision, serializer);
+    sse_encode_opt_box_autoadd_apii_vec_3(self.uAxis, serializer);
+    sse_encode_opt_box_autoadd_apii_vec_3(self.vAxis, serializer);
+    sse_encode_opt_box_autoadd_apii_vec_3(self.resolvedMillerIndex, serializer);
   }
 
   @protected

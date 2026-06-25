@@ -71,7 +71,7 @@ crystolecule/
 | `Structure` | `structure.rs` | Bundles `lattice_vecs: UnitCellStruct` + `motif: Motif` + `motif_offset: DVec3`. Factories: `Structure::diamond()` (cubic diamond + zincblende motif + zero offset), `Structure::from_lattice_vecs(...)` (default motif + zero offset). Carried by `BlueprintData` and `CrystalData` as a first-class value |
 | `Motif` | `motif.rs` | Sites (fractional coords), bonds (with cell offsets), parameter elements |
 | `SiteSpecifier` | `motif.rs` | Site index + IVec3 relative cell offset |
-| `DrawingPlane` | `drawing_plane.rs` | Miller-indexed 2D plane with 2D↔3D transforms |
+| `DrawingPlane` | `drawing_plane.rs` | Miller-indexed 2D plane with 2D↔3D transforms. Built via `from_spec(miller, u, v, …)` (the case matrix in `doc/design_drawing_plane_explicit_axes.md`): auto-pick both in-plane axes from the Miller index, or pin one/both in-plane lattice directions `[u v w]` explicitly, or derive the Miller index from `u × v`. `DrawingPlane::new` is a thin `from_spec` wrapper. `is_compatible` compares the resolved `u_axis`/`v_axis`, not just the Miller index |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |

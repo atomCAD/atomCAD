@@ -882,17 +882,35 @@ class APIDragSource {
 
 class APIDrawingPlaneData {
   final int maxMillerIndex;
-  final APIIVec3 millerIndex;
+
+  /// Miller plane index `(h k l)`. `None` = unset/derived (case D: derived
+  /// from `u`/`v`).
+  final APIIVec3? millerIndex;
   final APIIVec3 center;
   final int shift;
   final int subdivision;
 
+  /// First in-plane lattice direction `[u v w]`. `None` = unset.
+  final APIIVec3? uAxis;
+
+  /// Second in-plane lattice direction `[u v w]`. `None` = unset.
+  final APIIVec3? vAxis;
+
+  /// Resolved Miller index from the last evaluation (derived in case D).
+  /// Read-only; `None` when the node was not the selected node at the last
+  /// eval (no eval cache available). Used by the editor to display the
+  /// derived index when the stored `miller_index` is unset.
+  final APIIVec3? resolvedMillerIndex;
+
   const APIDrawingPlaneData({
     required this.maxMillerIndex,
-    required this.millerIndex,
+    this.millerIndex,
     required this.center,
     required this.shift,
     required this.subdivision,
+    this.uAxis,
+    this.vAxis,
+    this.resolvedMillerIndex,
   });
 
   @override
@@ -901,7 +919,10 @@ class APIDrawingPlaneData {
       millerIndex.hashCode ^
       center.hashCode ^
       shift.hashCode ^
-      subdivision.hashCode;
+      subdivision.hashCode ^
+      uAxis.hashCode ^
+      vAxis.hashCode ^
+      resolvedMillerIndex.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -912,7 +933,10 @@ class APIDrawingPlaneData {
           millerIndex == other.millerIndex &&
           center == other.center &&
           shift == other.shift &&
-          subdivision == other.subdivision;
+          subdivision == other.subdivision &&
+          uAxis == other.uAxis &&
+          vAxis == other.vAxis &&
+          resolvedMillerIndex == other.resolvedMillerIndex;
 }
 
 class APIEditAtomData {

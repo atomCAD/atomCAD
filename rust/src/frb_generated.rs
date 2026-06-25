@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -11832,16 +11832,25 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_maxMillerIndex = <i32>::sse_decode(deserializer);
         let mut var_millerIndex =
-            <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+            <Option<crate::api::common_api_types::APIIVec3>>::sse_decode(deserializer);
         let mut var_center = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_shift = <i32>::sse_decode(deserializer);
         let mut var_subdivision = <i32>::sse_decode(deserializer);
+        let mut var_uAxis =
+            <Option<crate::api::common_api_types::APIIVec3>>::sse_decode(deserializer);
+        let mut var_vAxis =
+            <Option<crate::api::common_api_types::APIIVec3>>::sse_decode(deserializer);
+        let mut var_resolvedMillerIndex =
+            <Option<crate::api::common_api_types::APIIVec3>>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData {
             max_miller_index: var_maxMillerIndex,
             miller_index: var_millerIndex,
             center: var_center,
             shift: var_shift,
             subdivision: var_subdivision,
+            u_axis: var_uAxis,
+            v_axis: var_vAxis,
+            resolved_miller_index: var_resolvedMillerIndex,
         };
     }
 }
@@ -17075,6 +17084,9 @@ impl flutter_rust_bridge::IntoDart
             self.center.into_into_dart().into_dart(),
             self.shift.into_into_dart().into_dart(),
             self.subdivision.into_into_dart().into_dart(),
+            self.u_axis.into_into_dart().into_dart(),
+            self.v_axis.into_into_dart().into_dart(),
+            self.resolved_miller_index.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -21037,10 +21049,16 @@ impl SseEncode
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.max_miller_index, serializer);
-        <crate::api::common_api_types::APIIVec3>::sse_encode(self.miller_index, serializer);
+        <Option<crate::api::common_api_types::APIIVec3>>::sse_encode(self.miller_index, serializer);
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.center, serializer);
         <i32>::sse_encode(self.shift, serializer);
         <i32>::sse_encode(self.subdivision, serializer);
+        <Option<crate::api::common_api_types::APIIVec3>>::sse_encode(self.u_axis, serializer);
+        <Option<crate::api::common_api_types::APIIVec3>>::sse_encode(self.v_axis, serializer);
+        <Option<crate::api::common_api_types::APIIVec3>>::sse_encode(
+            self.resolved_miller_index,
+            serializer,
+        );
     }
 }
 
@@ -24140,7 +24158,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -24164,7 +24182,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

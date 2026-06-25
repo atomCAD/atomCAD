@@ -13,6 +13,27 @@ Similarly to the 3D geometry nodes, positions and sizes are usually discrete int
 
 2D binary operations can be executed only on 2D shapes on the same drawing plane.
 
+### Orienting the plane
+
+The plane's orientation is given by up to three optional inputs, each available both as a node input pin and as a field in the property panel (a wired pin always overrides the corresponding field):
+
+- **`m_index`** — the Miller plane index `(h k l)` (the plane *normal*), a reciprocal-space index. This is the only input set by default `(0 0 1)`.
+- **`u`** — the first in-plane axis, a direct-space lattice *direction* `[u v w]` (integer steps along the unit-cell vectors **a**, **b**, **c**). It becomes the horizontal axis of the drawing coordinate system.
+- **`v`** — the second in-plane axis, also a `[u v w]` lattice direction. It becomes the vertical axis.
+
+By default only `m_index` is set and the two in-plane axes are picked automatically. Setting `u` (and optionally `v`) lets you **pin** which lattice directions become the horizontal/vertical axes, instead of relying on the automatic choice. There are four valid combinations:
+
+| Inputs present | Behavior |
+|----------------|----------|
+| `m_index` only | Both in-plane axes are auto-generated from the Miller index (the default). |
+| `m_index` + `u` | `u` is the horizontal axis; the vertical axis is auto-picked. `u` must lie in the plane. |
+| `m_index` + `u` + `v` | `u` and `v` are used exactly as given (no handedness flip). Both must lie in the plane and be non-collinear. |
+| `u` + `v` (no `m_index`) | The Miller index is *derived* from `u × v`. Both axes are used exactly as given. The property panel shows the derived index as read-only. |
+
+In the property panel each of `m_index` / `u` / `v` has a checkbox to set or unset it. Any other combination (for example `v` without `u`, or no orientation at all) is a **deliberate error**: redundant inputs are *verified*, never silently reconciled, so an inconsistency (an axis that does not lie in the plane, collinear axes, an under-specified plane) lights up the node with an explicit message rather than guessing. This also insulates a design from future changes to the automatic axis-picking — pinning `u`/`v` fixes the drawing coordinate system permanently.
+
+In-plane axis magnitudes are preserved (they set the 2D cell period), so `u = [2 0 0]` gives a cell twice as long as `u = [1 0 0]`. Two drawing planes count as compatible for 2D boolean operations only when their resolved in-plane axes match, not just their Miller index — so an auto-axis plane and an explicitly-rotated plane with the same normal are correctly reported incompatible.
+
 ## rect
 
 Outputs a rectangle with integer minimum corner coordinates and integer width and height.

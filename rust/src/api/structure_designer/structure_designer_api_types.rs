@@ -503,10 +503,21 @@ pub struct APIHalfSpaceData {
 
 pub struct APIDrawingPlaneData {
     pub max_miller_index: i32,
-    pub miller_index: APIIVec3,
+    /// Miller plane index `(h k l)`. `None` = unset/derived (case D: derived
+    /// from `u`/`v`).
+    pub miller_index: Option<APIIVec3>,
     pub center: APIIVec3,
     pub shift: i32,
     pub subdivision: i32,
+    /// First in-plane lattice direction `[u v w]`. `None` = unset.
+    pub u_axis: Option<APIIVec3>,
+    /// Second in-plane lattice direction `[u v w]`. `None` = unset.
+    pub v_axis: Option<APIIVec3>,
+    /// Resolved Miller index from the last evaluation (derived in case D).
+    /// Read-only; `None` when the node was not the selected node at the last
+    /// eval (no eval cache available). Used by the editor to display the
+    /// derived index when the stored `miller_index` is unset.
+    pub resolved_miller_index: Option<APIIVec3>,
 }
 
 pub struct APIFacet {
