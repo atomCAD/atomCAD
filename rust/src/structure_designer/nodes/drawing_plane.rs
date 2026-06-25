@@ -21,7 +21,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
-use crate::util::serialization_utils::ivec3_serializer;
+use crate::util::serialization_utils::{ivec3_serializer, option_ivec3_serializer};
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
@@ -31,13 +31,23 @@ use std::collections::HashSet;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingPlaneData {
     pub max_miller_index: i32,
-    #[serde(with = "ivec3_serializer")]
-    pub miller_index: IVec3,
+    /// Miller plane index `(h k l)`, now optional. Old files carry a bare
+    /// `[h,k,l]` array which `option_ivec3_serializer` deserializes to `Some(..)`;
+    /// an absent field (`#[serde(default)]`) or explicit `null` (case D) yields
+    /// `None`.
+    #[serde(with = "option_ivec3_serializer", default)]
+    pub miller_index: Option<IVec3>,
     #[serde(with = "ivec3_serializer")]
     pub center: IVec3,
     pub shift: i32,
     #[serde(default = "default_subdivision")]
     pub subdivision: i32,
+    /// First in-plane lattice direction `[u v w]`. `None` = unset.
+    #[serde(with = "option_ivec3_serializer", default)]
+    pub u_axis: Option<IVec3>,
+    /// Second in-plane lattice direction `[u v w]`. `None` = unset.
+    #[serde(with = "option_ivec3_serializer", default)]
+    pub v_axis: Option<IVec3>,
 }
 
 fn default_subdivision() -> i32 {
@@ -52,14 +62,19 @@ impl NodeData for DrawingPlaneData {
         let eval_cache = structure_designer.get_selected_node_eval_cache()?;
         let drawing_plane_cache = eval_cache.downcast_ref::<DrawingPlaneEvalCache>()?;
 
+        // Drive the gadget from the *resolved* orientation so it reflects the
+        // concrete plane (derived `m` in case D, auto-picked second axis in
+        // case B). Miller-index dragging is disabled when the stored `m` is
+        // `None` (case D) — the index is derived from `u`/`v`, not editable.
         Some(Box::new(DrawingPlaneGadget::new(
             self.max_miller_index,
-            &self.miller_index,
+            &drawing_plane_cache.resolved_miller,
             self.center,
             self.shift,
             self.subdivision,
             &drawing_plane_cache.unit_cell,
             &structure_designer.preferences.background_preferences,
+            self.miller_index.is_some(),
         )))
     }
 
@@ -90,14 +105,45 @@ impl NodeData for DrawingPlaneData {
         };
         let unit_cell = structure.lattice_vecs.clone();
 
-        let miller_index = match network_evaluator.evaluate_or_default(
+        // Resolve the three orientation inputs to `Option<IVec3>` with the
+        // standard three-state rule (wired pin > stored field > unset).
+        let miller_index = match resolve_optional_ivec3(
+            network_evaluator,
             network_stack,
             node_id,
             registry,
             context,
             1,
             self.miller_index,
-            NetworkResult::extract_ivec3,
+            "m_index",
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let u = match resolve_optional_ivec3(
+            network_evaluator,
+            network_stack,
+            node_id,
+            registry,
+            context,
+            5,
+            self.u_axis,
+            "u",
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let v = match resolve_optional_ivec3(
+            network_evaluator,
+            network_stack,
+            node_id,
+            registry,
+            context,
+            6,
+            self.v_axis,
+            "v",
         ) {
             Ok(value) => value,
             Err(error) => return EvalOutput::single(error),
@@ -142,21 +188,34 @@ impl NodeData for DrawingPlaneData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        // Store evaluation cache for root-level evaluations (used for gadget creation when this node is selected)
-        // Only store for direct evaluations of visible nodes, not for upstream dependency calculations
+        // Create DrawingPlane via the explicit-orientation spec (handles cases A–D).
+        let drawing_plane = match DrawingPlane::from_spec(
+            unit_cell,
+            miller_index,
+            u,
+            v,
+            center,
+            shift,
+            subdivision,
+        ) {
+            Ok(plane) => plane,
+            Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
+        };
+
+        // Store evaluation cache for root-level evaluations (used for gadget creation
+        // when this node is selected). Only store for direct evaluations of visible
+        // nodes, not for upstream dependency calculations. The cache carries the
+        // *resolved* orientation so the gadget/editor reflect the effective plane —
+        // important for case D (derived `m`) and case B (auto-picked second axis).
         if network_stack.len() == 1 {
             let eval_cache = DrawingPlaneEvalCache {
-                unit_cell: unit_cell.clone(),
+                unit_cell: drawing_plane.unit_cell.clone(),
+                resolved_miller: drawing_plane.miller_index,
+                resolved_u: drawing_plane.u_axis,
+                resolved_v: drawing_plane.v_axis,
             };
             context.selected_node_eval_cache = Some(Box::new(eval_cache));
         }
-
-        // Create DrawingPlane using the new constructor
-        let drawing_plane =
-            match DrawingPlane::new(unit_cell, miller_index, center, shift, subdivision) {
-                Ok(plane) => plane,
-                Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
-            };
 
         EvalOutput::single(NetworkResult::DrawingPlane(drawing_plane))
     }
@@ -173,53 +232,71 @@ impl NodeData for DrawingPlaneData {
         let m_index_connected = connected_input_pins.contains("m_index");
         let shift_connected = connected_input_pins.contains("shift");
         let subdivision_connected = connected_input_pins.contains("subdivision");
+        let u_connected = connected_input_pins.contains("u");
+        let v_connected = connected_input_pins.contains("v");
 
-        if center_connected && m_index_connected && shift_connected && subdivision_connected {
+        let mut parts = Vec::new();
+
+        if !center_connected {
+            parts.push(format!(
+                "c: ({},{},{})",
+                self.center.x, self.center.y, self.center.z
+            ));
+        }
+
+        if !m_index_connected {
+            // Show the Miller index when set, or a `derived` marker when `None`
+            // (case D — the index is computed from `u`/`v`).
+            match self.miller_index {
+                Some(m) => parts.push(format!("m: ({},{},{})", m.x, m.y, m.z)),
+                None => parts.push("m: derived".to_string()),
+            }
+        }
+
+        if !u_connected && let Some(u) = self.u_axis {
+            parts.push(format!("u: [{},{},{}]", u.x, u.y, u.z));
+        }
+
+        if !v_connected && let Some(v) = self.v_axis {
+            parts.push(format!("v: [{},{},{}]", v.x, v.y, v.z));
+        }
+
+        if !shift_connected {
+            parts.push(format!("s: {}", self.shift));
+        }
+
+        if !subdivision_connected && self.subdivision != 1 {
+            parts.push(format!("sub: {}", self.subdivision));
+        }
+
+        if parts.is_empty() {
             None
         } else {
-            let mut parts = Vec::new();
-
-            if !center_connected {
-                parts.push(format!(
-                    "c: ({},{},{})",
-                    self.center.x, self.center.y, self.center.z
-                ));
-            }
-
-            if !m_index_connected {
-                parts.push(format!(
-                    "m: ({},{},{})",
-                    self.miller_index.x, self.miller_index.y, self.miller_index.z
-                ));
-            }
-
-            if !shift_connected {
-                parts.push(format!("s: {}", self.shift));
-            }
-
-            if !subdivision_connected && self.subdivision != 1 {
-                parts.push(format!("sub: {}", self.subdivision));
-            }
-
-            if parts.is_empty() {
-                None
-            } else {
-                Some(parts.join(" "))
-            }
+            Some(parts.join(" "))
         }
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
-        vec![
-            (
-                "max_miller_index".to_string(),
-                TextValue::Int(self.max_miller_index),
-            ),
-            ("m_index".to_string(), TextValue::IVec3(self.miller_index)),
-            ("center".to_string(), TextValue::IVec3(self.center)),
-            ("shift".to_string(), TextValue::Int(self.shift)),
-            ("subdivision".to_string(), TextValue::Int(self.subdivision)),
-        ]
+        // `m_index`/`u`/`v` are optional: present ⇒ `Some`, absent ⇒ `None`.
+        // Emitting them only when set lets the text format express the
+        // unset/derived state (case D `m: null`) by simple omission.
+        let mut props = vec![(
+            "max_miller_index".to_string(),
+            TextValue::Int(self.max_miller_index),
+        )];
+        if let Some(m) = self.miller_index {
+            props.push(("m_index".to_string(), TextValue::IVec3(m)));
+        }
+        props.push(("center".to_string(), TextValue::IVec3(self.center)));
+        props.push(("shift".to_string(), TextValue::Int(self.shift)));
+        props.push(("subdivision".to_string(), TextValue::Int(self.subdivision)));
+        if let Some(u) = self.u_axis {
+            props.push(("u".to_string(), TextValue::IVec3(u)));
+        }
+        if let Some(v) = self.v_axis {
+            props.push(("v".to_string(), TextValue::IVec3(v)));
+        }
+        props
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
@@ -228,11 +305,11 @@ impl NodeData for DrawingPlaneData {
                 .as_int()
                 .ok_or_else(|| "max_miller_index must be an integer".to_string())?;
         }
-        if let Some(v) = props.get("m_index") {
-            self.miller_index = v
-                .as_ivec3()
-                .ok_or_else(|| "m_index must be an IVec3".to_string())?;
-        }
+        // Optional orientation triple: present ⇒ `Some`, absent ⇒ `None`. Replace-mode
+        // text edits rebuild the node, so an omitted property naturally unsets the field.
+        self.miller_index = read_optional_ivec3(props, "m_index")?;
+        self.u_axis = read_optional_ivec3(props, "u")?;
+        self.v_axis = read_optional_ivec3(props, "v")?;
         if let Some(v) = props.get("center") {
             self.center = v
                 .as_ivec3()
@@ -257,6 +334,11 @@ impl NodeData for DrawingPlaneData {
             "structure".to_string(),
             (false, Some("diamond".to_string())),
         );
+        // The three orientation inputs are all optional (resolved via the
+        // wired-pin > stored-field > unset rule).
+        m.insert("m_index".to_string(), (false, Some("(0,0,1)".to_string())));
+        m.insert("u".to_string(), (false, None));
+        m.insert("v".to_string(), (false, None));
         m
     }
 }
@@ -264,6 +346,12 @@ impl NodeData for DrawingPlaneData {
 #[derive(Debug, Clone)]
 pub struct DrawingPlaneEvalCache {
     pub unit_cell: UnitCellStruct,
+    /// Resolved Miller index (derived from `u`/`v` in case D).
+    pub resolved_miller: IVec3,
+    /// Resolved first in-plane axis (auto-picked in case A).
+    pub resolved_u: IVec3,
+    /// Resolved second in-plane axis (auto-picked in cases A/B).
+    pub resolved_v: IVec3,
 }
 
 #[derive(Clone)]
@@ -278,6 +366,9 @@ pub struct DrawingPlaneGadget {
     pub possible_miller_indices: HashSet<IVec3>,
     pub unit_cell: UnitCellStruct,
     pub background_preferences: BackgroundPreferences,
+    /// Whether the Miller index can be edited by dragging the central handle.
+    /// `false` in case D, where `m` is derived from `u`/`v` (not directly editable).
+    pub miller_editable: bool,
 }
 
 impl Tessellatable for DrawingPlaneGadget {
@@ -296,8 +387,9 @@ impl Tessellatable for DrawingPlaneGadget {
             self.subdivision,
         );
 
-        // Tessellate miller index discs only if we're dragging the central sphere (handle index 0)
-        if self.dragged_handle_index == Some(0) {
+        // Tessellate miller index discs only if we're dragging the central sphere
+        // (handle index 0) and the Miller index is editable (not derived).
+        if self.dragged_handle_index == Some(0) && self.miller_editable {
             half_space_utils::tessellate_miller_indices_discs(
                 output_mesh,
                 &center_pos,
@@ -356,6 +448,11 @@ impl Gadget for DrawingPlaneGadget {
         if handle_index == 0 {
             // Handle index already stored in dragged_handle_index during start_drag
 
+            // Miller index is derived (case D) — not draggable.
+            if !self.miller_editable {
+                return;
+            }
+
             // Check if any miller index disc is hit
             if let Some(new_miller_index) = half_space_utils::hit_test_miller_indices_discs(
                 &self.unit_cell,
@@ -397,7 +494,11 @@ impl NodeNetworkGadget for DrawingPlaneGadget {
 
     fn sync_data(&self, data: &mut dyn NodeData) {
         if let Some(drawing_plane_data) = data.as_any_mut().downcast_mut::<DrawingPlaneData>() {
-            drawing_plane_data.miller_index = self.miller_index;
+            // Only write the Miller index back when it is directly editable
+            // (case D derives it from `u`/`v`, leaving the stored field `None`).
+            if self.miller_editable {
+                drawing_plane_data.miller_index = Some(self.miller_index);
+            }
             drawing_plane_data.center = self.center;
             drawing_plane_data.shift = self.shift;
         }
@@ -405,6 +506,7 @@ impl NodeNetworkGadget for DrawingPlaneGadget {
 }
 
 impl DrawingPlaneGadget {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         max_miller_index: i32,
         miller_index: &IVec3,
@@ -413,6 +515,7 @@ impl DrawingPlaneGadget {
         subdivision: i32,
         unit_cell: &UnitCellStruct,
         background_preferences: &BackgroundPreferences,
+        miller_editable: bool,
     ) -> Self {
         Self {
             max_miller_index,
@@ -427,6 +530,7 @@ impl DrawingPlaneGadget {
             ),
             unit_cell: unit_cell.clone(),
             background_preferences: background_preferences.clone(),
+            miller_editable,
         }
     }
 }
@@ -463,6 +567,18 @@ pub fn get_node_type() -> NodeType {
           name: "subdivision".to_string(),
           data_type: DataType::Int,
         },
+        // New optional in-plane direction pins (appended at indices 5/6 so all
+        // existing pin indices are preserved).
+        Parameter {
+          id: None,
+          name: "u".to_string(),
+          data_type: DataType::IVec3,
+        },
+        Parameter {
+          id: None,
+          name: "v".to_string(),
+          data_type: DataType::IVec3,
+        },
       ],
       output_pins: OutputPinDefinition::single(DataType::DrawingPlane),
       zone_input_pins: vec![],
@@ -470,12 +586,55 @@ pub fn get_node_type() -> NodeType {
       public: true,
       node_data_creator: || Box::new(DrawingPlaneData {
         max_miller_index: 1,
-        miller_index: IVec3::new(0, 0, 1), // Default normal along z-axis (001 plane)
+        miller_index: Some(IVec3::new(0, 0, 1)), // Default normal along z-axis (001 plane)
         center: IVec3::new(0, 0, 0),
         shift: 0,
         subdivision: 1,
+        u_axis: None,
+        v_axis: None,
       }),
       node_data_saver: generic_node_data_saver::<DrawingPlaneData>,
       node_data_loader: generic_node_data_loader::<DrawingPlaneData>,
+    }
+}
+
+/// Resolves an orientation input pin to `Option<IVec3>` using the three-state
+/// rule: wired pin → `Some(value)`; pin disconnected → the stored field;
+/// a wired pin that evaluates to an error propagates that error.
+#[allow(clippy::result_large_err)]
+#[allow(clippy::too_many_arguments)]
+fn resolve_optional_ivec3(
+    evaluator: &NetworkEvaluator,
+    network_stack: &[NetworkStackElement<'_>],
+    node_id: u64,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    parameter_index: usize,
+    stored: Option<IVec3>,
+    pin_name: &str,
+) -> Result<Option<IVec3>, NetworkResult> {
+    let result = evaluator.evaluate_arg(network_stack, node_id, registry, context, parameter_index);
+    match result {
+        NetworkResult::None => Ok(stored),
+        r if r.is_error() => Err(r),
+        r => r
+            .extract_ivec3()
+            .map(Some)
+            .ok_or_else(|| NetworkResult::Error(format!("{} must be an IVec3", pin_name))),
+    }
+}
+
+/// Reads an optional `IVec3` text property: present ⇒ `Some`, absent ⇒ `None`.
+/// A present-but-wrong-typed value is a hard error.
+fn read_optional_ivec3(
+    props: &HashMap<String, TextValue>,
+    key: &str,
+) -> Result<Option<IVec3>, String> {
+    match props.get(key) {
+        Some(v) => Ok(Some(
+            v.as_ivec3()
+                .ok_or_else(|| format!("{} must be an IVec3", key))?,
+        )),
+        None => Ok(None),
     }
 }

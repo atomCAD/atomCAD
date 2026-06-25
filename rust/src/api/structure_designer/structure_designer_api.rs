@@ -3528,7 +3528,11 @@ pub fn get_drawing_plane_data(scope_path: Vec<u64>, node_id: u64) -> Option<APID
                     };
                 Some(APIDrawingPlaneData {
                     max_miller_index: drawing_plane_data.max_miller_index,
-                    miller_index: to_api_ivec3(&drawing_plane_data.miller_index),
+                    // Phase 2 interim bridge: the API still exposes a non-nullable
+                    // Miller index; Phase 3 makes it nullable and adds `u`/`v`.
+                    miller_index: to_api_ivec3(
+                        &drawing_plane_data.miller_index.unwrap_or_default(),
+                    ),
                     center: to_api_ivec3(&drawing_plane_data.center),
                     shift: drawing_plane_data.shift,
                     subdivision: drawing_plane_data.subdivision,
@@ -5148,12 +5152,23 @@ pub fn set_half_space_data(scope_path: Vec<u64>, node_id: u64, data: APIHalfSpac
 pub fn set_drawing_plane_data(scope_path: Vec<u64>, node_id: u64, data: APIDrawingPlaneData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            // Phase 2 interim bridge: the API does not yet expose the explicit
+            // `u`/`v` axes (Phase 3 does), so preserve whatever is already stored
+            // on the node rather than wiping it on every save.
+            let (u_axis, v_axis) = cad_instance
+                .structure_designer
+                .get_node_network_data_scoped(&scope_path, node_id)
+                .and_then(|d| d.as_any_ref().downcast_ref::<DrawingPlaneData>())
+                .map(|d| (d.u_axis, d.v_axis))
+                .unwrap_or((None, None));
             let drawing_plane_data = Box::new(DrawingPlaneData {
                 max_miller_index: data.max_miller_index,
-                miller_index: from_api_ivec3(&data.miller_index),
+                miller_index: Some(from_api_ivec3(&data.miller_index)),
                 center: from_api_ivec3(&data.center),
                 shift: data.shift,
                 subdivision: data.subdivision,
+                u_axis,
+                v_axis,
             });
             cad_instance
                 .structure_designer

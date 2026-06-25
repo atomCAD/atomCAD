@@ -977,17 +977,41 @@ fn test_motif_roundtrip() {
 fn test_drawing_plane_roundtrip() {
     test_roundtrip(&DrawingPlaneData {
         max_miller_index: 2,
-        miller_index: IVec3::new(1, 1, 0),
+        miller_index: Some(IVec3::new(1, 1, 0)),
         center: IVec3::new(0, 0, 0),
         shift: 2,
         subdivision: 1,
+        u_axis: None,
+        v_axis: None,
     });
     test_roundtrip(&DrawingPlaneData {
         max_miller_index: 3,
-        miller_index: IVec3::new(0, 0, 1),
+        miller_index: Some(IVec3::new(0, 0, 1)),
         center: IVec3::new(1, 2, 3),
         shift: -5,
         subdivision: 4,
+        u_axis: None,
+        v_axis: None,
+    });
+    // Case C: explicit u/v alongside a Miller index.
+    test_roundtrip(&DrawingPlaneData {
+        max_miller_index: 1,
+        miller_index: Some(IVec3::new(0, 0, 1)),
+        center: IVec3::new(0, 0, 0),
+        shift: 0,
+        subdivision: 1,
+        u_axis: Some(IVec3::new(1, 0, 0)),
+        v_axis: Some(IVec3::new(0, 1, 0)),
+    });
+    // Case D: Miller index unset (derived), explicit u/v.
+    test_roundtrip(&DrawingPlaneData {
+        max_miller_index: 1,
+        miller_index: None,
+        center: IVec3::new(2, 0, 0),
+        shift: 1,
+        subdivision: 1,
+        u_axis: Some(IVec3::new(2, 0, 0)),
+        v_axis: Some(IVec3::new(0, 1, 0)),
     });
 }
 
