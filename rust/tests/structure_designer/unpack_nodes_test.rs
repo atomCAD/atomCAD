@@ -354,3 +354,159 @@ fn test_lattice_vecs_params_no_input_yields_none() {
         }
     }
 }
+
+// ============================================================================
+// structure_unpack: registration
+// ============================================================================
+
+#[test]
+fn test_structure_unpack_registered() {
+    let registry = NodeTypeRegistry::new();
+    let nt = registry
+        .get_node_type("structure_unpack")
+        .expect("structure_unpack should be registered");
+    assert_eq!(nt.name, "structure_unpack");
+    assert!(nt.public);
+    assert_eq!(nt.parameters.len(), 1);
+    assert_eq!(nt.parameters[0].name, "structure");
+    assert_eq!(nt.parameters[0].data_type, DataType::Structure);
+
+    let expected: [(&str, DataType); 3] = [
+        ("lattice_vecs", DataType::LatticeVecs),
+        ("motif", DataType::Motif),
+        ("motif_offset", DataType::Vec3),
+    ];
+    assert_eq!(nt.output_pins.len(), expected.len());
+    for (pin, (name, ty)) in nt.output_pins.iter().zip(expected.iter()) {
+        assert_eq!(&pin.name, name);
+        assert_eq!(pin.fixed_type(), Some(ty));
+    }
+}
+
+// ============================================================================
+// structure_unpack: diamond structure default → lattice_vecs + zero offset
+// ============================================================================
+
+#[test]
+fn test_structure_unpack_diamond_default() {
+    let mut designer = setup_designer_with_network("test");
+
+    // `structure` node with default data → diamond structure.
+    let s_id = designer.add_node("structure", DVec2::new(0.0, 0.0));
+    let unpack_id = designer.add_node("structure_unpack", DVec2::new(200.0, 0.0));
+    designer.validate_active_network();
+    designer.connect_nodes(s_id, 0, unpack_id, 0);
+
+    // Pin 0: lattice_vecs — diamond cubic cell.
+    let s = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    match evaluate_pin(&designer, "test", unpack_id, 0) {
+        NetworkResult::LatticeVecs(uc) => {
+            assert!((uc.a - DVec3::new(s, 0.0, 0.0)).length() < 1e-9);
+            assert!((uc.b - DVec3::new(0.0, s, 0.0)).length() < 1e-9);
+            assert!((uc.c - DVec3::new(0.0, 0.0, s)).length() < 1e-9);
+        }
+        other => panic!(
+            "pin 0: expected LatticeVecs, got {:?}",
+            other.to_display_string()
+        ),
+    }
+
+    // Pin 1: motif — diamond zincblende motif (non-empty).
+    match evaluate_pin(&designer, "test", unpack_id, 1) {
+        NetworkResult::Motif(_) => {}
+        other => panic!("pin 1: expected Motif, got {:?}", other.to_display_string()),
+    }
+
+    // Pin 2: motif_offset — zero for a default diamond structure.
+    expect_vec3(evaluate_pin(&designer, "test", unpack_id, 2), DVec3::ZERO);
+}
+
+// ============================================================================
+// structure_unpack: end-to-end headline chain
+//   structure → structure_unpack → lattice_vecs_unpack → basis vectors
+// ============================================================================
+
+#[test]
+fn test_structure_unpack_then_lattice_vecs_unpack_basis_vectors() {
+    let mut designer = setup_designer_with_network("test");
+
+    let s_id = designer.add_node("structure", DVec2::new(0.0, 0.0));
+    let s_unpack_id = designer.add_node("structure_unpack", DVec2::new(200.0, 0.0));
+    let lv_unpack_id = designer.add_node("lattice_vecs_unpack", DVec2::new(400.0, 0.0));
+    designer.validate_active_network();
+
+    // structure → structure_unpack
+    designer.connect_nodes(s_id, 0, s_unpack_id, 0);
+    // structure_unpack.lattice_vecs (pin 0) → lattice_vecs_unpack
+    designer.connect_nodes(s_unpack_id, 0, lv_unpack_id, 0);
+
+    let s = DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+    expect_vec3(
+        evaluate_pin(&designer, "test", lv_unpack_id, 0),
+        DVec3::new(s, 0.0, 0.0),
+    );
+    expect_vec3(
+        evaluate_pin(&designer, "test", lv_unpack_id, 1),
+        DVec3::new(0.0, s, 0.0),
+    );
+    expect_vec3(
+        evaluate_pin(&designer, "test", lv_unpack_id, 2),
+        DVec3::new(0.0, 0.0, s),
+    );
+}
+
+// ============================================================================
+// structure_unpack: non-Structure input → Error on all pins
+// ============================================================================
+
+#[test]
+fn test_structure_unpack_wrong_type_yields_error() {
+    let mut designer = setup_designer_with_network("test");
+
+    // Feed a Vec3 (wrong type) into the structure pin. Wire connection bypasses
+    // the type check by connecting directly; eval should localize an Error.
+    let v_id = designer.add_node("vec3", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "test",
+        v_id,
+        Box::new(Vec3Data {
+            value: DVec3::new(1.0, 2.0, 3.0),
+        }),
+    );
+    let unpack_id = designer.add_node("structure_unpack", DVec2::new(200.0, 0.0));
+    designer.validate_active_network();
+    designer.connect_nodes(v_id, 0, unpack_id, 0);
+
+    for pin in 0..3 {
+        match evaluate_pin(&designer, "test", unpack_id, pin) {
+            NetworkResult::Error(_) => {}
+            other => panic!(
+                "pin {pin}: expected Error, got {:?}",
+                other.to_display_string()
+            ),
+        }
+    }
+}
+
+// ============================================================================
+// structure_unpack: no input wired → all 3 pins None
+// ============================================================================
+
+#[test]
+fn test_structure_unpack_no_input_yields_none() {
+    let mut designer = setup_designer_with_network("test");
+
+    let unpack_id = designer.add_node("structure_unpack", DVec2::new(0.0, 0.0));
+    designer.validate_active_network();
+
+    for pin in 0..3 {
+        match evaluate_pin(&designer, "test", unpack_id, pin) {
+            NetworkResult::None => {}
+            other => panic!(
+                "pin {pin}: expected None, got {:?}",
+                other.to_display_string()
+            ),
+        }
+    }
+}
