@@ -2,7 +2,7 @@ use glam::f64::DVec3;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::drawing_plane::{
-    compute_plane_axes, gcd, gcd3, reduce_to_primitive,
+    collinear, compute_plane_axes, derive_miller, gcd, gcd3, in_plane, reduce_to_primitive,
 };
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 
@@ -322,4 +322,410 @@ fn test_preferred_plane_axes_common_planes_prefer_90_degrees() {
     for m in cases {
         assert_preferred_basis_angle_cos(m, 0.0, 1e-6);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Explicit in-plane axes (`from_spec` cases A–D)
+// See doc/design_drawing_plane_explicit_axes.md
+// ---------------------------------------------------------------------------
+
+// --- Geometry helpers ---
+
+#[test]
+fn test_in_plane_weiss_zone_law() {
+    // (0,0,1) plane: any [u v 0] direction lies in it; anything with a z step does not.
+    assert!(in_plane(&IVec3::new(0, 0, 1), &IVec3::new(1, 0, 0)));
+    assert!(in_plane(&IVec3::new(0, 0, 1), &IVec3::new(3, -7, 0)));
+    assert!(!in_plane(&IVec3::new(0, 0, 1), &IVec3::new(0, 0, 1)));
+    // (1,1,1) plane: [1,-1,0] satisfies 1-1+0 = 0.
+    assert!(in_plane(&IVec3::new(1, 1, 1), &IVec3::new(1, -1, 0)));
+    assert!(!in_plane(&IVec3::new(1, 1, 1), &IVec3::new(1, 1, 0)));
+}
+
+#[test]
+fn test_collinear_uses_integer_cross() {
+    assert!(collinear(&IVec3::new(1, 0, 0), &IVec3::new(2, 0, 0)));
+    assert!(collinear(&IVec3::new(1, 2, 3), &IVec3::new(-2, -4, -6)));
+    assert!(!collinear(&IVec3::new(1, 0, 0), &IVec3::new(0, 1, 0)));
+}
+
+#[test]
+fn test_derive_miller_reduces_and_errors() {
+    // Primitive case.
+    assert_eq!(
+        derive_miller(&IVec3::new(1, 0, 0), &IVec3::new(0, 1, 0)).unwrap(),
+        IVec3::new(0, 0, 1)
+    );
+    // Non-primitive cross is reduced to lowest terms.
+    assert_eq!(
+        derive_miller(&IVec3::new(2, 0, 0), &IVec3::new(0, 2, 0)).unwrap(),
+        IVec3::new(0, 0, 1)
+    );
+    // Sign is preserved (so handedness holds by construction).
+    assert_eq!(
+        derive_miller(&IVec3::new(0, 1, 0), &IVec3::new(1, 0, 0)).unwrap(),
+        IVec3::new(0, 0, -1)
+    );
+    // Parallel directions are degenerate.
+    assert!(derive_miller(&IVec3::new(1, 0, 0), &IVec3::new(2, 0, 0)).is_err());
+}
+
+// --- Case A: Miller index only ---
+
+#[test]
+fn test_from_spec_case_a_matches_new() {
+    // from_spec with only a Miller index must reproduce DrawingPlane::new exactly.
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let m = IVec3::new(0, 0, 1);
+
+    let via_new = DrawingPlane::new(unit_cell.clone(), m, IVec3::ZERO, 0, 1).unwrap();
+    let via_spec =
+        DrawingPlane::from_spec(unit_cell, Some(m), None, None, IVec3::ZERO, 0, 1).unwrap();
+
+    assert_eq!(via_new.miller_index, via_spec.miller_index);
+    assert_eq!(via_new.u_axis, via_spec.u_axis);
+    assert_eq!(via_new.v_axis, via_spec.v_axis);
+    // For (001) cubic the auto basis is the canonical X/Y pair.
+    assert_eq!(via_spec.u_axis, IVec3::new(1, 0, 0));
+    assert_eq!(via_spec.v_axis, IVec3::new(0, 1, 0));
+}
+
+// --- Case B: Miller index + u ---
+
+#[test]
+fn test_from_spec_case_b_u_collinear_with_first_auto_axis_picks_other() {
+    // u = [1,0,0] is collinear with the first auto axis ([1,0,0]); the second axis
+    // must fall back to the other auto axis ([0,1,0]).
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let plane = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(1, 0, 0)),
+        None,
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(plane.u_axis, IVec3::new(1, 0, 0));
+    assert_eq!(plane.v_axis, IVec3::new(0, 1, 0));
+    assert_right_handed(&plane);
+}
+
+#[test]
+fn test_from_spec_case_b_u_non_collinear_reuses_first_auto_axis_and_flips() {
+    // u = [0,1,0] is non-collinear with the first auto axis [1,0,0], so the second
+    // axis is [1,0,0] — but (u × [1,0,0])·n < 0, so it is flipped to [-1,0,0].
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let plane = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(0, 1, 0)),
+        None,
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(plane.u_axis, IVec3::new(0, 1, 0));
+    assert_eq!(plane.v_axis, IVec3::new(-1, 0, 0));
+    assert_right_handed(&plane);
+}
+
+#[test]
+fn test_from_spec_case_b_u_not_in_plane_errors() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let result = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(0, 0, 1)), // along the normal, not in the plane
+        None,
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Weiss"));
+}
+
+// --- Case C: Miller index + u + v ---
+
+#[test]
+fn test_from_spec_case_c_axes_honored_verbatim() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let plane = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(1, 0, 0)),
+        Some(IVec3::new(0, 1, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(plane.u_axis, IVec3::new(1, 0, 0));
+    assert_eq!(plane.v_axis, IVec3::new(0, 1, 0));
+}
+
+#[test]
+fn test_from_spec_case_c_left_handed_pair_accepted_unchanged() {
+    // Decision 6: case C performs no handedness flip. A left-handed (u, v) is kept.
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let plane = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(0, 1, 0)),
+        Some(IVec3::new(1, 0, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    // No flip: v stays exactly as given.
+    assert_eq!(plane.u_axis, IVec3::new(0, 1, 0));
+    assert_eq!(plane.v_axis, IVec3::new(1, 0, 0));
+
+    // The pair really is left-handed: (u × v) · n < 0.
+    let n = plane
+        .unit_cell
+        .ivec3_miller_index_to_plane_props(&plane.miller_index)
+        .unwrap()
+        .normal;
+    let u_real = plane.unit_cell.ivec3_lattice_to_real(&plane.u_axis);
+    let v_real = plane.unit_cell.ivec3_lattice_to_real(&plane.v_axis);
+    assert!(u_real.cross(v_real).dot(n) < 0.0);
+}
+
+#[test]
+fn test_from_spec_case_c_weiss_violation_errors() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let result = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(1, 0, 0)),
+        Some(IVec3::new(0, 0, 1)), // v not in plane
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("Weiss"));
+}
+
+#[test]
+fn test_from_spec_case_c_collinear_axes_error() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let result = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(1, 0, 0)),
+        Some(IVec3::new(2, 0, 0)), // collinear with u
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("collinear"));
+}
+
+// --- Case D: u + v, no Miller index ---
+
+#[test]
+fn test_from_spec_case_d_derives_and_reduces_miller() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    // Non-primitive axes still derive a primitive Miller index.
+    let plane = DrawingPlane::from_spec(
+        unit_cell,
+        None,
+        Some(IVec3::new(2, 0, 0)),
+        Some(IVec3::new(0, 2, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(plane.miller_index, IVec3::new(0, 0, 1));
+    // Axes are honored verbatim (magnitudes preserved).
+    assert_eq!(plane.u_axis, IVec3::new(2, 0, 0));
+    assert_eq!(plane.v_axis, IVec3::new(0, 2, 0));
+}
+
+#[test]
+fn test_from_spec_case_d_right_handed_without_flip() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    // A pair whose cross product points along -z derives m = (0,0,-1); the basis is
+    // right-handed by construction with no flip applied.
+    let plane = DrawingPlane::from_spec(
+        unit_cell,
+        None,
+        Some(IVec3::new(0, 1, 0)),
+        Some(IVec3::new(1, 0, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(plane.miller_index, IVec3::new(0, 0, -1));
+    assert_eq!(plane.u_axis, IVec3::new(0, 1, 0));
+    assert_eq!(plane.v_axis, IVec3::new(1, 0, 0));
+    assert_right_handed(&plane);
+}
+
+#[test]
+fn test_from_spec_case_d_parallel_axes_error() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let result = DrawingPlane::from_spec(
+        unit_cell,
+        None,
+        Some(IVec3::new(1, 0, 0)),
+        Some(IVec3::new(2, 0, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("parallel"));
+}
+
+// --- Error combinations ---
+
+#[test]
+fn test_from_spec_v_only_with_miller_errors() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let result = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        None,
+        Some(IVec3::new(0, 1, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(result.is_err());
+    assert!(result.unwrap_err().contains("specify `u`"));
+}
+
+#[test]
+fn test_from_spec_underspecified_combos_error() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+
+    // u only.
+    let r1 = DrawingPlane::from_spec(
+        unit_cell.clone(),
+        None,
+        Some(IVec3::new(1, 0, 0)),
+        None,
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(r1.unwrap_err().contains("under-specified"));
+
+    // v only.
+    let r2 = DrawingPlane::from_spec(
+        unit_cell.clone(),
+        None,
+        None,
+        Some(IVec3::new(0, 1, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    );
+    assert!(r2.unwrap_err().contains("under-specified"));
+
+    // nothing.
+    let r3 = DrawingPlane::from_spec(unit_cell, None, None, None, IVec3::ZERO, 0, 1);
+    assert!(r3.unwrap_err().contains("unspecified"));
+}
+
+// --- Magnitude preservation ---
+
+#[test]
+fn test_from_spec_preserves_u_magnitude() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+
+    let plane_1 = DrawingPlane::from_spec(
+        unit_cell.clone(),
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(1, 0, 0)),
+        Some(IVec3::new(0, 1, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    let plane_2 = DrawingPlane::from_spec(
+        unit_cell,
+        Some(IVec3::new(0, 0, 1)),
+        Some(IVec3::new(2, 0, 0)),
+        Some(IVec3::new(0, 1, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    // u = [2,0,0] gives a 2× period along the effective cell's a axis vs u = [1,0,0].
+    let len_1 = plane_1.effective_unit_cell.a.length();
+    let len_2 = plane_2.effective_unit_cell.a.length();
+    assert!((len_2 - 2.0 * len_1).abs() < 1e-9);
+}
+
+// --- is_compatible with explicit axes ---
+
+#[test]
+fn test_is_compatible_distinguishes_explicit_axes() {
+    let unit_cell = UnitCellStruct::cubic_diamond();
+    let m = IVec3::new(0, 0, 1);
+
+    // Case A auto axes.
+    let plane_auto =
+        DrawingPlane::from_spec(unit_cell.clone(), Some(m), None, None, IVec3::ZERO, 0, 1).unwrap();
+
+    // Case C with explicit, rotated axes — same Miller index, different in-plane frame.
+    let plane_explicit = DrawingPlane::from_spec(
+        unit_cell.clone(),
+        Some(m),
+        Some(IVec3::new(1, 1, 0)),
+        Some(IVec3::new(-1, 1, 0)),
+        IVec3::ZERO,
+        0,
+        1,
+    )
+    .unwrap();
+
+    assert_eq!(plane_auto.miller_index, plane_explicit.miller_index);
+    assert!(
+        !plane_auto.is_compatible(&plane_explicit),
+        "planes with different in-plane axes must be incompatible"
+    );
+
+    // Two case-A planes with the same Miller index remain compatible (regression).
+    let plane_auto2 =
+        DrawingPlane::from_spec(unit_cell, Some(m), None, None, IVec3::ZERO, 0, 1).unwrap();
+    assert!(plane_auto.is_compatible(&plane_auto2));
+}
+
+// --- shared assertions ---
+
+fn assert_right_handed(plane: &DrawingPlane) {
+    let n = plane
+        .unit_cell
+        .ivec3_miller_index_to_plane_props(&plane.miller_index)
+        .unwrap()
+        .normal;
+    let u_real = plane.unit_cell.ivec3_lattice_to_real(&plane.u_axis);
+    let v_real = plane.unit_cell.ivec3_lattice_to_real(&plane.v_axis);
+    assert!(
+        u_real.cross(v_real).dot(n) > 0.0,
+        "expected right-handed basis for {:?}",
+        plane.miller_index
+    );
 }

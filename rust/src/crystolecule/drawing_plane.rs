@@ -74,23 +74,157 @@ impl DrawingPlane {
         shift: i32,
         subdivision: i32,
     ) -> Result<Self, String> {
-        // Compute in-plane axes from Miller index.
-        //
-        // Note: A plane normal does not uniquely define the in-plane orientation.
-        // We therefore choose a deterministic in-plane basis that best matches
-        // the global Cartesian axes projected onto the plane.
-        let (u_axis, mut v_axis) = compute_preferred_plane_axes(&unit_cell, &miller_index)?;
+        // Thin wrapper around `from_spec` for the classic "Miller index only" path,
+        // keeping every existing caller (xy_plane, tests) untouched.
+        Self::from_spec(
+            unit_cell,
+            Some(miller_index),
+            None,
+            None,
+            center,
+            shift,
+            subdivision,
+        )
+    }
 
-        // Ensure right-handed coordinate system: (u × v) · n > 0
+    /// Creates a drawing plane from an explicit orientation spec.
+    ///
+    /// A plane needs either its normal (`miller`), or two in-plane directions
+    /// (`u`, `v`). The four valid cases:
+    ///
+    /// - **A** (`m` only): auto-generate both in-plane axes from `m` (classic behavior).
+    /// - **B** (`m` + `u`): verify `u` lies in the plane (Weiss zone law); basis is
+    ///   `u` plus the first auto axis that is not collinear with `u`.
+    /// - **C** (`m` + `u` + `v`): verify both `u` and `v` lie in the plane and are
+    ///   non-collinear; use them verbatim (no handedness flip).
+    /// - **D** (`u` + `v`, no `m`): derive `m = reduce(u × v)`; use `u`, `v` verbatim.
+    ///
+    /// In-plane directions are **direct-space lattice direction indices** `[u v w]`
+    /// (steps along the unit-cell vectors a, b, c), distinct from the Miller plane
+    /// index `(h k l)`. A direction lies in a plane iff the Weiss zone law holds:
+    /// `h·u + k·v + l·w = 0`.
+    ///
+    /// Every invalid combination returns a localized `Err(String)` with an explicit
+    /// message; nothing is silently reconciled.
+    pub fn from_spec(
+        unit_cell: UnitCellStruct,
+        miller: Option<IVec3>,
+        u: Option<IVec3>,
+        v: Option<IVec3>,
+        center: IVec3,
+        shift: i32,
+        subdivision: i32,
+    ) -> Result<Self, String> {
+        match (miller, u, v) {
+            // Case A: Miller index only — auto-generate both axes.
+            (Some(m), None, None) => {
+                let (ua, va) = compute_auto_axes(&unit_cell, &m)?;
+                Self::build_from_axes(unit_cell, m, ua, va, center, shift, subdivision, true)
+            }
+
+            // Case B: Miller index + first in-plane axis.
+            (Some(m), Some(u), None) => {
+                if !in_plane(&m, &u) {
+                    return Err(format!(
+                        "u direction [{},{},{}] does not lie in the ({},{},{}) plane \
+                         (Weiss zone law violated)",
+                        u.x, u.y, u.z, m.x, m.y, m.z
+                    ));
+                }
+                let (ua, va) = compute_auto_axes(&unit_cell, &m)?;
+                // Reuse the first already-valid auto axis that is not collinear with `u`.
+                // At least one of the two auto axes is non-collinear with any single
+                // in-plane direction, so this always resolves.
+                let second = if !collinear(&u, &ua) {
+                    ua
+                } else if !collinear(&u, &va) {
+                    va
+                } else {
+                    return Err(format!(
+                        "Could not find an auto axis non-collinear with u [{},{},{}]",
+                        u.x, u.y, u.z
+                    ));
+                };
+                Self::build_from_axes(unit_cell, m, u, second, center, shift, subdivision, true)
+            }
+
+            // Case C: Miller index + both in-plane axes, used verbatim.
+            (Some(m), Some(u), Some(v)) => {
+                if !in_plane(&m, &u) {
+                    return Err(format!(
+                        "u direction [{},{},{}] does not lie in the ({},{},{}) plane \
+                         (Weiss zone law violated)",
+                        u.x, u.y, u.z, m.x, m.y, m.z
+                    ));
+                }
+                if !in_plane(&m, &v) {
+                    return Err(format!(
+                        "v direction [{},{},{}] does not lie in the ({},{},{}) plane \
+                         (Weiss zone law violated)",
+                        v.x, v.y, v.z, m.x, m.y, m.z
+                    ));
+                }
+                if collinear(&u, &v) {
+                    return Err(format!(
+                        "u [{},{},{}] and v [{},{},{}] are collinear; \
+                         in-plane axes must be non-collinear",
+                        u.x, u.y, u.z, v.x, v.y, v.z
+                    ));
+                }
+                // Honor the user's axes verbatim — no handedness flip (decision 6).
+                Self::build_from_axes(unit_cell, m, u, v, center, shift, subdivision, false)
+            }
+
+            // Case D: two in-plane axes, derive the Miller index.
+            (None, Some(u), Some(v)) => {
+                let m = derive_miller(&u, &v)?;
+                Self::build_from_axes(unit_cell, m, u, v, center, shift, subdivision, false)
+            }
+
+            // Error: only `v` provided (with a Miller index).
+            (Some(_), None, Some(_)) => Err("specify `u`, not only `v`".to_string()),
+
+            // Errors: under-specified plane.
+            (None, Some(_), None) | (None, None, Some(_)) => {
+                Err("under-specified plane: give a Miller index or both `u` and `v`".to_string())
+            }
+
+            // Error: nothing provided.
+            (None, None, None) => Err("plane orientation unspecified".to_string()),
+        }
+    }
+
+    /// Finalizes a drawing plane from chosen integer in-plane axes.
+    ///
+    /// This is the portion of construction *after* the axes are selected:
+    /// optional right-handed flip, Gram-Schmidt orthonormalization, and
+    /// `effective_unit_cell` construction in plane-local XY.
+    ///
+    /// When `enforce_right_handed` is true, `v_axis` is flipped if needed so that
+    /// `(u × v) · n > 0`. Case C/D pass `false` to honor the user's orientation.
+    fn build_from_axes(
+        unit_cell: UnitCellStruct,
+        miller_index: IVec3,
+        u_axis: IVec3,
+        mut v_axis: IVec3,
+        center: IVec3,
+        shift: i32,
+        subdivision: i32,
+        enforce_right_handed: bool,
+    ) -> Result<Self, String> {
+        // Plane normal (real-space direction) for handedness checks.
         let normal_dir = unit_cell
             .ivec3_miller_index_to_plane_props(&miller_index)
             .map_err(|e| format!("Failed to compute plane properties: {}", e))?
             .normal;
 
-        let cross = (u_axis.as_dvec3()).cross(v_axis.as_dvec3()).normalize();
-        if cross.dot(normal_dir) < 0.0 {
-            // Flip v-axis to make right-handed
-            v_axis = -v_axis;
+        if enforce_right_handed {
+            // Ensure right-handed coordinate system: (u × v) · n > 0
+            let cross = (u_axis.as_dvec3()).cross(v_axis.as_dvec3()).normalize();
+            if cross.dot(normal_dir) < 0.0 {
+                // Flip v-axis to make right-handed
+                v_axis = -v_axis;
+            }
         }
 
         // 2D geometry nodes operate in plane-local coordinates. We therefore store
@@ -153,14 +287,24 @@ impl DrawingPlane {
     /// Checks if two drawing planes are compatible for boolean operations.
     ///
     /// Planes are compatible if they have the same unit cell, orientation,
-    /// position, and shift parameters.
+    /// in-plane axes, position, and shift parameters.
+    ///
+    /// The in-plane axes (`u_axis`, `v_axis`) must match too: with user-pinned
+    /// axes two planes can share the same `miller_index` yet have entirely
+    /// different in-plane frames (e.g. case A auto axes vs. case C explicit,
+    /// rotated axes). Combining those as if identical would silently produce
+    /// wrong geometry — precisely the reconciliation this design forbids. The
+    /// compared axes are the *finalized* ones (post right-handed flip /
+    /// Gram-Schmidt), so two case-A planes with the same `miller_index` still
+    /// match.
     pub fn is_compatible(&self, other: &DrawingPlane) -> bool {
         self.unit_cell.is_approximately_equal(&other.unit_cell)
             && self.miller_index == other.miller_index
             && self.center == other.center
             && self.shift == other.shift
             && self.subdivision == other.subdivision
-        // u_axis and v_axis should be deterministically same if above match
+            && self.u_axis == other.u_axis
+            && self.v_axis == other.v_axis
     }
 
     /// Maps a 2D real coordinate (in plane space) to 3D world position.
@@ -457,14 +601,56 @@ pub fn compute_plane_axes(m: &IVec3) -> Result<(IVec3, IVec3), String> {
     ))
 }
 
+/// Integer cross product (exact, no float round-off).
+///
+/// Used for in-plane integer-lattice tests (collinearity, derived Miller index).
+fn ivec3_cross(a: &IVec3, b: &IVec3) -> IVec3 {
+    IVec3::new(
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x,
+    )
+}
+
+/// Weiss zone law: direction `d` `[u v w]` lies in the plane with Miller index
+/// `m` `(h k l)` iff `h·u + k·v + l·w == 0`.
+pub fn in_plane(m: &IVec3, d: &IVec3) -> bool {
+    m.x * d.x + m.y * d.y + m.z * d.z == 0
+}
+
+/// Two integer lattice directions are collinear iff their integer cross product
+/// is the zero vector (e.g. `[2,0,0]` is collinear with `[1,0,0]`).
+pub fn collinear(a: &IVec3, b: &IVec3) -> bool {
+    ivec3_cross(a, b) == IVec3::ZERO
+}
+
+/// Derives a Miller plane index from two in-plane directions via the Weiss zone
+/// law run backwards: `m = reduce(u × v)`.
+///
+/// The integer cross product preserves the sign of `u × v`, and reduction to
+/// primitive form divides by a positive GCD, so the resulting normal satisfies
+/// `(u × v) · n > 0` — the pair is already right-handed by construction.
+///
+/// # Errors
+/// * If `u` and `v` are parallel (`u × v == 0`), the plane is degenerate.
+pub fn derive_miller(u: &IVec3, v: &IVec3) -> Result<IVec3, String> {
+    let cross = ivec3_cross(u, v);
+    if cross == IVec3::ZERO {
+        return Err(format!(
+            "Degenerate plane: u [{},{},{}] and v [{},{},{}] are parallel \
+             (zero cross product); cannot derive a Miller index",
+            u.x, u.y, u.z, v.x, v.y, v.z
+        ));
+    }
+    Ok(reduce_to_primitive(cross))
+}
+
 /// Picks a deterministic pair of in-plane lattice axes for a Miller plane.
 ///
 /// The chosen axes are scored to best match global X/Y projected onto the plane,
-/// producing a stable, predictable in-plane orientation.
-fn compute_preferred_plane_axes(
-    unit_cell: &UnitCellStruct,
-    m: &IVec3,
-) -> Result<(IVec3, IVec3), String> {
+/// producing a stable, predictable in-plane orientation. This is the case-A
+/// auto-basis (formerly `compute_preferred_plane_axes`).
+pub fn compute_auto_axes(unit_cell: &UnitCellStruct, m: &IVec3) -> Result<(IVec3, IVec3), String> {
     if *m == IVec3::ZERO {
         return Err("Miller index cannot be zero vector".to_string());
     }
