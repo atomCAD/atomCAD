@@ -55,6 +55,7 @@ use super::nodes::ivec2::get_node_type as ivec2_get_node_type;
 use super::nodes::ivec3::get_node_type as ivec3_get_node_type;
 use super::nodes::lattice_symop::get_node_type as lattice_symop_get_node_type;
 use super::nodes::lattice_vecs::get_node_type as lattice_vecs_get_node_type;
+use super::nodes::lattice_vecs_params::get_node_type as lattice_vecs_params_get_node_type;
 use super::nodes::lattice_vecs_unpack::get_node_type as lattice_vecs_unpack_get_node_type;
 use super::nodes::map::get_node_type as map_get_node_type;
 use super::nodes::mat3_cols::get_node_type as mat3_cols_get_node_type;
@@ -286,6 +287,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(array_append_get_node_type());
         ret.add_node_type(collect_get_node_type());
         ret.add_node_type(lattice_vecs_get_node_type());
+        ret.add_node_type(lattice_vecs_params_get_node_type());
         ret.add_node_type(lattice_vecs_unpack_get_node_type());
 
         ret.add_node_type(rect_get_node_type());
