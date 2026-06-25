@@ -1765,13 +1765,16 @@ fn build_api_guideline_tool_view(sd: &StructureDesigner) -> Option<APIGuidelineT
                 let world = match atom {
                     atom_edit::AtomRef::Diff(id) => data.diff.get_atom(*id).map(|a| a.position),
                     atom_edit::AtomRef::Base(base_id) => {
-                        let set: std::collections::HashSet<u32> = std::iter::once(*base_id).collect();
+                        let set: std::collections::HashSet<u32> =
+                            std::iter::once(*base_id).collect();
                         atom_edit::gather_base_atom_promotion_info_including_frozen(sd, &set)
                             .first()
                             .map(|i| i.position)
                     }
                 };
-                let t = world.map(|p| guideline.decompose(p).0).unwrap_or(guideline.t);
+                let t = world
+                    .map(|p| guideline.decompose(p).0)
+                    .unwrap_or(guideline.t);
                 Some(APIGuidelineToolView {
                     phase: APIGuidelinePhase::Move,
                     defining_count: 0,
@@ -2020,4 +2023,3 @@ pub fn guideline_reset_interaction() {
         });
     }
 }
-

@@ -366,3 +366,6 @@ mod patch_latticefill_test;
 
 #[path = "structure_designer/invariants_test.rs"]
 mod invariants_test;
+
+#[path = "structure_designer/unpack_nodes_test.rs"]
+mod unpack_nodes_test;

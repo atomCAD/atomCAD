@@ -53,6 +53,7 @@ pub mod ivec2;
 pub mod ivec3;
 pub mod lattice_symop;
 pub mod lattice_vecs;
+pub mod lattice_vecs_unpack;
 pub mod map;
 pub mod mat3_cols;
 pub mod mat3_diag;
