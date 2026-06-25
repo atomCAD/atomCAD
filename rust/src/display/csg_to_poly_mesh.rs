@@ -27,7 +27,14 @@ pub fn convert_csg_sketch_to_poly_mesh(
         triangulate_csg_sketch(&csg_sketch, drawing_plane)
     } else {
         let mesh = CSGMesh::from(csg_sketch);
-        mesh.polygons
+        let mut polys = mesh.polygons;
+        // `CSGMesh::from(sketch)` lifts the outline into 3D as plane-local XY at
+        // z=0 (i.e. on the world XY plane). The triangulated path above maps its
+        // vertices onto the drawing plane via `real_2d_to_world_3d`; do the same
+        // here so wireframe 2D geometry lands on the drawing plane too instead of
+        // on the XY plane (issue #372).
+        map_polygons_to_drawing_plane(&mut polys, drawing_plane);
+        polys
     };
 
     // Check if plane is horizontal (parallel to XY) and at z≈0
@@ -96,6 +103,25 @@ fn convert_polygons_to_poly_mesh(
     }
 
     poly_mesh
+}
+
+/// Maps the outline polygons produced by `CSGMesh::from(sketch)` onto the
+/// drawing plane in 3D world space.
+///
+/// Those polygons come out in plane-local XY at z=0 (i.e. lying on the world XY
+/// plane). Each vertex's `(x, y)` are plane-local 2D coordinates; we run them
+/// through `DrawingPlane::real_2d_to_world_3d` — the exact mapping the
+/// triangulated path uses — so the wireframe outline lands on the drawing plane
+/// rather than the XY plane (issue #372). Vertex normals are left untouched
+/// because `PolyMesh` recomputes face normals from positions
+/// (`compute_face_normals`); only the positions matter downstream.
+fn map_polygons_to_drawing_plane(polygons: &mut [Polygon<()>], drawing_plane: &DrawingPlane) {
+    for poly in polygons.iter_mut() {
+        for vertex in &mut poly.vertices {
+            let mapped = drawing_plane.real_2d_to_world_3d(&DVec2::new(vertex.pos.x, vertex.pos.y));
+            vertex.pos = Point3::new(mapped.x as Real, mapped.y as Real, mapped.z as Real);
+        }
+    }
 }
 
 fn triangulate_geo_polygon(
