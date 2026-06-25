@@ -218,6 +218,24 @@ pub trait NodeData: Any + AsAny {
     fn drag_hint_for_input_pin(&self, _pin_index: usize) -> Option<DataType> {
         None
     }
+
+    /// Whether a freshly-added instance of this node should display *all* of its
+    /// output pins by default (eye on), instead of just pin 0 (the global
+    /// default in `NodeDisplayState`).
+    ///
+    /// Multi-output nodes normally show only pin 0 so that e.g. `atom_edit`
+    /// doesn't draw both `result` and `diff` at once. But for the stateless
+    /// destructure nodes (`structure_unpack`, `lattice_vecs_unpack`,
+    /// `lattice_vecs_params`) every output is a scalar/structure value that
+    /// draws *no* viewport geometry (it only feeds the per-pin hover readout),
+    /// so showing them all by default lets users inspect every unpacked value
+    /// immediately with no clutter. See
+    /// `doc/design_structure_lattice_unpack_nodes.md`.
+    ///
+    /// Default: `false` (pin 0 only).
+    fn default_display_all_output_pins(&self) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

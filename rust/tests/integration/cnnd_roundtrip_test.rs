@@ -204,6 +204,99 @@ fn test_demolib_proxy_roundtrip() {
     roundtrip_cnnd_file("../samples/demolib+(111)-proxy-generator.cnnd");
 }
 
+/// Phase 4 (unpack nodes): a network wiring all three stateless destructure
+/// nodes (`structure_unpack`, `lattice_vecs_unpack`, `lattice_vecs_params`)
+/// survives a `.cnnd` save → load round-trip with its nodes present and its
+/// multi-output pin wires (including non-zero pins) intact. These nodes follow
+/// the ordinary fixed-pin serialization path, so this is greenfield coverage,
+/// not new plumbing — see `doc/design_structure_lattice_unpack_nodes.md`.
+#[test]
+fn unpack_nodes_cnnd_roundtrip() {
+    use glam::f64::DVec2;
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+
+    // Build: structure → structure_unpack → { lattice_vecs_unpack, lattice_vecs_params }.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+
+    let s = designer.add_node("structure", DVec2::new(0.0, 0.0));
+    let su = designer.add_node("structure_unpack", DVec2::new(200.0, 0.0));
+    let lvu = designer.add_node("lattice_vecs_unpack", DVec2::new(400.0, 0.0));
+    let lvp = designer.add_node("lattice_vecs_params", DVec2::new(400.0, 200.0));
+    // Rebuild a structure from the unpacked pieces — exercises pin 1 (motif) and
+    // pin 2 (motif_offset) wires, not just pin 0.
+    let s2 = designer.add_node("structure", DVec2::new(600.0, 0.0));
+    designer.validate_active_network();
+
+    // `structure` params: [structure(0), lattice_vecs(1), motif(2), motif_offset(3)].
+    designer.connect_nodes(s, 0, su, 0);
+    designer.connect_nodes(su, 0, lvu, 0);
+    designer.connect_nodes(su, 0, lvp, 0);
+    designer.connect_nodes(su, 0, s2, 1); // lattice_vecs (out pin 0 → in pin 1)
+    designer.connect_nodes(su, 1, s2, 2); // motif (out pin 1 → in pin 2)
+    designer.connect_nodes(su, 2, s2, 3); // motif_offset (out pin 2 → in pin 3)
+
+    // Save → reload into a fresh registry.
+    let temp_dir = tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("unpack_nodes.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save");
+
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("reload");
+
+    let network = registry2.node_networks.get("Main").unwrap();
+
+    // All five nodes survive with their types.
+    let type_of = |id: u64| network.nodes.get(&id).unwrap().node_type_name.as_str();
+    assert_eq!(type_of(s), "structure");
+    assert_eq!(type_of(su), "structure_unpack");
+    assert_eq!(type_of(lvu), "lattice_vecs_unpack");
+    assert_eq!(type_of(lvp), "lattice_vecs_params");
+    assert_eq!(type_of(s2), "structure");
+
+    // Wires into the unpack node and out of its three pins all survive.
+    assert_eq!(
+        network.nodes.get(&su).unwrap().arguments[0].get_source_pin(s),
+        Some(0),
+        "structure_unpack.structure ← structure pin 0"
+    );
+    assert_eq!(
+        network.nodes.get(&lvu).unwrap().arguments[0].get_source_pin(su),
+        Some(0),
+        "lattice_vecs_unpack ← structure_unpack pin 0"
+    );
+    assert_eq!(
+        network.nodes.get(&lvp).unwrap().arguments[0].get_source_pin(su),
+        Some(0),
+        "lattice_vecs_params ← structure_unpack pin 0"
+    );
+
+    let s2_node = network.nodes.get(&s2).unwrap();
+    assert_eq!(
+        s2_node.arguments[1].get_source_pin(su),
+        Some(0),
+        "rebuilt structure.lattice_vecs ← structure_unpack pin 0"
+    );
+    assert_eq!(
+        s2_node.arguments[2].get_source_pin(su),
+        Some(1),
+        "rebuilt structure.motif ← structure_unpack pin 1"
+    );
+    assert_eq!(
+        s2_node.arguments[3].get_source_pin(su),
+        Some(2),
+        "rebuilt structure.motif_offset ← structure_unpack pin 2"
+    );
+}
+
 /// A user record def at a *dotted* (namespaced) name, referenced by a
 /// `record_construct` node, survives a save → load round-trip with its fields,
 /// the `Named` reference, and the derived pin layout intact. Greenfield —

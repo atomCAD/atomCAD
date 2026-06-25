@@ -363,6 +363,45 @@ impl StructureDesigner {
         Some(current)
     }
 
+    /// If the just-added node opts into displaying all of its output pins by
+    /// default (see [`NodeData::default_display_all_output_pins`]) and it is
+    /// currently displayed, mark its remaining output pins (`1..N`) displayed —
+    /// pin 0 is already on from `NodeNetwork::add_node`. Both display setters
+    /// preserve an existing `displayed_pins` set, so calling this *after* the
+    /// display-policy pass is safe (the policy only flips the node-level
+    /// display type, never the pin set). We deliberately do not force-show a
+    /// node the policy chose to hide. Used by the stateless unpack/destructure
+    /// nodes so every unpacked value is hover-inspectable the moment the node
+    /// is dropped (their outputs draw no viewport geometry). See
+    /// `doc/design_structure_lattice_unpack_nodes.md`.
+    fn apply_default_all_pin_display(
+        &mut self,
+        scope_path: &[u64],
+        node_type_name: &str,
+        node_id: u64,
+    ) {
+        let pin_count = match self.node_type_registry.get_node_type(node_type_name) {
+            Some(node_type) => node_type.output_pins.len(),
+            None => return,
+        };
+        if pin_count <= 1 {
+            return;
+        }
+        if let Some(network) = self.get_scope_network_mut(scope_path) {
+            let opt_in = network
+                .nodes
+                .get(&node_id)
+                .map(|n| n.data.default_display_all_output_pins())
+                .unwrap_or(false);
+            if !opt_in || !network.is_node_displayed(node_id) {
+                return;
+            }
+            for pin_index in 1..pin_count {
+                network.set_pin_displayed(node_id, pin_index as i32, true);
+            }
+        }
+    }
+
     /// Returns the scope path of the network that currently holds the
     /// selection, or `None` if nothing is selected anywhere. An empty `Vec`
     /// means the top-level active network. The single-scope selection
@@ -2479,6 +2518,10 @@ impl StructureDesigner {
             {
                 self.validate_active_network();
             }
+            // Opt-in nodes (the stateless unpack/destructure nodes) show all
+            // their output pins on creation, not just pin 0. Applied before the
+            // body-snapshot command push so undo/redo restore it faithfully.
+            self.apply_default_all_pin_display(scope_path, node_type_name, node_id);
             self.push_zone_body_command_with_ancestor_reflow(
                 scope_path,
                 format!("Add {} node", node_type_name),
@@ -2632,6 +2675,10 @@ impl StructureDesigner {
 
             // Apply display policy considering only this node as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
+
+            // Opt-in nodes (the stateless unpack/destructure nodes) show all
+            // their output pins on creation, not just pin 0.
+            self.apply_default_all_pin_display(&[], node_type_name, node_id);
 
             // Check if we need to validate the network
             let should_validate = node_type_name == "parameter"

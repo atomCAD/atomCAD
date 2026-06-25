@@ -15,6 +15,7 @@ Built-in node type implementations. Each file defines one node type's behavior v
 - **Geometry 2D:** `rect`, `circle`, `reg_poly`, `polygon`, `union_2d`, `intersect_2d`, `diff_2d`, `half_plane`
 - **Geometry 3D (Blueprint outputs):** `cuboid`, `sphere`, `extrude`, `half_space`, `drawing_plane`, `facet_shell`, `union`, `intersect`, `diff`, `geo_trans`. Primitives take an optional `Structure` input (defaulting to diamond) instead of the old `LatticeVecs`/unit-cell input.
 - **Structure construction:** `lattice_vecs`, `motif`, `motif_sub`, `structure` (unified constructor/modifier — all four inputs optional, defaults to diamond)
+- **Structure destructuring (unpack nodes):** `structure_unpack` (`Structure` → `lattice_vecs`/`motif`/`motif_offset`), `lattice_vecs_unpack` (`LatticeVecs` → basis vectors `a`/`b`/`c` as `Vec3`), `lattice_vecs_params` (`LatticeVecs` → cell params `a`/`b`/`c`/`alpha`/`beta`/`gamma` as `Float` + packed `lengths`/`angles` as `Vec3`). Stateless, fixed-pin inverses of the `structure` / `lattice_vecs` constructors — the built-in-type analogue of `record_destructure`. Follow the empty-data-struct pattern (`StructureData {}` + `generic_node_data_saver`/`loader`), `calculate_custom_node_type` returns `None`, `eval` returns `EvalOutput::multi(...)`. They opt into `default_display_all_output_pins() == true` (see below). Design doc: `doc/design_structure_lattice_unpack_nodes.md`.
 - **Phase transitions:** `materialize` (Blueprint → Crystal), `dematerialize` (Crystal → Blueprint), `exit_structure` (Crystal → Molecule), `enter_structure` (Molecule + Structure → Crystal)
 - **Atomic ops (HasAtoms-polymorphic):** `edit_atom/`, `atom_edit/` (plus `motif_edit` sibling node type defined in the same module), `atom_union`, `atom_cut`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `apply_diff`, `atom_composediff`
 - **Movement (polymorphic over abstract inputs):** `structure_move`, `structure_rot` on `HasStructure`; `free_move`, `free_rot` on `HasFreeLinOps`; `lattice_symop`. All four movement nodes use `OutputPinDefinition::single_same_as("input")` so the concrete type flows through.
@@ -58,8 +59,13 @@ pub trait NodeData: Send + Sync {
     fn get_parameter_metadata(&self) -> Option<Vec<ParameterMetadata>>;
     fn adapt_for_drag_source(&self, source: &DataType, dir: DragDirection,
                              registry: &NodeTypeRegistry) -> Option<Box<dyn NodeData>>;
+    fn default_display_all_output_pins(&self) -> bool;  // default false
 }
 ```
+
+### Default output-pin display
+
+The global default is **pin-0-only**: a freshly added node shows just its first output pin (`NodeDisplayState::normal`/`with_type` set `displayed_pins = {0}`). This is deliberate — a multi-output node like `atom_edit` should not draw both `result` and `diff` at once. Override `default_display_all_output_pins() -> true` for a node whose every output is worth showing on creation; the three unpack nodes do this so users can hover-inspect every unpacked value immediately. It is **safe only when the outputs draw no viewport geometry** — `LatticeVecs`/`Motif`/`Vec3`/`Float`/`Structure` all fall through `convert_result_to_node_output` to `NodeOutput::None`, so the eye toggle merely gates the per-pin hover readout, with no clutter. `StructureDesigner::apply_default_all_pin_display` consults this hook in both add paths (top-level + scoped) *after* the display-policy pass; both display setters preserve an existing `displayed_pins` set, so the policy never clobbers it. (It augments only a node the policy is already showing — it does not force-show a hidden node.) Backend-only; the Flutter side already renders each pin's eye from `NodeView.displayed_pins`.
 
 ### Drag-Aware Add Node
 

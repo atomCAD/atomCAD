@@ -3227,3 +3227,171 @@ mod multi_output_text_format_tests {
         assert_eq!(ad2_pin, Some(1), "ad2 should wire to pin 1 (diff)");
     }
 }
+
+/// Phase 4 (unpack nodes): the `.pinname` multi-output reference syntax already
+/// exists, so the three stateless destructure nodes (`structure_unpack`,
+/// `lattice_vecs_unpack`, `lattice_vecs_params`) round-trip through the text
+/// format with no parser/serializer change. These tests pin that down: a network
+/// wiring all three (with pin-1/pin-2 qualified references) parses → serializes →
+/// reparses to identical text, with wires landing on the right pins.
+mod unpack_nodes_text_format_tests {
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+    use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
+
+    fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+        let mut designer = StructureDesigner::new();
+        designer.add_node_network(network_name);
+        designer.set_active_node_network_name(Some(network_name.to_string()));
+        designer
+    }
+
+    fn edit_designer_network(
+        designer: &mut StructureDesigner,
+        network_name: &str,
+        code: &str,
+        replace: bool,
+    ) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove(network_name)
+            .unwrap();
+        let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert(network_name.to_string(), network);
+        result
+    }
+
+    /// A network exercising all three unpack nodes:
+    ///   - `structure_unpack` feeds its `lattice_vecs` (pin 0, unqualified),
+    ///     `motif` (pin 1) and `motif_offset` (pin 2) into a rebuilt `structure`.
+    ///   - `lattice_vecs_unpack` feeds `a` (pin 0), `b` (pin 1), `c` (pin 2) into a
+    ///     rebuilt `lattice_vecs`.
+    ///   - `lattice_vecs_params` is present (its Float outputs need no consumer).
+    ///
+    /// Parse → serialize → reparse must produce byte-identical text, and the
+    /// qualified (`.motif`, `.motif_offset`, `.b`, `.c`) wires must survive.
+    const NETWORK: &str = r#"
+        s = structure { }
+        su = structure_unpack { structure: s }
+        lvu = lattice_vecs_unpack { lattice_vecs: su }
+        lv2 = lattice_vecs { a: lvu, b: lvu.b, c: lvu.c }
+        s2 = structure { lattice_vecs: su, motif: su.motif, motif_offset: su.motif_offset }
+        lvp = lattice_vecs_params { lattice_vecs: su }
+        output s2
+    "#;
+
+    #[test]
+    fn test_unpack_nodes_text_roundtrip_identical() {
+        let mut designer = setup_designer_with_network("net");
+        let result = edit_designer_network(&mut designer, "net", NETWORK, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("net")
+            .unwrap();
+        let serialized = serialize_network(network, &designer.node_type_registry, None);
+
+        // Qualified pin references survive serialization.
+        assert!(
+            serialized.contains("su.motif"),
+            "Should serialize structure_unpack pin-1 ref 'su.motif', got:\n{serialized}"
+        );
+        assert!(
+            serialized.contains("su.motif_offset"),
+            "Should serialize structure_unpack pin-2 ref 'su.motif_offset', got:\n{serialized}"
+        );
+        assert!(
+            serialized.contains("lvu.b") && serialized.contains("lvu.c"),
+            "Should serialize lattice_vecs_unpack pin-1/2 refs 'lvu.b'/'lvu.c', got:\n{serialized}"
+        );
+
+        // Reparse into a fresh network and serialize again — must be identical.
+        let mut designer2 = setup_designer_with_network("net2");
+        let result2 = edit_designer_network(&mut designer2, "net2", &serialized, true);
+        assert!(
+            result2.success,
+            "Reparse should succeed: {:?}",
+            result2.errors
+        );
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("net2")
+            .unwrap();
+        let serialized2 = serialize_network(network2, &designer2.node_type_registry, None);
+        assert_eq!(
+            serialized, serialized2,
+            "Double roundtrip should produce identical text"
+        );
+    }
+
+    #[test]
+    fn test_unpack_nodes_text_roundtrip_wires_land_on_pins() {
+        let mut designer = setup_designer_with_network("net");
+        let result = edit_designer_network(&mut designer, "net", NETWORK, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("net")
+            .unwrap();
+        let id_of = |name: &str| -> u64 {
+            network
+                .nodes
+                .iter()
+                .find(|(_, n)| n.custom_name.as_deref() == Some(name))
+                .map(|(&id, _)| id)
+                .unwrap_or_else(|| panic!("node '{name}' not found"))
+        };
+
+        let su = id_of("su");
+        let lvu = id_of("lvu");
+        let s2 = id_of("s2");
+        let lv2 = id_of("lv2");
+
+        // The `structure` constructor's parameters are
+        // [structure(0), lattice_vecs(1), motif(2), motif_offset(3)], so the named
+        // props land on args 1/2/3. Source pins on structure_unpack are
+        // lattice_vecs(0), motif(1), motif_offset(2).
+        let s2_node = network.nodes.get(&s2).unwrap();
+        assert_eq!(
+            s2_node.arguments[1].get_source_pin(su),
+            Some(0),
+            "structure.lattice_vecs should read structure_unpack pin 0"
+        );
+        assert_eq!(
+            s2_node.arguments[2].get_source_pin(su),
+            Some(1),
+            "structure.motif should read structure_unpack pin 1"
+        );
+        assert_eq!(
+            s2_node.arguments[3].get_source_pin(su),
+            Some(2),
+            "structure.motif_offset should read structure_unpack pin 2"
+        );
+
+        // lv2 = lattice_vecs { a: lvu (pin 0), b: lvu.b (pin 1), c: lvu.c (pin 2) }
+        let lv2_node = network.nodes.get(&lv2).unwrap();
+        assert_eq!(
+            lv2_node.arguments[0].get_source_pin(lvu),
+            Some(0),
+            "lattice_vecs.a should read lattice_vecs_unpack pin 0"
+        );
+        assert_eq!(
+            lv2_node.arguments[1].get_source_pin(lvu),
+            Some(1),
+            "lattice_vecs.b should read lattice_vecs_unpack pin 1"
+        );
+        assert_eq!(
+            lv2_node.arguments[2].get_source_pin(lvu),
+            Some(2),
+            "lattice_vecs.c should read lattice_vecs_unpack pin 2"
+        );
+    }
+}

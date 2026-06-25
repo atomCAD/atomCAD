@@ -82,6 +82,10 @@ impl NodeData for LatticeVecsParamsData {
         Box::new(self.clone())
     }
 
+    fn default_display_all_output_pins(&self) -> bool {
+        true
+    }
+
     fn get_subtitle(
         &self,
         _connected_input_pins: &std::collections::HashSet<String>,

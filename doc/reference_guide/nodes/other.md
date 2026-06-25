@@ -27,6 +27,42 @@ Produces a `LatticeVecs` value representing the three lattice basis vectors defi
 
 ![](../../atomCAD_images/unit_cell_props.png)
 
+## lattice_vecs_unpack
+
+The inverse of the `lattice_vecs` constructor (vector form): reads the three stored basis vectors back out of a `LatticeVecs` value. `LatticeVecs` is a built-in (non-record) type, so this dedicated *unpack* node is how you recover its fields — there is no `record_destructure` for it.
+
+**Input pin**
+
+- `lattice_vecs: LatticeVecs` (optional) — the value to unpack. When unconnected, every output pin emits nothing (no default is substituted; wire a `lattice_vecs` node if you want diamond defaults).
+
+**Output pins**
+
+- `a`, `b`, `c` — the three basis vectors, each a `Vec3`.
+
+**Notes**
+
+- All output pins are shown by default when you drop this node, so you can hover any pin to read its value immediately. (The outputs draw nothing in the viewport; the eye toggle only governs the per-pin hover readout.)
+
+## lattice_vecs_params
+
+The inverse of the `lattice_vecs` constructor (crystallographic-parameter form): reads the cell parameters out of a `LatticeVecs` value. It does no geometry — `LatticeVecs` stores both the basis vectors and the parameters consistently, so this node just reads the stored fields.
+
+**Input pin**
+
+- `lattice_vecs: LatticeVecs` (optional) — the value to unpack. When unconnected, every output pin emits nothing.
+
+**Output pins**
+
+- `a`, `b`, `c` — the cell edge lengths, each a `Float`.
+- `alpha`, `beta`, `gamma` — the cell angles in **degrees** (`alpha = b∠c`, `beta = a∠c`, `gamma = a∠b`), each a `Float`.
+- `lengths` — the three lengths packed as a single `Vec3` `(a, b, c)` for convenient single-wire access.
+- `angles` — the three angles packed as a single `Vec3` `(α, β, γ)`.
+
+**Notes**
+
+- The `a`/`b`/`c` letters here are the **lengths** (Floats); on `lattice_vecs_unpack` the same letters are the **basis vectors** (Vec3s). The node names disambiguate.
+- All output pins are shown by default (see `lattice_vecs_unpack`).
+
 ## structure
 
 Constructs or modifies a `Structure` value — the bundle of lattice vectors, motif, and motif offset that defines the infinite crystal field used by every blueprint and crystal. All four input pins are optional.
@@ -50,6 +86,28 @@ A single `Structure` value. When the `structure` input is unconnected and a part
 - Override one field: wire the upstream `Structure` into `structure` and only the field you want to change. Untouched fields pass through.
 
 A `Structure` value is what the geometry primitives (`cuboid`, `sphere`, `extrude`, …) consume implicitly to interpret their integer coordinates. To swap the structure carried by a `Blueprint` further down the chain, use `with_structure`.
+
+## structure_unpack
+
+The inverse of the `structure` constructor: reads the three components back out of a `Structure` value. Note the distinction from `get_structure` — `get_structure` extracts a whole `Structure` *from a Blueprint/Crystal*, whereas `structure_unpack` takes a `Structure` *value* and splits it into its parts.
+
+**Input pin**
+
+- `structure: Structure` (optional) — the value to unpack. When unconnected, every output pin emits nothing (no diamond default is substituted; wire a `structure` node if you want defaults).
+
+**Output pins**
+
+- `lattice_vecs: LatticeVecs` — the structure's lattice vectors.
+- `motif: Motif` — the structure's motif.
+- `motif_offset: Vec3` — the fractional motif offset.
+
+**Typical use**
+
+The headline use case — reading the three basis vectors of a structure — is the composition `structure_unpack` → `lattice_vecs_unpack`: unpack a `Structure` into its `lattice_vecs`, then unpack that into `a`, `b`, `c`.
+
+**Notes**
+
+- All output pins are shown by default (see `lattice_vecs_unpack`).
 
 ## get_structure
 

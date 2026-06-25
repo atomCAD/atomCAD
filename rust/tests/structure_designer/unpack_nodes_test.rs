@@ -510,3 +510,64 @@ fn test_structure_unpack_no_input_yields_none() {
         }
     }
 }
+
+// ============================================================================
+// Default pin display: the unpack nodes opt into showing ALL output pins on
+// creation (their outputs draw no viewport geometry, so every value is
+// hover-inspectable immediately). Regular nodes keep the pin-0-only default.
+// ============================================================================
+
+/// Returns the sorted set of displayed output pin indices for a top-level node.
+fn displayed_pins_sorted(
+    designer: &StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+) -> Vec<i32> {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let mut pins: Vec<i32> = network
+        .get_displayed_pins(node_id)
+        .expect("node should be displayed")
+        .iter()
+        .copied()
+        .collect();
+    pins.sort();
+    pins
+}
+
+#[test]
+fn test_lattice_vecs_unpack_displays_all_pins_on_add() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("lattice_vecs_unpack", DVec2::new(0.0, 0.0));
+    assert_eq!(displayed_pins_sorted(&designer, "test", id), vec![0, 1, 2]);
+}
+
+#[test]
+fn test_lattice_vecs_params_displays_all_pins_on_add() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("lattice_vecs_params", DVec2::new(0.0, 0.0));
+    assert_eq!(
+        displayed_pins_sorted(&designer, "test", id),
+        vec![0, 1, 2, 3, 4, 5, 6, 7]
+    );
+}
+
+#[test]
+fn test_structure_unpack_displays_all_pins_on_add() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("structure_unpack", DVec2::new(0.0, 0.0));
+    assert_eq!(displayed_pins_sorted(&designer, "test", id), vec![0, 1, 2]);
+}
+
+/// Control: a regular multi-pin node is unaffected — it keeps the pin-0-only
+/// default. `atom_edit` has two output pins (`result`, `diff`); only pin 0
+/// should be displayed on add.
+#[test]
+fn test_regular_node_displays_only_pin_0_on_add() {
+    let mut designer = setup_designer_with_network("test");
+    let id = designer.add_node("atom_edit", DVec2::new(0.0, 0.0));
+    assert_eq!(displayed_pins_sorted(&designer, "test", id), vec![0]);
+}
