@@ -4476,6 +4476,9 @@ pub fn get_patch_latticefill_data(
                 Some(APIPatchLatticeFillData {
                     passivate: data.passivate,
                     tolerance: data.tolerance,
+                    test_height_at_origin: data.test_height_at_origin,
+                    debug_project_to_test_plane: data.debug_project_to_test_plane,
+                    debug_show_frontier_tiles: data.debug_show_frontier_tiles,
                     report,
                 })
             },
@@ -6031,6 +6034,9 @@ pub fn set_patch_latticefill_data(
             let patch_data = Box::new(PatchLatticeFillData {
                 passivate: data.passivate,
                 tolerance: data.tolerance,
+                test_height_at_origin: data.test_height_at_origin,
+                debug_project_to_test_plane: data.debug_project_to_test_plane,
+                debug_show_frontier_tiles: data.debug_show_frontier_tiles,
                 ..Default::default()
             });
 

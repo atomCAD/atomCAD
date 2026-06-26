@@ -2434,6 +2434,19 @@ class APIPatchLatticeFillData {
   /// Weld tolerance in Å.
   final double tolerance;
 
+  /// Cell-selection test height: `true` (default) uses the lattice origin's
+  /// height; `false` derives it from the target slab (robust to an offset
+  /// target).
+  final bool testHeightAtOrigin;
+
+  /// Debug: project the placed patch atoms onto the cell-selection test plane
+  /// (no weld/passivation). Non-physical; for understanding cell selection.
+  final bool debugProjectToTestPlane;
+
+  /// Debug: also place the one-cell-wider frontier of tiles, flagging the
+  /// excluded neighbours frozen so they are visible.
+  final bool debugShowFrontierTiles;
+
   /// Compatibility stats from the last successful evaluation, or `None` if the
   /// node has not evaluated yet (or the last evaluation errored).
   final APICompatibilityReport? report;
@@ -2441,11 +2454,20 @@ class APIPatchLatticeFillData {
   const APIPatchLatticeFillData({
     required this.passivate,
     required this.tolerance,
+    required this.testHeightAtOrigin,
+    required this.debugProjectToTestPlane,
+    required this.debugShowFrontierTiles,
     this.report,
   });
 
   @override
-  int get hashCode => passivate.hashCode ^ tolerance.hashCode ^ report.hashCode;
+  int get hashCode =>
+      passivate.hashCode ^
+      tolerance.hashCode ^
+      testHeightAtOrigin.hashCode ^
+      debugProjectToTestPlane.hashCode ^
+      debugShowFrontierTiles.hashCode ^
+      report.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2454,6 +2476,9 @@ class APIPatchLatticeFillData {
           runtimeType == other.runtimeType &&
           passivate == other.passivate &&
           tolerance == other.tolerance &&
+          testHeightAtOrigin == other.testHeightAtOrigin &&
+          debugProjectToTestPlane == other.debugProjectToTestPlane &&
+          debugShowFrontierTiles == other.debugShowFrontierTiles &&
           report == other.report;
 }
 

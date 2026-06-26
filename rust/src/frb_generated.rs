@@ -12732,10 +12732,13 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_passivate = <bool>::sse_decode(deserializer);
         let mut var_tolerance = <f64>::sse_decode(deserializer);
+        let mut var_testHeightAtOrigin = <bool>::sse_decode(deserializer);
+        let mut var_debugProjectToTestPlane = <bool>::sse_decode(deserializer);
+        let mut var_debugShowFrontierTiles = <bool>::sse_decode(deserializer);
         let mut var_report = <Option<
             crate::api::structure_designer::structure_designer_api_types::APICompatibilityReport,
         >>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIPatchLatticeFillData{passivate: var_passivate, tolerance: var_tolerance, report: var_report};
+        return crate::api::structure_designer::structure_designer_api_types::APIPatchLatticeFillData{passivate: var_passivate, tolerance: var_tolerance, test_height_at_origin: var_testHeightAtOrigin, debug_project_to_test_plane: var_debugProjectToTestPlane, debug_show_frontier_tiles: var_debugShowFrontierTiles, report: var_report};
     }
 }
 
@@ -18530,6 +18533,11 @@ impl flutter_rust_bridge::IntoDart
         [
             self.passivate.into_into_dart().into_dart(),
             self.tolerance.into_into_dart().into_dart(),
+            self.test_height_at_origin.into_into_dart().into_dart(),
+            self.debug_project_to_test_plane
+                .into_into_dart()
+                .into_dart(),
+            self.debug_show_frontier_tiles.into_into_dart().into_dart(),
             self.report.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -21649,6 +21657,9 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.passivate, serializer);
         <f64>::sse_encode(self.tolerance, serializer);
+        <bool>::sse_encode(self.test_height_at_origin, serializer);
+        <bool>::sse_encode(self.debug_project_to_test_plane, serializer);
+        <bool>::sse_encode(self.debug_show_frontier_tiles, serializer);
         <Option<
             crate::api::structure_designer::structure_designer_api_types::APICompatibilityReport,
         >>::sse_encode(self.report, serializer);

@@ -80,6 +80,25 @@ pub struct PatchLatticeFillData {
     /// Weld tolerance in Å (default 0.1).
     #[serde(default = "default_tolerance")]
     pub tolerance: f64,
+    /// Cell-selection test height: when `true` (default), project test atoms onto
+    /// the periodic subspace through the **lattice origin** (height 0 along each
+    /// non-periodic direction) — simple and predictable, correct when the target
+    /// straddles the origin along the normal. When `false`, derive the height
+    /// from the **target** slab's own extent (robust to a target offset from the
+    /// origin, e.g. a thin slab at a non-zero height). See
+    /// `doc/design_patch_cell_selection.md`.
+    #[serde(default = "default_true")]
+    pub test_height_at_origin: bool,
+    /// Debug: place the patch atoms at their projected positions on the test
+    /// plane (in-plane kept, normal = centre depth), with no cut/weld — shows
+    /// exactly what cell selection tests. Non-physical; default false.
+    #[serde(default)]
+    pub debug_project_to_test_plane: bool,
+    /// Debug: also place the one-cell-wider frontier of tiles (Cartesian product
+    /// of the selected index ranges ±1), flagging the not-selected ones frozen,
+    /// so the excluded neighbours are visible. Default false.
+    #[serde(default)]
+    pub debug_show_frontier_tiles: bool,
     /// Compatibility stats from the most recent successful evaluation (§6),
     /// surfaced to the property panel as a compatibility badge. Interior
     /// mutability because `eval` takes `&self`; transient (not serialized) and
@@ -101,6 +120,9 @@ impl Default for PatchLatticeFillData {
         Self {
             passivate: true,
             tolerance: DEFAULT_WELD_TOLERANCE,
+            test_height_at_origin: true,
+            debug_project_to_test_plane: false,
+            debug_show_frontier_tiles: false,
             last_report: RefCell::new(None),
         }
     }
@@ -142,76 +164,103 @@ fn free_directions(periodic_real: &[DVec3]) -> Vec<DVec3> {
     free
 }
 
-/// The 2^n corners of the cell parallelepiped at anchor `t` spanned by the real
-/// tiling vectors (the tile's periodic footprint — §5).
-fn footprint_corners(t: DVec3, periodic_real: &[DVec3]) -> Vec<DVec3> {
-    let n = periodic_real.len();
-    let mut corners = Vec::with_capacity(1usize << n);
-    for mask in 0u32..(1u32 << n) {
-        let mut p = t;
-        for (i, rv) in periodic_real.iter().enumerate() {
-            if mask & (1 << i) != 0 {
-                p += *rv;
+/// A selected cell: its integer step indices `k` (one per tiling vector, needed
+/// to box the frontier in the debug view) and the resulting lattice offset.
+pub struct SelectedCell {
+    pub k: Vec<i32>,
+    pub offset: IVec3,
+}
+
+/// Per free (non-periodic) direction, the midpoint of the **target** atoms'
+/// min/max projection onto that direction. This is the one axis of an oriented
+/// bounding box that matters for choosing a test height: measured along the real
+/// normal (not global XYZ), it always lands between the slab's bottom and top
+/// layers, so it is inside a prismatic region regardless of how the slab is
+/// tilted. Returns `0.0` for a direction with no target atoms. See
+/// `doc/design_patch_cell_selection.md`.
+pub fn region_center_depths(target: &AtomicStructure, free_dirs: &[DVec3]) -> Vec<f64> {
+    free_dirs
+        .iter()
+        .map(|d| {
+            let mut lo = f64::INFINITY;
+            let mut hi = f64::NEG_INFINITY;
+            for atom in target.atoms_values() {
+                let t = atom.position.dot(*d);
+                lo = lo.min(t);
+                hi = hi.max(t);
             }
-        }
-        corners.push(p);
-    }
-    corners
+            if lo.is_finite() { 0.5 * (lo + hi) } else { 0.0 }
+        })
+        .collect()
 }
 
-/// Tests whether a footprint corner is inside the region's *shadow* — its
-/// projection onto the periodic subspace lies in the region, free along the
-/// non-periodic direction(s). Implemented by sliding the corner along the free
-/// directions to the region's centre plane (exact for convex prismatic regions)
-/// and testing the region there (§5, "projected containment").
-fn corner_in_region_shadow(
-    corner: DVec3,
-    free_dirs: &[DVec3],
-    region_center: DVec3,
-    region_volume: Option<&GeoNode>,
-    region_bounds: &DAABox,
-) -> bool {
-    let mut sample = corner;
-    for d in free_dirs {
-        // Replace `sample`'s component along `d` with `region_center`'s.
-        sample += *d * (region_center - sample).dot(*d);
+/// Projects a point onto the test plane: in-plane coordinates kept, each
+/// non-periodic component overwritten with the region's centre depth along that
+/// direction. This is how "ignore how far it sticks out along the normal" is
+/// realized — the normal coordinate is replaced by a height known to be inside
+/// the region.
+fn project_to_test_plane(p: DVec3, free_dirs: &[DVec3], center_depths: &[f64]) -> DVec3 {
+    let mut s = p;
+    for (d, depth) in free_dirs.iter().zip(center_depths.iter()) {
+        s += *d * (*depth - s.dot(*d));
     }
+    s
+}
+
+/// True if `s` is inside the region (`region_volume` SDF when present, else the
+/// bounding box).
+fn point_in_region(s: DVec3, region_volume: Option<&GeoNode>, region_bounds: &DAABox) -> bool {
     match region_volume {
-        Some(geo) => geo.implicit_eval_3d(&sample) <= 0.0,
-        None => region_bounds.contains_point(sample),
+        Some(geo) => geo.implicit_eval_3d(&s) <= 0.0,
+        None => region_bounds.contains_point(s),
     }
 }
 
-/// Selects the cell **offsets** `o = origin + Σ kᵢ·vᵢ` that receive a tile:
-/// those whose footprint, projected onto the periodic subspace, lies fully
-/// inside the region (whole-cell containment in the periodic directions, free
-/// along the non-periodic ones — §5). The patch's tile keeps its authored
-/// coordinates, so its one-cell footprint sits at `tile_anchor` (the tile's
-/// reference lattice point, in absolute real space); offset `o` slides it by
-/// `o`'s real translation. `origin` is the user's whole-cell offset (default
-/// zero = as authored). `region_bounds` bounds the integer search;
-/// `region_volume` (when present) is the actual containment gate.
+/// Selects the cells `o = origin + Σ kᵢ·vᵢ` that receive a tile: those whose
+/// **interior atoms**, placed at the cell and projected onto the test plane,
+/// **all** lie inside the region (whole-cell containment in the periodic
+/// directions, free along the non-periodic ones — §5). The atoms carry both the
+/// real tile shape and its true position, so there is no synthetic anchor and no
+/// rhombus approximation. `origin` is the user's whole-cell offset (default zero
+/// = as authored). `region_bounds` bounds the integer search; `region_volume`
+/// (when present) is the actual containment gate. Returns each cell with its
+/// step indices `k` (needed to box the frontier debug view).
 ///
-/// Public for node-free testing of the containment rule (§9 Phase 3 test 5).
+/// Public for node-free testing of the containment rule.
+/// See `doc/design_patch_cell_selection.md`.
+#[allow(clippy::too_many_arguments)]
 pub fn select_patch_cells(
     origin: IVec3,
-    tile_anchor: DVec3,
     tiling_vectors: &[IVec3],
     region_lattice: &UnitCellStruct,
     region_volume: Option<&GeoNode>,
     region_bounds: &DAABox,
-) -> Vec<IVec3> {
+    interior_positions: &[DVec3],
+    free_dirs: &[DVec3],
+    center_depths: &[f64],
+) -> Vec<SelectedCell> {
+    // No interior atoms → nothing to sample the cut footprint with (a purely
+    // subtractive patch would need cut-SDF sampling, not implemented). Select
+    // nothing rather than vacuously selecting every cell.
+    if interior_positions.is_empty() {
+        return Vec::new();
+    }
+
     let periodic_real: Vec<DVec3> = tiling_vectors
         .iter()
         .map(|v| region_lattice.ivec3_lattice_to_real(v))
         .collect();
-    let free_dirs = free_directions(&periodic_real);
     let region_center = region_bounds.center();
     let diag = region_bounds.size().length();
-    // The authored anchor may sit anywhere relative to the region (e.g. a small
-    // patch applied to a large workpiece); widen the integer search so the
-    // tiling can reach the region from the anchor.
-    let anchor_to_center = (region_center - tile_anchor).length();
+    // Centroid of the interior atoms — the reference for bounding the integer
+    // search so the tiling can reach the region even when the authored patch is
+    // far from it (small patch, large workpiece).
+    let centroid = if interior_positions.is_empty() {
+        DVec3::ZERO
+    } else {
+        interior_positions.iter().copied().sum::<DVec3>() / interior_positions.len() as f64
+    };
+    let centroid_to_center = (region_center - centroid).length();
 
     // Bound |kᵢ| by how many tiling steps could possibly land inside the search
     // box, plus a margin cell.
@@ -222,7 +271,7 @@ pub fn select_patch_cells(
             if len < 1e-9 {
                 0
             } else {
-                ((diag + anchor_to_center) / len).ceil() as i32 + 1
+                ((diag + centroid_to_center) / len).ceil() as i32 + 1
             }
         })
         .collect();
@@ -233,53 +282,70 @@ pub fn select_patch_cells(
         for (ki, v) in k.iter().zip(tiling_vectors.iter()) {
             o += *v * *ki;
         }
-        // The placed tile's footprint is its authored footprint translated by
-        // the offset's real-space vector.
-        let t = tile_anchor + region_lattice.ivec3_lattice_to_real(&o);
-        let corners = footprint_corners(t, &periodic_real);
-        let inside = corners.iter().all(|corner| {
-            corner_in_region_shadow(
-                *corner,
-                &free_dirs,
-                region_center,
-                region_volume,
-                region_bounds,
-            )
+        let place = region_lattice.ivec3_lattice_to_real(&o);
+        let inside = interior_positions.iter().all(|p| {
+            let s = project_to_test_plane(*p + place, free_dirs, center_depths);
+            point_in_region(s, region_volume, region_bounds)
         });
         if inside {
-            cells.push(o);
+            cells.push(SelectedCell { k, offset: o });
         }
     }
     cells
 }
 
-/// The tile's reference lattice point in real space: the floored min corner of
-/// the tile's **real** (non-ghost) atoms — i.e. the interior atoms — snapped to
-/// a lattice point. The tile keeps its authored coordinates, so its one-cell
-/// periodic footprint is anchored here; cell selection tests the footprint at
-/// `tile_anchor + offset` (§5). Returns the origin when the tile has no real
-/// atoms.
-fn tile_reference_anchor(tile: &AtomicStructure, lattice: &UnitCellStruct) -> DVec3 {
-    let mut min_real: Option<DVec3> = None;
-    for atom in tile.atoms_values() {
-        if atom.is_patch_ghost() {
-            continue;
-        }
-        min_real = Some(match min_real {
-            Some(m) => m.min(atom.position),
-            None => atom.position,
-        });
+/// The **frontier** cells for the debug view: the Cartesian product of each
+/// periodic direction's selected-index range widened by one (`[min−1, max+1]`),
+/// minus the cells that were actually selected. Empty when nothing was selected.
+fn compute_frontier(
+    selected: &[SelectedCell],
+    origin: IVec3,
+    tiling_vectors: &[IVec3],
+) -> Vec<IVec3> {
+    if selected.is_empty() {
+        return Vec::new();
     }
-    let Some(min_real) = min_real else {
-        return DVec3::ZERO;
-    };
-    let min_lattice = lattice.real_to_dvec3_lattice(&min_real);
-    let cell = IVec3::new(
-        min_lattice.x.floor() as i32,
-        min_lattice.y.floor() as i32,
-        min_lattice.z.floor() as i32,
-    );
-    lattice.ivec3_lattice_to_real(&cell)
+    let dims = tiling_vectors.len();
+    let mut mins = vec![i32::MAX; dims];
+    let mut maxs = vec![i32::MIN; dims];
+    for c in selected {
+        for i in 0..dims {
+            mins[i] = mins[i].min(c.k[i]);
+            maxs[i] = maxs[i].max(c.k[i]);
+        }
+    }
+    for i in 0..dims {
+        mins[i] -= 1;
+        maxs[i] += 1;
+    }
+    let selected_keys: std::collections::HashSet<Vec<i32>> =
+        selected.iter().map(|c| c.k.clone()).collect();
+
+    // Cartesian product of the widened ranges.
+    let mut tuples: Vec<Vec<i32>> = vec![vec![]];
+    for i in 0..dims {
+        let mut next = Vec::new();
+        for prefix in &tuples {
+            for ki in mins[i]..=maxs[i] {
+                let mut t = prefix.clone();
+                t.push(ki);
+                next.push(t);
+            }
+        }
+        tuples = next;
+    }
+
+    tuples
+        .into_iter()
+        .filter(|k| !selected_keys.contains(k))
+        .map(|k| {
+            let mut o = origin;
+            for (ki, v) in k.iter().zip(tiling_vectors.iter()) {
+                o += *v * *ki;
+            }
+            o
+        })
+        .collect()
 }
 
 /// Enumerates every integer tuple `k` with `kᵢ ∈ [-bounds[i], bounds[i]]`.
@@ -337,9 +403,46 @@ fn count_overcoordinated(structure: &AtomicStructure) -> usize {
         .count()
 }
 
+/// Places a copy of `tile` at offset `o` for a debug view: optionally projected
+/// onto the test plane and/or flagged frozen. Used only by the debug branches of
+/// `apply_patch` (see `doc/design_patch_cell_selection.md`).
+#[allow(clippy::too_many_arguments)]
+fn place_debug_tile(
+    out: &mut AtomicStructure,
+    tile: &AtomicStructure,
+    o: &IVec3,
+    region_lattice: &UnitCellStruct,
+    project: bool,
+    free_dirs: &[DVec3],
+    center_depths: &[f64],
+    frozen: bool,
+) {
+    let t = region_lattice.ivec3_lattice_to_real(o);
+    let mut copy = tile.clone();
+    copy.transform(&DQuat::IDENTITY, &t);
+    if project || frozen {
+        let ids: Vec<u32> = copy.atom_ids().copied().collect();
+        for id in ids {
+            if project {
+                let p = copy.get_atom(id).expect("placed atom").position;
+                copy.set_atom_position(id, project_to_test_plane(p, free_dirs, center_depths));
+            }
+            if frozen {
+                copy.set_atom_frozen(id, true);
+            }
+        }
+    }
+    out.add_atomic_structure(&copy);
+}
+
 /// Applies a patch over a region (§5). `region_volume` is the containment SDF
 /// (`None` → fall back to `region_bounds`); `region_bounds` bounds the integer
 /// cell search. Returns the reconstructed atoms plus a [`CompatibilityReport`].
+///
+/// `debug_project` / `debug_frontier` enable the two debug visualizations; both
+/// leave the [`CompatibilityReport`] computed from the real (non-debug) weld of
+/// the selected cells, so the badge stays truthful. See
+/// `doc/design_patch_cell_selection.md`.
 ///
 /// This is the node-free core so the model is testable on plain
 /// `AtomicStructure`s without the node-network machinery.
@@ -355,31 +458,51 @@ pub fn apply_patch(
     origin: IVec3,
     passivate: bool,
     tolerance: f64,
+    test_height_at_origin: bool,
+    debug_project: bool,
+    debug_frontier: bool,
 ) -> (AtomicStructure, CompatibilityReport) {
-    // The tile keeps its authored coordinates; cell selection works in offsets
-    // from that authored registration, anchored at the tile's reference point.
-    let tile_anchor = tile_reference_anchor(tile, region_lattice);
-    let cells = select_patch_cells(
+    // Test-plane frame: the periodic subspace is spanned by the tiling vectors;
+    // the free (non-periodic) directions are its complement. The centre depth
+    // along each is either the lattice origin's height (0 — simple, default) or
+    // the target slab's own mid-height (robust to a target offset from the
+    // origin along the normal). See doc/design_patch_cell_selection.md.
+    let periodic_real: Vec<DVec3> = tiling_vectors
+        .iter()
+        .map(|v| region_lattice.ivec3_lattice_to_real(v))
+        .collect();
+    let free_dirs = free_directions(&periodic_real);
+    let center_depths = if test_height_at_origin {
+        vec![0.0; free_dirs.len()]
+    } else {
+        region_center_depths(target, &free_dirs)
+    };
+    let interior_positions: Vec<DVec3> = tile
+        .atoms_values()
+        .filter(|a| !a.is_patch_ghost())
+        .map(|a| a.position)
+        .collect();
+
+    let selected = select_patch_cells(
         origin,
-        tile_anchor,
         tiling_vectors,
         region_lattice,
         region_volume,
         region_bounds,
+        &interior_positions,
+        &free_dirs,
+        &center_depths,
     );
+    let selected_offsets: Vec<IVec3> = selected.iter().map(|c| c.offset).collect();
 
+    // ---- Real pipeline on the selected cells (drives both the result and the
+    //      report; the report is captured here even in debug modes). ----
     let mut result = target.clone();
-
     let ghosts_per_tile = tile.atoms_values().filter(|a| a.is_patch_ghost()).count();
-    let total_placed_ghosts = ghosts_per_tile * cells.len();
+    let total_placed_ghosts = ghosts_per_tile * selected_offsets.len();
 
     // Step 3 — Cut: remove substrate atoms inside the translated cut_volume.
-    // Runs before any tile is placed, so only substrate atoms are removed. Each
-    // cell is an offset `o` from the authored registration; the cut volume
-    // (in authored coordinates) translated by `o` evaluates as `cut_volume(p - t)`.
-    // At the default offset (zero) this removes exactly the surface the
-    // reconstruction was drawn to displace.
-    for o in &cells {
+    for o in &selected_offsets {
         let t = region_lattice.ivec3_lattice_to_real(o);
         let to_remove: Vec<u32> = result
             .iter_atoms()
@@ -393,10 +516,8 @@ pub fn apply_patch(
         }
     }
 
-    // Step 4 — Place: add a copy of the tile translated by each offset. At the
-    // default offset (zero) the copy lands exactly where it was authored. The
-    // patch-ghost flag rides along (`add_atomic_structure` copies all flags).
-    for o in &cells {
+    // Step 4 — Place: add a copy of the tile translated by each offset.
+    for o in &selected_offsets {
         let t = region_lattice.ivec3_lattice_to_real(o);
         let mut copy = tile.clone();
         copy.transform(&DQuat::IDENTITY, &t);
@@ -404,8 +525,6 @@ pub fn apply_patch(
     }
 
     // Step 5 — Weld: fuse tile↔tile (periodic) and tile↔bulk (collar) at once.
-    // A weld touching any real atom yields a real survivor (the ghost flag is
-    // cleared); a cluster of only patch-ghosts stays a patch-ghost.
     weld_coincident_atoms(&mut result, tolerance);
 
     // §6 stats: any atom still flagged patch-ghost found no real twin.
@@ -413,8 +532,7 @@ pub fn apply_patch(
     let welded_ghosts = total_placed_ghosts.saturating_sub(orphaned_ghosts);
     let overcoordinated_atoms = count_overcoordinated(&result);
 
-    // Step 6 — Drop unwelded patch-ghosts (true reconstruction edges / collars
-    // with no substrate partner), leaving a dangling bond on the boundary atom.
+    // Step 6 — Drop unwelded patch-ghosts, leaving a dangling bond.
     let to_drop: Vec<u32> = result
         .iter_atoms()
         .filter(|(_, a)| a.is_patch_ghost())
@@ -424,7 +542,7 @@ pub fn apply_patch(
         result.delete_atom(id);
     }
 
-    // Step 7 — Passivate the residual danglers (reuses the general H passivation).
+    // Step 7 — Passivate the residual danglers.
     if passivate {
         add_hydrogens(&mut result, &AddHydrogensOptions::default());
     }
@@ -434,7 +552,68 @@ pub fn apply_patch(
         orphaned_ghosts,
         overcoordinated_atoms,
     };
-    (result, report)
+
+    if !debug_project && !debug_frontier {
+        return (result, report);
+    }
+
+    // ---- Debug visualizations (output only; the report above is preserved) ----
+    let frontier_offsets = if debug_frontier {
+        compute_frontier(&selected, origin, tiling_vectors)
+    } else {
+        Vec::new()
+    };
+
+    let output = if debug_project {
+        // Footprint view: target atoms (unprojected) + the selected and frontier
+        // tiles flattened onto the test plane; frontier tiles flagged frozen. No
+        // cut, no weld — this shows exactly what the inclusion test sees.
+        let mut out = target.clone();
+        for o in &selected_offsets {
+            place_debug_tile(
+                &mut out,
+                tile,
+                o,
+                region_lattice,
+                true,
+                &free_dirs,
+                &center_depths,
+                false,
+            );
+        }
+        for o in &frontier_offsets {
+            place_debug_tile(
+                &mut out,
+                tile,
+                o,
+                region_lattice,
+                true,
+                &free_dirs,
+                &center_depths,
+                true,
+            );
+        }
+        out
+    } else {
+        // Frontier overlay: the real welded result plus the excluded neighbour
+        // tiles placed raw and flagged frozen.
+        let mut out = result;
+        for o in &frontier_offsets {
+            place_debug_tile(
+                &mut out,
+                tile,
+                o,
+                region_lattice,
+                false,
+                &free_dirs,
+                &center_depths,
+                true,
+            );
+        }
+        out
+    };
+
+    (output, report)
 }
 
 // ============================================================================
@@ -651,6 +830,9 @@ impl NodeData for PatchLatticeFillData {
             origin,
             passivate,
             tolerance,
+            self.test_height_at_origin,
+            self.debug_project_to_test_plane,
+            self.debug_show_frontier_tiles,
         );
 
         // Cache the compatibility stats for the property-panel badge (§6).
@@ -680,6 +862,18 @@ impl NodeData for PatchLatticeFillData {
         vec![
             ("passivate".to_string(), TextValue::Bool(self.passivate)),
             ("tolerance".to_string(), TextValue::Float(self.tolerance)),
+            (
+                "test_height_at_origin".to_string(),
+                TextValue::Bool(self.test_height_at_origin),
+            ),
+            (
+                "debug_project_to_test_plane".to_string(),
+                TextValue::Bool(self.debug_project_to_test_plane),
+            ),
+            (
+                "debug_show_frontier_tiles".to_string(),
+                TextValue::Bool(self.debug_show_frontier_tiles),
+            ),
         ]
     }
 
@@ -693,6 +887,21 @@ impl NodeData for PatchLatticeFillData {
             self.tolerance = v
                 .as_float()
                 .ok_or_else(|| "tolerance must be a float".to_string())?;
+        }
+        if let Some(v) = props.get("test_height_at_origin") {
+            self.test_height_at_origin = v
+                .as_bool()
+                .ok_or_else(|| "test_height_at_origin must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("debug_project_to_test_plane") {
+            self.debug_project_to_test_plane = v
+                .as_bool()
+                .ok_or_else(|| "debug_project_to_test_plane must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("debug_show_frontier_tiles") {
+            self.debug_show_frontier_tiles = v
+                .as_bool()
+                .ok_or_else(|| "debug_show_frontier_tiles must be a boolean".to_string())?;
         }
         Ok(())
     }

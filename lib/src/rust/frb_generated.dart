@@ -14553,12 +14553,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIPatchLatticeFillData dco_decode_api_patch_lattice_fill_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return APIPatchLatticeFillData(
       passivate: dco_decode_bool(arr[0]),
       tolerance: dco_decode_f_64(arr[1]),
-      report: dco_decode_opt_box_autoadd_api_compatibility_report(arr[2]),
+      testHeightAtOrigin: dco_decode_bool(arr[2]),
+      debugProjectToTestPlane: dco_decode_bool(arr[3]),
+      debugShowFrontierTiles: dco_decode_bool(arr[4]),
+      report: dco_decode_opt_box_autoadd_api_compatibility_report(arr[5]),
     );
   }
 
@@ -18314,10 +18317,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_passivate = sse_decode_bool(deserializer);
     var var_tolerance = sse_decode_f_64(deserializer);
+    var var_testHeightAtOrigin = sse_decode_bool(deserializer);
+    var var_debugProjectToTestPlane = sse_decode_bool(deserializer);
+    var var_debugShowFrontierTiles = sse_decode_bool(deserializer);
     var var_report =
         sse_decode_opt_box_autoadd_api_compatibility_report(deserializer);
     return APIPatchLatticeFillData(
-        passivate: var_passivate, tolerance: var_tolerance, report: var_report);
+        passivate: var_passivate,
+        tolerance: var_tolerance,
+        testHeightAtOrigin: var_testHeightAtOrigin,
+        debugProjectToTestPlane: var_debugProjectToTestPlane,
+        debugShowFrontierTiles: var_debugShowFrontierTiles,
+        report: var_report);
   }
 
   @protected
@@ -22491,6 +22502,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.passivate, serializer);
     sse_encode_f_64(self.tolerance, serializer);
+    sse_encode_bool(self.testHeightAtOrigin, serializer);
+    sse_encode_bool(self.debugProjectToTestPlane, serializer);
+    sse_encode_bool(self.debugShowFrontierTiles, serializer);
     sse_encode_opt_box_autoadd_api_compatibility_report(
         self.report, serializer);
   }

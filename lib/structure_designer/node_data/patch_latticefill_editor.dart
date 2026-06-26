@@ -22,13 +22,23 @@ class PatchLatticeFillEditor extends StatelessWidget {
     required this.model,
   });
 
-  void _commit({bool? passivate, double? tolerance}) {
+  void _commit({
+    bool? passivate,
+    double? tolerance,
+    bool? testHeightAtOrigin,
+    bool? debugProject,
+    bool? debugFrontier,
+  }) {
     final current = data!;
     model.setPatchLatticefillData(
       nodeId,
       APIPatchLatticeFillData(
         passivate: passivate ?? current.passivate,
         tolerance: tolerance ?? current.tolerance,
+        testHeightAtOrigin: testHeightAtOrigin ?? current.testHeightAtOrigin,
+        debugProjectToTestPlane:
+            debugProject ?? current.debugProjectToTestPlane,
+        debugShowFrontierTiles: debugFrontier ?? current.debugShowFrontierTiles,
       ),
     );
   }
@@ -71,8 +81,50 @@ class PatchLatticeFillEditor extends StatelessWidget {
             'interatomic spacing so distinct sites never over-merge.',
             style: TextStyle(fontSize: 11, color: Colors.grey),
           ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            title: const Text('Test height at lattice origin'),
+            subtitle: const Text(
+              'Cell selection tests the patch footprint at the lattice origin '
+              "height. Uncheck to derive it from the target slab instead "
+              '(needed when the target is offset from the origin, e.g. a thin '
+              'slab at a non-zero height).',
+            ),
+            value: data!.testHeightAtOrigin,
+            onChanged: (value) => _commit(testHeightAtOrigin: value ?? true),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
           const SizedBox(height: 12),
           _CompatibilityBadge(report: data!.report),
+          const SizedBox(height: 12),
+          const Divider(),
+          const Text(
+            'Debug (cell selection)',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          ),
+          CheckboxListTile(
+            title: const Text('Project atoms to test plane'),
+            subtitle: const Text(
+              'Flatten the placed atoms onto the plane cell selection tests '
+              '(no weld). Shows why a tile was included. Non-physical.',
+            ),
+            value: data!.debugProjectToTestPlane,
+            onChanged: (value) => _commit(debugProject: value ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
+          CheckboxListTile(
+            title: const Text('Show frontier tiles'),
+            subtitle: const Text(
+              'Also place the one-cell-wider ring of tiles, flagging the '
+              'excluded neighbours frozen so the boundary is visible.',
+            ),
+            value: data!.debugShowFrontierTiles,
+            onChanged: (value) => _commit(debugFrontier: value ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
         ],
       ),
     );
@@ -104,8 +156,7 @@ class _CompatibilityBadge extends StatelessWidget {
     final overcoordinated = report.overcoordinatedAtoms;
     final clean = orphaned == BigInt.zero && overcoordinated == BigInt.zero;
 
-    final Color color =
-        clean ? Colors.green.shade700 : Colors.orange.shade800;
+    final Color color = clean ? Colors.green.shade700 : Colors.orange.shade800;
     final IconData icon = clean ? Icons.check_circle : Icons.warning_amber;
     final String headline = clean ? 'Compatible' : 'Check fit';
 

@@ -15,12 +15,44 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::Atom;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::nodes::patch_latticefill::{
-    apply_patch, select_patch_cells,
+    CompatibilityReport, apply_patch, region_center_depths, select_patch_cells,
 };
 use rust_lib_flutter_cad::util::daabox::DAABox;
 
 const CARBON: i16 = 6;
 const SINGLE: u8 = 1;
+
+/// Non-debug `apply_patch` (both debug flags off) — keeps the existing tests
+/// terse now that the core takes two extra debug booleans.
+#[allow(clippy::too_many_arguments)]
+fn apply_patch_t(
+    target: &AtomicStructure,
+    region_lattice: &UnitCellStruct,
+    region_volume: Option<&GeoNode>,
+    region_bounds: &DAABox,
+    tile: &AtomicStructure,
+    tiling_vectors: &[glam::i32::IVec3],
+    cut_volume: &GeoNode,
+    origin: glam::i32::IVec3,
+    passivate: bool,
+    tolerance: f64,
+) -> (AtomicStructure, CompatibilityReport) {
+    apply_patch(
+        target,
+        region_lattice,
+        region_volume,
+        region_bounds,
+        tile,
+        tiling_vectors,
+        cut_volume,
+        origin,
+        passivate,
+        tolerance,
+        true, // test_height_at_origin (the default)
+        false,
+        false,
+    )
+}
 
 /// A cubic lattice with edge `L` — keeps lattice/real arithmetic legible.
 fn cubic(l: f64) -> UnitCellStruct {
@@ -78,7 +110,7 @@ fn periodic_weld_fuses_adjacent_tiles() {
     // Select exactly cells 0 and +1.
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(8.5, 2.0, 2.0));
 
-    let (result, report) = apply_patch(
+    let (result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -135,7 +167,7 @@ fn bulk_weld_collar_inherits_bulk_bonds() {
     let tiling = [IVec3::new(1, 0, 0)];
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(4.5, 2.0, 2.0));
 
-    let (result, _report) = apply_patch(
+    let (result, _report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -189,7 +221,7 @@ fn cut_then_weld_preserves_collar_coordination() {
     let tiling = [IVec3::new(1, 0, 0)];
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(4.5, 2.0, 2.0));
 
-    let (result, _report) = apply_patch(
+    let (result, _report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -239,7 +271,7 @@ fn unwelded_ghost_is_dropped_leaving_a_dangler() {
     // Only cell 0 (no neighbour for the ghost to weld onto).
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(4.5, 2.0, 2.0));
 
-    let (result, report) = apply_patch(
+    let (result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -273,24 +305,60 @@ fn unwelded_ghost_is_dropped_leaving_a_dangler() {
 //    non-periodic direction(s) are free. 1D / 2D / 3D exercised.
 // ============================================================================
 
+/// One cell's footprint as a set of corner points: all subset-sums of the real
+/// tiling vectors at the origin cell. Used so "all interior atoms inside" tests
+/// whole-cell containment, matching the design's "no partial lateral tiles".
+fn cell_corners(tiling: &[IVec3], lattice: &UnitCellStruct) -> Vec<DVec3> {
+    let real: Vec<DVec3> = tiling
+        .iter()
+        .map(|v| lattice.ivec3_lattice_to_real(v))
+        .collect();
+    (0..(1u32 << real.len()))
+        .map(|mask| {
+            let mut p = DVec3::ZERO;
+            for (i, rv) in real.iter().enumerate() {
+                if mask & (1 << i) != 0 {
+                    p += *rv;
+                }
+            }
+            p
+        })
+        .collect()
+}
+
 #[test]
 fn containment_2d_normal_is_free() {
     let lattice = cubic(4.0);
     let tiling = [IVec3::new(1, 0, 0), IVec3::new(0, 1, 0)];
-    // The footprint sits at z=0; the region is far away in z. Because z is the
-    // free (normal) axis, cells are still selected by their x–y footprint.
+    let interior = cell_corners(&tiling, &lattice); // four x–y corners at z=0
+    // Region far away in z; z is the free (normal) axis, so cells are selected
+    // by their x–y footprint after projection to the region's z centre.
     let bounds = box_bounds(DVec3::new(-0.5, -0.5, 20.0), DVec3::new(8.5, 8.5, 30.0));
+    let free_dirs = vec![DVec3::Z];
+    let center_depths = vec![25.0];
 
-    let cells = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &bounds);
+    let cells = select_patch_cells(
+        IVec3::ZERO,
+        &tiling,
+        &lattice,
+        None,
+        &bounds,
+        &interior,
+        &free_dirs,
+        &center_depths,
+    );
 
     assert_eq!(cells.len(), 4, "the 2×2 block whose x–y footprint fits");
-    for c in [
+    for o in [
         IVec3::new(0, 0, 0),
         IVec3::new(1, 0, 0),
         IVec3::new(0, 1, 0),
         IVec3::new(1, 1, 0),
     ] {
-        assert!(cells.contains(&c), "cell {c:?} should be placed");
+        assert!(
+            cells.iter().any(|c| c.offset == o),
+            "cell {o:?} should be placed"
+        );
     }
 }
 
@@ -298,14 +366,26 @@ fn containment_2d_normal_is_free() {
 fn containment_1d_transverse_free() {
     let lattice = cubic(4.0);
     let tiling = [IVec3::new(1, 0, 0)];
+    let interior = cell_corners(&tiling, &lattice); // two x endpoints at y=z=0
     // Both transverse axes (y, z) are free; only the x footprint gates.
     let bounds = box_bounds(DVec3::new(-0.5, 20.0, 20.0), DVec3::new(8.5, 30.0, 30.0));
+    let free_dirs = vec![DVec3::Y, DVec3::Z];
+    let center_depths = vec![25.0, 25.0];
 
-    let cells = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &bounds);
+    let cells = select_patch_cells(
+        IVec3::ZERO,
+        &tiling,
+        &lattice,
+        None,
+        &bounds,
+        &interior,
+        &free_dirs,
+        &center_depths,
+    );
 
     assert_eq!(cells.len(), 2);
-    assert!(cells.contains(&IVec3::new(0, 0, 0)));
-    assert!(cells.contains(&IVec3::new(1, 0, 0)));
+    assert!(cells.iter().any(|c| c.offset == IVec3::new(0, 0, 0)));
+    assert!(cells.iter().any(|c| c.offset == IVec3::new(1, 0, 0)));
 }
 
 #[test]
@@ -316,19 +396,41 @@ fn containment_3d_has_no_free_axis() {
         IVec3::new(0, 1, 0),
         IVec3::new(0, 0, 1),
     ];
+    let interior = cell_corners(&tiling, &lattice); // 8 corners of one cubic cell
+    let free_dirs: Vec<DVec3> = vec![]; // no free axis
+    let center_depths: Vec<f64> = vec![];
 
     // Tight box around the origin cell → exactly one cell.
     let tight = box_bounds(DVec3::new(-0.5, -0.5, -0.5), DVec3::new(4.5, 4.5, 4.5));
-    let cells = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &tight);
-    assert_eq!(cells, vec![IVec3::ZERO]);
+    let cells = select_patch_cells(
+        IVec3::ZERO,
+        &tiling,
+        &lattice,
+        None,
+        &tight,
+        &interior,
+        &free_dirs,
+        &center_depths,
+    );
+    assert_eq!(cells.len(), 1);
+    assert_eq!(cells[0].offset, IVec3::ZERO);
 
     // With no free axis, z is a periodic direction requiring containment: a
     // region offset in z does NOT place the origin-plane cell (unlike the 2D
     // case above, where z is free and the origin cell is placed regardless).
     let far_z = box_bounds(DVec3::new(-0.5, -0.5, 20.0), DVec3::new(4.5, 4.5, 30.0));
-    let far = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &far_z);
+    let far = select_patch_cells(
+        IVec3::ZERO,
+        &tiling,
+        &lattice,
+        None,
+        &far_z,
+        &interior,
+        &free_dirs,
+        &center_depths,
+    );
     assert!(
-        !far.contains(&IVec3::ZERO),
+        !far.iter().any(|c| c.offset == IVec3::ZERO),
         "the origin-plane cell is not placed when z is periodic and out of range"
     );
 }
@@ -343,17 +445,19 @@ fn cut_only_happens_in_placed_cells() {
     let lattice = cubic(4.0);
     let mut target = AtomicStructure::new();
     target.add_atom(CARBON, DVec3::new(2.0, 1.0, 1.0)); // inside cut @ cell 0
-    target.add_atom(CARBON, DVec3::new(6.0, 1.0, 1.0)); // inside cut @ cell +1 (not placed)
+    target.add_atom(CARBON, DVec3::new(6.0, 1.0, 1.0)); // would be inside cut @ cell +1
 
-    // A purely-removing patch: empty tile, cut covering one cell's surface.
-    let tile = AtomicStructure::new();
+    // Tile has one interior atom that fits cell 0's region but not cell +1's, so
+    // cell +1 is not selected → its substrate atom must not be cut.
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(CARBON, DVec3::new(2.0, 1.0, 1.0));
     let cut = GeoNode::sphere(DVec3::new(2.0, 1.0, 1.0), 1.5);
 
     let tiling = [IVec3::new(1, 0, 0)];
-    // Only cell 0 is selected.
+    // x range admits cell 0's interior atom (x=2) but not cell +1's (x=6).
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(4.5, 2.0, 2.0));
 
-    let (result, _report) = apply_patch(
+    let (result, _report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -366,14 +470,16 @@ fn cut_only_happens_in_placed_cells() {
         0.1,
     );
 
-    assert_eq!(result.get_num_of_atoms(), 1);
+    // Cell 0: original (2,1,1) cut, replaced by the placed tile atom. Cell +1 not
+    // selected → its (6,1,1) survives, and nothing was placed there.
+    assert_eq!(result.get_num_of_atoms(), 2);
     assert!(
         find_atom_at(&result, DVec3::new(6.0, 1.0, 1.0), 1e-6).is_some(),
-        "the atom in the un-reconstructed cell survives"
+        "the atom in the un-reconstructed cell survives (cell +1 not cut)"
     );
     assert!(
-        find_atom_at(&result, DVec3::new(2.0, 1.0, 1.0), 1e-6).is_none(),
-        "the atom in the reconstructed cell is cut"
+        find_atom_at(&result, DVec3::new(2.0, 1.0, 1.0), 1e-6).is_some(),
+        "the reconstructed cell holds the placed tile atom"
     );
 }
 
@@ -397,7 +503,7 @@ fn passivation_saturates_danglers_when_enabled() {
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(4.5, 2.0, 2.0));
 
     let run = |passivate: bool| {
-        apply_patch(
+        apply_patch_t(
             &target,
             &lattice,
             None,
@@ -439,9 +545,10 @@ fn close_sites_do_not_over_merge() {
 
     let target = AtomicStructure::new();
     let tiling = [IVec3::new(1, 0, 0)];
-    let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(4.5, 2.0, 2.0));
+    // x range tight enough that only the origin cell's interior atoms fit.
+    let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(2.5, 2.0, 2.0));
 
-    let (result, _report) = apply_patch(
+    let (result, _report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -498,7 +605,7 @@ fn golden_two_cell_reconstruction() {
     let tiling = [IVec3::new(1, 0, 0)];
     let bounds = box_bounds(DVec3::new(-0.5, -2.0, -2.0), DVec3::new(8.5, 2.0, 2.0));
 
-    let (result, report) = apply_patch(
+    let (result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -557,7 +664,7 @@ fn compatibility_correct_depth_is_clean() {
     let d = target.add_atom(CARBON, DVec3::new(1.0, 1.0, -4.0));
     target.add_bond(b, d, SINGLE);
 
-    let (_result, report) = apply_patch(
+    let (_result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -583,7 +690,7 @@ fn compatibility_too_high_orphans_collars() {
     // No substrate atom at the collar position → the collar floats.
     let target = AtomicStructure::new();
 
-    let (_result, report) = apply_patch(
+    let (_result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -619,7 +726,7 @@ fn compatibility_too_low_overcoordinates() {
         target.add_bond(b, id, SINGLE);
     }
 
-    let (_result, report) = apply_patch(
+    let (_result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -667,10 +774,11 @@ fn default_origin_reproduces_authored_coordinates() {
     let d = target.add_atom(CARBON, DVec3::new(13.0, 1.0, -4.0));
     target.add_bond(b, d, SINGLE);
 
-    // Region generous enough that exactly the authored cell fits.
-    let bounds = box_bounds(DVec3::new(10.0, -3.0, -8.0), DVec3::new(18.0, 5.0, 8.0));
+    // Region tight in x so only the authored cell's interior atom fits (a
+    // single-atom tile fits any cell whose projection lands in the region).
+    let bounds = box_bounds(DVec3::new(11.0, -3.0, -8.0), DVec3::new(15.0, 5.0, 8.0));
 
-    let (result, report) = apply_patch(
+    let (result, report) = apply_patch_t(
         &target,
         &lattice,
         None,
@@ -730,7 +838,7 @@ fn origin_offset_shifts_phase_by_whole_cells() {
     let bounds = box_bounds(DVec3::new(-6.0, -2.0, -2.0), DVec3::new(14.0, 2.0, 8.0));
 
     let run = |origin: IVec3| {
-        apply_patch(
+        apply_patch_t(
             &target,
             &lattice,
             None,
@@ -762,5 +870,261 @@ fn origin_offset_shifts_phase_by_whole_cells() {
     assert!(
         find_atom_at(&odd, DVec3::new(1.0, 1.0, 4.0), 1e-9).is_none(),
         "the authored even-cell position is now empty (phase shifted)"
+    );
+}
+
+// ============================================================================
+// 13. Centre depth is measured along the real normal, not the global AABB. For
+//     a slab tilted w.r.t. XYZ the axis-aligned box centre can sit off the slab
+//     (the old height bug); the normal-depth midpoint stays on it.
+// ============================================================================
+
+#[test]
+fn center_depth_is_on_the_tilted_slab_not_the_aabb_centre() {
+    // Four atoms on the tilted plane x+y+z=0, chosen so their global AABB centre
+    // is (1,0,0) — which is NOT on the plane (1+0+0 = 1 ≠ 0).
+    let mut target = AtomicStructure::new();
+    for p in [
+        DVec3::new(1.0, 0.0, -1.0),
+        DVec3::new(0.0, 1.0, -1.0),
+        DVec3::new(0.0, -1.0, 1.0),
+        DVec3::new(2.0, -1.0, -1.0),
+    ] {
+        target.add_atom(CARBON, p);
+    }
+    let normal = DVec3::new(1.0, 1.0, 1.0).normalize();
+
+    // Every atom has x+y+z = 0 → depth along the normal is 0; the midpoint is 0,
+    // i.e. exactly on the slab.
+    let depths = region_center_depths(&target, &[normal]);
+    assert!(
+        depths[0].abs() < 1e-9,
+        "centre depth is on the slab (~0), got {}",
+        depths[0]
+    );
+
+    // The old height would have been the AABB centre (1,0,0), whose normal
+    // component is 1/sqrt(3) ~ 0.577 — off the slab, where the SDF test fails.
+    let aabb_centre = DVec3::new(1.0, 0.0, 0.0);
+    assert!(
+        aabb_centre.dot(normal).abs() > 0.5,
+        "the global AABB centre is off the tilted slab"
+    );
+}
+
+// ============================================================================
+// 14. Symmetric region + symmetric tiling -> symmetric selection (the old
+//     corner-anchored footprint biased the selection off-centre).
+// ============================================================================
+
+#[test]
+fn selection_is_symmetric_for_symmetric_region() {
+    let lattice = cubic(4.0);
+    let tiling = [IVec3::new(1, 0, 0), IVec3::new(0, 1, 0)];
+    // One interior atom at the cell origin -> selection is symmetric about o=0.
+    let interior = vec![DVec3::ZERO];
+    let bounds = box_bounds(DVec3::new(-10.0, -10.0, 20.0), DVec3::new(10.0, 10.0, 30.0));
+    let free_dirs = vec![DVec3::Z];
+    let center_depths = vec![25.0];
+
+    let cells = select_patch_cells(
+        IVec3::ZERO,
+        &tiling,
+        &lattice,
+        None,
+        &bounds,
+        &interior,
+        &free_dirs,
+        &center_depths,
+    );
+
+    assert!(
+        cells.len() >= 9,
+        "several cells selected, got {}",
+        cells.len()
+    );
+    for c in &cells {
+        let mirror = IVec3::new(-c.offset.x, -c.offset.y, -c.offset.z);
+        assert!(
+            cells.iter().any(|d| d.offset == mirror),
+            "selection symmetric: mirror of {:?} must be present",
+            c.offset
+        );
+    }
+}
+
+// ============================================================================
+// 15. Debug A: project placed atoms to the test plane; no weld/passivation.
+// ============================================================================
+
+#[test]
+fn debug_project_flattens_atoms_to_test_plane() {
+    let lattice = cubic(4.0);
+    let mut target = AtomicStructure::new();
+    target.add_atom(CARBON, DVec3::new(0.0, 0.0, 0.0)); // centre depth z = 0
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(CARBON, DVec3::new(1.0, 0.0, 5.0)); // sticks up at z=5
+    let tiling = [IVec3::new(1, 0, 0), IVec3::new(0, 1, 0)];
+    let bounds = box_bounds(DVec3::new(-2.0, -2.0, -2.0), DVec3::new(2.0, 2.0, 8.0));
+
+    let (result, _r) = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &tiling,
+        &empty_cut(),
+        IVec3::ZERO,
+        true, // passivate (ignored in project mode)
+        0.1,
+        true,  // test_height_at_origin
+        true,  // debug_project
+        false, // debug_frontier
+    );
+
+    // The patch atom (z=5) is flattened onto the test plane (z=0); nothing left
+    // at z=5; no hydrogens added (no passivation in project mode).
+    assert!(
+        find_atom_at(&result, DVec3::new(1.0, 0.0, 0.0), 1e-9).is_some(),
+        "patch atom projected onto the test plane z=0"
+    );
+    assert!(
+        find_atom_at(&result, DVec3::new(1.0, 0.0, 5.0), 1e-9).is_none(),
+        "nothing left at the original z=5 position"
+    );
+    assert_eq!(
+        result
+            .atoms_values()
+            .filter(|a| a.atomic_number == 1)
+            .count(),
+        0,
+        "project mode does not passivate"
+    );
+}
+
+// ============================================================================
+// 16. Debug B: frontier overlay places the +/-1 box around the selection, with
+//     the excluded neighbours flagged frozen; report unchanged vs. non-debug.
+// ============================================================================
+
+#[test]
+fn debug_frontier_overlays_excluded_neighbours_frozen() {
+    let lattice = cubic(4.0);
+    let target = AtomicStructure::new();
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(CARBON, DVec3::ZERO); // single interior atom at the cell origin
+    let tiling = [IVec3::new(1, 0, 0), IVec3::new(0, 1, 0)];
+    // Tight region: only the origin cell fits.
+    let bounds = box_bounds(DVec3::new(-1.0, -1.0, -2.0), DVec3::new(1.0, 1.0, 2.0));
+
+    let plain = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &tiling,
+        &empty_cut(),
+        IVec3::ZERO,
+        false,
+        0.1,
+        true, // test_height_at_origin
+        false,
+        false,
+    );
+    assert_eq!(
+        plain.0.get_num_of_atoms(),
+        1,
+        "only the origin cell is selected"
+    );
+
+    let (dbg, report) = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &tiling,
+        &empty_cut(),
+        IVec3::ZERO,
+        false,
+        0.1,
+        true, // test_height_at_origin
+        false,
+        true, // debug_frontier
+    );
+    // 3x3 box around the origin cell = 9 cells; 1 selected (real) + 8 frontier.
+    assert_eq!(dbg.get_num_of_atoms(), 9, "selected + 8 frontier tiles");
+    assert_eq!(
+        dbg.atoms_values().filter(|a| a.is_frozen()).count(),
+        8,
+        "the excluded neighbour tiles are flagged frozen"
+    );
+    // Report reflects the normal selection (no ghosts here -> zero), unchanged.
+    assert_eq!(report.welded_ghosts, plain.1.welded_ghosts);
+    assert_eq!(report.orphaned_ghosts, plain.1.orphaned_ghosts);
+}
+
+// ============================================================================
+// 17. Origin vs target test height: for a slab offset from the lattice origin
+//     along the normal, the origin-height plane (z=0) misses it and selects
+//     nothing, while the target-derived height lands on the slab.
+// ============================================================================
+
+#[test]
+fn origin_vs_target_test_height_for_offset_slab() {
+    let lattice = cubic(4.0);
+    // A thin target slab parked at z ~ 10, nowhere near the origin plane z=0.
+    let mut target = AtomicStructure::new();
+    target.add_atom(CARBON, DVec3::new(0.0, 0.0, 10.0));
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(CARBON, DVec3::new(0.0, 0.0, 12.0)); // reconstruction above the slab
+    let tiling = [IVec3::new(1, 0, 0), IVec3::new(0, 1, 0)];
+    // Bounds hug the slab (z in [8,13]); the origin plane z=0 is outside them.
+    let bounds = box_bounds(DVec3::new(-1.0, -1.0, 8.0), DVec3::new(1.0, 1.0, 13.0));
+
+    // Origin height (z=0) → projected atoms land at z=0, outside the region →
+    // no cell selected; only the original target atom remains.
+    let (origin_ver, _r1) = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &tiling,
+        &empty_cut(),
+        IVec3::ZERO,
+        false,
+        0.1,
+        true, // test_height_at_origin
+        false,
+        false,
+    );
+    assert_eq!(
+        origin_ver.get_num_of_atoms(),
+        1,
+        "origin-height plane (z=0) misses the offset slab → no tile placed"
+    );
+
+    // Target-derived height (z=10) → projected atoms land on the slab → selected.
+    let (target_ver, _r2) = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &tiling,
+        &empty_cut(),
+        IVec3::ZERO,
+        false,
+        0.1,
+        false, // derive height from the target
+        false,
+        false,
+    );
+    assert!(
+        target_ver.get_num_of_atoms() > 1,
+        "target-derived height (z=10) lands on the slab → tile placed"
     );
 }

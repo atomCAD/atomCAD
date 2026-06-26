@@ -1134,6 +1134,16 @@ pub struct APIPatchLatticeFillData {
     pub passivate: bool,
     /// Weld tolerance in Å.
     pub tolerance: f64,
+    /// Cell-selection test height: `true` (default) uses the lattice origin's
+    /// height; `false` derives it from the target slab (robust to an offset
+    /// target).
+    pub test_height_at_origin: bool,
+    /// Debug: project the placed patch atoms onto the cell-selection test plane
+    /// (no weld/passivation). Non-physical; for understanding cell selection.
+    pub debug_project_to_test_plane: bool,
+    /// Debug: also place the one-cell-wider frontier of tiles, flagging the
+    /// excluded neighbours frozen so they are visible.
+    pub debug_show_frontier_tiles: bool,
     /// Compatibility stats from the last successful evaluation, or `None` if the
     /// node has not evaluated yet (or the last evaluation errored).
     pub report: Option<APICompatibilityReport>,
