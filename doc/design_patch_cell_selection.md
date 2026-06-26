@@ -17,7 +17,9 @@ The old test was: build the parallelogram spanned by the tiling vectors, anchore
 For a candidate cell offset `o`:
 - place each **interior** (non-ghost) tile atom at its absolute position `p = a.position + lattice·o`;
 - project it onto the **test plane**: keep its in-plane coordinates, overwrite each non-periodic component with `center_depth[d]`;
-- the cell is selected **iff every interior atom lands inside the region** (`region_volume(s) ≤ 0`, or the bounds when there is no volume).
+- the cell is selected **iff every interior atom lands inside the region** (`region_volume(s) ≤ REGION_MEMBERSHIP_EPSILON`, default 0.1 Å — the boundary belongs to the region, matching the cut/build threshold; or the bounds, expanded by the same ε, when there is no volume).
+
+The membership ε matters when the test plane lands *on* the region boundary — e.g. origin-height mode on a surface built through the lattice origin, where every projected atom sits at SDF ≈ 0 and a strict `≤ 0` would fail on a hair of floating-point or sub-Ångström offset.
 
 `center_depth` per free (non-periodic) direction `d` has **two selectable sources** (boolean `test_height_at_origin`, default **`false`** = target-derived):
 

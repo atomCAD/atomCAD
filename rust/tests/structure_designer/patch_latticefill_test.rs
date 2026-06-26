@@ -1173,3 +1173,45 @@ fn debug_frontier_shows_block_when_nothing_selected() {
         "the -1..+1 frontier block is shown so the user sees where tiles would go"
     );
 }
+
+// ============================================================================
+// 19. Region membership epsilon: a projected test point a hair (0.05 Å) past the
+//     region boundary is still admitted (within the 0.1 Å threshold), so a test
+//     plane that lands *on* the boundary doesn't fail on floating-point sign.
+// ============================================================================
+
+#[test]
+fn region_inclusion_admits_boundary_within_epsilon() {
+    let lattice = cubic(4.0);
+    let tiling = [IVec3::new(1, 0, 0)];
+    // Region = a sphere of radius 5 at the origin (SDF = |p| − 5).
+    let region = GeoNode::sphere(DVec3::ZERO, 5.0);
+    // One interior atom whose projection (y,z → 0) lands at (5.05, 0, 0): 0.05 Å
+    // *outside* the sphere — within the 0.1 Å membership epsilon. A strict `<= 0`
+    // test would reject the origin cell ("boundary right at the test plane").
+    let interior = vec![DVec3::new(5.05, 0.0, 7.0)];
+    let bounds = box_bounds(DVec3::new(-8.0, -8.0, -2.0), DVec3::new(8.0, 8.0, 10.0));
+    let free_dirs = vec![DVec3::Y, DVec3::Z];
+    let center_depths = vec![0.0, 0.0]; // origin-height test plane
+
+    let cells = select_patch_cells(
+        IVec3::ZERO,
+        &tiling,
+        &lattice,
+        Some(&region),
+        &bounds,
+        &interior,
+        &free_dirs,
+        &center_depths,
+    );
+
+    assert!(
+        cells.iter().any(|c| c.offset == IVec3::ZERO),
+        "a point 0.05 Å past the boundary is admitted by the membership epsilon"
+    );
+    // One cell over → projects to (9.05, 0, 0), SDF +4.05 ≫ 0.1 → still rejected.
+    assert!(
+        !cells.iter().any(|c| c.offset == IVec3::new(1, 0, 0)),
+        "a point well outside is still rejected"
+    );
+}

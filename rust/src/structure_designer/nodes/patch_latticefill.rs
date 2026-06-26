@@ -55,6 +55,14 @@ pub const DEFAULT_WELD_TOLERANCE: f64 = 0.1;
 /// step captured as interior is exactly the surface the apply step removes.
 const CUT_MEMBERSHIP_EPSILON: f64 = 0.1;
 
+/// Membership threshold for the cell-selection inclusion test (Å). A projected
+/// test point counts as inside the region when its SDF ≤ this — so the boundary
+/// belongs to the region, and a test plane that lands *on* the region boundary
+/// (e.g. origin-height mode when the surface is built through the lattice
+/// origin) still selects rather than failing on a hair of floating-point /
+/// sub-Ångström offset. Matches the cut/build threshold.
+const REGION_MEMBERSHIP_EPSILON: f64 = 0.1;
+
 /// Statistics produced by `apply_patch`, surfaced (eventually) as a
 /// compatibility badge (§6). Falls directly out of the weld:
 /// - `welded_ghosts` — patch-ghosts that found a real twin and fused (the
@@ -216,8 +224,10 @@ fn project_to_test_plane(p: DVec3, free_dirs: &[DVec3], center_depths: &[f64]) -
 /// bounding box).
 fn point_in_region(s: DVec3, region_volume: Option<&GeoNode>, region_bounds: &DAABox) -> bool {
     match region_volume {
-        Some(geo) => geo.implicit_eval_3d(&s) <= 0.0,
-        None => region_bounds.contains_point(s),
+        Some(geo) => geo.implicit_eval_3d(&s) <= REGION_MEMBERSHIP_EPSILON,
+        None => region_bounds
+            .expand(REGION_MEMBERSHIP_EPSILON)
+            .contains_point(s),
     }
 }
 

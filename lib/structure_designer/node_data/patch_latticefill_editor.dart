@@ -7,8 +7,8 @@ import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart
 /// Editor widget for `patch_latticefill` nodes — tiles a surface-reconstruction
 /// patch across a region and welds it in. Stored, editable properties are
 /// `passivate` and `tolerance`; the `target` / `region` / `patch` / `origin`
-/// inputs are wired. A compatibility badge shows the welded-vs-orphaned collar
-/// and over-coordination stats from the last evaluation (§6). See
+/// inputs are wired. A compatibility badge shows the welded / orphaned-edge /
+/// over-coordination stats from the last evaluation (§6). See
 /// `doc/design_surface_patches.md` §5.
 class PatchLatticeFillEditor extends StatelessWidget {
   final BigInt nodeId;
@@ -132,9 +132,11 @@ class PatchLatticeFillEditor extends StatelessWidget {
 }
 
 /// Compatibility badge (§6): summarizes the weld outcome of the last apply.
-/// Green when every collar welded and nothing is over-coordinated; amber
-/// otherwise, naming the likely failure mode. Hidden until the node has
-/// evaluated.
+/// Red "No tiles placed" when nothing tiled; amber "Check fit" on a real defect
+/// (over-coordination, or a placed patch whose ghosts all failed to weld =
+/// floating); otherwise green "Welded in". Orphaned ghosts alone are *not* a
+/// defect — they are the expected dropped edges of a finite patch. Hidden until
+/// the node has evaluated.
 class _CompatibilityBadge extends StatelessWidget {
   final APICompatibilityReport? report;
 
@@ -155,23 +157,33 @@ class _CompatibilityBadge extends StatelessWidget {
     final welded = report.weldedGhosts;
     final orphaned = report.orphanedGhosts;
     final overcoordinated = report.overcoordinatedAtoms;
-    // Nothing tiled: the other counts are all zero, but that is failure, not
-    // success — the test plane missed the target (usually the wrong test-height
-    // mode for an off-origin target). Flag it distinctly.
+    final totalGhosts = welded + orphaned;
+
+    // The genuinely-bad outcomes. Orphaned ghosts on their own are NOT a
+    // defect — every finite patch has a perimeter of true edges whose ghosts
+    // can't weld; they are dropped and passivated. Only flag:
+    //  - nothing placed (the patch did nothing);
+    //  - over-coordination (atoms with impossible bond counts — patch too low);
+    //  - "floating": the patch has ghosts to weld but none welded (mis-registered
+    //    / too high). A ghost-free patch (totalGhosts == 0) is fine.
     final nothingPlaced = placed == BigInt.zero;
-    final clean = !nothingPlaced &&
-        orphaned == BigInt.zero &&
-        overcoordinated == BigInt.zero;
+    final overcoordinatedBad = overcoordinated > BigInt.zero;
+    final floating =
+        !nothingPlaced && welded == BigInt.zero && totalGhosts > BigInt.zero;
 
     final Color color = nothingPlaced
         ? Colors.red.shade700
-        : (clean ? Colors.green.shade700 : Colors.orange.shade800);
+        : ((overcoordinatedBad || floating)
+            ? Colors.orange.shade800
+            : Colors.green.shade700);
     final IconData icon = nothingPlaced
         ? Icons.error_outline
-        : (clean ? Icons.check_circle : Icons.warning_amber);
+        : ((overcoordinatedBad || floating)
+            ? Icons.warning_amber
+            : Icons.check_circle);
     final String headline = nothingPlaced
         ? 'No tiles placed'
-        : (clean ? 'Compatible' : 'Check fit');
+        : ((overcoordinatedBad || floating) ? 'Check fit' : 'Welded in');
 
     final hints = <String>[];
     if (nothingPlaced) {
@@ -181,16 +193,24 @@ class _CompatibilityBadge extends StatelessWidget {
         'along the surface normal, uncheck "Test height at lattice origin".',
       );
     }
-    if (orphaned > BigInt.zero) {
+    if (floating) {
       hints.add(
-        'Orphaned collars suggest the patch sits too high (floating, '
-        'un-welded). They are dropped as reconstruction edges.',
+        "None of the patch's shared edge atoms welded — the reconstruction "
+        "isn't attaching to the substrate or its neighbours. It is likely "
+        'floating (too high) or mis-registered.',
       );
     }
-    if (overcoordinated > BigInt.zero) {
+    if (overcoordinatedBad) {
       hints.add(
-        'Over-coordinated atoms suggest the patch sits too low / into the '
-        'sub-surface.',
+        'Some atoms ended up over-coordinated (more bonds than allowed). The '
+        'patch may sit too low / into the sub-surface.',
+      );
+    }
+    if (!floating && orphaned > BigInt.zero) {
+      hints.add(
+        'The orphaned ghosts are the patch\'s outer edges (no neighbour tile or '
+        'bulk to weld to). They are dropped and hydrogen-passivated — expected '
+        'for a patch that does not cover the whole surface, not a defect.',
       );
     }
 
@@ -217,8 +237,8 @@ class _CompatibilityBadge extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           _statLine('Tiles placed', placed),
-          _statLine('Welded collars / ghosts', welded),
-          _statLine('Orphaned (dropped) ghosts', orphaned),
+          _statLine('Welded joins (neighbour + bulk)', welded),
+          _statLine('Orphaned edge ghosts (dropped)', orphaned),
           _statLine('Over-coordinated atoms', overcoordinated),
           for (final hint in hints) ...[
             const SizedBox(height: 6),
