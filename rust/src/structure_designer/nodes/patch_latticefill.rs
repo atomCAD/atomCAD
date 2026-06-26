@@ -182,15 +182,20 @@ fn corner_in_region_shadow(
     }
 }
 
-/// Selects the absolute cell vectors `c = origin + Σ kᵢ·vᵢ` that receive a tile:
+/// Selects the cell **offsets** `o = origin + Σ kᵢ·vᵢ` that receive a tile:
 /// those whose footprint, projected onto the periodic subspace, lies fully
 /// inside the region (whole-cell containment in the periodic directions, free
-/// along the non-periodic ones — §5). `region_bounds` bounds the integer search;
+/// along the non-periodic ones — §5). The patch's tile keeps its authored
+/// coordinates, so its one-cell footprint sits at `tile_anchor` (the tile's
+/// reference lattice point, in absolute real space); offset `o` slides it by
+/// `o`'s real translation. `origin` is the user's whole-cell offset (default
+/// zero = as authored). `region_bounds` bounds the integer search;
 /// `region_volume` (when present) is the actual containment gate.
 ///
 /// Public for node-free testing of the containment rule (§9 Phase 3 test 5).
 pub fn select_patch_cells(
     origin: IVec3,
+    tile_anchor: DVec3,
     tiling_vectors: &[IVec3],
     region_lattice: &UnitCellStruct,
     region_volume: Option<&GeoNode>,
@@ -203,6 +208,10 @@ pub fn select_patch_cells(
     let free_dirs = free_directions(&periodic_real);
     let region_center = region_bounds.center();
     let diag = region_bounds.size().length();
+    // The authored anchor may sit anywhere relative to the region (e.g. a small
+    // patch applied to a large workpiece); widen the integer search so the
+    // tiling can reach the region from the anchor.
+    let anchor_to_center = (region_center - tile_anchor).length();
 
     // Bound |kᵢ| by how many tiling steps could possibly land inside the search
     // box, plus a margin cell.
@@ -213,18 +222,20 @@ pub fn select_patch_cells(
             if len < 1e-9 {
                 0
             } else {
-                (diag / len).ceil() as i32 + 1
+                ((diag + anchor_to_center) / len).ceil() as i32 + 1
             }
         })
         .collect();
 
     let mut cells = Vec::new();
     for k in iter_step_tuples(&step_bounds) {
-        let mut c = origin;
+        let mut o = origin;
         for (ki, v) in k.iter().zip(tiling_vectors.iter()) {
-            c += *v * *ki;
+            o += *v * *ki;
         }
-        let t = region_lattice.ivec3_lattice_to_real(&c);
+        // The placed tile's footprint is its authored footprint translated by
+        // the offset's real-space vector.
+        let t = tile_anchor + region_lattice.ivec3_lattice_to_real(&o);
         let corners = footprint_corners(t, &periodic_real);
         let inside = corners.iter().all(|corner| {
             corner_in_region_shadow(
@@ -236,10 +247,39 @@ pub fn select_patch_cells(
             )
         });
         if inside {
-            cells.push(c);
+            cells.push(o);
         }
     }
     cells
+}
+
+/// The tile's reference lattice point in real space: the floored min corner of
+/// the tile's **real** (non-ghost) atoms — i.e. the interior atoms — snapped to
+/// a lattice point. The tile keeps its authored coordinates, so its one-cell
+/// periodic footprint is anchored here; cell selection tests the footprint at
+/// `tile_anchor + offset` (§5). Returns the origin when the tile has no real
+/// atoms.
+fn tile_reference_anchor(tile: &AtomicStructure, lattice: &UnitCellStruct) -> DVec3 {
+    let mut min_real: Option<DVec3> = None;
+    for atom in tile.atoms_values() {
+        if atom.is_patch_ghost() {
+            continue;
+        }
+        min_real = Some(match min_real {
+            Some(m) => m.min(atom.position),
+            None => atom.position,
+        });
+    }
+    let Some(min_real) = min_real else {
+        return DVec3::ZERO;
+    };
+    let min_lattice = lattice.real_to_dvec3_lattice(&min_real);
+    let cell = IVec3::new(
+        min_lattice.x.floor() as i32,
+        min_lattice.y.floor() as i32,
+        min_lattice.z.floor() as i32,
+    );
+    lattice.ivec3_lattice_to_real(&cell)
 }
 
 /// Enumerates every integer tuple `k` with `kᵢ ∈ [-bounds[i], bounds[i]]`.
@@ -316,8 +356,12 @@ pub fn apply_patch(
     passivate: bool,
     tolerance: f64,
 ) -> (AtomicStructure, CompatibilityReport) {
+    // The tile keeps its authored coordinates; cell selection works in offsets
+    // from that authored registration, anchored at the tile's reference point.
+    let tile_anchor = tile_reference_anchor(tile, region_lattice);
     let cells = select_patch_cells(
         origin,
+        tile_anchor,
         tiling_vectors,
         region_lattice,
         region_volume,
@@ -330,10 +374,13 @@ pub fn apply_patch(
     let total_placed_ghosts = ghosts_per_tile * cells.len();
 
     // Step 3 — Cut: remove substrate atoms inside the translated cut_volume.
-    // Runs before any tile is placed, so only substrate atoms are removed. The
-    // cut volume translated to cell `c` evaluates as `cut_volume(p - t)`.
-    for c in &cells {
-        let t = region_lattice.ivec3_lattice_to_real(c);
+    // Runs before any tile is placed, so only substrate atoms are removed. Each
+    // cell is an offset `o` from the authored registration; the cut volume
+    // (in authored coordinates) translated by `o` evaluates as `cut_volume(p - t)`.
+    // At the default offset (zero) this removes exactly the surface the
+    // reconstruction was drawn to displace.
+    for o in &cells {
+        let t = region_lattice.ivec3_lattice_to_real(o);
         let to_remove: Vec<u32> = result
             .iter_atoms()
             .filter(|(_, a)| {
@@ -346,10 +393,11 @@ pub fn apply_patch(
         }
     }
 
-    // Step 4 — Place: add a copy of the tile translated to each cell. The
+    // Step 4 — Place: add a copy of the tile translated by each offset. At the
+    // default offset (zero) the copy lands exactly where it was authored. The
     // patch-ghost flag rides along (`add_atomic_structure` copies all flags).
-    for c in &cells {
-        let t = region_lattice.ivec3_lattice_to_real(c);
+    for o in &cells {
+        let t = region_lattice.ivec3_lattice_to_real(o);
         let mut copy = tile.clone();
         copy.transform(&DQuat::IDENTITY, &t);
         result.add_atomic_structure(&copy);
@@ -548,15 +596,14 @@ impl NodeData for PatchLatticeFillData {
             .map(|b| b.expand(margin))
             .unwrap_or_else(|| DAABox::new(REAL_IMPLICIT_VOLUME_MIN, REAL_IMPLICIT_VOLUME_MAX));
 
-        // Pin 3: origin (IVec3, optional). Defaults to the lattice point nearest
-        // the region's centre.
+        // Pin 3: origin (IVec3, optional). A whole-cell offset applied to the
+        // entire reconstruction; the default (0,0,0) places it exactly where it
+        // was authored (same lattice registration).
         let origin =
             match network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 3) {
                 NetworkResult::Error(e) => return EvalOutput::single(NetworkResult::Error(e)),
                 NetworkResult::IVec3(v) => v,
-                NetworkResult::None => {
-                    region_lattice.real_to_ivec3_lattice(&region_bounds.center())
-                }
+                NetworkResult::None => IVec3::ZERO,
                 other => {
                     return EvalOutput::single(NetworkResult::Error(format!(
                         "patch_latticefill: origin must be an IVec3, got {}",

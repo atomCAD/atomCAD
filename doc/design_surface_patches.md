@@ -61,8 +61,8 @@ With the weld model every field of a patch is an existing first-class network ty
 ```text
 Patch = {
     tile:           Molecule,             // atoms + intra-tile bonds, is_diff = false; includes shared-boundary,
-                                          //   ghost, and collar atoms; coordinates relative to the patch's
-                                          //   lattice-point local origin (§4)
+                                          //   ghost, and collar atoms; kept in authored absolute
+                                          //   coordinates (§4)
     tiling_vectors: Array[IVec3],         // 1–3 periodic directions, each an integer combination of the
                                           //   substrate lattice; count = periodic dimensionality
     cut_volume:     Blueprint,            // geometry of one tile: defines the interior at build time
@@ -129,20 +129,20 @@ The slab already contains both the neighbouring cells and the bulk, so the singl
 
 Two conveniences fall out: atoms on the shared cut boundary land inside the cut for *both* adjacent tiles (within `ε`) and simply weld — the "atoms at both ends" closure with no special case; and the same `cut_volume` serves extraction and removal, so there is no second region to keep consistent.
 
-### Coordinate frame: the tile's origin
+### Coordinate frame: the tile keeps its authored coordinates
 
-`patch_build` does **not** keep the slab's absolute coordinates — they would leave the tile floating wherever it was authored, making `patch_latticefill`'s `origin` meaningless. It re-expresses the extracted atoms **and the `cut_volume` geometry** relative to a reference **lattice point** `R`, so the patch's local origin `(0,0,0)` is that lattice point; `patch_latticefill` places `R` at the target lattice point named by `origin` and tiles from there.
+`patch_build` keeps the extracted atoms **and the `cut_volume` geometry** in the **absolute coordinates they were drawn in**. No re-expression, no hidden reference cell, no extra stored field. This is correct *because the atoms came straight off an authored crystal*, so they are already lattice-registered in absolute space — every atom sits on a real lattice point plus its motif offset, exactly as the target's atoms do.
 
-The reference **must be a lattice point, not one of the tile's atoms.** Placement has to be a pure lattice translation (that is what maps the tile's atoms onto the target's motif sites so the welds land), and `origin` is itself a lattice point. A lattice-point `R` makes `origin − R` a lattice translation → motif sites map to motif sites → every weld hits its target. An *atom* sits at a lattice point **plus a fractional motif offset**; anchoring there would bake that fraction into the local origin, so placing it at a lattice point would shift the whole tile *off* the lattice and every weld would miss. Storing relative to a lattice point also preserves the reconstruction's **phase** w.r.t. the lattice (which sites pair into dimers, etc.), since atom positions relative to `R` are untouched.
+`patch_latticefill` then only ever translates the tile by **whole lattice vectors** — the tiling steps `Σ kᵢ·vᵢ` plus the optional integer `origin` offset. A whole-lattice-vector translation maps motif sites onto motif sites, so every weld hits its target; and at the default offset `(0,0,0)` with no tiling step, nothing is translated at all, so the patch reappears **exactly where it was authored**. This is the property that makes the node predictable: *build → apply to the same crystal with the default `origin` is the identity* (modulo the reconstruction itself).
 
-`R` is derived deterministically from `cut_volume` — the lattice cell at its reference (min) corner — so `origin` is predictable ("it places the tile's corner cell here"). Any lattice point is correct; the choice only fixes a phase the user then shifts with `origin`. It bakes into the normalized coordinates, so there is no extra stored field and no extra pin.
+Why this beats a re-expressed local frame: re-anchoring the tile to some internal reference cell `R` (e.g. the cut's min corner) and placing `R` at an absolute `origin` makes the landing position depend on a value the user cannot see — to reproduce the drawing they would have to reverse-engineer `R`. Keeping absolute coordinates removes `R` entirely: the authored position *is* the answer, and `origin` is a transparent whole-cell nudge on top of it (default `0` = as drawn). The reconstruction's **phase** w.r.t. the lattice (which sites pair into dimers, etc.) is preserved automatically because the atom positions are never touched; `origin` shifts that phase by whole cells when the tiling supercell leaves room for it.
 
-This places two distinct requirements, on two different `patch_latticefill` pins:
+This still places two distinct requirements, on two different `patch_latticefill` pins:
 
 - **`target`** (the atom source the collar welds onto) must share the build `lattice`'s **full lattice — `UnitCellStruct` *and* motif registration**, not merely be tiling-commensurate: a collar patch-ghost coincides with a surviving substrate atom only if the tile's motif sites land exactly on the target's. The atoms are what weld, so this constraint is on the structure carrying the atoms — `target` — *not* on `region` (which may be a `Blueprint` carrying a lattice but no bulk atoms at all). Because `target` and `region` are separate pins (§5), this is a real, separately-checkable precondition, not automatic.
 - **`region`** (the extent + `lattice_vecs` source) need only supply lattice vectors **commensurate** with `patch.tiling_vectors`, so tiling steps land on lattice points.
 
-Both are naturally satisfied in the common case where the slab is authored from the same crystal that is later passed as both `target` and `region`.
+Both are naturally satisfied in the common case where the slab is authored from the same crystal that is later passed as both `target` and `region` — which, with the authored-coordinate frame above, is also exactly when the default `origin` lands the reconstruction back on its own surface.
 
 ### Behaviour & caveats
 
@@ -159,7 +159,7 @@ Tiles a patch across a region and welds it in.
 | `target` | `Crystal` \| `Molecule` (`HasAtoms`) | Yes | The structure being reconstructed. |
 | `region` | `Crystal` \| `Blueprint` (`HasStructure`) | No | Where to tile; supplies the substrate `lattice_vecs` and the fill extent. Default: `target`'s extent (then `target` must be a `Crystal`). |
 | `patch` | `Patch` (record) | Yes | From `patch_build`. |
-| `origin` | `IVec3` | No | Target lattice point at which the patch's local origin (its `cut_volume` corner cell, §4) is placed; tiling fills from there. Default: the lattice point nearest the region's centre. |
+| `origin` | `IVec3` | No | Whole-cell **offset** applied to the entire reconstruction. Default `(0,0,0)` = where it was authored (§4); tiling fills the region regardless, with `origin` only shifting the common phase (which sites pair into dimers). A shift by a full tiling vector is a no-op. |
 | `passivate` | `Bool` | No | Hydrogen-passivate the danglers left after welding (the dropped-ghost reconstruction edges, and any under-coordinated atoms). Default `true`. Set `false` to keep those danglers exposed — e.g. when a later `patch_latticefill` on an adjacent face is meant to bond to them — and passivate once at the end. (Matches `materialize`'s `passivate`.) |
 | `tolerance` | `Float` | No | Weld tolerance (Å). Default 0.1. |
 | → (out) | `Crystal` | — | The reconstructed crystal. |
@@ -247,15 +247,15 @@ The one new piece of core machinery (§3), the bit-6 accessors reserved in `atom
 
 ### Phase 2 — `patch_build` extraction
 
-The "draw, don't assemble" authoring step (§4): extract the tile from a slab + cut volume, then re-express relative to the reference lattice point `R`.
+The "draw, don't assemble" authoring step (§4): extract the tile from a slab + cut volume, keeping it in its authored coordinates.
 
-- **Source:** `rust/src/structure_designer/nodes/patch_build.rs` (+ register in `nodes/mod.rs`, `node_type_registry.rs`). Extraction helpers (interior/ghost split, bond selection, `R`-relative re-expression of atoms **and** `cut_volume`) factored into a plain function so they test without the node wrapper.
+- **Source:** `rust/src/structure_designer/nodes/patch_build.rs` (+ register in `nodes/mod.rs`, `node_type_registry.rs`). Extraction helpers (interior/ghost split, bond selection) factored into a plain function so they test without the node wrapper.
 - **Rust tests** — `rust/tests/structure_designer/patch_build_test.rs`:
   1. **interior split:** atoms with SDF ≤ `ε` are interior (real); atoms outside are not interior.
   2. **ghost capture:** an outside atom bonded to an interior atom becomes a patch-ghost; an outside atom with no bond into the interior is excluded; **distance-1 only**.
   3. **bond selection:** interior–interior and interior–ghost bonds kept; ghost–ghost bonds dropped.
   4. **shared-boundary closure:** an atom on the shared cut face lands inside the cut for both adjacent tiles (within `ε`) and is real in both (not a ghost).
-  5. **coordinate frame:** extracted atoms + `cut_volume` are re-expressed relative to `R` (the cut's min-corner lattice cell); `R` is a lattice point, so a known atom's fractional motif offset is preserved (phase intact).
+  5. **coordinate frame:** extracted atoms keep their authored absolute coordinates (no re-expression) — this is what makes `patch_latticefill`'s default `origin` reproduce the reconstruction in place.
   6. **`HasAtoms` input:** a `Crystal` source and a `Molecule` source yield the same tile (only atoms read).
   7. validation: `1 ≤ len(tiling_vectors) ≤ 3` and linear independence enforced; degenerate vectors error.
 

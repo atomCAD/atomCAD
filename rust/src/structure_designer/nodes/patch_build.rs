@@ -14,7 +14,6 @@
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::{DataType, RecordType};
@@ -32,8 +31,6 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::transform::Transform;
-use glam::f64::{DQuat, DVec3};
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -61,18 +58,6 @@ impl Default for PatchBuildData {
             epsilon: DEFAULT_BUILD_THRESHOLD,
         }
     }
-}
-
-/// The result of extracting one tile from a slab + cut volume: the tile
-/// (interior + patch-ghosts + their bonds, a plain `AtomicStructure`) and the
-/// cut volume geometry, both re-expressed relative to the reference lattice
-/// point `R`.
-pub struct ExtractedTile {
-    pub tile: AtomicStructure,
-    pub cut_volume: GeoNode,
-    /// The reference lattice point the tile/cut were re-expressed against.
-    /// Exposed for testing/inspection; `R` itself is not stored in the patch.
-    pub reference_lattice_point: IVec3,
 }
 
 /// Validates the tiling vectors per design §4: there must be 1–3 of them and
@@ -113,52 +98,28 @@ pub fn validate_tiling_vectors(vectors: &[IVec3]) -> Result<(), String> {
     }
 }
 
-/// Computes the reference lattice point `R`: the lattice cell at the cut's
-/// reference (min) corner, approximated by the min corner of the realized
-/// interior atom set (the atoms actually inside the cut). Any lattice point is
-/// correct — `R` only fixes a phase the user later shifts with
-/// `patch_latticefill.origin` — and flooring to a cell keeps `R` a lattice
-/// point, so each atom's fractional motif offset survives the shift (phase
-/// preserved). Returns the origin cell when there are no interior atoms.
-fn compute_reference_lattice_point(
-    interior_positions: &[DVec3],
-    lattice: &UnitCellStruct,
-) -> IVec3 {
-    if interior_positions.is_empty() {
-        return IVec3::ZERO;
-    }
-    let mut min_real = interior_positions[0];
-    for p in &interior_positions[1..] {
-        min_real = min_real.min(*p);
-    }
-    let min_lattice = lattice.real_to_dvec3_lattice(&min_real);
-    IVec3::new(
-        min_lattice.x.floor() as i32,
-        min_lattice.y.floor() as i32,
-        min_lattice.z.floor() as i32,
-    )
-}
-
 /// Extracts the tile from `source` given the `cut_volume` geometry (a real-space
-/// SDF) and the build threshold `epsilon`, then re-expresses the atoms and the
-/// cut volume relative to the reference lattice point `R` (§4 "Extraction" /
-/// "Coordinate frame").
+/// SDF) and the build threshold `epsilon` (§4 "Extraction").
+///
+/// The extracted atoms are kept **in the coordinates they were drawn in** — they
+/// came straight off the authored slab, so they are already lattice-registered.
+/// `patch_latticefill` then places the tile by whole-lattice-vector translations
+/// only (the tiling steps plus the optional `origin` offset), which keeps every
+/// atom on the lattice so the welds line up; at the default offset nothing is
+/// moved, so the patch reappears exactly where it was authored.
 ///
 /// This is the node-free core so the extraction logic is testable without the
 /// node-network machinery.
 pub fn extract_patch_tile(
     source: &AtomicStructure,
-    lattice: &UnitCellStruct,
     cut_volume: &GeoNode,
     epsilon: f64,
-) -> ExtractedTile {
+) -> AtomicStructure {
     // 1. Interior `I` = slab atoms inside the cut volume (membership SDF ≤ ε).
     let mut interior: HashSet<u32> = HashSet::new();
-    let mut interior_positions: Vec<DVec3> = Vec::new();
     for (id, atom) in source.iter_atoms() {
         if cut_volume.implicit_eval_3d(&atom.position) <= epsilon {
             interior.insert(*id);
-            interior_positions.push(atom.position);
         }
     }
 
@@ -226,20 +187,9 @@ pub fn extract_patch_tile(
         }
     }
 
-    // 5. Re-express atoms and cut volume relative to R (a lattice point).
-    let reference = compute_reference_lattice_point(&interior_positions, lattice);
-    let r_real = lattice.ivec3_lattice_to_real(&reference);
-    tile.transform(&DQuat::IDENTITY, &(-r_real));
-    let cut_volume_rel = GeoNode::transform(
-        Transform::new(-r_real, DQuat::IDENTITY),
-        Box::new(cut_volume.clone()),
-    );
-
-    ExtractedTile {
-        tile,
-        cut_volume: cut_volume_rel,
-        reference_lattice_point: reference,
-    }
+    // The tile keeps its authored absolute coordinates — no re-expression. The
+    // cut volume is likewise stored as-drawn (see `eval`).
+    tile
 }
 
 impl NodeData for PatchBuildData {
@@ -278,22 +228,21 @@ impl NodeData for PatchBuildData {
             }
         };
 
-        // Pin 1: lattice (HasStructure) — supplies the lattice vectors used to
-        // interpret tiling vectors and to derive the reference lattice point.
+        // Pin 1: lattice (HasStructure) — retained so the tiling vectors are
+        // declared against a concrete lattice (commensurability intent); the
+        // tile is kept in authored coordinates, so no reference lattice point is
+        // derived here. Still evaluated to surface a clear error on mis-wiring.
         let lattice_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 1);
         if let NetworkResult::Error(_) = lattice_val {
             return EvalOutput::single(lattice_val);
         }
-        let lattice_vecs = match lattice_val.get_unit_cell() {
-            Some(uc) => uc,
-            None => {
-                return EvalOutput::single(NetworkResult::Error(
-                    "patch_build: lattice must be a Crystal or Blueprint providing lattice vectors"
-                        .to_string(),
-                ));
-            }
-        };
+        if lattice_val.get_unit_cell().is_none() {
+            return EvalOutput::single(NetworkResult::Error(
+                "patch_build: lattice must be a Crystal or Blueprint providing lattice vectors"
+                    .to_string(),
+            ));
+        }
 
         // Pin 2: tiling_vectors (Array[IVec3]).
         let tiling_val =
@@ -342,17 +291,14 @@ impl NodeData for PatchBuildData {
             }
         };
 
-        // Extract the tile and re-express it relative to R.
-        let extracted = extract_patch_tile(
-            &source_atoms,
-            &lattice_vecs,
-            &cut_bp.geo_tree_root,
-            self.epsilon,
-        );
+        // Extract the tile in its authored coordinates.
+        let tile = extract_patch_tile(&source_atoms, &cut_bp.geo_tree_root, self.epsilon);
 
-        // Assemble the built-in `Patch` record.
+        // Assemble the built-in `Patch` record. The tile and cut volume are both
+        // kept as drawn, so applying with the default `origin` reproduces the
+        // authored reconstruction in place.
         let tile_result = NetworkResult::Molecule(MoleculeData {
-            atoms: extracted.tile,
+            atoms: tile,
             geo_tree_root: None,
         });
         let tiling_result = NetworkResult::Array(
@@ -363,7 +309,7 @@ impl NodeData for PatchBuildData {
         );
         let cut_result = NetworkResult::Blueprint(BlueprintData {
             structure: cut_bp.structure,
-            geo_tree_root: extracted.cut_volume,
+            geo_tree_root: cut_bp.geo_tree_root,
             alignment: cut_bp.alignment,
             alignment_reason: cut_bp.alignment_reason,
         });
@@ -418,7 +364,7 @@ pub fn get_node_type() -> NodeType {
             bonded to the interior are copied as patch-ghosts that weld onto neighbour tiles / \
             the bulk at apply time. Outputs the built-in Patch record \
             {tile: Molecule, tiling_vectors: Array[IVec3], cut_volume: Blueprint}, with the tile \
-            and cut volume re-expressed relative to a reference lattice point. See \
+            and cut volume kept in their authored coordinates. See \
             doc/design_surface_patches.md §4."
                 .to_string(),
         summary: Some("Extract a tileable surface patch".to_string()),

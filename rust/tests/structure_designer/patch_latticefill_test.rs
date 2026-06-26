@@ -281,7 +281,7 @@ fn containment_2d_normal_is_free() {
     // free (normal) axis, cells are still selected by their x–y footprint.
     let bounds = box_bounds(DVec3::new(-0.5, -0.5, 20.0), DVec3::new(8.5, 8.5, 30.0));
 
-    let cells = select_patch_cells(IVec3::ZERO, &tiling, &lattice, None, &bounds);
+    let cells = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &bounds);
 
     assert_eq!(cells.len(), 4, "the 2×2 block whose x–y footprint fits");
     for c in [
@@ -301,7 +301,7 @@ fn containment_1d_transverse_free() {
     // Both transverse axes (y, z) are free; only the x footprint gates.
     let bounds = box_bounds(DVec3::new(-0.5, 20.0, 20.0), DVec3::new(8.5, 30.0, 30.0));
 
-    let cells = select_patch_cells(IVec3::ZERO, &tiling, &lattice, None, &bounds);
+    let cells = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &bounds);
 
     assert_eq!(cells.len(), 2);
     assert!(cells.contains(&IVec3::new(0, 0, 0)));
@@ -319,14 +319,14 @@ fn containment_3d_has_no_free_axis() {
 
     // Tight box around the origin cell → exactly one cell.
     let tight = box_bounds(DVec3::new(-0.5, -0.5, -0.5), DVec3::new(4.5, 4.5, 4.5));
-    let cells = select_patch_cells(IVec3::ZERO, &tiling, &lattice, None, &tight);
+    let cells = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &tight);
     assert_eq!(cells, vec![IVec3::ZERO]);
 
     // With no free axis, z is a periodic direction requiring containment: a
     // region offset in z does NOT place the origin-plane cell (unlike the 2D
     // case above, where z is free and the origin cell is placed regardless).
     let far_z = box_bounds(DVec3::new(-0.5, -0.5, 20.0), DVec3::new(4.5, 4.5, 30.0));
-    let far = select_patch_cells(IVec3::ZERO, &tiling, &lattice, None, &far_z);
+    let far = select_patch_cells(IVec3::ZERO, DVec3::ZERO, &tiling, &lattice, None, &far_z);
     assert!(
         !far.contains(&IVec3::ZERO),
         "the origin-plane cell is not placed when z is periodic and out of range"
@@ -636,5 +636,131 @@ fn compatibility_too_low_overcoordinates() {
     assert!(
         report.overcoordinated_atoms > 0,
         "the over-stacked weld is flagged"
+    );
+}
+
+// ============================================================================
+// 11. Default origin reproduces authoring: because the tile keeps its authored
+//     coordinates, applying with origin = (0,0,0) lands the tile exactly where
+//     it was drawn (no hidden re-anchoring), and the collar welds onto the
+//     substrate sitting at that same authored position. This is the behaviour
+//     the whole `origin`-as-offset change is for.
+// ============================================================================
+
+#[test]
+fn default_origin_reproduces_authored_coordinates() {
+    let lattice = cubic(4.0);
+
+    // A tile authored at an arbitrary absolute position — deliberately *not*
+    // near the lattice origin (cell (3,0,1)-ish), to prove there is no implicit
+    // re-anchoring to the origin cell.
+    let mut tile = AtomicStructure::new();
+    let i = tile.add_atom(CARBON, DVec3::new(13.0, 1.0, 4.0));
+    let c = tile.add_atom(CARBON, DVec3::new(13.0, 1.0, 0.0));
+    tile.set_atom_patch_ghost(c, true);
+    tile.add_bond(i, c, SINGLE);
+
+    // Substrate with an atom exactly at the collar's authored position (plus a
+    // deeper neighbour so the welded collar carries an inherited bulk bond).
+    let mut target = AtomicStructure::new();
+    let b = target.add_atom(CARBON, DVec3::new(13.0, 1.0, 0.0));
+    let d = target.add_atom(CARBON, DVec3::new(13.0, 1.0, -4.0));
+    target.add_bond(b, d, SINGLE);
+
+    // Region generous enough that exactly the authored cell fits.
+    let bounds = box_bounds(DVec3::new(10.0, -3.0, -8.0), DVec3::new(18.0, 5.0, 8.0));
+
+    let (result, report) = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &[IVec3::new(1, 0, 0)],
+        &empty_cut(),
+        IVec3::ZERO, // default offset → as authored
+        false,
+        0.1,
+    );
+
+    // The interior atom appears exactly where it was drawn (origin 0 = identity).
+    assert!(
+        find_atom_at(&result, DVec3::new(13.0, 1.0, 4.0), 1e-9).is_some(),
+        "the interior atom lands at its authored absolute position"
+    );
+    // The collar found its substrate twin and welded — nothing left floating.
+    assert_eq!(
+        report.orphaned_ghosts, 0,
+        "the collar welds at the authored position"
+    );
+    assert_eq!(
+        num_ghosts(&result),
+        0,
+        "no patch-ghosts remain after the weld"
+    );
+    // The welded collar carries both the inherited bulk bond (to D) and the tile
+    // bond (to I): a continuous bulk—collar—interior chain.
+    assert_eq!(
+        bonds_at(&result, DVec3::new(13.0, 1.0, 0.0)),
+        2,
+        "the welded collar is bonded to both the bulk and the tile interior"
+    );
+}
+
+// ============================================================================
+// 12. The `origin` offset shifts the reconstruction's phase by whole cells.
+//     With a 2-cell tiling period the authored tile lands on even cells; an
+//     origin of (1,0,0) shifts the whole pattern onto the odd cells (a genuine
+//     one-cell slide — the kind of phase choice that picks which sites pair into
+//     dimers). A shift by a full tiling vector would instead be a no-op.
+// ============================================================================
+
+#[test]
+fn origin_offset_shifts_phase_by_whole_cells() {
+    let lattice = cubic(4.0);
+
+    // Tile authored at x = 1; tiling period is 2 cells (8 Å) along x.
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(CARBON, DVec3::new(1.0, 1.0, 4.0));
+    let c = tile.add_atom(CARBON, DVec3::new(1.0, 1.0, 0.0));
+    tile.set_atom_patch_ghost(c, true);
+
+    let target = AtomicStructure::new();
+    let tiling = [IVec3::new(2, 0, 0)];
+    let bounds = box_bounds(DVec3::new(-6.0, -2.0, -2.0), DVec3::new(14.0, 2.0, 8.0));
+
+    let run = |origin: IVec3| {
+        apply_patch(
+            &target,
+            &lattice,
+            None,
+            &bounds,
+            &tile,
+            &tiling,
+            &empty_cut(),
+            origin,
+            false,
+            0.1,
+        )
+        .0
+    };
+
+    // origin (0,0,0): the authored even-cell tile is present at x = 1.
+    let even = run(IVec3::ZERO);
+    assert!(
+        find_atom_at(&even, DVec3::new(1.0, 1.0, 4.0), 1e-9).is_some(),
+        "default origin keeps the tile at its authored even-cell position"
+    );
+
+    // origin (1,0,0): the pattern slides one cell — interiors now land on the
+    // odd cells (x = 5, -3, …), and nothing sits at the authored x = 1.
+    let odd = run(IVec3::new(1, 0, 0));
+    assert!(
+        find_atom_at(&odd, DVec3::new(5.0, 1.0, 4.0), 1e-9).is_some(),
+        "origin (1,0,0) shifts the reconstruction one cell along +x"
+    );
+    assert!(
+        find_atom_at(&odd, DVec3::new(1.0, 1.0, 4.0), 1e-9).is_none(),
+        "the authored even-cell position is now empty (phase shifted)"
     );
 }

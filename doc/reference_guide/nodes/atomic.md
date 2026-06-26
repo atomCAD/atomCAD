@@ -312,7 +312,7 @@ Extracts a tileable patch from an authored slab and a cut volume. The authoring 
 **Input pins**
 
 - `source: HasAtoms` — the whole authored slab (the reconstruction **on its bulk**). Only its atoms are read; the stored tile is *computed* from this, not equal to it. A `Crystal` or a `Molecule` both work.
-- `lattice: HasStructure` — supplies the lattice vectors used to interpret the integer tiling vectors and to pick the tile's reference lattice point.
+- `lattice: HasStructure` — supplies the lattice vectors used to interpret and validate the integer tiling vectors.
 - `tiling_vectors: Array[IVec3]` — 1–3 periodic directions, each an integer combination of `lattice`'s vectors (1 = chain/edge, 2 = surface, 3 = bulk twin). Typically produced by a [`plane_tiling_vectors`](./math_programming.md#plane_tiling_vectors) node rather than typed by hand. Must be linearly independent.
 - `cut_volume: Blueprint` — the geometry of **one tile**. It does double duty: at build time it separates the slab into interior (kept as real tile atoms) and the outward-bonded ghosts; the same volume is stored in the patch and drives substrate removal at apply time.
 
@@ -324,7 +324,7 @@ Extracts a tileable patch from an authored slab and a cut volume. The authoring 
 
 - `Build threshold ε (Å)` (default `0.1`) — a slab atom counts as *interior* when its cut-volume membership SDF ≤ ε. Keep it above any on-surface jitter so atoms drawn right on the cut face are caught, but well below the interplanar spacing so it never grabs the layer below.
 
-**How extraction works.** Interior atoms (inside the cut) become real tile atoms. Slab atoms *outside* the cut that are bonded to an interior atom are copied as **patch-ghosts** — these are exactly the two kinds of atom the weld needs: neighbour-tile atoms (across a tile boundary → realize the periodic bond) and bulk collar atoms (one step into the substrate → realize the tile↔bulk bond and inherit the bulk's bonds). Bonds with at least one interior endpoint are kept; ghost–ghost bonds are dropped. The extracted atoms and the cut volume are then re-expressed relative to a reference *lattice point* (the cell at the cut's min corner) so the patch's local origin is a lattice point — this is what makes placement a pure lattice translation so the welds line up later.
+**How extraction works.** Interior atoms (inside the cut) become real tile atoms. Slab atoms *outside* the cut that are bonded to an interior atom are copied as **patch-ghosts** — these are exactly the two kinds of atom the weld needs: neighbour-tile atoms (across a tile boundary → realize the periodic bond) and bulk collar atoms (one step into the substrate → realize the tile↔bulk bond and inherit the bulk's bonds). Bonds with at least one interior endpoint are kept; ghost–ghost bonds are dropped. The extracted atoms and the cut volume are kept **in the coordinates you drew them in** — they came straight off the authored slab, so they are already on the lattice. Because every placement `patch_latticefill` makes is a whole-lattice-vector translation (the tiling steps plus the optional `origin` offset), every atom stays on the lattice and the welds line up; and at the default offset nothing is moved, so the patch reappears exactly where it was authored.
 
 ### patch_latticefill
 
@@ -337,7 +337,7 @@ Tiles a patch across a region and welds it in, producing the reconstructed `Crys
 - `target: HasAtoms` — the structure being reconstructed.
 - `region: HasStructure` (optional) — where to tile; supplies the substrate lattice vectors and the fill extent. Defaults to `target`'s extent (in which case `target` must be a `Crystal`, so it carries a structure). `target` and `region` are separate pins because in 3D the fill volume need not match the workpiece volume.
 - `patch: Patch` — from `patch_build`.
-- `origin: IVec3` (optional) — the target lattice point at which the patch's local origin is placed; tiling fills outward from there. Defaults to the lattice point nearest the region's centre. Shift it to slide the reconstruction or change which sites pair into dimers.
+- `origin: IVec3` (optional, default `(0,0,0)`) — a whole-cell **offset** applied to the entire reconstruction. The default `(0,0,0)` places it exactly where it was authored (same lattice registration) — what you want whenever `target` is the crystal the patch was built from, or an equivalent one. Set it to slide the reconstruction by whole unit cells, or to pick a different phase (e.g. which sites pair into dimers). It does **not** change *how much* of the region is filled — tiling always covers every cell whose footprint fits; `origin` only shifts their common phase.
 - `passivate: Bool` (optional, default `true`) — hydrogen-passivate the danglers left after welding and dropping unwelded ghosts. Set `false` to keep edge danglers exposed — e.g. when a later `patch_latticefill` on an adjacent face is meant to bond to them — and passivate once at the end. (Matches `materialize`'s passivate.)
 - `tolerance: Float` (optional, default `0.1` Å) — weld tolerance. Atoms within this distance fuse into one. Keep it below the smallest interatomic spacing so distinct lattice sites never over-merge.
 
@@ -345,12 +345,12 @@ Tiles a patch across a region and welds it in, producing the reconstructed `Crys
 
 - `Crystal` — the reconstructed crystal.
 
-**What it does, in order.** Select the cells whose tile footprint fits the region (whole-cell containment in the periodic directions — no partial lateral tiles; free along the surface normal, so the cut volume may legitimately stick out to reach passivation hydrogens above the face). Cut the displaced substrate in those cells, place a translated copy of the tile in each, weld all coincident atoms (fusing tile↔tile periodic bonds and tile↔bulk collar bonds in one pass), drop any patch-ghost that found no real twin (a true reconstruction edge), then passivate the residual danglers. Cut and place share the same cell set, so substrate is never removed where it is not also reconstructed.
+**What it does, in order.** Starting from the authored registration shifted by `origin`, select the cells whose tile footprint fits the region (whole-cell containment in the periodic directions — no partial lateral tiles; free along the surface normal, so the cut volume may legitimately stick out to reach passivation hydrogens above the face). Cut the displaced substrate in those cells, place a copy of the tile in each — at `origin = (0,0,0)` and no tiling step the copy lands exactly where it was drawn — weld all coincident atoms (fusing tile↔tile periodic bonds and tile↔bulk collar bonds in one pass), drop any patch-ghost that found no real twin (a true reconstruction edge), then passivate the residual danglers. Cut and place share the same cell set, so substrate is never removed where it is not also reconstructed.
 
 **Compatibility badge.** After each evaluation the properties panel shows a compatibility badge summarizing the weld outcome:
 
 - **Welded collars / ghosts** — patch-ghosts that found a real twin and fused (the realized periodic and collar bonds).
-- **Orphaned (dropped) ghosts** — patch-ghosts with no real twin. A high count usually means the patch sits **too high** (floating, un-welded collars).
+- **Orphaned (dropped) ghosts** — patch-ghosts with no real twin. A few are expected at the true reconstruction edges. A *high* count means the collars aren't meeting substrate — with the default `origin` that points at a **registration mismatch** (`target` doesn't share the patch's lattice and motif registration), or at an `origin` offset that slid the reconstruction off the surface.
 - **Over-coordinated atoms** — real atoms left with more bonds than their element allows after welding — usually the patch sits **too low / into the sub-surface**.
 
 The badge reads green **Compatible** when there are no orphaned collars and no over-coordination, and amber **Check fit** otherwise (with a hint pointing at the likely too-high / too-low cause). It reads *not yet evaluated* until the node has been displayed at least once. Both `target` and `region` must be commensurate with the patch's tiling vectors, and `target` must share the build lattice's full lattice **and** motif registration for collars to weld — a mismatch shows up as orphaned collars in the badge.

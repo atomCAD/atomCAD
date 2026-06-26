@@ -2,19 +2,17 @@
 //! `doc/design_surface_patches.md` §4 / §9 Phase 2).
 //!
 //! The "draw, don't assemble" authoring step: extract a tile from a slab + cut
-//! volume (interior real atoms + outward patch-ghosts + their bonds), then
-//! re-express the atoms and the cut volume relative to a reference lattice
-//! point `R`. The extraction core (`extract_patch_tile`) and the tiling-vector
-//! validation (`validate_tiling_vectors`) are plain functions, tested here
-//! without the node-network machinery.
+//! volume (interior real atoms + outward patch-ghosts + their bonds). The tile
+//! is kept in the coordinates it was drawn in (no re-expression). The extraction
+//! core (`extract_patch_tile`) and the tiling-vector validation
+//! (`validate_tiling_vectors`) are plain functions, tested here without the
+//! node-network machinery.
 
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
-use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     Alignment, CrystalData, MoleculeData, NetworkResult,
 };
@@ -24,15 +22,6 @@ use rust_lib_flutter_cad::structure_designer::nodes::patch_build::{
 
 const CARBON: i16 = 6;
 const SINGLE: u8 = 1;
-
-/// A 10 Å cubic lattice — keeps lattice/real arithmetic legible in tests.
-fn cubic_10() -> UnitCellStruct {
-    UnitCellStruct::new(
-        DVec3::new(10.0, 0.0, 0.0),
-        DVec3::new(0.0, 10.0, 0.0),
-        DVec3::new(0.0, 0.0, 10.0),
-    )
-}
 
 /// Counts (real atoms, patch-ghost atoms) in a structure.
 fn count_real_and_ghost(s: &AtomicStructure) -> (usize, usize) {
@@ -71,13 +60,13 @@ fn interior_split_keeps_inside_atoms_only() {
     slab.add_atom(CARBON, DVec3::new(8.0, 0.0, 0.0)); // d = 8, outside, no bond
 
     let cut = GeoNode::sphere(DVec3::ZERO, 5.0);
-    let res = extract_patch_tile(&slab, &cubic_10(), &cut, 0.1);
+    let res = extract_patch_tile(&slab, &cut, 0.1);
 
     // Only the two interior atoms survive; the unbonded outside atom is dropped.
-    assert_eq!(res.tile.get_num_of_atoms(), 2);
-    assert_eq!(count_real_and_ghost(&res.tile), (2, 0));
-    assert!(find_atom_at(&res.tile, DVec3::new(0.0, 0.0, 0.0), 1e-6).is_some());
-    assert!(find_atom_at(&res.tile, DVec3::new(3.0, 0.0, 0.0), 1e-6).is_some());
+    assert_eq!(res.get_num_of_atoms(), 2);
+    assert_eq!(count_real_and_ghost(&res), (2, 0));
+    assert!(find_atom_at(&res, DVec3::new(0.0, 0.0, 0.0), 1e-6).is_some());
+    assert!(find_atom_at(&res, DVec3::new(3.0, 0.0, 0.0), 1e-6).is_some());
 }
 
 // ============================================================================
@@ -95,20 +84,20 @@ fn ghost_capture_is_distance_one_only() {
     slab.add_bond(b, c, SINGLE);
 
     let cut = GeoNode::sphere(DVec3::ZERO, 5.0);
-    let res = extract_patch_tile(&slab, &cubic_10(), &cut, 0.1);
+    let res = extract_patch_tile(&slab, &cut, 0.1);
 
     // A (real) + B (patch-ghost). C is distance-2 → excluded.
-    assert_eq!(res.tile.get_num_of_atoms(), 2);
-    assert_eq!(count_real_and_ghost(&res.tile), (1, 1));
-    let ghost = find_atom_at(&res.tile, DVec3::new(8.0, 0.0, 0.0), 1e-6)
+    assert_eq!(res.get_num_of_atoms(), 2);
+    assert_eq!(count_real_and_ghost(&res), (1, 1));
+    let ghost = find_atom_at(&res, DVec3::new(8.0, 0.0, 0.0), 1e-6)
         .expect("the bonded outside atom B must be present");
     assert!(ghost.is_patch_ghost(), "B must be flagged patch-ghost");
     assert!(
-        find_atom_at(&res.tile, DVec3::new(16.0, 0.0, 0.0), 1e-6).is_none(),
+        find_atom_at(&res, DVec3::new(16.0, 0.0, 0.0), 1e-6).is_none(),
         "distance-2 atom C must be excluded"
     );
     // The A–B bond is kept; the B–C bond is dropped (C is not in the tile).
-    assert_eq!(res.tile.get_num_of_bonds(), 1);
+    assert_eq!(res.get_num_of_bonds(), 1);
 }
 
 // ============================================================================
@@ -129,12 +118,12 @@ fn bond_selection_drops_ghost_ghost() {
     slab.add_bond(g1, g2, SINGLE); // ghost–ghost (must be dropped)
 
     let cut = GeoNode::sphere(DVec3::ZERO, 5.0);
-    let res = extract_patch_tile(&slab, &cubic_10(), &cut, 0.1);
+    let res = extract_patch_tile(&slab, &cut, 0.1);
 
-    assert_eq!(res.tile.get_num_of_atoms(), 4);
-    assert_eq!(count_real_and_ghost(&res.tile), (2, 2));
+    assert_eq!(res.get_num_of_atoms(), 4);
+    assert_eq!(count_real_and_ghost(&res), (2, 2));
     // A–B, A–G1, B–G2 kept; G1–G2 dropped → 3 bonds.
-    assert_eq!(res.tile.get_num_of_bonds(), 3);
+    assert_eq!(res.get_num_of_bonds(), 3);
 }
 
 // ============================================================================
@@ -149,12 +138,12 @@ fn atom_on_cut_surface_is_interior_real() {
     slab.add_atom(CARBON, DVec3::new(5.0, 0.0, 0.0)); // exactly on the r=5 surface
 
     let cut = GeoNode::sphere(DVec3::ZERO, 5.0);
-    let res = extract_patch_tile(&slab, &cubic_10(), &cut, 0.1);
+    let res = extract_patch_tile(&slab, &cut, 0.1);
 
-    assert_eq!(res.tile.get_num_of_atoms(), 2);
-    assert_eq!(count_real_and_ghost(&res.tile), (2, 0));
-    let on_surface = find_atom_at(&res.tile, DVec3::new(5.0, 0.0, 0.0), 1e-6)
-        .expect("surface atom must be present");
+    assert_eq!(res.get_num_of_atoms(), 2);
+    assert_eq!(count_real_and_ghost(&res), (2, 0));
+    let on_surface =
+        find_atom_at(&res, DVec3::new(5.0, 0.0, 0.0), 1e-6).expect("surface atom must be present");
     assert!(
         !on_surface.is_patch_ghost(),
         "an atom on the shared cut face is a real boundary atom, not a ghost"
@@ -162,49 +151,34 @@ fn atom_on_cut_surface_is_interior_real() {
 }
 
 // ============================================================================
-// 5. Coordinate frame: atoms + cut volume re-expressed relative to R (the cut's
-//    min-corner lattice cell). R is a lattice point, so a known atom's
-//    fractional motif offset is preserved (phase intact).
+// 5. Coordinate frame: the extracted atoms keep their **authored absolute**
+//    coordinates — no re-expression. This is what makes `patch_latticefill`'s
+//    default `origin` reproduce the reconstruction in place.
 // ============================================================================
 
 #[test]
-fn coordinate_frame_is_r_relative_and_phase_preserving() {
-    let lattice = cubic_10();
-    // Two interior atoms at lattice-point + a fixed fractional offset.
-    // offset = (2.5, 1.0, 1.0) = fractional (0.25, 0.1, 0.1) of a 10 Å cell.
-    let offset = DVec3::new(2.5, 1.0, 1.0);
-    let a_real = DVec3::new(10.0, 0.0, 0.0) + offset; // cell (1,0,0)
-    let b_real = DVec3::new(20.0, 0.0, 0.0) + offset; // cell (2,0,0)
+fn coordinate_frame_is_absolute_authored() {
+    // Two interior atoms drawn at arbitrary absolute positions (deliberately
+    // not near the lattice origin).
+    let a_real = DVec3::new(12.5, 1.0, 1.0);
+    let b_real = DVec3::new(22.5, 1.0, 1.0);
 
     let mut slab = AtomicStructure::new();
     slab.add_atom(CARBON, a_real);
     slab.add_atom(CARBON, b_real);
 
     // Sphere covering both atoms; centred between them.
-    let cut = GeoNode::sphere(DVec3::new(17.0, 1.0, 1.0), 8.0);
-    let res = extract_patch_tile(&slab, &lattice, &cut, 0.1);
+    let cut = GeoNode::sphere(DVec3::new(17.5, 1.0, 1.0), 8.0);
+    let res = extract_patch_tile(&slab, &cut, 0.1);
 
-    // R = floor of the min interior corner in lattice coords → cell (1,0,0).
-    assert_eq!(res.reference_lattice_point, IVec3::new(1, 0, 0));
-
-    // Atom A, originally at lattice point (1,0,0)+offset, lands at exactly the
-    // offset — its fractional phase within the cell is untouched.
+    // Both atoms remain exactly where they were drawn — coordinates untouched.
     assert!(
-        find_atom_at(&res.tile, offset, 1e-9).is_some(),
-        "atom A must re-express to the pure fractional offset (phase preserved)"
+        find_atom_at(&res, a_real, 1e-9).is_some(),
+        "atom A keeps its authored absolute position"
     );
-    // Atom B lands one cell over.
     assert!(
-        find_atom_at(&res.tile, DVec3::new(10.0, 0.0, 0.0) + offset, 1e-9).is_some(),
-        "atom B must re-express to (1 cell) + offset"
-    );
-
-    // The cut volume moved by -R_real = (-10,0,0): its centre is now (7,1,1),
-    // where the sphere SDF equals -radius.
-    let sdf_at_new_center = res.cut_volume.implicit_eval_3d(&DVec3::new(7.0, 1.0, 1.0));
-    assert!(
-        (sdf_at_new_center - (-8.0)).abs() < 1e-6,
-        "cut volume must be re-expressed relative to R (got SDF {sdf_at_new_center} at the new centre)"
+        find_atom_at(&res, b_real, 1e-9).is_some(),
+        "atom B keeps its authored absolute position"
     );
 }
 
@@ -233,27 +207,21 @@ fn crystal_and_molecule_sources_yield_same_tile() {
     });
 
     let cut = GeoNode::sphere(DVec3::ZERO, 5.0);
-    let lattice = cubic_10();
 
-    let from_crystal = extract_patch_tile(&crystal.extract_atomic().unwrap(), &lattice, &cut, 0.1);
-    let from_molecule =
-        extract_patch_tile(&molecule.extract_atomic().unwrap(), &lattice, &cut, 0.1);
+    let from_crystal = extract_patch_tile(&crystal.extract_atomic().unwrap(), &cut, 0.1);
+    let from_molecule = extract_patch_tile(&molecule.extract_atomic().unwrap(), &cut, 0.1);
 
     assert_eq!(
-        from_crystal.tile.get_num_of_atoms(),
-        from_molecule.tile.get_num_of_atoms()
+        from_crystal.get_num_of_atoms(),
+        from_molecule.get_num_of_atoms()
     );
     assert_eq!(
-        from_crystal.tile.get_num_of_bonds(),
-        from_molecule.tile.get_num_of_bonds()
+        from_crystal.get_num_of_bonds(),
+        from_molecule.get_num_of_bonds()
     );
     assert_eq!(
-        count_real_and_ghost(&from_crystal.tile),
-        count_real_and_ghost(&from_molecule.tile)
-    );
-    assert_eq!(
-        from_crystal.reference_lattice_point,
-        from_molecule.reference_lattice_point
+        count_real_and_ghost(&from_crystal),
+        count_real_and_ghost(&from_molecule)
     );
 }
 
