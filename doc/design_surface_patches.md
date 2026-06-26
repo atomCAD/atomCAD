@@ -166,6 +166,8 @@ Tiles a patch across a region and welds it in.
 
 ### Which cells get a tile (how `region` is used)
 
+> **Superseded by `doc/design_patch_cell_selection.md`.** The implemented rule tests the tile's **interior atoms** (placed and projected onto a target-derived test plane), not the `cut_volume` footprint sketched below; the `origin` pin is an offset, not an absolute anchor; and there are two cell-selection debug views. The asymmetric periodic/non-periodic principle below still holds — only the footprint sampling and the test height changed. Read the dedicated doc before touching `select_patch_cells`.
+
 Tiling must stop at the region boundary. The rule is asymmetric between the periodic and non-periodic directions:
 
 > **Place a tile at cell `c` iff its `cut_volume`, translated to `c` and *projected onto the subspace spanned by `tiling_vectors`*, lies fully inside `region` — with no containment requirement along the non-periodic direction(s).**
