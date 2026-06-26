@@ -85,13 +85,13 @@ class PatchLatticeFillEditor extends StatelessWidget {
           CheckboxListTile(
             title: const Text('Test height at lattice origin'),
             subtitle: const Text(
-              'Cell selection tests the patch footprint at the lattice origin '
-              "height. Uncheck to derive it from the target slab instead "
-              '(needed when the target is offset from the origin, e.g. a thin '
-              'slab at a non-zero height).',
+              'Off (default): cell selection derives the test height from the '
+              'target slab — robust to a target offset from the origin. On: '
+              'tests at the lattice origin height (simpler, but selects nothing '
+              'if the target does not straddle the origin).',
             ),
             value: data!.testHeightAtOrigin,
-            onChanged: (value) => _commit(testHeightAtOrigin: value ?? true),
+            onChanged: (value) => _commit(testHeightAtOrigin: value ?? false),
             controlAffinity: ListTileControlAffinity.leading,
             contentPadding: EdgeInsets.zero,
           ),
@@ -151,16 +151,36 @@ class _CompatibilityBadge extends StatelessWidget {
       );
     }
 
+    final placed = report.placedCells;
     final welded = report.weldedGhosts;
     final orphaned = report.orphanedGhosts;
     final overcoordinated = report.overcoordinatedAtoms;
-    final clean = orphaned == BigInt.zero && overcoordinated == BigInt.zero;
+    // Nothing tiled: the other counts are all zero, but that is failure, not
+    // success — the test plane missed the target (usually the wrong test-height
+    // mode for an off-origin target). Flag it distinctly.
+    final nothingPlaced = placed == BigInt.zero;
+    final clean = !nothingPlaced &&
+        orphaned == BigInt.zero &&
+        overcoordinated == BigInt.zero;
 
-    final Color color = clean ? Colors.green.shade700 : Colors.orange.shade800;
-    final IconData icon = clean ? Icons.check_circle : Icons.warning_amber;
-    final String headline = clean ? 'Compatible' : 'Check fit';
+    final Color color = nothingPlaced
+        ? Colors.red.shade700
+        : (clean ? Colors.green.shade700 : Colors.orange.shade800);
+    final IconData icon = nothingPlaced
+        ? Icons.error_outline
+        : (clean ? Icons.check_circle : Icons.warning_amber);
+    final String headline = nothingPlaced
+        ? 'No tiles placed'
+        : (clean ? 'Compatible' : 'Check fit');
 
     final hints = <String>[];
+    if (nothingPlaced) {
+      hints.add(
+        'No cell was selected, so the patch added nothing. The test plane '
+        'missed the target — if the target is offset from the lattice origin '
+        'along the surface normal, uncheck "Test height at lattice origin".',
+      );
+    }
     if (orphaned > BigInt.zero) {
       hints.add(
         'Orphaned collars suggest the patch sits too high (floating, '
@@ -196,6 +216,7 @@ class _CompatibilityBadge extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
+          _statLine('Tiles placed', placed),
           _statLine('Welded collars / ghosts', welded),
           _statLine('Orphaned (dropped) ghosts', orphaned),
           _statLine('Over-coordinated atoms', overcoordinated),

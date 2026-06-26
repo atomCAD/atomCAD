@@ -11700,10 +11700,11 @@ impl SseDecode
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_placedCells = <usize>::sse_decode(deserializer);
         let mut var_weldedGhosts = <usize>::sse_decode(deserializer);
         let mut var_orphanedGhosts = <usize>::sse_decode(deserializer);
         let mut var_overcoordinatedAtoms = <usize>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APICompatibilityReport{welded_ghosts: var_weldedGhosts, orphaned_ghosts: var_orphanedGhosts, overcoordinated_atoms: var_overcoordinatedAtoms};
+        return crate::api::structure_designer::structure_designer_api_types::APICompatibilityReport{placed_cells: var_placedCells, welded_ghosts: var_weldedGhosts, orphaned_ghosts: var_orphanedGhosts, overcoordinated_atoms: var_overcoordinatedAtoms};
     }
 }
 
@@ -16861,6 +16862,7 @@ impl flutter_rust_bridge::IntoDart
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.placed_cells.into_into_dart().into_dart(),
             self.welded_ghosts.into_into_dart().into_dart(),
             self.orphaned_ghosts.into_into_dart().into_dart(),
             self.overcoordinated_atoms.into_into_dart().into_dart(),
@@ -20957,6 +20959,7 @@ impl SseEncode
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <usize>::sse_encode(self.placed_cells, serializer);
         <usize>::sse_encode(self.welded_ghosts, serializer);
         <usize>::sse_encode(self.orphaned_ghosts, serializer);
         <usize>::sse_encode(self.overcoordinated_atoms, serializer);

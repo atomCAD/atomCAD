@@ -67,6 +67,11 @@ const CUT_MEMBERSHIP_EPSILON: f64 = 0.1;
 ///   sub-surface" failure mode).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CompatibilityReport {
+    /// Number of cells (tiles) selected and placed. **Zero means nothing was
+    /// tiled** — typically the test plane missed the target (see
+    /// `test_height_at_origin`), so the other three counts being zero is *not*
+    /// success.
+    pub placed_cells: usize,
     pub welded_ghosts: usize,
     pub orphaned_ghosts: usize,
     pub overcoordinated_atoms: usize,
@@ -80,14 +85,14 @@ pub struct PatchLatticeFillData {
     /// Weld tolerance in Å (default 0.1).
     #[serde(default = "default_tolerance")]
     pub tolerance: f64,
-    /// Cell-selection test height: when `true` (default), project test atoms onto
-    /// the periodic subspace through the **lattice origin** (height 0 along each
-    /// non-periodic direction) — simple and predictable, correct when the target
-    /// straddles the origin along the normal. When `false`, derive the height
-    /// from the **target** slab's own extent (robust to a target offset from the
-    /// origin, e.g. a thin slab at a non-zero height). See
-    /// `doc/design_patch_cell_selection.md`.
-    #[serde(default = "default_true")]
+    /// Cell-selection test height. When `false` (**default**), derive the height
+    /// from the **target** slab's own extent — robust to a target offset from the
+    /// lattice origin along the normal (the usual case: surfaces are authored at
+    /// the height where they sit). When `true`, project onto the periodic
+    /// subspace through the **lattice origin** (height 0) — simpler and
+    /// predictable, but selects nothing when the target does not straddle the
+    /// origin. See `doc/design_patch_cell_selection.md`.
+    #[serde(default)]
     pub test_height_at_origin: bool,
     /// Debug: place the patch atoms at their projected positions on the test
     /// plane (in-plane kept, normal = centre depth), with no cut/weld — shows
@@ -120,7 +125,7 @@ impl Default for PatchLatticeFillData {
         Self {
             passivate: true,
             tolerance: DEFAULT_WELD_TOLERANCE,
-            test_height_at_origin: true,
+            test_height_at_origin: false,
             debug_project_to_test_plane: false,
             debug_show_frontier_tiles: false,
             last_report: RefCell::new(None),
@@ -296,28 +301,33 @@ pub fn select_patch_cells(
 
 /// The **frontier** cells for the debug view: the Cartesian product of each
 /// periodic direction's selected-index range widened by one (`[min−1, max+1]`),
-/// minus the cells that were actually selected. Empty when nothing was selected.
+/// minus the cells that were actually selected. When **nothing** was selected
+/// the range degenerates, so we instead show the `[−1, +1]` block around the
+/// origin — otherwise the debug view would be empty exactly when the user most
+/// needs to see where the (rejected) tiles would have gone.
 fn compute_frontier(
     selected: &[SelectedCell],
     origin: IVec3,
     tiling_vectors: &[IVec3],
 ) -> Vec<IVec3> {
-    if selected.is_empty() {
-        return Vec::new();
-    }
     let dims = tiling_vectors.len();
-    let mut mins = vec![i32::MAX; dims];
-    let mut maxs = vec![i32::MIN; dims];
-    for c in selected {
-        for i in 0..dims {
-            mins[i] = mins[i].min(c.k[i]);
-            maxs[i] = maxs[i].max(c.k[i]);
+    let (mins, maxs) = if selected.is_empty() {
+        (vec![-1; dims], vec![1; dims])
+    } else {
+        let mut mins = vec![i32::MAX; dims];
+        let mut maxs = vec![i32::MIN; dims];
+        for c in selected {
+            for i in 0..dims {
+                mins[i] = mins[i].min(c.k[i]);
+                maxs[i] = maxs[i].max(c.k[i]);
+            }
         }
-    }
-    for i in 0..dims {
-        mins[i] -= 1;
-        maxs[i] += 1;
-    }
+        for i in 0..dims {
+            mins[i] -= 1;
+            maxs[i] += 1;
+        }
+        (mins, maxs)
+    };
     let selected_keys: std::collections::HashSet<Vec<i32>> =
         selected.iter().map(|c| c.k.clone()).collect();
 
@@ -548,6 +558,7 @@ pub fn apply_patch(
     }
 
     let report = CompatibilityReport {
+        placed_cells: selected_offsets.len(),
         welded_ghosts,
         orphaned_ghosts,
         overcoordinated_atoms,

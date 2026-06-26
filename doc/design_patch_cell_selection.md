@@ -19,10 +19,10 @@ For a candidate cell offset `o`:
 - project it onto the **test plane**: keep its in-plane coordinates, overwrite each non-periodic component with `center_depth[d]`;
 - the cell is selected **iff every interior atom lands inside the region** (`region_volume(s) ≤ 0`, or the bounds when there is no volume).
 
-`center_depth` per free (non-periodic) direction `d` has **two selectable sources** (boolean `test_height_at_origin`, default `true`):
+`center_depth` per free (non-periodic) direction `d` has **two selectable sources** (boolean `test_height_at_origin`, default **`false`** = target-derived):
 
-- **Origin (default).** `center_depth = 0` along every free direction — project onto the periodic subspace through the **lattice origin**. Simplest and most predictable; correct whenever the target straddles the origin along the normal (the usual case for a crystal built around the origin). The lattice origin has height 0 in both the source and target frames (shared lattice), so the `origin` pin's offset does not move it.
-- **Target-derived.** `center_depth` = midpoint of the **target atoms'** min/max of `position·d`, measured *before* cutting. This is the one axis of an oriented bounding box that matters; measured along the real normal it always lies between the slab's bottom and top layers, so it is inside a prismatic region regardless of tilt **or offset from the origin** (e.g. a thin slab parked at a non-zero height). Robust but requires the target-atom scan.
+- **Target-derived (default).** `center_depth` = midpoint of the **target atoms'** min/max of `position·d`, measured *before* cutting. This is the one axis of an oriented bounding box that matters; measured along the real normal it always lies between the slab's bottom and top layers, so it is inside a prismatic region regardless of tilt **or offset from the origin** (e.g. a thin slab parked at a non-zero height). Robust but requires the target-atom scan. **Default**, because real surfaces are authored at the height where they sit, not at the lattice origin — the origin version silently selects nothing for an off-origin target.
+- **Origin (opt-in).** `center_depth = 0` along every free direction — project onto the periodic subspace through the **lattice origin**. Simplest and most predictable, and the lattice origin has height 0 in both the source and target frames (shared lattice) so the `origin` pin offset never moves it; but it selects **nothing** unless the target straddles the origin along the normal. The "nothing placed" outcome is surfaced by `CompatibilityReport.placed_cells == 0` (the badge flags it rather than showing a misleading green).
 
 Either way, using the atoms themselves as the sample set (each is, by construction, inside the cut) fixes faults 1 and 2: real shape, true position, no synthetic anchor. The height source only affects fault 3 — and only when the target does not straddle the origin.
 
@@ -39,6 +39,8 @@ Boolean `debug_project_to_test_plane` (default false). When on, the node outputs
 ## Debug view B — show frontier tiles
 
 Boolean `debug_show_frontier_tiles` (default false). When on, take the selected cells' integer index range in each periodic direction, widen it to `[min−1, max+1]`, and also place the full **Cartesian product** of those widened ranges (so the selection is "boxed", concavities filled). Atoms from cells that were **not** normally selected are flagged **frozen** (reusing the existing per-atom frozen flag — same bit that renders them distinctly; a viz overload, harmless here since this path never minimizes). Lets the user see the just-excluded neighbours beside the included ones. Frontier tiles are placed raw (not cut, not welded) as an overlay on the real welded result; when A is also on, everything is projected.
+
+**Empty selection.** When *nothing* is selected the `[min−1, max+1]` range is undefined, and an empty frontier would be useless exactly when the user most needs it (to see *why* nothing tiled). So with an empty selection the frontier falls back to the **`[−1, +1]` block around the origin** — a `3ⁿ` ring of frozen tiles showing where the rejected tiles would have gone.
 
 ## Invariants
 

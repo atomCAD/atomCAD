@@ -13738,12 +13738,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICompatibilityReport dco_decode_api_compatibility_report(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APICompatibilityReport(
-      weldedGhosts: dco_decode_usize(arr[0]),
-      orphanedGhosts: dco_decode_usize(arr[1]),
-      overcoordinatedAtoms: dco_decode_usize(arr[2]),
+      placedCells: dco_decode_usize(arr[0]),
+      weldedGhosts: dco_decode_usize(arr[1]),
+      orphanedGhosts: dco_decode_usize(arr[2]),
+      overcoordinatedAtoms: dco_decode_usize(arr[3]),
     );
   }
 
@@ -17498,10 +17499,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICompatibilityReport sse_decode_api_compatibility_report(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_placedCells = sse_decode_usize(deserializer);
     var var_weldedGhosts = sse_decode_usize(deserializer);
     var var_orphanedGhosts = sse_decode_usize(deserializer);
     var var_overcoordinatedAtoms = sse_decode_usize(deserializer);
     return APICompatibilityReport(
+        placedCells: var_placedCells,
         weldedGhosts: var_weldedGhosts,
         orphanedGhosts: var_orphanedGhosts,
         overcoordinatedAtoms: var_overcoordinatedAtoms);
@@ -21869,6 +21872,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_compatibility_report(
       APICompatibilityReport self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_usize(self.placedCells, serializer);
     sse_encode_usize(self.weldedGhosts, serializer);
     sse_encode_usize(self.orphanedGhosts, serializer);
     sse_encode_usize(self.overcoordinatedAtoms, serializer);

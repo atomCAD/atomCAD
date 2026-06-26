@@ -1152,6 +1152,9 @@ pub struct APIPatchLatticeFillData {
 /// Welded/orphaned/over-coordination stats from a `patch_latticefill` apply,
 /// surfaced as a compatibility badge (§6).
 pub struct APICompatibilityReport {
+    /// Number of tiles placed. Zero means nothing was tiled (the test plane
+    /// missed the target) — the other counts being zero is then *not* success.
+    pub placed_cells: usize,
     /// Patch-ghosts that found a real twin and fused (realized periodic / collar
     /// bonds).
     pub welded_ghosts: usize,

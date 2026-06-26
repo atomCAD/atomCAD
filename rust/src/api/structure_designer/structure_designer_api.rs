@@ -4468,6 +4468,7 @@ pub fn get_patch_latticefill_data(
                     .borrow()
                     .as_ref()
                     .map(|r: &CompatibilityReport| APICompatibilityReport {
+                        placed_cells: r.placed_cells,
                         welded_ghosts: r.welded_ghosts,
                         orphaned_ghosts: r.orphaned_ghosts,
                         overcoordinated_atoms: r.overcoordinated_atoms,

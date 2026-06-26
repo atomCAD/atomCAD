@@ -621,6 +621,10 @@ class APICommentData {
 /// Welded/orphaned/over-coordination stats from a `patch_latticefill` apply,
 /// surfaced as a compatibility badge (§6).
 class APICompatibilityReport {
+  /// Number of tiles placed. Zero means nothing was tiled (the test plane
+  /// missed the target) — the other counts being zero is then *not* success.
+  final BigInt placedCells;
+
   /// Patch-ghosts that found a real twin and fused (realized periodic / collar
   /// bonds).
   final BigInt weldedGhosts;
@@ -634,6 +638,7 @@ class APICompatibilityReport {
   final BigInt overcoordinatedAtoms;
 
   const APICompatibilityReport({
+    required this.placedCells,
     required this.weldedGhosts,
     required this.orphanedGhosts,
     required this.overcoordinatedAtoms,
@@ -641,6 +646,7 @@ class APICompatibilityReport {
 
   @override
   int get hashCode =>
+      placedCells.hashCode ^
       weldedGhosts.hashCode ^
       orphanedGhosts.hashCode ^
       overcoordinatedAtoms.hashCode;
@@ -650,6 +656,7 @@ class APICompatibilityReport {
       identical(this, other) ||
       other is APICompatibilityReport &&
           runtimeType == other.runtimeType &&
+          placedCells == other.placedCells &&
           weldedGhosts == other.weldedGhosts &&
           orphanedGhosts == other.orphanedGhosts &&
           overcoordinatedAtoms == other.overcoordinatedAtoms;

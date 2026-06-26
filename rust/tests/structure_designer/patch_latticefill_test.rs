@@ -1128,3 +1128,48 @@ fn origin_vs_target_test_height_for_offset_slab() {
         "target-derived height (z=10) lands on the slab → tile placed"
     );
 }
+
+// ============================================================================
+// 18. Frontier debug with an empty selection: falls back to the -1..+1 block
+//     around the origin so the user still sees where the (rejected) tiles would
+//     have gone, plus placed_cells == 0 (the "nothing tiled" signal).
+// ============================================================================
+
+#[test]
+fn debug_frontier_shows_block_when_nothing_selected() {
+    let lattice = cubic(4.0);
+    // Offset target + origin height → zero cells selected.
+    let mut target = AtomicStructure::new();
+    target.add_atom(CARBON, DVec3::new(0.0, 0.0, 10.0));
+    let mut tile = AtomicStructure::new();
+    tile.add_atom(CARBON, DVec3::new(0.0, 0.0, 12.0));
+    let tiling = [IVec3::new(1, 0, 0), IVec3::new(0, 1, 0)];
+    let bounds = box_bounds(DVec3::new(-1.0, -1.0, 8.0), DVec3::new(1.0, 1.0, 13.0));
+
+    let (dbg, report) = apply_patch(
+        &target,
+        &lattice,
+        None,
+        &bounds,
+        &tile,
+        &tiling,
+        &empty_cut(),
+        IVec3::ZERO,
+        false,
+        0.1,
+        true,  // origin height → nothing selected for the offset target
+        false, // debug_project
+        true,  // debug_frontier
+    );
+
+    assert_eq!(
+        report.placed_cells, 0,
+        "origin height selects nothing for the offset target"
+    );
+    // 3×3 = 9 frontier cells (the -1..+1 block), all frozen since none selected.
+    assert_eq!(
+        dbg.atoms_values().filter(|a| a.is_frozen()).count(),
+        9,
+        "the -1..+1 frontier block is shown so the user sees where tiles would go"
+    );
+}
