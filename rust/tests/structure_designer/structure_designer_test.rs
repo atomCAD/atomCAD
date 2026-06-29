@@ -803,6 +803,59 @@ fn test_new_project_full_reset() {
     assert!(main_network.nodes.is_empty());
 }
 
+// Regression: pressing "New" while the design has user-declared record type
+// definitions must clear those defs (they belong to the old document), while
+// keeping application-supplied built-in record defs (e.g. ElementMapping).
+#[test]
+fn test_new_project_clears_record_type_defs() {
+    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+    use rust_lib_flutter_cad::structure_designer::node_type_registry::RecordTypeDef;
+
+    let mut designer = StructureDesigner::new();
+
+    // Declare a couple of user record types.
+    designer
+        .add_record_type_def(RecordTypeDef {
+            name: "Point".to_string(),
+            fields: vec![
+                ("x".to_string(), DataType::Float),
+                ("y".to_string(), DataType::Float),
+            ],
+        })
+        .unwrap();
+    designer
+        .add_record_type_def(RecordTypeDef {
+            name: "Segment".to_string(),
+            fields: vec![("length".to_string(), DataType::Float)],
+        })
+        .unwrap();
+    assert_eq!(designer.node_type_registry.record_type_defs.len(), 2);
+
+    // A built-in record def exists out of the box.
+    assert!(
+        !designer
+            .node_type_registry
+            .built_in_record_type_defs
+            .is_empty()
+    );
+    let built_in_before = designer.node_type_registry.built_in_record_type_defs.clone();
+
+    // Call new_project — this is what the "New" button does.
+    designer.new_project();
+
+    // User-declared record defs must be gone.
+    assert!(
+        designer.node_type_registry.record_type_defs.is_empty(),
+        "user record type defs should be cleared by new_project"
+    );
+
+    // Built-in record defs must be preserved.
+    assert_eq!(
+        designer.node_type_registry.built_in_record_type_defs, built_in_before,
+        "built-in record type defs must survive new_project"
+    );
+}
+
 // Regression for issue #315: `add_new_node_network` must return the name of
 // the network it actually created, so the caller can select that exact network
 // (the registry is a HashMap, so list order is unreliable).

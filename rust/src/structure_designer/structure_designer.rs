@@ -4380,6 +4380,11 @@ impl StructureDesigner {
         // Clear all networks
         self.node_type_registry.node_networks.clear();
 
+        // Clear user-declared record type definitions (they belong to the old
+        // document). Built-in record defs (e.g. ElementMapping) are
+        // application-supplied and intentionally preserved.
+        self.node_type_registry.record_type_defs.clear();
+
         // Create a fresh "Main" network and set it as active
         self.add_node_network("Main");
         self.active_node_network_name = Some("Main".to_string());
