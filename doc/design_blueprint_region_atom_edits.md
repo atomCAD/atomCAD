@@ -392,6 +392,8 @@ Tests (`rust/tests/structure_designer/`): disconnected pin → snapshot-identica
 
 ### Phase B3 — UI polish & docs
 
+*Status: implemented 2026-06-29. (1) `materialize_editor.dart` shows an italic "Regions override these settings inside their volumes." annotation (with a layers icon) above the checkbox group whenever the `regions` pin — input index 6 — is wired; the checkboxes stay enabled (root semantics, §B7). Connection is detected by walking `model.nodeNetworkView.wires` for `destParamIndex == 6`, the same pattern as `atom_replace_editor.dart`. (2) Reference guide: new "Per-region settings (`regions`)" subsection in `doc/reference_guide/nodes/atomic.md` under `materialize` (region-spec construction, root + painter's model, margin), the `regions` pin added to the materialize input-pin list, and `MaterializeRegion` added to the built-in-record-defs list in `doc/reference_guide/nodes/math_programming.md`.*
+
 1. Side-panel annotation when `regions` is connected (§B7).
 2. Reference guide / tutorial section: building a region spec (half-space through the top surface → `record_construct` → `materialize.regions`), the root + painter's mental model, margin semantics.
 

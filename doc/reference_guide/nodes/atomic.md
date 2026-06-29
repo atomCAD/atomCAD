@@ -72,6 +72,7 @@ The motif and motif offset used for filling come from the input Blueprint's `Str
 - `surf_recon: Bool` (optional) — see *Surface reconstruction* below.
 - `invert_phase: Bool` (optional) — see *Invert phase* below.
 - `rm_unbonded: Bool` (optional) — see *Remove unbonded atoms* below.
+- `regions: Array[Record(MaterializeRegion)]` (optional) — per-region setting overrides; see *Per-region settings* below.
 
 The boolean inputs default to the values set on the node properties; wiring an input overrides the property.
 
@@ -94,6 +95,22 @@ You can switch on or off the following checkboxes:
   The (100) 2×1 reconstruction automatically removes single-bond (dangling) atoms even if the *Remove single-bond atoms* option is not enabled. Surface reconstruction can be used together with hydrogen passivation or on its own.
 - *Invert phase*: Determines whether the phase of the dimer pattern should be inverted. 
 - *Hydrogen passivation:* Hydrogen atoms are added to passivate dangling bonds created by the cut.
+
+### Per-region settings (`regions`)
+
+The five booleans above (`passivate`, `rm_single`, `surf_recon`, `invert_phase`, `rm_unbonded`) normally apply to the **entire** structure. The optional `regions` input lets you override them inside one or more volumes you draw — for example, depassivating or reconstructing only the top surface of a slab while the rest keeps the node's default treatment.
+
+**Building a region spec.** A region is a `MaterializeRegion` record built with an ordinary `record_construct` node (select the built-in `MaterializeRegion` type from its dropdown). Its fields are:
+
+- `volume: Blueprint` (required) — the region's shape. Build it from the same geometry nodes you already use (`half_space`, `cuboid`, `sphere`, CSG combinations), in the **same real space** as the Blueprint being materialized. Only the volume's geometry is used; any `Structure` it carries is ignored. The typical region is a single `half_space` whose plane cuts through the surface you want to treat differently.
+- `margin: Float` (optional) — membership tolerance in Å (see *Margin* below). Leave unset to use the default of 0.1 Å.
+- `passivate`, `rm_single`, `surf_recon`, `invert_phase`, `rm_unbonded` (all optional `Bool`) — the per-region overrides. Each field has three states: **force on** (set to `true`), **force off** (set to `false`), and **inherit** (leave unset). An unset field is transparently inherited — a region that sets only `surf_recon: true` changes nothing else.
+
+Wire one or more region records into an `array` node and feed that into `materialize.regions`. A typical chain is: `half_space` → `record_construct(MaterializeRegion)` (with `surf_recon: true`) → `array` → `materialize.regions`.
+
+**Root + painter's model.** The node's own checkboxes are the **root** — they apply to all of space and stay editable even when `regions` is connected (the side panel notes *"Regions override these settings inside their volumes."*). Regions layer on top of the root: for any point and any setting, the regions are resolved **last → first** in array order, and the first (latest-in-array) region that contains the point *and* sets that field wins; if none does, the root supplies the value. Resolution is per field, so overlapping regions compose field-by-field rather than wholesale. A disconnected `regions` pin, an empty array, or a region with every field unset all reproduce today's behavior exactly.
+
+**Margin.** A point belongs to a region when the region geometry's signed distance at that point is ≤ the region's `margin`. The default of 0.1 Å matters because surface atoms produced by the cut sit numerically *on* the boundary of any region you build by reusing the cutting geometry — the small positive margin robustly captures those surface atoms without grabbing the layer below. A **negative** margin shrinks the region (e.g. to deliberately exclude the boundary layer). Where two regions' margins overlap, the array order decides the result inside the overlap band, deterministically.
 
 ## dematerialize
 
@@ -198,11 +215,42 @@ The composition uses position-based matching to merge the diffs: a `diff_1` modi
 
 A typical use is collapsing a long edit history into a single distributable patch: chain several `atom_edit` nodes, take their `diff` outputs, feed them through `atom_composediff`, and the result is one `Molecule` value that encodes the entire edit sequence.
 
+## Restricting an atom operation to a region
+
+Several atom operations — `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, and `unfreeze` — accept an optional **`region: Blueprint`** input pin (always the last pin) that confines their effect to a volume you draw. With `region` disconnected, the operation applies to **all** atoms (its original behavior). With `region` connected, the operation only touches atoms **inside** the region volume; atoms outside pass through untouched.
+
+- **Membership.** An atom is in-region when the region geometry's signed distance at the atom's position is ≤ a small margin (default 0.1 Å — the same default `materialize`'s per-region margin uses). The margin reliably captures surface atoms that sit numerically *on* a boundary you built by reusing the cutting geometry, without grabbing the layer below.
+- **Build the region** from the same geometry nodes you already use (`half_space`, `cuboid`, `sphere`, CSG combinations), in the same real space as the atoms. Only the region Blueprint's geometry is used; any `Structure` it carries is ignored. The typical region is a single `half_space` whose plane cuts through the surface you want to treat. A region disjoint from the structure is a well-defined no-op.
+- **Which atom counts.** Each operation tests the position of the **existing (host) atom** it acts on: `add_hydrogen` tests the dangling-bond atom (the new H is placed wherever the bond template puts it, even if that lands just outside the region); `remove_hydrogen` tests the heavy atom an H is bonded to (an H sitting just outside the boundary is still stripped if its host is in-region); `infer_bonds` (re)infers a bond when **at least one** endpoint is in-region; `atom_replace` / `freeze` / `unfreeze` test the atom being edited. Newly created atoms are never themselves membership-tested.
+- **Multiple regions = chained nodes.** Because each of these operations returns the same kind of structure it received, you apply several regional treatments by placing several nodes in sequence, each with its own region — there is no multi-region pin on these nodes. (That painter's-algorithm pattern is unique to `materialize`, whose settings are consumed together in a single fill pass; see its *Per-region settings*.)
+
 ## relax
 
 Performs UFF (Universal Force Field) energy minimization on an atomic structure. Takes a `Crystal` or `Molecule` input and outputs the minimized structure, preserving the concrete input type.
 
 This node is useful in node-network workflows where you want to relax a structure non-destructively as part of a parametric pipeline. For interactive minimization during atom editing, use the energy minimization feature built into the `atom_edit` node instead.
+
+**Frozen atoms.** `relax` honors the per-atom *frozen* flag: atoms marked frozen (by an upstream `freeze` node) are held fixed during minimization while their mobile neighbors move and settle. A frozen atom still participates in the force field — it pulls on its neighbors — it just doesn't move itself. This is how you relax only a sub-volume of a structure: freeze everything you want to hold, then `relax`. `relax` itself has no `region` pin; compose it with `freeze` / `unfreeze` to scope which atoms move.
+
+## freeze
+
+Marks atoms as **frozen** so a downstream `relax` node holds them fixed. Takes a `Crystal` or `Molecule` and outputs the same structure with the frozen flag set on the selected atoms, preserving the concrete input type.
+
+**Input pins**
+
+- `molecule: HasAtoms` — the input structure.
+- `region: Blueprint` (optional) — restrict freezing to atoms inside this volume. Disconnected → **all** atoms are frozen. See *Restricting an atom operation to a region* above.
+
+Freezing is a pure metadata edit — atom positions and bonds are unchanged. Chaining `freeze` nodes with different regions accumulates: `freeze(region A) → freeze(region B)` leaves the union of A and B frozen. Pair `freeze` with `relax` to constrain which atoms move (see `relax`).
+
+## unfreeze
+
+The inverse of `freeze`: clears the frozen flag so `relax` can move the atoms again. Takes a `Crystal` or `Molecule` and outputs the same structure with the frozen flag cleared on the selected atoms, preserving the concrete input type.
+
+**Input pins**
+
+- `molecule: HasAtoms` — the input structure.
+- `region: Blueprint` (optional) — restrict unfreezing to atoms inside this volume. Disconnected → **all** atoms are unfrozen. See *Restricting an atom operation to a region* above.
 
 ## add_hydrogen
 
@@ -210,11 +258,15 @@ Adds hydrogen atoms to satisfy valence requirements of undersaturated atoms. Tak
 
 The algorithm detects hybridization (sp3, sp2, sp1) automatically and places hydrogen atoms at the correct bond lengths and angles. This is the node-network counterpart of the one-click hydrogen passivation in the `atom_edit` node.
 
+An optional **`region: Blueprint`** input pin (last pin) restricts passivation to dangling bonds on in-region atoms; a passivating H whose host atom is in-region is still placed even if it lands just outside the region. Disconnected → all atoms are passivated. See *Restricting an atom operation to a region* above.
+
 ## remove_hydrogen
 
 Removes all hydrogen atoms from an atomic structure. Takes a `Crystal` or `Molecule` input and outputs the bare framework without hydrogens, preserving the concrete input type.
 
 Useful in workflows like: `remove_hydrogen` → transform/edit → `add_hydrogen`, allowing you to work with the bare framework and re-passivate afterward.
+
+An optional **`region: Blueprint`** input pin (last pin) restricts removal to hydrogens whose heavy (host) atom is in-region — including an H whose own position is just outside the region. Disconnected → all hydrogens are removed. See *Restricting an atom operation to a region* above.
 
 ## infer_bonds
 
@@ -225,6 +277,7 @@ Recomputes bonds in an atomic structure based on interatomic distances and coval
 - `molecule: HasAtoms` — the input structure.
 - `additive: Bool` (optional) — when `false` (default), the existing bonds are discarded and rebuilt from scratch. When `true`, existing bonds are preserved and only inferred bonds that are not already present are added.
 - `bond_tolerance: Float` (optional) — multiplier applied to the sum of covalent radii when deciding whether two atoms should be bonded (default `1.15`).
+- `region: Blueprint` (optional) — restrict bond inference to bonds with at least one endpoint inside this volume; a surface atom thus gets its bonds even to a neighbor just outside. Disconnected → bonds are inferred everywhere. See *Restricting an atom operation to a region* above.
 
 **Properties**
 
@@ -240,6 +293,7 @@ Substitutes atoms of one element for another (or removes them) in bulk, accordin
 
 - `molecule` — the atomic structure to transform (`Crystal` or `Molecule`).
 - `rules: Array[Record(ElementMapping)]` (optional) — a programmatically-built list of replacement rules. `ElementMapping` is a built-in record def with two `Int` fields, `from` and `to` (atomic numbers; `0` on `to` means *Delete*).
+- `region: Blueprint` (optional) — apply the replacement rules only to atoms inside this volume; out-of-region atoms pass through unchanged. Disconnected → rules apply to all atoms. See *Restricting an atom operation to a region* above.
 
 **Properties**
 

@@ -4,6 +4,11 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/parameter_element_override_editor.dart';
 
+/// Index of the `regions` input pin on `materialize`.
+/// 0 = shape, 1 = passivate, 2 = rm_single, 3 = surf_recon,
+/// 4 = invert_phase, 5 = rm_unbonded, 6 = regions.
+const int _REGIONS_PIN_INDEX = 6;
+
 /// Editor widget for materialize nodes
 class MaterializeEditor extends StatefulWidget {
   final BigInt nodeId;
@@ -28,6 +33,21 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
   late bool _invertPhase;
+
+  /// True when the optional `regions` input pin is wired. When connected, the
+  /// per-region records layer *on top of* these node settings (the "root"),
+  /// so the checkboxes stay enabled — see doc/design_blueprint_region_atom_edits.md §B7.
+  bool _isRegionsPinConnected() {
+    final view = widget.model.nodeNetworkView;
+    if (view == null) return false;
+    for (final wire in view.wires) {
+      if (wire.destNodeId == widget.nodeId &&
+          wire.destParamIndex == BigInt.from(_REGIONS_PIN_INDEX)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   void _commitChanges() {
     if (widget.data == null) {
@@ -123,6 +143,31 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
           ),
 
           const SizedBox(height: 8),
+
+          // Annotation: when `regions` is wired, the per-region records override
+          // these settings inside their volumes; the checkboxes below remain the
+          // root (and stay enabled). See design doc §B7.
+          if (_isRegionsPinConnected())
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.layers_outlined,
+                    size: 16,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'Regions override these settings inside their volumes.',
+                      style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Remove unbonded atoms checkbox
           CheckboxListTile(

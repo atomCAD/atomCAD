@@ -82,7 +82,7 @@ Some operations are naturally polymorphic over multiple phase types — e.g. `ad
 
 | Abstract type | Members | Used by |
 |---|---|---|
-| `HasAtoms` | `Crystal`, `Molecule` | atom operations: `atom_edit`, `apply_diff`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `atom_union`, `atom_composediff` |
+| `HasAtoms` | `Crystal`, `Molecule` | atom operations: `atom_edit`, `apply_diff`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, `atom_union`, `atom_composediff` |
 | `HasStructure` | `Blueprint`, `Crystal` | structure-aligned operations: `structure_move`, `structure_rot`, `get_structure` |
 | `HasFreeLinOps` | `Blueprint`, `Molecule` | free movement: `free_move`, `free_rot` |
 

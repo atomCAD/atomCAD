@@ -806,10 +806,11 @@ Record-typed pins render in a single neutral color (no per-name hashing — the 
 
 Record defs may freely contain other record types as field types, but the dependency graph among defs must be acyclic. `Tree = { children: [Record(Tree)] }` is rejected; build recursive shapes by linking records via integer IDs in arrays instead.
 
-Some node types ship with **built-in record defs** — schemas baked into the application that you don't have to author yourself. Two examples ship today:
+Some node types ship with **built-in record defs** — schemas baked into the application that you don't have to author yourself. Three examples ship today:
 
 - `ElementMapping = {from: Int, to: Int}` — the element type of `atom_replace`'s optional `rules` input.
 - `Patch = {tile: Molecule, tiling_vectors: Array[IVec3], cut_volume: Blueprint}` — the surface-reconstruction patch produced by [`patch_build`](./atomic.md#patch_build) and consumed by [`patch_latticefill`](./atomic.md#patch_latticefill). Because a patch is a plain record of existing types, you can `record_destructure` one to swap its tile or tiling vectors with ordinary nodes.
+- `MaterializeRegion = {volume: Blueprint, margin: Optional[Float], passivate: Optional[Bool], rm_single: Optional[Bool], surf_recon: Optional[Bool], invert_phase: Optional[Bool], rm_unbonded: Optional[Bool]}` — the element type of [`materialize`](./atomic.md#materialize)'s optional `regions` input, pairing a volume with per-field setting overrides. The `Optional` fields are *inherit-when-unset*: only `volume` is required. See [*Per-region settings*](./atomic.md#per-region-settings-regions).
 
 Built-in defs share one namespace with user defs and participate in the same bare-identifier lookup (so `ElementMapping` and `Patch` work as type expressions in `expr` parameters and in the schema dropdowns), but they cannot be edited or deleted from the User Types panel, and the User Types panel will reject attempts to create, rename, or delete a user def with the same name.
 
