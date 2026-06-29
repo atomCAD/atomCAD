@@ -187,11 +187,15 @@ pub fn build_node_type_for_schema_with_defs(
     let resolved = record_type_defs
         .get(schema)
         .or_else(|| built_in_record_type_defs.get(schema));
+    // An `Optional[T]` field projects onto a plain `T` output pin (identity at
+    // the value layer — the stored payload or `None` passes straight through).
+    // The value/wire layer never sees `Optional`. See
+    // `doc/design_optional_type.md` §5.
     let pins: Vec<OutputPinDefinition> = match resolved {
         Some(def) if !def.fields.is_empty() => def
             .fields
             .iter()
-            .map(|(name, ty)| OutputPinDefinition::fixed(name, ty.clone()))
+            .map(|(name, ty)| OutputPinDefinition::fixed(name, ty.record_field_pin_type()))
             .collect(),
         _ => vec![OutputPinDefinition::fixed("result", DataType::None)],
     };

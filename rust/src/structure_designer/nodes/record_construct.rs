@@ -76,11 +76,17 @@ impl NodeData for RecordConstructData {
         // matches that order (set by the registry-aware cache populator).
         let mut fields: Vec<(String, NetworkResult)> = Vec::with_capacity(def.fields.len());
         for (param_index, (field_name, field_type)) in def.fields.iter().enumerate() {
+            // An `Optional[T]` field is exposed as a plain `T` pin (the value /
+            // wire layer never sees `Optional`), so literals coerce against the
+            // inner `T`, not `Optional[T]`. See `doc/design_optional_type.md` §5.
+            let pin_type = field_type.record_field_pin_type();
+            let is_optional = field_type.is_optional();
             // Wired > literal > pass-None-through. A wired pin always wins;
             // an unwired pin with a stored literal uses that literal (if it
             // still coerces to the field type); otherwise we fall through to
-            // `evaluate_arg`, which on an unwired pin yields None and
-            // short-circuits the whole record below.
+            // `evaluate_arg`, which on an unwired pin yields None — which then
+            // collapses the record for a required field, or is kept as an
+            // explicit `None` for an `Optional` field (below).
             let wired = node
                 .arguments
                 .get(param_index)
@@ -97,7 +103,7 @@ impl NodeData for RecordConstructData {
             } else if let Some(literal) = self
                 .literal_values
                 .get(field_name)
-                .and_then(|tv| tv.to_network_result(field_type))
+                .and_then(|tv| tv.to_network_result(&pin_type))
             {
                 literal
             } else {
@@ -110,7 +116,15 @@ impl NodeData for RecordConstructData {
                 )
             };
             match &value {
-                NetworkResult::None => return EvalOutput::single(NetworkResult::None),
+                // A `None` on a required field still collapses the whole record
+                // to `None` (pre-Optional all-or-nothing behavior). A `None` on
+                // an `Optional[T]` field is **kept** as an explicit `None` in
+                // that slot — the record is emitted with all fields, "unset"
+                // being an explicit `None` value. `Error` short-circuits either
+                // way. See `doc/design_optional_type.md` §5.
+                NetworkResult::None if !is_optional => {
+                    return EvalOutput::single(NetworkResult::None);
+                }
                 NetworkResult::Error(_) => return EvalOutput::single(value),
                 _ => {}
             }
@@ -215,14 +229,17 @@ pub fn build_node_type_for_schema_with_defs(
         .get(schema)
         .or_else(|| built_in_record_type_defs.get(schema))
     {
-        // Pin order = authored field order.
+        // Pin order = authored field order. An `Optional[T]` field is exposed
+        // as a plain `T` input pin (the value/wire layer never sees `Optional`;
+        // the optional behavior lives in `eval`'s collapse exemption). See
+        // `doc/design_optional_type.md` §5.
         custom.parameters = def
             .fields
             .iter()
             .map(|(name, ty)| Parameter {
                 id: None,
                 name: name.clone(),
-                data_type: ty.clone(),
+                data_type: ty.record_field_pin_type(),
             })
             .collect();
     } else {

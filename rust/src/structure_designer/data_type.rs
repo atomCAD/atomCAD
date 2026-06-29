@@ -408,6 +408,27 @@ impl DataType {
         matches!(self, DataType::Array(_))
     }
 
+    /// True for `Optional[_]`. `Optional` is a record-field modifier only (see
+    /// `doc/design_optional_type.md`), so this is consulted by the record nodes
+    /// to decide a field's required-ness / `None`-collapse behavior.
+    pub fn is_optional(&self) -> bool {
+        matches!(self, DataType::Optional(_))
+    }
+
+    /// The pin type used to represent a record field of this declared type at
+    /// the value/wire layer. An `Optional[T]` field is exposed as a plain `T`
+    /// pin — the value layer never sees `Optional` (Core Decision 2 in
+    /// `doc/design_optional_type.md`): `record_construct` input pins and
+    /// `record_destructure` output pins for an `Optional[T]` field are typed
+    /// `T`. Every non-Optional type is itself. Peels exactly one layer (nesting
+    /// is ill-formed, so there is never more than one to peel).
+    pub fn record_field_pin_type(&self) -> DataType {
+        match self {
+            DataType::Optional(inner) => (**inner).clone(),
+            other => other.clone(),
+        }
+    }
+
     /// Returns true for the two function-shaped pin types: the concrete
     /// `Function(_)` (used as both source and dest) and the `AnyFunction { .. }`
     /// destination-only constraint introduced in Function-pin Unification
