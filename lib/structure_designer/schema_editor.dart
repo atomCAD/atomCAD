@@ -357,6 +357,8 @@ class _SchemaEditorState extends State<SchemaEditor> {
           Expanded(
             child: DataTypeInput(
               label: 'Type',
+              // Record fields are the only place `Optional[T]` is meaningful.
+              allowOptional: true,
               value: f.dataType,
               onChanged: (newType) => _commitTypeChange(index, newType),
             ),

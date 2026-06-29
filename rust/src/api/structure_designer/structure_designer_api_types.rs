@@ -53,6 +53,10 @@ pub enum APIDataTypeBase {
     /// `Iter[T]`: `children = [T]`.
     /// See `doc/design_structural_function_and_iter_types.md`.
     Iter,
+    /// `Optional[T]`: `children = [T]` (one entry, the inner type). A
+    /// record-field modifier only — never a pin type. Represented like `Iter`
+    /// (one child). See `doc/design_optional_type.md` §7.
+    Optional,
     /// `Function((p0, p1, ..., pN-1) -> R)`:
     /// `children = [p0, p1, ..., pN-1, R]` (rightmost slot is the return
     /// type). See `doc/design_structural_function_and_iter_types.md`.
@@ -68,9 +72,10 @@ pub struct APIDataType {
     pub custom_data_type: Option<String>,
     pub array: bool, // combined with built_in_data_type, but only redundant with custom_data_type as the outermost array is within the string in that case.
     /// Recursive children, interpretation driven by `data_type_base`. Empty
-    /// for every base except `Iter` (one child, the element type) and
-    /// `Function` (N+1 children: params then return). See
-    /// `doc/design_structural_function_and_iter_types.md`.
+    /// for every base except `Iter` (one child, the element type), `Optional`
+    /// (one child, the inner type) and `Function` (N+1 children: params then
+    /// return). See `doc/design_structural_function_and_iter_types.md` and
+    /// `doc/design_optional_type.md`.
     pub children: Vec<APIDataType>,
 }
 

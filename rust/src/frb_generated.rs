@@ -11769,8 +11769,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 23 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit,
 24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record,
 25 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter,
-26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
-27 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Optional,
+27 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
+28 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -16973,8 +16974,9 @@ impl flutter_rust_bridge::IntoDart
             Self::Unit => 23.into_dart(),
             Self::Record => 24.into_dart(),
             Self::Iter => 25.into_dart(),
-            Self::Function => 26.into_dart(),
-            Self::Custom => 27.into_dart(),
+            Self::Optional => 26.into_dart(),
+            Self::Function => 27.into_dart(),
+            Self::Custom => 28.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -21016,8 +21018,9 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::S
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit => { 23 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record => { 24 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter => { 25 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 26 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 27 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Optional => { 26 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 27 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 28 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

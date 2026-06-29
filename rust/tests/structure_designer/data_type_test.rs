@@ -294,6 +294,91 @@ fn array_of_iter_roundtrip() {
     assert!(roundtrip(original.clone()) == original);
 }
 
+// --- Optional[T] API round-trip tests (doc/design_optional_type.md §7) ---
+
+#[test]
+fn optional_bool_roundtrip() {
+    let original = DataType::Optional(Box::new(DataType::Bool));
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Optional);
+    assert!(!api.array);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Bool);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn optional_record_roundtrip() {
+    // `Optional[Record(Foo)]` — exercises children-of-children with a Record
+    // inner; the inner uses the first-class Record base, not Custom.
+    let original = DataType::Optional(Box::new(DataType::Record(RecordType::Named(
+        "Foo".to_string(),
+    ))));
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Optional);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Record);
+    assert_eq!(api.children[0].custom_data_type.as_deref(), Some("Foo"));
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn optional_array_inner_roundtrip() {
+    // `Optional[Array[Float]]` — Array goes *inside* the Optional (the outer
+    // array checkbox is hidden for Optional in the UI). The inner APIDataType
+    // carries `array: true`.
+    let original = DataType::Optional(Box::new(DataType::Array(Box::new(DataType::Float))));
+    let api = data_type_to_api_data_type(&original);
+    assert!(api.data_type_base == APIDataTypeBase::Optional);
+    assert!(!api.array);
+    assert_eq!(api.children.len(), 1);
+    assert!(api.children[0].array);
+    assert!(api.children[0].data_type_base == APIDataTypeBase::Float);
+    assert!(roundtrip(original.clone()) == original);
+}
+
+#[test]
+fn optional_ill_formed_inner_rejected_by_api_conversion() {
+    // The four ill-formed inners are rejected at the API conversion site,
+    // mirroring the text parser and registry validation (§3).
+    for inner in [
+        DataType::Optional(Box::new(DataType::Int)),
+        DataType::Iterator(Box::new(DataType::Int)),
+        DataType::Unit,
+        DataType::None,
+    ] {
+        let api = APIDataType {
+            data_type_base: APIDataTypeBase::Optional,
+            custom_data_type: None,
+            array: false,
+            children: vec![data_type_to_api_data_type(&inner)],
+        };
+        assert!(
+            api_data_type_to_data_type(&api).is_err(),
+            "Optional[{inner}] should be rejected"
+        );
+    }
+}
+
+#[test]
+fn custom_text_optional_promotes_on_back_conversion() {
+    // A `Custom`-base APIDataType carrying `"Optional[Bool]"` upgrades to the
+    // structural Optional variant after API → Rust → API (same next-paint
+    // upgrade path as Iter).
+    let starting = APIDataType {
+        data_type_base: APIDataTypeBase::Custom,
+        custom_data_type: Some("Optional[Bool]".to_string()),
+        array: false,
+        children: vec![],
+    };
+    let rust = api_data_type_to_data_type(&starting).expect("parses Optional[Bool]");
+    let promoted = data_type_to_api_data_type(&rust);
+    assert!(promoted.data_type_base == APIDataTypeBase::Optional);
+    assert!(promoted.custom_data_type.is_none());
+    assert_eq!(promoted.children.len(), 1);
+    assert!(promoted.children[0].data_type_base == APIDataTypeBase::Bool);
+}
+
 #[test]
 fn custom_text_iter_promotes_on_back_conversion() {
     // Start from a `Custom`-base APIDataType carrying the text `"Iter[Int]"`

@@ -1,6 +1,7 @@
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
+use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec3;
 use std::collections::HashMap;
 
@@ -25,6 +26,135 @@ pub struct LatticeFillConfig {
 
     /// Offset applied in motif space (fractional lattice coordinates)
     pub motif_offset: DVec3,
+
+    /// Ordered list of regions overriding the global (root) settings within
+    /// their volumes. Empty = today's behavior (global settings everywhere).
+    /// Regions apply in array order via a per-field painter's algorithm
+    /// (see [`SettingsResolver`]).
+    pub regions: Vec<RegionSpec>,
+}
+
+/// One materialization region: a volume (SDF) paired with per-field settings
+/// overrides. Extracted from a `MaterializeRegion` record by the node layer
+/// (Part B of `doc/design_blueprint_region_atom_edits.md`). An unset (`None`)
+/// settings field means "inherit" — the value is resolved from earlier matching
+/// regions and ultimately from the root settings.
+pub struct RegionSpec {
+    /// Region volume as an SDF, in absolute real (Å) coordinates.
+    pub geometry: GeoNode,
+
+    /// Membership tolerance in Å: a point `p` is in this region iff
+    /// `geometry.implicit_eval_3d(p) <= margin`. Resolved value (record value
+    /// or [`super::fill_algorithm::DEFAULT_REGION_MARGIN`]). Negative margins
+    /// shrink the region (e.g. to exclude the boundary layer).
+    pub margin: f64,
+
+    pub passivate: Option<bool>,
+    pub rm_single: Option<bool>,
+    pub surf_recon: Option<bool>,
+    pub invert_phase: Option<bool>,
+    /// Remove zero-bond (lone) atoms; mirrors materialize's `rm_unbonded` (#363).
+    pub rm_unbonded: Option<bool>,
+}
+
+/// Resolves effective lattice-fill settings at a point by layering an ordered
+/// list of regions on top of the root settings (the node's own booleans).
+///
+/// Resolution is **per field**: for each settings field, walk the regions
+/// last → first and take the value from the first (latest-in-array) region that
+/// *contains* the point and has that field set; if none does, fall back to the
+/// root. A region that sets only one field transparently inherits all others.
+///
+/// See §B3 of `doc/design_blueprint_region_atom_edits.md`.
+pub struct SettingsResolver<'a> {
+    pub root: &'a LatticeFillOptions,
+    pub regions: &'a [RegionSpec],
+}
+
+impl SettingsResolver<'_> {
+    /// Resolve the effective settings at point `p` via the per-field painter's
+    /// algorithm. With no regions this returns the root settings unchanged.
+    pub fn resolve_at(&self, p: DVec3) -> LatticeFillOptions {
+        let mut opts = LatticeFillOptions {
+            hydrogen_passivation: self.root.hydrogen_passivation,
+            remove_unbonded_atoms: self.root.remove_unbonded_atoms,
+            remove_single_bond_atoms: self.root.remove_single_bond_atoms,
+            reconstruct_surface: self.root.reconstruct_surface,
+            invert_phase: self.root.invert_phase,
+        };
+
+        if self.regions.is_empty() {
+            return opts;
+        }
+
+        // Track which fields are still unresolved (root is the final fallback).
+        let mut have_passivate = false;
+        let mut have_rm_unbonded = false;
+        let mut have_rm_single = false;
+        let mut have_surf_recon = false;
+        let mut have_invert = false;
+
+        // Walk regions last → first; first containing region with a field set wins.
+        for region in self.regions.iter().rev() {
+            if have_passivate
+                && have_rm_unbonded
+                && have_rm_single
+                && have_surf_recon
+                && have_invert
+            {
+                break; // all fields resolved — no need to test further regions
+            }
+
+            // Membership: SDF at p must be within the region's margin.
+            if region.geometry.implicit_eval_3d(&p) > region.margin {
+                continue;
+            }
+
+            if !have_passivate {
+                if let Some(v) = region.passivate {
+                    opts.hydrogen_passivation = v;
+                    have_passivate = true;
+                }
+            }
+            if !have_rm_unbonded {
+                if let Some(v) = region.rm_unbonded {
+                    opts.remove_unbonded_atoms = v;
+                    have_rm_unbonded = true;
+                }
+            }
+            if !have_rm_single {
+                if let Some(v) = region.rm_single {
+                    opts.remove_single_bond_atoms = v;
+                    have_rm_single = true;
+                }
+            }
+            if !have_surf_recon {
+                if let Some(v) = region.surf_recon {
+                    opts.reconstruct_surface = v;
+                    have_surf_recon = true;
+                }
+            }
+            if !have_invert {
+                if let Some(v) = region.invert_phase {
+                    opts.invert_phase = v;
+                    have_invert = true;
+                }
+            }
+        }
+
+        opts
+    }
+
+    /// `root_val || any region sets the field to Some(true)`. Replaces the old
+    /// global gate: a step runs when it is enabled at the root *or* in any
+    /// region (the per-position resolution then decides per atom).
+    pub fn enabled_anywhere(
+        &self,
+        root_val: bool,
+        get: impl Fn(&RegionSpec) -> Option<bool>,
+    ) -> bool {
+        root_val || self.regions.iter().any(|r| get(r) == Some(true))
+    }
 }
 
 /// Options controlling the filling behavior

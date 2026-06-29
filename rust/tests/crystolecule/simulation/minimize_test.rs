@@ -2516,6 +2516,7 @@ fn create_diamond_cuboid_with_options(
         parameter_element_values: HashMap::new(),
         geometry,
         motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
     };
 
     let options = LatticeFillOptions {

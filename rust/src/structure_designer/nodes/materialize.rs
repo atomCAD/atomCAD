@@ -4,7 +4,7 @@ use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
 };
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -25,7 +25,9 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 // Import the lattice fill algorithm
-use crate::crystolecule::lattice_fill::{LatticeFillConfig, LatticeFillOptions, fill_lattice};
+use crate::crystolecule::lattice_fill::{
+    DEFAULT_REGION_MARGIN, LatticeFillConfig, LatticeFillOptions, RegionSpec, fill_lattice,
+};
 
 fn default_true() -> bool {
     true
@@ -254,6 +256,28 @@ impl NodeData for MaterializeData {
             Err(error) => return EvalOutput::single(error),
         };
 
+        // Evaluate optional `regions` input (param index 6). Disconnected →
+        // empty (today's global-settings-everywhere behavior). Connected →
+        // an ordered `Array[Record(MaterializeRegion)]` layered on top of the
+        // root settings via the per-field painter's algorithm in
+        // `SettingsResolver` (see doc/design_blueprint_region_atom_edits.md §B6).
+        let regions_input =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 6);
+        let regions = match regions_input {
+            NetworkResult::None => Vec::new(),
+            NetworkResult::Error(_) => return EvalOutput::single(regions_input),
+            NetworkResult::Array(items) => match parse_regions_from_records(items) {
+                Ok(r) => r,
+                Err(e) => return EvalOutput::single(NetworkResult::Error(e)),
+            },
+            other => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "materialize.regions: expected Array[Record], got {:?}",
+                    other.infer_data_type()
+                )));
+            }
+        };
+
         // Calculate effective parameter element values (fill in defaults for missing values)
         let effective_parameter_values =
             motif.get_effective_parameter_element_values(&self.parameter_element_values);
@@ -265,6 +289,9 @@ impl NodeData for MaterializeData {
             parameter_element_values: effective_parameter_values,
             geometry: mesh.geo_tree_root,
             motif_offset,
+            // Per-region materialization settings (Part B of
+            // doc/design_blueprint_region_atom_edits.md).
+            regions,
         };
 
         let options = LatticeFillOptions {
@@ -385,7 +412,85 @@ impl NodeData for MaterializeData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("shape".to_string(), (true, None)); // required
+        m.insert("regions".to_string(), (false, None)); // optional
         m
+    }
+}
+
+/// Parse a runtime `Array[Record(MaterializeRegion)]` value into the
+/// `RegionSpec` list consumed by `fill_lattice` (see
+/// `doc/design_blueprint_region_atom_edits.md` §B1/§B6). Per item: `volume`
+/// must extract to a `Blueprint` (its `geo_tree_root` is taken; structure
+/// ignored), `margin` is a `Float` or unset (→ `DEFAULT_REGION_MARGIN`), and
+/// each of the five settings is a `Bool` or unset (→ inherit, `None`). An unset
+/// optional field arrives as an explicit `NetworkResult::None` in the record
+/// slot (record_construct's optional-field collapse exemption). Any malformed
+/// item produces an `Err(String)` naming the item index.
+fn parse_regions_from_records(items: Vec<NetworkResult>) -> Result<Vec<RegionSpec>, String> {
+    let mut out = Vec::with_capacity(items.len());
+    for (i, item) in items.into_iter().enumerate() {
+        // `volume` is the one required field. Take its geometry SDF; ignore
+        // the Blueprint's structure (documented; §B1).
+        let geometry = match item.extract_record_field("volume") {
+            Some(NetworkResult::Blueprint(bp)) => bp.geo_tree_root.clone(),
+            None | Some(NetworkResult::None) => {
+                return Err(format!(
+                    "materialize.regions[{}]: missing required 'volume' field",
+                    i
+                ));
+            }
+            Some(other) => {
+                return Err(format!(
+                    "materialize.regions[{}].volume: expected Blueprint, got {:?}",
+                    i,
+                    other.infer_data_type()
+                ));
+            }
+        };
+
+        // `margin` is `Optional[Float]`; unset → default.
+        let margin = match item.extract_record_field("margin") {
+            None | Some(NetworkResult::None) => DEFAULT_REGION_MARGIN,
+            Some(NetworkResult::Float(f)) => *f,
+            Some(other) => {
+                return Err(format!(
+                    "materialize.regions[{}].margin: expected Float, got {:?}",
+                    i,
+                    other.infer_data_type()
+                ));
+            }
+        };
+
+        out.push(RegionSpec {
+            geometry,
+            margin,
+            passivate: parse_optional_bool_field(&item, "passivate", i)?,
+            rm_single: parse_optional_bool_field(&item, "rm_single", i)?,
+            surf_recon: parse_optional_bool_field(&item, "surf_recon", i)?,
+            invert_phase: parse_optional_bool_field(&item, "invert_phase", i)?,
+            rm_unbonded: parse_optional_bool_field(&item, "rm_unbonded", i)?,
+        });
+    }
+    Ok(out)
+}
+
+/// Read one `Optional[Bool]` settings field from a region record. Missing or an
+/// explicit `None` → `None` ("inherit"); a `Bool` → `Some(b)`; anything else is
+/// a malformed item.
+fn parse_optional_bool_field(
+    item: &NetworkResult,
+    name: &str,
+    index: usize,
+) -> Result<Option<bool>, String> {
+    match item.extract_record_field(name) {
+        None | Some(NetworkResult::None) => Ok(None),
+        Some(NetworkResult::Bool(b)) => Ok(Some(*b)),
+        Some(other) => Err(format!(
+            "materialize.regions[{}].{}: expected Bool, got {:?}",
+            index,
+            name,
+            other.infer_data_type()
+        )),
     }
 }
 
@@ -425,6 +530,13 @@ pub fn get_node_type() -> NodeType {
               id: None,
               name: "rm_unbonded".to_string(),
               data_type: DataType::Bool,
+          },
+          Parameter {
+              id: None,
+              name: "regions".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Record(RecordType::Named(
+                  "MaterializeRegion".to_string(),
+              )))),
           },
       ],
       output_pins: OutputPinDefinition::single_fixed(DataType::Crystal),

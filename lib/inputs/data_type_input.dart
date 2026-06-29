@@ -12,11 +12,25 @@ class DataTypeInput extends StatefulWidget {
   final APIDataType value;
   final ValueChanged<APIDataType> onChanged;
 
+  /// When true, the base-type dropdown offers the `Optional[T]` entry.
+  /// `Optional` is a **record-field modifier only** (never a pin type), so this
+  /// is set true exclusively by the record `SchemaEditor`. See
+  /// `doc/design_optional_type.md` §7.
+  final bool allowOptional;
+
+  /// When true, this input edits the *inner* type of an `Optional[T]`. The
+  /// dropdown then hides the bases that are ill-formed as an Optional inner
+  /// (`Optional`, `Iter`, `Unit`, `None`) so nesting cannot be authored from
+  /// the UI. See `doc/design_optional_type.md` §3.
+  final bool optionalInner;
+
   const DataTypeInput({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
+    this.allowOptional = false,
+    this.optionalInner = false,
   });
 
   @override
@@ -44,7 +58,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
           decoration: AppInputDecorations.standard.copyWith(
             labelText: widget.label,
           ),
-          items: APIDataTypeBase.values.map((base) {
+          items: APIDataTypeBase.values.where(_baseSelectable).map((base) {
             return DropdownMenuItem(
               value: base,
               child: Text(_getDataTypeBaseDisplayName(base)),
@@ -74,7 +88,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
               // carry-over). The structural editor dialog relies on
               // `children` being well-shaped for the current base.
               final List<APIDataType> seededChildren;
-              if (newValue == APIDataTypeBase.iter) {
+              if (newValue == APIDataTypeBase.iter ||
+                  newValue == APIDataTypeBase.optional) {
                 seededChildren = [_defaultFloat()];
               } else if (newValue == APIDataTypeBase.function) {
                 seededChildren = [_defaultFloat(), _defaultFloat()];
@@ -85,8 +100,10 @@ class _DataTypeInputState extends State<DataTypeInput> {
                 dataTypeBase: newValue,
                 customDataType: customDataType,
                 // Custom owns its own array semantics inside the string;
+                // Optional has no outer-array affordance (Array goes inside);
                 // Record participates in the array checkbox like built-ins.
-                array: newValue == APIDataTypeBase.custom
+                array: (newValue == APIDataTypeBase.custom ||
+                        newValue == APIDataTypeBase.optional)
                     ? false
                     : widget.value.array,
                 children: seededChildren,
@@ -138,7 +155,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         // Inline editing inside the parent column got cramped fast at depth ≥ 1
         // (see doc/design_structural_function_and_iter_types.md §"Editor").
         if (widget.value.dataTypeBase == APIDataTypeBase.iter ||
-            widget.value.dataTypeBase == APIDataTypeBase.function)
+            widget.value.dataTypeBase == APIDataTypeBase.function ||
+            widget.value.dataTypeBase == APIDataTypeBase.optional)
           Padding(
             padding: const EdgeInsets.only(top: 8.0),
             child: _StructuralTypeSummary(
@@ -147,8 +165,12 @@ class _DataTypeInputState extends State<DataTypeInput> {
             ),
           ),
 
-        // Conditional array checkbox
-        if (widget.value.dataTypeBase != APIDataTypeBase.custom)
+        // Conditional array checkbox. Hidden for Optional: an outer
+        // `Array[Optional[T]]` is not an authorable shape — wrap the array
+        // *inside* the Optional instead (`Optional[Array[T]]`), which the
+        // nested inner-type editor supports. See `doc/design_optional_type.md`.
+        if (widget.value.dataTypeBase != APIDataTypeBase.custom &&
+            widget.value.dataTypeBase != APIDataTypeBase.optional)
           CheckboxListTile(
             title: const Text('Array'),
             value: widget.value.array,
@@ -180,6 +202,26 @@ class _DataTypeInputState extends State<DataTypeInput> {
       initialValue: widget.value,
       onChanged: widget.onChanged,
     );
+  }
+
+  /// Which base-type dropdown entries are offered, given the `allowOptional` /
+  /// `optionalInner` context. The currently-selected base is always kept so
+  /// `DropdownButtonFormField` never asserts on a value missing from its items.
+  bool _baseSelectable(APIDataTypeBase base) {
+    if (base == widget.value.dataTypeBase) return true;
+    if (base == APIDataTypeBase.optional) {
+      // Optional is a record-field modifier (SchemaEditor only) and never
+      // nests inside another Optional.
+      return widget.allowOptional && !widget.optionalInner;
+    }
+    if (widget.optionalInner &&
+        (base == APIDataTypeBase.iter ||
+            base == APIDataTypeBase.unit ||
+            base == APIDataTypeBase.none)) {
+      // Ill-formed as an Optional inner — hide so nesting can't be authored.
+      return false;
+    }
+    return true;
   }
 
   String _getDataTypeBaseDisplayName(APIDataTypeBase base) {
@@ -236,6 +278,8 @@ class _DataTypeInputState extends State<DataTypeInput> {
         return 'Record';
       case APIDataTypeBase.iter:
         return 'Iter[T]';
+      case APIDataTypeBase.optional:
+        return 'Optional[T]';
       case APIDataTypeBase.function:
         return 'Function(args…) → R';
       case APIDataTypeBase.custom:

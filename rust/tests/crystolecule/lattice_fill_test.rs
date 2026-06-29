@@ -185,6 +185,7 @@ site 1 C 0.0 0.0 0.0
         parameter_element_values: HashMap::new(),
         geometry: sphere,
         motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
     };
 
     let options = LatticeFillOptions {
@@ -232,6 +233,7 @@ bond 1 ..-2
         parameter_element_values: HashMap::new(),
         geometry: sphere,
         motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
     };
 
     let options = LatticeFillOptions {
@@ -281,6 +283,7 @@ site 1 C 0.0 0.0 0.0
         parameter_element_values: HashMap::new(),
         geometry: sphere,
         motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
     };
 
     let fill_region = DAABox::new(

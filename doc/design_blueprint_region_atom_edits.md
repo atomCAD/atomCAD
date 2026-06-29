@@ -38,7 +38,7 @@ There are two structurally different cases, and they get two different mechanism
 | Mechanism | one optional **`region: Blueprint`** input pin | optional **`regions: [Record(MaterializeRegion)]`** input pin (painter's algorithm) |
 | Needs `Optional[T]`? | No | Yes (record fields are per-field optional) |
 
-The asymmetry is essential, not incidental. `materialize`'s four settings (`passivate`, `rm_single`, `surf_recon`, `invert_phase`) are consumed **simultaneously** inside one `fill_lattice` pass, so per-region overrides must be assembled *before* the pass and resolved per query point. Every other operation runs on atoms that already exist, returns the same phase it received, and is therefore freely stackable — so a single region pin per node, chained, is both sufficient and simpler.
+The asymmetry is essential, not incidental. `materialize`'s five settings (`passivate`, `rm_single`, `surf_recon`, `invert_phase`, `rm_unbonded`) are consumed **simultaneously** inside one `fill_lattice` pass, so per-region overrides must be assembled *before* the pass and resolved per query point. Every other operation runs on atoms that already exist, returns the same phase it received, and is therefore freely stackable — so a single region pin per node, chained, is both sufficient and simpler.
 
 The shared kernel of both parts is identical: **membership of a point in a region = the region Blueprint's `geo_tree_root` SDF evaluated at that point is `≤ margin`.** Part B already specifies that rule in full (§B4); Part A reuses it verbatim.
 
@@ -154,7 +154,7 @@ The minimizer (`crystolecule/simulation/minimize.rs`) **already supports frozen 
 
 > This is the original #346 design, unchanged in substance. Section numbers are prefixed `B` to disambiguate from Part A; cross-references that previously read "§4" now read "§B4", etc.
 
-`materialize` converts a Blueprint into a Crystal via `fill_lattice`, controlled by four booleans — `passivate`, `rm_single`, `surf_recon`, `invert_phase` — that today apply **globally** to the entire structure. Issue #346 asks for crystolecule parts with *different* surface treatments on different regions/zones: e.g. a reconstructed and/or depassivated top surface with ordinary passivation everywhere else, specified by simple volume proxies (typically a half-space through the top surface). The issue also asks to make the materialization process "less magic and more user-space exposed".
+`materialize` converts a Blueprint into a Crystal via `fill_lattice`, controlled by five booleans — `passivate`, `rm_single`, `surf_recon`, `invert_phase`, `rm_unbonded` — that today apply **globally** to the entire structure. Issue #346 asks for crystolecule parts with *different* surface treatments on different regions/zones: e.g. a reconstructed and/or depassivated top surface with ordinary passivation everywhere else, specified by simple volume proxies (typically a half-space through the top surface). The issue also asks to make the materialization process "less magic and more user-space exposed".
 
 This design keeps `materialize` as the single Blueprint → Crystal conversion point and adds an optional **`regions`** input pin: an ordered array of region records, each pairing a Blueprint volume with per-field-optional settings overrides. The specification is assembled from ordinary nodes (`half_space`, CSG, `record_construct`, array nodes), so it is plain, inspectable, parametric node-network data — that is the "user-space exposed" part — while the algorithms that genuinely require fill-time data (crystallographic addresses, motif templates) stay inside materialization.
 
@@ -179,10 +179,11 @@ MaterializeRegion = {
     rm_single:    Optional[Bool],
     surf_recon:   Optional[Bool],
     invert_phase: Optional[Bool],
+    rm_unbonded:  Optional[Bool],    // remove zero-bond (lone) atoms; mirrors materialize's rm_unbonded (#363)
 }
 ```
 
-Authored field order above drives the `record_construct` pin layout. Per `doc/design_optional_type.md` (Core Decision 2: `Optional` is a record-field modifier, never a pin type), **the construct input pins are plain `T`** — `volume: Blueprint`, `margin: Float`, the four settings `Bool` — *not* `Optional[…]`. `Optional` lives only in the def's field declarations above; it never appears on a pin or wire. The field's Optional-ness drives behavior at `record_construct::eval`: `volume` is the one **required** pin (unwired → the whole record collapses to `None`); the five `Optional` fields are **not required** (an unset one stays an explicit `None` in the record rather than collapsing it).
+Authored field order above drives the `record_construct` pin layout. Per `doc/design_optional_type.md` (Core Decision 2: `Optional` is a record-field modifier, never a pin type), **the construct input pins are plain `T`** — `volume: Blueprint`, `margin: Float`, the five settings `Bool` — *not* `Optional[…]`. `Optional` lives only in the def's field declarations above; it never appears on a pin or wire. The field's Optional-ness drives behavior at `record_construct::eval`: `volume` is the one **required** pin (unwired → the whole record collapses to `None`); the six `Optional` fields are **not required** (an unset one stays an explicit `None` in the record rather than collapsing it).
 
 The three settings states this design needs (§Motivation: force-on / force-off / inherit) map directly onto the construct node's per-field input, with no `Optional` value ever on a wire:
 
@@ -207,7 +208,8 @@ Note Part B never uses a `record_destructure` node: `materialize` parses the reg
 | 2 | Input | `rm_single` | `Bool` | No | unchanged |
 | 3 | Input | `surf_recon` | `Bool` | No | unchanged |
 | 4 | Input | `invert_phase` | `Bool` | No | unchanged |
-| 5 | Input | **`regions`** | **`[Record(Named("MaterializeRegion"))]`** | **No** | new |
+| 5 | Input | `rm_unbonded` | `Bool` | No | unchanged (added in #363; remove zero-bond atoms) |
+| 6 | Input | **`regions`** | **`[Record(Named("MaterializeRegion"))]`** | **No** | new |
 | — | Output | (pin 0) | `Crystal` | — | unchanged |
 
 ### B3. Semantics: root + per-field painter's algorithm
@@ -246,7 +248,7 @@ Margin solves *membership* (in-or-out of one region); it does not solve *tie-bre
 
 1. **Fill** — recursive box subdivision; main-geometry SDF batch-evaluated at candidate motif sites; atoms placed where `sdf ≤ 0.01`; per-atom depth (−sdf) stored on the atom; crystallographic address recorded in `PlacedAtomTracker`.
 2. **Bonds** — created from motif bond templates via the tracker.
-3. **Lone-atom cleanup** — always.
+3. **`rm_unbonded`** (gated; default on) — `remove_lone_atoms`: single pass removing zero-bond atoms (removing a 0-bond atom can't create new 0-bond atoms, so no waves needed). Made a flag in #363; was unconditional before.
 4. **`rm_single`** (gated) — `remove_single_bond_atoms`: waves of ≤1-bond removals until fixpoint (monotone → terminates).
 5. **`surf_recon`** (gated; near-cubic zincblende diamond/Si only, via `get_reconstruction_params`) — per-atom classification (depth ≤ `BULK_DEPTH_THRESHOLD = 0.5`, exactly 2 bonds, axis-aligned) → primary selection via truth tables over crystallographic addresses (**`invert_phase`** XOR-ed in, per atom) → partner via offset table → `apply_dimer_reconstruction` per validated pair (**`passivate` is already a per-dimer parameter** here: it selects geometry constants and adds the two tilted H atoms, flagging the carbons).
 6. **`passivate`** (gated) — `hydrogen_passivate`: per tracked atom not flagged in step 5, compare actual vs. motif-expected bonds; per missing motif bond, place an H along the template direction.
@@ -264,6 +266,7 @@ pub struct RegionSpec {
     pub rm_single: Option<bool>,
     pub surf_recon: Option<bool>,
     pub invert_phase: Option<bool>,
+    pub rm_unbonded: Option<bool>,
 }
 
 // LatticeFillConfig gains:  pub regions: Vec<RegionSpec>,   // empty = today's behavior
@@ -272,7 +275,7 @@ pub struct RegionSpec {
 struct SettingsResolver<'a> { root: &'a LatticeFillOptions, regions: &'a [RegionSpec] }
 impl SettingsResolver<'_> {
     /// Walk regions last → first; membership = sdf(p) ≤ margin; first region
-    /// with the field set wins; early-exit when all four fields are filled;
+    /// with the field set wins; early-exit when all five fields are filled;
     /// remaining fields fall back to root.
     fn resolve_at(&self, p: DVec3) -> LatticeFillOptions { ... }
     /// `root.f || any region sets Some(true)` — replaces the old global gates.
@@ -282,7 +285,8 @@ impl SettingsResolver<'_> {
 
 **Per-step changes:**
 
-- Steps 1–3: **unchanged**. (Regions affect surface treatment only; atom placement is still driven solely by the main geometry. Per-region *placement* effects — doping — are a future extension, see §B10.)
+- Steps 1–2: **unchanged**. (Regions affect surface treatment only; atom placement is still driven solely by the main geometry. Per-region *placement* effects — doping — are a future extension, see §B10.)
+- **Step 3 (`rm_unbonded`)**: gate becomes `enabled_anywhere`; removal filters candidates to atoms whose `resolve_at(position).remove_unbonded_atoms` is true. Implemented as a predicate variant in `atomic_structure_utils` (`remove_lone_atoms_filtered(structure, eligible: &dyn Fn(DVec3) -> bool)`), the existing function being the always-true case — same pattern as step 4. Single pass (a zero-bond atom's removal never lowers another atom's bond count), so no fixpoint concern.
 - **Step 4 (`rm_single`)**: gate becomes `enabled_anywhere`; the removal waves filter candidates to atoms whose `resolve_at(position).remove_single_bond_atoms` is true — in both the initial scan and the neighbor re-check. Implemented as a predicate variant in `atomic_structure_utils` (`remove_single_bond_atoms_filtered(structure, recursive, eligible: &dyn Fn(DVec3) -> bool)`) so the utils module stays independent of `lattice_fill`; the existing function becomes the always-true case. Monotone → still terminates.
 - **Step 5 (`surf_recon`)**: runs when `enabled_anywhere`. Classification (`process_atoms`) is unchanged except `is_primary_dimer_atom` receives the **per-atom** `invert_phase` resolved at that atom's position. The apply loop gates each validated pair on `resolve_at(midpoint of the two atom positions)`: skip if `surf_recon` is off there; the same lookup supplies `passivate` for the dimer's H atoms (already a per-dimer parameter of `apply_dimer_reconstruction`). The existing motif/cell gating (`get_reconstruction_params`) is untouched — a `surf_recon: true` region on a non-supported structure is a no-op, same as the global flag today.
 - **Step 6 (`passivate`)**: runs when `enabled_anywhere`; the global gate moves inside the loop — per tracked atom, resolve once at the atom's position and skip its dangling-bond scan if `passivate` is false there. (Decision point = the **existing atom's** position, not the would-be H position: the atom is the stable side of the dangling bond.)
@@ -295,10 +299,10 @@ impl SettingsResolver<'_> {
 
 ### B6. `materialize` node changes
 
-`eval` reads pin 5 with `evaluate_arg` (not `_required`):
+`eval` reads pin 6 with `evaluate_arg` (not `_required`):
 
 - `NetworkResult::None` → `regions: vec![]` (today's behavior).
-- `NetworkResult::Array(items)` → `parse_regions_from_records(items)`, mirroring `atom_replace::parse_rules_from_records`: per item, `volume` must extract to a Blueprint payload (its `geo_tree_root` is taken; structure ignored), `margin` a `Float` or `None` (→ `DEFAULT_REGION_MARGIN`), the four settings `Bool` or `None`. Any malformed item → `NetworkResult::Error` with the item index in the message.
+- `NetworkResult::Array(items)` → `parse_regions_from_records(items)`, mirroring `atom_replace::parse_rules_from_records`: per item, `volume` must extract to a Blueprint payload (its `geo_tree_root` is taken; structure ignored), `margin` a `Float` or `None` (→ `DEFAULT_REGION_MARGIN`), the five settings `Bool` or `None`. Any malformed item → `NetworkResult::Error` with the item index in the message.
 - Anything else → `NetworkResult::Error` naming the actual type.
 
 `MaterializeData` storage, `get_text_properties` / `set_text_properties`, and the parameter-element machinery are unchanged. There is **no `regions` text property** — like `atom_replace.rules`, wired region data is recomputed per eval, never stored.
@@ -368,17 +372,19 @@ Tests: `freeze`/`unfreeze` set/clear bit 2 in-region (and globally when disconne
 
 ### Phase B1 — Region engine in `lattice_fill` (no node changes)
 
-1. `RegionSpec`, `DEFAULT_REGION_MARGIN`, `SettingsResolver` (resolve_at / enabled_anywhere), `LatticeFillConfig.regions` (default empty).
-2. Step-4 predicate variant `remove_single_bond_atoms_filtered` in `atomic_structure_utils`; wire the per-position gates into steps 4–6 per §B5.
+*Status: implemented 2026-06-29. `RegionSpec` / `SettingsResolver` in `lattice_fill/config.rs`; `LatticeFillConfig.regions` (default empty); filtered cleanup variants in `atomic_structure_utils.rs`; per-position gates wired into steps 3–6 of `fill_algorithm.rs` (+ `surface_reconstruction.rs` / `hydrogen_passivation.rs` take the resolver). Tests: `rust/tests/crystolecule/lattice_fill_regions_test.rs` (9 tests). No node-network surface yet — that lands in Phase B2.*
 
-Tests (`rust/tests/crystolecule/`, pure — configs constructed directly, no node network): empty-regions equivalence with today's snapshots; cuboid blueprint + boundary-coincident half-space region per setting (`passivate` off on top only; `surf_recon` on top only; `rm_single` regional; `invert_phase` regional → dimer row phase flips inside, no dimer at the seam); margin behavior (default captures `sdf ≈ 0` atoms; negative margin excludes the boundary layer); overlap + array-order override; per-field inheritance (region setting only one field).
+1. `RegionSpec`, `DEFAULT_REGION_MARGIN`, `SettingsResolver` (resolve_at / enabled_anywhere), `LatticeFillConfig.regions` (default empty).
+2. Step-3 predicate variant `remove_lone_atoms_filtered` and step-4 variant `remove_single_bond_atoms_filtered` in `atomic_structure_utils`; wire the per-position gates into steps 3–6 per §B5.
+
+Tests (`rust/tests/crystolecule/`, pure — configs constructed directly, no node network): empty-regions equivalence with today's snapshots; cuboid blueprint + boundary-coincident half-space region per setting (`passivate` off on top only; `surf_recon` on top only; `rm_single` regional; `rm_unbonded` regional → lone atoms kept outside the region but stripped inside; `invert_phase` regional → dimer row phase flips inside, no dimer at the seam); margin behavior (default captures `sdf ≈ 0` atoms; negative margin excludes the boundary layer); overlap + array-order override; per-field inheritance (region setting only one field).
 
 **Verification note (manual).** Phase B1 is pure `lattice_fill` plumbing with **no node-network surface**, so there is nothing to drive from the UI yet — manual verification is the automated `tests/crystolecule/` suite above. For an ad-hoc spot-check, construct a `LatticeFillConfig` with a single boundary-coincident `RegionSpec` in a scratch test or binary and diff the produced `Crystal` against the global-flag baseline (e.g. `passivate` off on the top region only should leave exactly the top surface's dangling bonds unterminated).
 
 ### Phase B2 — `MaterializeRegion` def + `regions` pin
 
 1. Register the built-in def (§B1) in `NodeTypeRegistry::new()`; reserved-name guards come free from the `atom_replace.rules` Phase-A infrastructure (add the mirror tests).
-2. `materialize` node: pin 5 (§B2), optional in `get_parameter_metadata`; `eval` parsing (§B6).
+2. `materialize` node: pin 6 (§B2), optional in `get_parameter_metadata`; `eval` parsing (§B6).
 
 Tests (`rust/tests/structure_designer/`): disconnected pin → snapshot-identical output; wired regions drive per-position settings end-to-end through the node; malformed item → indexed `Error`; node-snapshot update for the new pin; `.cnnd` round-trip of a network with a wired regions chain; reserved-name tests (`add/rename/update/delete_record_type_def("MaterializeRegion")` rejected; network named `MaterializeRegion` rejected).
 

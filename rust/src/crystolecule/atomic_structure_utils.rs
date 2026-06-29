@@ -283,9 +283,23 @@ pub fn print_atom_info(structure: &AtomicStructure) {
 }
 
 pub fn remove_lone_atoms(structure: &mut AtomicStructure) {
+    remove_lone_atoms_filtered(structure, &|_| true);
+}
+
+/// Like [`remove_lone_atoms`], but only removes a zero-bond atom when
+/// `eligible` returns true for its position. The unfiltered variant passes an
+/// always-`true` predicate, so the two share a single code path.
+///
+/// Used by region-gated materialization (`rm_unbonded` resolved per position):
+/// `eligible(pos)` reports whether `rm_unbonded` is enabled at that point. See
+/// `doc/design_blueprint_region_atom_edits.md` §B5 (step 3).
+pub fn remove_lone_atoms_filtered(
+    structure: &mut AtomicStructure,
+    eligible: &dyn Fn(DVec3) -> bool,
+) {
     let lone_atoms: Vec<u32> = structure
         .atoms_values()
-        .filter(|atom| atom.bonds.is_empty())
+        .filter(|atom| atom.bonds.is_empty() && eligible(atom.position))
         .map(|atom| atom.id)
         .collect();
 
@@ -338,10 +352,28 @@ fn delete_atoms_with_at_most_one_bond(
 /// enabling single-bond removal in `materialize` implies lone-atom removal
 /// regardless of the separate `rm_unbonded` flag. See issue #363.
 pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool) {
-    // First iteration: find ALL atoms with at most one bond (0 or 1 bonds)
+    remove_single_bond_atoms_filtered(structure, recursive, &|_| true);
+}
+
+/// Like [`remove_single_bond_atoms`], but an atom is only a removal candidate
+/// when `eligible` returns true for its position — applied both in the initial
+/// scan and in the recursive neighbor re-check. The unfiltered variant passes
+/// an always-`true` predicate, so the two share a single code path.
+///
+/// Used by region-gated materialization (`rm_single` resolved per position):
+/// `eligible(pos)` reports whether `rm_single` is enabled at that point. The
+/// removal stays monotone (deletions only lower bond counts), so the recursion
+/// still terminates. See `doc/design_blueprint_region_atom_edits.md` §B5
+/// (step 4).
+pub fn remove_single_bond_atoms_filtered(
+    structure: &mut AtomicStructure,
+    recursive: bool,
+    eligible: &dyn Fn(DVec3) -> bool,
+) {
+    // First iteration: find ALL eligible atoms with at most one bond (0 or 1 bonds)
     let mut atoms_with_at_most_one_bond: Vec<u32> = structure
         .atoms_values()
-        .filter(|atom| atom.bonds.len() <= 1)
+        .filter(|atom| atom.bonds.len() <= 1 && eligible(atom.position))
         .map(|atom| atom.id)
         .collect();
 
@@ -356,12 +388,13 @@ pub fn remove_single_bond_atoms(structure: &mut AtomicStructure, recursive: bool
         }
 
         // For next iteration: check which neighbors now have at most one bond
+        // and are themselves eligible for removal.
         atoms_with_at_most_one_bond = all_neighbors
             .into_iter()
             .filter(|&neighbor_id| {
                 structure
                     .get_atom(neighbor_id)
-                    .map(|atom| atom.bonds.len() <= 1)
+                    .map(|atom| atom.bonds.len() <= 1 && eligible(atom.position))
                     .unwrap_or(false)
             })
             .collect();

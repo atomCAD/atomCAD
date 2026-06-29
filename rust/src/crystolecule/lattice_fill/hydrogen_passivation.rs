@@ -1,4 +1,4 @@
-use super::config::{LatticeFillConfig, LatticeFillStatistics};
+use super::config::{LatticeFillConfig, LatticeFillStatistics, SettingsResolver};
 use super::placed_atom_tracker::PlacedAtomTracker;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::atomic_structure::AtomicStructure;
@@ -15,6 +15,7 @@ pub fn hydrogen_passivate(
     atom_tracker: &PlacedAtomTracker,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut LatticeFillStatistics,
+    resolver: &SettingsResolver,
 ) {
     //println!("hydrogen_passivate called");
 
@@ -36,6 +37,12 @@ pub fn hydrogen_passivate(
                     (atom.position, atom.atomic_number, atom.bonds.len())
                 }
             };
+
+        // Region-aware gate: skip this atom's dangling-bond scan where
+        // passivation is disabled at the (existing, stable) atom's position.
+        if !resolver.resolve_at(atom_position).hydrogen_passivation {
+            continue;
+        }
 
         // Optimization: Check if atom has all expected bonds from motif
         // If so, skip expensive dangling bond checking

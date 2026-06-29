@@ -971,9 +971,9 @@ fn test_load_atom_fill_split() {
 
     // Materialize args, in v3 order: shape (now W, not cuboid directly),
     // passivate (id 5), rm_single (id 6), surf_recon (id 7), invert_phase (id 8).
-    // A 6th slot (rm_unbonded) is appended unwired by the argument-repair pass —
-    // it is a newer optional pin the v2 fixture predates.
-    assert_eq!(materialize.arguments.len(), 6);
+    // The 6th (rm_unbonded) and 7th (regions) slots are appended unwired by the
+    // argument-repair pass — newer optional pins the v2 fixture predates.
+    assert_eq!(materialize.arguments.len(), 7);
     assert_eq!(
         materialize.arguments[0]
             .argument_output_pins()
@@ -1202,14 +1202,14 @@ fn test_load_shared_unit_cell_composes_passes() {
     // The materialize node (renamed atom_fill, id 4) has its shape wire
     // pointing at the cuboid (id 2) â€” case B preserves the original shape wire
     // verbatim. The five Bool flag args are unwired (no flag wires here);
-    // the 5th (rm_unbonded) is a newer optional pin appended by the repair pass.
+    // rm_unbonded and regions are newer optional pins appended by the repair pass.
     let materialize = network
         .nodes
         .values()
         .find(|n| n.node_type_name == "materialize")
         .expect("materialize node missing");
     assert_eq!(materialize.id, 4);
-    assert_eq!(materialize.arguments.len(), 6);
+    assert_eq!(materialize.arguments.len(), 7);
     assert_eq!(
         materialize.arguments[0].argument_output_pins().get(&2),
         Some(&0),
@@ -1861,13 +1861,13 @@ fn test_load_motif_offset_only_unchained_case_c() {
 
     // Materialize.shape stays empty in case C, and the five Bool flag args
     // are also empty (this fixture wires nothing besides motif_offset). The
-    // 5th flag (rm_unbonded) is a newer optional pin appended unwired.
+    // rm_unbonded and regions slots are newer optional pins appended unwired.
     let materialize = network
         .nodes
         .values()
         .find(|n| n.node_type_name == "materialize")
         .unwrap();
-    assert_eq!(materialize.arguments.len(), 6);
+    assert_eq!(materialize.arguments.len(), 7);
     for (i, a) in materialize.arguments.iter().enumerate() {
         assert!(
             a.argument_output_pins().is_empty(),

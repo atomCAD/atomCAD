@@ -5,7 +5,10 @@ pub mod placed_atom_tracker;
 pub mod surface_reconstruction;
 
 // Re-export main API
-pub use config::{LatticeFillConfig, LatticeFillOptions, LatticeFillResult, LatticeFillStatistics};
+pub use config::{
+    LatticeFillConfig, LatticeFillOptions, LatticeFillResult, LatticeFillStatistics, RegionSpec,
+    SettingsResolver,
+};
 pub use fill_algorithm::{DEFAULT_REGION_MARGIN, fill_lattice};
 pub use placed_atom_tracker::{CrystallographicAddress, PlacedAtomTracker};
 pub use surface_reconstruction::reconstruct_surface;

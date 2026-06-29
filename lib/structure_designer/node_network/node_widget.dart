@@ -524,6 +524,14 @@ String _apiDataTypeToString(APIDataType dt) {
           dt.children.isNotEmpty ? _apiDataTypeToString(dt.children[0]) : '?';
       base = 'Iter[$element]';
       break;
+    case APIDataTypeBase.optional:
+      // `children[0]` is the inner type. Optional is a record-field modifier,
+      // not a pin type, so this rarely renders here — kept for exhaustiveness.
+      // See `doc/design_optional_type.md`.
+      final inner =
+          dt.children.isNotEmpty ? _apiDataTypeToString(dt.children[0]) : '?';
+      base = 'Optional[$inner]';
+      break;
     case APIDataTypeBase.function:
       // `children = [p0, ..., pN-1, R]` — rightmost is the return type.
       if (dt.children.isEmpty) {
@@ -1476,7 +1484,8 @@ class NodeWidget extends StatelessWidget {
         NODE_BORDER_WIDTH_NORMAL,
         [
           BoxShadow(
-              color: NODE_BORDER_COLOR_ERROR.withValues(alpha: WIRE_GLOW_OPACITY),
+              color:
+                  NODE_BORDER_COLOR_ERROR.withValues(alpha: WIRE_GLOW_OPACITY),
               blurRadius: WIRE_GLOW_BLUR_RADIUS,
               spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
         ],
@@ -1500,8 +1509,8 @@ class NodeWidget extends StatelessWidget {
         NODE_BORDER_WIDTH_SELECTED,
         [
           BoxShadow(
-              color: NODE_COLOR_SELECTED
-                  .withValues(alpha: WIRE_GLOW_OPACITY * 0.5),
+              color: NODE_COLOR_SELECTED.withValues(
+                  alpha: WIRE_GLOW_OPACITY * 0.5),
               blurRadius: WIRE_GLOW_BLUR_RADIUS * 0.7,
               spreadRadius: WIRE_GLOW_SPREAD_RADIUS * 0.5)
         ],

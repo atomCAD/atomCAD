@@ -18,6 +18,9 @@ String _innerToString(APIDataType type) {
     case APIDataTypeBase.iter:
       if (type.children.isEmpty) return 'Iter[?]';
       return 'Iter[${apiDataTypeToString(type.children.first)}]';
+    case APIDataTypeBase.optional:
+      if (type.children.isEmpty) return 'Optional[?]';
+      return 'Optional[${apiDataTypeToString(type.children.first)}]';
     case APIDataTypeBase.function:
       if (type.children.isEmpty) return '() → ?';
       final n = type.children.length - 1;
@@ -88,6 +91,7 @@ String _flatBaseLabel(APIDataTypeBase base) {
       return 'Unit';
     case APIDataTypeBase.record:
     case APIDataTypeBase.iter:
+    case APIDataTypeBase.optional:
     case APIDataTypeBase.function:
     case APIDataTypeBase.custom:
       // Handled by _innerToString.
@@ -184,6 +188,22 @@ Future<void> showTypeEditorDialog({
                           children: [newElement],
                         ),
                       ),
+                    )
+                  else if (current.dataTypeBase == APIDataTypeBase.optional)
+                    DataTypeInput(
+                      label: 'Inner Type',
+                      // The inner editor blocks the ill-formed Optional inners
+                      // (Optional/Iter/Unit/None). See doc/design_optional_type.md §3.
+                      optionalInner: true,
+                      value: _iterElement(current),
+                      onChanged: (newElement) => commit(
+                        APIDataType(
+                          dataTypeBase: current.dataTypeBase,
+                          customDataType: current.customDataType,
+                          array: current.array,
+                          children: [newElement],
+                        ),
+                      ),
                     ),
                   const SizedBox(height: 16),
                   Align(
@@ -209,6 +229,8 @@ String _dialogTitle(APIDataType type) {
       return 'Function Type';
     case APIDataTypeBase.iter:
       return 'Iterator Type';
+    case APIDataTypeBase.optional:
+      return 'Optional Type';
     default:
       return 'Edit Type';
   }

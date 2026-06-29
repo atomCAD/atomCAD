@@ -273,6 +273,23 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
                 base
             });
         }
+        APIDataTypeBase::Optional => {
+            let element = api_data_type
+                .children
+                .first()
+                .ok_or_else(|| "Optional type requires one child".to_string())?;
+            let inner = api_data_type_to_data_type(element)?;
+            // Reject the ill-formed shapes (Optional[Optional]/Iter/Unit/None)
+            // at this construction site, mirroring the text parser and registry
+            // validation. See `doc/design_optional_type.md` §3.
+            crate::structure_designer::data_type::validate_optional_inner(&inner)?;
+            let base = DataType::Optional(Box::new(inner));
+            return Ok(if api_data_type.array {
+                DataType::Array(Box::new(base))
+            } else {
+                base
+            });
+        }
         APIDataTypeBase::Function => {
             if api_data_type.children.is_empty() {
                 return Err("Function type requires at least one child (the return type)".into());
@@ -339,6 +356,17 @@ pub fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
             custom_data_type: None,
             array: is_array,
             children: vec![data_type_to_api_data_type(element.as_ref())],
+        };
+    }
+    // Optional[T] is a record-field modifier; it surfaces to the schema editor
+    // as a first-class structural variant (one child). See
+    // `doc/design_optional_type.md` §7.
+    if let DataType::Optional(inner) = base_data_type {
+        return APIDataType {
+            data_type_base: APIDataTypeBase::Optional,
+            custom_data_type: None,
+            array: is_array,
+            children: vec![data_type_to_api_data_type(inner.as_ref())],
         };
     }
     if let DataType::Function(func) = base_data_type {
@@ -5858,7 +5886,14 @@ pub fn get_record_construct_fields(
 
                 let mut result = Vec::new();
                 for (i, (field_name, field_type)) in def.fields.iter().enumerate() {
-                    let Some(simple_type) = data_type_to_simple_param_type(field_type) else {
+                    // An `Optional[T]` field is exposed at the value/literal layer
+                    // as a plain `T` (Core Decision 2). Peel the Optional so the
+                    // literal editor renders `T`'s input; the tri-state "unset"
+                    // (no `literal_values` entry, no wire ⇒ `None` ⇒ inherit) is
+                    // already handled by the editor's placeholder/clear states.
+                    // See `doc/design_optional_type.md` §5.
+                    let value_type = field_type.record_field_pin_type();
+                    let Some(simple_type) = data_type_to_simple_param_type(&value_type) else {
                         continue;
                     };
                     let is_wired = node
@@ -5869,7 +5904,7 @@ pub fn get_record_construct_fields(
                     let stored_value = data
                         .literal_values
                         .get(field_name)
-                        .and_then(|tv| text_value_to_api_literal(tv, field_type));
+                        .and_then(|tv| text_value_to_api_literal(tv, &value_type));
                     result.push(APILiteralField {
                         name: field_name.clone(),
                         data_type: simple_type,

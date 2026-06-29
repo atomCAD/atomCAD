@@ -10,6 +10,7 @@ use crate::crystolecule::crystolecule_constants::{
     ZINCBLENDE_SITE_INTERIOR1, ZINCBLENDE_SITE_INTERIOR2, ZINCBLENDE_SITE_INTERIOR3,
     ZINCBLENDE_SITE_INTERIOR4,
 };
+use crate::crystolecule::lattice_fill::config::SettingsResolver;
 use crate::crystolecule::lattice_fill::placed_atom_tracker::{
     CrystallographicAddress, PlacedAtomTracker,
 };
@@ -809,7 +810,7 @@ fn get_dimer_partner(
 fn process_atoms(
     structure: &mut AtomicStructure,
     atom_tracker: &PlacedAtomTracker,
-    invert_phase: bool,
+    resolver: &SettingsResolver,
 ) -> DimerCandidateData {
     let mut partner_orientations: FxHashMap<u32, SurfaceOrientation> = FxHashMap::default();
     let mut dimer_pairs: Vec<DimerPair> = Vec::new();
@@ -821,6 +822,7 @@ fn process_atoms(
             Some(a) => a,
             None => continue, // Atom doesn't exist in structure, skip
         };
+        let atom_position = atom.position;
 
         // Classify surface orientation
         let orientation = classify_atom_surface_orientation(atom, structure);
@@ -834,6 +836,9 @@ fn process_atoms(
         if orientation == SurfaceOrientation::Bulk || orientation == SurfaceOrientation::Unknown {
             continue;
         }
+
+        // Resolve invert_phase per atom at its position (region-aware).
+        let invert_phase = resolver.resolve_at(atom_position).invert_phase;
 
         // Check if this is a primary dimer atom
         if is_primary_dimer_atom(&address, orientation, invert_phase) {
@@ -1038,13 +1043,11 @@ fn add_hydrogen_passivation(
     structure.set_atom_hydrogen_passivation(dimer_pair.partner_atom_id, true);
 }
 
-#[allow(clippy::too_many_arguments)]
 fn reconstruct_surface_100_diamond_cubic(
     structure: &mut AtomicStructure,
     atom_tracker: &PlacedAtomTracker,
     single_bond_atoms_already_removed: bool,
-    hydrogen_passivation: bool,
-    invert_phase: bool,
+    resolver: &SettingsResolver,
     params: SurfaceReconstructionParams,
 ) -> usize {
     // Remove single-bond atoms if they haven't been removed yet
@@ -1055,7 +1058,7 @@ fn reconstruct_surface_100_diamond_cubic(
 
     // Step 1: Process atoms - classify orientations and identify dimer candidates
     // Debug visualization is applied during processing if SURFACE_RECONSTRUCTION_VISUAL_DEBUG is true
-    let candidate_data = process_atoms(structure, atom_tracker, invert_phase);
+    let candidate_data = process_atoms(structure, atom_tracker, resolver);
 
     // Step 2: Process dimer candidates - validate and apply reconstruction
     let mut dimer_count = 0;
@@ -1067,7 +1070,30 @@ fn reconstruct_surface_100_diamond_cubic(
         {
             // Only reconstruct if both atoms have the same surface orientation
             if partner_orientation == dimer_pair.primary_orientation {
-                apply_dimer_reconstruction(structure, dimer_pair, hydrogen_passivation, params);
+                // Resolve per-dimer settings at the midpoint of the two atoms
+                // (least sensitive to which atom is "primary"; Open Question 3).
+                let midpoint = {
+                    let a1 = structure.get_atom(dimer_pair.primary_atom_id);
+                    let a2 = structure.get_atom(dimer_pair.partner_atom_id);
+                    match (a1, a2) {
+                        (Some(a1), Some(a2)) => (a1.position + a2.position) * 0.5,
+                        _ => continue, // one atom was removed; skip this pair
+                    }
+                };
+                let opts = resolver.resolve_at(midpoint);
+
+                // Skip reconstruction where surf_recon is disabled at the dimer.
+                if !opts.reconstruct_surface {
+                    continue;
+                }
+
+                // The same lookup supplies passivation for the dimer's H atoms.
+                apply_dimer_reconstruction(
+                    structure,
+                    dimer_pair,
+                    opts.hydrogen_passivation,
+                    params,
+                );
                 dimer_count += 1;
             }
         }
@@ -1088,11 +1114,12 @@ fn reconstruct_surface_100_diamond_cubic(
 /// * `unit_cell` - The unit cell defining the lattice
 /// * `parameter_element_values` - Map of parameter element names to atomic numbers
 /// * `single_bond_atoms_already_removed` - Whether single-bond atoms were already removed
-/// * `hydrogen_passivation` - Whether to add hydrogen passivation to reconstructed dimers
+/// * `resolver` - Per-position settings resolver; supplies the region-aware
+///   `invert_phase` (per primary atom), `reconstruct_surface` gate (per dimer),
+///   and `hydrogen_passivation` (per dimer) — see §B5 step 5
 ///
 /// # Returns
 /// * The number of surface reconstructions performed (e.g., number of dimers for (100) reconstruction)
-#[allow(clippy::too_many_arguments)]
 pub fn reconstruct_surface(
     structure: &mut AtomicStructure,
     atom_tracker: &PlacedAtomTracker,
@@ -1100,8 +1127,7 @@ pub fn reconstruct_surface(
     unit_cell: &UnitCellStruct,
     parameter_element_values: &HashMap<String, i16>,
     single_bond_atoms_already_removed: bool,
-    hydrogen_passivation: bool,
-    invert_phase: bool,
+    resolver: &SettingsResolver,
 ) -> usize {
     let params = match get_reconstruction_params(motif, unit_cell, parameter_element_values) {
         Some(p) => p,
@@ -1112,8 +1138,7 @@ pub fn reconstruct_surface(
         structure,
         atom_tracker,
         single_bond_atoms_already_removed,
-        hydrogen_passivation,
-        invert_phase,
+        resolver,
         params,
     )
 }

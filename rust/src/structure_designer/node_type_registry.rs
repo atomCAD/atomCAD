@@ -245,6 +245,46 @@ impl NodeTypeRegistry {
             },
         );
 
+        // `MaterializeRegion` — one entry of `materialize.regions`: a volume
+        // paired with per-field-optional settings overrides. The `Optional[T]`
+        // fields give the force-on / force-off / inherit tri-state (an unset
+        // field inherits from earlier matching regions and ultimately the root
+        // settings). `volume` is the one required field. See
+        // `doc/design_blueprint_region_atom_edits.md` §B1.
+        ret.built_in_record_type_defs.insert(
+            "MaterializeRegion".to_string(),
+            RecordTypeDef {
+                name: "MaterializeRegion".to_string(),
+                fields: vec![
+                    ("volume".to_string(), DataType::Blueprint),
+                    (
+                        "margin".to_string(),
+                        DataType::Optional(Box::new(DataType::Float)),
+                    ),
+                    (
+                        "passivate".to_string(),
+                        DataType::Optional(Box::new(DataType::Bool)),
+                    ),
+                    (
+                        "rm_single".to_string(),
+                        DataType::Optional(Box::new(DataType::Bool)),
+                    ),
+                    (
+                        "surf_recon".to_string(),
+                        DataType::Optional(Box::new(DataType::Bool)),
+                    ),
+                    (
+                        "invert_phase".to_string(),
+                        DataType::Optional(Box::new(DataType::Bool)),
+                    ),
+                    (
+                        "rm_unbonded".to_string(),
+                        DataType::Optional(Box::new(DataType::Bool)),
+                    ),
+                ],
+            },
+        );
+
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
 

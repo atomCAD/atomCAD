@@ -693,9 +693,10 @@ class APIDataType {
   final bool array;
 
   /// Recursive children, interpretation driven by `data_type_base`. Empty
-  /// for every base except `Iter` (one child, the element type) and
-  /// `Function` (N+1 children: params then return). See
-  /// `doc/design_structural_function_and_iter_types.md`.
+  /// for every base except `Iter` (one child, the element type), `Optional`
+  /// (one child, the inner type) and `Function` (N+1 children: params then
+  /// return). See `doc/design_structural_function_and_iter_types.md` and
+  /// `doc/design_optional_type.md`.
   final List<APIDataType> children;
 
   const APIDataType({
@@ -762,6 +763,11 @@ enum APIDataTypeBase {
   /// `Iter[T]`: `children = [T]`.
   /// See `doc/design_structural_function_and_iter_types.md`.
   iter,
+
+  /// `Optional[T]`: `children = [T]` (one entry, the inner type). A
+  /// record-field modifier only — never a pin type. Represented like `Iter`
+  /// (one child). See `doc/design_optional_type.md` §7.
+  optional,
 
   /// `Function((p0, p1, ..., pN-1) -> R)`:
   /// `children = [p0, p1, ..., pN-1, R]` (rightmost slot is the return

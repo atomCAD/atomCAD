@@ -14,13 +14,16 @@ use std::collections::HashSet;
 
 use super::hydrogen_passivation::hydrogen_passivate;
 use super::surface_reconstruction::reconstruct_surface;
-use crate::crystolecule::atomic_structure_utils::{remove_lone_atoms, remove_single_bond_atoms};
+use crate::crystolecule::atomic_structure_utils::{
+    remove_lone_atoms_filtered, remove_single_bond_atoms_filtered,
+};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::util::timer::Timer;
 
 // Import configuration types
 use super::config::{
     LatticeFillConfig, LatticeFillOptions, LatticeFillResult, LatticeFillStatistics,
+    SettingsResolver,
 };
 
 // ============================================================================
@@ -147,22 +150,39 @@ pub fn fill_lattice(
 
     {
         let _cleanup_timer = Timer::new("LatticeFill cleanup and passivation");
+
+        // Per-position settings resolver: the node's options are the root,
+        // layered under the (possibly empty) ordered region list. With no
+        // regions this resolves to the root everywhere — today's behavior.
+        let resolver = SettingsResolver {
+            root: options,
+            regions: &config.regions,
+        };
+
         // Remove unbonded (lone) atoms before hydrogen passivation if enabled.
         // Defaults to enabled; disabling keeps zero-bond atoms (useful for debugging
         // cuts, dumping atoms, or salts like NaCl that have unbonded ions).
-        if options.remove_unbonded_atoms {
-            remove_lone_atoms(&mut atomic_structure);
+        // Runs if enabled at the root or in any region; the per-position
+        // predicate then decides per atom.
+        if resolver.enabled_anywhere(options.remove_unbonded_atoms, |r| r.rm_unbonded) {
+            remove_lone_atoms_filtered(&mut atomic_structure, &|pos| {
+                resolver.resolve_at(pos).remove_unbonded_atoms
+            });
         }
 
         // Remove single bond atoms before hydrogen passivation if enabled
         // This is useful for removing methyl groups on crystal surfaces
         // Recursive removal: keeps removing until no more single-bond atoms exist
-        if options.remove_single_bond_atoms {
-            remove_single_bond_atoms(&mut atomic_structure, true);
+        let rm_single_enabled =
+            resolver.enabled_anywhere(options.remove_single_bond_atoms, |r| r.rm_single);
+        if rm_single_enabled {
+            remove_single_bond_atoms_filtered(&mut atomic_structure, true, &|pos| {
+                resolver.resolve_at(pos).remove_single_bond_atoms
+            });
         }
 
         // Apply surface reconstruction if enabled (before hydrogen passivation)
-        if options.reconstruct_surface {
+        if resolver.enabled_anywhere(options.reconstruct_surface, |r| r.surf_recon) {
             let _reconstruction_timer = Timer::new("LatticeFill surface reconstruction");
             let reconstruction_count = reconstruct_surface(
                 &mut atomic_structure,
@@ -170,20 +190,20 @@ pub fn fill_lattice(
                 &config.motif,
                 &config.unit_cell,
                 &config.parameter_element_values,
-                options.remove_single_bond_atoms,
-                options.hydrogen_passivation,
-                options.invert_phase,
+                rm_single_enabled,
+                &resolver,
             );
             statistics.surface_reconstructions = reconstruction_count as i32;
         }
 
         // Apply hydrogen passivation after bonds are created and lone atoms removed
-        if options.hydrogen_passivation {
+        if resolver.enabled_anywhere(options.hydrogen_passivation, |r| r.passivate) {
             hydrogen_passivate(
                 config,
                 &atom_tracker,
                 &mut atomic_structure,
                 &mut statistics,
+                &resolver,
             );
         }
     }

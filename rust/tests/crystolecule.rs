@@ -55,6 +55,9 @@ mod xyz_roundtrip_test;
 #[path = "crystolecule/lattice_fill_test.rs"]
 mod lattice_fill_test;
 
+#[path = "crystolecule/lattice_fill_regions_test.rs"]
+mod lattice_fill_regions_test;
+
 #[path = "crystolecule/simulation/uff_params_test.rs"]
 mod uff_params_test;
 
