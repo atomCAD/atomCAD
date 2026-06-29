@@ -137,13 +137,16 @@ fn atom_replace_has_rules_pin() {
     let nt = registry
         .get_node_type("atom_replace")
         .expect("atom_replace registered");
-    assert_eq!(nt.parameters.len(), 2);
+    // molecule, rules, region (region added by design_blueprint_region_atom_edits.md Phase A1)
+    assert_eq!(nt.parameters.len(), 3);
     assert_eq!(nt.parameters[0].name, "molecule");
     assert_eq!(nt.parameters[1].name, "rules");
     let expected_rules = DataType::Array(Box::new(DataType::Record(RecordType::Named(
         "ElementMapping".to_string(),
     ))));
     assert_eq!(nt.parameters[1].data_type, expected_rules);
+    assert_eq!(nt.parameters[2].name, "region");
+    assert_eq!(nt.parameters[2].data_type, DataType::Blueprint);
 }
 
 #[test]

@@ -30,6 +30,18 @@ use super::config::{
 /// Threshold for SDF sampling - atoms placed where SDF <= this value
 const CRYSTAL_SAMPLE_THRESHOLD: f64 = 0.01;
 
+/// Default region-membership tolerance in Å. A point belongs to a region if
+/// its SDF is ≤ this margin. Sits an order of magnitude above the fill
+/// threshold + float noise (CRYSTAL_SAMPLE_THRESHOLD = 0.01) and an order of
+/// magnitude below the smallest relevant interlayer spacing (diamond (100)
+/// layer separation a/4 ≈ 0.89 Å), so it robustly captures the surface atoms
+/// a boundary-coincident region aims at without grabbing the layer below.
+///
+/// Shared by the per-region materialization settings (Part B) and the
+/// composable region-gated atom ops (Part A). See
+/// `doc/design_blueprint_region_atom_edits.md`.
+pub const DEFAULT_REGION_MARGIN: f64 = 0.1;
+
 /// Conservative epsilon for numerical stability in box overlaps
 const CONSERVATIVE_EPSILON: f64 = 0.001;
 

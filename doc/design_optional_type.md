@@ -2,13 +2,13 @@
 
 ## Status: Draft
 
-First consumer: per-region materialization settings (`doc/design_materialize_regions.md`), which needs record fields that distinguish "set to a value" from "unset / inherit". This feature is deliberately specified as a standalone type-system building block because the need is general: any future record schema or node property with override/inherit semantics will reuse it.
+First consumer: per-region materialization settings (`doc/design_blueprint_region_atom_edits.md`, Part B), which needs record fields that distinguish "set to a value" from "unset / inherit". This feature is deliberately specified as a standalone type-system building block because the need is general: any future record schema or node property with override/inherit semantics will reuse it.
 
 ## Motivation
 
 atomCAD's type system has no way to express "a `T`, or nothing". The gap shows up wherever a record field or pin needs three-valued semantics:
 
-- **Override vs. inherit.** `MaterializeRegion` (see `doc/design_materialize_regions.md`) wants each settings field to mean "force on", "force off", or "not specified here — inherit from the enclosing scope". A plain `Bool` cannot express the third state.
+- **Override vs. inherit.** `MaterializeRegion` (see `doc/design_blueprint_region_atom_edits.md` §B1) wants each settings field to mean "force on", "force off", or "not specified here — inherit from the enclosing scope". A plain `Bool` cannot express the third state.
 - **Future shaped inputs.** Any built-in record def carrying optional knobs (tolerances, overrides, annotations) hits the same wall, and so does any node that wants an explicitly-nullable property flowing along a wire.
 
 Workarounds considered and rejected:

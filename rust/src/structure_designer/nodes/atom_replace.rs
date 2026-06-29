@@ -1,7 +1,8 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
+use crate::crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use crate::structure_designer::data_type::{DataType, RecordType};
-use crate::structure_designer::evaluator::atom_op::map_atomic;
+use crate::structure_designer::evaluator::atom_op::map_atomic_in_region;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -83,45 +84,72 @@ impl NodeData for AtomReplaceData {
             }
         };
 
-        EvalOutput::single(map_atomic(molecule_input_val, move |mut structure| {
-            if replacements.is_empty() {
-                return structure;
+        // Optional `region` pin (param index 2). Disconnected → operate on
+        // every atom. Connected → only atoms whose position lies inside the
+        // region Blueprint's volume are replaced; the rest pass through
+        // unchanged (see design_blueprint_region_atom_edits.md §A1/§A4).
+        let region_input =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 2);
+        let region_geo = match region_input {
+            NetworkResult::None => None,
+            NetworkResult::Error(_) => return EvalOutput::single(region_input),
+            NetworkResult::Blueprint(bp) => Some(bp.geo_tree_root),
+            other => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "atom_replace.region: expected Blueprint, got {:?}",
+                    other.infer_data_type()
+                )));
             }
+        };
 
-            // Build lookup map (last rule wins for duplicate sources)
-            let replacement_map: HashMap<i16, i16> = replacements.iter().copied().collect();
-
-            // Collect atoms to delete and atoms to replace
-            let mut atoms_to_delete = Vec::new();
-            let mut atoms_to_replace = Vec::new();
-
-            for (atom_id, atom) in structure.iter_atoms() {
-                let source = atom.atomic_number;
-                // Skip delete markers and unchanged markers
-                if source == 0 || source == -1 {
-                    continue;
+        EvalOutput::single(map_atomic_in_region(
+            molecule_input_val,
+            region_geo.as_ref(),
+            DEFAULT_REGION_MARGIN,
+            move |mut structure, in_region| {
+                if replacements.is_empty() {
+                    return structure;
                 }
-                if let Some(&target) = replacement_map.get(&source) {
-                    if target == 0 {
-                        atoms_to_delete.push(*atom_id);
-                    } else {
-                        atoms_to_replace.push((*atom_id, target));
+
+                // Build lookup map (last rule wins for duplicate sources)
+                let replacement_map: HashMap<i16, i16> = replacements.iter().copied().collect();
+
+                // Collect atoms to delete and atoms to replace
+                let mut atoms_to_delete = Vec::new();
+                let mut atoms_to_replace = Vec::new();
+
+                for (atom_id, atom) in structure.iter_atoms() {
+                    // Skip atoms outside the region (tests the atom being replaced)
+                    if !in_region(*atom_id) {
+                        continue;
+                    }
+                    let source = atom.atomic_number;
+                    // Skip delete markers and unchanged markers
+                    if source == 0 || source == -1 {
+                        continue;
+                    }
+                    if let Some(&target) = replacement_map.get(&source) {
+                        if target == 0 {
+                            atoms_to_delete.push(*atom_id);
+                        } else {
+                            atoms_to_replace.push((*atom_id, target));
+                        }
                     }
                 }
-            }
 
-            // Apply replacements
-            for (atom_id, target) in atoms_to_replace {
-                structure.set_atom_atomic_number(atom_id, target);
-            }
+                // Apply replacements
+                for (atom_id, target) in atoms_to_replace {
+                    structure.set_atom_atomic_number(atom_id, target);
+                }
 
-            // Delete atoms (handles bond cleanup)
-            for atom_id in atoms_to_delete {
-                structure.delete_atom(atom_id);
-            }
+                // Delete atoms (handles bond cleanup)
+                for atom_id in atoms_to_delete {
+                    structure.delete_atom(atom_id);
+                }
 
-            structure
-        }))
+                structure
+            },
+        ))
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -190,6 +218,7 @@ impl NodeData for AtomReplaceData {
         let mut m = HashMap::new();
         m.insert("molecule".to_string(), (true, None));
         m.insert("rules".to_string(), (false, None));
+        m.insert("region".to_string(), (false, None));
         m
     }
 }
@@ -263,6 +292,11 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(DataType::Record(RecordType::Named(
                     "ElementMapping".to_string(),
                 )))),
+            },
+            Parameter {
+                id: None,
+                name: "region".to_string(),
+                data_type: DataType::Blueprint,
             },
         ],
         output_pins: OutputPinDefinition::single_same_as("molecule"),

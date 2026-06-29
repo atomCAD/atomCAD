@@ -211,6 +211,9 @@ mod infer_bonds_test;
 #[path = "structure_designer/atom_replace_test.rs"]
 mod atom_replace_test;
 
+#[path = "structure_designer/atom_replace_region_test.rs"]
+mod atom_replace_region_test;
+
 #[path = "structure_designer/network_result_test.rs"]
 mod network_result_test;
 

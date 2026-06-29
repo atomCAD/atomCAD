@@ -838,7 +838,10 @@ fn test_new_project_clears_record_type_defs() {
             .built_in_record_type_defs
             .is_empty()
     );
-    let built_in_before = designer.node_type_registry.built_in_record_type_defs.clone();
+    let built_in_before = designer
+        .node_type_registry
+        .built_in_record_type_defs
+        .clone();
 
     // Call new_project — this is what the "New" button does.
     designer.new_project();
