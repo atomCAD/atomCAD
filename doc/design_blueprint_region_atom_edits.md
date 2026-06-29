@@ -128,7 +128,9 @@ This pair is folded into this document rather than split out, because freeze is 
 
 ## A6. `relax` honors the frozen flag
 
-The minimizer (`crystolecule/simulation/minimize.rs`) **already supports frozen atoms** by zeroing their gradient components — but the `relax` node calls `minimize_energy()` with an **empty frozen list**, so it ignores the frozen flag entirely. This is simply a bug: a frozen atom should not move under relaxation. The fix: `relax.eval` collects the topology indices of atoms with `is_frozen()` and passes them to the minimizer.
+The minimizer (`crystolecule/simulation/minimize.rs`) **already supports frozen atoms** by zeroing their gradient components, and `minimize_energy()` — the entry point the `relax` node calls — **already collects the frozen atoms itself**: it walks the topology, picks out every atom with `is_frozen()`, and passes those indices to both the force-field construction and the optimizer (`crystolecule/simulation/mod.rs`). So `relax` honors the frozen flag today with **no node change required**.
+
+> **Historical note.** An earlier draft of this section claimed `relax` was buggy because it called `minimize_energy()` with an *empty frozen list* and that Phase A3 needed to fix `relax.eval` to collect `is_frozen()` indices. That was already false by the time Phase A3 was implemented (2026-06-29): `minimize_energy` had since been refactored from taking an explicit `frozen` argument to deriving the frozen set internally from the atom flags. The supposed bug never reached users. Phase A3 therefore added only a regression test (`relax_holds_frozen_atom_fixed`) locking in the existing behavior, and made no change to `relax`. This note is kept so anyone returning to this design isn't misled by the original claim.
 
 `relax` gains **no `region` pin**. Because a frozen atom stays in the force field (it still pulls on its mobile neighbors) while being held fixed, the existing `freeze`/`unfreeze` nodes (A5) already compose with `relax` to constrain which atoms move — no region-aware variant of `relax` is needed.
 
@@ -337,14 +339,16 @@ Tests: per-node regional behavior + disconnected-pin equivalence; `infer_bonds` 
 
 **Verification note (manual).** *Status: implemented; automated coverage green (`rust/tests/structure_designer/region_atom_ops_test.rs`).* In the app, repeat the A1 region walkthrough for each rolled-out node: `add_hydrogen` (only in-region dangling bonds gain H — and an H placed *across* the boundary still appears, since its host is in-region), `remove_hydrogen` (only H bonded to in-region hosts is stripped, including an H whose own position is just outside the region), `infer_bonds` (a bond forms when at least one endpoint is in-region). Then chain two region-gated `atom_replace` nodes with overlapping and with disjoint regions and confirm the effects accumulate identically to two separate single-region passes — this is the load-bearing "multiple regions = chained nodes" claim, so it is worth eyeballing directly.
 
-### Phase A3 — `freeze` / `unfreeze` nodes + `relax` honors frozen
+### Phase A3 — `freeze` / `unfreeze` nodes ( + `relax` already honors frozen)
+
+*Status: implemented 2026-06-29 (`rust/src/structure_designer/nodes/freeze.rs`, tests `rust/tests/structure_designer/freeze_test.rs`).*
 
 1. Register `freeze` / `unfreeze` node types (region-gated metadata edits via `map_atomic_in_region`).
-2. `relax.eval` collects `is_frozen()` topology indices and passes them to `minimize_energy` (fixes the bug where the frozen flag was ignored).
+2. ~~`relax.eval` collects `is_frozen()` topology indices and passes them to `minimize_energy`.~~ **Not needed** — `minimize_energy` already derives the frozen set from the atom flags (see §A6). Phase A3 added only a regression test, not a `relax` change.
 
-Tests: `freeze`/`unfreeze` set/clear bit 2 in-region (and globally when disconnected); `relax` holds frozen atoms fixed while moving free ones. Node registration/serialization: `node_snapshots` updated for the two new node types; a network containing `freeze`/`unfreeze` nodes (with and without a wired `region`) round-trips through `.cnnd`. Composition: `freeze(region A) → freeze(region B)` leaves the union of A and B frozen (chained metadata edits accumulate).
+Tests: `freeze`/`unfreeze` set/clear bit 2 in-region (and globally when disconnected); `relax` holds frozen atoms fixed while moving free ones. Node registration/serialization: a network containing `freeze`/`unfreeze` nodes (with and without a wired `region`) round-trips through `.cnnd`. Composition: `freeze(region A) → freeze(region B)` leaves the union of A and B frozen (chained metadata edits accumulate).
 
-**Verification note (manual).** In the app, drop a `freeze` node with a `half_space` region on a structure and confirm — via the frozen-atom rendering/flag — that only in-region atoms are frozen, and that `unfreeze` clears them; with `region` disconnected, confirm both act on all atoms. Then wire `freeze → relax` and run relaxation: the frozen atoms must hold their positions while their mobile neighbours move and settle (this is the bug fix — pre-fix, `relax` ignored the flag and everything moved).
+**Verification note (manual).** In the app, drop a `freeze` node with a `half_space` region on a structure and confirm — via the frozen-atom rendering/flag — that only in-region atoms are frozen, and that `unfreeze` clears them; with `region` disconnected, confirm both act on all atoms. Then wire `freeze → relax` and run relaxation: the frozen atoms must hold their positions while their mobile neighbours move and settle (`relax` honors the flag via `minimize_energy`, as it already did before this phase).
 
 ## Part B phases
 

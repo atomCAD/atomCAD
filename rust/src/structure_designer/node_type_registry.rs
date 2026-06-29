@@ -35,6 +35,7 @@ use super::nodes::fold::get_node_type as fold_get_node_type;
 use super::nodes::foreach::get_node_type as foreach_get_node_type;
 use super::nodes::free_move::get_node_type as free_move_get_node_type;
 use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
+use super::nodes::freeze::{freeze_get_node_type, unfreeze_get_node_type};
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
 use super::nodes::get_structure::get_node_type as get_structure_get_node_type;
 use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
@@ -341,6 +342,8 @@ impl NodeTypeRegistry {
         ret.add_node_type(remove_hydrogen_get_node_type());
         ret.add_node_type(infer_bonds_get_node_type());
         ret.add_node_type(atom_replace_get_node_type());
+        ret.add_node_type(freeze_get_node_type());
+        ret.add_node_type(unfreeze_get_node_type());
 
         ret
     }

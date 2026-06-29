@@ -6,10 +6,10 @@ First consumer: per-region materialization settings (`doc/design_blueprint_regio
 
 ## Motivation
 
-atomCAD's type system has no way to express "a `T`, or nothing". The gap shows up wherever a record field or pin needs three-valued semantics:
+atomCAD's type system has no way for a **record field** to express "a `T`, or nothing". (Pins do not need this — every pin is *already* implicitly nullable, since a disconnected input evaluates to `NetworkResult::None`. The gap is specifically at record fields, the one place the system enforces presence.) It shows up wherever a record field needs three-valued semantics:
 
 - **Override vs. inherit.** `MaterializeRegion` (see `doc/design_blueprint_region_atom_edits.md` §B1) wants each settings field to mean "force on", "force off", or "not specified here — inherit from the enclosing scope". A plain `Bool` cannot express the third state.
-- **Future shaped inputs.** Any built-in record def carrying optional knobs (tolerances, overrides, annotations) hits the same wall, and so does any node that wants an explicitly-nullable property flowing along a wire.
+- **Future shaped inputs.** Any built-in record def carrying optional knobs (tolerances, overrides, annotations) hits the same wall.
 
 Workarounds considered and rejected:
 
@@ -18,14 +18,25 @@ Workarounds considered and rejected:
 
 So: bite the bullet, add `Optional[T]` — but with a representation choice that makes the bullet small.
 
-## Core Decision: Nullable Union, Not a Wrapper
+## Core Decision 1: Nullable Union, Not a Wrapper
 
 `Optional[T]` is a **nullable** type — its values are either an ordinary `T` value or the null — **not** a `Some(T)`-wrapped container. This single decision is what keeps the feature cheap, because the value layer already has the null:
 
 - `NetworkResult::None` exists today as the canonical "no value" (it is what a disconnected input pin evaluates to, and `evaluate_or_default` handles it throughout the evaluator).
 - Under the nullable design, the runtime representation of an `Optional[T]` value is *either a plain `T`-shaped `NetworkResult` or `NetworkResult::None`*. **No new `NetworkResult` variant, no wrapping, no unwrapping.**
-- Consequently `T → Optional[T]` is an **identity at the value layer** — exactly a *tag-only widening*, the class of conversion the record system already accepts at field positions via `is_tag_only_widening` (`data_type.rs`). The new rules slot into the existing predicate instead of fighting it, and `record_destructure` keeps passing payloads through unchanged.
-- The `record_construct` UX falls out for free: an `Optional[T]` field maps to an *optional input pin*; a disconnected pin already evaluates to `NetworkResult::None`, which **is** the null. No "none literal" node is needed for v1.
+- Consequently `T → Optional[T]` is an **identity at the value layer** — the payload (or `None`) is unchanged.
+
+## Core Decision 2: `Optional` Is a Record-Field Modifier, Never a Pin Type
+
+The required-vs-optional distinction is **only meaningful at record fields**, because that is the only place in the system that enforces value presence: `record_construct::eval` collapses the whole record to `None` the moment any field resolves to `None`. **Everywhere else — every input pin, every output pin — a value is already implicitly nullable.** A disconnected input evaluates to `NetworkResult::None`, and `convert_to` passes `None` through unchanged on any pin. So an `Optional[T]` *tag on a pin* would carry no information the evaluator does not already assume, while actively creating dead-end ("trapped") values: a v1 `Optional[T]` pin output could only flow into another `Optional` pin or a `Unit` discard, because there is no unwrap/coalesce/`none`-literal in v1.
+
+Therefore:
+
+- **`Optional[T]` appears only in record-field *declarations*** (and the record-subtyping that compares them). It is never the type of a pin and never travels on a wire.
+- **`record_construct`** input pins for a field of declared type `Optional[T]` are typed plain **`T`**. The optional behavior is driven by the *field type in the record def*, which `eval` already has in hand: a field declared `Optional[T]` whose pin resolves to `None` is **kept** as an explicit `None` in that slot instead of collapsing the record. "This pin may be left unwired" is conveyed by pin metadata (`get_parameter_metadata`), not by the pin's type.
+- **`record_destructure`** output pins are typed plain **`T`**, *not* `Optional[T]`. This is exactly identity at the value layer — an `Optional[T]` field already stores "a `T`-shaped value or `None`," so projecting it onto a `T` output pin passes the payload (or `None`) straight through, and every downstream consumer handles `None` exactly as it must for any pin. No value is trapped.
+
+Because `Optional` never reaches a wire, **no wire-level conversion rules are needed for it** (see §2): the entire `S → Optional[T]` / `Optional[S] → Optional[T]` machinery in `can_be_converted_to_impl`, its strict-broadcast mirror, and the `convert_to(value, Optional[T])` runtime arm all disappear. The only conversion handling Optional needs lives at **record-field positions during record subtyping**, which is its natural home (`can_be_structurally_converted_to`).
 
 The price of untagged null is that nesting is meaningless: a `None` inside `Optional[Optional[T]]` cannot distinguish "no outer value" from "outer value present, inner is none". Nesting is therefore **forbidden** (see Restrictions) — an acceptable trade; no anticipated consumer needs it.
 
@@ -51,20 +62,19 @@ pub enum DataType {
 
 ### 2. Conversion rules
 
-In `can_be_converted_to_impl` (ordered before the catch-all):
+Because `Optional` never appears on a pin, there are **no arms in `can_be_converted_to_impl`** (the wire-level entry) and **no `convert_to` runtime arm** for it. The only place an `Optional[T]` is compared against another type is **record subtyping** — when one record's field is `Optional`-typed and the corresponding field in the other record is `Optional` or bare. That comparison goes through the field-level structural predicate `can_be_structurally_converted_to` (which already carries `&NodeTypeRegistry`, so it can resolve `Optional[Record(Named)]` inner types correctly).
 
-| Rule | Condition | Runtime effect |
-|---|---|---|
-| `Optional[S] → Optional[T]` | `S → T` (recursive, non-top-level) | null passes through as null; payload converts per inner rule |
-| `S → Optional[T]` (S not Optional) | `S → T` (recursive, non-top-level) | payload converts per inner rule |
-| `Optional[S] → T` (T not Optional) | **rejected** | — (this is the whole point; the one exception is the universal `T → Unit` discard, which keeps applying) |
+Extend the **field-level** predicate (`can_be_structurally_converted_to`, *not* the registry-free `is_tag_only_widening`) with two arms, mirroring how it already recurses through `Array`:
+
+| Field-position rule | Condition |
+|---|---|
+| `Optional[S] → Optional[T]` | `can_be_structurally_converted_to(S, T)` |
+| `S → Optional[T]` (S not Optional) | `can_be_structurally_converted_to(S, T)` — promoting a present value to a maybe-present one |
 
 Notes:
 
-- `S → Optional[T]` deliberately uses the **full** conversion rule, not just tag-only, because wires need it: a user dropping an `int` node onto a `record_construct` pin typed `Optional[Float]` expects the ordinary `Int → Float` conversion to fire. `convert_to` handles the payload exactly as it would for a bare `T` destination, and maps `NetworkResult::None → NetworkResult::None`.
-- **Record field positions stay strict automatically.** The field-level path goes through `is_tag_only_widening`, which is extended with the tag-only subset only: `S → Optional[T]` and `Optional[S] → Optional[T]` where `S == T` or `is_tag_only_widening(S, T)`. So `{x: Int} → {x: Optional[Float]}` is rejected at a field position (value-converting), while `{x: Crystal} → {x: Optional[HasAtoms]}` is accepted (tag-only) — consistent with how bare fields behave today.
-- The strict drag-adapter variant (`can_be_strictly_converted_to`) mirrors the same two arms with its own recursion, so scalar broadcast cannot leak in through an Optional element type.
-- The generic broadcasts compose without special cases: `S → Array[Optional[T]]` works iff `S → Optional[T]`, etc.
+- The reverse, `Optional[S] → T` at a field position, is **rejected** — a maybe-present value cannot satisfy a field that requires presence. (`T → Unit` discard still applies if it ever reached here, but `Unit` is not a record field type.)
+- These stay **strictly tag-only** at the leaf, exactly like bare fields: `{x: Int} → {x: Optional[Float]}` is rejected (value-converting), while `{x: Crystal} → {x: Optional[HasAtoms]}` is accepted (tag-only), and `{x: Record(A)} → {x: Optional[Record(B)]}` follows the ordinary record structural rule because the predicate has the registry. Putting these arms in `is_tag_only_widening` instead would be wrong: that function is registry-free and has no record arm, so it would spuriously reject `Optional`-wrapped record/array inner types that the bare field accepts.
 - `Optional` participates in `canonicalize_data_type` (recurse into the inner type) and in the record-rename `DataType` walks.
 
 ### 3. Restrictions (ill-formed Optionals)
@@ -85,16 +95,15 @@ Enforcement sites:
 
 No evaluator changes are required for the type itself:
 
-- `NetworkResult::None` inhabits every `Optional[T]`. `infer_data_type()` of `None` remains `DataType::None`; nothing resolves an output pin *to* `Optional` implicitly — Optional types appear only where declared (pins, record fields).
-- `convert_to(value, Optional[T])`: `None` stays `None`; anything else converts against `T`.
-- A displayed output pin of type `Optional[T]` renders nothing in the viewport (same as other primitives) — no scene-builder change.
+- `NetworkResult::None` inhabits every `Optional[T]`. `infer_data_type()` of `None` remains `DataType::None`. Since `Optional` is never a pin type, nothing resolves an output pin *to* `Optional`; it appears only in record-field declarations.
+- No `convert_to` arm is needed: `Optional` values only ever sit *inside* a record field, where the stored payload (or `None`) is held verbatim, and they leave a record onto a plain `T` pin via `record_destructure` with no conversion. The existing `NetworkResult::None => return self` arm in `convert_to` already keeps `None` as `None` on the destructure output pin.
 
 ### 5. Records integration
 
-- **`record_construct`**: a field typed `Optional[T]` becomes an **optional** input pin (`get_parameter_metadata` derives required-ness from the field type). Unwired pin → the emitted record stores `NetworkResult::None` for that field. Emitted records always carry **all** fields in canonical order — "unset" is an explicit `None` value, never a missing field, so record subtyping and the destructure passthrough invariant are untouched.
-- **`record_destructure`**: the field's output pin is typed `Optional[T]` and passes the stored value through unchanged (`None` or payload).
-- **`product`**: no special case — an `Optional[T]` field consumes `Iter[Optional[T]]` like any other field type, via the generic rules.
-- Pin layouts re-derive through the existing `repair_node_network` machinery when a def gains/loses Optional-ness; wires that become incompatible (e.g. `Optional[T]` source into a now-bare-`T` pin) are disconnected by the ordinary repair pass.
+- **`record_construct`**: a field declared `Optional[T]` gets an input pin typed plain **`T`** (the value/wire layer never sees `Optional`). `get_parameter_metadata` marks that pin **not required** so the UI/`describe` know it may be left unwired. At `eval`, the field's *declared* type drives collapse behavior (see below): an Optional field that resolves to `None` is **kept** as an explicit `None`; a required field that resolves to `None` collapses the record. Emitted records always carry **all** fields in canonical order — "unset" is an explicit `None` value, never a missing field, so record subtyping and the destructure passthrough invariant are untouched.
+- **`record_destructure`**: the field's output pin is typed plain **`T`** (not `Optional[T]`) and passes the stored value through unchanged (`None` or payload). This is identity at the value layer and means a destructured field flows into any ordinary `T` consumer — no trapped values.
+- **`product`**: no special case — `product` consumes `Iter[T]` per field as today; the target record's field being `Optional` is invisible to the value/wire layer.
+- Pin layouts re-derive through the existing `repair_node_network` machinery when a def gains/loses Optional-ness. Flipping a field between `T` and `Optional[T]` does **not** change the pin's *type* (both are `T`), so wires are not disconnected; only the construct pin's required-ness metadata and the eval-time collapse behavior change.
 
 #### Current `record_construct` semantics & the required change
 
@@ -105,19 +114,22 @@ This short-circuit is what `Optional[T]` fields must opt out of. The Phase 2 cha
 - A **non-Optional** (required) field that resolves to `None` still collapses the whole record to `None`, exactly as today.
 - An **Optional[T]** field that resolves to `None` is **kept** as an explicit `None` value in that field's slot and does **not** collapse the record (consistent with the §5 rule that emitted records always carry all fields).
 
-`Error` propagation is unchanged — an `Error` in any field, Optional or not, still short-circuits to that error. The required-ness derived by `get_parameter_metadata` (Optional field ⇒ optional pin) and this eval-level exemption are two faces of the same rule and must stay in sync.
+`Error` propagation is unchanged — an `Error` in any field, Optional or not, still short-circuits to that error. The not-required flag surfaced by `get_parameter_metadata` (Optional field ⇒ pin may be unwired) is cosmetic — it feeds the `describe` text command and pin styling, not a validation gate — and this eval-level exemption is the one that actually matters; keep them in sync so the UI doesn't mislead.
+
+**Literal vs. `None` on an unwired Optional field.** Today `record_construct::eval` resolves each field **wired > stored literal > `None`**, where "stored literal" means a present entry in `literal_values` (keyed by field name). **This order is kept unchanged for Optional fields** — the only eval change is the collapse exemption above. "Unset / inherit" is therefore represented by the **absence** of a `literal_values` entry *and* no wire, which already falls through to `None`. This is more expressive than forcing unwired-⇒-`None`: a user can still express "force this value" inline by typing a literal (e.g. `freeze: true` / `freeze: false`) **without** wiring a constant node — exactly the three-state UX the `MaterializeRegion` use case wants (force-on / force-off / inherit). The work is on the UI side: an Optional field's literal editor must offer a **clearable / tri-state** affordance (a true "unset" that removes the map entry) rather than a plain `Bool`/`Float` box that always holds a value. A freshly-added `record_construct` defaults Optional fields to *no* literal entry (⇒ `None` ⇒ inherit).
 
 ### 6. Out of scope for v1
 
 - **`expr` language**: no `none` literal, no null-coalescing operator, and `Optional` is rejected in expr type positions. Nodes consuming Optionals do so in Rust (`NetworkResult::None` match arms). Revisit when an expr-level use case appears.
 - **A `none`-producing node**: a disconnected optional pin covers every known construction path. Add a literal node only when a use case demands wiring an explicit null *through* a network.
-- **Text-format property values**: no node stores Optional-typed *properties* yet, so `TextValue` is unchanged. The `Optional[T]` *type syntax* (for record-def declarations and pin types) is in scope.
+- **Text-format property values**: no node stores Optional-typed *properties* yet, so `TextValue` is unchanged. The `Optional[T]` *type syntax* (for record-def field declarations) is in scope.
+- **Optional on pins**: out of scope by construction — `Optional` is a record-field modifier only (see Core Decision). If a future need arises to flow an explicitly-nullable value *along a wire* (distinct from the implicit nullability every pin already has), that is when an unwrap / coalesce / `none`-literal story gets designed.
 
 ### 7. API / Flutter
 
-- `APIDataTypeBase` gains an `Optional` variant represented like `Iter`: one entry in `children` carrying the inner type (the existing recursive-children mechanism; the outermost-`array` bool is orthogonal and unchanged).
-- `DataTypeInput` gains an "Optional" toggle alongside the existing array/iter affordances, with the nesting guards from §3. The record `SchemaEditor` inherits it via `DataTypeInput` with no extra work.
-- Pin tooltips / type strings flow through `Display` and need no special handling.
+- `APIDataTypeBase` gains an `Optional` variant represented like `Iter`: one entry in `children` carrying the inner type (the existing recursive-children mechanism; the outermost-`array` bool is orthogonal and unchanged). Needed because record-field types cross the FFI boundary in the `SchemaEditor`.
+- `DataTypeInput` gains an "Optional" toggle alongside the existing array/iter affordances, with the nesting guards from §3 — but it is **only meaningful inside the record `SchemaEditor`** (declaring a field type). It does not appear as a pin-type affordance, since `Optional` is never a pin type.
+- Pin tooltips / type strings: pins are always `T`, so nothing renders `Optional` outside the schema editor. Record-field type strings flow through `Display` and need no special handling.
 
 ### 8. Serialization & compatibility
 
@@ -126,30 +138,30 @@ This short-circuit is what `Optional[T]` fields must opt out of. The Phase 2 cha
 
 ## Phasing
 
-### Phase 1 — Core type & conversions (Rust)
+### Phase 1 — Core type & field-position subtyping (Rust)
 
 1. `DataType::Optional` variant + `Display` + type-parser arm (incl. ill-formed-nesting rejection).
-2. Conversion rules in `can_be_converted_to_impl`, the strict variant, and the `is_tag_only_widening` extension (§2).
-3. `convert_to` runtime arm (§4).
-4. `canonicalize_data_type` recursion + record-rename walk coverage.
-5. Registry validation of record defs against §3.
+2. Field-position subtyping arms in `can_be_structurally_converted_to` (§2). **No** changes to `can_be_converted_to_impl`, no strict-variant mirror, no `convert_to` arm — `Optional` never reaches a wire.
+3. `canonicalize_data_type` recursion + record-rename walk coverage.
+4. Registry validation of record defs against §3.
 
-Tests (`rust/tests/structure_designer/`): conversion matrix (`T → Optional[T]`, `Int → Optional[Float]` wire-accepted, `Optional[T] → T` rejected, `Optional[Crystal] → Optional[HasAtoms]` accepted, `{x: Int} → {x: Optional[Float]}` field-rejected, `{x: Crystal} → {x: Optional[HasAtoms]}` field-accepted, `Optional[T] → Unit` accepted); parser round-trip incl. rejection of the four ill-formed shapes; `convert_to` null/payload behavior.
+Tests (`rust/tests/structure_designer/`): field-position matrix (`{x: Crystal} → {x: Optional[HasAtoms]}` accepted, `{x: Int} → {x: Optional[Float]}` rejected, `{x: Record(A)} → {x: Optional[Record(B)]}` follows the record structural rule, `{x: Optional[T]} → {x: T}` rejected, `{x: Optional[S]} → {x: Optional[T]}` per inner); parser round-trip incl. rejection of the four ill-formed shapes.
 
 ### Phase 2 — Records & nodes integration
 
-1. `record_construct`: optionality of pins derived from field types; unwired → `None` field value; emitted records carry all fields.
-2. `record_destructure`: `Optional[T]` pin typing + unchanged passthrough.
-3. `repair_node_network` interaction: def edits that flip Optional-ness refresh pin layouts and disconnect incompatible wires (existing machinery; add coverage).
+1. `record_construct`: input pin for an `Optional[T]` field typed plain `T`; `get_parameter_metadata` marks it not-required; eval keeps `None` for Optional fields (driven by declared field type) and collapses for required fields; emitted records carry all fields. Literal resolution order is unchanged (§5) — the tri-state literal editor is Phase 3 UI work.
+2. `record_destructure`: output pin typed plain `T`; unchanged passthrough of `None`/payload.
+3. `repair_node_network` interaction: flipping a field's Optional-ness keeps the pin type `T` (no wire disconnect) but refreshes the construct pin's required-ness/eval behavior; add coverage.
 4. `.cnnd` round-trip with a user def containing Optional fields.
 
-Tests: construct-with-unwired-optional-pin → destructure → `None` comes out; subtyping through wires; roundtrip fixture; repair on def edit.
+Tests: construct-with-unwired-optional-pin (no literal) → destructure → `None` flows into a plain `T` consumer; required field unwired → record collapses; unwired Optional field **with** a stored literal → that literal value (resolution order unchanged); roundtrip fixture; flip Optional-ness on a def in use.
 
 ### Phase 3 — Flutter UI + API
 
 1. `APIDataTypeBase::Optional` + conversion in both directions (`flutter_rust_bridge_codegen generate`).
-2. `DataTypeInput` toggle + nesting guards; `SchemaEditor` verification.
-3. `flutter analyze` clean; manual pass: declare a record def with `Optional[Bool]` / `Optional[Float]` fields, build construct/destructure chains, wire an `int` into an `Optional[Float]` pin, leave optional pins unwired.
+2. `DataTypeInput` "Optional" toggle + nesting guards, surfaced **only in the `SchemaEditor`** (record-field declaration), not as a pin affordance.
+3. `record_construct` literal editor: for an Optional field, a **clearable / tri-state** literal affordance (true / false / unset for `Optional[Bool]`; value / unset for `Optional[Float]`), where "unset" removes the `literal_values` entry. Default = unset.
+4. `flutter analyze` clean; manual pass: declare a record def with `Optional[Bool]` / `Optional[Float]` fields, build construct/destructure chains, leave optional construct pins unwired (unset) and confirm the destructured `T` output reads `None` and feeds an ordinary consumer; set a literal and confirm it overrides.
 
 ## Open Questions
 
