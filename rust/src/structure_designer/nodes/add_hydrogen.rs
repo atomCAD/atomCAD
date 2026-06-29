@@ -1,7 +1,8 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
+use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens_filtered};
+use crate::crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::atom_op::map_atomic;
+use crate::structure_designer::evaluator::atom_op::map_atomic_in_region;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -51,21 +52,43 @@ impl NodeData for HydrogenPassivateData {
             return EvalOutput::single(input_val);
         }
 
-        let at_root = network_stack.len() == 1;
-        let output = map_atomic(input_val, |mut structure| {
-            let options = AddHydrogensOptions {
-                selected_only: false,
-                skip_already_passivated: true,
-            };
-            let result = add_hydrogens(&mut structure, &options);
-
-            if at_root {
-                context.selected_node_eval_cache = Some(Box::new(HydrogenPassivateEvalCache {
-                    message: format!("Added {} hydrogens", result.hydrogens_added),
-                }));
+        // Optional `region` pin (param index 1). Disconnected → passivate every
+        // atom. Connected → only in-region host atoms are passivated (see
+        // design_blueprint_region_atom_edits.md §A1/§A4).
+        let region_input =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
+        let region_geo = match region_input {
+            NetworkResult::None => None,
+            NetworkResult::Error(_) => return EvalOutput::single(region_input),
+            NetworkResult::Blueprint(bp) => Some(bp.geo_tree_root),
+            other => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "add_hydrogen.region: expected Blueprint, got {:?}",
+                    other.infer_data_type()
+                )));
             }
-            structure
-        });
+        };
+
+        let at_root = network_stack.len() == 1;
+        let output = map_atomic_in_region(
+            input_val,
+            region_geo.as_ref(),
+            DEFAULT_REGION_MARGIN,
+            |mut structure, in_region| {
+                let options = AddHydrogensOptions {
+                    selected_only: false,
+                    skip_already_passivated: true,
+                };
+                let result = add_hydrogens_filtered(&mut structure, &options, in_region);
+
+                if at_root {
+                    context.selected_node_eval_cache = Some(Box::new(HydrogenPassivateEvalCache {
+                        message: format!("Added {} hydrogens", result.hydrogens_added),
+                    }));
+                }
+                structure
+            },
+        );
         EvalOutput::single(output)
     }
 
@@ -83,6 +106,7 @@ impl NodeData for HydrogenPassivateData {
     fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
         let mut m = std::collections::HashMap::new();
         m.insert("molecule".to_string(), (true, None)); // required
+        m.insert("region".to_string(), (false, None)); // optional
         m
     }
 }
@@ -95,11 +119,18 @@ pub fn get_node_type() -> NodeType {
             .to_string(),
         summary: Some("Add H to open bonds".to_string()),
         category: NodeTypeCategory::AtomicStructure,
-        parameters: vec![Parameter {
-            id: None,
-            name: "molecule".to_string(),
-            data_type: DataType::HasAtoms,
-        }],
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "molecule".to_string(),
+                data_type: DataType::HasAtoms,
+            },
+            Parameter {
+                id: None,
+                name: "region".to_string(),
+                data_type: DataType::Blueprint,
+            },
+        ],
         output_pins: OutputPinDefinition::single_same_as("molecule"),
         zone_input_pins: vec![],
         zone_output_pins: vec![],

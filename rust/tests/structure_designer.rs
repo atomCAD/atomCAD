@@ -214,6 +214,9 @@ mod atom_replace_test;
 #[path = "structure_designer/atom_replace_region_test.rs"]
 mod atom_replace_region_test;
 
+#[path = "structure_designer/region_atom_ops_test.rs"]
+mod region_atom_ops_test;
+
 #[path = "structure_designer/network_result_test.rs"]
 mod network_result_test;
 

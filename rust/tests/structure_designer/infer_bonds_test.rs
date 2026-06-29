@@ -345,9 +345,10 @@ fn test_infer_bonds_node_snapshot() {
 
     let node_type = get_node_type();
     assert_eq!(node_type.name, "infer_bonds");
-    assert_eq!(node_type.parameters.len(), 3);
+    assert_eq!(node_type.parameters.len(), 4);
     assert_eq!(node_type.parameters[0].name, "molecule");
     assert_eq!(node_type.parameters[1].name, "additive");
     assert_eq!(node_type.parameters[2].name, "bond_tolerance");
+    assert_eq!(node_type.parameters[3].name, "region");
     assert!(node_type.public);
 }

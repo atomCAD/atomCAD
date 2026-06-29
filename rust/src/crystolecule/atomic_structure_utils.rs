@@ -19,6 +19,24 @@ pub fn auto_create_bonds_with_tolerance(
     structure: &mut AtomicStructure,
     tolerance_multiplier: f64,
 ) {
+    auto_create_bonds_with_tolerance_filtered(structure, tolerance_multiplier, &|_| true);
+}
+
+/// Like [`auto_create_bonds_with_tolerance`], but a candidate bond is only
+/// created when at least one of its two endpoints satisfies `eligible`
+/// (one-endpoint-inside). The default unfiltered variant passes an
+/// always-`true` predicate, so the two share a single code path.
+///
+/// Used by the region-gated `infer_bonds` node: with a region wired, `eligible`
+/// reports whether an atom lies inside the region volume, so bonds touching at
+/// least one in-region atom are (re)inferred while bonds between two
+/// out-of-region atoms are never created here (the node restores those
+/// untouched). See `doc/design_blueprint_region_atom_edits.md` §A4.
+pub fn auto_create_bonds_with_tolerance_filtered(
+    structure: &mut AtomicStructure,
+    tolerance_multiplier: f64,
+    eligible: &dyn Fn(u32) -> bool,
+) {
     // Track bonds we've already created to avoid duplicates
     let mut processed_pairs: HashSet<(u32, u32)> = HashSet::new();
 
@@ -83,9 +101,13 @@ pub fn auto_create_bonds_with_tolerance(
                     let max_bond_distance =
                         (atom_radius + nearby_atom_radius) * tolerance_multiplier;
 
-                    // If the atoms are close enough, create a single bond
+                    // If the atoms are close enough, create a single bond —
+                    // but only when at least one endpoint is eligible
+                    // (one-endpoint-inside region gating).
                     if distance <= max_bond_distance {
-                        structure.add_bond(atom_id, nearby_atom_id, 1);
+                        if eligible(atom_id) || eligible(nearby_atom_id) {
+                            structure.add_bond(atom_id, nearby_atom_id, 1);
+                        }
                         processed_pairs.insert(bond_pair);
                     }
                 }

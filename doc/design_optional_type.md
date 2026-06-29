@@ -96,6 +96,17 @@ No evaluator changes are required for the type itself:
 - **`product`**: no special case — an `Optional[T]` field consumes `Iter[Optional[T]]` like any other field type, via the generic rules.
 - Pin layouts re-derive through the existing `repair_node_network` machinery when a def gains/loses Optional-ness; wires that become incompatible (e.g. `Optional[T]` source into a now-bare-`T` pin) are disconnected by the ordinary repair pass.
 
+#### Current `record_construct` semantics & the required change
+
+Today (pre-Optional) `record_construct::eval` is **all-or-nothing**. For each field it resolves a value as **wired pin > stored UI literal > `None`** (a wired pin wins; an unwired pin uses its stored literal if that literal still coerces to the field type; otherwise the field is `None`). It then short-circuits: the moment *any* field resolves to `NetworkResult::None`, the whole node returns `NetworkResult::None` (and any field resolving to `Error` short-circuits to that error). Only if **every** field obtained a non-`None` value does it emit the record. So a record is emitted iff, for every field, either its input pin supplies a non-`None` value or its UI literal is filled.
+
+This short-circuit is what `Optional[T]` fields must opt out of. The Phase 2 change makes the `None`-collapse **conditional on the field type**:
+
+- A **non-Optional** (required) field that resolves to `None` still collapses the whole record to `None`, exactly as today.
+- An **Optional[T]** field that resolves to `None` is **kept** as an explicit `None` value in that field's slot and does **not** collapse the record (consistent with the §5 rule that emitted records always carry all fields).
+
+`Error` propagation is unchanged — an `Error` in any field, Optional or not, still short-circuits to that error. The required-ness derived by `get_parameter_metadata` (Optional field ⇒ optional pin) and this eval-level exemption are two faces of the same rule and must stay in sync.
+
 ### 6. Out of scope for v1
 
 - **`expr` language**: no `none` literal, no null-coalescing operator, and `Optional` is rejected in expr type positions. Nodes consuming Optionals do so in Rust (`NetworkResult::None` match arms). Revisit when an expr-level use case appears.

@@ -34,6 +34,24 @@ pub fn remove_hydrogens(
     structure: &mut AtomicStructure,
     options: &RemoveHydrogensOptions,
 ) -> RemoveHydrogensResult {
+    remove_hydrogens_filtered(structure, options, &|_| true)
+}
+
+/// Like [`remove_hydrogens`], but an H atom is only removed when its **host**
+/// (the heavy atom it is bonded to) satisfies `eligible`. The default
+/// unfiltered variant passes an always-`true` predicate, so the two share a
+/// single code path.
+///
+/// Region semantics (`doc/design_blueprint_region_atom_edits.md` §A4): the
+/// membership decision uses the position of the existing heavy atom, not the
+/// H's own position — an H sitting just outside the region boundary is still
+/// stripped if its host is in-region. A lone H with no host falls back to its
+/// own membership.
+pub fn remove_hydrogens_filtered(
+    structure: &mut AtomicStructure,
+    options: &RemoveHydrogensOptions,
+    eligible: &dyn Fn(u32) -> bool,
+) -> RemoveHydrogensResult {
     // Phase 1: Analysis (immutable scan)
     let atom_ids: Vec<u32> = structure.atom_ids().copied().collect();
     let mut ids_to_remove: Vec<u32> = Vec::new();
@@ -45,6 +63,23 @@ pub fn remove_hydrogens(
         };
 
         if atom.atomic_number != 1 {
+            continue;
+        }
+
+        // Region gate: remove this H only if its host heavy atom is in-region.
+        // Lone H (no bonds) falls back to its own membership.
+        let mut hosts = atom
+            .bonds
+            .iter()
+            .filter(|b| !b.is_delete_marker())
+            .map(|b| b.other_atom_id())
+            .peekable();
+        let host_in_region = if hosts.peek().is_none() {
+            eligible(atom_id)
+        } else {
+            hosts.any(eligible)
+        };
+        if !host_in_region {
             continue;
         }
 
@@ -315,11 +350,32 @@ pub fn add_hydrogens(
     structure: &mut AtomicStructure,
     options: &AddHydrogensOptions,
 ) -> AddHydrogensResult {
+    add_hydrogens_filtered(structure, options, &|_| true)
+}
+
+/// Like [`add_hydrogens`], but only atoms satisfying `eligible` are passivated.
+/// The default unfiltered variant passes an always-`true` predicate, so the two
+/// share a single code path.
+///
+/// Region semantics (`doc/design_blueprint_region_atom_edits.md` §A4): `eligible`
+/// tests the **host** (dangling-bond) atom. A passivating H is placed wherever
+/// the bond template puts it, regardless of where that lands relative to the
+/// region — newly created H atoms are never themselves membership-tested.
+pub fn add_hydrogens_filtered(
+    structure: &mut AtomicStructure,
+    options: &AddHydrogensOptions,
+    eligible: &dyn Fn(u32) -> bool,
+) -> AddHydrogensResult {
     // Step 1: Analysis (immutable scan)
     let atom_ids: Vec<u32> = structure.atom_ids().copied().collect();
     let mut placements: Vec<(u32, Vec<DVec3>)> = Vec::new();
 
     for &atom_id in &atom_ids {
+        // Region gate: only passivate in-region host atoms.
+        if !eligible(atom_id) {
+            continue;
+        }
+
         let atom = match structure.get_atom(atom_id) {
             Some(a) => a,
             None => continue,
