@@ -182,7 +182,19 @@ MaterializeRegion = {
 }
 ```
 
-Authored field order above drives the `record_construct` pin layout: `volume` is the only required pin; everything else is optional (unwired → unset, per `doc/design_optional_type.md` §5).
+Authored field order above drives the `record_construct` pin layout. Per `doc/design_optional_type.md` (Core Decision 2: `Optional` is a record-field modifier, never a pin type), **the construct input pins are plain `T`** — `volume: Blueprint`, `margin: Float`, the four settings `Bool` — *not* `Optional[…]`. `Optional` lives only in the def's field declarations above; it never appears on a pin or wire. The field's Optional-ness drives behavior at `record_construct::eval`: `volume` is the one **required** pin (unwired → the whole record collapses to `None`); the five `Optional` fields are **not required** (an unset one stays an explicit `None` in the record rather than collapsing it).
+
+The three settings states this design needs (§Motivation: force-on / force-off / inherit) map directly onto the construct node's per-field input, with no `Optional` value ever on a wire:
+
+| State | How the user expresses it | Field value in the emitted record |
+|---|---|---|
+| Force on | wire `true`, or set the literal to `true` | `Bool(true)` |
+| Force off | wire `false`, or set the literal to `false` | `Bool(false)` |
+| Inherit | leave the pin unwired **and** the literal unset | `None` |
+
+"Inherit" is the **absence** of both a wire and a `literal_values` entry (resolution order is unchanged: wired > literal > `None` — see `doc/design_optional_type.md` §5). The construct node's literal editor therefore needs a **clearable / tri-state** affordance for these fields (true / false / unset for the `Bool`s; value / unset for `margin`), defaulting to unset. A freshly-added region record thus inherits everything until the user sets a field.
+
+Note Part B never uses a `record_destructure` node: `materialize` parses the region records directly in Rust (§B6, reading each field as "value or `None`"), so the destructure-emits-plain-`T` rule from the Optional design does not bear on this path at all — Part B depends only on (a) `Optional` as a field-declaration type and (b) `record_construct`'s optional-field collapse exemption.
 
 **`volume` is a Blueprint** because that is what every 3D shape node outputs — there is no bare 3D-geometry type at the network level. Users build region volumes with the exact nodes they already know (`half_space`, `cuboid`, `sphere`, CSG combinations), in the same real space as the Blueprint being materialized. Only the region Blueprint's `geo_tree_root` is consumed; its `structure` is **ignored** (documented; see Open Question 5 for the warn-on-mismatch alternative).
 
@@ -352,7 +364,7 @@ Tests: `freeze`/`unfreeze` set/clear bit 2 in-region (and globally when disconne
 
 ## Part B phases
 
-(Unchanged from the original #346 plan; require `doc/design_optional_type.md` Phases 1–2.)
+(Unchanged from the original #346 plan; require `doc/design_optional_type.md` Phases 1–2 for the type + `record_construct` optional-field behavior. The **tri-state literal editor** (set/unset per field) lands in that doc's Phase 3; until then the three states are still reachable by wiring a `bool`/`float` node for "force" and leaving the pin unwired for "inherit", so Part B's Phases B1–B2 do not block on it.)
 
 ### Phase B1 — Region engine in `lattice_fill` (no node changes)
 

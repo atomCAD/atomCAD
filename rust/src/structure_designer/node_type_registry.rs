@@ -142,6 +142,8 @@ pub enum RecordTypeDefError {
     CycleDetected { description: String },
     #[error("name '{0}' is invalid: {1}")]
     InvalidName(String, String),
+    #[error("record type def '{0}' has an ill-formed type in field '{1}': {2}")]
+    IllFormedType(String, String, String),
 }
 
 /// Kind of an existing *user-defined* type addressable by the namespace
@@ -1291,6 +1293,7 @@ impl NodeTypeRegistry {
             return Err(RecordTypeDefError::NameCollision(def.name.clone()));
         }
         validate_distinct_fields(&def.name, &def.fields)?;
+        validate_field_optionals(&def.name, &def.fields)?;
         self.check_no_cycle(&def.name, &def.fields)?;
         // A new entity gives its ancestor folders content (doc/design_empty_folders.md).
         self.prune_ancestor_folders(&def.name);
@@ -1375,6 +1378,7 @@ impl NodeTypeRegistry {
             return Err(RecordTypeDefError::NotFound(name.to_string()));
         }
         validate_distinct_fields(name, &new_fields)?;
+        validate_field_optionals(name, &new_fields)?;
         self.check_no_cycle(name, &new_fields)?;
         if let Some(def) = self.record_type_defs.get_mut(name) {
             def.fields = new_fields;
@@ -2416,6 +2420,60 @@ fn validate_distinct_fields(
     Ok(())
 }
 
+/// Validates that every `Optional[..]` reachable from a record def's field
+/// list is well-formed (no nested `Optional`, no `Iter`, `Unit`, or `None`
+/// inner type — see `doc/design_optional_type.md` §3). This guards `.cnnd`
+/// files that smuggle in ill-formed shapes past the text parser, since
+/// record-def field types deserialize directly from JSON.
+fn validate_field_optionals(
+    def_name: &str,
+    fields: &[(String, DataType)],
+) -> Result<(), RecordTypeDefError> {
+    for (field_name, ty) in fields {
+        if let Err(message) = validate_optionals_in_type(ty) {
+            return Err(RecordTypeDefError::IllFormedType(
+                def_name.to_string(),
+                field_name.clone(),
+                message,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Recursively checks every `Optional[..]` inside `t`, returning the first
+/// ill-formedness message found. Recurses through `Array`, `Iterator`,
+/// `Optional`, `Function`, `AnyFunction`, and nested `Record::Anonymous`
+/// shapes so an `Optional` buried anywhere in a field type is caught.
+fn validate_optionals_in_type(t: &DataType) -> Result<(), String> {
+    match t {
+        DataType::Optional(inner) => {
+            crate::structure_designer::data_type::validate_optional_inner(inner)?;
+            validate_optionals_in_type(inner)
+        }
+        DataType::Array(inner) | DataType::Iterator(inner) => validate_optionals_in_type(inner),
+        DataType::Function(func) => {
+            for p in &func.parameter_types {
+                validate_optionals_in_type(p)?;
+            }
+            validate_optionals_in_type(&func.output_type)
+        }
+        DataType::AnyFunction { leading_params } => {
+            for p in leading_params {
+                validate_optionals_in_type(p)?;
+            }
+            Ok(())
+        }
+        DataType::Record(RecordType::Anonymous(fs)) => {
+            for (_, ty) in fs {
+                validate_optionals_in_type(ty)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Collects every `RecordType::Named(N)` reference reachable from a field
 /// list. Recurses through `Array`, `Function`, and nested `Record::Anonymous`
 /// shapes; `Record::Named` references are leaves (the def itself is followed
@@ -2431,6 +2489,7 @@ fn collect_named_record_refs(fields: &[(String, DataType)]) -> Vec<String> {
 fn collect_named_record_refs_in_type(t: &DataType, out: &mut Vec<String>) {
     match t {
         DataType::Array(inner) => collect_named_record_refs_in_type(inner, out),
+        DataType::Optional(inner) => collect_named_record_refs_in_type(inner, out),
         DataType::Function(func) => {
             for p in &func.parameter_types {
                 collect_named_record_refs_in_type(p, out);
@@ -2828,6 +2887,21 @@ pub fn validate_record_type_defs(registry: &NodeTypeRegistry) -> Vec<String> {
             registry.check_no_cycle(name, &def.fields)
         {
             errors.push(format!("record type def {}", description));
+        }
+    }
+
+    // Ill-formed `Optional` check: every `Optional[..]` reachable from a def's
+    // field types must be well-formed (no nested Optional / Iter / Unit / None).
+    // Field types deserialize directly from JSON, bypassing the text parser, so
+    // a hand-edited `.cnnd` could carry an ill-formed shape.
+    for (name, def) in &registry.record_type_defs {
+        if let Err(RecordTypeDefError::IllFormedType(_, field, message)) =
+            validate_field_optionals(name, &def.fields)
+        {
+            errors.push(format!(
+                "record type def '{}' has an ill-formed type in field '{}': {}",
+                name, field, message
+            ));
         }
     }
 

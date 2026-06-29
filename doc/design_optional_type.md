@@ -133,8 +133,21 @@ This short-circuit is what `Optional[T]` fields must opt out of. The Phase 2 cha
 
 ### 8. Serialization & compatibility
 
-- `DataType` is serde-serialized; the new variant round-trips with no migration (old `.cnnd` files cannot contain it).
+- `DataType` is serde-serialized **by variant name** (externally tagged); the new variant round-trips with no migration and does not perturb the encoding of existing variants (old `.cnnd` files cannot contain it). Record-def field types load directly from JSON via serde — **the text parser is never on the load path** — so the new parser arm cannot change how existing files deserialize.
 - Standard forward-compat caveat: a project saved with `Optional` types will not load in older builds. No version bump — same policy as previous additive `DataType` variants (`Unit`, `Iterator`, matrices).
+
+#### Backward-compatibility / regression analysis
+
+This design **cannot regress an existing (Optional-free) network**, by construction: `Optional` lives only in record-field declarations (Core Decision 2), so every behavioral change below is *gated on encountering an `Optional` type*, and no existing `.cnnd` contains one.
+
+- **Pin layouts unchanged.** For a non-Optional field the destructure output projection (strip `Optional`) is a **no-op** and the construct input pin is `T` as today, so existing `record_construct` / `record_destructure` nodes get byte-identical pin layouts and wires.
+- **Collapse semantics preserved.** The eval change only *exempts* Optional fields from `None`-collapse; an all-required record (every existing record) collapses on a `None` field exactly as before.
+- **Subtyping untouched for old records.** The new `can_be_structurally_converted_to` arms fire only when the destination field is `Optional[_]`; existing record subtyping never reaches them.
+
+Two genuine compatibility hazards remain and must be handled:
+
+1. **`Optional` becomes a reserved type-parser keyword** (same class as `Iter`'s reservation). An existing record def or network *named exactly* `Optional` would be shadowed in the text format and rejected by registry validation. Mitigation: treat `Optional` as the keyword **only when immediately followed by `[`** — bare `Optional` stays a record-name reference (`Named("Optional")`), so the collision is essentially nil in practice but must be coded that way deliberately. (`.cnnd` *load* is unaffected — field types deserialize, they are not re-parsed.)
+2. **Exhaustive-match audit for the new variant.** Adding a `DataType` variant is a compile-time fan-out; the danger is a `_ =>` catch-all that silently mishandles `Optional`. This is *not* an existing-network regression (old networks never carry `Optional`), but to avoid a latent panic / mis-render in Optional-using networks, audit **every** `DataType` match site — at minimum the `DataType ↔ APIDataTypeBase` converters (both directions), `node_layout` pin-type sizing, text-format type serialization, the record-def cycle checker, and `infer_data_type` — not just the canonicalize / rename / conversion / parser / Display / registry-validation sites named above.
 
 ## Phasing
 

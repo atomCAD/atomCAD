@@ -4,6 +4,9 @@ mod structure_designer_test;
 #[path = "structure_designer/data_type_test.rs"]
 mod data_type_test;
 
+#[path = "structure_designer/optional_type_phase1_test.rs"]
+mod optional_type_phase1_test;
+
 #[path = "structure_designer/node_dependency_analysis_tests.rs"]
 mod node_dependency_analysis_tests;
 

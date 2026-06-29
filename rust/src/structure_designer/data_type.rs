@@ -95,7 +95,7 @@ pub fn canonicalize_data_type(t: &mut DataType) {
                 }
             }
         }
-        DataType::Array(inner) | DataType::Iterator(inner) => {
+        DataType::Array(inner) | DataType::Iterator(inner) | DataType::Optional(inner) => {
             canonicalize_data_type(inner);
         }
         DataType::AnyFunction { leading_params } => {
@@ -152,6 +152,18 @@ pub enum DataType {
     /// **no** implicit `Iter[T] → [T]` rule — use a `collect` node. See
     /// `doc/design_iterators.md`.
     Iterator(Box<DataType>),
+    /// Nullable `T`: a value of `Optional[T]` is either an ordinary `T`-shaped
+    /// `NetworkResult` or `NetworkResult::None` — there is **no** wrapper at the
+    /// value layer. `Optional` is a **record-field modifier only**: it appears
+    /// only in record-field declarations and the record subtyping that compares
+    /// them, never as the type of a pin and never on a wire.
+    ///
+    /// Nesting is meaningless under untagged null, so `Optional[Optional[_]]`,
+    /// `Optional[Iter[_]]`, `Optional[Unit]` and `Optional[None]` are ill-formed
+    /// and rejected at every construction site (`from_string`, registry
+    /// validation, and the Flutter type selector). See
+    /// `doc/design_optional_type.md`.
+    Optional(Box<DataType>),
     Function(FunctionType),
     /// A pin that accepts any `Function(_)` value whose parameter list begins
     /// with `leading_params`. An empty `leading_params` accepts any function
@@ -199,6 +211,7 @@ where
     match t {
         DataType::Array(inner) => walk_data_type_record_names_mut(inner, f),
         DataType::Iterator(inner) => walk_data_type_record_names_mut(inner, f),
+        DataType::Optional(inner) => walk_data_type_record_names_mut(inner, f),
         DataType::Function(func) => {
             for p in &mut func.parameter_types {
                 walk_data_type_record_names_mut(p, f);
@@ -234,6 +247,7 @@ where
     match t {
         DataType::Array(inner) => walk_data_type_record_names(inner, f),
         DataType::Iterator(inner) => walk_data_type_record_names(inner, f),
+        DataType::Optional(inner) => walk_data_type_record_names(inner, f),
         DataType::Function(func) => {
             for p in &func.parameter_types {
                 walk_data_type_record_names(p, f);
@@ -322,6 +336,9 @@ impl fmt::Display for DataType {
             }
             DataType::Iterator(element_type) => {
                 write!(f, "Iter[{}]", element_type)
+            }
+            DataType::Optional(inner_type) => {
+                write!(f, "Optional[{}]", inner_type)
             }
             DataType::Function(func_type) => {
                 if func_type.parameter_types.is_empty() {
@@ -891,6 +908,10 @@ pub fn contains_iterator(t: &DataType) -> bool {
     match t {
         DataType::Iterator(_) => true,
         DataType::Array(inner) => contains_iterator(inner),
+        // `Optional[Iter[_]]` is ill-formed and rejected at construction, so a
+        // well-formed `Optional` never carries an iterator; recurse defensively
+        // rather than fall through to the `_ => false` catch-all.
+        DataType::Optional(inner) => contains_iterator(inner),
         DataType::Function(func) => {
             func.parameter_types.iter().any(contains_iterator)
                 || contains_iterator(&func.output_type)
@@ -900,6 +921,31 @@ pub fn contains_iterator(t: &DataType) -> bool {
             fields.iter().any(|(_, ty)| contains_iterator(ty))
         }
         _ => false,
+    }
+}
+
+/// Returns `Ok(())` if `inner` is a legal inner type for `Optional[..]`, or an
+/// `Err` with a human-readable message naming the offending shape otherwise.
+///
+/// Ill-formed Optionals (see `doc/design_optional_type.md` §3):
+/// - `Optional[Optional[_]]` — untagged null makes nesting ambiguous.
+/// - `Optional[Iter[_]]` — an optional lazy walker has no meaningful semantics.
+/// - `Optional[Unit]` and `Optional[None]` — degenerate.
+///
+/// This is the single shared predicate for every construction site (the type
+/// parser and registry record-def validation) so the rejection rule stays in
+/// one place.
+pub fn validate_optional_inner(inner: &DataType) -> Result<(), String> {
+    match inner {
+        DataType::Optional(_) => {
+            Err("Optional[Optional[_]] is ill-formed: Optional cannot be nested".to_string())
+        }
+        DataType::Iterator(_) => {
+            Err("Optional[Iter[_]] is ill-formed: an iterator cannot be optional".to_string())
+        }
+        DataType::Unit => Err("Optional[Unit] is ill-formed".to_string()),
+        DataType::None => Err("Optional[None] is ill-formed".to_string()),
+        _ => Ok(()),
     }
 }
 
@@ -955,6 +1001,18 @@ pub fn can_be_structurally_converted_to(
         (DataType::Array(s), DataType::Array(d)) => {
             can_be_structurally_converted_to(s, d, registry)
         }
+        // Optional destination (record-field positions only — see
+        // `doc/design_optional_type.md` §2). `Optional[S] → Optional[T]` and
+        // `S → Optional[T]` (promoting a present value to a maybe-present one)
+        // both reduce to the strict field-level check on the inner types. The
+        // reverse `Optional[S] → T` is rejected: it falls through to the `_`
+        // arm below, where `is_tag_only_widening` returns false for an
+        // `Optional` source — a maybe-present value cannot satisfy a field that
+        // requires presence.
+        (DataType::Optional(s), DataType::Optional(d)) => {
+            can_be_structurally_converted_to(s, d, registry)
+        }
+        (s, DataType::Optional(d)) => can_be_structurally_converted_to(s, d, registry),
         // Leaf position: identity + concrete→abstract phase upcasts only.
         _ => is_tag_only_widening(src, dst),
     }
@@ -1215,6 +1273,20 @@ impl DataTypeParser {
                     let element_type = self.parse_data_type()?;
                     self.expect(DataTypeToken::RightBracket)?;
                     return Ok(DataType::Iterator(Box::new(element_type)));
+                }
+                // Optional type: `Optional[T]`. Treated as a keyword **only when
+                // immediately followed by `[`** so a bare `Optional` does not
+                // shadow a record-name reference (`Record(Optional)` is parsed by
+                // the `Record(..)` branch and is unaffected). Ill-formed inner
+                // types (`Optional[Optional[_]]`, `Optional[Iter[_]]`,
+                // `Optional[Unit]`, `Optional[None]`) are rejected here. See
+                // `doc/design_optional_type.md` §3.
+                if name == "Optional" && self.peek() == &DataTypeToken::LeftBracket {
+                    self.expect(DataTypeToken::LeftBracket)?;
+                    let inner_type = self.parse_data_type()?;
+                    self.expect(DataTypeToken::RightBracket)?;
+                    validate_optional_inner(&inner_type)?;
+                    return Ok(DataType::Optional(Box::new(inner_type)));
                 }
                 // `AnyFunction` syntax (see `doc/design_function_pin_unification.md`).
                 // Mirrors the Display impl:

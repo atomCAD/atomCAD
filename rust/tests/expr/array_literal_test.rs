@@ -496,6 +496,7 @@ mod element_type_eligibility_tests {
             DataType::Unit,
             DataType::Array(Box::new(DataType::Int)),
             DataType::Iterator(Box::new(DataType::Int)),
+            DataType::Optional(Box::new(DataType::Int)),
             DataType::Function(
                 rust_lib_flutter_cad::structure_designer::data_type::FunctionType {
                     parameter_types: vec![DataType::Int],
@@ -543,6 +544,7 @@ mod element_type_eligibility_tests {
                 | DataType::Unit
                 | DataType::Array(_)
                 | DataType::Iterator(_)
+                | DataType::Optional(_)
                 | DataType::Function(_)
                 | DataType::AnyFunction { .. }
                 | DataType::Record(_) => {}
@@ -578,6 +580,7 @@ mod element_type_eligibility_tests {
             if matches!(
                 v,
                 DataType::Array(_)
+                    | DataType::Optional(_)
                     | DataType::Function(_)
                     | DataType::AnyFunction { .. }
                     | DataType::Record(_)
