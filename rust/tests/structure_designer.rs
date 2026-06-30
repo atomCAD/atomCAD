@@ -70,6 +70,9 @@ mod rename_wire_loss_regression_test;
 #[path = "structure_designer/record_field_rename_wire_loss_test.rs"]
 mod record_field_rename_wire_loss_test;
 
+#[path = "structure_designer/record_destructure_output_identity_test.rs"]
+mod record_destructure_output_identity_test;
+
 #[path = "structure_designer/layout_topological_grid_test.rs"]
 mod layout_topological_grid_test;
 

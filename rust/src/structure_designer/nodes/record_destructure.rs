@@ -196,7 +196,12 @@ pub fn build_node_type_for_schema_with_defs(
             .fields
             .iter()
             .map(|field| {
+                // Stamp the field's stable `FieldId` onto the output pin so
+                // `repair_node_network` can remap output wires by identity
+                // across a reorder/rename/delete (R3,
+                // `doc/design_record_field_identity.md` §4.4).
                 OutputPinDefinition::fixed(&field.name, field.data_type.record_field_pin_type())
+                    .with_id(field.id.0)
             })
             .collect(),
         _ => vec![OutputPinDefinition::fixed("result", DataType::None)],

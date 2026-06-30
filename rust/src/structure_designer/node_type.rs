@@ -85,6 +85,13 @@ fn none_data_type_ref() -> &'static DataType {
 pub struct OutputPinDefinition {
     pub name: String,
     pub data_type: PinOutputType,
+    /// Optional stable editing identity for the field this pin represents.
+    /// Set only on `record_destructure` per-field output pins (the field's
+    /// `FieldId`); `None` for every other output pin. Used by
+    /// `repair_node_network` to remap output wires across a field reorder /
+    /// rename / delete by identity rather than slot index. Invisible to the
+    /// type system. See `doc/design_record_field_identity.md` §4.4 (R3).
+    pub id: Option<u64>,
 }
 
 impl OutputPinDefinition {
@@ -93,6 +100,7 @@ impl OutputPinDefinition {
         Self {
             name: name.to_string(),
             data_type: PinOutputType::Fixed(data_type),
+            id: None,
         }
     }
 
@@ -104,6 +112,7 @@ impl OutputPinDefinition {
                 input_pin_name: input_pin_name.to_string(),
                 fallback_if_disconnected: None,
             },
+            id: None,
         }
     }
 
@@ -119,6 +128,7 @@ impl OutputPinDefinition {
                 input_pin_name: input_pin_name.to_string(),
                 fallback_if_disconnected: Some(fallback),
             },
+            id: None,
         }
     }
 
@@ -127,7 +137,16 @@ impl OutputPinDefinition {
         Self {
             name: name.to_string(),
             data_type: PinOutputType::SameAsArrayElements(input_pin_name.to_string()),
+            id: None,
         }
+    }
+
+    /// Attach a stable field identity (`FieldId.0`) to this output pin. Used by
+    /// the `record_destructure` pin builder so output wires can be remapped by
+    /// identity across a field reorder/rename/delete.
+    pub fn with_id(mut self, id: u64) -> Self {
+        self.id = Some(id);
+        self
     }
 
     /// Backward-compatible convenience for single-output nodes with a fixed type.

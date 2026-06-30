@@ -2342,6 +2342,29 @@ impl NodeTypeRegistry {
     /// # Parameters
     /// * `network` - A mutable reference to the node network to repair
     pub fn repair_node_network(&self, network: &mut NodeNetwork) {
+        // R3 (`doc/design_record_field_identity.md` §4.4): capture each record
+        // node's current output-pin index -> `FieldId` map BEFORE the populate
+        // loop below refreshes `custom_node_type` from the (possibly just-
+        // changed) registry def. Only `record_destructure` per-field output
+        // pins carry ids, so this naturally restricts to those nodes. After the
+        // refresh we remap consumer output wires by identity: a field
+        // reorder/rename follows the field to its new pin slot, and a deleted
+        // field's wire is dropped rather than silently re-pointed at whatever
+        // field slid into its old index (the slot-index count check below would
+        // keep such a wire pointed at the wrong field).
+        let record_old_pin_ids: HashMap<u64, Vec<Option<u64>>> = network
+            .nodes
+            .iter()
+            .filter_map(|(&id, node)| {
+                let nt = node.custom_node_type.as_ref()?;
+                if nt.output_pins.iter().any(|p| p.id.is_some()) {
+                    Some((id, nt.output_pins.iter().map(|p| p.id).collect()))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         // Refresh every node's custom_node_type FIRST so the parameter /
         // output-pin counts derived from per-node data and the registry are
         // visible to the arg-count and wire-pin repair passes below.
@@ -2410,6 +2433,70 @@ impl NodeTypeRegistry {
         // feeding `map.f` has its output type resolved against its updated
         // arg-pin layout first.
         self.update_map_pin_layouts_for_network(network);
+
+        // R3: remap consumer output wires by field identity now that record
+        // nodes' output-pin layouts have been refreshed (see the capture at the
+        // top of this function). Runs BEFORE the slot-index wire cleanup below
+        // so the cleanup sees already-correct indices.
+        if !record_old_pin_ids.is_empty() {
+            // New field-id -> output-pin-index map per record node.
+            let record_new_id_to_index: HashMap<u64, HashMap<u64, usize>> = record_old_pin_ids
+                .keys()
+                .filter_map(|&id| {
+                    let nt = network.nodes.get(&id)?.custom_node_type.as_ref()?;
+                    let map: HashMap<u64, usize> = nt
+                        .output_pins
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(idx, p)| p.id.map(|fid| (fid, idx)))
+                        .collect();
+                    Some((id, map))
+                })
+                .collect();
+
+            for node in network.nodes.values_mut() {
+                for argument in node.arguments.iter_mut() {
+                    argument.incoming_wires.retain_mut(|wire| {
+                        // Only local-scope, regular-output wires are slot-keyed
+                        // by output-pin index; captures / zone-input refs are
+                        // left to the zone-aware passes.
+                        if wire.source_scope_depth != 0 {
+                            return true;
+                        }
+                        let SourcePin::NodeOutput { pin_index } = wire.source_pin else {
+                            return true;
+                        };
+                        if pin_index < 0 {
+                            return true; // function pin
+                        }
+                        let Some(old_ids) = record_old_pin_ids.get(&wire.source_node_id) else {
+                            return true; // source is not a record node
+                        };
+                        // The field this wire fed, by the OLD slot order. A
+                        // `None` here (placeholder pin, or index past the old
+                        // pin list) is left to the slot-index count check.
+                        let Some(Some(field_id)) = old_ids.get(pin_index as usize).copied() else {
+                            return true;
+                        };
+                        match record_new_id_to_index
+                            .get(&wire.source_node_id)
+                            .and_then(|m| m.get(&field_id))
+                        {
+                            Some(&new_index) => {
+                                // Field survived (possibly reordered/renamed):
+                                // follow it to its new pin slot.
+                                wire.source_pin = SourcePin::NodeOutput {
+                                    pin_index: new_index as i32,
+                                };
+                                true
+                            }
+                            // Field was deleted: drop its output wire.
+                            None => false,
+                        }
+                    });
+                }
+            }
+        }
 
         let node_ids: HashSet<u64> = network.nodes.keys().copied().collect();
 

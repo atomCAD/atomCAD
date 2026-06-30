@@ -992,6 +992,7 @@ fn resolved_return_output_pins(
             OutputPinDefinition {
                 name: pin.name.clone(),
                 data_type,
+                id: pin.id,
             }
         })
         .collect()

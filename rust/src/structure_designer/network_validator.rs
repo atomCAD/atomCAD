@@ -1206,6 +1206,7 @@ fn update_network_output_type(
                 pins.push(OutputPinDefinition {
                     name: pin.name.clone(),
                     data_type,
+                    id: pin.id,
                 });
             }
             pins
