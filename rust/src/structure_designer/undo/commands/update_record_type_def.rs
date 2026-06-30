@@ -42,9 +42,13 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
     }
 
     fn undo(&self, ctx: &mut UndoContext) {
-        // Restore the def's old field list.
+        // Restore the def's old field list. `set_fields_by_name` re-derives
+        // stable `FieldId`s (preserving any whose name is unchanged, allocating
+        // fresh never-recycled ids otherwise). Field ids do not drive wires in
+        // R1 — pins still emit `id: None` — so name+type restoration is exact;
+        // R4 will round-trip the ids themselves.
         if let Some(def) = ctx.node_type_registry.record_type_defs.get_mut(&self.name) {
-            def.fields = self.old_fields.clone();
+            def.set_fields_by_name(self.old_fields.clone());
         }
         // Restore each affected network from its pre-update snapshot.
         for (network_name, snapshot) in &self.network_snapshots_before {
@@ -64,7 +68,7 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
         // Apply the new field list and re-run repair on every affected
         // network so wires re-disconnect identically to the original update.
         if let Some(def) = ctx.node_type_registry.record_type_defs.get_mut(&self.name) {
-            def.fields = self.new_fields.clone();
+            def.set_fields_by_name(self.new_fields.clone());
         }
         // Helper 2 — repair every network so record-node pin layouts re-derive
         // and now-incompatible wires re-disconnect (matches the forward update).

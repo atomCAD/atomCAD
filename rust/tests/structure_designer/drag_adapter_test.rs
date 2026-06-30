@@ -1615,13 +1615,13 @@ fn map_drag_hint_round_trips_through_string_into_closure() {
 // ============================================================================
 
 fn point_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Point".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Point".to_string(),
+        vec![
             ("x".to_string(), DataType::Float),
             ("y".to_string(), DataType::Float),
         ],
-    }
+    )
 }
 
 fn point_type() -> DataType {

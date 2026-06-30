@@ -78,13 +78,13 @@ fn set_node_data(
 /// Authored order [y, x] — non-alphabetical on purpose, to exercise the
 /// distinction between authored pin order and canonical storage order.
 fn point_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Point".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Point".to_string(),
+        vec![
             ("y".to_string(), DataType::Int),
             ("x".to_string(), DataType::Int),
         ],
-    }
+    )
 }
 
 /// Returns the value of the named field from a `NetworkResult::Record`,
@@ -287,10 +287,10 @@ fn int_to_float_coercion_through_to_network_result() {
     let mut designer = setup_designer_with_network("test");
     designer
         .node_type_registry
-        .add_record_type_def(RecordTypeDef {
-            name: "FRecord".to_string(),
-            fields: vec![("f".to_string(), DataType::Float)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "FRecord".to_string(),
+            vec![("f".to_string(), DataType::Float)],
+        ))
         .unwrap();
 
     let construct = designer.add_node("record_construct", DVec2::new(0.0, 0.0));
@@ -391,14 +391,14 @@ fn schema_change_preserves_literal_values_for_matching_fields() {
         .unwrap();
     designer
         .node_type_registry
-        .add_record_type_def(RecordTypeDef {
-            name: "PointPlusZ".to_string(),
-            fields: vec![
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "PointPlusZ".to_string(),
+            vec![
                 ("y".to_string(), DataType::Int),
                 ("x".to_string(), DataType::Int),
                 ("z".to_string(), DataType::Int),
             ],
-        })
+        ))
         .unwrap();
 
     let construct = designer.add_node("record_construct", DVec2::new(0.0, 0.0));

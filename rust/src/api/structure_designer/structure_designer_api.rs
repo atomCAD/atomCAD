@@ -1396,9 +1396,9 @@ pub fn get_record_type_def(name: String) -> Option<APIRecordTypeDef> {
                         fields: def
                             .fields
                             .iter()
-                            .map(|(fname, ftype)| APIRecordTypeField {
-                                name: fname.clone(),
-                                data_type: data_type_to_api_data_type(ftype),
+                            .map(|field| APIRecordTypeField {
+                                name: field.name.clone(),
+                                data_type: data_type_to_api_data_type(&field.data_type),
                             })
                             .collect(),
                     })
@@ -1415,10 +1415,8 @@ pub fn add_record_type_def(name: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                let def = crate::structure_designer::node_type_registry::RecordTypeDef {
-                    name: name.clone(),
-                    fields: Vec::new(),
-                };
+                let def =
+                    crate::structure_designer::node_type_registry::RecordTypeDef::new(name.clone());
                 let result = instance.structure_designer.add_record_type_def(def);
                 refresh_structure_designer_auto(instance);
                 match result {
@@ -5885,7 +5883,9 @@ pub fn get_record_construct_fields(
                 let def = sd.node_type_registry.lookup_record_type_def(&data.schema)?;
 
                 let mut result = Vec::new();
-                for (i, (field_name, field_type)) in def.fields.iter().enumerate() {
+                for (i, field) in def.fields.iter().enumerate() {
+                    let field_name = &field.name;
+                    let field_type = &field.data_type;
                     // An `Optional[T]` field is exposed at the value/literal layer
                     // as a plain `T` (Core Decision 2). Peel the Optional so the
                     // literal editor renders `T`'s input; the tri-state "unset"

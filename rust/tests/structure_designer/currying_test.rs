@@ -427,18 +427,18 @@ fn canonicalize_record_type_defs_flattens_field_types() {
     let mut defs = HashMap::new();
     defs.insert(
         "Pair".to_string(),
-        RecordTypeDef {
-            name: "Pair".to_string(),
-            fields: vec![
+        RecordTypeDef::from_named_fields(
+            "Pair".to_string(),
+            vec![
                 ("f".to_string(), non_canonical_a_then_bc_to_d()),
                 ("g".to_string(), DataType::Float),
             ],
-        },
+        ),
     );
     canonicalize_record_type_defs(&mut defs);
     let def = defs.get("Pair").expect("Pair");
-    assert_eq!(def.fields[0].1, canonical_abc_to_d());
-    assert_eq!(def.fields[1].1, DataType::Float);
+    assert_eq!(def.fields[0].data_type, canonical_abc_to_d());
+    assert_eq!(def.fields[1].data_type, DataType::Float);
 }
 
 // =============================================================================

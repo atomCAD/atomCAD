@@ -131,7 +131,7 @@ fn materialize_region_resolves_via_lookup() {
         .expect("MaterializeRegion should resolve via built_in_record_type_defs");
     assert_eq!(def.name, "MaterializeRegion");
     // Authored field order drives the record_construct pin layout.
-    let names: Vec<&str> = def.fields.iter().map(|(n, _)| n.as_str()).collect();
+    let names: Vec<&str> = def.fields.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(
         names,
         vec![
@@ -145,13 +145,16 @@ fn materialize_region_resolves_via_lookup() {
         ]
     );
     // volume is a plain Blueprint; the six settings are Optional[..].
-    assert_eq!(def.fields[0].1, DataType::Blueprint);
+    assert_eq!(def.fields[0].data_type, DataType::Blueprint);
     assert_eq!(
-        def.fields[1].1,
+        def.fields[1].data_type,
         DataType::Optional(Box::new(DataType::Float))
     );
     for field in &def.fields[2..] {
-        assert_eq!(field.1, DataType::Optional(Box::new(DataType::Bool)));
+        assert_eq!(
+            field.data_type,
+            DataType::Optional(Box::new(DataType::Bool))
+        );
     }
 }
 
@@ -163,10 +166,7 @@ fn materialize_region_is_reserved_built_in() {
 
     // add / rename / update rejected; delete is a no-op.
     let add_err = registry
-        .add_record_type_def(RecordTypeDef {
-            name: "MaterializeRegion".to_string(),
-            fields: vec![],
-        })
+        .add_record_type_def(RecordTypeDef::new("MaterializeRegion".to_string()))
         .unwrap_err();
     assert!(matches!(add_err, RecordTypeDefError::BuiltIn(_)));
 

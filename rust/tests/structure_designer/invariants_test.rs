@@ -437,13 +437,13 @@ fn document_checker_flags_dangling_record_def_field_ref() {
     // A def whose field references a non-existent def.
     d.node_type_registry.record_type_defs.insert(
         "R".to_string(),
-        RecordTypeDef {
-            name: "R".to_string(),
-            fields: vec![(
+        RecordTypeDef::from_named_fields(
+            "R".to_string(),
+            vec![(
                 "f".to_string(),
                 DataType::Record(RecordType::Named("ghost".to_string())),
             )],
-        },
+        ),
     );
 
     let v = check_document_invariants(&d.node_type_registry);

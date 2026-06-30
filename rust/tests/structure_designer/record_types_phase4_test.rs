@@ -25,13 +25,13 @@ use rust_lib_flutter_cad::structure_designer::node_type_registry::{
 // ---------------------------------------------------------------------------
 
 fn def(name: &str, fields: &[(&str, DataType)]) -> RecordTypeDef {
-    RecordTypeDef {
-        name: name.to_string(),
-        fields: fields
+    RecordTypeDef::from_named_fields(
+        name,
+        fields
             .iter()
             .map(|(n, t)| (n.to_string(), t.clone()))
             .collect(),
-    }
+    )
 }
 
 fn examples_registry() -> NodeTypeRegistry {

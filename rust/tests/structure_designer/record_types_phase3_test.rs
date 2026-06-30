@@ -82,25 +82,25 @@ fn set_node_data(
 }
 
 fn point_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Point".to_string(),
+    RecordTypeDef::from_named_fields(
+        "Point".to_string(),
         // Authored order intentionally non-alphabetical so we exercise the
         // distinction between authored pin order and canonical storage order.
-        fields: vec![
+        vec![
             ("y".to_string(), DataType::Int),
             ("x".to_string(), DataType::Int),
         ],
-    }
+    )
 }
 
 fn box_def_referencing_point() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Box".to_string(),
-        fields: vec![(
+    RecordTypeDef::from_named_fields(
+        "Box".to_string(),
+        vec![(
             "p".to_string(),
             DataType::Record(RecordType::Named("Point".to_string())),
         )],
-    }
+    )
 }
 
 // ============================================================================
@@ -478,14 +478,14 @@ fn destructure_passes_through_extra_fields() {
         .node_type_registry
         .add_record_type_def(point_def())
         .unwrap();
-    let point3 = RecordTypeDef {
-        name: "Point3".to_string(),
-        fields: vec![
+    let point3 = RecordTypeDef::from_named_fields(
+        "Point3".to_string(),
+        vec![
             ("y".to_string(), DataType::Int),
             ("x".to_string(), DataType::Int),
             ("z".to_string(), DataType::Int),
         ],
-    };
+    );
     designer
         .node_type_registry
         .add_record_type_def(point3)

@@ -2082,8 +2082,8 @@ impl StructureDesigner {
                 continue;
             }
             let mut refs: HashSet<String> = HashSet::new();
-            for (_, ty) in &def.fields {
-                super::node_type_registry::collect_record_refs_in_type(ty, &mut refs);
+            for field in &def.fields {
+                super::node_type_registry::collect_record_refs_in_type(&field.data_type, &mut refs);
             }
             for r in &refs {
                 if target_records.contains(r.as_str()) {
@@ -2285,10 +2285,7 @@ impl StructureDesigner {
             i += 1;
         }
 
-        let def = super::node_type_registry::RecordTypeDef {
-            name: name.clone(),
-            fields: Vec::new(),
-        };
+        let def = super::node_type_registry::RecordTypeDef::new(name.clone());
         self.add_record_type_def(def)?;
         Ok(name)
     }
@@ -2383,14 +2380,21 @@ impl StructureDesigner {
         new_fields: Vec<(String, DataType)>,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
         // Capture old fields for undo *before* the update overwrites them.
-        let old_fields = match self.node_type_registry.record_type_defs.get(name) {
-            Some(def) => def.fields.clone(),
-            None => {
-                return Err(super::node_type_registry::RecordTypeDefError::NotFound(
-                    name.to_string(),
-                ));
-            }
-        };
+        // Project `RecordField` → `(name, type)` tuples: the undo command stores
+        // the authored field list and re-derives ids by name on undo/redo (R1).
+        let old_fields: Vec<(String, DataType)> =
+            match self.node_type_registry.record_type_defs.get(name) {
+                Some(def) => def
+                    .fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.data_type.clone()))
+                    .collect(),
+                None => {
+                    return Err(super::node_type_registry::RecordTypeDefError::NotFound(
+                        name.to_string(),
+                    ));
+                }
+            };
 
         // Snapshot every network before the update — wires whose source type
         // no longer satisfies a retyped field will be disconnected by the

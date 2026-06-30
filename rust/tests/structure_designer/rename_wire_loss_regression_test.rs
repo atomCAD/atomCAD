@@ -526,10 +526,10 @@ fn record_rename_rewrites_closure_and_collect_type_fields() {
 
     // A record def to rename.
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "R".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "R".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .expect("add record def R");
 
     // A network with a `closure` (type_args reference R) and a `collect`

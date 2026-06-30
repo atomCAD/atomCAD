@@ -815,19 +815,19 @@ fn test_new_project_clears_record_type_defs() {
 
     // Declare a couple of user record types.
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Point".to_string(),
-            fields: vec![
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Point".to_string(),
+            vec![
                 ("x".to_string(), DataType::Float),
                 ("y".to_string(), DataType::Float),
             ],
-        })
+        ))
         .unwrap();
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Segment".to_string(),
-            fields: vec![("length".to_string(), DataType::Float)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Segment".to_string(),
+            vec![("length".to_string(), DataType::Float)],
+        ))
         .unwrap();
     assert_eq!(designer.node_type_registry.record_type_defs.len(), 2);
 

@@ -47,7 +47,10 @@ fn patch_def_resolves_with_expected_fields() {
         .expect("Patch should resolve via built_in_record_type_defs");
     assert_eq!(def.name, "Patch");
     assert_eq!(
-        def.fields,
+        def.fields
+            .iter()
+            .map(|f| (f.name.clone(), f.data_type.clone()))
+            .collect::<Vec<_>>(),
         vec![
             ("tile".to_string(), DataType::Molecule),
             (
@@ -148,13 +151,13 @@ fn user_def_referencing_patch_is_not_dangling() {
     // A user def whose field is a `Patch` must resolve cleanly because the
     // built-in `Patch` def is reachable through `lookup_record_type_def`.
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "PatchHolder".to_string(),
-            fields: vec![(
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "PatchHolder".to_string(),
+            vec![(
                 "patch".to_string(),
                 DataType::Record(RecordType::Named("Patch".to_string())),
             )],
-        })
+        ))
         .expect("a def referencing the built-in Patch must be accepted (not dangling)");
 
     // And the reference resolves.

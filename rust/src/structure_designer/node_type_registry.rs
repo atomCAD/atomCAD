@@ -110,19 +110,169 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
 
+/// Def-scoped stable surrogate key for a record field. Allocated once from the
+/// owning def's `next_field_id` counter, never reused within that def, never
+/// reordered. Mirrors the `Parameter.id` / `next_param_id` discipline
+/// (`doc/design_parameter_wire_stability.md`). It is the **editing identity** of
+/// a field, orthogonal to the field **name** (which carries structural type
+/// identity). See `doc/design_record_field_identity.md`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct FieldId(pub u64);
+
+/// One field of a [`RecordTypeDef`]. The `name` is the structural-type identity
+/// (records stay structurally typed by name); the `id` is the editing identity
+/// used to preserve wires on `record_construct` / `record_destructure` /
+/// `product` across rename/reorder. See `doc/design_record_field_identity.md`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RecordField {
+    /// Editing identity — stable across rename/reorder, never recycled.
+    pub id: FieldId,
+    /// Structural-type identity — gates `can_be_converted_to` compatibility.
+    pub name: String,
+    pub data_type: DataType,
+}
+
 /// Top-level definition of a named record type. Lives in
 /// `NodeTypeRegistry::record_type_defs` alongside `node_networks` (single user-type
 /// namespace). Field order is **authored** — driven by the schema editor and used
 /// for `record_construct` / `record_destructure` / `product` pin layouts. The
 /// canonical (sorted) view used for subtyping is derived on demand by
 /// `RecordType::resolve_fields`.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+///
+/// **Field identity (`doc/design_record_field_identity.md`).** Each field carries
+/// a stable [`FieldId`] handed out by the per-def `next_field_id` counter
+/// (allocate-then-bump, floor-recomputed on load, never recycled). On disk the
+/// ids are **not** persisted — they are reassigned deterministically in authored
+/// order on load (see the custom `Serialize`/`Deserialize` below), so the
+/// `.cnnd` format is unchanged.
+#[derive(Clone, Debug, PartialEq)]
 pub struct RecordTypeDef {
     pub name: String,
     /// Authored field order. Names are unique within this list (enforced by the
     /// edit-time validator). Field types may reference other record defs by
     /// name; the dependency graph must be acyclic (also enforced).
-    pub fields: Vec<(String, DataType)>,
+    pub fields: Vec<RecordField>,
+    /// Monotonic per-def allocator floor for [`FieldId`]s. Equal to
+    /// `max(field id) + 1` (or 0 for an empty def); recomputed on load. Never
+    /// decreases; ids are never recycled. Not serialized.
+    pub next_field_id: u64,
+}
+
+impl RecordTypeDef {
+    /// An empty named def (no fields). `next_field_id` starts at 0.
+    pub fn new(name: impl Into<String>) -> Self {
+        RecordTypeDef {
+            name: name.into(),
+            fields: Vec::new(),
+            next_field_id: 0,
+        }
+    }
+
+    /// Construct from authored `(name, type)` pairs, assigning sequential field
+    /// ids `0..len` and setting `next_field_id = len`. Used for built-in defs,
+    /// on load, and as the ergonomic constructor for programmatic/test code.
+    pub fn from_named_fields(name: impl Into<String>, fields: Vec<(String, DataType)>) -> Self {
+        let record_fields: Vec<RecordField> = fields
+            .into_iter()
+            .enumerate()
+            .map(|(i, (name, data_type))| RecordField {
+                id: FieldId(i as u64),
+                name,
+                data_type,
+            })
+            .collect();
+        let next_field_id = record_fields.len() as u64;
+        RecordTypeDef {
+            name: name.into(),
+            fields: record_fields,
+            next_field_id,
+        }
+    }
+
+    /// Allocate a fresh field id, bumping the counter. Never recycles a value
+    /// (matches `NodeNetwork::next_param_id`).
+    pub fn allocate_field_id(&mut self) -> FieldId {
+        let id = FieldId(self.next_field_id);
+        self.next_field_id += 1;
+        id
+    }
+
+    /// Raise `next_field_id` to `max(field id) + 1` if it is lagging. Called on
+    /// load (and after any migration that assigns ids) so the allocator never
+    /// hands out a value already in use. Idempotent.
+    pub fn recompute_next_field_id(&mut self) {
+        let floor = self
+            .fields
+            .iter()
+            .map(|f| f.id.0)
+            .max()
+            .map_or(0, |m| m + 1);
+        if self.next_field_id < floor {
+            self.next_field_id = floor;
+        }
+    }
+
+    /// Replace the field list from authored `(name, type)` pairs, preserving the
+    /// [`FieldId`] of any field whose **name** is unchanged and allocating fresh,
+    /// never-recycled ids for new names. This is the R1 interim diff (name-based);
+    /// R2 replaces name-matching with explicit per-row ids from the editor. See
+    /// `doc/design_record_field_identity.md` §4.2/§5.
+    pub fn set_fields_by_name(&mut self, new_fields: Vec<(String, DataType)>) {
+        let old_ids: HashMap<String, FieldId> =
+            self.fields.iter().map(|f| (f.name.clone(), f.id)).collect();
+        let mut rebuilt = Vec::with_capacity(new_fields.len());
+        for (name, data_type) in new_fields {
+            let id = match old_ids.get(&name) {
+                Some(id) => *id,
+                None => self.allocate_field_id(),
+            };
+            rebuilt.push(RecordField {
+                id,
+                name,
+                data_type,
+            });
+        }
+        self.fields = rebuilt;
+    }
+}
+
+// On-disk shape: `{ "name": ..., "fields": [[name, type], ...] }` — exactly the
+// pre-identity format (`fields` was `Vec<(String, DataType)>`). Field ids and
+// `next_field_id` are NOT persisted; they are reassigned deterministically in
+// authored order on load. No `.cnnd` format change, no version bump. See
+// `doc/design_record_field_identity.md` §6.
+impl Serialize for RecordTypeDef {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let fields: Vec<(&str, &DataType)> = self
+            .fields
+            .iter()
+            .map(|f| (f.name.as_str(), &f.data_type))
+            .collect();
+        let mut s = serializer.serialize_struct("RecordTypeDef", 2)?;
+        s.serialize_field("name", &self.name)?;
+        s.serialize_field("fields", &fields)?;
+        s.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for RecordTypeDef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wire {
+            name: String,
+            #[serde(default)]
+            fields: Vec<(String, DataType)>,
+        }
+        let wire = Wire::deserialize(deserializer)?;
+        Ok(RecordTypeDef::from_named_fields(wire.name, wire.fields))
+    }
 }
 
 /// Reasons an `add_record_type_def` / `update_record_type_def` /
@@ -217,13 +367,13 @@ impl NodeTypeRegistry {
         // See `doc/design_atom_replace_rules_input.md` Phase A.
         ret.built_in_record_type_defs.insert(
             "ElementMapping".to_string(),
-            RecordTypeDef {
-                name: "ElementMapping".to_string(),
-                fields: vec![
+            RecordTypeDef::from_named_fields(
+                "ElementMapping",
+                vec![
                     ("from".to_string(), DataType::Int),
                     ("to".to_string(), DataType::Int),
                 ],
-            },
+            ),
         );
 
         // `Patch` — the tileable surface-reconstruction patch carried by
@@ -232,9 +382,9 @@ impl NodeTypeRegistry {
         // `doc/design_surface_patches.md` §2 ("Schema").
         ret.built_in_record_type_defs.insert(
             "Patch".to_string(),
-            RecordTypeDef {
-                name: "Patch".to_string(),
-                fields: vec![
+            RecordTypeDef::from_named_fields(
+                "Patch",
+                vec![
                     ("tile".to_string(), DataType::Molecule),
                     (
                         "tiling_vectors".to_string(),
@@ -242,7 +392,7 @@ impl NodeTypeRegistry {
                     ),
                     ("cut_volume".to_string(), DataType::Blueprint),
                 ],
-            },
+            ),
         );
 
         // `MaterializeRegion` — one entry of `materialize.regions`: a volume
@@ -253,9 +403,9 @@ impl NodeTypeRegistry {
         // `doc/design_blueprint_region_atom_edits.md` §B1.
         ret.built_in_record_type_defs.insert(
             "MaterializeRegion".to_string(),
-            RecordTypeDef {
-                name: "MaterializeRegion".to_string(),
-                fields: vec![
+            RecordTypeDef::from_named_fields(
+                "MaterializeRegion",
+                vec![
                     ("volume".to_string(), DataType::Blueprint),
                     (
                         "margin".to_string(),
@@ -282,7 +432,7 @@ impl NodeTypeRegistry {
                         DataType::Optional(Box::new(DataType::Bool)),
                     ),
                 ],
-            },
+            ),
         );
 
         // Annotation nodes
@@ -1414,14 +1564,38 @@ impl NodeTypeRegistry {
         if self.is_built_in_record_type_def(name) {
             return Err(RecordTypeDefError::BuiltIn(name.to_string()));
         }
-        if !self.record_type_defs.contains_key(name) {
+        let Some(def) = self.record_type_defs.get(name) else {
             return Err(RecordTypeDefError::NotFound(name.to_string()));
-        }
-        validate_distinct_fields(name, &new_fields)?;
-        validate_field_optionals(name, &new_fields)?;
-        self.check_no_cycle(name, &new_fields)?;
+        };
+        // Build the candidate field list with stable ids (preserve a field's
+        // `FieldId` if its name is unchanged; allocate a fresh, never-recycled
+        // id otherwise) into a temporary so validation can run *before* anything
+        // is committed — including the `next_field_id` advance. See
+        // `doc/design_record_field_identity.md` §4.2.
+        let old_ids: HashMap<String, FieldId> =
+            def.fields.iter().map(|f| (f.name.clone(), f.id)).collect();
+        let mut next_field_id = def.next_field_id;
+        let candidate: Vec<RecordField> = new_fields
+            .into_iter()
+            .map(|(name, data_type)| {
+                let id = old_ids.get(&name).copied().unwrap_or_else(|| {
+                    let id = FieldId(next_field_id);
+                    next_field_id += 1;
+                    id
+                });
+                RecordField {
+                    id,
+                    name,
+                    data_type,
+                }
+            })
+            .collect();
+        validate_distinct_fields(name, &candidate)?;
+        validate_field_optionals(name, &candidate)?;
+        self.check_no_cycle(name, &candidate)?;
         if let Some(def) = self.record_type_defs.get_mut(name) {
-            def.fields = new_fields;
+            def.fields = candidate;
+            def.next_field_id = next_field_id;
         }
         Ok(())
     }
@@ -1433,7 +1607,7 @@ impl NodeTypeRegistry {
     fn check_no_cycle(
         &self,
         def_name: &str,
-        fields: &[(String, DataType)],
+        fields: &[RecordField],
     ) -> Result<(), RecordTypeDefError> {
         // Treat the def-being-validated as if its fields were `fields` (not
         // whatever is currently in the registry — this also handles the
@@ -2446,14 +2620,14 @@ impl NodeTypeRegistry {
 /// `DuplicateField` on the first repeated name.
 fn validate_distinct_fields(
     def_name: &str,
-    fields: &[(String, DataType)],
+    fields: &[RecordField],
 ) -> Result<(), RecordTypeDefError> {
     let mut seen: HashSet<&str> = HashSet::new();
-    for (name, _) in fields {
-        if !seen.insert(name.as_str()) {
+    for field in fields {
+        if !seen.insert(field.name.as_str()) {
             return Err(RecordTypeDefError::DuplicateField(
                 def_name.to_string(),
-                name.clone(),
+                field.name.clone(),
             ));
         }
     }
@@ -2467,13 +2641,13 @@ fn validate_distinct_fields(
 /// record-def field types deserialize directly from JSON.
 fn validate_field_optionals(
     def_name: &str,
-    fields: &[(String, DataType)],
+    fields: &[RecordField],
 ) -> Result<(), RecordTypeDefError> {
-    for (field_name, ty) in fields {
-        if let Err(message) = validate_optionals_in_type(ty) {
+    for field in fields {
+        if let Err(message) = validate_optionals_in_type(&field.data_type) {
             return Err(RecordTypeDefError::IllFormedType(
                 def_name.to_string(),
-                field_name.clone(),
+                field.name.clone(),
                 message,
             ));
         }
@@ -2518,10 +2692,10 @@ fn validate_optionals_in_type(t: &DataType) -> Result<(), String> {
 /// list. Recurses through `Array`, `Function`, and nested `Record::Anonymous`
 /// shapes; `Record::Named` references are leaves (the def itself is followed
 /// by `dfs_cycle_check`).
-fn collect_named_record_refs(fields: &[(String, DataType)]) -> Vec<String> {
+fn collect_named_record_refs(fields: &[RecordField]) -> Vec<String> {
     let mut refs = Vec::new();
-    for (_, ty) in fields {
-        collect_named_record_refs_in_type(ty, &mut refs);
+    for field in fields {
+        collect_named_record_refs_in_type(&field.data_type, &mut refs);
     }
     refs
 }
@@ -2784,8 +2958,8 @@ fn rewrite_record_name_in_registry(
     // Walk every record def's fields too — `Box = { p: Record(Old) }` should
     // see the rename. The def being renamed itself is updated by the caller.
     for def in registry.record_type_defs.values_mut() {
-        for (_, ty) in def.fields.iter_mut() {
-            walk_data_type_record_names_mut(ty, &mut rename);
+        for field in def.fields.iter_mut() {
+            walk_data_type_record_names_mut(&mut field.data_type, &mut rename);
         }
     }
 

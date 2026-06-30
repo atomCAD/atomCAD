@@ -25,24 +25,24 @@ use rust_lib_flutter_cad::structure_designer::undo::{UndoContext, UndoStack};
 // Helpers --------------------------------------------------------------------
 
 fn point_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Point".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Point".to_string(),
+        vec![
             ("x".to_string(), DataType::Int),
             ("y".to_string(), DataType::Int),
         ],
-    }
+    )
 }
 
 fn box_def() -> RecordTypeDef {
     // Box references Point; cycle test for the dependency graph.
-    RecordTypeDef {
-        name: "Box".to_string(),
-        fields: vec![(
+    RecordTypeDef::from_named_fields(
+        "Box".to_string(),
+        vec![(
             "p".to_string(),
             DataType::Record(RecordType::Named("Point".to_string())),
         )],
-    }
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -100,10 +100,7 @@ fn add_record_type_def_rejects_collision_with_built_in_type() {
     // "cuboid" is a built-in node type registered by NodeTypeRegistry::new.
     let mut registry = NodeTypeRegistry::new();
     let err = registry
-        .add_record_type_def(RecordTypeDef {
-            name: "cuboid".to_string(),
-            fields: vec![],
-        })
+        .add_record_type_def(RecordTypeDef::new("cuboid".to_string()))
         .unwrap_err();
     assert!(matches!(err, RecordTypeDefError::NameCollision(_)));
 }
@@ -111,13 +108,13 @@ fn add_record_type_def_rejects_collision_with_built_in_type() {
 #[test]
 fn add_record_type_def_rejects_duplicate_field_names() {
     let mut registry = NodeTypeRegistry::new();
-    let bad = RecordTypeDef {
-        name: "Bad".to_string(),
-        fields: vec![
+    let bad = RecordTypeDef::from_named_fields(
+        "Bad".to_string(),
+        vec![
             ("x".to_string(), DataType::Int),
             ("x".to_string(), DataType::Float),
         ],
-    };
+    );
     let err = registry.add_record_type_def(bad).unwrap_err();
     assert!(matches!(err, RecordTypeDefError::DuplicateField(_, _)));
 }
@@ -129,15 +126,15 @@ fn add_record_type_def_rejects_duplicate_field_names() {
 #[test]
 fn cycle_rejected_direct_self_reference() {
     let mut registry = NodeTypeRegistry::new();
-    let tree = RecordTypeDef {
-        name: "Tree".to_string(),
-        fields: vec![(
+    let tree = RecordTypeDef::from_named_fields(
+        "Tree".to_string(),
+        vec![(
             "children".to_string(),
             DataType::Array(Box::new(DataType::Record(RecordType::Named(
                 "Tree".to_string(),
             )))),
         )],
-    };
+    );
     let err = registry.add_record_type_def(tree).unwrap_err();
     assert!(matches!(err, RecordTypeDefError::CycleDetected { .. }));
 }
@@ -147,20 +144,20 @@ fn cycle_rejected_mutual_recursion() {
     let mut registry = NodeTypeRegistry::new();
     // First insert A with no cycle.
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "A".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "A".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
     // B references A — fine.
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "B".to_string(),
-            fields: vec![(
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "B".to_string(),
+            vec![(
                 "a".to_string(),
                 DataType::Record(RecordType::Named("A".to_string())),
             )],
-        })
+        ))
         .unwrap();
     // Now updating A to reference B would close the cycle.
     let err = registry
@@ -180,28 +177,28 @@ fn cycle_rejected_transitive_chain() {
     let mut registry = NodeTypeRegistry::new();
     // A -> B -> C, all acyclic.
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "C".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "C".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "B".to_string(),
-            fields: vec![(
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "B".to_string(),
+            vec![(
                 "c".to_string(),
                 DataType::Record(RecordType::Named("C".to_string())),
             )],
-        })
+        ))
         .unwrap();
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "A".to_string(),
-            fields: vec![(
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "A".to_string(),
+            vec![(
                 "b".to_string(),
                 DataType::Record(RecordType::Named("B".to_string())),
             )],
-        })
+        ))
         .unwrap();
     // Closing the cycle by updating C to reference A is rejected.
     let err = registry
@@ -331,19 +328,19 @@ fn rename_walker_rewrites_parameter_pin_and_array_at_and_record_def_field() {
     // Add a record def `Old` and another `Box = { p: Record(Old) }` to test
     // that nested record-def field types also see the rename.
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Old".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Old".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Box".to_string(),
-            fields: vec![(
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Box".to_string(),
+            vec![(
                 "p".to_string(),
                 DataType::Record(RecordType::Named("Old".to_string())),
             )],
-        })
+        ))
         .unwrap();
 
     // Perform the rename.
@@ -393,7 +390,7 @@ fn rename_walker_rewrites_parameter_pin_and_array_at_and_record_def_field() {
         .record_type_defs
         .get("Box")
         .unwrap();
-    match &box_def.fields[0].1 {
+    match &box_def.fields[0].data_type {
         DataType::Record(RecordType::Named(n)) => assert_eq!(n, "New"),
         other => panic!("expected Record(Named(New)), got {:?}", other),
     }
@@ -420,10 +417,10 @@ fn rename_walker_does_not_touch_unrelated_networks() {
     designer.add_node_network("Untouched");
     designer.set_active_node_network_name(Some("Untouched".to_string()));
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Old".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Old".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
 
     // Snapshot the unrelated network before and after the rename.
@@ -513,13 +510,13 @@ fn validate_record_type_defs_flags_dangling_reference() {
     // through the normal add path — simulates a hand-edited file).
     registry.record_type_defs.insert(
         "Bad".to_string(),
-        RecordTypeDef {
-            name: "Bad".to_string(),
-            fields: vec![(
+        RecordTypeDef::from_named_fields(
+            "Bad".to_string(),
+            vec![(
                 "p".to_string(),
                 DataType::Record(RecordType::Named("Missing".to_string())),
             )],
-        },
+        ),
     );
     let errors = validate_record_type_defs(&registry);
     assert!(
@@ -535,13 +532,13 @@ fn validate_record_type_defs_flags_cycle_in_loaded_registry() {
     let mut registry = NodeTypeRegistry::new();
     registry.record_type_defs.insert(
         "Loop".to_string(),
-        RecordTypeDef {
-            name: "Loop".to_string(),
-            fields: vec![(
+        RecordTypeDef::from_named_fields(
+            "Loop".to_string(),
+            vec![(
                 "self".to_string(),
                 DataType::Record(RecordType::Named("Loop".to_string())),
             )],
-        },
+        ),
     );
     let errors = validate_record_type_defs(&registry);
     assert!(errors.iter().any(|e| e.contains("references itself")));
@@ -650,10 +647,10 @@ fn add_record_type_def_undo_redo_round_trip() {
 fn rename_record_type_def_undo_redo_round_trip() {
     let mut designer = build_designer_referencing("Old");
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Old".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Old".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
 
     let before = registry_snapshot(&mut designer);
@@ -821,10 +818,10 @@ fn rename_record_type_def_repopulates_sequence_custom_node_type() {
 
     // A record def the sequence node has nothing to do with.
     designer
-        .add_record_type_def(RecordTypeDef {
-            name: "Old".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Old".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
 
     designer.rename_record_type_def("Old", "New").unwrap();

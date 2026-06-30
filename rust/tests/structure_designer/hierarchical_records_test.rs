@@ -26,13 +26,13 @@ use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesig
 // ============================================================================
 
 fn def(name: &str, fields: Vec<(&str, DataType)>) -> RecordTypeDef {
-    RecordTypeDef {
-        name: name.to_string(),
-        fields: fields
+    RecordTypeDef::from_named_fields(
+        name.to_string(),
+        fields
             .into_iter()
             .map(|(n, t)| (n.to_string(), t))
             .collect(),
-    }
+    )
 }
 
 fn named(name: &str) -> DataType {
@@ -680,5 +680,5 @@ fn rename_namespace_moved_record_refs_another_moved_record() {
         .record_type_defs
         .get("Geo.Box")
         .unwrap();
-    assert_eq!(box_def.fields[0].1, named("Geo.Point"));
+    assert_eq!(box_def.fields[0].data_type, named("Geo.Point"));
 }

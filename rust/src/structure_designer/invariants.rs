@@ -48,6 +48,10 @@ pub enum InvariantKind {
     DuplicateParamId,
     /// `next_param_id <= max(param_id)` in this network.
     ParamIdFloor,
+    /// Two fields of one record def share a `FieldId`.
+    DuplicateFieldId,
+    /// `next_field_id <= max(field id)` in this record def.
+    FieldIdFloor,
     /// `next_node_id <= max(node id)` in this network / body.
     NextNodeIdFloor,
 
@@ -80,6 +84,8 @@ impl InvariantKind {
                 | InvariantKind::DuplicateParamId
                 | InvariantKind::ParamIdFloor
                 | InvariantKind::NextNodeIdFloor
+                | InvariantKind::DuplicateFieldId
+                | InvariantKind::FieldIdFloor
         )
     }
 
@@ -100,7 +106,9 @@ impl InvariantKind {
     pub fn is_id_counter_floor(&self) -> bool {
         matches!(
             self,
-            InvariantKind::ParamIdFloor | InvariantKind::NextNodeIdFloor
+            InvariantKind::ParamIdFloor
+                | InvariantKind::NextNodeIdFloor
+                | InvariantKind::FieldIdFloor
         )
     }
 }
@@ -150,11 +158,51 @@ pub fn check_document_invariants(registry: &NodeTypeRegistry) -> Vec<InvariantVi
     for network in registry.node_networks.values() {
         check_one_scope(network, registry, &[], &mut out);
     }
+    // Per-def field-identity invariants (mirror the per-network param-id
+    // checks): no two fields share a `FieldId`, and `next_field_id` floors the
+    // allocator above every live id. These are the persistence-axis guard for
+    // the record-field-identity feature (`doc/design_record_field_identity.md`
+    // §4.1/§5) — the same shape as `DuplicateParamId` / `ParamIdFloor`.
+    for def in registry.record_type_defs.values() {
+        let mut seen_field_ids: HashMap<u64, String> = HashMap::new(); // id -> first field name
+        let mut max_field_id: Option<u64> = None;
+        for field in &def.fields {
+            let fid = field.id.0;
+            max_field_id = Some(max_field_id.map_or(fid, |m| m.max(fid)));
+            if let Some(prev) = seen_field_ids.insert(fid, field.name.clone()) {
+                out.push(InvariantViolation {
+                    scope_path: Vec::new(),
+                    node_id: None,
+                    kind: InvariantKind::DuplicateFieldId,
+                    detail: format!(
+                        "record type def '{}' has FieldId {} shared by fields '{}' and '{}'",
+                        def.name, fid, prev, field.name
+                    ),
+                    accounted_for: false,
+                });
+            }
+        }
+        if let Some(mx) = max_field_id
+            && def.next_field_id <= mx
+        {
+            out.push(InvariantViolation {
+                scope_path: Vec::new(),
+                node_id: None,
+                kind: InvariantKind::FieldIdFloor,
+                detail: format!(
+                    "record type def '{}': next_field_id ({}) <= max field id ({}) — recycling will collide",
+                    def.name, def.next_field_id, mx
+                ),
+                accounted_for: false,
+            });
+        }
+    }
+
     // Record-def field types must reference only defs that exist (record→record
     // references). `node_id: None` — these aren't attributable to a node.
     for def in registry.record_type_defs.values() {
-        for (_field_name, ty) in &def.fields {
-            walk_data_type_record_names(ty, &mut |name| {
+        for field in &def.fields {
+            walk_data_type_record_names(&field.data_type, &mut |name| {
                 if registry.lookup_record_type_def(name).is_none() {
                     out.push(InvariantViolation {
                         scope_path: Vec::new(),

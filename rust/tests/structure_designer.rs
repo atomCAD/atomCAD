@@ -391,5 +391,8 @@ mod patch_latticefill_test;
 #[path = "structure_designer/invariants_test.rs"]
 mod invariants_test;
 
+#[path = "structure_designer/record_field_identity_test.rs"]
+mod record_field_identity_test;
+
 #[path = "structure_designer/unpack_nodes_test.rs"]
 mod unpack_nodes_test;

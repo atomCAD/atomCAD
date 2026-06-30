@@ -296,7 +296,14 @@ impl RecordType {
         match self {
             RecordType::Anonymous(fs) => Some(Cow::Borrowed(fs.as_slice())),
             RecordType::Named(n) => registry.lookup_record_type_def(n).map(|def| {
-                let mut canonical = def.fields.clone();
+                // The type system works in `(name, type)` tuples regardless of
+                // the def's field-identity storage; project `RecordField` down to
+                // tuples here so `FieldId` stays invisible to compatibility.
+                let mut canonical: Vec<(String, DataType)> = def
+                    .fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.data_type.clone()))
+                    .collect();
                 canonical.sort_by(|(a, _), (b, _)| a.cmp(b));
                 Cow::Owned(canonical)
             }),

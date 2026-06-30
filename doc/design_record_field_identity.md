@@ -7,8 +7,9 @@ inputs, non-locally!"). Reproduced live 2026-06-30 at three altitudes (top-level
 literal inline-closure-body case from the title).
 
 **Scope:** the three record nodes (`record_construct`, `record_destructure`,
-`product`), their pin-layout builder (`build_node_type_for_schema_with_defs`),
-`RecordTypeDef` storage + a per-def id allocator, the `update_record_type_def`
+`product`), their per-field pin-layout builders (one per node — see §4.3; they
+are *not* a single shared function), `RecordTypeDef` storage + a per-def id
+allocator, the `update_record_type_def`
 API + Flutter `SchemaEditor`, and `RecordConstructData.literal_values` re-keying.
 **Explicitly out of scope:** record-*def* identity (`RecordDefId`, owned by
 `doc/design_identity_vs_naming.md`), structural type compatibility, and anonymous
@@ -203,11 +204,15 @@ previous name" heuristic could never handle.
 > rename + reorder + retype + add + delete, and resolves each correctly. This is
 > strictly more robust than a dedicated `rename_record_field` verb (§9).
 
-### 4.3 Stamp the id onto the pins (the one-line core)
+### 4.3 Stamp the id onto the input pins (the load-bearing core)
 
-`build_node_type_for_schema_with_defs` (`nodes/record_construct.rs:219-249`,
-shared by `record_destructure` and `product`) changes the field→pin map from
-`id: None` to the field's id:
+The construct/product **input**-pin builders change the field→pin map from
+`id: None` to the field's id. These are **two separate functions in two files**
+(not a single shared builder) — both need the identical stamp:
+
+- `record_construct::build_node_type_for_schema_with_defs`
+  (`nodes/record_construct.rs:219-249`)
+- `product::build_node_type_for_target_with_defs` (`nodes/product.rs:150-177`)
 
 ```rust
 custom.parameters = def.fields.iter()
@@ -219,12 +224,23 @@ custom.parameters = def.fields.iter()
     .collect();
 ```
 
-That is the load-bearing change. With ids present on both the pre-update cached
-`custom_node_type` and the post-update one, `set_custom_node_type`'s existing
-**id-first** matching (`node_network.rs:720-780`) preserves the wire across a
-rename or reorder with **no change to the wire layer**, and the body recursion
-that caused the non-local drop now *preserves* non-locally instead. Incompatible
-retypes and deletes still drop, via the unchanged downstream validation.
+(`product` wraps the field type in `Iter[..]` for its pin, exactly as today; the
+only delta there is also `id: None → Some(f.id.0)`.) `record_destructure`'s
+builder (`nodes/record_destructure.rs:175-204`) emits **`OutputPinDefinition`s,
+which carry no `id` field at all** — it is *not* served by these functions and
+cannot be fixed here; honoring field identity on destructure outputs is the
+separate, additive R3 phase (§4.4).
+
+That is the load-bearing change for the **reported** bug. With ids present on
+both the pre-update cached `custom_node_type` and the post-update one,
+`set_custom_node_type`'s existing **id-first** matching (`node_network.rs:720-780`)
+preserves the wire across a rename or reorder with **no change to the wire
+layer**, and the body recursion that caused the non-local drop now *preserves*
+non-locally instead. **Deletes** still drop (the pin is gone). **Incompatible
+retypes** are *not* dropped at the repair layer — the wire is preserved by id and
+the type mismatch is surfaced as a blocking validation error, exactly as the §3
+table and the R2 `[GUARD]` test require (the repair layer only drops
+missing-source / bad-pin-index wires, never type-mismatched ones).
 
 ### 4.4 `record_destructure` outputs and `product` — the symmetric cases
 
@@ -280,8 +296,8 @@ same body-recursion lesson that the non-local wire drop teaches.
 **Phase R1 — ids on fields + allocator (no behaviour change).**
 Introduce `FieldId`, `RecordField`, `RecordTypeDef.next_field_id`, the allocator +
 floor-on-load, built-in ids. Migrate `Vec<(String,DataType)>` call sites to
-`RecordField` (mechanical, compiler-driven). `build_node_type_for_schema_with_defs`
-**still** emits `id: None` (so no wire-behaviour change yet). Add Phase 0
+`RecordField` (mechanical, compiler-driven). The input-pin builders (§4.3)
+**still** emit `id: None` (so no wire-behaviour change yet). Add Phase 0
 invariants `DuplicateFieldId` / `FieldIdFloor` (mirror `DuplicateParamId` /
 `next_param_id` floor). Pure addition — nothing user-visible was broken, so there
 is no red-first regression here; tests are forward-looking unit tests:
@@ -446,7 +462,7 @@ It remains a reasonable **interim stopgap** if R2 must be deferred, but the
 | --- | --- |
 | `FieldId` + `RecordField` + `next_field_id` + allocator/floor + accessors | **+45** |
 | Migrate `Vec<(String,DataType)>` → `Vec<RecordField>` call sites (mechanical) | **+30** |
-| `build_node_type_for_schema_with_defs`: `id: None → Some(f.id.0)` | **+1** |
+| `id: None → Some(f.id.0)` in the two input-pin builders (construct + product, separate fns) | **+2** |
 | `APIRecordTypeField.id` + `update_record_type_def` diff-by-id + `get_record_type_def` surface | **+40** |
 | Flutter `SchemaEditor` carry/echo per-row id | **+20** |
 | `literal_values` re-key on rename (walk_all_nodes_mut) | **+20** |

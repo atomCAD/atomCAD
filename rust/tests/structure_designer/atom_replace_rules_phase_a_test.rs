@@ -40,7 +40,10 @@ fn element_mapping_resolves_via_lookup_with_empty_user_defs() {
         .expect("ElementMapping should resolve via built_in_record_type_defs");
     assert_eq!(def.name, "ElementMapping");
     assert_eq!(
-        def.fields,
+        def.fields
+            .iter()
+            .map(|f| (f.name.clone(), f.data_type.clone()))
+            .collect::<Vec<_>>(),
         vec![
             ("from".to_string(), DataType::Int),
             ("to".to_string(), DataType::Int),
@@ -74,10 +77,10 @@ fn name_is_taken_includes_built_in_record_defs() {
 fn is_built_in_record_type_def_only_built_ins() {
     let mut registry = NodeTypeRegistry::new();
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Point".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Point".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
     assert!(registry.is_built_in_record_type_def("ElementMapping"));
     assert!(!registry.is_built_in_record_type_def("Point"));
@@ -92,10 +95,7 @@ fn is_built_in_record_type_def_only_built_ins() {
 fn add_record_type_def_rejects_built_in_name() {
     let mut registry = NodeTypeRegistry::new();
     let err = registry
-        .add_record_type_def(RecordTypeDef {
-            name: "ElementMapping".to_string(),
-            fields: vec![],
-        })
+        .add_record_type_def(RecordTypeDef::new("ElementMapping".to_string()))
         .unwrap_err();
     assert!(matches!(err, RecordTypeDefError::BuiltIn(ref s) if s == "ElementMapping"));
 }
@@ -125,10 +125,10 @@ fn rename_record_type_def_rejects_built_in_source() {
 fn rename_record_type_def_rejects_built_in_target() {
     let mut registry = NodeTypeRegistry::new();
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Mine".to_string(),
-            fields: vec![("a".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Mine".to_string(),
+            vec![("a".to_string(), DataType::Int)],
+        ))
         .unwrap();
     let err = registry
         .rename_record_type_def("Mine", "ElementMapping")
@@ -178,10 +178,10 @@ fn cnnd_save_does_not_emit_built_in_record_defs() {
     let mut registry = NodeTypeRegistry::new();
     // Add one user def so the file has an unambiguous record_type_defs section.
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Point".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Point".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
 
     let temp = TempDir::new().unwrap();
@@ -213,10 +213,10 @@ fn cnnd_load_keeps_element_mapping_resolvable() {
     use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
     let mut registry = NodeTypeRegistry::new();
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Point".to_string(),
-            fields: vec![("x".to_string(), DataType::Int)],
-        })
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Point".to_string(),
+            vec![("x".to_string(), DataType::Int)],
+        ))
         .unwrap();
     let temp = TempDir::new().unwrap();
     let path = temp.path().join("project.cnnd");

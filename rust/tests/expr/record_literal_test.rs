@@ -514,13 +514,13 @@ mod evaluation_tests {
         let mut registry = NodeTypeRegistry::default();
         registry.record_type_defs.insert(
             "Point".to_string(),
-            RecordTypeDef {
-                name: "Point".to_string(),
-                fields: vec![
+            RecordTypeDef::from_named_fields(
+                "Point".to_string(),
+                vec![
                     ("x".to_string(), DataType::Int),
                     ("y".to_string(), DataType::Int),
                 ],
-            },
+            ),
         );
 
         let named = DataType::Record(RecordType::Named("Point".to_string()));

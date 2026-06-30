@@ -627,13 +627,13 @@ fn test_product_output_type_is_iter_record() {
 
     let mut registry = NodeTypeRegistry::new();
     registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Pair".to_string(),
-            fields: vec![
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Pair".to_string(),
+            vec![
                 ("a".to_string(), DataType::Int),
                 ("b".to_string(), DataType::Int),
             ],
-        })
+        ))
         .unwrap();
 
     let base = registry.get_node_type("product").unwrap();

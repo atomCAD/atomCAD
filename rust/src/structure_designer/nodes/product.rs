@@ -66,9 +66,10 @@ impl NodeData for ProductData {
         // index). The pin type is `Iter[FieldType]` after Phase 6, so the
         // wire-time conversion produces an `Iterator`. Belt-and-braces, also
         // accept `Array` (in case a wire path delivers it) and wrap.
-        let field_names: Vec<String> = def.fields.iter().map(|(n, _)| n.clone()).collect();
+        let field_names: Vec<String> = def.fields.iter().map(|f| f.name.clone()).collect();
         let mut axes: Vec<Walker> = Vec::with_capacity(def.fields.len());
-        for (param_index, (field_name, _)) in def.fields.iter().enumerate() {
+        for (param_index, field) in def.fields.iter().enumerate() {
+            let field_name = &field.name;
             let value = network_evaluator.evaluate_arg(
                 network_stack,
                 node_id,
@@ -161,13 +162,14 @@ pub fn build_node_type_for_target_with_defs(
         .get(target)
         .or_else(|| built_in_record_type_defs.get(target))
     {
+        // R1: `id: None` retained (see record_construct) — R2 stamps the id.
         custom.parameters = def
             .fields
             .iter()
-            .map(|(name, ty)| Parameter {
+            .map(|field| Parameter {
                 id: None,
-                name: name.clone(),
-                data_type: DataType::Iterator(Box::new(ty.clone())),
+                name: field.name.clone(),
+                data_type: DataType::Iterator(Box::new(field.data_type.clone())),
             })
             .collect();
     } else {

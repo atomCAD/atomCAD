@@ -75,7 +75,9 @@ impl NodeData for RecordConstructData {
         // Walk the def's authored fields in order; the parameter pin layout
         // matches that order (set by the registry-aware cache populator).
         let mut fields: Vec<(String, NetworkResult)> = Vec::with_capacity(def.fields.len());
-        for (param_index, (field_name, field_type)) in def.fields.iter().enumerate() {
+        for (param_index, field) in def.fields.iter().enumerate() {
+            let field_name = &field.name;
+            let field_type = &field.data_type;
             // An `Optional[T]` field is exposed as a plain `T` pin (the value /
             // wire layer never sees `Optional`), so literals coerce against the
             // inner `T`, not `Optional[T]`. See `doc/design_optional_type.md` §5.
@@ -233,13 +235,16 @@ pub fn build_node_type_for_schema_with_defs(
         // as a plain `T` input pin (the value/wire layer never sees `Optional`;
         // the optional behavior lives in `eval`'s collapse exemption). See
         // `doc/design_optional_type.md` §5.
+        // R1: the field's `FieldId` is intentionally NOT stamped onto the pin
+        // yet (`id: None`), so wire preservation still falls back to name
+        // matching — no behaviour change. R2 flips this to `Some(field.id.0)`.
         custom.parameters = def
             .fields
             .iter()
-            .map(|(name, ty)| Parameter {
+            .map(|field| Parameter {
                 id: None,
-                name: name.clone(),
-                data_type: ty.record_field_pin_type(),
+                name: field.name.clone(),
+                data_type: field.data_type.record_field_pin_type(),
             })
             .collect();
     } else {

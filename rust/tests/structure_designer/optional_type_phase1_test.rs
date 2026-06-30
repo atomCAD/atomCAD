@@ -27,13 +27,13 @@ fn named(name: &str) -> DataType {
 }
 
 fn def(name: &str, fields: &[(&str, DataType)]) -> RecordTypeDef {
-    RecordTypeDef {
-        name: name.to_string(),
-        fields: fields
+    RecordTypeDef::from_named_fields(
+        name.to_string(),
+        fields
             .iter()
             .map(|(n, t)| (n.to_string(), t.clone()))
             .collect(),
-    }
+    )
 }
 
 // ---------------------------------------------------------------------------

@@ -85,8 +85,8 @@ pub fn canonicalize_network(network: &mut NodeNetwork) {
 /// Canonicalize every record type def in place.
 pub fn canonicalize_record_type_defs(defs: &mut HashMap<String, RecordTypeDef>) {
     for def in defs.values_mut() {
-        for (_, t) in def.fields.iter_mut() {
-            canonicalize_data_type(t);
+        for field in def.fields.iter_mut() {
+            canonicalize_data_type(&mut field.data_type);
         }
     }
 }

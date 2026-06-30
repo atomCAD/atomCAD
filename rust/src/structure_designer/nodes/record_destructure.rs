@@ -82,9 +82,9 @@ impl NodeData for RecordDestructureData {
             return EvalOutput::multi(vec![NetworkResult::None]);
         }
         let mut outputs: Vec<NetworkResult> = Vec::with_capacity(def.fields.len());
-        for (field_name, _) in &def.fields {
+        for field in &def.fields {
             let value = record_val
-                .extract_record_field(field_name)
+                .extract_record_field(&field.name)
                 .cloned()
                 .unwrap_or(NetworkResult::None);
             outputs.push(value);
@@ -195,7 +195,9 @@ pub fn build_node_type_for_schema_with_defs(
         Some(def) if !def.fields.is_empty() => def
             .fields
             .iter()
-            .map(|(name, ty)| OutputPinDefinition::fixed(name, ty.record_field_pin_type()))
+            .map(|field| {
+                OutputPinDefinition::fixed(&field.name, field.data_type.record_field_pin_type())
+            })
             .collect(),
         _ => vec![OutputPinDefinition::fixed("result", DataType::None)],
     };

@@ -148,24 +148,24 @@ fn record_field_int(rec: &NetworkResult, field: &str) -> i32 {
 // `Date = {year, month, day}` — non-alphabetical authored order so the
 // authored-vs-canonical distinction shows up in pin-layout assertions.
 fn date_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Date".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Date".to_string(),
+        vec![
             ("year".to_string(), DataType::Int),
             ("month".to_string(), DataType::Int),
             ("day".to_string(), DataType::Int),
         ],
-    }
+    )
 }
 
 fn pair_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Pair".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Pair".to_string(),
+        vec![
             ("a".to_string(), DataType::Int),
             ("b".to_string(), DataType::Int),
         ],
-    }
+    )
 }
 
 // ============================================================================
@@ -443,16 +443,16 @@ fn product_target_with_array_field() {
     // record whose field value happens to be an array. Each axis input is
     // therefore Array[Array[Int]], i.e. a list of arrays.
     let mut designer = setup_designer_with_network("test");
-    let bag = RecordTypeDef {
-        name: "Bag".to_string(),
-        fields: vec![
+    let bag = RecordTypeDef::from_named_fields(
+        "Bag".to_string(),
+        vec![
             ("tag".to_string(), DataType::Int),
             (
                 "items".to_string(),
                 DataType::Array(Box::new(DataType::Int)),
             ),
         ],
-    };
+    );
     designer
         .node_type_registry
         .add_record_type_def(bag)

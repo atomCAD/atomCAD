@@ -92,13 +92,13 @@ fn set_node_data(
 /// is non-alphabetical relative to canonical (`count` < `flag`) only at the
 /// margins; we mainly want a required field and an Optional field side by side.
 fn settings_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Settings".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Settings".to_string(),
+        vec![
             ("count".to_string(), DataType::Int),
             ("flag".to_string(), opt(DataType::Bool)),
         ],
-    }
+    )
 }
 
 // ============================================================================
@@ -389,13 +389,13 @@ fn flipping_optionalness_keeps_pin_type_and_wire() {
     // survives.
     designer
         .node_type_registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Settings".to_string(),
-            fields: vec![
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Settings".to_string(),
+            vec![
                 ("count".to_string(), DataType::Int),
                 ("flag".to_string(), DataType::Bool),
             ],
-        })
+        ))
         .unwrap();
 
     let count = designer.add_node("int", DVec2::new(0.0, 0.0));
@@ -508,7 +508,10 @@ fn optional_field_def_cnnd_roundtrip() {
         .get("Settings")
         .expect("def missing after roundtrip");
     assert_eq!(
-        def.fields,
+        def.fields
+            .iter()
+            .map(|f| (f.name.clone(), f.data_type.clone()))
+            .collect::<Vec<_>>(),
         vec![
             ("count".to_string(), DataType::Int),
             ("flag".to_string(), opt(DataType::Bool)),

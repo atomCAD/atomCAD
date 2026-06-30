@@ -317,13 +317,13 @@ fn dotted_record_def_cnnd_roundtrip() {
     designer.set_active_node_network_name(Some("Main".to_string()));
     designer
         .node_type_registry
-        .add_record_type_def(RecordTypeDef {
-            name: "Physics.ElementMapping".to_string(),
-            fields: vec![
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Physics.ElementMapping".to_string(),
+            vec![
                 ("from".to_string(), DataType::Int),
                 ("to".to_string(), DataType::Int),
             ],
-        })
+        ))
         .unwrap();
     let cons = designer.add_node("record_construct", DVec2::new(0.0, 0.0));
     // Set the node's schema, then refresh its derived pin cache (re-fetch the
@@ -377,7 +377,10 @@ fn dotted_record_def_cnnd_roundtrip() {
         .get("Physics.ElementMapping")
         .expect("dotted record def missing after roundtrip");
     assert_eq!(
-        def.fields,
+        def.fields
+            .iter()
+            .map(|f| (f.name.clone(), f.data_type.clone()))
+            .collect::<Vec<_>>(),
         vec![
             ("from".to_string(), DataType::Int),
             ("to".to_string(), DataType::Int),

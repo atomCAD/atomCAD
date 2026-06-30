@@ -43,13 +43,13 @@ fn setup(network_name: &str) -> StructureDesigner {
 
 /// `Pair { a: Int, b: Int }` — authored order `a`, then `b`.
 fn pair_def() -> RecordTypeDef {
-    RecordTypeDef {
-        name: "Pair".to_string(),
-        fields: vec![
+    RecordTypeDef::from_named_fields(
+        "Pair".to_string(),
+        vec![
             ("a".to_string(), DataType::Int),
             ("b".to_string(), DataType::Int),
         ],
-    }
+    )
 }
 
 fn set_int(designer: &mut StructureDesigner, network: &str, node_id: u64, value: i32) {
