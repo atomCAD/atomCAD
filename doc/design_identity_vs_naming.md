@@ -52,7 +52,11 @@ the *fields* do). So making the def name a mutable label with no binding power
 changes no typing semantics — it only deletes the rewrite walk.
 
 > **Why not also node-type names, parameter positions, record *fields*?**
-> Those are deliberately deferred or rejected — see §9.
+> Node-type names and parameter positions are deliberately deferred — see §9.
+> Record *fields* are a split decision: their **structural-type** axis stays
+> name-based (correctly — §9), while their **wire-identity** axis (the
+> rename-drops-wires bug, issue #377) is addressed by the sibling brief
+> `doc/design_record_field_identity.md`.
 
 ---
 
@@ -473,12 +477,27 @@ The existing `UnresolvedRecordName` / schema checks keep working (they consult
   by the landed F1–F6 of `doc/design_parameter_wire_stability.md` (regression
   tests green). Removing it leaves no open bug.
 
-- **Record *field* renaming.** Rejected as a relabel-style change. A record field
-  name is **structural type identity**, not a label: `can_be_converted_to` matches
-  record fields **by name**, and anonymous records (`{x: Int}`) carry *only* names
-  with no def to host an id. So renaming a field genuinely produces a different
-  type (`{x: Int}` ≠ `{y: Int}`) — correctly handled today as a *schema edit*
-  (`update_record_type_def` → `repair_node_network`), not a free rename.
+- **Record *field* renaming — split by axis (was: rejected wholesale).** A record
+  field name **is** structural type identity on the *type* axis:
+  `can_be_converted_to` matches record fields **by name**, and anonymous records
+  (`{x: Int}`) carry *only* names with no def to host an id. So renaming a field
+  genuinely produces a different *type* (`{x: Int}` ≠ `{y: Int}`), and that aspect
+  stays name-based, handled as a *schema edit* (`update_record_type_def` →
+  `repair_node_network`) — **this doc does not change it.**
+
+  The original blanket rejection was, however, **too broad**: it let a *separate*
+  binding be collateral. The wire feeding a `record_construct`/`product` field
+  *input* pin does not carry a record value — it carries the **ingredient** for one
+  field, whose validity depends only on that field's *type*, not its name. Renaming
+  `a:Int → aa:Int` keeps the pin `Int`, so the wire should survive; today it is
+  dropped (the field pins are built `id: None`, so wire re-association falls back to
+  name-matching), including **non-locally inside closure/HOF bodies** — issue #377.
+  That **wire-identity** axis is fixed by a stable per-field `FieldId`
+  (editing identity, orthogonal to the name, invisible to `can_be_converted_to`),
+  scoped to the three record nodes' pins on **named** defs — see
+  `doc/design_record_field_identity.md`. The "anonymous records have no def to host
+  an id" objection does not reach that path: construct/destructure/product always
+  reference a named def.
 
 ---
 
@@ -532,6 +551,10 @@ untouched.**
   dropped (F1–F6 already contain the acute bug).
 - `doc/design_record_types.md` — defines the record/field model this doc id-keys;
   the structural-typing semantics in §9 ("fields match by name") come from there.
+- `doc/design_record_field_identity.md` — the field-level sibling. Where this doc
+  gives a record *def* an identity (`RecordDefId`) while keeping its *name* a
+  structural label, that doc does the same one level down for a record *field*
+  (`FieldId`), on the wire-identity axis only (issue #377). §9 here defers to it.
 - `doc/design_custom_node_type_cache_invariant.md` — its "Non-goals" named the
   deeper fix; this doc delivers it for the record-name axis (and explains in §9
   why the node-type axis is deferred).
