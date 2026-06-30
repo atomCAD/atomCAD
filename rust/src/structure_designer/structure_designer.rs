@@ -2372,23 +2372,68 @@ impl StructureDesigner {
         Ok(())
     }
 
-    /// Replace the field list of an existing record type def. Snapshots every
-    /// network beforehand and re-runs repair afterward, just like delete.
+    /// Replace the field list of an existing record type def from authored
+    /// `(name, type)` pairs, with **no per-row identity information**. Field
+    /// identity is inferred by name-match against the current def — a name that
+    /// already exists keeps its `FieldId`, a new name becomes a new field — so a
+    /// rename reads as delete+add and drops the field's wire (historical
+    /// behaviour; see `record_types_phase3_test::field_rename_disconnects_old_pin_wires`).
+    ///
+    /// The identity-preserving entry point is
+    /// [`update_record_type_def_with_ids`](Self::update_record_type_def_with_ids),
+    /// used by the schema editor, which closes #377.
     pub fn update_record_type_def(
         &mut self,
         name: &str,
         new_fields: Vec<(String, DataType)>,
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
-        // Capture old fields for undo *before* the update overwrites them.
-        // Project `RecordField` → `(name, type)` tuples: the undo command stores
-        // the authored field list and re-derives ids by name on undo/redo (R1).
-        let old_fields: Vec<(String, DataType)> =
+        // Resolve per-row ids by name against the current def, then delegate to
+        // the identity-aware core. A name present before keeps its id; a new name
+        // sends `None`.
+        let edits = match self.node_type_registry.record_type_defs.get(name) {
+            Some(def) => {
+                let ids: HashMap<&str, super::node_type_registry::FieldId> =
+                    def.fields.iter().map(|f| (f.name.as_str(), f.id)).collect();
+                new_fields
+                    .into_iter()
+                    .map(
+                        |(field_name, data_type)| super::node_type_registry::RecordFieldEdit {
+                            id: ids.get(field_name.as_str()).copied(),
+                            name: field_name,
+                            data_type,
+                        },
+                    )
+                    .collect()
+            }
+            None => {
+                return Err(super::node_type_registry::RecordTypeDefError::NotFound(
+                    name.to_string(),
+                ));
+            }
+        };
+        self.update_record_type_def_with_ids(name, edits)
+    }
+
+    /// Replace the field list of an existing record type def from an
+    /// identity-aware [`RecordFieldEdit`](super::node_type_registry::RecordFieldEdit)
+    /// list (each row carries the editing identity of an existing field, or
+    /// `None` for a new field). Surviving fields keep their `FieldId` across
+    /// rename / reorder / retype, so input-pin wires on `record_construct` /
+    /// `product` are preserved by id — at top level **and** inside every HOF
+    /// body (`repair_node_network` recurses). Re-keys `record_construct` literal
+    /// defaults for renamed fields, snapshots every network for undo, and
+    /// re-runs repair afterward (just like delete). Closes #377
+    /// (`doc/design_record_field_identity.md` R2).
+    pub fn update_record_type_def_with_ids(
+        &mut self,
+        name: &str,
+        edits: Vec<super::node_type_registry::RecordFieldEdit>,
+    ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
+        // Capture the exact pre-update field list + allocator floor for a
+        // faithful undo restore (ids round-trip verbatim — R2/R4).
+        let (old_fields, old_next_field_id) =
             match self.node_type_registry.record_type_defs.get(name) {
-                Some(def) => def
-                    .fields
-                    .iter()
-                    .map(|f| (f.name.clone(), f.data_type.clone()))
-                    .collect(),
+                Some(def) => (def.fields.clone(), def.next_field_id),
                 None => {
                     return Err(super::node_type_registry::RecordTypeDefError::NotFound(
                         name.to_string(),
@@ -2398,15 +2443,21 @@ impl StructureDesigner {
 
         // Snapshot every network before the update — wires whose source type
         // no longer satisfies a retyped field will be disconnected by the
-        // repair pass below.
+        // repair pass below, and pre-rename literal keys must be restorable.
         let snapshots =
             super::undo::commands::delete_record_type_def::snapshot_all_networks_for_record_def_change(
                 &mut self.node_type_registry,
             );
 
-        let new_fields_clone = new_fields.clone();
+        let edits_clone = edits.clone();
+        let renames = self
+            .node_type_registry
+            .update_record_type_def_with_edits(name, edits)?;
+
+        // Re-key `record_construct` literal defaults for any surviving renamed
+        // field (top-level AND inside HOF bodies).
         self.node_type_registry
-            .update_record_type_def(name, new_fields)?;
+            .rekey_record_construct_literals(name, &renames);
 
         self.node_type_registry.repair_all_networks();
 
@@ -2416,7 +2467,8 @@ impl StructureDesigner {
             super::undo::commands::update_record_type_def::UpdateRecordTypeDefCommand {
                 name: name.to_string(),
                 old_fields,
-                new_fields: new_fields_clone,
+                old_next_field_id,
+                new_edits: edits_clone,
                 network_snapshots_before: snapshots,
             },
         );

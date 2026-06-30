@@ -162,12 +162,13 @@ pub fn build_node_type_for_target_with_defs(
         .get(target)
         .or_else(|| built_in_record_type_defs.get(target))
     {
-        // R1: `id: None` retained (see record_construct) — R2 stamps the id.
+        // R2: stamp the field's stable `FieldId` onto the pin (see
+        // record_construct) so wires survive rename / reorder by id.
         custom.parameters = def
             .fields
             .iter()
             .map(|field| Parameter {
-                id: None,
+                id: Some(field.id.0),
                 name: field.name.clone(),
                 data_type: DataType::Iterator(Box::new(field.data_type.clone())),
             })

@@ -352,6 +352,11 @@ pub struct APIRecordSchemaData {
 
 /// One field of a record type def, surfaced for the schema editor UI.
 pub struct APIRecordTypeField {
+    /// Editing identity of an **existing** field; `None` for a freshly added
+    /// row. The schema editor echoes this back on commit so the backend can
+    /// preserve input-pin wires across rename / reorder by id rather than name
+    /// (`doc/design_record_field_identity.md`).
+    pub id: Option<u64>,
     pub name: String,
     pub data_type: APIDataType,
 }

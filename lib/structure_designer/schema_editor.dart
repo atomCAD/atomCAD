@@ -142,6 +142,9 @@ class _SchemaEditorState extends State<SchemaEditor> {
     // Default new field type: Int. Keeps the row minimally usable until the
     // user picks something more meaningful.
     final newField = APIRecordTypeField(
+      // New row: no editing identity yet — the backend allocates a fresh
+      // FieldId on commit. See doc/design_record_field_identity.md.
+      id: null,
       name: _uniqueDefaultName(),
       dataType: const APIDataType(
         dataTypeBase: APIDataTypeBase.int,
@@ -199,6 +202,9 @@ class _SchemaEditorState extends State<SchemaEditor> {
         for (int i = 0; i < _fields.length; i++)
           if (i == index)
             APIRecordTypeField(
+              // Preserve the row's editing identity so the rename is matched by
+              // id, not name — this is what keeps wires attached (#377).
+              id: _fields[i].id,
               name: newName,
               dataType: _fields[i].dataType,
             )
@@ -217,6 +223,8 @@ class _SchemaEditorState extends State<SchemaEditor> {
         for (int i = 0; i < _fields.length; i++)
           if (i == index)
             APIRecordTypeField(
+              // Retype keeps the field's identity (and its wire).
+              id: _fields[i].id,
               name: _fields[i].name,
               dataType: newType,
             )

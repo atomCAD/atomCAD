@@ -235,14 +235,15 @@ pub fn build_node_type_for_schema_with_defs(
         // as a plain `T` input pin (the value/wire layer never sees `Optional`;
         // the optional behavior lives in `eval`'s collapse exemption). See
         // `doc/design_optional_type.md` §5.
-        // R1: the field's `FieldId` is intentionally NOT stamped onto the pin
-        // yet (`id: None`), so wire preservation still falls back to name
-        // matching — no behaviour change. R2 flips this to `Some(field.id.0)`.
+        // R2 (the load-bearing change of `doc/design_record_field_identity.md`):
+        // stamp the field's stable `FieldId` onto the pin so
+        // `set_custom_node_type`'s id-first matching preserves the wire across a
+        // rename / reorder — at top level and inside every HOF body.
         custom.parameters = def
             .fields
             .iter()
             .map(|field| Parameter {
-                id: None,
+                id: Some(field.id.0),
                 name: field.name.clone(),
                 data_type: field.data_type.record_field_pin_type(),
             })

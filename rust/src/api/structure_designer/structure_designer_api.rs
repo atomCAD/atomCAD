@@ -1397,6 +1397,7 @@ pub fn get_record_type_def(name: String) -> Option<APIRecordTypeDef> {
                             .fields
                             .iter()
                             .map(|field| APIRecordTypeField {
+                                id: Some(field.id.0),
                                 name: field.name.clone(),
                                 data_type: data_type_to_api_data_type(&field.data_type),
                             })
@@ -1507,13 +1508,19 @@ pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> 
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                // Convert API fields to (String, DataType). Bail with a clear
-                // error if any field's APIDataType cannot be parsed (e.g. a
-                // malformed Custom string).
-                let mut converted: Vec<(String, DataType)> = Vec::with_capacity(fields.len());
+                // Convert API fields to identity-aware edits. `id == Some` is an
+                // existing field (preserves wires by `FieldId`); `id == None` is
+                // a newly added row. Bail with a clear error if any field's
+                // APIDataType cannot be parsed (e.g. a malformed Custom string).
+                use crate::structure_designer::node_type_registry::{FieldId, RecordFieldEdit};
+                let mut converted: Vec<RecordFieldEdit> = Vec::with_capacity(fields.len());
                 for f in &fields {
                     match api_data_type_to_data_type(&f.data_type) {
-                        Ok(dt) => converted.push((f.name.clone(), dt)),
+                        Ok(dt) => converted.push(RecordFieldEdit {
+                            id: f.id.map(FieldId),
+                            name: f.name.clone(),
+                            data_type: dt,
+                        }),
                         Err(e) => {
                             return APIResult {
                                 success: false,
@@ -1527,7 +1534,7 @@ pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> 
                 }
                 let result = instance
                     .structure_designer
-                    .update_record_type_def(&name, converted);
+                    .update_record_type_def_with_ids(&name, converted);
                 refresh_structure_designer_auto(instance);
                 match result {
                     Ok(()) => APIResult {

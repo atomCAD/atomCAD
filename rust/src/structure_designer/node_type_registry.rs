@@ -211,29 +211,20 @@ impl RecordTypeDef {
             self.next_field_id = floor;
         }
     }
+}
 
-    /// Replace the field list from authored `(name, type)` pairs, preserving the
-    /// [`FieldId`] of any field whose **name** is unchanged and allocating fresh,
-    /// never-recycled ids for new names. This is the R1 interim diff (name-based);
-    /// R2 replaces name-matching with explicit per-row ids from the editor. See
-    /// `doc/design_record_field_identity.md` §4.2/§5.
-    pub fn set_fields_by_name(&mut self, new_fields: Vec<(String, DataType)>) {
-        let old_ids: HashMap<String, FieldId> =
-            self.fields.iter().map(|f| (f.name.clone(), f.id)).collect();
-        let mut rebuilt = Vec::with_capacity(new_fields.len());
-        for (name, data_type) in new_fields {
-            let id = match old_ids.get(&name) {
-                Some(id) => *id,
-                None => self.allocate_field_id(),
-            };
-            rebuilt.push(RecordField {
-                id,
-                name,
-                data_type,
-            });
-        }
-        self.fields = rebuilt;
-    }
+/// One row of a record-def field-list edit, as submitted by the schema editor.
+/// `id == Some(fid)` identifies an **existing** field — it survives the commit
+/// and keeps its [`FieldId`] across rename / reorder / retype. `id == None` is a
+/// **new** field, for which a fresh, never-recycled id is allocated. This per-row
+/// identity is exactly what lets [`NodeTypeRegistry::update_record_type_def_with_edits`]
+/// distinguish a rename from a delete+add — the entire point of
+/// `doc/design_record_field_identity.md` (R2).
+#[derive(Clone, Debug)]
+pub struct RecordFieldEdit {
+    pub id: Option<FieldId>,
+    pub name: String,
+    pub data_type: DataType,
 }
 
 // On-disk shape: `{ "name": ..., "fields": [[name, type], ...] }` — exactly the
@@ -1598,6 +1589,132 @@ impl NodeTypeRegistry {
             def.next_field_id = next_field_id;
         }
         Ok(())
+    }
+
+    /// Replace the field list of an existing record type def from an
+    /// identity-aware edit list (see [`RecordFieldEdit`]). This is the
+    /// wire-stable entry point used by the schema editor (R2 of
+    /// `doc/design_record_field_identity.md`): a surviving field (`id = Some`)
+    /// keeps its [`FieldId`] across rename / reorder / retype, so
+    /// `set_custom_node_type`'s id-first matching preserves the wire feeding its
+    /// `record_construct` / `product` input pin; a new field (`id = None`) gets a
+    /// fresh, never-recycled id. Validates name distinctness, optional
+    /// well-formedness, and acyclicity *before* committing — nothing (not even
+    /// the `next_field_id` advance) is applied on failure.
+    ///
+    /// Returns the `(old_name, new_name)` pairs for fields that **survived a
+    /// rename** (same id, changed name); the caller re-keys `record_construct`
+    /// literal defaults from it (§4.5). The list is empty when no surviving field
+    /// was renamed.
+    pub fn update_record_type_def_with_edits(
+        &mut self,
+        name: &str,
+        edits: Vec<RecordFieldEdit>,
+    ) -> Result<Vec<(String, String)>, RecordTypeDefError> {
+        if self.is_built_in_record_type_def(name) {
+            return Err(RecordTypeDefError::BuiltIn(name.to_string()));
+        }
+        let Some(def) = self.record_type_defs.get(name) else {
+            return Err(RecordTypeDefError::NotFound(name.to_string()));
+        };
+        // Map each existing field id to its old name, so we can both preserve the
+        // id and detect a rename. `next_field_id` only ever moves forward.
+        let old_names_by_id: HashMap<FieldId, String> =
+            def.fields.iter().map(|f| (f.id, f.name.clone())).collect();
+        let mut next_field_id = def.next_field_id;
+        let mut renames: Vec<(String, String)> = Vec::new();
+
+        let candidate: Vec<RecordField> = edits
+            .into_iter()
+            .map(|edit| {
+                let id = match edit.id {
+                    Some(id) => {
+                        if let Some(old_name) = old_names_by_id.get(&id)
+                            && *old_name != edit.name
+                        {
+                            renames.push((old_name.clone(), edit.name.clone()));
+                        }
+                        // Keep the allocator floor above any id we are told about
+                        // (defends against a stale/foreign id exceeding the
+                        // counter — never recycle).
+                        if id.0 >= next_field_id {
+                            next_field_id = id.0 + 1;
+                        }
+                        id
+                    }
+                    None => {
+                        let id = FieldId(next_field_id);
+                        next_field_id += 1;
+                        id
+                    }
+                };
+                RecordField {
+                    id,
+                    name: edit.name,
+                    data_type: edit.data_type,
+                }
+            })
+            .collect();
+
+        validate_distinct_fields(name, &candidate)?;
+        validate_field_optionals(name, &candidate)?;
+        self.check_no_cycle(name, &candidate)?;
+
+        if let Some(def) = self.record_type_defs.get_mut(name) {
+            def.fields = candidate;
+            def.next_field_id = next_field_id;
+        }
+        Ok(renames)
+    }
+
+    /// Re-key `record_construct` literal-default maps after a field rename, across
+    /// **every** network including HOF bodies (via `walk_all_nodes_mut` — the
+    /// same body-recursion lesson that the non-local wire drop teaches). `renames`
+    /// is the `(old_name, new_name)` list returned by
+    /// [`update_record_type_def_with_edits`]; it is applied as a **simultaneous**
+    /// remap (new map built from the old entries) so a name swap re-keys
+    /// correctly. No-op when `renames` is empty. See
+    /// `doc/design_record_field_identity.md` §4.5.
+    pub fn rekey_record_construct_literals(
+        &mut self,
+        def_name: &str,
+        renames: &[(String, String)],
+    ) {
+        if renames.is_empty() {
+            return;
+        }
+        let rename_map: HashMap<&str, &str> = renames
+            .iter()
+            .map(|(o, n)| (o.as_str(), n.as_str()))
+            .collect();
+        for network in self.node_networks.values_mut() {
+            crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
+                if node.node_type_name != "record_construct" {
+                    return;
+                }
+                let Some(rc) = node
+                    .data
+                    .as_any_mut()
+                    .downcast_mut::<crate::structure_designer::nodes::record_construct::RecordConstructData>()
+                else {
+                    return;
+                };
+                if rc.schema != def_name {
+                    return;
+                }
+                let old = std::mem::take(&mut rc.literal_values);
+                rc.literal_values = old
+                    .into_iter()
+                    .map(|(k, v)| {
+                        let new_key = rename_map
+                            .get(k.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or(k);
+                        (new_key, v)
+                    })
+                    .collect();
+            });
+        }
     }
 
     /// Returns true when `def_name` would, under the candidate `fields`, refer

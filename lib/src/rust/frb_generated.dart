@@ -14660,11 +14660,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRecordTypeField dco_decode_api_record_type_field(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIRecordTypeField(
-      name: dco_decode_String(arr[0]),
-      dataType: dco_decode_api_data_type(arr[1]),
+      id: dco_decode_opt_box_autoadd_u_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      dataType: dco_decode_api_data_type(arr[2]),
     );
   }
 
@@ -18410,9 +18411,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRecordTypeField sse_decode_api_record_type_field(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_dataType = sse_decode_api_data_type(deserializer);
-    return APIRecordTypeField(name: var_name, dataType: var_dataType);
+    return APIRecordTypeField(
+        id: var_id, name: var_name, dataType: var_dataType);
   }
 
   @protected
@@ -22575,6 +22578,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_record_type_field(
       APIRecordTypeField self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_u_64(self.id, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_api_data_type(self.dataType, serializer);
   }

@@ -21,6 +21,7 @@ Future<BigInt?> _setupRecordConstructWithField(
   // fields, then return to the original network to add the construct node.
   final updateError = model.updateRecordTypeDef(defName, [
     const APIRecordTypeField(
+      id: null,
       name: 'amount',
       dataType: APIDataType(
         dataTypeBase: APIDataTypeBase.float,

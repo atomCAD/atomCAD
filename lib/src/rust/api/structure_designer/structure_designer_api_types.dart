@@ -2683,22 +2683,29 @@ class APIRecordTypeDef {
 
 /// One field of a record type def, surfaced for the schema editor UI.
 class APIRecordTypeField {
+  /// Editing identity of an **existing** field; `None` for a freshly added
+  /// row. The schema editor echoes this back on commit so the backend can
+  /// preserve input-pin wires across rename / reorder by id rather than name
+  /// (`doc/design_record_field_identity.md`).
+  final BigInt? id;
   final String name;
   final APIDataType dataType;
 
   const APIRecordTypeField({
+    this.id,
     required this.name,
     required this.dataType,
   });
 
   @override
-  int get hashCode => name.hashCode ^ dataType.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ dataType.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIRecordTypeField &&
           runtimeType == other.runtimeType &&
+          id == other.id &&
           name == other.name &&
           dataType == other.dataType;
 }

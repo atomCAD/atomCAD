@@ -1,4 +1,4 @@
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::node_type_registry::{RecordField, RecordFieldEdit};
 use crate::structure_designer::serialization::node_networks_serialization::{
     SerializableNodeNetwork, serializable_to_node_network,
 };
@@ -10,13 +10,26 @@ use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode}
 /// `repair_node_network` runs on every affected network so wires whose source
 /// type no longer satisfies the new field type are disconnected. Undo restores
 /// the def *and* the affected networks back to their pre-update shape.
+///
+/// The command round-trips field **identity** (R2 of
+/// `doc/design_record_field_identity.md`): it stores the exact pre-update
+/// `RecordField` list (with `FieldId`s) plus `next_field_id`, and the
+/// identity-aware [`RecordFieldEdit`] list applied. Undo restores the field
+/// list/counter verbatim; redo replays the same id-aware edit (so renames and
+/// preserved ids reproduce exactly) and re-keys `record_construct` literals.
 pub struct UpdateRecordTypeDefCommand {
     pub name: String,
-    pub old_fields: Vec<(String, DataType)>,
-    pub new_fields: Vec<(String, DataType)>,
+    /// Exact pre-update field list (with `FieldId`s), restored verbatim on undo.
+    pub old_fields: Vec<RecordField>,
+    /// Pre-update allocator floor, restored verbatim on undo.
+    pub old_next_field_id: u64,
+    /// The identity-aware edit applied, replayed on redo. Redo recomputes the
+    /// literal-rename map from this edit (undo restores literals via the network
+    /// snapshots).
+    pub new_edits: Vec<RecordFieldEdit>,
     /// Snapshot of every network before the update, so undo can restore the
-    /// disconnected wires. See `DeleteRecordTypeDefCommand` for the same
-    /// pattern.
+    /// disconnected wires and the pre-rename literal keys. See
+    /// `DeleteRecordTypeDefCommand` for the same pattern.
     pub network_snapshots_before: Vec<(String, SerializableNodeNetwork)>,
 }
 
@@ -42,15 +55,14 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
     }
 
     fn undo(&self, ctx: &mut UndoContext) {
-        // Restore the def's old field list. `set_fields_by_name` re-derives
-        // stable `FieldId`s (preserving any whose name is unchanged, allocating
-        // fresh never-recycled ids otherwise). Field ids do not drive wires in
-        // R1 — pins still emit `id: None` — so name+type restoration is exact;
-        // R4 will round-trip the ids themselves.
+        // Restore the def's exact pre-update field list and allocator floor
+        // (ids round-trip verbatim — R2).
         if let Some(def) = ctx.node_type_registry.record_type_defs.get_mut(&self.name) {
-            def.set_fields_by_name(self.old_fields.clone());
+            def.fields = self.old_fields.clone();
+            def.next_field_id = self.old_next_field_id;
         }
-        // Restore each affected network from its pre-update snapshot.
+        // Restore each affected network from its pre-update snapshot — this also
+        // restores `record_construct` literal keys to their pre-rename names.
         for (network_name, snapshot) in &self.network_snapshots_before {
             if let Ok(network) = serializable_to_node_network(
                 snapshot,
@@ -65,13 +77,17 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        // Apply the new field list and re-run repair on every affected
-        // network so wires re-disconnect identically to the original update.
-        if let Some(def) = ctx.node_type_registry.record_type_defs.get_mut(&self.name) {
-            def.set_fields_by_name(self.new_fields.clone());
+        // Base state is the restored-old def (set by the preceding undo). Replay
+        // the identity-aware edit so field ids / renames reproduce exactly,
+        // re-key literals, then repair every network so wires re-preserve /
+        // -disconnect identically to the original update.
+        if let Ok(renames) = ctx
+            .node_type_registry
+            .update_record_type_def_with_edits(&self.name, self.new_edits.clone())
+        {
+            ctx.node_type_registry
+                .rekey_record_construct_literals(&self.name, &renames);
         }
-        // Helper 2 — repair every network so record-node pin layouts re-derive
-        // and now-incompatible wires re-disconnect (matches the forward update).
         ctx.node_type_registry.repair_all_networks();
     }
 
