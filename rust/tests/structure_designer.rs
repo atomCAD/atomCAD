@@ -402,3 +402,6 @@ mod record_field_identity_test;
 
 #[path = "structure_designer/unpack_nodes_test.rs"]
 mod unpack_nodes_test;
+
+#[path = "structure_designer/extrude_structure_test.rs"]
+mod extrude_structure_test;

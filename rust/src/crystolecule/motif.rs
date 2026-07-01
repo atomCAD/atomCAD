@@ -117,6 +117,56 @@ impl Motif {
         true
     }
 
+    /// Compares two motifs for **topological** equality, ignoring the element
+    /// assigned to each parameter.
+    ///
+    /// Same as [`is_structurally_equal`](Self::is_structurally_equal) except the
+    /// parameter *default atomic numbers* are **not** compared (only the
+    /// parameter names, site count/positions/element-refs, and bonds). This lets
+    /// callers recognise "this is the zincblende topology" independently of
+    /// whether its PARAMs default to carbon, silicon, etc. — the concrete
+    /// elements are checked separately via the effective parameter values.
+    ///
+    /// Used by the surface-reconstruction applicability gate: a genuine silicon
+    /// motif (PARAMs defaulting to Si) is topologically the default zincblende
+    /// motif, so it must pass the gate and let the Si element check downstream
+    /// decide the reconstruction variant. See `surface_reconstruction.rs`.
+    pub fn is_topologically_equal(&self, other: &Motif) -> bool {
+        if self.parameters.len() != other.parameters.len()
+            || self.sites.len() != other.sites.len()
+            || self.bonds.len() != other.bonds.len()
+        {
+            return false;
+        }
+
+        // Parameter names must match; default atomic numbers are intentionally
+        // NOT compared (that is the element, decided separately).
+        for (p1, p2) in self.parameters.iter().zip(other.parameters.iter()) {
+            if p1.name != p2.name {
+                return false;
+            }
+        }
+
+        for (s1, s2) in self.sites.iter().zip(other.sites.iter()) {
+            if s1.atomic_number != s2.atomic_number || s1.position != s2.position {
+                return false;
+            }
+        }
+
+        for (b1, b2) in self.bonds.iter().zip(other.bonds.iter()) {
+            if b1.site_1.site_index != b2.site_1.site_index
+                || b1.site_1.relative_cell != b2.site_1.relative_cell
+                || b1.site_2.site_index != b2.site_2.site_index
+                || b1.site_2.relative_cell != b2.site_2.relative_cell
+                || b1.multiplicity != b2.multiplicity
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Compares two motifs with tolerance on fractional site positions.
     ///
     /// Same as `is_structurally_equal`, but fractional site positions are compared

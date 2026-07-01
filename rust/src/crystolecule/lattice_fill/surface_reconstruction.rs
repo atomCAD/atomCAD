@@ -156,7 +156,12 @@ fn get_reconstruction_params(
     unit_cell: &UnitCellStruct,
     parameter_element_values: &HashMap<String, i16>,
 ) -> Option<SurfaceReconstructionParams> {
-    if !motif.is_structurally_equal(&DEFAULT_ZINCBLENDE_MOTIF) {
+    // Topology check only: the motif must be the zincblende lattice topology,
+    // but its PARAM elements are decided by the effective element values below
+    // (a genuine silicon motif bakes Si into its PARAM defaults, which
+    // `is_structurally_equal` would reject — see motif.rs / issue: extrude
+    // silicon reconstruction).
+    if !motif.is_topologically_equal(&DEFAULT_ZINCBLENDE_MOTIF) {
         return None;
     }
 

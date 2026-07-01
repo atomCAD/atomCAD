@@ -1,3 +1,6 @@
+use crate::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
+use crate::crystolecule::motif::Motif;
+use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::util::transform::Transform;
 use glam::DQuat;
@@ -48,6 +51,18 @@ pub struct DrawingPlane {
     /// - `a` and `b` are 2D basis vectors expressed in that local XY
     /// - `c` is local Z (scaled by d-spacing)
     pub effective_unit_cell: UnitCellStruct,
+
+    /// The motif of the crystal structure this plane is embedded in.
+    ///
+    /// The drawing plane's *geometry* depends only on `unit_cell` + orientation,
+    /// but it carries the motif (and `motif_offset`) so the full `Structure` is
+    /// the single source of truth for the 2D→3D transition (`extrude`). Defaults
+    /// to the zincblende motif (carbon) so pre-existing callers are unaffected.
+    /// See `doc/design_drawing_plane_carries_structure.md`.
+    pub motif: Motif,
+
+    /// Fractional motif offset carried alongside `motif` (see `motif`).
+    pub motif_offset: DVec3,
 }
 
 impl DrawingPlane {
@@ -262,7 +277,33 @@ impl DrawingPlane {
             u_axis,
             v_axis,
             effective_unit_cell,
+            // Default to the standard zincblende (carbon) motif + zero offset so
+            // existing callers get the historical behavior; callers that have a
+            // full `Structure` override these via `with_structure`.
+            motif: DEFAULT_ZINCBLENDE_MOTIF.clone(),
+            motif_offset: DVec3::ZERO,
         })
+    }
+
+    /// Attaches the motif and motif offset of the crystal structure this plane
+    /// is embedded in, returning the enriched plane. The plane's `unit_cell`
+    /// (lattice vectors) is unchanged — it stays the single source of the
+    /// in-plane geometry — while `motif`/`motif_offset` ride along so `extrude`
+    /// can reconstitute the full `Structure`.
+    pub fn with_structure(mut self, motif: Motif, motif_offset: DVec3) -> Self {
+        self.motif = motif;
+        self.motif_offset = motif_offset;
+        self
+    }
+
+    /// The full crystal `Structure` this plane is embedded in: the plane's
+    /// `unit_cell` as lattice vectors, plus the carried `motif`/`motif_offset`.
+    pub fn structure(&self) -> Structure {
+        Structure {
+            lattice_vecs: self.unit_cell.clone(),
+            motif: self.motif.clone(),
+            motif_offset: self.motif_offset,
+        }
     }
 
     /// Creates a drawing plane with default XY plane orientation (001 Miller index) at origin.

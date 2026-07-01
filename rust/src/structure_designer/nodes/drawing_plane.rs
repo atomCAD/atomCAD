@@ -198,7 +198,11 @@ impl NodeData for DrawingPlaneData {
             shift,
             subdivision,
         ) {
-            Ok(plane) => plane,
+            // Carry the full structure (motif + offset) through the plane so the
+            // 2D→3D transition (`extrude`) has the complete crystal field — the
+            // plane's `unit_cell` remains the single source of the in-plane
+            // geometry. See doc/design_drawing_plane_carries_structure.md.
+            Ok(plane) => plane.with_structure(structure.motif, structure.motif_offset),
             Err(error_msg) => return EvalOutput::single(NetworkResult::Error(error_msg)),
         };
 

@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -141,8 +140,13 @@ impl NodeData for ExtrudeData {
         }
 
         if let NetworkResult::Geometry2D(shape) = shape_val {
-            // Extract unit cell from the drawing plane
-            let unit_cell = shape.drawing_plane.unit_cell.clone();
+            // Take the full crystal structure (lattice vectors + motif + offset)
+            // from the drawing plane — the single source of truth for the 2D→3D
+            // transition. The deprecated `structure` input pin is intentionally
+            // NOT honored: the drawing plane already carries the structure, and
+            // an override could desync the atom lattice from the geometry baked
+            // against the plane. See doc/design_drawing_plane_carries_structure.md.
+            let structure = shape.drawing_plane.structure();
 
             if network_stack.len() == 1 {
                 let eval_cache = ExtrudeEvalCache {
@@ -175,7 +179,7 @@ impl NodeData for ExtrudeData {
 
             let s = shape.geo_tree_root;
             EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
-                structure: Structure::from_lattice_vecs(unit_cell),
+                structure,
                 geo_tree_root: GeoNode::extrude(
                     height_real,
                     local_direction,

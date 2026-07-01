@@ -1,9 +1,11 @@
 use glam::f64::DVec3;
 use glam::i32::IVec3;
+use rust_lib_flutter_cad::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use rust_lib_flutter_cad::crystolecule::lattice_fill::{
     CrystallographicAddress, LatticeFillConfig, LatticeFillOptions, LatticeFillStatistics,
     PlacedAtomTracker, fill_lattice,
 };
+use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::crystolecule::motif_parser::parse_motif;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::geo_tree::GeoNode;
@@ -318,5 +320,97 @@ site 1 C 0.0 0.0 0.0
     assert!(
         result_keep.atomic_structure.get_num_of_atoms() > 0,
         "With remove_unbonded_atoms = false, unbonded atoms should be kept"
+    );
+}
+
+// =============================================================================
+// Surface reconstruction gate tests (doc: surface_reconstructions.md)
+//
+// These guard that the (100) 2x1 dimer reconstruction fires for the two
+// supported structures. The silicon case is the regression: a genuine silicon
+// zincblende motif (Si baked into the PARAM defaults, exactly as the user's
+// `structure.14Si` custom node does) must reconstruct on a 5.431 A cell. Before
+// the gate fix, `get_reconstruction_params` rejected it at the
+// `is_structurally_equal(&DEFAULT_ZINCBLENDE_MOTIF)` check (that helper compares
+// parameter default atomic numbers), so reconstruction silently no-op'd and the
+// on/off atom counts were identical.
+// =============================================================================
+
+/// An axis-aligned box built as the intersection of 6 half-spaces, in world
+/// coordinates. For a cubic cell this yields clean {100} faces normal to X/Y/Z.
+fn axis_aligned_box(min: DVec3, max: DVec3) -> GeoNode {
+    GeoNode::intersection_3d(vec![
+        GeoNode::half_space(DVec3::new(-1.0, 0.0, 0.0), DVec3::new(min.x, 0.0, 0.0)),
+        GeoNode::half_space(DVec3::new(1.0, 0.0, 0.0), DVec3::new(max.x, 0.0, 0.0)),
+        GeoNode::half_space(DVec3::new(0.0, -1.0, 0.0), DVec3::new(0.0, min.y, 0.0)),
+        GeoNode::half_space(DVec3::new(0.0, 1.0, 0.0), DVec3::new(0.0, max.y, 0.0)),
+        GeoNode::half_space(DVec3::new(0.0, 0.0, -1.0), DVec3::new(0.0, 0.0, min.z)),
+        GeoNode::half_space(DVec3::new(0.0, 0.0, 1.0), DVec3::new(0.0, 0.0, max.z)),
+    ])
+}
+
+fn cubic_cell(a: f64) -> UnitCellStruct {
+    UnitCellStruct::new(
+        DVec3::new(a, 0.0, 0.0),
+        DVec3::new(0.0, a, 0.0),
+        DVec3::new(0.0, 0.0, a),
+    )
+}
+
+/// Materializes a `cells`x`cells`x`cells` box of the given motif/cell and
+/// returns the surviving atom count, with surface reconstruction on or off.
+fn box_atom_count(motif: &Motif, cell: &UnitCellStruct, cells: f64, reconstruct: bool) -> usize {
+    let a = cell.a.length();
+    let config = LatticeFillConfig {
+        unit_cell: cell.clone(),
+        motif: motif.clone(),
+        parameter_element_values: HashMap::new(),
+        geometry: axis_aligned_box(DVec3::ZERO, DVec3::splat(cells * a)),
+        motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
+    };
+    let options = LatticeFillOptions {
+        hydrogen_passivation: true,
+        remove_unbonded_atoms: true,
+        remove_single_bond_atoms: false,
+        reconstruct_surface: reconstruct,
+        invert_phase: false,
+    };
+    let margin = 5.0;
+    let fill_region = DAABox::new(DVec3::splat(-margin), DVec3::splat(cells * a + margin));
+    fill_lattice(&config, &options, &fill_region)
+        .atomic_structure
+        .get_num_of_atoms()
+}
+
+/// Control: cubic diamond (carbon zincblende, 3.567 A) reconstruction already
+/// works. Guards against regressing the diamond path while fixing silicon.
+#[test]
+fn diamond_100_reconstruction_changes_atom_count() {
+    let motif = DEFAULT_ZINCBLENDE_MOTIF.clone();
+    let cell = cubic_cell(3.567);
+    let off = box_atom_count(&motif, &cell, 6.0, false);
+    let on = box_atom_count(&motif, &cell, 6.0, true);
+    assert_ne!(
+        on, off,
+        "diamond (100) reconstruction should change the atom count (off={off}, on={on})"
+    );
+}
+
+/// Regression: a genuine silicon zincblende motif (Si in the PARAM defaults, as
+/// `structure.14Si` bakes in) on a 5.431 A cell must reconstruct. Red before the
+/// gate fix (on == off), green after.
+#[test]
+fn silicon_100_reconstruction_changes_atom_count() {
+    let mut motif = DEFAULT_ZINCBLENDE_MOTIF.clone();
+    for p in &mut motif.parameters {
+        p.default_atomic_number = 14; // Si
+    }
+    let cell = cubic_cell(5.431);
+    let off = box_atom_count(&motif, &cell, 6.0, false);
+    let on = box_atom_count(&motif, &cell, 6.0, true);
+    assert_ne!(
+        on, off,
+        "silicon (100) reconstruction should change the atom count (off={off}, on={on})"
     );
 }
