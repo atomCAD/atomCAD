@@ -1,22 +1,17 @@
 use crate::structure_designer::node_type_registry::RecordTypeDef;
 use crate::structure_designer::serialization::node_networks_serialization::{
-    SerializableNodeNetwork, node_network_to_serializable, serializable_to_node_network,
+    SerializableNodeNetwork, node_network_to_serializable,
 };
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
 /// Command for undoing/redoing the deletion of a record type def.
 ///
-/// On delete: the def is removed and `repair_node_network` is called on every
-/// affected network so wires whose source/dest type became dangling are
-/// disconnected. Undo restores the def *and* every affected network back to
-/// its pre-delete shape (so the disconnected wires reappear).
+/// `StructureDesigner::delete_record_type_def` blocks deletion while any entity
+/// still references the def, so a successful delete never disconnects a wire or
+/// dangles another def — the command only has to remove/re-insert the def (and
+/// track the active-record-def selection). No per-network snapshot is needed.
 pub struct DeleteRecordTypeDefCommand {
     pub def: RecordTypeDef,
-    /// Snapshot of every network affected by the delete (i.e., every network
-    /// whose `repair_node_network` ran). Stored as `SerializableNodeNetwork`
-    /// because `NodeNetwork` doesn't derive `Clone` cheaply and the
-    /// serialization round-trip is the existing canonical "full snapshot".
-    pub affected_network_snapshots: Vec<(String, SerializableNodeNetwork)>,
     /// Whether the deleted def was the active record def at delete time, so
     /// redo can clear and undo can restore the schema-editor selection
     /// (parity with the network active-name handling). See
@@ -28,14 +23,6 @@ impl std::fmt::Debug for DeleteRecordTypeDefCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DeleteRecordTypeDefCommand")
             .field("def", &self.def.name)
-            .field(
-                "affected_networks",
-                &self
-                    .affected_network_snapshots
-                    .iter()
-                    .map(|(n, _)| n.as_str())
-                    .collect::<Vec<_>>(),
-            )
             .finish()
     }
 }
@@ -46,27 +33,12 @@ impl UndoCommand for DeleteRecordTypeDefCommand {
     }
 
     fn undo(&self, ctx: &mut UndoContext) {
-        // Restore the def first so any references resolve correctly.
+        // Restore the def. Nothing referenced it at delete time (the delete was
+        // gated on that), so no network needs repair — restoring the def alone
+        // reproduces the pre-delete state.
         ctx.node_type_registry
             .record_type_defs
             .insert(self.def.name.clone(), self.def.clone());
-
-        // Restore every affected network from its snapshot.
-        for (name, snapshot) in &self.affected_network_snapshots {
-            if let Ok(network) = serializable_to_node_network(
-                snapshot,
-                &ctx.node_type_registry.built_in_node_types,
-                None,
-            ) {
-                ctx.node_type_registry
-                    .node_networks
-                    .insert(name.clone(), network);
-            }
-        }
-
-        // Helper 2 — refresh record-node pin layouts now that the `Named`
-        // target exists again (the `Full` refresh does not do this).
-        ctx.node_type_registry.repair_all_networks();
 
         // Restore the active record def if the deleted def was active.
         if self.was_active {
@@ -75,13 +47,9 @@ impl UndoCommand for DeleteRecordTypeDefCommand {
     }
 
     fn redo(&self, ctx: &mut UndoContext) {
-        // Re-delete the def, then re-run repair on every network so wires
-        // depending on the now-dangling reference are re-disconnected.
         ctx.node_type_registry
             .record_type_defs
             .remove(&self.def.name);
-
-        ctx.node_type_registry.repair_all_networks();
 
         // Clear the active record def if it was the deleted def.
         if self.was_active && ctx.active_record_def_name.as_deref() == Some(self.def.name.as_str())

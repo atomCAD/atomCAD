@@ -1439,8 +1439,9 @@ pub fn add_record_type_def(name: String) -> APIResult {
     }
 }
 
-/// Deletes the record type def with the given name. Wires that depended on
-/// the now-dangling references are disconnected by `repair_node_network`.
+/// Deletes the record type def with the given name. Fails (with a `Referenced`
+/// error listing the offenders) if any network or other record def still
+/// references it — mirroring network / namespace deletion.
 #[flutter_rust_bridge::frb(sync)]
 pub fn delete_record_type_def(name: String) -> APIResult {
     unsafe {

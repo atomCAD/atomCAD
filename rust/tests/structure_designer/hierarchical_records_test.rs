@@ -16,7 +16,7 @@ use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::{
-    NodeTypeRegistry, RecordTypeDef, UserTypeKind,
+    NodeTypeRegistry, RecordTypeDef, RecordTypeDefError, UserTypeKind,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::record_construct::RecordConstructData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -449,6 +449,152 @@ fn delete_namespace_builtin_record_never_spuriously_blocks() {
         .unwrap();
 
     assert!(designer.delete_namespace("NS").is_ok());
+}
+
+// ============================================================================
+// Single-def delete_record_type_def reference checks
+//
+// The single-def delete path must block just like the batch `delete_namespace`
+// path (they share `record_delete_blockers` / `collect_record_refs_in_network`).
+// Regression: deleting a still-referenced record def used to silently succeed
+// and leave a dangling `Record(Named(_))` behind (e.g. inside another def).
+// ============================================================================
+
+#[test]
+fn delete_record_def_blocked_by_referencing_record_def() {
+    // The reported bug: A { inner: B }, deleting B must be blocked, not left
+    // dangling inside A.
+    let mut designer = StructureDesigner::new();
+    designer
+        .node_type_registry
+        .add_record_type_def(def("B", vec![("x", DataType::Int)]))
+        .unwrap();
+    designer
+        .node_type_registry
+        .add_record_type_def(def("A", vec![("inner", named("B"))]))
+        .unwrap();
+
+    let err = designer.delete_record_type_def("B").unwrap_err();
+    match &err {
+        RecordTypeDefError::Referenced(name, refs) => {
+            assert_eq!(name, "B");
+            assert!(refs.contains("record 'A'"), "got: {refs}");
+        }
+        other => panic!("expected Referenced, got {other:?}"),
+    }
+    assert!(
+        has_record(&designer, "B"),
+        "B must survive a blocked delete"
+    );
+}
+
+#[test]
+fn delete_record_def_blocked_by_nested_container_field() {
+    // Array[B] inside A also blocks (the ref walker recurses containers).
+    let mut designer = StructureDesigner::new();
+    designer
+        .node_type_registry
+        .add_record_type_def(def("B", vec![("x", DataType::Int)]))
+        .unwrap();
+    designer
+        .node_type_registry
+        .add_record_type_def(def(
+            "A",
+            vec![("xs", DataType::Array(Box::new(named("B"))))],
+        ))
+        .unwrap();
+
+    let err = designer.delete_record_type_def("B").unwrap_err();
+    assert!(
+        matches!(err, RecordTypeDefError::Referenced(..)),
+        "got: {err:?}"
+    );
+    assert!(has_record(&designer, "B"));
+}
+
+#[test]
+fn delete_record_def_blocked_by_node_in_network() {
+    // A record_construct node referencing B blocks; message names the network.
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    designer
+        .node_type_registry
+        .add_record_type_def(def("B", vec![("x", DataType::Int)]))
+        .unwrap();
+    add_record_construct(&mut designer, "Main", "B");
+
+    let err = designer.delete_record_type_def("B").unwrap_err();
+    match &err {
+        RecordTypeDefError::Referenced(_, refs) => {
+            assert!(refs.contains("network 'Main'"), "got: {refs}");
+        }
+        other => panic!("expected Referenced, got {other:?}"),
+    }
+    assert!(has_record(&designer, "B"));
+}
+
+#[test]
+fn delete_record_def_blocked_lists_all_references() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    designer
+        .node_type_registry
+        .add_record_type_def(def("B", vec![("x", DataType::Int)]))
+        .unwrap();
+    designer
+        .node_type_registry
+        .add_record_type_def(def("A", vec![("inner", named("B"))]))
+        .unwrap();
+    add_record_construct(&mut designer, "Main", "B");
+
+    let err = designer.delete_record_type_def("B").unwrap_err();
+    let RecordTypeDefError::Referenced(_, refs) = &err else {
+        panic!("expected Referenced, got {err:?}");
+    };
+    assert!(refs.contains("record 'A'"), "got: {refs}");
+    assert!(refs.contains("network 'Main'"), "got: {refs}");
+}
+
+#[test]
+fn delete_container_def_not_blocked_by_its_own_reference() {
+    // A { inner: B } — deleting A is fine even though A references B; a def's
+    // own outgoing references never block its own deletion.
+    let mut designer = StructureDesigner::new();
+    designer
+        .node_type_registry
+        .add_record_type_def(def("B", vec![("x", DataType::Int)]))
+        .unwrap();
+    designer
+        .node_type_registry
+        .add_record_type_def(def("A", vec![("inner", named("B"))]))
+        .unwrap();
+
+    assert!(designer.delete_record_type_def("A").is_ok());
+    assert!(!has_record(&designer, "A"));
+    assert!(has_record(&designer, "B"));
+}
+
+#[test]
+fn delete_unreferenced_record_def_succeeds_and_undo_restores() {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    designer
+        .node_type_registry
+        .add_record_type_def(def("B", vec![("x", DataType::Int)]))
+        .unwrap();
+    designer.undo_stack.clear();
+
+    designer.delete_record_type_def("B").unwrap();
+    assert!(!has_record(&designer, "B"));
+
+    designer.undo();
+    assert!(has_record(&designer, "B"), "undo restores the def");
+
+    designer.redo();
+    assert!(!has_record(&designer, "B"), "redo re-deletes");
 }
 
 // ============================================================================

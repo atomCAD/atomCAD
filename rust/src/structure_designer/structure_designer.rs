@@ -2053,13 +2053,16 @@ impl StructureDesigner {
     /// a network whose name is not in `deleted_networks`, or a user record def
     /// whose name is not in `target_records`. Walks each surviving network's
     /// signature + all nodes (incl. zone bodies) and each surviving record
-    /// def's field types. Returns `Err` with a listing if any external
-    /// reference would be left dangling. See `doc/design_hierarchical_records.md`.
-    fn check_record_delete_references(
+    /// def's field types. Returns the (sorted) list of external references that
+    /// would be left dangling — empty means the delete is safe. Callers format
+    /// their own message (single-def vs namespace). Shared by `delete_namespace`
+    /// (batch) and `delete_record_type_def` (single).
+    /// See `doc/design_hierarchical_records.md`.
+    fn record_delete_blockers(
         &self,
         target_records: &std::collections::HashSet<&str>,
         deleted_networks: &std::collections::HashSet<&str>,
-    ) -> Result<(), String> {
+    ) -> Vec<String> {
         let mut blockers: Vec<String> = Vec::new();
 
         // Surviving networks referencing a deleted record.
@@ -2092,15 +2095,8 @@ impl StructureDesigner {
             }
         }
 
-        if blockers.is_empty() {
-            Ok(())
-        } else {
-            blockers.sort();
-            Err(format!(
-                "Cannot delete namespace because referenced from outside: {}",
-                blockers.join(", ")
-            ))
-        }
+        blockers.sort();
+        blockers
     }
 
     pub fn delete_namespace(&mut self, prefix: &str) -> Result<(), String> {
@@ -2146,7 +2142,13 @@ impl StructureDesigner {
 
         let record_targets: std::collections::HashSet<&str> =
             affected_records.iter().map(|s| s.as_str()).collect();
-        self.check_record_delete_references(&record_targets, &network_targets)?;
+        let record_blockers = self.record_delete_blockers(&record_targets, &network_targets);
+        if !record_blockers.is_empty() {
+            return Err(format!(
+                "Cannot delete namespace because referenced from outside: {}",
+                record_blockers.join(", ")
+            ));
+        }
 
         // Snapshot all affected networks (for undo).
         let mut network_snapshots = Vec::new();
@@ -2303,21 +2305,28 @@ impl StructureDesigner {
             ));
         }
 
-        // Snapshot every network before delete (the conservative choice — any
-        // network may carry a `Record(Named(name))` reference at any depth).
-        let snapshots =
-            super::undo::commands::delete_record_type_def::snapshot_all_networks_for_record_def_change(
-                &mut self.node_type_registry,
-            );
+        // Block deletion while any surviving network or record def still
+        // references this record via `RecordType::Named` — consistent with
+        // network deletion and `delete_namespace`. This is the single-def
+        // counterpart of the batch check; without it, deleting a referenced
+        // def would leave a dangling `Record(Named(name))` behind (the old
+        // repair pass only disconnected wires, never fixed other record defs).
+        let targets: std::collections::HashSet<&str> = std::iter::once(name).collect();
+        let no_deleted_networks: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        let blockers = self.record_delete_blockers(&targets, &no_deleted_networks);
+        if !blockers.is_empty() {
+            return Err(super::node_type_registry::RecordTypeDefError::Referenced(
+                name.to_string(),
+                blockers.join(", "),
+            ));
+        }
 
-        // Remove the def, then run repair on every network so wires whose
-        // pin-types now resolve via a dangling reference are disconnected.
+        // No surviving reference remains, so no wire can dangle and no other
+        // def needs repair — remove the def outright (no delete-and-repair).
         let def = self
             .node_type_registry
             .delete_record_type_def(name)
             .expect("contains_key checked above");
-
-        self.node_type_registry.repair_all_networks();
 
         // Clear the backend-owned active record def if it was the deleted one
         // (capture first so undo can restore the schema-editor selection).
@@ -2331,7 +2340,6 @@ impl StructureDesigner {
         self.push_command(
             super::undo::commands::delete_record_type_def::DeleteRecordTypeDefCommand {
                 def,
-                affected_network_snapshots: snapshots,
                 was_active,
             },
         );

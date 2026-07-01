@@ -1,4 +1,4 @@
-﻿//! Phase 3 tests for record types (see `doc/design_record_types.md`).
+//! Phase 3 tests for record types (see `doc/design_record_types.md`).
 //!
 //! Phase 3 introduces the `record_construct` and `record_destructure` nodes,
 //! both of which derive their pin layout from a `RecordTypeDef` in the
@@ -20,7 +20,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::{
-    NodeTypeRegistry, RecordTypeDef,
+    NodeTypeRegistry, RecordTypeDef, RecordTypeDefError,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::record_construct::RecordConstructData;
@@ -592,7 +592,7 @@ fn empty_schema_destructure_returns_none() {
 }
 
 #[test]
-fn dangling_schema_after_delete_disconnects_downstream() {
+fn delete_blocked_while_schema_referenced() {
     let mut designer = setup_designer_with_network("test");
     designer
         .node_type_registry
@@ -635,11 +635,29 @@ fn dangling_schema_after_delete_disconnects_downstream() {
     };
     assert_eq!(pre_arg_count, 2);
 
-    designer.delete_record_type_def("Point").unwrap();
+    // Deleting a record def while a node still references its schema is now
+    // blocked (consistent with network / namespace deletion) — no more silent
+    // delete-and-dangle. The message names the referencing network.
+    let err = designer.delete_record_type_def("Point").unwrap_err();
+    match &err {
+        RecordTypeDefError::Referenced(name, refs) => {
+            assert_eq!(name, "Point");
+            assert!(
+                refs.contains("test"),
+                "message should name the network: {refs}"
+            );
+        }
+        other => panic!("expected Referenced error, got {other:?}"),
+    }
 
-    // After delete, the construct's pin layout collapses to no parameters
-    // (the schema is dangling). The pre-existing wire entries get truncated
-    // when arguments are reset to match the new (empty) parameter list.
+    // The def survives and the construct keeps its two parameter pins.
+    assert!(
+        designer
+            .node_type_registry
+            .lookup_record_type_def("Point")
+            .is_some(),
+        "Point should still exist after a blocked delete"
+    );
     let net = designer
         .node_type_registry
         .node_networks
@@ -650,8 +668,8 @@ fn dangling_schema_after_delete_disconnects_downstream() {
     let nt = registry.get_node_type_for_node(construct_node).unwrap();
     assert_eq!(
         nt.parameters.len(),
-        0,
-        "construct should have no params after schema delete"
+        2,
+        "construct keeps its params — delete was blocked"
     );
 }
 

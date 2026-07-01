@@ -285,6 +285,8 @@ pub enum RecordTypeDefError {
     InvalidName(String, String),
     #[error("record type def '{0}' has an ill-formed type in field '{1}': {2}")]
     IllFormedType(String, String, String),
+    #[error("cannot delete record type '{0}' because it is still referenced: {1}")]
+    Referenced(String, String),
 }
 
 /// Kind of an existing *user-defined* type addressable by the namespace
