@@ -1985,21 +1985,14 @@ impl NodeTypeRegistry {
         use crate::structure_designer::node_type::OutputPinDefinition;
 
         let base = self.built_in_node_types.get("apply")?;
-        let f_arg = apply_node.arguments.first()?;
-        let f_wire = f_arg.incoming_wires.first()?;
-        // Resolve the f source's type across scopes — local (depth 0),
-        // cross-scope capture (`NodeOutput` depth ≥ 1), or zone-input
-        // reference (`ZoneInput` depth ≥ 1, e.g. dragging the body's
-        // `element`/`acc` pin into apply.f). Returns `None` for abstract or
-        // otherwise-unresolvable sources (including a cross-scope source whose
-        // ancestor chain isn't available — e.g. the body is being processed in
-        // isolation during repair; the top-level pass resolves it correctly).
-        let src_type = self
-            .resolve_wire_source_type_scoped(f_wire, network, ancestors, ancestor_hof_ids)?
-            .data_type;
-        let DataType::Function(src_ft) = src_type else {
-            return None;
-        };
+        // apply.f is parameter index 0.
+        let src_ft = self.resolve_wired_function_signature(
+            apply_node,
+            0,
+            network,
+            ancestors,
+            ancestor_hof_ids,
+        )?;
 
         let total_arity = src_ft.parameter_types.len();
         let return_type = (*src_ft.output_type).clone();
@@ -2082,6 +2075,68 @@ impl NodeTypeRegistry {
         Some(custom)
     }
 
+    /// Resolves the canonical-flat `Function` signature of the source wired
+    /// into `node`'s function-input pin at parameter index `f_param_index`,
+    /// across scopes — local (depth 0), cross-scope capture (`NodeOutput`
+    /// depth ≥ 1), or zone-input reference (`ZoneInput` depth ≥ 1, e.g. the
+    /// body's `element`/`acc` pin). Returns `None` when the pin is unwired,
+    /// the source doesn't resolve (unresolved polymorphic upstream, stale
+    /// wire, or a cross-scope source whose ancestor chain isn't available —
+    /// e.g. the body is being processed in isolation during repair; the
+    /// top-level pass resolves it correctly), or the source isn't a
+    /// `Function`.
+    ///
+    /// Shared by the `apply` / `map` / `zip_with` `f`-derivation post-passes
+    /// so the "read the wired `f` source's signature across scopes" step
+    /// cannot drift between them.
+    fn resolve_wired_function_signature(
+        &self,
+        node: &Node,
+        f_param_index: usize,
+        network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<crate::structure_designer::data_type::FunctionType> {
+        let f_arg = node.arguments.get(f_param_index)?;
+        let f_wire = f_arg.incoming_wires.first()?;
+        let src_type = self
+            .resolve_wire_source_type_scoped(f_wire, network, ancestors, ancestor_hof_ids)?
+            .data_type;
+        match src_type {
+            DataType::Function(ft) => Some(ft),
+            _ => None,
+        }
+    }
+
+    /// Shared starts-with derivation step for the `map` / `zip_with`
+    /// `f`-derivation post-passes: when the wired source's canonical-flat
+    /// parameter list begins with `leading_params` (elementwise equality —
+    /// the same exactness the map pass has always used; a value-convertible
+    /// but unequal prefix passes wire validation yet keeps the stored output
+    /// type), returns the derived per-element output type — `R` at exact
+    /// arity, or `Function(tail, R)` (the auto-partialization tail,
+    /// canonicalized) at excess arity. `None` = starts-with rule fails; the
+    /// caller keeps the stored layout.
+    fn derive_hof_output_from_signature(
+        leading_params: &[DataType],
+        src_ft: &crate::structure_designer::data_type::FunctionType,
+    ) -> Option<DataType> {
+        use crate::structure_designer::data_type::FunctionType;
+
+        if src_ft.parameter_types.len() < leading_params.len()
+            || src_ft.parameter_types[..leading_params.len()] != *leading_params
+        {
+            return None;
+        }
+        let tail = &src_ft.parameter_types[leading_params.len()..];
+        let return_type = (*src_ft.output_type).clone();
+        Some(if tail.is_empty() {
+            return_type
+        } else {
+            DataType::Function(FunctionType::new(tail.to_vec(), return_type))
+        })
+    }
+
     /// Top-level driver for the Currying Phase 4 `map` post-pass: for every
     /// `map` node in `network` whose `f` pin is wired to a resolvable `Function`
     /// source whose declared (canonical, flat) parameter list **starts with**
@@ -2116,7 +2171,14 @@ impl NodeTypeRegistry {
     /// body-internal `map` whose `f` is wired — including from a cross-scope
     /// capture or a zone-input pin — derives its layout too.
     pub fn update_map_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
-        self.update_map_pin_layouts_scoped(network, &[], &[], true);
+        self.update_f_derived_pin_layouts_scoped(
+            network,
+            &[],
+            &[],
+            true,
+            "map",
+            Self::compute_map_custom_type,
+        );
     }
 
     /// `refresh_args = false` counterpart of
@@ -2125,41 +2187,86 @@ impl NodeTypeRegistry {
     /// the conversion / body-undo restore paths re-derive layouts without
     /// rebuilding the arguments vector.
     pub fn update_map_pin_layouts_for_network_preserving_args(&self, network: &mut NodeNetwork) {
-        self.update_map_pin_layouts_scoped(network, &[], &[], false);
+        self.update_f_derived_pin_layouts_scoped(
+            network,
+            &[],
+            &[],
+            false,
+            "map",
+            Self::compute_map_custom_type,
+        );
     }
 
-    /// Scope-aware recursive worker for the map post-pass. See
-    /// [`Self::update_apply_pin_layouts_scoped`] for the chain convention and
-    /// the take-and-restore borrow-split rationale. `refresh_args` is forwarded
-    /// to `set_custom_node_type`.
-    fn update_map_pin_layouts_scoped(
+    /// `zip_with` sibling of [`Self::update_map_pin_layouts_for_network`]
+    /// (`doc/design_zip_with.md` Phase 2): for every `zip_with` node whose `f`
+    /// pin is wired to a resolvable `Function` source whose canonical-flat
+    /// parameter list **starts with** the lane types, derive the output pin —
+    /// exact arity ⇒ `Iter[R]`, excess arity ⇒ `Iter[Function(tail → R)]`.
+    /// Recomputes every `zip_with` node so disconnecting `f` restores the
+    /// stored `ZipWithData`-driven layout. Sequenced after the apply post-pass
+    /// for the same source-resolution ordering reason as map's.
+    pub fn update_zip_with_pin_layouts_for_network(&self, network: &mut NodeNetwork) {
+        self.update_f_derived_pin_layouts_scoped(
+            network,
+            &[],
+            &[],
+            true,
+            "zip_with",
+            Self::compute_zip_with_custom_type,
+        );
+    }
+
+    /// `refresh_args = false` counterpart of
+    /// [`Self::update_zip_with_pin_layouts_for_network`] — see
+    /// [`Self::update_apply_pin_layouts_for_network_preserving_args`].
+    pub fn update_zip_with_pin_layouts_for_network_preserving_args(
+        &self,
+        network: &mut NodeNetwork,
+    ) {
+        self.update_f_derived_pin_layouts_scoped(
+            network,
+            &[],
+            &[],
+            false,
+            "zip_with",
+            Self::compute_zip_with_custom_type,
+        );
+    }
+
+    /// Shared scope-aware recursive worker for the `f`-derivation post-passes
+    /// (`map`, `zip_with`). See [`Self::update_apply_pin_layouts_scoped`] for
+    /// the chain convention and the take-and-restore borrow-split rationale.
+    /// `refresh_args` is forwarded to `set_custom_node_type`; `compute`
+    /// resolves the custom type for one node of type `node_type_name`
+    /// (returning `None` = leave the existing layout untouched).
+    fn update_f_derived_pin_layouts_scoped(
         &self,
         network: &mut NodeNetwork,
         ancestors: &[&NodeNetwork],
         ancestor_hof_ids: &[u64],
         refresh_args: bool,
+        node_type_name: &str,
+        compute: fn(&Self, &Node, &NodeNetwork, &[&NodeNetwork], &[u64]) -> Option<NodeType>,
     ) {
-        // Snapshot pass (immutable read). Recompute *every* map node's
-        // custom_node_type so disconnecting `f` restores the MapData-driven
+        // Snapshot pass (immutable read). Recompute *every* matching node's
+        // custom_node_type so disconnecting `f` restores the data-driven
         // layout cleanly — without this, an override installed by a previous
-        // run would persist after the wire is gone. The MapData-driven default
+        // run would persist after the wire is gone. The data-driven default
         // is identical to what `populate_custom_node_type_cache` would produce,
         // so re-installing it on every revalidate is a no-op for nodes that
         // weren't overridden (`set_custom_node_type`'s by-name parameter
         // preservation keeps the existing arguments untouched).
-        let map_ids: Vec<u64> = network
+        let node_ids: Vec<u64> = network
             .nodes
             .iter()
-            .filter_map(|(&id, n)| (n.node_type_name == "map").then_some(id))
+            .filter_map(|(&id, n)| (n.node_type_name == node_type_name).then_some(id))
             .collect();
         let mut updates: Vec<(u64, NodeType)> = Vec::new();
-        for id in map_ids {
+        for id in node_ids {
             let Some(node) = network.nodes.get(&id) else {
                 continue;
             };
-            if let Some(custom) =
-                self.compute_map_custom_type(node, network, ancestors, ancestor_hof_ids)
-            {
+            if let Some(custom) = compute(self, node, network, ancestors, ancestor_hof_ids) {
                 updates.push((id, custom));
             }
         }
@@ -2189,11 +2296,13 @@ impl NodeTypeRegistry {
                 let mut new_hof_ids: Vec<u64> = ancestor_hof_ids.to_vec();
                 new_hof_ids.push(hof_id);
                 let body = std::sync::Arc::make_mut(&mut body_arc);
-                self.update_map_pin_layouts_scoped(
+                self.update_f_derived_pin_layouts_scoped(
                     body,
                     &new_ancestors,
                     &new_hof_ids,
                     refresh_args,
+                    node_type_name,
+                    compute,
                 );
             }
             if let Some(node) = network.nodes.get_mut(&hof_id) {
@@ -2281,21 +2390,19 @@ impl NodeTypeRegistry {
         ancestors: &[&NodeNetwork],
         ancestor_hof_ids: &[u64],
     ) -> Option<NodeType> {
-        use crate::structure_designer::data_type::FunctionType;
         use crate::structure_designer::node_type::OutputPinDefinition;
 
         // map.f is parameter index 1. Resolve its source across scopes — local
         // (depth 0), cross-scope capture, or zone-input reference — so a `map`
         // inside a zone body whose `f` is fed by an outer `element`/`acc` pin
         // derives its layout too.
-        let f_arg = map_node.arguments.get(1)?;
-        let f_wire = f_arg.incoming_wires.first()?;
-        let src_type = self
-            .resolve_wire_source_type_scoped(f_wire, network, ancestors, ancestor_hof_ids)?
-            .data_type;
-        let DataType::Function(src_ft) = src_type else {
-            return None;
-        };
+        let src_ft = self.resolve_wired_function_signature(
+            map_node,
+            1,
+            network,
+            ancestors,
+            ancestor_hof_ids,
+        )?;
 
         // Starts-with rule: the source's parameter list must begin with
         // `[element_type]`. element_type is the MapData-driven f pin's
@@ -2306,19 +2413,7 @@ impl NodeTypeRegistry {
         let DataType::AnyFunction { leading_params } = f_pin_type else {
             return None;
         };
-        let element_type = leading_params.first()?.clone();
-        if src_ft.parameter_types.first() != Some(&element_type) {
-            return None;
-        }
-
-        // Derive the output type. Tail = params after the leading element_type.
-        let tail = &src_ft.parameter_types[1..];
-        let return_type = (*src_ft.output_type).clone();
-        let derived_output = if tail.is_empty() {
-            return_type
-        } else {
-            DataType::Function(FunctionType::new(tail.to_vec(), return_type))
-        };
+        let derived_output = Self::derive_hof_output_from_signature(leading_params, &src_ft)?;
 
         // Build the override on top of the MapData-driven default. The f-pin
         // declared type stays at `AnyFunction { leading_params: [element] }` —
@@ -2329,6 +2424,61 @@ impl NodeTypeRegistry {
             OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(derived_output)));
 
         Some(custom)
+    }
+
+    /// Resolves the custom_node_type for a `zip_with` node — the N-lane
+    /// sibling of [`Self::compute_map_custom_type`]:
+    /// - `f` wired and derivable (source params start with the lane types) →
+    ///   the derived layout: only the output pin changes, to `Iter[R]` /
+    ///   `Iter[Function(tail → R)]`; lane pins and zone pins stay
+    ///   `ZipWithData`-driven so disconnecting `f` restores cleanly.
+    /// - `f` disconnected → the `ZipWithData`-driven default.
+    /// - `f` wired but **unresolvable** in this scope context → `None`,
+    ///   meaning "leave the existing layout untouched" (keeps the
+    ///   body-recursion of `repair_node_network` from clobbering a derived
+    ///   cross-scope layout the top-level pass already installed).
+    fn compute_zip_with_custom_type(
+        &self,
+        zip_node: &Node,
+        network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<NodeType> {
+        use crate::structure_designer::node_type::OutputPinDefinition;
+
+        let base = self.built_in_node_types.get("zip_with")?;
+        let data_default = zip_node.data.calculate_custom_node_type(base)?;
+        // `f` is the trailing pin, after the N lane pins; its declared
+        // `AnyFunction { leading_params }` carries the lane types.
+        let f_index = data_default.parameters.len().checked_sub(1)?;
+        if let DataType::AnyFunction { leading_params } =
+            &data_default.parameters[f_index].data_type
+            && let Some(src_ft) = self.resolve_wired_function_signature(
+                zip_node,
+                f_index,
+                network,
+                ancestors,
+                ancestor_hof_ids,
+            )
+            && let Some(derived_output) =
+                Self::derive_hof_output_from_signature(leading_params, &src_ft)
+        {
+            let mut custom = data_default.clone();
+            custom.output_pins =
+                OutputPinDefinition::single_fixed(DataType::Iterator(Box::new(derived_output)));
+            return Some(custom);
+        }
+
+        // `f` wired but the source didn't resolve to a starts-with-compatible
+        // Function in this scope context — keep the existing layout rather
+        // than reverting to the data default (avoids the repair-recursion
+        // clobber). Disconnected `f` falls through to the default.
+        let f_wired = zip_node
+            .arguments
+            .get(f_index)
+            .map(|a| !a.incoming_wires.is_empty())
+            .unwrap_or(false);
+        if f_wired { None } else { Some(data_default) }
     }
 
     /// Repairs a node network by ensuring all nodes have the correct number of arguments
@@ -2437,6 +2587,12 @@ impl NodeTypeRegistry {
         // feeding `map.f` has its output type resolved against its updated
         // arg-pin layout first.
         self.update_map_pin_layouts_for_network(network);
+
+        // zip_with Phase 2 (`doc/design_zip_with.md`): the N-lane sibling of
+        // the map pass — output pin type derives from a wired `f` whose
+        // parameter list starts with the lane types. Same after-apply ordering
+        // rationale.
+        self.update_zip_with_pin_layouts_for_network(network);
 
         // R3: remap consumer output wires by field identity now that record
         // nodes' output-pin layouts have been refreshed (see the capture at the

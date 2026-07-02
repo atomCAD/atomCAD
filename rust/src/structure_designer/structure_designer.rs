@@ -8046,6 +8046,8 @@ impl StructureDesigner {
             self.node_type_registry
                 .update_map_pin_layouts_for_network_preserving_args(&mut top);
             self.node_type_registry
+                .update_zip_with_pin_layouts_for_network_preserving_args(&mut top);
+            self.node_type_registry
                 .node_networks
                 .insert(network_name.clone(), top);
         }

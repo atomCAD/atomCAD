@@ -9,7 +9,7 @@
 //! earlier lane. See `doc/design_zip_with.md`.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -312,6 +312,22 @@ impl NodeData for ZipWithData {
         // zip.
         m.insert("f".to_string(), (false, None));
         m
+    }
+
+    fn drag_hint_for_input_pin(&self, pin_index: usize) -> Option<DataType> {
+        // The `f` pin (index N, after the lane pins) is declared
+        // `AnyFunction { leading_params: [T_1..T_N] }`, which omits the return
+        // type. Expose the concrete `(T_1..T_N) -> output_type` signature so a
+        // `closure` dragged off this pin lands pre-shaped (mirrors `map.rs`).
+        // See `doc/design_drag_aware_add_node.md` (Tier 2).
+        if pin_index == self.lanes.len() {
+            Some(DataType::Function(FunctionType::new(
+                self.lane_types(),
+                self.output_type.clone(),
+            )))
+        } else {
+            None
+        }
     }
 }
 

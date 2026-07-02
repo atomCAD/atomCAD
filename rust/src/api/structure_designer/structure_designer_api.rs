@@ -769,13 +769,14 @@ fn build_node_view(
 }
 
 /// Build an [`APIDerivedShapeView`] for nodes whose layout / output type is
-/// derived from a wired input pin: `apply` (arg pins materialise from `f`) and
-/// `map` (output type derives from `f` via the starts-with rule). Returns
-/// `None` for every other node type. The resulting `derived_from_input_pin`
-/// is `Some("f")` only when the relevant source resolves to a usable type
-/// (`Function(_)` for apply; `Function(_)` whose params start with the map's
-/// element type for map). See
-/// `doc/design_function_pin_unification.md` (Phase D).
+/// derived from a wired input pin: `apply` (arg pins materialise from `f`),
+/// and `map` / `zip_with` (output type derives from `f` via the starts-with
+/// rule). Returns `None` for every other node type. The resulting
+/// `derived_from_input_pin` is `Some("f")` only when the relevant source
+/// resolves to a usable type (`Function(_)` for apply; `Function(_)` whose
+/// params start with the map's element type / the zip's lane types for
+/// map / zip_with). See `doc/design_function_pin_unification.md` (Phase D)
+/// and `doc/design_zip_with.md` (Phase 2).
 fn build_derived_shape_view(
     node: &crate::structure_designer::node_network::Node,
     node_network: &crate::structure_designer::node_network::NodeNetwork,
@@ -800,8 +801,28 @@ fn build_derived_shape_view(
                 derived_from_input_pin: derived.then(|| "f".to_string()),
             })
         }
-        "map" => {
-            let f_arg = node.arguments.get(1)?;
+        "map" | "zip_with" => {
+            // For both nodes `f` is the trailing pin, and its declared
+            // `AnyFunction { leading_params }` carries the element type
+            // (map: `[element]`, set by `MapData::calculate_custom_node_type`)
+            // or the lane types (zip_with: `[T_1..T_N]`, set by
+            // `ZipWithData::calculate_custom_node_type`). The starts-with rule
+            // is the same elementwise-equality prefix check the derivation
+            // post-pass uses.
+            let leading_params = {
+                let nt = registry.get_node_type_for_node(node)?;
+                let f_param = nt.parameters.last()?;
+                match &f_param.data_type {
+                    DataType::AnyFunction { leading_params } => leading_params.clone(),
+                    _ => {
+                        return Some(APIDerivedShapeView {
+                            derived_from_input_pin: None,
+                        });
+                    }
+                }
+            };
+            let f_index = registry.get_node_type_for_node(node)?.parameters.len() - 1;
+            let f_arg = node.arguments.get(f_index)?;
             let f_wire = f_arg.incoming_wires.first()?;
             if f_wire.source_scope_depth != 0 {
                 return Some(APIDerivedShapeView {
@@ -816,21 +837,8 @@ fn build_derived_shape_view(
                     derived_from_input_pin: None,
                 });
             };
-            // Read the element_type from the map's f-pin declared AnyFunction
-            // leading_params (set by MapData::calculate_custom_node_type).
-            let element_type = {
-                let nt = registry.get_node_type_for_node(node)?;
-                let f_param = nt.parameters.get(1)?;
-                match &f_param.data_type {
-                    DataType::AnyFunction { leading_params } => leading_params.first()?.clone(),
-                    _ => {
-                        return Some(APIDerivedShapeView {
-                            derived_from_input_pin: None,
-                        });
-                    }
-                }
-            };
-            let starts_with = src_ft.parameter_types.first() == Some(&element_type);
+            let starts_with = src_ft.parameter_types.len() >= leading_params.len()
+                && src_ft.parameter_types[..leading_params.len()] == leading_params[..];
             Some(APIDerivedShapeView {
                 derived_from_input_pin: starts_with.then(|| "f".to_string()),
             })

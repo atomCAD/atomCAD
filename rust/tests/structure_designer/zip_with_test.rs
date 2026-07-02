@@ -8,13 +8,15 @@
 //! in `iterator_walker_test.rs`.
 
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
-use rust_lib_flutter_cad::structure_designer::node_network::{Argument, IncomingWire, SourcePin};
+use rust_lib_flutter_cad::structure_designer::node_network::{
+    Argument, ArgumentKind, IncomingWire, SourcePin, Wire,
+};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::closure::{ClosureData, ClosureKind};
 use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
@@ -22,6 +24,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParame
 use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
+use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
 use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
@@ -1354,4 +1357,631 @@ fn zip_heal_lane_ids_mints_missing_ids() {
     data.heal_lane_ids();
     let after: Vec<u64> = data.lanes.iter().map(|l| l.id.unwrap()).collect();
     assert_eq!(before, after);
+}
+
+// ============================================================================
+// Phase 2: `f`-derivation post-pass + validation polish
+// (`doc/design_zip_with.md` §Phase 2)
+// ============================================================================
+
+/// The *resolved* output type of `node_id`'s pin 0 — what downstream
+/// consumers see, including the post-pass derivation (mirrors
+/// `currying_test.rs::phase4_output_type`).
+fn resolved_output_type(
+    designer: &StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+) -> DataType {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    designer
+        .node_type_registry
+        .get_node_type_for_node(node)
+        .unwrap()
+        .output_type()
+        .clone()
+}
+
+/// Add a bodiless `closure` node of `Custom` kind with the given signature —
+/// sufficient for layout/type derivation tests (the declared output pin type
+/// doesn't need a populated body).
+fn add_custom_closure(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    param_types: Vec<DataType>,
+    return_type: DataType,
+    y: f64,
+) -> u64 {
+    let c_id = designer.add_node("closure", DVec2::new(0.0, y));
+    let n = param_types.len();
+    set_node_data(
+        designer,
+        network_name,
+        c_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: param_types.into_iter().chain([return_type]).collect(),
+            param_names: (0..n).map(|i| format!("p{}", i)).collect(),
+            custom_label: None,
+        }),
+    );
+    c_id
+}
+
+/// Disconnect the wire `src.0 → dst.arg_index` by selecting and deleting it
+/// (same path the UI takes; re-validates, so the post-pass reruns).
+fn disconnect_wire(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    src: u64,
+    dst: u64,
+    dst_arg_index: usize,
+) {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    net.selected_wires.clear();
+    net.selected_wires.push(Wire {
+        source_node_id: src,
+        source_pin: SourcePin::NodeOutput { pin_index: 0 },
+        source_scope_depth: 0,
+        destination_node_id: dst,
+        destination_argument_index: dst_arg_index,
+        destination_argument_kind: ArgumentKind::External,
+    });
+    designer.delete_selected();
+}
+
+/// Exact-arity wired `f` derives the output pin type; the stored
+/// `output_type` stays untouched; disconnecting `f` restores `Iter[stored]`.
+#[test]
+fn zip_phase2_wired_f_derives_output_and_disconnect_restores() {
+    let mut designer = setup_designer_with_network("main");
+    // Stored output_type = Bool, so the derived type is distinguishable.
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Bool,
+        400.0,
+    );
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Vec3,
+        200.0,
+    );
+
+    assert!(
+        designer.can_connect_nodes(c_id, 0, zip_id, 2),
+        "an exact-arity (Int, Int) -> Vec3 source must be accepted on [Int, Int] lanes"
+    );
+    designer.connect_nodes(c_id, 0, zip_id, 2);
+
+    assert_eq!(
+        resolved_output_type(&designer, "main", zip_id),
+        DataType::Iterator(Box::new(DataType::Vec3)),
+        "wired f must derive the output pin to Iter[Vec3]"
+    );
+
+    // The stored ZipWithData is untouched — only the derived layout changed.
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let data = net
+            .nodes
+            .get(&zip_id)
+            .unwrap()
+            .data
+            .as_any_ref()
+            .downcast_ref::<ZipWithData>()
+            .unwrap();
+        assert_eq!(data.output_type, DataType::Bool);
+    }
+
+    disconnect_wire(&mut designer, "main", c_id, zip_id, 2);
+    assert_eq!(
+        resolved_output_type(&designer, "main", zip_id),
+        DataType::Iterator(Box::new(DataType::Bool)),
+        "disconnecting f must restore the stored output_type"
+    );
+}
+
+/// Excess-arity wired `f` derives `Iter[Function(tail → R)]` — the
+/// auto-partialization tail.
+#[test]
+fn zip_phase2_excess_arity_derives_partial_tail() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        400.0,
+    );
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int, DataType::Float],
+        DataType::Int,
+        200.0,
+    );
+
+    assert!(
+        designer.can_connect_nodes(c_id, 0, zip_id, 2),
+        "a (Int, Int, Float) -> Int source starts with the lane types and must be accepted"
+    );
+    designer.connect_nodes(c_id, 0, zip_id, 2);
+
+    assert_eq!(
+        resolved_output_type(&designer, "main", zip_id),
+        DataType::Iterator(Box::new(DataType::Function(FunctionType::new(
+            vec![DataType::Float],
+            DataType::Int,
+        )))),
+        "excess arity must derive Iter[Function((Float) -> Int)]"
+    );
+}
+
+/// Pinning test: a value-convertible-but-unequal prefix — `(Float, Int)` on
+/// `[Int, Int]` lanes — is admitted by the wire-level pairwise-convertibility
+/// rule but does NOT derive (the post-pass requires elementwise equality,
+/// mirroring map), so the output pin keeps the stored type.
+#[test]
+fn zip_phase2_convertible_but_unequal_prefix_keeps_stored_output() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Bool,
+        400.0,
+    );
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Float, DataType::Int],
+        DataType::Int,
+        200.0,
+    );
+
+    assert!(
+        designer.can_connect_nodes(c_id, 0, zip_id, 2),
+        "pairwise-convertible prefix (Float ~ Int) passes the wire rule (pinning)"
+    );
+    designer.connect_nodes(c_id, 0, zip_id, 2);
+
+    assert_eq!(
+        resolved_output_type(&designer, "main", zip_id),
+        DataType::Iterator(Box::new(DataType::Bool)),
+        "non-equal prefix must not derive; the stored output_type stays (pinning)"
+    );
+}
+
+/// A source whose prefix mismatches the lane types outright is rejected at
+/// connect time.
+#[test]
+fn zip_phase2_mismatched_prefix_rejected_at_connect() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        400.0,
+    );
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Bool, DataType::Int],
+        DataType::Int,
+        200.0,
+    );
+
+    assert!(
+        !designer.can_connect_nodes(c_id, 0, zip_id, 2),
+        "a (Bool, Int) -> Int source must be rejected on [Int, Int] lanes"
+    );
+}
+
+/// Zone rule 1 ("zone-output pin needs a wire") is suspended when `f` is
+/// connected — `function_input_pin_connected` locates the trailing pin by
+/// name + function shape, so the network stays valid with an empty inline
+/// body, and evaluation uses the wired closure (pinning test).
+#[test]
+fn zip_phase2_f_wired_empty_body_is_valid_and_evaluates() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        600.0,
+    );
+    let r1 = add_range(&mut designer, "main", 0, 1, 3, 0.0); // [0,1,2]
+    let r2 = add_range(&mut designer, "main", 5, 1, 3, 200.0); // [5,6,7]
+    designer.connect_nodes(r1, 0, zip_id, 0);
+    designer.connect_nodes(r2, 0, zip_id, 1);
+
+    // Closure with a real body: (a, b) -> a * 10 + b.
+    let c_id = designer.add_node("closure", DVec2::new(0.0, 300.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        c_id,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int, DataType::Int, DataType::Int],
+            param_names: vec!["a".to_string(), "b".to_string()],
+            custom_label: None,
+        }),
+    );
+    let c_expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        c_id,
+        "a * 10 + b",
+        vec![
+            ("a".to_string(), DataType::Int),
+            ("b".to_string(), DataType::Int),
+        ],
+    );
+    wire_zone_input_pin_to_body_node(&mut designer, "main", c_id, 0, c_expr_id, 0);
+    wire_zone_input_pin_to_body_node(&mut designer, "main", c_id, 1, c_expr_id, 1);
+    wire_body_node_to_zone_output(&mut designer, "main", c_id, c_expr_id);
+    designer.connect_nodes(c_id, 0, zip_id, 2);
+
+    designer.validate_active_network();
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        assert!(net.valid, "network must stay valid with an empty zip body");
+        assert!(
+            net.validation_errors
+                .iter()
+                .all(|e| e.node_id != Some(zip_id)),
+            "no validation error may be attributed to the zip while f is wired \
+             (rule-1 suspension must cover the trailing f pin); got: {:?}",
+            net.validation_errors
+                .iter()
+                .filter(|e| e.node_id == Some(zip_id))
+                .map(|e| e.error_text.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    let result = evaluate_node(&designer, "main", zip_id);
+    let elements = extract_ints(drain_iter_with_designer(&designer, result));
+    assert_eq!(elements, vec![5, 16, 27]);
+}
+
+/// Two consecutive validate passes leave the derived custom type identical —
+/// guards the recompute-every-node discipline (idempotence).
+#[test]
+fn zip_phase2_post_pass_idempotent() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        400.0,
+    );
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int, DataType::Float],
+        DataType::Vec3,
+        200.0,
+    );
+    designer.connect_nodes(c_id, 0, zip_id, 2);
+
+    designer.validate_active_network();
+    let snapshot = {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        net.nodes
+            .get(&zip_id)
+            .unwrap()
+            .custom_node_type
+            .clone()
+            .expect("zip must carry a custom node type")
+    };
+
+    designer.validate_active_network();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let after = net
+        .nodes
+        .get(&zip_id)
+        .unwrap()
+        .custom_node_type
+        .as_ref()
+        .expect("zip must still carry a custom node type");
+
+    // `Parameter` has no Debug impl, so compare with plain equality.
+    assert!(
+        after.parameters == snapshot.parameters,
+        "parameters must be unchanged by a second validate"
+    );
+    assert_eq!(after.output_pins, snapshot.output_pins);
+    assert_eq!(after.zone_input_pins, snapshot.zone_input_pins);
+    assert!(
+        after.zone_output_pins == snapshot.zone_output_pins,
+        "zone_output_pins must be unchanged by a second validate"
+    );
+}
+
+/// A body-internal `zip_with` whose `f` is a cross-scope capture of an outer
+/// closure derives its layout too — the scoped-recursion path of the
+/// post-pass.
+#[test]
+fn zip_phase2_body_internal_zip_cross_scope_f_derives() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Top level: a closure (Int, Int) -> Vec3 and a map whose body hosts the
+    // zip.
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Vec3,
+        -200.0,
+    );
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+
+    // Body-internal zip (stored output_type Float — distinguishable from the
+    // derived Vec3).
+    let zip_id = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        body.add_node(
+            "zip_with",
+            DVec2::new(0.0, 0.0),
+            3,
+            Box::new(zip_data(
+                vec![DataType::Int, DataType::Int],
+                DataType::Float,
+            )),
+        )
+    };
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Capture the outer closure into the body zip's `f` (pin 2, depth 1).
+    wire_capture_to_body_node(&mut designer, "main", map_id, zip_id, 2, c_id);
+
+    designer.validate_active_network();
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let body = net.nodes.get(&map_id).unwrap().zone.as_ref().unwrap();
+    let out_ty = body
+        .nodes
+        .get(&zip_id)
+        .unwrap()
+        .custom_node_type
+        .as_ref()
+        .expect("body zip must carry a custom node type")
+        .output_type()
+        .clone();
+    assert_eq!(
+        out_ty,
+        DataType::Iterator(Box::new(DataType::Vec3)),
+        "a cross-scope f capture must derive the body zip's output type"
+    );
+}
+
+/// The drag hint for the `f` pin exposes the concrete `(T_1..T_N) ->
+/// output_type` signature (the declared `AnyFunction` omits the return type);
+/// lane pins expose no hint.
+#[test]
+fn zip_phase2_drag_hint_exposes_concrete_signature() {
+    let data = zip_data(vec![DataType::Int, DataType::Vec3], DataType::Float);
+    assert_eq!(data.drag_hint_for_input_pin(0), None);
+    assert_eq!(data.drag_hint_for_input_pin(1), None);
+    assert_eq!(
+        data.drag_hint_for_input_pin(2),
+        Some(DataType::Function(FunctionType::new(
+            vec![DataType::Int, DataType::Vec3],
+            DataType::Float,
+        )))
+    );
+}
+
+/// Mirror of `function_pin_test.rs::configure_parameter`: set a parameter
+/// node's name and type, preserving an already-minted `param_id`.
+fn configure_parameter(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+    name: &str,
+    data_type: DataType,
+) {
+    designer.set_active_node_network_name(Some(network_name.to_string()));
+    let existing_param_id = designer
+        .get_active_node_network()
+        .and_then(|n| n.nodes.get(&node_id))
+        .and_then(|node| node.data.as_any_ref().downcast_ref::<ParameterData>())
+        .and_then(|p| p.param_id);
+    let new_data = Box::new(ParameterData {
+        param_id: existing_param_id,
+        param_index: 0,
+        param_name: name.to_string(),
+        data_type,
+        sort_order: 0,
+        data_type_str: None,
+        error: None,
+    });
+    designer.set_node_network_data(node_id, new_data);
+}
+
+/// `.cnnd` round-trip where the zip's `f`-source is another network's
+/// function pin — the load-order bug class (`apply`'s under-derived layout):
+/// every wire must survive the load positionally, and after validation the
+/// output type derives and the zip evaluates correctly.
+#[test]
+fn zip_phase2_cnnd_roundtrip_preserves_wires_and_derives() {
+    let mut designer = setup_designer_with_network("mynet");
+
+    // mynet(a: Int, b: Int) -> Int = a * 10 + b, used via its function pin.
+    let pa = designer.add_node("parameter", DVec2::new(0.0, 0.0));
+    configure_parameter(&mut designer, "mynet", pa, "a", DataType::Int);
+    let pb = designer.add_node("parameter", DVec2::new(0.0, 150.0));
+    configure_parameter(&mut designer, "mynet", pb, "b", DataType::Int);
+    let expr_id = {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut("mynet").unwrap();
+        let expr_id = add_expr_to_network(
+            network,
+            "a * 10 + b",
+            vec![
+                ("a".to_string(), DataType::Int),
+                ("b".to_string(), DataType::Int),
+            ],
+        );
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            registry
+                .node_networks
+                .get_mut("mynet")
+                .unwrap()
+                .nodes
+                .get_mut(&expr_id)
+                .unwrap(),
+            true,
+        );
+        expr_id
+    };
+    designer.connect_nodes(pa, 0, expr_id, 0);
+    designer.connect_nodes(pb, 0, expr_id, 1);
+    designer.set_return_node_id(Some(expr_id));
+    designer.validate_active_network();
+
+    // Main: two ranges into a 2×Int zip whose f is mynet's function pin.
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    let zip_id = add_zip(
+        &mut designer,
+        "Main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Float,
+        600.0,
+    );
+    let r1 = add_range(&mut designer, "Main", 0, 1, 3, 0.0); // [0,1,2]
+    let r2 = add_range(&mut designer, "Main", 5, 1, 3, 200.0); // [5,6,7]
+    designer.connect_nodes(r1, 0, zip_id, 0);
+    designer.connect_nodes(r2, 0, zip_id, 1);
+    let inst = designer.add_node("mynet", DVec2::new(0.0, 400.0));
+    designer.connect_nodes(inst, -1, zip_id, 2); // mynet.fn → f
+
+    // Pre-save sanity: the function-pin source derives the output type.
+    assert_eq!(
+        resolved_output_type(&designer, "Main", zip_id),
+        DataType::Iterator(Box::new(DataType::Int)),
+        "pre-save: the function-pin f source must derive Iter[Int]"
+    );
+
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("zip_with_f_load_order.cnnd");
+    let path_str = path.to_str().unwrap();
+    designer.save_node_networks_as(path_str).unwrap();
+
+    let mut loaded = StructureDesigner::new();
+    loaded
+        .load_node_networks(path_str)
+        .unwrap_or_else(|e| panic!("fixture failed to load: {}", e));
+
+    // Every wire survives the load positionally (the apply bug class).
+    {
+        let main = loaded
+            .node_type_registry
+            .node_networks
+            .get("Main")
+            .expect("Main network");
+        let zip_node = main.nodes.get(&zip_id).unwrap();
+        assert_eq!(zip_node.arguments.len(), 3, "xs1 + xs2 + f pins");
+        for (i, arg) in zip_node.arguments.iter().enumerate() {
+            assert_eq!(
+                arg.incoming_wires.len(),
+                1,
+                "the wire on zip pin {} must survive the load",
+                i
+            );
+        }
+    }
+
+    // After the standard post-load validation the output type derives and
+    // evaluation runs the function-pin closure per frame.
+    loaded.set_active_node_network_name(Some("Main".to_string()));
+    loaded.validate_active_network();
+    assert_eq!(
+        resolved_output_type(&loaded, "Main", zip_id),
+        DataType::Iterator(Box::new(DataType::Int)),
+        "post-load: the derived output type must be restored"
+    );
+    let result = evaluate_node(&loaded, "Main", zip_id);
+    let elements = extract_ints(drain_iter_with_designer(&loaded, result));
+    assert_eq!(elements, vec![5, 16, 27]);
 }

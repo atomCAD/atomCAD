@@ -79,13 +79,15 @@ impl ExtractClosureBodyCommand {
         };
         ctx.node_type_registry
             .initialize_custom_node_types_for_network(&mut body);
-        // Re-derive `apply` / `map` layouts preserving the arguments vector so
-        // body arg wires survive the re-init's reset to the bare default layout
-        // (see `EditZoneBodyCommand::restore`).
+        // Re-derive `apply` / `map` / `zip_with` layouts preserving the
+        // arguments vector so body arg wires survive the re-init's reset to
+        // the bare default layout (see `EditZoneBodyCommand::restore`).
         ctx.node_type_registry
             .update_apply_pin_layouts_for_network_preserving_args(&mut body);
         ctx.node_type_registry
             .update_map_pin_layouts_for_network_preserving_args(&mut body);
+        ctx.node_type_registry
+            .update_zip_with_pin_layouts_for_network_preserving_args(&mut body);
 
         let zone_output_arguments: Vec<Argument> = snap
             .zone_output_wires

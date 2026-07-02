@@ -91,6 +91,48 @@ fn leading_param_pairwise_uses_can_be_converted_to() {
     assert!(DataType::can_be_converted_to(&src, &dst, &registry));
 }
 
+#[test]
+fn multi_leading_params_starts_with_matrix() {
+    // The `zip_with.f` shape: `AnyFunction { leading_params: [T_1 .. T_N] }`
+    // with N > 1 enforces a multi-element starts-with prefix
+    // (`doc/design_zip_with.md`). Pins the acceptance matrix the zip's
+    // connect-time gate relies on.
+    let registry = NodeTypeRegistry::new();
+    let dst = DataType::AnyFunction {
+        leading_params: vec![DataType::Int, DataType::Int],
+    };
+
+    let exact = DataType::Function(FunctionType::new(
+        vec![DataType::Int, DataType::Int],
+        DataType::Vec3,
+    ));
+    assert!(DataType::can_be_converted_to(&exact, &dst, &registry));
+
+    let excess = DataType::Function(FunctionType::new(
+        vec![DataType::Int, DataType::Int, DataType::Float],
+        DataType::Vec3,
+    ));
+    assert!(DataType::can_be_converted_to(&excess, &dst, &registry));
+
+    // Pairwise convertibility (Float ~ Int) admits a non-equal prefix at the
+    // wire level; the layout-derivation post-passes separately require exact
+    // equality (see `zip_with_test.rs`).
+    let convertible = DataType::Function(FunctionType::new(
+        vec![DataType::Float, DataType::Int],
+        DataType::Vec3,
+    ));
+    assert!(DataType::can_be_converted_to(&convertible, &dst, &registry));
+
+    let mismatched = DataType::Function(FunctionType::new(
+        vec![DataType::Bool, DataType::Int],
+        DataType::Vec3,
+    ));
+    assert!(!DataType::can_be_converted_to(&mismatched, &dst, &registry));
+
+    let too_short = DataType::Function(FunctionType::new(vec![DataType::Int], DataType::Vec3));
+    assert!(!DataType::can_be_converted_to(&too_short, &dst, &registry));
+}
+
 // =============================================================================
 // Reverse direction (AnyFunction as source) is rejected
 // =============================================================================

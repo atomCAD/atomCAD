@@ -746,6 +746,13 @@ pub fn validate_network(
     // layout first.
     node_type_registry.update_map_pin_layouts_for_network_preserving_args(network);
 
+    // REPAIR PHASE: zip_with `f`-derivation (`doc/design_zip_with.md` Phase 2).
+    // The N-lane sibling of the map pass: for every `zip_with` node whose `f`
+    // pin is wired with a source whose parameter list starts with the lane
+    // types, derive the output pin type (`Iter[R]` / `Iter[Function(tail→R)]`).
+    // Same after-apply ordering rationale as map's.
+    node_type_registry.update_zip_with_pin_layouts_for_network_preserving_args(network);
+
     // REPAIR PHASE: Ensure argument counts match parameter counts in this
     // network (runs after the apply/map post-passes so their derived arg-pin
     // counts are in place before padding/truncation).

@@ -89,16 +89,18 @@ impl EditZoneBodyCommand {
         };
         ctx.node_type_registry
             .initialize_custom_node_types_for_network(&mut body);
-        // The re-init above reset any `apply` / `map` body node to its bare
-        // default layout (erasing post-pass-derived arg-pin names). Re-derive
-        // those layouts preserving the arguments vector positionally, so the
-        // body's arg wires survive (the post-Full-refresh validate pass would
-        // otherwise drop them on its by-name rebuild). No-op for bodies without
-        // a wired-`f` apply/map.
+        // The re-init above reset any `apply` / `map` / `zip_with` body node
+        // to its bare default layout (erasing post-pass-derived arg-pin
+        // names). Re-derive those layouts preserving the arguments vector
+        // positionally, so the body's arg wires survive (the post-Full-refresh
+        // validate pass would otherwise drop them on its by-name rebuild).
+        // No-op for bodies without a wired-`f` apply/map/zip_with.
         ctx.node_type_registry
             .update_apply_pin_layouts_for_network_preserving_args(&mut body);
         ctx.node_type_registry
             .update_map_pin_layouts_for_network_preserving_args(&mut body);
+        ctx.node_type_registry
+            .update_zip_with_pin_layouts_for_network_preserving_args(&mut body);
 
         let zone_output_arguments: Vec<Argument> = snap
             .zone_output_wires
