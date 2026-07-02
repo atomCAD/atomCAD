@@ -15,11 +15,6 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use serde::{Deserialize, Serialize};
 
-/// Maximum number of atoms the relax node will process before returning an error.
-/// Minimization has O(N²) complexity due to nonbonded pair enumeration, so large
-/// structures would block the UI thread for an unacceptable time (issue #271).
-pub const MAX_RELAX_ATOMS: usize = 2000;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RelaxData {}
 
@@ -71,16 +66,6 @@ impl NodeData for RelaxData {
             NetworkResult::Molecule(m) => &mut m.atoms,
             _ => unreachable!(),
         };
-
-        let num_atoms = atoms_ref.get_num_of_atoms();
-        if num_atoms > MAX_RELAX_ATOMS {
-            return EvalOutput::single(NetworkResult::Error(format!(
-                "Structure has {} atoms, which exceeds the relax node limit of {}. \
-                 Large structures cause excessive computation time. \
-                 Consider reducing the structure size or using a smaller region.",
-                num_atoms, MAX_RELAX_ATOMS
-            )));
-        }
 
         let vdw_mode = if context.use_vdw_cutoff {
             VdwMode::Cutoff(6.0)
