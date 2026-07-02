@@ -26,12 +26,28 @@ impl SpatialGrid {
     /// `cell_size` should typically equal the cutoff radius so that neighbor
     /// queries only need to check at most 3^3 = 27 neighboring cells.
     pub fn from_positions(positions: &[f64], cell_size: f64) -> Self {
+        let num_atoms = positions.len() / 3;
+        Self::from_indices(positions, 0..num_atoms, cell_size)
+    }
+
+    /// Builds a spatial grid containing only the given atom indices.
+    ///
+    /// Positions are still read from the full flat array by index, so grids
+    /// over different subsets of the same array can be queried side by side.
+    pub fn from_positions_subset(positions: &[f64], indices: &[usize], cell_size: f64) -> Self {
+        Self::from_indices(positions, indices.iter().copied(), cell_size)
+    }
+
+    fn from_indices(
+        positions: &[f64],
+        indices: impl Iterator<Item = usize>,
+        cell_size: f64,
+    ) -> Self {
         debug_assert!(cell_size > 0.0, "cell_size must be positive");
         let inv_cell_size = 1.0 / cell_size;
         let mut cells: FxHashMap<(i32, i32, i32), Vec<usize>> = FxHashMap::default();
 
-        let num_atoms = positions.len() / 3;
-        for i in 0..num_atoms {
+        for i in indices {
             let i3 = i * 3;
             let cx = (positions[i3] * inv_cell_size).floor() as i32;
             let cy = (positions[i3 + 1] * inv_cell_size).floor() as i32;

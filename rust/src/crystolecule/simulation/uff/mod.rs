@@ -58,8 +58,11 @@ enum VdwStrategy {
         atom_vdw_x: Vec<f64>,
         atom_vdw_d: Vec<f64>,
         exclusions: FxHashSet<(usize, usize)>,
-        /// Per-atom frozen flag. Pairs where both atoms are frozen are skipped.
-        frozen: Vec<bool>,
+        /// Indices of atoms that can move. Rebuilds scan only these.
+        free_indices: Vec<usize>,
+        /// Grid over frozen atoms only, built once — frozen atoms never
+        /// move, so their cell assignments stay valid for the whole run.
+        frozen_grid: SpatialGrid,
     },
 }
 
@@ -107,10 +110,15 @@ impl UffForceField {
     /// Constructs a UFF force field with a configurable vdW strategy and
     /// frozen atom support.
     ///
-    /// Pairs where **both** atoms are frozen are skipped in both AllPairs
-    /// and Cutoff modes (their gradients would be zeroed anyway). This can
-    /// dramatically reduce the pair count when most atoms are frozen
-    /// (e.g., FreezeBase).
+    /// Interactions whose atoms are **all** frozen are skipped everywhere:
+    /// bonds, angles, torsions, inversions, and vdW pairs (in both AllPairs
+    /// and Cutoff modes). Such terms exert zero force on every free atom and
+    /// contribute only a constant energy offset, so dropping them does not
+    /// change where any free atom ends up — but the reported energy becomes
+    /// "energy of all interactions involving at least one free atom". This
+    /// can dramatically reduce the per-iteration cost when most atoms are
+    /// frozen (e.g., FreezeBase, or a relax of a small unfrozen pocket in a
+    /// large frozen structure).
     pub fn from_topology_with_frozen(
         topology: &MolecularTopology,
         vdw_mode: VdwMode,
@@ -126,6 +134,21 @@ impl UffForceField {
                 vdw_strategy: VdwStrategy::AllPairs { params: Vec::new() },
                 num_atoms: 0,
             });
+        }
+
+        // Per-atom frozen flags, shared by all filter points below.
+        // Interactions whose atoms are *all* frozen exert zero force on every
+        // free atom and contribute only a constant energy offset, so they are
+        // skipped when pre-computing parameters. Note that the topology's
+        // bond list itself is NOT filtered: the atom typer needs each atom's
+        // complete bond environment (a frozen boundary atom's UFF type
+        // depends on all its bonds), and torsion force-constant scaling
+        // counts all torsions about a central bond, filtered or not.
+        let mut frozen_flags = vec![false; num_atoms];
+        for &idx in frozen {
+            if idx < num_atoms {
+                frozen_flags[idx] = true;
+            }
         }
 
         // Step 1: Build per-atom bond lists for the atom typer.
@@ -154,6 +177,7 @@ impl UffForceField {
         let bond_params: Vec<BondStretchParams> = topology
             .bonds
             .iter()
+            .filter(|bond| !(frozen_flags[bond.idx1] && frozen_flags[bond.idx2]))
             .map(|bond| {
                 let bo = bond_order_map
                     .get(&(bond.idx1.min(bond.idx2), bond.idx1.max(bond.idx2)))
@@ -182,6 +206,10 @@ impl UffForceField {
             .angles
             .iter()
             .filter_map(|angle| {
+                if frozen_flags[angle.idx1] && frozen_flags[angle.idx2] && frozen_flags[angle.idx3]
+                {
+                    return None;
+                }
                 let p1 = typing.params[angle.idx1];
                 let p2 = typing.params[angle.idx2]; // vertex
                 let p3 = typing.params[angle.idx3];
@@ -219,22 +247,15 @@ impl UffForceField {
         // Step 6: Pre-compute torsion parameters.
         // RDKit only adds torsions for central atoms that are SP2 or SP3.
         // Force constant is divided by the number of torsions about each central bond.
-        let torsion_params = Self::compute_torsion_params(topology, &typing, &bond_order_map);
+        let torsion_params =
+            Self::compute_torsion_params(topology, &typing, &bond_order_map, &frozen_flags);
 
         // Step 7: Pre-compute inversion parameters.
-        let inversion_params = Self::compute_inversion_params(topology, &typing);
+        let inversion_params = Self::compute_inversion_params(topology, &typing, &frozen_flags);
 
         // Step 8: Build vdW strategy based on the chosen mode.
         let vdw_strategy = match vdw_mode {
             VdwMode::AllPairs => {
-                // Build per-atom frozen flags to skip frozen-frozen pairs.
-                let mut frozen_flags = vec![false; num_atoms];
-                for &idx in frozen {
-                    if idx < num_atoms {
-                        frozen_flags[idx] = true;
-                    }
-                }
-
                 let vdw_params: Vec<VdwParams> = topology
                     .nonbonded_pairs
                     .iter()
@@ -282,23 +303,29 @@ impl UffForceField {
                     exclusions.insert(key);
                 }
 
-                // Build per-atom frozen flags from topology indices.
-                let mut frozen_flags = vec![false; num_atoms];
-                for &idx in frozen {
-                    if idx < num_atoms {
-                        frozen_flags[idx] = true;
-                    }
-                }
+                // Partition atoms into free and frozen. The frozen grid is
+                // built once here — frozen atoms never move — so periodic
+                // pair-list rebuilds only construct a grid over the free
+                // atoms, making rebuilds O(N_free) instead of O(N_total).
+                let free_indices: Vec<usize> =
+                    (0..num_atoms).filter(|&i| !frozen_flags[i]).collect();
+                let frozen_indices: Vec<usize> =
+                    (0..num_atoms).filter(|&i| frozen_flags[i]).collect();
+                let frozen_grid = SpatialGrid::from_positions_subset(
+                    &topology.positions,
+                    &frozen_indices,
+                    build_radius,
+                );
 
-                // Build initial pair list from spatial grid.
+                // Build initial pair list from spatial grids.
                 let vdw_params = Self::build_cutoff_pairs(
                     &topology.positions,
-                    num_atoms,
+                    &free_indices,
+                    &frozen_grid,
                     build_radius,
                     &atom_vdw_x,
                     &atom_vdw_d,
                     &exclusions,
-                    &frozen_flags,
                 );
 
                 VdwStrategy::Cutoff {
@@ -309,7 +336,8 @@ impl UffForceField {
                     atom_vdw_x,
                     atom_vdw_d,
                     exclusions,
-                    frozen: frozen_flags,
+                    free_indices,
+                    frozen_grid,
                 }
             }
         };
@@ -338,30 +366,65 @@ impl UffForceField {
         }
     }
 
-    /// Builds a vdW pair list from current positions using a spatial grid.
+    /// Returns the current vdW pair list as normalized `(min_idx, max_idx)`
+    /// index pairs, in either mode. In Cutoff mode this reflects the most
+    /// recent (re)build. Intended for introspection and tests.
+    pub fn vdw_pair_indices(&self) -> Vec<(usize, usize)> {
+        let normalize = |vp: &VdwParams| (vp.idx1.min(vp.idx2), vp.idx1.max(vp.idx2));
+        match &self.vdw_strategy {
+            VdwStrategy::AllPairs { params } => params.iter().map(normalize).collect(),
+            VdwStrategy::Cutoff { params, .. } => params.borrow().iter().map(normalize).collect(),
+        }
+    }
+
+    /// Returns the pair-list build radius (cutoff + skin) in Cutoff mode,
+    /// or `None` in AllPairs mode. Intended for introspection and tests.
+    pub fn cutoff_build_radius(&self) -> Option<f64> {
+        match &self.vdw_strategy {
+            VdwStrategy::AllPairs { .. } => None,
+            VdwStrategy::Cutoff { build_radius, .. } => Some(*build_radius),
+        }
+    }
+
+    /// Builds a vdW pair list from current positions using a two-grid scan.
     ///
-    /// Skips pairs where both atoms are frozen (their gradients would be
-    /// zeroed by the minimizer anyway).
+    /// Only pairs with at least one free endpoint are wanted (frozen–frozen
+    /// gradients would be zeroed by the minimizer anyway), so the scan is
+    /// centered on free atoms only: a fresh grid over the free atoms is
+    /// built here (O(N_free)), while the grid over the frozen atoms is the
+    /// cached one built at construction (frozen atoms never move). For each
+    /// free atom, the free grid is scanned with the `j > i` dedup (each
+    /// free–free pair found once, from its lower index) and the frozen grid
+    /// with unconditional acceptance (each free–frozen pair found once,
+    /// from its free center). Frozen–frozen pairs are never visited.
     fn build_cutoff_pairs(
         positions: &[f64],
-        num_atoms: usize,
+        free_indices: &[usize],
+        frozen_grid: &SpatialGrid,
         build_radius: f64,
         atom_vdw_x: &[f64],
         atom_vdw_d: &[f64],
         exclusions: &FxHashSet<(usize, usize)>,
-        frozen: &[bool],
     ) -> Vec<VdwParams> {
-        let grid = SpatialGrid::from_positions(positions, build_radius);
+        let free_grid = SpatialGrid::from_positions_subset(positions, free_indices, build_radius);
         let mut vdw_params: Vec<VdwParams> = Vec::new();
-        for i in 0..num_atoms {
-            grid.for_each_neighbor(positions, i, build_radius, |j| {
-                if j > i && !exclusions.contains(&(i, j)) && !(frozen[i] && frozen[j]) {
-                    vdw_params.push(VdwParams {
-                        idx1: i,
-                        idx2: j,
-                        x_ij: (atom_vdw_x[i] * atom_vdw_x[j]).sqrt(),
-                        d_ij: (atom_vdw_d[i] * atom_vdw_d[j]).sqrt(),
-                    });
+        let mut push_pair = |i: usize, j: usize| {
+            vdw_params.push(VdwParams {
+                idx1: i,
+                idx2: j,
+                x_ij: (atom_vdw_x[i] * atom_vdw_x[j]).sqrt(),
+                d_ij: (atom_vdw_d[i] * atom_vdw_d[j]).sqrt(),
+            });
+        };
+        for &i in free_indices {
+            free_grid.for_each_neighbor(positions, i, build_radius, |j| {
+                if j > i && !exclusions.contains(&(i, j)) {
+                    push_pair(i, j);
+                }
+            });
+            frozen_grid.for_each_neighbor(positions, i, build_radius, |j| {
+                if !exclusions.contains(&(i.min(j), i.max(j))) {
+                    push_pair(i, j);
                 }
             });
         }
@@ -375,10 +438,17 @@ impl UffForceField {
     /// 2. Count torsions per central bond and scale each force constant by 1/count
     ///
     /// This matches RDKit's `scaleForceConstant(contribsHere.size())` in Builder.cpp.
+    ///
+    /// Torsions whose four atoms are all frozen are dropped **after** the
+    /// count-and-scale pass: a central bond can host both mixed and
+    /// all-frozen torsions, and dropping the all-frozen ones before counting
+    /// would inflate the surviving torsions' force constants — changing
+    /// forces on free atoms.
     fn compute_torsion_params(
         topology: &MolecularTopology,
         typing: &typer::AtomTypeAssignment,
         bond_order_map: &FxHashMap<(usize, usize), f64>,
+        frozen: &[bool],
     ) -> Vec<TorsionAngleParams> {
         // First pass: compute raw torsion contributions.
         let mut raw_torsions: Vec<TorsionAngleParams> = Vec::new();
@@ -452,6 +522,10 @@ impl UffForceField {
             }
         }
 
+        // Drop all-frozen torsions only now that counting is done.
+        raw_torsions
+            .retain(|t| !(frozen[t.idx1] && frozen[t.idx2] && frozen[t.idx3] && frozen[t.idx4]));
+
         raw_torsions
     }
 
@@ -462,10 +536,14 @@ impl UffForceField {
     fn compute_inversion_params(
         topology: &MolecularTopology,
         typing: &typer::AtomTypeAssignment,
+        frozen: &[bool],
     ) -> Vec<InversionParams> {
         topology
             .inversions
             .iter()
+            .filter(|inv| {
+                !(frozen[inv.idx1] && frozen[inv.idx2] && frozen[inv.idx3] && frozen[inv.idx4])
+            })
             .map(|inv| {
                 let at2_atomic_num = topology.atomic_numbers[inv.idx2] as i32;
 
@@ -536,19 +614,20 @@ impl ForceField for UffForceField {
                 atom_vdw_x,
                 atom_vdw_d,
                 exclusions,
-                frozen,
+                free_indices,
+                frozen_grid,
             } => {
                 // Periodically rebuild the neighbor list from current positions.
                 let count = eval_count.get();
                 if count > 0 && count % rebuild_interval == 0 {
                     let new_params = Self::build_cutoff_pairs(
                         positions,
-                        self.num_atoms,
+                        free_indices,
+                        frozen_grid,
                         *build_radius,
                         atom_vdw_x,
                         atom_vdw_d,
                         exclusions,
-                        frozen,
                     );
                     *params.borrow_mut() = new_params;
                 }

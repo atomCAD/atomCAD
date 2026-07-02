@@ -36,6 +36,8 @@ uff/
 
 Torsion force constants are **scaled by the count of torsions per central bond** (matching RDKit's `scaleForceConstant`).
 
+**Frozen-atom filtering** (`from_topology_with_frozen`): interactions whose atoms are *all* frozen are skipped at parameter build time — bonds, angles, torsions, inversions, and vdW pairs. Two invariants must not regress (see `doc/design_relax_frozen_atoms.md`): the typer always sees the *full* bond list (a frozen boundary atom's type depends on all its bonds), and torsion count-scaling happens *before* the all-frozen filter (a central bond can host both mixed and all-frozen torsions). In Cutoff mode the pair-list rebuild is a two-grid scan: a cached grid over frozen atoms (built once — they never move) plus a per-rebuild grid over free atoms, making rebuilds O(N_free).
+
 ## Energy Terms (energy.rs)
 
 Each term has two functions: `*_energy()` (energy only) and `*_energy_and_gradient()` (energy + gradient accumulation).

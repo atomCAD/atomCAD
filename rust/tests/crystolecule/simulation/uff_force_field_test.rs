@@ -11,7 +11,8 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 };
 use rust_lib_flutter_cad::crystolecule::simulation::force_field::ForceField;
 use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
-use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
+use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
+use std::collections::BTreeSet;
 
 // ============================================================================
 // Helpers: load reference data, build structures
@@ -701,5 +702,418 @@ fn energy_gradient_consistency() {
             (g1 - g2).abs() < 1e-12,
             "Gradient[{i}] not deterministic: {g1} vs {g2}"
         );
+    }
+}
+
+// ============================================================================
+// Frozen-aware interaction filtering (design_relax_frozen_atoms Phase 1)
+// ============================================================================
+
+/// C1-C2-C3-C4 chain with C5 branching off C2 (topology indices 0..4).
+/// The central bond C2-C3 hosts two torsions: C1-C2-C3-C4 and C5-C2-C3-C4.
+fn build_isopentane_skeleton() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = s.add_atom(6, DVec3::new(1.5, 0.3, 0.0));
+    let c3 = s.add_atom(6, DVec3::new(2.6, -0.7, 0.3));
+    let c4 = s.add_atom(6, DVec3::new(4.0, -0.2, 0.5));
+    let c5 = s.add_atom(6, DVec3::new(1.9, 1.4, 1.1));
+    s.add_bond(c1, c2, BOND_SINGLE);
+    s.add_bond(c2, c3, BOND_SINGLE);
+    s.add_bond(c3, c4, BOND_SINGLE);
+    s.add_bond(c2, c5, BOND_SINGLE);
+    s
+}
+
+/// Asserts that `filtered`'s param lists are exactly the reference entries
+/// that have at least one free participant, byte-identical.
+fn assert_params_match_reference(
+    filtered: &UffForceField,
+    reference: &UffForceField,
+    frozen_flags: &[bool],
+) {
+    // Bonds.
+    let expected_bonds: Vec<_> = reference
+        .bond_params
+        .iter()
+        .filter(|b| !(frozen_flags[b.idx1] && frozen_flags[b.idx2]))
+        .collect();
+    assert_eq!(filtered.bond_params.len(), expected_bonds.len());
+    for (a, b) in filtered.bond_params.iter().zip(&expected_bonds) {
+        assert_eq!((a.idx1, a.idx2), (b.idx1, b.idx2));
+        assert_eq!(a.rest_length.to_bits(), b.rest_length.to_bits());
+        assert_eq!(a.force_constant.to_bits(), b.force_constant.to_bits());
+    }
+
+    // Angles.
+    let expected_angles: Vec<_> = reference
+        .angle_params
+        .iter()
+        .filter(|a| !(frozen_flags[a.idx1] && frozen_flags[a.idx2] && frozen_flags[a.idx3]))
+        .collect();
+    assert_eq!(filtered.angle_params.len(), expected_angles.len());
+    for (a, b) in filtered.angle_params.iter().zip(&expected_angles) {
+        assert_eq!((a.idx1, a.idx2, a.idx3), (b.idx1, b.idx2, b.idx3));
+        assert_eq!(a.force_constant.to_bits(), b.force_constant.to_bits());
+        assert_eq!(a.theta0.to_bits(), b.theta0.to_bits());
+        assert_eq!(a.order, b.order);
+        assert_eq!(a.c0.to_bits(), b.c0.to_bits());
+        assert_eq!(a.c1.to_bits(), b.c1.to_bits());
+        assert_eq!(a.c2.to_bits(), b.c2.to_bits());
+    }
+
+    // Torsions (force constants must reflect count-before-filter scaling).
+    let expected_torsions: Vec<_> = reference
+        .torsion_params
+        .iter()
+        .filter(|t| {
+            !(frozen_flags[t.idx1]
+                && frozen_flags[t.idx2]
+                && frozen_flags[t.idx3]
+                && frozen_flags[t.idx4])
+        })
+        .collect();
+    assert_eq!(filtered.torsion_params.len(), expected_torsions.len());
+    for (a, b) in filtered.torsion_params.iter().zip(&expected_torsions) {
+        assert_eq!(
+            (a.idx1, a.idx2, a.idx3, a.idx4),
+            (b.idx1, b.idx2, b.idx3, b.idx4)
+        );
+        assert_eq!(
+            a.params.force_constant.to_bits(),
+            b.params.force_constant.to_bits()
+        );
+        assert_eq!(a.params.order, b.params.order);
+        assert_eq!(a.params.cos_term.to_bits(), b.params.cos_term.to_bits());
+    }
+
+    // Inversions.
+    let expected_inversions: Vec<_> = reference
+        .inversion_params
+        .iter()
+        .filter(|i| {
+            !(frozen_flags[i.idx1]
+                && frozen_flags[i.idx2]
+                && frozen_flags[i.idx3]
+                && frozen_flags[i.idx4])
+        })
+        .collect();
+    assert_eq!(filtered.inversion_params.len(), expected_inversions.len());
+    for (a, b) in filtered.inversion_params.iter().zip(&expected_inversions) {
+        assert_eq!(
+            (a.idx1, a.idx2, a.idx3, a.idx4),
+            (b.idx1, b.idx2, b.idx3, b.idx4)
+        );
+        assert_eq!(a.force_constant.to_bits(), b.force_constant.to_bits());
+        assert_eq!(a.c0.to_bits(), b.c0.to_bits());
+        assert_eq!(a.c1.to_bits(), b.c1.to_bits());
+        assert_eq!(a.c2.to_bits(), b.c2.to_bits());
+    }
+}
+
+#[test]
+fn frozen_filter_torsion_scaling_counts_before_filtering() {
+    // Freeze the main chain C1..C4 (indices 0..3); the branch C5 (index 4)
+    // stays free. The central bond C2-C3 hosts one all-frozen torsion
+    // (C1-C2-C3-C4, dropped) and one mixed torsion (C5-C2-C3-C4, kept).
+    // The kept torsion's force constant must still be divided by 2 -- the
+    // per-central-bond count includes the dropped sibling.
+    let structure = build_isopentane_skeleton();
+    let topology = MolecularTopology::from_structure(&structure);
+    let frozen = [0usize, 1, 2, 3];
+    let frozen_flags = [true, true, true, true, false];
+
+    let reference =
+        UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::AllPairs).unwrap();
+    let filtered =
+        UffForceField::from_topology_with_frozen(&topology, VdwMode::AllPairs, &frozen).unwrap();
+
+    // The reference must have exactly the two torsions about C2-C3, sharing
+    // the same (already count-scaled) force constant -- otherwise this test
+    // would not exercise the count-before-filter rule.
+    assert_eq!(reference.torsion_params.len(), 2);
+    assert_eq!(
+        reference.torsion_params[0].params.force_constant.to_bits(),
+        reference.torsion_params[1].params.force_constant.to_bits()
+    );
+
+    // Only the mixed torsion survives, with the reference's scaled constant.
+    assert_eq!(filtered.torsion_params.len(), 1);
+    let t = &filtered.torsion_params[0];
+    assert_eq!((t.idx1, t.idx2, t.idx3, t.idx4), (4, 1, 2, 3));
+
+    assert_params_match_reference(&filtered, &reference, &frozen_flags);
+
+    // Sanity: filtering did remove all-frozen terms.
+    assert_eq!(filtered.bond_params.len(), 1); // only C2-C5
+    assert_eq!(filtered.bond_params[0].idx1, 1);
+    assert_eq!(filtered.bond_params[0].idx2, 4);
+}
+
+#[test]
+fn frozen_filter_inversions_and_mixed_terms_match_reference() {
+    // Propene with explicit hydrogens: C1(=C2)H2, C2(H)-C3H3.
+    // Indices: C1=0, C2=1, C3=2, H on C1: 3,4; H on C2: 5; H on C3: 6,7,8.
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = s.add_atom(6, DVec3::new(1.33, 0.0, 0.0));
+    let c3 = s.add_atom(6, DVec3::new(2.1, 1.25, 0.2));
+    let h1 = s.add_atom(1, DVec3::new(-0.6, 0.9, 0.0));
+    let h2 = s.add_atom(1, DVec3::new(-0.6, -0.9, 0.0));
+    let h3 = s.add_atom(1, DVec3::new(1.9, -0.95, 0.0));
+    let h4 = s.add_atom(1, DVec3::new(1.6, 2.1, 0.6));
+    let h5 = s.add_atom(1, DVec3::new(2.9, 1.1, 0.9));
+    let h6 = s.add_atom(1, DVec3::new(2.6, 1.6, -0.7));
+    s.add_bond(c1, c2, BOND_DOUBLE);
+    s.add_bond(c2, c3, BOND_SINGLE);
+    s.add_bond(c1, h1, BOND_SINGLE);
+    s.add_bond(c1, h2, BOND_SINGLE);
+    s.add_bond(c2, h3, BOND_SINGLE);
+    s.add_bond(c3, h4, BOND_SINGLE);
+    s.add_bond(c3, h5, BOND_SINGLE);
+    s.add_bond(c3, h6, BOND_SINGLE);
+
+    let topology = MolecularTopology::from_structure(&s);
+    // Freeze C1, C2 and their hydrogens; the methyl group stays free.
+    let frozen = [0usize, 1, 3, 4, 5];
+    let mut frozen_flags = [false; 9];
+    for &i in &frozen {
+        frozen_flags[i] = true;
+    }
+
+    let reference =
+        UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::AllPairs).unwrap();
+    let filtered =
+        UffForceField::from_topology_with_frozen(&topology, VdwMode::AllPairs, &frozen).unwrap();
+
+    // The sp2 center C1 has all-frozen inversions (participants C1,H,H,C2);
+    // the sp2 center C2's inversions involve free C3 and survive. Both sets
+    // must exist in the reference for the test to be meaningful.
+    assert!(
+        reference
+            .inversion_params
+            .iter()
+            .any(|i| frozen_flags[i.idx1]
+                && frozen_flags[i.idx2]
+                && frozen_flags[i.idx3]
+                && frozen_flags[i.idx4]),
+        "expected at least one all-frozen inversion in the reference"
+    );
+    assert!(
+        !filtered.inversion_params.is_empty(),
+        "expected surviving mixed inversions"
+    );
+    assert!(filtered.inversion_params.len() < reference.inversion_params.len());
+
+    assert_params_match_reference(&filtered, &reference, &frozen_flags);
+
+    // vdW (AllPairs): exactly the reference pairs with >=1 free endpoint.
+    let expected_vdw: BTreeSet<(usize, usize)> = reference
+        .vdw_pair_indices()
+        .into_iter()
+        .filter(|&(i, j)| !(frozen_flags[i] && frozen_flags[j]))
+        .collect();
+    let actual_vdw: BTreeSet<(usize, usize)> = filtered.vdw_pair_indices().into_iter().collect();
+    assert_eq!(actual_vdw, expected_vdw);
+}
+
+#[test]
+fn frozen_boundary_atom_typing_uses_full_connectivity() {
+    // C1=C2-C3 bare-carbon chain. C1 and C2 frozen, C3 free. C2's sp2 type
+    // comes from its double bond to C1 -- a bond between two frozen atoms.
+    // The surviving angle C1-C2-C3 must be built with the trigonal (order 3)
+    // vertex type, byte-identical to the unfiltered reference.
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let c2 = s.add_atom(6, DVec3::new(1.33, 0.0, 0.0));
+    let c3 = s.add_atom(6, DVec3::new(2.1, 1.25, 0.0));
+    s.add_bond(c1, c2, BOND_DOUBLE);
+    s.add_bond(c2, c3, BOND_SINGLE);
+
+    let topology = MolecularTopology::from_structure(&s);
+    let frozen = [0usize, 1];
+
+    let reference =
+        UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::AllPairs).unwrap();
+    let filtered =
+        UffForceField::from_topology_with_frozen(&topology, VdwMode::AllPairs, &frozen).unwrap();
+
+    assert_eq!(filtered.angle_params.len(), 1);
+    let a = &filtered.angle_params[0];
+    assert_eq!((a.idx1, a.idx2, a.idx3), (0, 1, 2));
+    assert_eq!(a.order, 3, "sp2 vertex must yield trigonal coordination");
+
+    let r = &reference.angle_params[0];
+    assert_eq!(a.force_constant.to_bits(), r.force_constant.to_bits());
+    assert_eq!(a.theta0.to_bits(), r.theta0.to_bits());
+}
+
+// ----------------------------------------------------------------------------
+// Cutoff pair-set parity: two-grid scan vs brute force
+// ----------------------------------------------------------------------------
+
+/// Brute-force ground truth: every non-excluded pair within `build_radius`
+/// with at least one free endpoint.
+fn brute_force_cutoff_pairs(
+    positions: &[f64],
+    num_atoms: usize,
+    build_radius: f64,
+    exclusions: &BTreeSet<(usize, usize)>,
+    frozen_flags: &[bool],
+) -> BTreeSet<(usize, usize)> {
+    let mut pairs = BTreeSet::new();
+    for i in 0..num_atoms {
+        for j in (i + 1)..num_atoms {
+            if frozen_flags[i] && frozen_flags[j] {
+                continue;
+            }
+            if exclusions.contains(&(i, j)) {
+                continue;
+            }
+            let dx = positions[i * 3] - positions[j * 3];
+            let dy = positions[i * 3 + 1] - positions[j * 3 + 1];
+            let dz = positions[i * 3 + 2] - positions[j * 3 + 2];
+            if dx * dx + dy * dy + dz * dz < build_radius * build_radius {
+                pairs.insert((i, j));
+            }
+        }
+    }
+    pairs
+}
+
+/// Zigzag carbon chain with consecutive single bonds.
+fn build_zigzag_chain(num_atoms: usize) -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let mut prev = 0u32;
+    for i in 0..num_atoms {
+        let pos = DVec3::new(i as f64 * 1.4, (i % 2) as f64 * 0.6, 0.0);
+        let id = s.add_atom(6, pos);
+        if i > 0 {
+            s.add_bond(prev, id, BOND_SINGLE);
+        }
+        prev = id;
+    }
+    s
+}
+
+/// 1-2 and 1-3 exclusions, normalized to (min, max) like the force field's.
+fn exclusion_set(topology: &MolecularTopology) -> BTreeSet<(usize, usize)> {
+    let mut exclusions: BTreeSet<(usize, usize)> = BTreeSet::new();
+    for b in &topology.bonds {
+        exclusions.insert((b.idx1.min(b.idx2), b.idx1.max(b.idx2)));
+    }
+    for a in &topology.angles {
+        exclusions.insert((a.idx1.min(a.idx3), a.idx1.max(a.idx3)));
+    }
+    exclusions
+}
+
+#[test]
+fn cutoff_pair_set_matches_brute_force_including_after_rebuild() {
+    let num_atoms = 30;
+    let structure = build_zigzag_chain(num_atoms);
+    let topology = MolecularTopology::from_structure_bonded_only(&structure);
+
+    let frozen: Vec<usize> = (0..15).collect();
+    let mut frozen_flags = vec![false; num_atoms];
+    for &i in &frozen {
+        frozen_flags[i] = true;
+    }
+
+    let ff =
+        UffForceField::from_topology_with_frozen(&topology, VdwMode::Cutoff(6.0), &frozen).unwrap();
+    let build_radius = ff.cutoff_build_radius().unwrap();
+    let exclusions = exclusion_set(&topology);
+
+    let expected = brute_force_cutoff_pairs(
+        &topology.positions,
+        num_atoms,
+        build_radius,
+        &exclusions,
+        &frozen_flags,
+    );
+    let pair_list = ff.vdw_pair_indices();
+    let actual: BTreeSet<(usize, usize)> = pair_list.iter().copied().collect();
+    assert_eq!(actual.len(), pair_list.len(), "duplicate pairs in the list");
+    assert_eq!(actual, expected);
+
+    // The frozen/free boundary must actually contribute pairs, and no
+    // frozen-frozen pair may be present.
+    assert!(
+        expected
+            .iter()
+            .any(|&(i, j)| frozen_flags[i] != frozen_flags[j])
+    );
+    assert!(
+        expected
+            .iter()
+            .all(|&(i, j)| !(frozen_flags[i] && frozen_flags[j]))
+    );
+
+    // Displace a free atom and force a rebuild (rebuild happens on the
+    // evaluation where eval_count is a positive multiple of the interval,
+    // i.e. the 11th call). Parity must hold against the moved positions --
+    // this catches a stale frozen grid or a broken free/frozen partition.
+    let mut moved = topology.positions.clone();
+    moved[29 * 3] += 1.7;
+    moved[29 * 3 + 1] += 2.4;
+    let mut energy = 0.0;
+    let mut gradients = vec![0.0; moved.len()];
+    for _ in 0..11 {
+        ff.energy_and_gradients(&moved, &mut energy, &mut gradients);
+    }
+
+    let expected_after =
+        brute_force_cutoff_pairs(&moved, num_atoms, build_radius, &exclusions, &frozen_flags);
+    let actual_after: BTreeSet<(usize, usize)> = ff.vdw_pair_indices().into_iter().collect();
+    assert_ne!(
+        expected_after, expected,
+        "displacement should change the pair set"
+    );
+    assert_eq!(actual_after, expected_after);
+}
+
+#[test]
+fn cutoff_pair_set_no_frozen_matches_brute_force() {
+    // With no frozen atoms the two-grid scan degenerates to a single free
+    // grid; parity with brute force must still hold.
+    let num_atoms = 20;
+    let structure = build_zigzag_chain(num_atoms);
+    let topology = MolecularTopology::from_structure_bonded_only(&structure);
+
+    let ff = UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::Cutoff(6.0)).unwrap();
+    let build_radius = ff.cutoff_build_radius().unwrap();
+    let exclusions = exclusion_set(&topology);
+
+    let expected = brute_force_cutoff_pairs(
+        &topology.positions,
+        num_atoms,
+        build_radius,
+        &exclusions,
+        &vec![false; num_atoms],
+    );
+    let actual: BTreeSet<(usize, usize)> = ff.vdw_pair_indices().into_iter().collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn all_atoms_frozen_all_param_lists_empty() {
+    let structure = build_isopentane_skeleton();
+    let topology = MolecularTopology::from_structure(&structure);
+    let frozen: Vec<usize> = (0..5).collect();
+
+    for mode in [VdwMode::AllPairs, VdwMode::Cutoff(6.0)] {
+        let ff = UffForceField::from_topology_with_frozen(&topology, mode, &frozen).unwrap();
+        assert!(ff.bond_params.is_empty());
+        assert!(ff.angle_params.is_empty());
+        assert!(ff.torsion_params.is_empty());
+        assert!(ff.inversion_params.is_empty());
+        assert!(ff.vdw_pair_indices().is_empty());
+
+        let mut energy = 1.0;
+        let mut gradients = vec![1.0; topology.positions.len()];
+        ff.energy_and_gradients(&topology.positions, &mut energy, &mut gradients);
+        assert_eq!(energy, 0.0);
+        assert!(gradients.iter().all(|&g| g == 0.0));
     }
 }

@@ -2950,3 +2950,108 @@ fn minimize_energy_no_frozen_flag_all_atoms_move() {
         "H2 did not move"
     );
 }
+
+// ============================================================================
+// Frozen-aware interaction filtering (design_relax_frozen_atoms Phase 1)
+// ============================================================================
+
+/// Perturbed hexane carbon skeleton (indices 0..5, consecutive single bonds).
+fn build_perturbed_hexane_skeleton() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let positions = [
+        DVec3::new(0.0, 0.0, 0.0),
+        DVec3::new(1.62, 0.25, 0.1),
+        DVec3::new(2.55, -0.85, 0.35),
+        DVec3::new(4.05, -0.55, 0.55),
+        DVec3::new(4.95, 0.62, 0.15),
+        DVec3::new(6.55, 0.45, 0.35),
+    ];
+    let mut prev = 0u32;
+    for (i, pos) in positions.iter().enumerate() {
+        let id = s.add_atom(6, *pos);
+        if i > 0 {
+            s.add_bond(prev, id, BOND_SINGLE);
+        }
+        prev = id;
+    }
+    s
+}
+
+#[test]
+fn frozen_filter_trajectory_identity_allpairs() {
+    // Minimizing with the frozen-filtered force field must land every free
+    // atom in exactly the same place as minimizing the SAME constrained
+    // problem with an unfiltered force field (all bonded terms and all
+    // frozen-frozen vdW pairs retained). The dropped terms only add a
+    // constant energy offset, which cancels in the Armijo comparison.
+    //
+    // This strict comparison is only valid in AllPairs mode: the cutoff
+    // two-grid rebuild is set-identical but can reorder the pair list,
+    // perturbing floating-point summation (see the design doc). Cutoff-mode
+    // correctness is asserted on the pair set in uff_force_field_test.rs.
+    let structure = build_perturbed_hexane_skeleton();
+    let topology = MolecularTopology::from_structure(&structure);
+    // Freeze the first four carbons so whole bonds/angles/torsions (and the
+    // nonbonded 0-3 pair) are dropped by the filter, not just vdW pairs.
+    let frozen = [0usize, 1, 2, 3];
+
+    let filtered =
+        UffForceField::from_topology_with_frozen(&topology, VdwMode::AllPairs, &frozen).unwrap();
+    // Reference: unfiltered force field (all-false frozen flags keep every
+    // term), but the same frozen mask at the minimizer level.
+    let reference =
+        UffForceField::from_topology_with_vdw_mode(&topology, VdwMode::AllPairs).unwrap();
+    assert!(
+        filtered.bond_params.len() < reference.bond_params.len(),
+        "filter must actually drop bonded terms for this test to be meaningful"
+    );
+
+    let config = MinimizationConfig::default();
+    let mut pos_filtered = topology.positions.clone();
+    let mut pos_reference = topology.positions.clone();
+
+    let res_filtered = minimize_with_force_field(&filtered, &mut pos_filtered, &config, &frozen);
+    let res_reference = minimize_with_force_field(&reference, &mut pos_reference, &config, &frozen);
+
+    assert_eq!(res_filtered.converged, res_reference.converged);
+    assert_eq!(res_filtered.iterations, res_reference.iterations);
+
+    let mut max_diff = 0.0f64;
+    for (a, b) in pos_filtered.iter().zip(pos_reference.iter()) {
+        max_diff = max_diff.max((a - b).abs());
+    }
+    assert!(
+        max_diff < 1e-10,
+        "free-atom trajectories diverged: max coordinate diff {max_diff:.3e}"
+    );
+
+    // Not vacuous: the free atoms moved away from the perturbed start.
+    let moved = (12..18).any(|k| (pos_filtered[k] - topology.positions[k]).abs() > 0.01);
+    assert!(moved, "free atoms did not move during minimization");
+    // Frozen atoms stayed exactly put.
+    for k in 0..12 {
+        assert_eq!(pos_filtered[k].to_bits(), topology.positions[k].to_bits());
+    }
+}
+
+#[test]
+fn all_atoms_frozen_minimizes_immediately_without_movement() {
+    let structure = build_perturbed_hexane_skeleton();
+    let topology = MolecularTopology::from_structure(&structure);
+    let frozen: Vec<usize> = (0..6).collect();
+
+    for mode in [VdwMode::AllPairs, VdwMode::Cutoff(6.0)] {
+        let ff = UffForceField::from_topology_with_frozen(&topology, mode, &frozen).unwrap();
+        let mut positions = topology.positions.clone();
+        let config = MinimizationConfig::default();
+
+        let result = minimize_with_force_field(&ff, &mut positions, &config, &frozen);
+
+        assert!(result.converged);
+        assert_eq!(result.iterations, 0);
+        assert_eq!(result.energy, 0.0);
+        for (a, b) in positions.iter().zip(topology.positions.iter()) {
+            assert_eq!(a.to_bits(), b.to_bits(), "frozen atom moved");
+        }
+    }
+}
