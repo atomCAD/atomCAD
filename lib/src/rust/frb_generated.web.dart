@@ -181,10 +181,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIForeachData dco_decode_api_foreach_data(dynamic raw);
 
   @protected
+  APIFreeCircleData dco_decode_api_free_circle_data(dynamic raw);
+
+  @protected
   APIFreeMoveData dco_decode_api_free_move_data(dynamic raw);
 
   @protected
   APIFreeRotData dco_decode_api_free_rot_data(dynamic raw);
+
+  @protected
+  APIFreeSphereData dco_decode_api_free_sphere_data(dynamic raw);
 
   @protected
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
@@ -533,10 +539,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIForeachData dco_decode_box_autoadd_api_foreach_data(dynamic raw);
 
   @protected
+  APIFreeCircleData dco_decode_box_autoadd_api_free_circle_data(dynamic raw);
+
+  @protected
   APIFreeMoveData dco_decode_box_autoadd_api_free_move_data(dynamic raw);
 
   @protected
   APIFreeRotData dco_decode_box_autoadd_api_free_rot_data(dynamic raw);
+
+  @protected
+  APIFreeSphereData dco_decode_box_autoadd_api_free_sphere_data(dynamic raw);
 
   @protected
   APIGeoTransData dco_decode_box_autoadd_api_geo_trans_data(dynamic raw);
@@ -1026,10 +1038,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIForeachData? dco_decode_opt_box_autoadd_api_foreach_data(dynamic raw);
 
   @protected
+  APIFreeCircleData? dco_decode_opt_box_autoadd_api_free_circle_data(
+      dynamic raw);
+
+  @protected
   APIFreeMoveData? dco_decode_opt_box_autoadd_api_free_move_data(dynamic raw);
 
   @protected
   APIFreeRotData? dco_decode_opt_box_autoadd_api_free_rot_data(dynamic raw);
+
+  @protected
+  APIFreeSphereData? dco_decode_opt_box_autoadd_api_free_sphere_data(
+      dynamic raw);
 
   @protected
   APIGeoTransData? dco_decode_opt_box_autoadd_api_geo_trans_data(dynamic raw);
@@ -1478,10 +1498,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIForeachData sse_decode_api_foreach_data(SseDeserializer deserializer);
 
   @protected
+  APIFreeCircleData sse_decode_api_free_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIFreeMoveData sse_decode_api_free_move_data(SseDeserializer deserializer);
 
   @protected
   APIFreeRotData sse_decode_api_free_rot_data(SseDeserializer deserializer);
+
+  @protected
+  APIFreeSphereData sse_decode_api_free_sphere_data(
+      SseDeserializer deserializer);
 
   @protected
   APIGeoTransData sse_decode_api_geo_trans_data(SseDeserializer deserializer);
@@ -1888,11 +1916,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFreeCircleData sse_decode_box_autoadd_api_free_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIFreeMoveData sse_decode_box_autoadd_api_free_move_data(
       SseDeserializer deserializer);
 
   @protected
   APIFreeRotData sse_decode_box_autoadd_api_free_rot_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFreeSphereData sse_decode_box_autoadd_api_free_sphere_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2481,11 +2517,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFreeCircleData? sse_decode_opt_box_autoadd_api_free_circle_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIFreeMoveData? sse_decode_opt_box_autoadd_api_free_move_data(
       SseDeserializer deserializer);
 
   @protected
   APIFreeRotData? sse_decode_opt_box_autoadd_api_free_rot_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFreeSphereData? sse_decode_opt_box_autoadd_api_free_sphere_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3000,12 +3044,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIForeachData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_free_circle_data(
+      APIFreeCircleData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_free_move_data(
       APIFreeMoveData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_free_rot_data(
       APIFreeRotData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_free_sphere_data(
+      APIFreeSphereData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_geo_trans_data(
@@ -3435,12 +3487,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIForeachData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_free_circle_data(
+      APIFreeCircleData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_free_move_data(
       APIFreeMoveData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_free_rot_data(
       APIFreeRotData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_free_sphere_data(
+      APIFreeSphereData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_geo_trans_data(
@@ -4041,12 +4101,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIForeachData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_free_circle_data(
+      APIFreeCircleData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_free_move_data(
       APIFreeMoveData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_free_rot_data(
       APIFreeRotData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_free_sphere_data(
+      APIFreeSphereData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_geo_trans_data(

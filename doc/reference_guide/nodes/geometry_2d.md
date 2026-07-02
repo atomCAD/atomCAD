@@ -54,6 +54,18 @@ Outputs a circle with integer center coordinates and integer radius.
 
 ![](../../atomCAD_images/circle_viewport.png)
 
+## free_circle
+
+The non-lattice-aligned analog of `circle`: its center and radius are given directly in **real-space Ångström coordinates** (floating-point), rather than in whole lattice steps. Use it when you need a circle positioned or sized *between* lattice points. (Unlike 3D shapes, a `Geometry2D` cannot be moved by `free_move` at all, so before this node there was no workaround for a free-positioned circle.)
+
+**Input pins**
+
+- `center: Vec2` — the center in real-space Å, measured **within the drawing-plane frame** (default `(0, 0)`).
+- `radius: Float` — the radius in Å (default `5.0`).
+- `d_plane: DrawingPlane` (optional) — the plane to draw on (default: the XY plane). Only the position and size within the plane are free; the plane itself is still lattice-derived (see `drawing_plane` above).
+
+The output is a `Geometry2D`, so `free_circle` composes with `extrude` exactly like `circle` does. Like `circle`, it has no viewport gadget; edit its properties in the panel.
+
 ## reg_poly
 
 Outputs a regular polygon with integer radius. The number of sides is a property too.

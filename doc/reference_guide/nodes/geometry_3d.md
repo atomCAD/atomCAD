@@ -39,6 +39,22 @@ Outputs a sphere with integer center coordinates and integer radius.
 
 ![](../../atomCAD_images/sphere_viewport.png)
 
+## free_sphere
+
+The non-lattice-aligned analog of `sphere`: its center and radius are given directly in **real-space Ångström coordinates** (floating-point), rather than in whole lattice steps. Use it when you need a sphere positioned or sized *between* lattice points — the workaround of composing `sphere` with `free_move` can only reach lattice-quantized centers, and offers no way to get a non-whole-cell radius.
+
+**Input pins**
+
+- `center: Vec3` — the center in real-space Å (default `(0, 0, 0)`).
+- `radius: Float` — the radius in Å (default `5.0`).
+- `structure: Structure` (optional) — the lattice the resulting `Blueprint` carries for a downstream `materialize` (default: diamond). The sphere geometry is independent of this structure; it only supplies the lattice that atoms are later placed on.
+
+Because the geometry is authored in real space there is no lattice quantization: the sphere is always perfectly round, even on a non-cubic unit cell (unlike `sphere`, whose radius scales with the `a` lattice vector). The output is a `Blueprint`.
+
+**Alignment.** A `free_sphere` is marked `aligned`, *not* `lattice_unaligned` — a fractionally-positioned cutter does not taint alignment, because atoms are always placed on motif sites during materialization and the cutter merely decides which of them survive. See [Blueprint alignment](../node_networks.md#blueprint-alignment). (This is the deliberate opposite of `free_move`, which taints conservatively because it acts on arbitrary already-built objects.)
+
+Like `sphere`, `free_sphere` has no viewport gadget; edit its properties in the panel.
+
 ## half_space
 
 Outputs a half-space (the region on one side of an infinite plane).

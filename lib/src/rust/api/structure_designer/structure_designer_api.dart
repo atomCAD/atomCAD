@@ -889,6 +889,18 @@ APIFreeMoveData? getFreeMoveData(
         .crateApiStructureDesignerStructureDesignerApiGetFreeMoveData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIFreeSphereData? getFreeSphereData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetFreeSphereData(
+            scopePath: scopePath, nodeId: nodeId);
+
+APIFreeCircleData? getFreeCircleData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetFreeCircleData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIFreeRotData? getFreeRotData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1314,6 +1326,22 @@ void setFreeMoveData(
         required APIFreeMoveData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetFreeMoveData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setFreeSphereData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFreeSphereData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetFreeSphereData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setFreeCircleData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIFreeCircleData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetFreeCircleData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setFreeRotData(

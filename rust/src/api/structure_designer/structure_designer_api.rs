@@ -84,8 +84,10 @@ use crate::api::structure_designer::structure_designer_api_types::APIDiffStats;
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomData;
 use crate::api::structure_designer::structure_designer_api_types::APIFloatData;
+use crate::api::structure_designer::structure_designer_api_types::APIFreeCircleData;
 use crate::api::structure_designer::structure_designer_api_types::APIFreeMoveData;
 use crate::api::structure_designer::structure_designer_api_types::APIFreeRotData;
+use crate::api::structure_designer::structure_designer_api_types::APIFreeSphereData;
 use crate::api::structure_designer::structure_designer_api_types::APIGeoTransData;
 use crate::api::structure_designer::structure_designer_api_types::APIHalfSpaceData;
 use crate::api::structure_designer::structure_designer_api_types::APIIMat2ColsData;
@@ -159,8 +161,10 @@ use crate::structure_designer::nodes::filter::FilterData;
 use crate::structure_designer::nodes::float::FloatData;
 use crate::structure_designer::nodes::fold::FoldData;
 use crate::structure_designer::nodes::foreach::ForeachData;
+use crate::structure_designer::nodes::free_circle::FreeCircleData;
 use crate::structure_designer::nodes::free_move::FreeMoveData;
 use crate::structure_designer::nodes::free_rot::FreeRotData;
+use crate::structure_designer::nodes::free_sphere::FreeSphereData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
@@ -3824,6 +3828,60 @@ pub fn get_free_move_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeM
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_free_sphere_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeSphereData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let free_sphere_data = match node_data.as_any_ref().downcast_ref::<FreeSphereData>()
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                Some(APIFreeSphereData {
+                    center: to_api_vec3(&free_sphere_data.center),
+                    radius: free_sphere_data.radius,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_free_circle_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeCircleData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let free_circle_data = match node_data.as_any_ref().downcast_ref::<FreeCircleData>()
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                Some(APIFreeCircleData {
+                    center: to_api_vec2(&free_circle_data.center),
+                    radius: free_circle_data.radius,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_free_rot_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeRotData> {
     unsafe {
         with_cad_instance_or(
@@ -5335,6 +5393,38 @@ pub fn set_free_move_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeMoveD
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, free_move_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_free_sphere_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeSphereData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let free_sphere_data = Box::new(FreeSphereData {
+                center: from_api_vec3(&data.center),
+                radius: data.radius,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, free_sphere_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_free_circle_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeCircleData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let free_circle_data = Box::new(FreeCircleData {
+                center: from_api_vec2(&data.center),
+                radius: data.radius,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, free_circle_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

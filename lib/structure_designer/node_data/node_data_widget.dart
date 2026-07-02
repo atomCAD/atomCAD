@@ -16,6 +16,8 @@ import 'package:flutter_cad/structure_designer/node_data/structure_move_editor.d
 import 'package:flutter_cad/structure_designer/node_data/structure_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_rot_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/free_sphere_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/free_circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_edit_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
@@ -270,6 +272,17 @@ class NodeDataWidget extends StatelessWidget {
           data: sphereData,
           model: model,
         );
+      case 'free_sphere':
+        // Fetch the free sphere data here in the parent widget
+        final freeSphereData = getFreeSphereData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        return FreeSphereEditor(
+          nodeId: selectedNode.id,
+          data: freeSphereData,
+          model: model,
+        );
       case 'half_space':
         // Fetch the half space data here in the parent widget
         final halfSpaceData = getHalfSpaceData(
@@ -355,6 +368,18 @@ class NodeDataWidget extends StatelessWidget {
         return FreeRotEditor(
           nodeId: selectedNode.id,
           data: freeRotData,
+          model: model,
+        );
+      case 'free_circle':
+        // Fetch the free circle data here in the parent widget
+        final freeCircleData = getFreeCircleData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return FreeCircleEditor(
+          nodeId: selectedNode.id,
+          data: freeCircleData,
           model: model,
         );
       case 'edit_atom':

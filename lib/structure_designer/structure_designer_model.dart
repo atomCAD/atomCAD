@@ -2268,6 +2268,22 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setFreeSphereData(BigInt nodeId, APIFreeSphereData data) {
+    structure_designer_api.setFreeSphereData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  void setFreeCircleData(BigInt nodeId, APIFreeCircleData data) {
+    structure_designer_api.setFreeCircleData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   void setExtrudeData(BigInt nodeId, APIExtrudeData data) {
     structure_designer_api.setExtrudeData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

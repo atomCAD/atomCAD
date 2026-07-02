@@ -1284,6 +1284,27 @@ class APIForeachData {
           inputType == other.inputType;
 }
 
+class APIFreeCircleData {
+  final APIVec2 center;
+  final double radius;
+
+  const APIFreeCircleData({
+    required this.center,
+    required this.radius,
+  });
+
+  @override
+  int get hashCode => center.hashCode ^ radius.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFreeCircleData &&
+          runtimeType == other.runtimeType &&
+          center == other.center &&
+          radius == other.radius;
+}
+
 class APIFreeMoveData {
   final APIVec3 translation;
 
@@ -1324,6 +1345,27 @@ class APIFreeRotData {
           angle == other.angle &&
           rotAxis == other.rotAxis &&
           pivotPoint == other.pivotPoint;
+}
+
+class APIFreeSphereData {
+  final APIVec3 center;
+  final double radius;
+
+  const APIFreeSphereData({
+    required this.center,
+    required this.radius,
+  });
+
+  @override
+  int get hashCode => center.hashCode ^ radius.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFreeSphereData &&
+          runtimeType == other.runtimeType &&
+          center == other.center &&
+          radius == other.radius;
 }
 
 class APIGeoTransData {

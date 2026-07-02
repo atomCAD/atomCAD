@@ -581,6 +581,16 @@ pub struct APIFreeMoveData {
     pub translation: APIVec3,
 }
 
+pub struct APIFreeSphereData {
+    pub center: APIVec3,
+    pub radius: f64,
+}
+
+pub struct APIFreeCircleData {
+    pub center: APIVec2,
+    pub radius: f64,
+}
+
 pub struct APIFreeRotData {
     pub angle: f64, // In radians
     pub rot_axis: APIVec3,
