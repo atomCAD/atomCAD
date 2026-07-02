@@ -3268,3 +3268,165 @@ fn zip_phase4_load_heals_missing_lane_ids() {
         "external lane wires must survive an id-less load"
     );
 }
+
+// ============================================================================
+// Phase 5 — API-facing scoped setter / removal (body-internal node)
+// ============================================================================
+
+/// Stored lane types of a `zip_with` nested inside a `map` body (mirrors what
+/// `get_zip_with_data` reads over the API, resolved through the map's scope).
+fn body_zip_lane_types(
+    designer: &StructureDesigner,
+    network_name: &str,
+    map_id: u64,
+    zip_id: u64,
+) -> Vec<DataType> {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap()
+        .nodes
+        .get(&zip_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap()
+        .lane_types()
+}
+
+/// Stored lane types of a top-level `zip_with`.
+fn top_level_zip_lane_types(
+    designer: &StructureDesigner,
+    network_name: &str,
+    zip_id: u64,
+) -> Vec<DataType> {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .unwrap()
+        .nodes
+        .get(&zip_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap()
+        .lane_types()
+}
+
+/// The API layer drives `set_zip_with_data` / `remove_zip_with_lane` with a
+/// `scope_path`, so a body-internal `zip_with` must be addressed through its
+/// containing HOF's scope — never by bare id (the property-panel-wrong-node bug
+/// class, `rust/AGENTS.md`). A decoy top-level `zip_with` must be left untouched
+/// by the scoped edits, proving the scope routes into the map's body.
+#[test]
+fn zip_phase5_scoped_setter_and_removal_target_body_node() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Decoy top-level 2-lane zip — must never be touched by a scoped edit.
+    let decoy_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        0.0,
+    );
+
+    // A `map` whose body holds the zip we actually edit.
+    let map_id = designer.add_node("map", DVec2::new(400.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+
+    let body_zip_id = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        body.add_node(
+            "zip_with",
+            DVec2::new(100.0, 0.0),
+            3,
+            Box::new(zip_data(vec![DataType::Int, DataType::Int], DataType::Int)),
+        )
+    };
+    // Initialize the body zip's custom-type cache + inline zone.
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&body_zip_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Grow the body zip to 3 lanes through the scoped combined setter.
+    designer
+        .set_zip_with_data(
+            &[map_id],
+            body_zip_id,
+            vec![DataType::Int, DataType::Int, DataType::Int],
+            DataType::Int,
+        )
+        .expect("scoped set must succeed");
+    assert_eq!(
+        body_zip_lane_types(&designer, "main", map_id, body_zip_id).len(),
+        3,
+        "the body-internal zip must gain a lane"
+    );
+    assert_eq!(
+        top_level_zip_lane_types(&designer, "main", decoy_id).len(),
+        2,
+        "the decoy top-level zip must be untouched by a scoped edit"
+    );
+
+    // Remove the middle lane through the scoped id-accurate removal.
+    designer
+        .remove_zip_with_lane(&[map_id], body_zip_id, 1)
+        .expect("scoped removal must succeed");
+    assert_eq!(
+        body_zip_lane_types(&designer, "main", map_id, body_zip_id).len(),
+        2,
+        "the body-internal zip must lose the removed lane"
+    );
+    assert_eq!(
+        top_level_zip_lane_types(&designer, "main", decoy_id).len(),
+        2,
+        "the decoy stays at 2 lanes after a scoped removal"
+    );
+}

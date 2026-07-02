@@ -239,8 +239,9 @@ APIRecordTypeDef? getRecordTypeDef({required String name}) => RustLib
 APIResult addRecordTypeDef({required String name}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiAddRecordTypeDef(name: name);
 
-/// Deletes the record type def with the given name. Wires that depended on
-/// the now-dangling references are disconnected by `repair_node_network`.
+/// Deletes the record type def with the given name. Fails (with a `Referenced`
+/// error listing the offenders) if any network or other record def still
+/// references it — mirroring network / namespace deletion.
 APIResult deleteRecordTypeDef({required String name}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiDeleteRecordTypeDef(
         name: name);
@@ -936,6 +937,12 @@ APIForeachData? getForeachData(
         .crateApiStructureDesignerStructureDesignerApiGetForeachData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIZipWithData? getZipWithData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetZipWithData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIPatchBuildData? getPatchBuildData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1506,6 +1513,34 @@ void setForeachData(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetForeachData(
             scopePath: scopePath, nodeId: nodeId, data: data);
+
+/// Whole-list lane + output-type edit on a `zip_with` node (the positional id
+/// merge). Delegates to `StructureDesigner::set_zip_with_data` so the shared
+/// `ZipWithLaneEditCommand` undo capture (whole-network snapshots covering the
+/// wire fallout) is used — the API layer adds no undo logic of its own. Lane
+/// ids are managed Rust-side and never cross the API.
+void setZipWithData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIZipWithData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetZipWithData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+/// Id-accurate removal of one specific `zip_with` lane (the property panel's
+/// per-lane delete button). Surviving lanes keep their hidden stable ids so
+/// external wires follow them while the `xs{i}` labels renumber; body wires to
+/// the removed `element{i}` are dropped and later ones decremented at mutation
+/// time. Delegates to `StructureDesigner::remove_zip_with_lane` (shared undo).
+/// A bare lane-type-list setter can only express the positional merge, so the
+/// id-accurate removal needs its own entry point.
+void removeZipWithLane(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required BigInt laneIndex}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRemoveZipWithLane(
+            scopePath: scopePath, nodeId: nodeId, laneIndex: laneIndex);
 
 void setPatchBuildData(
         {required Uint64List scopePath,

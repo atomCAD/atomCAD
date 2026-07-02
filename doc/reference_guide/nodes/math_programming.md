@@ -400,7 +400,7 @@ distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 
 An **iterator type** `Iter[T]` represents a lazily-evaluated stream of `T` values. Iterators travel along wires the same way arrays do, but downstream nodes pull elements one at a time rather than allocating the full payload upfront. This is the backbone of the `range → map → filter → fold` pipeline: a million-element `range` followed by a `map` and a `fold` keeps only one element alive at a time, regardless of stream length.
 
-`range`, `map`, `filter`, and `product` are the four iterator producers — their output pins are `Iter[T]`, not `Array[T]`. `fold` is an iterator consumer; it walks the stream to a single accumulator value. `collect` is the explicit bridge from `Iter[T]` back to `Array[T]`.
+`range`, `map`, `zip_with`, `filter`, and `product` are the iterator producers — their output pins are `Iter[T]`, not `Array[T]`. `fold` is an iterator consumer; it walks the stream to a single accumulator value. `collect` is the explicit bridge from `Iter[T]` back to `Array[T]`.
 
 **Implicit conversions**
 
@@ -607,6 +607,32 @@ To see the map node in action please check out the *Pattern* demo [in the demos 
 In the Pattern demo, `map`'s input type is `Int` and output type is `Blueprint` — so the body's `element` pin is `Int` and the `result` pin is `Blueprint`. Inside the body, an `Int → Blueprint` chain (a `cuboid` whose position is driven by `element`, for instance) wires into `result`. To parameterize the body — e.g. a `gap` value that the body uses to space the cuboids — drop a `float` (or any other) node in the **outer** scope and drag a capture wire from it into the relevant body-internal node's input. The capture wire is the inline-body equivalent of the old "extra function parameter" mechanism.
 
 **Auto-partialization example.** A `closure` of kind `Custom` with parameters `(x: Float, y: Float)` and body `expr: x * y` has type `Function((Float, Float) → Int)`. Wire it directly into the `f` pin of a `map` whose `Input type` is `Float` (e.g. driven by `range(3) → collect`), and `map.output_type` is derived to `Function((Float,), Int)` — `map` produces a stream of partially-applied closures, one per `xs` element, each with that element bound as its `x`. Downstream you can pipe this `Iter[Function((Float,), Int)]` into a second `map` whose body calls `apply` on each closure to finish the computation. No nested-`closure` ladder, no inline body required.
+
+## zip_with
+
+The **n-ary generalization of `map`** (Haskell's `zipWith`, also called *multimap*): combines **N** input streams element-wise with an N-argument body, producing one output stream. Where `map` runs a one-argument body over a single stream, `zip_with` pulls one element from every lane per step and runs the body on the whole pulled frame — `map` is the degenerate one-lane case. Like `map` it is fully **lazy** (a new `Iter[R]` walker; the intermediate frames are never materialized) and it is an HOF with an inline body and an optional `f` pin, so everything in *[Higher-order function nodes](#higher-order-function-nodes-map-filter-fold-foreach)* applies.
+
+The stream ends with the **shortest input** (an empty lane ⇒ empty output), matching the `zipWith` convention. To combine each element of a stream with a *constant*, don't add a lane for the constant — reference it from inside the body as a **capture**; a scalar-fed lane broadcasts to a single-element stream (the `S → Iter[T]` rule) and would end the whole zip after one step.
+
+**Lanes.** The input arity is a user-configurable list of **lanes** (default 2, minimum 1). Lane pins have fixed, position-derived names — external `xs1 … xsN`, inside-facing `element1 … elementN`, 1-based — so there is nothing to name and reordering is not a concept; lane editing is just **add / remove / retype**. Each lane carries a hidden stable identity, so removing an earlier lane keeps the later lanes' external wires attached (the pins renumber, the wires follow) and remaps the body's `element{i}` references in the same step.
+
+**Properties** (Node Properties panel)
+
+- **Input Lanes** — an ordered list of lane rows, one per lane: a fixed `xs{i}` label + a type picker + a delete button (disabled at the last remaining lane). An **Add Input** button appends a lane (defaulting to `Float`). Deleting a middle lane keeps the surviving lanes' wires; the whole edit (add / remove / retype, including the dropped and remapped wires) is a single undo step.
+- **Output Type** — the element type R of the output stream (drives the body's `result` zone-output pin). Editable when `f` is disconnected; when a function is wired into `f`, this becomes a read-only *derived* display (the type is taken from the wired source's signature), exactly like `map`'s Output Type field.
+
+**External pins**
+
+- Input `xs1 … xsN: Iter[T_i]` — the N streams to combine, one per lane. Each accepts an `Array[T_i]` source via the implicit `[T] → Iter[T]` conversion.
+- Input `f: Function(T_1, …, T_N, *)` *(optional)* — any function value whose parameter list **starts with** the lane types `(T_1, …, T_N)`. When wired, it drives the zip instead of the inline body; excess parameters auto-partialize into the output element type, exactly like `map.f`.
+- Output `Iter[OutputType]` — the combined stream. When `f` is connected, `OutputType` is derived from the wired source's signature.
+
+**Body (inline)**
+
+- Zone-input `element1 … elementN: T_i` — the current per-lane iteration values (inner-left sources).
+- Zone-output `result: OutputType` — the body's per-iteration return value (inner-right destination). Must have at least one incoming wire.
+
+A two-lane summing zip has a body of one `expr` with parameters `a` and `b` (wired from `element1` and `element2`) computing `a + b` into `result`; wiring two `range`s into `xs1`/`xs2` and a `collect` onto the output yields the element-wise sums.
 
 ## filter
 

@@ -3075,6 +3075,38 @@ sealed class APIViewportPickResult with _$APIViewportPickResult {
   const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
 }
 
+/// Editable state of a `zip_with` node (n-ary element-wise map, issue #382).
+/// Lane pin names (`xs1..xsN` / `element1..elementN`) are derived positionally
+/// and the hidden per-lane stable ids are managed Rust-side, so they never
+/// cross the API — only the ordered lane types and the stored output type are
+/// exposed. `output_type` is user-editable when `f` is disconnected and
+/// read-only (derived) display when `f` is wired. See `doc/design_zip_with.md`
+/// (Phase 5).
+class APIZipWithData {
+  /// The N input lane element types, in pin order (`xs1..xsN`).
+  final List<APIDataType> laneTypes;
+
+  /// The stored output element type (the fallback used when `f` is
+  /// disconnected; the output pin resolves to `Iter[output_type]`).
+  final APIDataType outputType;
+
+  const APIZipWithData({
+    required this.laneTypes,
+    required this.outputType,
+  });
+
+  @override
+  int get hashCode => laneTypes.hashCode ^ outputType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIZipWithData &&
+          runtimeType == other.runtimeType &&
+          laneTypes == other.laneTypes &&
+          outputType == other.outputType;
+}
+
 /// `a` / `b` are columns 0 / 1 — same convention as the text
 /// properties exposed by `IMat2ColsData::get_text_properties`.
 class APIIMat2ColsData {

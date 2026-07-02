@@ -52,6 +52,7 @@ use super::structure_designer_api_types::APISourcePin;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
+use super::structure_designer_api_types::APIZipWithData;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_api_types::ZoneView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
@@ -205,6 +206,7 @@ use crate::structure_designer::nodes::structure_rot::{StructureRotData, Structur
 use crate::structure_designer::nodes::supercell::SupercellData;
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
+use crate::structure_designer::nodes::zip_with::ZipWithData;
 use crate::structure_designer::text_format::TextValue;
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::collections::HashMap;
@@ -4472,6 +4474,30 @@ pub fn get_foreach_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIForeach
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_zip_with_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIZipWithData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let zip_data = node_data.as_any_ref().downcast_ref::<ZipWithData>()?;
+
+                Some(APIZipWithData {
+                    lane_types: zip_data
+                        .lanes
+                        .iter()
+                        .map(|lane| data_type_to_api_data_type(&lane.data_type))
+                        .collect(),
+                    output_type: data_type_to_api_data_type(&zip_data.output_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_patch_build_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPatchBuildData> {
     unsafe {
         with_cad_instance_or(
@@ -6052,6 +6078,58 @@ pub fn set_foreach_data(scope_path: Vec<u64>, node_id: u64, data: APIForeachData
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, foreach_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Whole-list lane + output-type edit on a `zip_with` node (the positional id
+/// merge). Delegates to `StructureDesigner::set_zip_with_data` so the shared
+/// `ZipWithLaneEditCommand` undo capture (whole-network snapshots covering the
+/// wire fallout) is used — the API layer adds no undo logic of its own. Lane
+/// ids are managed Rust-side and never cross the API.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_zip_with_data(scope_path: Vec<u64>, node_id: u64, data: APIZipWithData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let lane_types: Vec<DataType> = data
+                .lane_types
+                .iter()
+                .map(|t| api_data_type_to_data_type(t).unwrap_or(DataType::None))
+                .collect();
+            let output_type =
+                api_data_type_to_data_type(&data.output_type).unwrap_or(DataType::None);
+
+            // Errors (empty lane list, wrong node type) leave the node
+            // untouched; the UI's Add/Delete affordances prevent the empty case.
+            let _ = cad_instance.structure_designer.set_zip_with_data(
+                &scope_path,
+                node_id,
+                lane_types,
+                output_type,
+            );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Id-accurate removal of one specific `zip_with` lane (the property panel's
+/// per-lane delete button). Surviving lanes keep their hidden stable ids so
+/// external wires follow them while the `xs{i}` labels renumber; body wires to
+/// the removed `element{i}` are dropped and later ones decremented at mutation
+/// time. Delegates to `StructureDesigner::remove_zip_with_lane` (shared undo).
+/// A bare lane-type-list setter can only express the positional merge, so the
+/// id-accurate removal needs its own entry point.
+#[flutter_rust_bridge::frb(sync)]
+pub fn remove_zip_with_lane(scope_path: Vec<u64>, node_id: u64, lane_index: usize) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            // Errors (last lane, out of range) leave the node untouched.
+            let _ = cad_instance.structure_designer.remove_zip_with_lane(
+                &scope_path,
+                node_id,
+                lane_index,
+            );
             refresh_structure_designer_auto(cad_instance);
         });
     }

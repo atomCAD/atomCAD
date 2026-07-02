@@ -2427,6 +2427,27 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Whole-list lane + output-type edit on a `zip_with` node (the positional id
+  /// merge). Ids are managed Rust-side; the shared `ZipWithLaneEditCommand`
+  /// undo capture is created by the Rust setter, not here.
+  void setZipWithData(BigInt nodeId, APIZipWithData data) {
+    structure_designer_api.setZipWithData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  /// Id-accurate removal of one `zip_with` lane (the delete button). Surviving
+  /// lanes keep their external wires; body wires remap in the same step.
+  void removeZipWithLane(BigInt nodeId, int laneIndex) {
+    structure_designer_api.removeZipWithLane(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        laneIndex: BigInt.from(laneIndex));
+    refreshFromKernel();
+  }
+
   void setPatchBuildData(BigInt nodeId, APIPatchBuildData data) {
     structure_designer_api.setPatchBuildData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

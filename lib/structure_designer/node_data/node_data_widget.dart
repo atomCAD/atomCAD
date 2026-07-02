@@ -25,6 +25,7 @@ import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/print_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/zip_with_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/array_at_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
@@ -480,6 +481,18 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
           node: selectedNode,
         );
+      case 'zip_with':
+        final zipWithData = getZipWithData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return ZipWithEditor(
+          nodeId: selectedNode.id,
+          data: zipWithData,
+          model: model,
+          node: selectedNode,
+        );
       case 'filter':
         final filterData = getFilterData(
           scopePath: scopePath,
@@ -878,7 +891,8 @@ class NodeDataWidget extends StatelessWidget {
       case 'patch_build':
         return PatchBuildEditor(
           nodeId: selectedNode.id,
-          data: getPatchBuildData(scopePath: scopePath, nodeId: selectedNode.id),
+          data:
+              getPatchBuildData(scopePath: scopePath, nodeId: selectedNode.id),
           model: model,
         );
       case 'patch_latticefill':

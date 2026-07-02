@@ -4225,6 +4225,46 @@ impl StructureDesigner {
         node_id: u64,
         lane_types: Vec<DataType>,
     ) -> Result<(), String> {
+        use crate::structure_designer::nodes::zip_with::ZipWithData;
+
+        if lane_types.is_empty() {
+            return Err("zip_with requires at least one lane".to_string());
+        }
+        // Lane-only edit: preserve the node's current stored output type and
+        // delegate to the combined data setter (single undo command).
+        let output_type = {
+            let node = self
+                .get_scope_network(scope_path)
+                .and_then(|net| net.nodes.get(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            node.data
+                .as_any_ref()
+                .downcast_ref::<ZipWithData>()
+                .ok_or_else(|| "Node is not a zip_with".to_string())?
+                .output_type
+                .clone()
+        };
+        self.set_zip_with_data(scope_path, node_id, lane_types, output_type)
+    }
+
+    /// Combined whole-list lane + output-type edit on a `zip_with` node — the
+    /// path the API setter drives (`doc/design_zip_with.md` Phase 5). Lanes
+    /// merge positionally (id-preserving retype, tail-drop shrink with body-wire
+    /// cleanup, `next_lane_id`-minted growth); the stored `output_type` is set
+    /// alongside so a retype of the `result` zone-output pin flows through the
+    /// same repair + undo path (`repair_zone_body` drops an incompatible result
+    /// wire). Empty lane list is rejected. Undo: whole-top-level-network
+    /// before/after snapshots via [`ZipWithLaneEditCommand`], shared with
+    /// [`Self::remove_zip_with_lane`] — the API layer adds no undo logic.
+    ///
+    /// [`ZipWithLaneEditCommand`]: super::undo::commands::zip_with_lane_edit::ZipWithLaneEditCommand
+    pub fn set_zip_with_data(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        lane_types: Vec<DataType>,
+        output_type: DataType,
+    ) -> Result<(), String> {
         use crate::structure_designer::nodes::zip_with::{
             ZipWithData, disconnect_zip_body_wires_to_dropped_lanes,
         };
@@ -4239,7 +4279,7 @@ impl StructureDesigner {
 
         // Read-only pre-check: resolve the node and reject before any
         // mutation or snapshot so an error leaves the designer untouched.
-        let old_types = {
+        let (old_types, old_output) = {
             let node = self
                 .get_scope_network(scope_path)
                 .and_then(|net| net.nodes.get(&node_id))
@@ -4249,9 +4289,9 @@ impl StructureDesigner {
                 .as_any_ref()
                 .downcast_ref::<ZipWithData>()
                 .ok_or_else(|| "Node is not a zip_with".to_string())?;
-            data.lane_types()
+            (data.lane_types(), data.output_type.clone())
         };
-        if old_types == lane_types {
+        if old_types == lane_types && old_output == output_type {
             return Ok(()); // no-op; don't push an empty command
         }
 
@@ -4262,11 +4302,13 @@ impl StructureDesigner {
                 .get_scope_network_mut(scope_path)
                 .and_then(|net| net.nodes.get_mut(&node_id))
                 .ok_or_else(|| "Node not found".to_string())?;
-            node.data
+            let data = node
+                .data
                 .as_any_mut()
                 .downcast_mut::<ZipWithData>()
-                .ok_or_else(|| "Node is not a zip_with".to_string())?
-                .merge_lane_types(lane_types.clone())?;
+                .ok_or_else(|| "Node is not a zip_with".to_string())?;
+            data.merge_lane_types(lane_types.clone())?;
+            data.output_type = output_type;
             if lane_types.len() < old_types.len() {
                 disconnect_zip_body_wires_to_dropped_lanes(node, lane_types.len());
             }
