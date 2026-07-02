@@ -35,6 +35,7 @@ use super::nodes::fold::get_node_type as fold_get_node_type;
 use super::nodes::foreach::get_node_type as foreach_get_node_type;
 use super::nodes::free_move::get_node_type as free_move_get_node_type;
 use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
+use super::nodes::free_sphere::get_node_type as free_sphere_get_node_type;
 use super::nodes::freeze::{freeze_get_node_type, unfreeze_get_node_type};
 use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
 use super::nodes::get_structure::get_node_type as get_structure_get_node_type;
@@ -491,6 +492,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(extrude_get_node_type());
         ret.add_node_type(cuboid_get_node_type());
         ret.add_node_type(sphere_get_node_type());
+        ret.add_node_type(free_sphere_get_node_type());
         ret.add_node_type(half_space_get_node_type());
         ret.add_node_type(drawing_plane_get_node_type());
         ret.add_node_type(facet_shell_get_node_type());
