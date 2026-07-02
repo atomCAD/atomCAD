@@ -5,23 +5,32 @@
 //! quantization, roundness in real space regardless of the structure input,
 //! `Aligned` alignment, wired-pin overrides (incl. `Int → Float`), materialize
 //! integration with sub-cell sensitivity, and text-property roundtrips.
+//!
+//! Phase 2 covers `free_circle` (Rust core): real-space 2D SDF placement and
+//! `frame_transform`, the default XY drawing plane when `d_plane` is unwired,
+//! extrude→materialize integration with sub-cell sensitivity, wired-pin
+//! overrides, and text-property roundtrips (incl. the whole-number `IVec2`
+//! path via `as_vec2`).
 
 use glam::f64::{DVec2, DVec3};
-use glam::i32::IVec3;
+use glam::i32::{IVec2, IVec3};
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::ImplicitGeometry3D;
+use rust_lib_flutter_cad::geo_tree::implicit_geometry::{ImplicitGeometry2D, ImplicitGeometry3D};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::GeometrySummary2D;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, NetworkResult,
 };
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
+use rust_lib_flutter_cad::structure_designer::nodes::free_circle::FreeCircleData;
 use rust_lib_flutter_cad::structure_designer::nodes::free_sphere::FreeSphereData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+use rust_lib_flutter_cad::structure_designer::nodes::vec2::Vec2Data;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
@@ -80,6 +89,31 @@ fn add_free_sphere(
         .get_mut(network_name)
         .unwrap();
     network.set_node_network_data(id, Box::new(FreeSphereData { center, radius }));
+    id
+}
+
+fn geometry_2d(result: NetworkResult) -> GeometrySummary2D {
+    match result {
+        NetworkResult::Geometry2D(g) => g,
+        NetworkResult::Error(e) => panic!("expected Geometry2D, got Error: {}", e),
+        other => panic!("expected Geometry2D, got {:?}", other.infer_data_type()),
+    }
+}
+
+/// Add a `free_circle` node to the active network and set its stored data.
+fn add_free_circle(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    center: DVec2,
+    radius: f64,
+) -> u64 {
+    let id = designer.add_node("free_circle", DVec2::ZERO);
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    network.set_node_network_data(id, Box::new(FreeCircleData { center, radius }));
     id
 }
 
@@ -371,5 +405,191 @@ fn free_sphere_text_properties_roundtrip() {
     };
     d.set_text_properties(&whole).unwrap();
     assert_eq!(d.center, DVec3::new(1.0, 2.0, 3.0));
+    assert_eq!(d.radius, 2.5);
+}
+
+// ============================================================================
+// Phase 2 — free_circle
+// ============================================================================
+
+/// Stored fractional center/radius place the 2D SDF exactly there (no lattice
+/// quantization, no |a| radius scaling), and `frame_transform` translation
+/// equals the stored center.
+#[test]
+fn free_circle_sdf_placement_and_frame_transform() {
+    let mut designer = setup_designer("t");
+    let center = DVec2::new(1.5, -2.25);
+    let radius = 3.7;
+    let id = add_free_circle(&mut designer, "t", center, radius);
+
+    let geo2d = geometry_2d(evaluate_raw(&designer, "t", id));
+
+    // frame_transform carries the real-space center unchanged.
+    assert!(
+        (geo2d.frame_transform.translation - center).length() < 1e-9,
+        "frame_transform translation should equal the stored center"
+    );
+
+    let geo = &geo2d.geo_tree_root;
+    // Inside (center): SDF ≈ -radius.
+    assert!(
+        (geo.implicit_eval_2d(&center) - (-radius)).abs() < 1e-6,
+        "SDF at center should be -radius"
+    );
+    // Boundary at center + (radius, 0): SDF ≈ 0. (If radius were scaled by |a|
+    // like `circle`, this would be far from zero.)
+    let boundary = center + DVec2::new(radius, 0.0);
+    assert!(
+        geo.implicit_eval_2d(&boundary).abs() < 1e-6,
+        "SDF on the +x boundary point should be ~0"
+    );
+    // Well outside: SDF > 0.
+    let outside = center + DVec2::new(radius + 10.0, 0.0);
+    assert!(
+        geo.implicit_eval_2d(&outside) > 0.0,
+        "SDF well outside should be positive"
+    );
+}
+
+/// With `d_plane` unwired, `free_circle` falls back to the default XY drawing
+/// plane (Miller index (0, 0, 1)), matching `circle`.
+#[test]
+fn free_circle_default_plane_is_xy() {
+    let mut designer = setup_designer("t");
+    let id = add_free_circle(&mut designer, "t", DVec2::ZERO, 5.0);
+    let geo2d = geometry_2d(evaluate_raw(&designer, "t", id));
+    assert_eq!(
+        geo2d.drawing_plane.miller_index,
+        IVec3::new(0, 0, 1),
+        "default drawing plane should be the XY plane"
+    );
+}
+
+/// `free_circle → extrude → materialize` carves atoms, and shifting the circle
+/// center by a sub-cell amount changes the resulting atom set.
+#[test]
+fn free_circle_extrude_materialize_sub_cell_sensitivity() {
+    fn carve(center: DVec2) -> Vec<(i64, i64, i64)> {
+        let mut designer = setup_designer("t");
+        let fc_id = add_free_circle(&mut designer, "t", center, 5.0);
+        let ex_id = designer.add_node("extrude", DVec2::new(300.0, 0.0));
+        let mat_id = designer.add_node("materialize", DVec2::new(600.0, 0.0));
+        {
+            let network = designer
+                .node_type_registry
+                .node_networks
+                .get_mut("t")
+                .unwrap();
+            // free_circle → extrude.shape (pin 0)
+            network.connect_nodes(fc_id, 0, ex_id, 0, false);
+            // extrude → materialize (pin 0)
+            network.connect_nodes(ex_id, 0, mat_id, 0, false);
+        }
+        let c = crystal(evaluate_raw(&designer, "t", mat_id));
+        assert!(
+            c.atoms.get_num_of_atoms() > 0,
+            "extrude+materialize over a free_circle should carve at least one atom"
+        );
+        position_set(&c)
+    }
+
+    let base = carve(DVec2::ZERO);
+    // Shift by half a diamond lattice vector (3.567 / 2 ≈ 1.7835 Å), a distance
+    // not representable in whole cells.
+    let shifted = carve(DVec2::new(1.7835, 0.0));
+    assert_ne!(
+        base, shifted,
+        "a sub-cell center shift should change the carved atom set"
+    );
+}
+
+/// Wired `center`/`radius` pins override the stored fields; an `Int → Float`
+/// implicit conversion into `radius` works out of the box.
+#[test]
+fn free_circle_wired_pins_override_stored() {
+    let mut designer = setup_designer("t");
+    // Stored values are deliberately different from what we wire in.
+    let fc_id = add_free_circle(&mut designer, "t", DVec2::new(9.0, 9.0), 1.0);
+
+    let wired_center = DVec2::new(1.0, 2.0);
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("t")
+            .unwrap();
+        let vec2_id = network.add_node(
+            "vec2",
+            DVec2::new(-200.0, 0.0),
+            0,
+            Box::new(Vec2Data {
+                value: wired_center,
+            }),
+        );
+        let int_id = network.add_node(
+            "int",
+            DVec2::new(-200.0, 100.0),
+            0,
+            Box::new(IntData { value: 4 }),
+        );
+        network.connect_nodes(vec2_id, 0, fc_id, 0, false);
+        // Int → Float implicit conversion into `radius`.
+        network.connect_nodes(int_id, 0, fc_id, 1, false);
+    }
+
+    let geo2d = geometry_2d(evaluate_raw(&designer, "t", fc_id));
+    assert!(
+        (geo2d.frame_transform.translation - wired_center).length() < 1e-9,
+        "wired center should drive the frame transform"
+    );
+    assert!(
+        (geo2d.geo_tree_root.implicit_eval_2d(&wired_center) - (-4.0)).abs() < 1e-6,
+        "wired center/radius (int→float) should drive the SDF"
+    );
+}
+
+/// `get_text_properties` emits `Vec2`/`Float`; `set_text_properties` reads them
+/// back (including a whole-number `IVec2` center via `as_vec2`) and roundtrips.
+#[test]
+fn free_circle_text_properties_roundtrip() {
+    let data = FreeCircleData {
+        center: DVec2::new(1.5, -2.25),
+        radius: 3.7,
+    };
+    let props = data.get_text_properties();
+    assert!(
+        props
+            .iter()
+            .any(|(k, v)| k == "center" && matches!(v, TextValue::Vec2(_))),
+        "center should serialize as a Vec2"
+    );
+    assert!(
+        props
+            .iter()
+            .any(|(k, v)| k == "radius" && matches!(v, TextValue::Float(_))),
+        "radius should serialize as a Float"
+    );
+
+    // Roundtrip through get/set.
+    let map: HashMap<String, TextValue> = props.into_iter().collect();
+    let mut restored = FreeCircleData {
+        center: DVec2::ZERO,
+        radius: 0.0,
+    };
+    restored.set_text_properties(&map).unwrap();
+    assert_eq!(restored.center, data.center);
+    assert_eq!(restored.radius, data.radius);
+
+    // Whole-number center parses to an IVec2 in the text format; `as_vec2`
+    // accepts it, so `center: (1, 2)` just works.
+    let mut whole = HashMap::new();
+    whole.insert("center".to_string(), TextValue::IVec2(IVec2::new(1, 2)));
+    whole.insert("radius".to_string(), TextValue::Float(2.5));
+    let mut d = FreeCircleData {
+        center: DVec2::ZERO,
+        radius: 0.0,
+    };
+    d.set_text_properties(&whole).unwrap();
+    assert_eq!(d.center, DVec2::new(1.0, 2.0));
     assert_eq!(d.radius, 2.5);
 }

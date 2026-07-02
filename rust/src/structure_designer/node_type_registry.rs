@@ -33,6 +33,7 @@ use super::nodes::filter::get_node_type as filter_get_node_type;
 use super::nodes::float::get_node_type as float_get_node_type;
 use super::nodes::fold::get_node_type as fold_get_node_type;
 use super::nodes::foreach::get_node_type as foreach_get_node_type;
+use super::nodes::free_circle::get_node_type as free_circle_get_node_type;
 use super::nodes::free_move::get_node_type as free_move_get_node_type;
 use super::nodes::free_rot::get_node_type as free_rot_get_node_type;
 use super::nodes::free_sphere::get_node_type as free_sphere_get_node_type;
@@ -482,6 +483,7 @@ impl NodeTypeRegistry {
 
         ret.add_node_type(rect_get_node_type());
         ret.add_node_type(circle_get_node_type());
+        ret.add_node_type(free_circle_get_node_type());
         ret.add_node_type(reg_poly_get_node_type());
         ret.add_node_type(polygon_get_node_type());
         ret.add_node_type(union_2d_get_node_type());
