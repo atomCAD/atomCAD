@@ -3395,3 +3395,214 @@ mod unpack_nodes_text_format_tests {
         );
     }
 }
+
+// ============================================================================
+// zip_with text format (`doc/design_zip_with.md` §Phase 4)
+//
+// The N input lanes carry fixed, position-derived pin names (`xs1..xsN`), so
+// lane connections serialize/parse by derived pin name and the lane list is a
+// plain `lane_types` array — no name array and no key-collision hazard. Zone
+// bodies are not part of the text format (same as `map`/`fold`); they live only
+// in `.cnnd` JSON (see `zip_with_test.rs` Phase 4 roundtrip tests).
+// ============================================================================
+mod zip_with_text_format_tests {
+    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::nodes::zip_with::ZipWithData;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+    use rust_lib_flutter_cad::structure_designer::text_format::{
+        EditResult, edit_network, serialize_network,
+    };
+
+    fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+        let mut designer = StructureDesigner::new();
+        designer.add_node_network(network_name);
+        designer.set_active_node_network_name(Some(network_name.to_string()));
+        designer
+    }
+
+    fn edit_designer_network(
+        designer: &mut StructureDesigner,
+        network_name: &str,
+        code: &str,
+        replace: bool,
+    ) -> EditResult {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove(network_name)
+            .unwrap();
+        let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert(network_name.to_string(), network);
+        result
+    }
+
+    /// Find the id of the node whose `custom_name` is `name`.
+    fn node_id_by_name(network: &NodeNetwork, name: &str) -> u64 {
+        network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some(name))
+            .map(|(id, _)| *id)
+            .unwrap_or_else(|| panic!("no node named '{}'", name))
+    }
+
+    fn zip_data<'a>(network: &'a NodeNetwork, name: &str) -> &'a ZipWithData {
+        let id = node_id_by_name(network, name);
+        network
+            .nodes
+            .get(&id)
+            .unwrap()
+            .data
+            .as_any_ref()
+            .downcast_ref::<ZipWithData>()
+            .expect("node is a zip_with")
+    }
+
+    /// Parse builds the node with correct lanes, external lane wires, and a
+    /// wired `f`.
+    #[test]
+    fn parse_creates_lanes_wires_and_f() {
+        let mut designer = setup_designer_with_network("test");
+        // `f: @g` wires a function value into the trailing `f` pin. The pin is
+        // name-addressable and lands at index N (after the N lanes), which is
+        // the zip-specific part — the function-ref machinery itself is generic
+        // (`@name` = the named node's function pin). Here `g` is another node
+        // whose function pin supplies the value.
+        let code = "\
+a = range { start: 0, step: 1, count: 3 }
+b = range { start: 10, step: 1, count: 3 }
+g = range { start: 0, step: 1, count: 3 }
+z = zip_with { lane_types: [Int, Int], output_type: Int, xs1: a, xs2: b, f: @g }
+output z
+";
+        let result = edit_designer_network(&mut designer, "test", code, true);
+        assert!(
+            result.errors.is_empty(),
+            "unexpected parse/edit errors: {:?}",
+            result.errors
+        );
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let data = zip_data(network, "z");
+        assert_eq!(data.lanes.len(), 2);
+        assert_eq!(data.lanes[0].data_type, DataType::Int);
+        assert_eq!(data.lanes[1].data_type, DataType::Int);
+        assert_eq!(data.output_type, DataType::Int);
+
+        let a_id = node_id_by_name(network, "a");
+        let b_id = node_id_by_name(network, "b");
+        let g_id = node_id_by_name(network, "g");
+        let z_id = node_id_by_name(network, "z");
+        let z_node = network.nodes.get(&z_id).unwrap();
+        // Lane pins xs1, xs2 (indices 0, 1) then the trailing `f` (index 2).
+        assert_eq!(z_node.arguments[0].get_source_pin(a_id), Some(0));
+        assert_eq!(z_node.arguments[1].get_source_pin(b_id), Some(0));
+        assert_eq!(
+            z_node.arguments[2].get_source_pin(g_id),
+            Some(-1),
+            "f pin (index 2, after the 2 lanes) must be wired to the function pin (-1)"
+        );
+    }
+
+    /// A 3-lane zip round-trips to byte-identical text (serialize → parse into a
+    /// fresh network → serialize).
+    #[test]
+    fn serialize_roundtrip_byte_equal() {
+        let mut designer = setup_designer_with_network("test");
+        let code = "\
+a = range { start: 0, step: 1, count: 3 }
+b = range { start: 10, step: 1, count: 3 }
+z = zip_with { lane_types: [Int, Int, Vec3], output_type: Float, xs1: a, xs2: b }
+output z
+";
+        let r = edit_designer_network(&mut designer, "test", code, true);
+        assert!(r.errors.is_empty(), "edit errors: {:?}", r.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let text1 = serialize_network(network, &designer.node_type_registry, None);
+
+        // Re-parse into a fresh network and re-serialize; the two must match.
+        let mut designer2 = setup_designer_with_network("test");
+        let r2 = edit_designer_network(&mut designer2, "test", &text1, true);
+        assert!(r2.errors.is_empty(), "re-parse errors: {:?}", r2.errors);
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let text2 = serialize_network(network2, &designer2.node_type_registry, None);
+
+        assert_eq!(text1, text2, "zip_with text serialization is not stable");
+        // Sanity: the derived pin names and lane-type array actually appear.
+        assert!(text1.contains("lane_types: [Int, Int, Vec3]"), "{}", text1);
+        assert!(text1.contains("xs1: a"), "{}", text1);
+        assert!(text1.contains("xs2: b"), "{}", text1);
+
+        // The re-parsed lanes carry the position-stable ids the merge assigns.
+        let data = zip_data(network2, "z");
+        assert_eq!(
+            data.lanes.iter().map(|l| l.id).collect::<Vec<_>>(),
+            vec![Some(1), Some(2), Some(3)]
+        );
+    }
+
+    /// An incremental edit changing only `lane_types` preserves position-stable
+    /// ids and the external lane wires (the Phase 3 positional merge through the
+    /// text path).
+    #[test]
+    fn incremental_lane_types_edit_preserves_ids_and_wires() {
+        let mut designer = setup_designer_with_network("test");
+        let code = "\
+a = range { start: 0, step: 1, count: 3 }
+b = range { start: 10, step: 1, count: 3 }
+z = zip_with { lane_types: [Int, Int], output_type: Int, xs1: a, xs2: b }
+output z
+";
+        let r = edit_designer_network(&mut designer, "test", code, true);
+        assert!(r.errors.is_empty(), "edit errors: {:?}", r.errors);
+
+        // Incremental edit: retype lane 2 Int -> Float, mention nothing else.
+        let r2 = edit_designer_network(
+            &mut designer,
+            "test",
+            "z = zip_with { lane_types: [Int, Float] }",
+            false,
+        );
+        assert!(
+            r2.errors.is_empty(),
+            "incremental edit errors: {:?}",
+            r2.errors
+        );
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let data = zip_data(network, "z");
+        // Ids survive the retype (position-stable merge).
+        assert_eq!(data.lanes[0].id, Some(1));
+        assert_eq!(data.lanes[1].id, Some(2));
+        assert_eq!(data.lanes[1].data_type, DataType::Float);
+
+        // The external lane wires are untouched by the lane-only edit.
+        let a_id = node_id_by_name(network, "a");
+        let b_id = node_id_by_name(network, "b");
+        let z_id = node_id_by_name(network, "z");
+        let z_node = network.nodes.get(&z_id).unwrap();
+        assert_eq!(z_node.arguments[0].get_source_pin(a_id), Some(0));
+        assert_eq!(z_node.arguments[1].get_source_pin(b_id), Some(0));
+    }
+}

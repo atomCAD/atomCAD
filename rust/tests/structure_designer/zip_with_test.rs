@@ -2937,3 +2937,334 @@ fn zip_phase3_undo_redo_retype_and_shrink() {
     );
     assert_eq!(network_json(&mut designer, "main"), after);
 }
+
+// ============================================================================
+// Phase 4: text format + serialization round-trips
+// (`doc/design_zip_with.md` §Phase 4)
+//
+// `zip_with` uses `generic_node_data_saver` + a loader that heals persisted
+// lane-id state. These tests drive that saver/loader through the same
+// serializable form the `.cnnd` file path uses (`node_network_to_serializable`
+// → JSON → `serializable_to_node_network`), covering a populated inline body,
+// captures, a wired `f`, a body-internal (nested) zip, and hand-authored files
+// with missing lane ids. (Text-format parse/serialize round-trips live in
+// `text_format_test.rs::zip_with_text_format_tests`; zone bodies are not part
+// of the text format, only the JSON form.)
+// ============================================================================
+
+use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+    SerializableNodeNetwork, node_network_to_serializable, serializable_to_node_network,
+};
+
+/// Round-trip a network through the serializable (`.cnnd`) form —
+/// saver → JSON string → loader (`serializable_to_node_network`, which invokes
+/// each node's `node_data_loader`, i.e. `zip_with_node_data_loader` + id
+/// healing) → saver again — and assert the normalized JSON is byte-identical.
+/// Exercises the recursive zone-body serialization for any HOF present.
+fn assert_cnnd_roundtrip(designer: &mut StructureDesigner, name: &str) {
+    let before = network_json(designer, name);
+
+    let snap = designer.snapshot_network(name).expect("snapshot network");
+    let json = serde_json::to_string(&snap).unwrap();
+    let reloaded: SerializableNodeNetwork = serde_json::from_str(&json).unwrap();
+
+    let built_in = &designer.node_type_registry.built_in_node_types;
+    let mut net2 =
+        serializable_to_node_network(&reloaded, built_in, None).expect("load network back");
+    let snap2 = node_network_to_serializable(&mut net2, built_in, None).unwrap();
+    let mut after = serde_json::to_value(&snap2).unwrap();
+    normalize_network_json(&mut after);
+
+    assert_eq!(
+        before, after,
+        "cnnd roundtrip changed the network JSON for '{}'",
+        name
+    );
+}
+
+/// Design test 4 (top-level): a `zip_with` with a populated inline body, a
+/// depth-1 capture, and a wired `f` round-trips exactly.
+#[test]
+fn zip_phase4_cnnd_roundtrip_body_capture_and_wired_f() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        400.0,
+    );
+    let r1 = add_range(&mut designer, "main", 0, 1, 3, 0.0);
+    let r2 = add_range(&mut designer, "main", 0, 10, 3, 200.0);
+    designer.connect_nodes(r1, 0, zip_id, 0);
+    designer.connect_nodes(r2, 0, zip_id, 1);
+
+    // Inline body `a + b + k` where k is a depth-1 capture of an outer int.
+    let k_id = designer.add_node("int", DVec2::new(0.0, 300.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        k_id,
+        Box::new(IntData { value: 1000 }),
+    );
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        zip_id,
+        "a + b + k",
+        vec![
+            ("a".to_string(), DataType::Int),
+            ("b".to_string(), DataType::Int),
+            ("k".to_string(), DataType::Int),
+        ],
+    );
+    wire_zone_input_pin_to_body_node(&mut designer, "main", zip_id, 0, expr_id, 0);
+    wire_zone_input_pin_to_body_node(&mut designer, "main", zip_id, 1, expr_id, 1);
+    wire_capture_to_body_node(&mut designer, "main", zip_id, expr_id, 2, k_id);
+    wire_body_node_to_zone_output(&mut designer, "main", zip_id, expr_id);
+
+    // Also wire a (bodiless) closure into `f` so the wired-`f` argument is part
+    // of the serialized shape (the closure wins at eval; here we only round-trip
+    // the structure).
+    let c_id = add_custom_closure(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int],
+        DataType::Int,
+        500.0,
+    );
+    designer.connect_nodes(c_id, 0, zip_id, 2);
+
+    assert_cnnd_roundtrip(&mut designer, "main");
+}
+
+/// Design test 4 (nested): a body-internal `zip_with` (inside a `map` zone),
+/// with its own inline body, survives the roundtrip — a zone inside a zone.
+#[test]
+fn zip_phase4_cnnd_roundtrip_nested_body_internal_zip() {
+    let mut designer = setup_designer_with_network("main");
+    let outer = add_range(&mut designer, "main", 0, 1, 2, 0.0);
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(outer, 0, map_id, 0);
+
+    // Map body: two ranges + a body-internal zip (2 lanes).
+    let zip_id = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let r1_id = body.add_node(
+            "range",
+            DVec2::new(0.0, 0.0),
+            3,
+            Box::new(RangeData {
+                start: 1,
+                step: 1,
+                count: 3,
+            }),
+        );
+        let r2_id = body.add_node(
+            "range",
+            DVec2::new(0.0, 100.0),
+            3,
+            Box::new(RangeData {
+                start: 10,
+                step: 10,
+                count: 2,
+            }),
+        );
+        let zip_id = body.add_node(
+            "zip_with",
+            DVec2::new(200.0, 0.0),
+            3,
+            Box::new(zip_data(vec![DataType::Int, DataType::Int], DataType::Int)),
+        );
+        // xs1 <- r1, xs2 <- r2 (intra-body wires).
+        body.nodes.get_mut(&zip_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: r1_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+        body.nodes.get_mut(&zip_id).unwrap().arguments[1]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: r2_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+        zip_id
+    };
+
+    // Populate the body-internal zip's cache — this initializes its inline zone
+    // body (`ensure_zone_init`), which the roundtrip must then preserve.
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // The body-internal zip's own inline body: expr `a + b`, element pins +
+    // zone-output wired.
+    {
+        let zip_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let expr_id = add_expr_to_network(
+            zip_body,
+            "a + b",
+            vec![
+                ("a".to_string(), DataType::Int),
+                ("b".to_string(), DataType::Int),
+            ],
+        );
+        zip_body.nodes.get_mut(&expr_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: zip_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+        zip_body.nodes.get_mut(&expr_id).unwrap().arguments[1]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: zip_id,
+                source_pin: SourcePin::ZoneInput { pin_index: 1 },
+                source_scope_depth: 1,
+            });
+        let zip_node = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap();
+        if zip_node.zone_output_arguments.is_empty() {
+            zip_node.zone_output_arguments.push(Argument::new());
+        }
+        zip_node.zone_output_arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: expr_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+
+    assert_cnnd_roundtrip(&mut designer, "main");
+}
+
+/// Set every lane's `id` to null and zero `next_lane_id` on the zip node's
+/// serialized `data` blob — the shape a hand-authored `.cnnd` file has.
+fn strip_zip_lane_ids(network_json: &mut Value, zip_id: u64) {
+    let nodes = network_json
+        .get_mut("nodes")
+        .and_then(|v| v.as_array_mut())
+        .expect("nodes array");
+    for node in nodes {
+        if node.get("id").and_then(|v| v.as_u64()) == Some(zip_id) {
+            let data = node.get_mut("data").expect("node data");
+            data["next_lane_id"] = Value::from(0u64);
+            for lane in data
+                .get_mut("lanes")
+                .and_then(|v| v.as_array_mut())
+                .expect("lanes array")
+            {
+                lane["id"] = Value::Null;
+            }
+        }
+    }
+}
+
+/// Design test 6 — healing: a hand-authored file with lanes missing `id` and a
+/// zero `next_lane_id` loads with fresh distinct lane ids and a consistent
+/// counter, and the external lane wires (positional, id-independent) survive.
+#[test]
+fn zip_phase4_load_heals_missing_lane_ids() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = build_sum_zip(&mut designer, "main", Some((0, 1, 3)), Some((10, 10, 3)));
+
+    let snap = designer.snapshot_network("main").unwrap();
+    let mut json = serde_json::to_value(&snap).unwrap();
+    strip_zip_lane_ids(&mut json, zip_id);
+
+    let reloaded: SerializableNodeNetwork = serde_json::from_value(json).unwrap();
+    let built_in = &designer.node_type_registry.built_in_node_types;
+    let net2 = serializable_to_node_network(&reloaded, built_in, None).expect("load heals");
+
+    let z_node = net2.nodes.get(&zip_id).unwrap();
+    let data = z_node
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap();
+    // Every lane got a fresh id, all distinct, and the counter is past them.
+    let ids: Vec<u64> = data
+        .lanes
+        .iter()
+        .map(|l| l.id.expect("healed id"))
+        .collect();
+    let unique: std::collections::HashSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "healed lane ids must be distinct");
+    assert!(
+        data.next_lane_id > *ids.iter().max().unwrap(),
+        "next_lane_id must be past every healed id"
+    );
+    // The external lane wires are positional and independent of ids, so they
+    // survive the id-less load.
+    assert!(
+        !z_node.arguments[0].is_empty() && !z_node.arguments[1].is_empty(),
+        "external lane wires must survive an id-less load"
+    );
+}
