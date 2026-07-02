@@ -539,9 +539,9 @@ pub const DEFAULT_BODY_HEIGHT: f64 = 180.0;
 /// declares an `f` parameter"; kept as a name list so the load path (which only
 /// has the type name) and the runtime path (which has the `NodeType`) agree.
 /// See `doc/design_hof_node_collapse.md`.
-pub const COLLAPSABLE_HOF_TYPE_NAMES: &[&str] = &["map", "filter", "fold", "foreach"];
+pub const COLLAPSABLE_HOF_TYPE_NAMES: &[&str] = &["map", "filter", "fold", "foreach", "zip_with"];
 
-/// True iff `name` is one of the four collapsable HOF type names.
+/// True iff `name` is one of the collapsable HOF type names.
 pub fn collapsable_type_name(name: &str) -> bool {
     COLLAPSABLE_HOF_TYPE_NAMES.contains(&name)
 }

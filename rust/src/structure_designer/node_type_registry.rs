@@ -93,6 +93,7 @@ use super::nodes::value::get_node_type as value_get_node_type;
 use super::nodes::vec2::get_node_type as vec2_get_node_type;
 use super::nodes::vec3::get_node_type as vec3_get_node_type;
 use super::nodes::with_structure::get_node_type as with_structure_get_node_type;
+use super::nodes::zip_with::get_node_type as zip_with_get_node_type;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
@@ -439,6 +440,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(filter_get_node_type());
         ret.add_node_type(fold_get_node_type());
         ret.add_node_type(foreach_get_node_type());
+        ret.add_node_type(zip_with_get_node_type());
         ret.add_node_type(closure_get_node_type());
         ret.add_node_type(apply_get_node_type());
         ret.add_node_type(print_get_node_type());

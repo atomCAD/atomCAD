@@ -417,3 +417,219 @@ fn product_clone_advances_independently() {
     let original_drain = drain(&mut w, &evaluator, &registry);
     assert_eq!(original_drain.len(), 3);
 }
+
+// ============================================================================
+// ZipZone (zip_with's walker — `doc/design_zip_with.md` Phase 1)
+// ============================================================================
+
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::evaluator::zone_closure::ZoneClosure;
+use rust_lib_flutter_cad::structure_designer::node_network::{
+    IncomingWire, NodeNetwork, SourcePin,
+};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+/// A minimal hand-built closure whose result wire reads the zone-input pin at
+/// `pin_index` directly (a lane passthrough). `eval_step`'s `ZoneInput` branch
+/// resolves it from the live frame pushed by `run_closure_once`, so no body
+/// nodes are needed — enough to exercise the ZipZone pull/frame discipline
+/// without standing up a full designer.
+#[allow(clippy::arc_with_non_send_sync)]
+fn passthrough_closure(pin_index: usize, arity: usize) -> ZoneClosure {
+    const OWNER: u64 = 42;
+    ZoneClosure {
+        body: Arc::new(NodeNetwork::new_empty()),
+        captures: Arc::new(HashMap::new()),
+        zone_output_wires: Arc::new(vec![IncomingWire {
+            source_node_id: OWNER,
+            source_pin: SourcePin::ZoneInput { pin_index },
+            source_scope_depth: 0,
+        }]),
+        owner_node_id: OWNER,
+        param_types: vec![DataType::Int; arity],
+        return_type: DataType::Int,
+        pre_supplied_args: Arc::new(Vec::new()),
+    }
+}
+
+#[test]
+fn zip_zone_pulls_all_lanes_elementwise_in_order() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    // Passthrough of lane 0: results mirror the first source.
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2, 3])),
+            Walker::from_array(ints(&[10, 20, 30])),
+        ],
+        passthrough_closure(0, 2),
+    );
+    let out = drain(&mut w, &evaluator, &registry);
+    assert_int_results(&out, &[1, 2, 3]);
+
+    // Passthrough of lane 1: the frame really carries every lane's element,
+    // in lane order.
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2, 3])),
+            Walker::from_array(ints(&[10, 20, 30])),
+        ],
+        passthrough_closure(1, 2),
+    );
+    let out = drain(&mut w, &evaluator, &registry);
+    assert_int_results(&out, &[10, 20, 30]);
+}
+
+#[test]
+fn zip_zone_truncates_to_shortest_input() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2, 3])),
+            Walker::from_array(ints(&[10, 20, 30, 40, 50])),
+        ],
+        passthrough_closure(1, 2),
+    );
+    let out = drain(&mut w, &evaluator, &registry);
+    assert_int_results(&out, &[10, 20, 30]);
+}
+
+#[test]
+fn zip_zone_empty_source_yields_empty() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(vec![]),
+            Walker::from_array(ints(&[10, 20])),
+        ],
+        passthrough_closure(0, 2),
+    );
+    assert!(
+        w.next(&evaluator, &registry, &mut NetworkEvaluationContext::new())
+            .is_none()
+    );
+}
+
+#[test]
+fn zip_zone_error_mid_stream_fuses() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(vec![
+                NetworkResult::Int(1),
+                NetworkResult::Error("boom".to_string()),
+                NetworkResult::Int(3),
+            ]),
+            Walker::from_array(ints(&[10, 20, 30])),
+        ],
+        passthrough_closure(0, 2),
+    );
+    let mut ctx = NetworkEvaluationContext::new();
+    assert!(matches!(
+        w.next(&evaluator, &registry, &mut ctx),
+        Some(NetworkResult::Int(1))
+    ));
+    assert!(matches!(
+        w.next(&evaluator, &registry, &mut ctx),
+        Some(NetworkResult::Error(_))
+    ));
+    assert!(w.is_fused());
+    assert!(w.next(&evaluator, &registry, &mut ctx).is_none());
+}
+
+#[test]
+fn zip_zone_clone_advances_independently() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2, 3])),
+            Walker::from_array(ints(&[10, 20, 30])),
+        ],
+        passthrough_closure(1, 2),
+    );
+    let mut ctx = NetworkEvaluationContext::new();
+    // Advance the original past the first element, then clone mid-stream.
+    let _ = w.next(&evaluator, &registry, &mut ctx);
+    let mut clone = w.clone();
+    let clone_out = drain(&mut clone, &evaluator, &registry);
+    assert_int_results(&clone_out, &[20, 30]);
+    // The original is unaffected by the clone's advancement.
+    let original_out = drain(&mut w, &evaluator, &registry);
+    assert_int_results(&original_out, &[20, 30]);
+}
+
+#[test]
+fn zip_zone_reset_rewinds_all_sources() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2])),
+            Walker::from_array(ints(&[10, 20])),
+        ],
+        passthrough_closure(1, 2),
+    );
+    let _ = drain(&mut w, &evaluator, &registry);
+    w.reset();
+    let out = drain(&mut w, &evaluator, &registry);
+    assert_int_results(&out, &[10, 20]);
+}
+
+#[test]
+fn zip_zone_undersized_closure_yields_error_not_panic() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    // A 1-parameter closure over 2 lanes is unreachable through type-checking
+    // but reachable via a hand-authored file: must yield an Error element.
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2])),
+            Walker::from_array(ints(&[10, 20])),
+        ],
+        passthrough_closure(0, 1),
+    );
+    let mut ctx = NetworkEvaluationContext::new();
+    match w.next(&evaluator, &registry, &mut ctx) {
+        Some(NetworkResult::Error(msg)) => {
+            assert!(msg.contains("zip_with"), "unexpected message: {}", msg)
+        }
+        other => panic!("expected Error element, got {:?}", other.is_none()),
+    }
+    // The outer fuse terminates the stream after the error.
+    assert!(w.next(&evaluator, &registry, &mut ctx).is_none());
+}
+
+#[test]
+fn zip_zone_excess_arity_yields_partial_functions() {
+    let evaluator = make_evaluator();
+    let registry = empty_registry();
+    // A 3-parameter closure over 2 lanes: each element binds the two lane
+    // values into `pre_supplied_args` and yields a 1-parameter Function value
+    // (currying auto-partialization, mirroring MapZone).
+    let mut w = Walker::zip_zone(
+        vec![
+            Walker::from_array(ints(&[1, 2])),
+            Walker::from_array(ints(&[10, 20])),
+        ],
+        passthrough_closure(0, 3),
+    );
+    let out = drain(&mut w, &evaluator, &registry);
+    assert_eq!(out.len(), 2);
+    for elem in &out {
+        match elem {
+            NetworkResult::Function(zc) => {
+                assert_eq!(zc.param_types.len(), 1);
+                assert_eq!(zc.pre_supplied_args.len(), 2);
+            }
+            other => panic!(
+                "expected Function element, got {}",
+                other.to_display_string()
+            ),
+        }
+    }
+}

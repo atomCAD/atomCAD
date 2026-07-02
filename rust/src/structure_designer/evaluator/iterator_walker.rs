@@ -80,6 +80,20 @@ enum WalkerKind {
         source: Box<Walker>,
         closure: ZoneClosure,
     },
+    /// `zip_with` driven by a zone closure: N source streams combined
+    /// element-wise. Per `next()` one element is pulled from every source **in
+    /// lane order**; if any source is exhausted the zip ends (elements already
+    /// pulled this step from earlier lanes are discarded — the shortest input
+    /// terminates the stream, Haskell `zipWith` convention). The pulled frame
+    /// then runs through the closure exactly like `MapZone`'s single element,
+    /// including the currying auto-partialization — see
+    /// [`run_closure_on_frame`], the helper shared with `MapZone` so the two
+    /// cannot drift. Clone independence (Invariant 2) holds: per-source state
+    /// is owned via the `Vec<Walker>` and `ZoneClosure` is fully `Arc`-backed.
+    ZipZone {
+        sources: Vec<Walker>,
+        closure: ZoneClosure,
+    },
     /// Lazy `Iter[S] → Iter[T]` element conversion (`S → T` allowed, `S ≠ T`).
     /// Per `next()` the walker pulls one element from `source` and runs
     /// [`NetworkResult::convert_to`] on it from `source_elem_type` to
@@ -159,6 +173,15 @@ impl Walker {
                 source: Box::new(source),
                 closure,
             },
+            fused: false,
+        }
+    }
+
+    /// Construct a `zip_with` walker driven by a zone closure over N source
+    /// streams. See `WalkerKind::ZipZone` for the per-`next()` discipline.
+    pub fn zip_zone(sources: Vec<Walker>, closure: ZoneClosure) -> Self {
+        Self {
+            kind: WalkerKind::ZipZone { sources, closure },
             fused: false,
         }
     }
@@ -290,48 +313,50 @@ impl WalkerKind {
                 match source.next(evaluator, registry, context) {
                     None => None,
                     Some(NetworkResult::Error(e)) => Some(NetworkResult::Error(e)),
-                    Some(elem) => {
-                        // Currying Phase 4 (`doc/design_currying.md`,
-                        // §"HOF auto-partialization (`map`)"): when the
-                        // closure's body arity is > 1, the element fills only
-                        // the first slot — the remaining slots become the
-                        // partial-application tail. Bind the element into
-                        // `pre_supplied_args` and yield a partial `Function`
-                        // value carrying it; downstream consumers (`apply`,
-                        // another `map`, etc.) absorb the rest.
-                        //
-                        // Body arity 0 or 1 is the existing exact-arity path:
-                        // run the body once via `run_closure_once`. (Body
-                        // arity 0 is a thunk; the element is silently
-                        // discarded — pathological but well-defined.)
-                        if closure.param_types.len() > 1 {
-                            #[allow(clippy::arc_with_non_send_sync)]
-                            let extended = {
-                                let mut v = (*closure.pre_supplied_args).clone();
-                                v.push(elem);
-                                Arc::new(v)
-                            };
-                            Some(NetworkResult::Function(ZoneClosure {
-                                body: Arc::clone(&closure.body),
-                                captures: Arc::clone(&closure.captures),
-                                zone_output_wires: Arc::clone(&closure.zone_output_wires),
-                                owner_node_id: closure.owner_node_id,
-                                param_types: closure.param_types[1..].to_vec(),
-                                return_type: closure.return_type.clone(),
-                                pre_supplied_args: extended,
-                            }))
-                        } else {
-                            Some(run_closure_once(
-                                evaluator,
-                                &[],
-                                registry,
-                                context,
-                                closure,
-                                vec![elem],
-                            ))
-                        }
+                    // The frame step (run vs. auto-partialization) is shared
+                    // with `ZipZone` — see `run_closure_on_frame`. (For map,
+                    // body arity 0 is a thunk; the element is silently
+                    // discarded — pathological but well-defined.)
+                    Some(elem) => Some(run_closure_on_frame(
+                        evaluator,
+                        registry,
+                        context,
+                        closure,
+                        vec![elem],
+                    )),
+                }
+            }
+            WalkerKind::ZipZone { sources, closure } => {
+                // Pull one element from each source in lane order. Any
+                // exhausted source ends the zip — elements already pulled this
+                // step from earlier lanes are discarded (documented; sources
+                // are always pulled in lane order, so `print`-node side
+                // effects inside upstream walkers fire deterministically). A
+                // mid-stream source error is yielded; the outer fuse then
+                // terminates the stream.
+                let mut frame = Vec::with_capacity(sources.len());
+                for source in sources.iter_mut() {
+                    match source.next(evaluator, registry, context) {
+                        None => return None,
+                        Some(NetworkResult::Error(e)) => return Some(NetworkResult::Error(e)),
+                        Some(elem) => frame.push(elem),
                     }
                 }
+                // A closure with fewer parameters than lanes is unreachable
+                // through type-checking (`AnyFunction { leading_params }`
+                // requires arity ≥ N and inline bodies have exactly N params)
+                // but reachable via a hand-authored file — yield an error
+                // rather than panicking or silently truncating the frame.
+                if closure.param_types.len() < frame.len() {
+                    return Some(NetworkResult::Error(format!(
+                        "zip_with: function takes {} parameter(s) but {} lanes are zipped",
+                        closure.param_types.len(),
+                        frame.len()
+                    )));
+                }
+                Some(run_closure_on_frame(
+                    evaluator, registry, context, closure, frame,
+                ))
             }
             WalkerKind::FilterZone { source, closure } => loop {
                 match source.next(evaluator, registry, context) {
@@ -456,6 +481,11 @@ impl WalkerKind {
             WalkerKind::FromArray { idx, .. } => *idx = 0,
             WalkerKind::Range { emitted, .. } => *emitted = 0,
             WalkerKind::MapZone { source, .. } => source.reset(),
+            WalkerKind::ZipZone { sources, .. } => {
+                for source in sources.iter_mut() {
+                    source.reset();
+                }
+            }
             WalkerKind::FilterZone { source, .. } => source.reset(),
             WalkerKind::Convert { source, .. } => source.reset(),
             WalkerKind::Product {
@@ -473,6 +503,51 @@ impl WalkerKind {
                 *done = false;
             }
         }
+    }
+}
+
+/// Run `closure` on one pulled argument frame — the per-element step shared by
+/// the zone-driven mapping walkers (`MapZone`, `ZipZone`) so the two cannot
+/// drift.
+///
+/// Implements the currying auto-partialization branch
+/// (`doc/design_currying.md`, §"HOF auto-partialization (`map`)"): when the
+/// closure's remaining arity exceeds the frame size, the frame fills the
+/// leading slots — bound into `pre_supplied_args` — and the result is a
+/// partially-applied `Function` value; downstream consumers (`apply`, another
+/// `map`, …) absorb the rest. Otherwise the body runs once via
+/// [`run_closure_once`] with a body-only stack (deep captures were pre-frozen
+/// at the producing HOF's `eval`).
+///
+/// A closure whose arity is *smaller* than the frame is the callers' concern:
+/// `MapZone` deliberately lets a 0-arity thunk discard its element, while
+/// `ZipZone` rejects the undersized closure before calling here.
+fn run_closure_on_frame(
+    evaluator: &NetworkEvaluator,
+    registry: &NodeTypeRegistry,
+    context: &mut NetworkEvaluationContext,
+    closure: &ZoneClosure,
+    frame: Vec<NetworkResult>,
+) -> NetworkResult {
+    if closure.param_types.len() > frame.len() {
+        let consumed = frame.len();
+        #[allow(clippy::arc_with_non_send_sync)]
+        let extended = {
+            let mut v = (*closure.pre_supplied_args).clone();
+            v.extend(frame);
+            Arc::new(v)
+        };
+        NetworkResult::Function(ZoneClosure {
+            body: Arc::clone(&closure.body),
+            captures: Arc::clone(&closure.captures),
+            zone_output_wires: Arc::clone(&closure.zone_output_wires),
+            owner_node_id: closure.owner_node_id,
+            param_types: closure.param_types[consumed..].to_vec(),
+            return_type: closure.return_type.clone(),
+            pre_supplied_args: extended,
+        })
+    } else {
+        run_closure_once(evaluator, &[], registry, context, closure, frame)
     }
 }
 

@@ -46,6 +46,7 @@ use crate::structure_designer::nodes::foreach::ForeachData;
 use crate::structure_designer::nodes::map::MapData;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::sequence::SequenceData;
+use crate::structure_designer::nodes::zip_with::ZipWithData;
 
 /// Canonicalize every `DataType::Function` reachable from `network` in place.
 ///
@@ -149,6 +150,11 @@ fn canonicalize_node_data(data: &mut dyn NodeData) {
         canonicalize_data_type(&mut d.accumulator_type);
     } else if let Some(d) = any.downcast_mut::<ForeachData>() {
         canonicalize_data_type(&mut d.input_type);
+    } else if let Some(d) = any.downcast_mut::<ZipWithData>() {
+        for lane in d.lanes.iter_mut() {
+            canonicalize_data_type(&mut lane.data_type);
+        }
+        canonicalize_data_type(&mut d.output_type);
     } else if let Some(d) = any.downcast_mut::<ParameterData>() {
         canonicalize_data_type(&mut d.data_type);
         if d.data_type_str.is_some() {
