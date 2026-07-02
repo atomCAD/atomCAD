@@ -508,9 +508,25 @@ impl<'a> NetworkEditor<'a> {
         if !literal_props.is_empty()
             && let Some(node) = self.network.nodes.get_mut(&node_id)
         {
+            // A `zip_with` lane-list shrink through the text path must also
+            // disconnect body wires referencing the dropped tail indices —
+            // including nested depth ≥ 2 wires that validation rule 3 only
+            // flags red and `repair_zone_body` deliberately skips. The data
+            // struct cannot reach the body, so the cleanup runs here, at
+            // mutation time (`doc/design_zip_with.md` Phase 3). Text edits
+            // are positional, so a tail drop is the only shrink shape.
+            let old_zip_lane_count = zip_with_lane_count(node);
             node.data
                 .set_text_properties(&literal_props)
                 .map_err(|e| format!("Error setting properties: {}", e))?;
+            if let (Some(old_count), Some(new_count)) =
+                (old_zip_lane_count, zip_with_lane_count(node))
+                && new_count < old_count
+            {
+                crate::structure_designer::nodes::zip_with::disconnect_zip_body_wires_to_dropped_lanes(
+                    node, new_count,
+                );
+            }
         }
 
         Ok(())
@@ -823,4 +839,18 @@ pub fn edit_network(
 ) -> EditResult {
     let editor = NetworkEditor::new(network, registry);
     editor.apply(code, replace)
+}
+
+/// The current lane count of a `zip_with` node, `None` for any other node.
+/// Used to detect a lane-list shrink across a `set_text_properties` call so
+/// body wires to the dropped tail indices can be disconnected at mutation
+/// time (`doc/design_zip_with.md` Phase 3).
+fn zip_with_lane_count(node: &crate::structure_designer::node_network::Node) -> Option<usize> {
+    if node.node_type_name != "zip_with" {
+        return None;
+    }
+    node.data
+        .as_any_ref()
+        .downcast_ref::<crate::structure_designer::nodes::zip_with::ZipWithData>()
+        .map(|d| d.lanes.len())
 }

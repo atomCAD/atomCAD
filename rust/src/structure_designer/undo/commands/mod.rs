@@ -35,3 +35,4 @@ pub mod set_return_node;
 pub mod set_zone_size;
 pub mod text_edit_network;
 pub mod update_record_type_def;
+pub mod zip_with_lane_edit;

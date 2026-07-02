@@ -16,7 +16,8 @@ use crate::structure_designer::evaluator::network_evaluator::{
 };
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::zone_closure::obtain_closure;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
+use crate::structure_designer::node_network::{Argument, Node, NodeNetwork, SourcePin};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_saver,
@@ -94,9 +95,165 @@ impl ZipWithData {
         }
     }
 
-    fn lane_types(&self) -> Vec<DataType> {
+    pub fn lane_types(&self) -> Vec<DataType> {
         self.lanes.iter().map(|l| l.data_type.clone()).collect()
     }
+
+    /// Positional id merge — the whole-list lane-edit path (`set_text_properties`
+    /// now, the API setter in Phase 5): the lane at position `i` keeps the old
+    /// position-`i` id (retype preserves identity), growth mints fresh ids from
+    /// `next_lane_id` (never reusing a consumed id), shrink drops the tail. An
+    /// empty lane list is rejected and leaves the node unchanged. Body-wire
+    /// cleanup for dropped tail indices is the caller's job (the data struct
+    /// cannot reach the zone body) — see
+    /// [`disconnect_zip_body_wires_to_dropped_lanes`].
+    pub fn merge_lane_types(&mut self, types: Vec<DataType>) -> Result<(), String> {
+        if types.is_empty() {
+            return Err("zip_with requires at least one lane".to_string());
+        }
+        self.lanes = types
+            .into_iter()
+            .enumerate()
+            .map(|(i, data_type)| {
+                let id = match self.lanes.get(i).and_then(|l| l.id) {
+                    Some(id) => id,
+                    None => {
+                        let id = self.next_lane_id;
+                        self.next_lane_id += 1;
+                        id
+                    }
+                };
+                ZipWithLane {
+                    id: Some(id),
+                    data_type,
+                }
+            })
+            .collect();
+        Ok(())
+    }
+
+    /// Id-accurate removal of one specific lane. Surviving lanes keep their
+    /// ids, so external wires follow them while the `xs{i}` labels renumber.
+    /// Removing the last remaining lane is rejected (minimum arity is 1).
+    /// Body-wire remap (disconnect the removed index, decrement later indices)
+    /// is the caller's job — see [`remap_zip_body_wires_for_lane_removal`].
+    pub fn remove_lane(&mut self, index: usize) -> Result<(), String> {
+        if index >= self.lanes.len() {
+            return Err(format!(
+                "lane index {} out of range ({} lanes)",
+                index,
+                self.lanes.len()
+            ));
+        }
+        if self.lanes.len() == 1 {
+            return Err("zip_with requires at least one lane".to_string());
+        }
+        self.lanes.remove(index);
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Body-wire remap on lane edits (`doc/design_zip_with.md` Phase 3)
+// ============================================================================
+
+/// Remap of body-internal `ZoneInput` wires after a lane removal: wires to the
+/// removed index are disconnected, wires to later indices are decremented. Must
+/// run **at mutation time** — a validate-time repair pass only sees the
+/// post-edit pin list and cannot know *which* index was removed, and a
+/// shifted-but-still-in-range wire between same-typed lanes passes every type
+/// check, so leaving this to repair produces silently wrong values, not a red
+/// badge.
+pub fn remap_zip_body_wires_for_lane_removal(zip_node: &mut Node, removed_index: usize) {
+    remap_zip_lane_wires(zip_node, &move |i| {
+        use std::cmp::Ordering;
+        match i.cmp(&removed_index) {
+            Ordering::Less => Some(i),
+            Ordering::Equal => None,
+            Ordering::Greater => Some(i - 1),
+        }
+    });
+}
+
+/// Disconnect-only remap for the positional whole-list merge's tail drop:
+/// body wires to indices `>= new_lane_count` are disconnected (no decrement —
+/// surviving indices are unchanged by a tail drop). Without this, nested
+/// depth ≥ 2 wires to dropped pins are only flagged red by validation rule 3,
+/// never cleaned (`repair_zone_body` deliberately skips depth ≥ 2).
+pub fn disconnect_zip_body_wires_to_dropped_lanes(zip_node: &mut Node, new_lane_count: usize) {
+    remap_zip_lane_wires(zip_node, &move |i| (i < new_lane_count).then_some(i));
+}
+
+/// Apply `remap` (old zone-input pin index → new index, `None` = disconnect)
+/// to every wire referencing this zip node's zone-input pins — in the zip's
+/// own zone-output arguments, in body nodes' arguments, and recursively in
+/// nested HOF bodies (their arguments *and* their zone-output arguments).
+///
+/// Matching requires all three of `SourcePin::ZoneInput`,
+/// `source_node_id == zip_node.id`, **and** `source_scope_depth` equal to the
+/// wire's nesting distance from the zip body (1 for a wire resolving directly
+/// in the zip body's frame, 2 for one resolving inside a nested HOF's body, …).
+/// Node ids collide across scopes (per-body `next_node_id`), so matching on id
+/// alone would corrupt a same-id inner HOF's own element wires; the exact-depth
+/// gate is what makes this safe (same discipline as
+/// `remap_body_wires_to_pasted_scope` in `node_network.rs`).
+fn remap_zip_lane_wires(zip_node: &mut Node, remap: &dyn Fn(usize) -> Option<usize>) {
+    let zip_id = zip_node.id;
+    // The zip's own zone-output wires resolve in the body's frame, so a
+    // passthrough wire reading the zip's own zone-input pin carries depth 1 —
+    // the same depth as a wire on a node directly inside the body.
+    for arg in zip_node.zone_output_arguments.iter_mut() {
+        remap_wires_in_argument(arg, zip_id, 1, remap);
+    }
+    if let Some(body) = zip_node.zone_mut() {
+        remap_zip_lane_wires_in_network(body, zip_id, 1, remap);
+    }
+}
+
+fn remap_zip_lane_wires_in_network(
+    network: &mut NodeNetwork,
+    zip_id: u64,
+    nesting: u8,
+    remap: &dyn Fn(usize) -> Option<usize>,
+) {
+    for node in network.nodes.values_mut() {
+        for arg in node.arguments.iter_mut() {
+            remap_wires_in_argument(arg, zip_id, nesting, remap);
+        }
+        // A nested HOF's zone-output wires resolve in its own body's frame —
+        // one level deeper than the wires on its argument pins.
+        for arg in node.zone_output_arguments.iter_mut() {
+            remap_wires_in_argument(arg, zip_id, nesting + 1, remap);
+        }
+        if let Some(body) = node.zone_mut() {
+            remap_zip_lane_wires_in_network(body, zip_id, nesting + 1, remap);
+        }
+    }
+}
+
+fn remap_wires_in_argument(
+    arg: &mut Argument,
+    zip_id: u64,
+    expected_depth: u8,
+    remap: &dyn Fn(usize) -> Option<usize>,
+) {
+    arg.incoming_wires.retain_mut(|wire| {
+        if wire.source_node_id != zip_id || wire.source_scope_depth != expected_depth {
+            return true;
+        }
+        let SourcePin::ZoneInput { pin_index } = wire.source_pin else {
+            return true;
+        };
+        match remap(pin_index) {
+            Some(new_index) => {
+                wire.source_pin = SourcePin::ZoneInput {
+                    pin_index: new_index,
+                };
+                true
+            }
+            None => false,
+        }
+    });
 }
 
 impl NodeData for ZipWithData {
@@ -267,32 +424,10 @@ impl NodeData for ZipWithData {
                         .clone(),
                 );
             }
-            if types.is_empty() {
-                return Err("zip_with requires at least one lane".to_string());
-            }
-            // Positional id merge: the lane at position i keeps the old
-            // position-i id (retype preserves identity), growth mints fresh
-            // ids from `next_lane_id` (never reusing a consumed id), shrink
-            // drops the tail. Body-wire cleanup for dropped tail indices is a
-            // Phase 3 deliverable (see `doc/design_zip_with.md`).
-            self.lanes = types
-                .into_iter()
-                .enumerate()
-                .map(|(i, data_type)| {
-                    let id = match self.lanes.get(i).and_then(|l| l.id) {
-                        Some(id) => id,
-                        None => {
-                            let id = self.next_lane_id;
-                            self.next_lane_id += 1;
-                            id
-                        }
-                    };
-                    ZipWithLane {
-                        id: Some(id),
-                        data_type,
-                    }
-                })
-                .collect();
+            // Positional id merge. Body-wire cleanup for a tail-dropping
+            // shrink is performed by the text editor after this returns
+            // (`network_editor.rs`) — the data struct cannot reach the body.
+            self.merge_lane_types(types)?;
         }
         if let Some(v) = props.get("output_type") {
             self.output_type = v
@@ -312,6 +447,23 @@ impl NodeData for ZipWithData {
         // zip.
         m.insert("f".to_string(), (false, None));
         m
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Peel the drag source's element type into lane 1 and `output_type`
+        // (mirrors `map.rs`'s identity-shaped default), leaving lane 2 at its
+        // `Float` default — the popup's static-match verification only needs
+        // one connectable pin. Over-promising is caught by that verification.
+        let elem = source_type.drag_element_type_from_output()?;
+        let mut data = ZipWithData::default();
+        data.lanes[0].data_type = elem.clone();
+        data.output_type = elem;
+        Some(Box::new(data))
     }
 
     fn drag_hint_for_input_pin(&self, pin_index: usize) -> Option<DataType> {

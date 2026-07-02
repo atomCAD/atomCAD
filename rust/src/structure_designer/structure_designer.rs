@@ -4208,6 +4208,186 @@ impl StructureDesigner {
         }
     }
 
+    /// Whole-list lane edit on a `zip_with` node — the positional id merge
+    /// (`doc/design_zip_with.md` Phase 3): the lane at position `i` keeps the
+    /// old position-`i` id (retype preserves identity), growth mints fresh ids
+    /// from `next_lane_id`, shrink drops the tail **and disconnects body wires
+    /// referencing the dropped tail indices** (recursively, including nested
+    /// HOF bodies — validation rule 3 only flags those red, it never cleans
+    /// them). An empty lane list is rejected. Undo: whole-top-level-network
+    /// before/after snapshots via [`ZipWithLaneEditCommand`] — a node-data
+    /// snapshot cannot capture the wire fallout.
+    ///
+    /// [`ZipWithLaneEditCommand`]: super::undo::commands::zip_with_lane_edit::ZipWithLaneEditCommand
+    pub fn set_zip_with_lanes(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        lane_types: Vec<DataType>,
+    ) -> Result<(), String> {
+        use crate::structure_designer::nodes::zip_with::{
+            ZipWithData, disconnect_zip_body_wires_to_dropped_lanes,
+        };
+
+        if lane_types.is_empty() {
+            return Err("zip_with requires at least one lane".to_string());
+        }
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or_else(|| "No active network".to_string())?;
+
+        // Read-only pre-check: resolve the node and reject before any
+        // mutation or snapshot so an error leaves the designer untouched.
+        let old_types = {
+            let node = self
+                .get_scope_network(scope_path)
+                .and_then(|net| net.nodes.get(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            let data = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<ZipWithData>()
+                .ok_or_else(|| "Node is not a zip_with".to_string())?;
+            data.lane_types()
+        };
+        if old_types == lane_types {
+            return Ok(()); // no-op; don't push an empty command
+        }
+
+        let before = self.snapshot_network(&network_name);
+
+        {
+            let node = self
+                .get_scope_network_mut(scope_path)
+                .and_then(|net| net.nodes.get_mut(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            node.data
+                .as_any_mut()
+                .downcast_mut::<ZipWithData>()
+                .ok_or_else(|| "Node is not a zip_with".to_string())?
+                .merge_lane_types(lane_types.clone())?;
+            if lane_types.len() < old_types.len() {
+                disconnect_zip_body_wires_to_dropped_lanes(node, lane_types.len());
+            }
+        }
+
+        self.finish_zip_with_lane_edit(scope_path, node_id, &network_name, before);
+        Ok(())
+    }
+
+    /// Id-accurate removal of one specific `zip_with` lane
+    /// (`doc/design_zip_with.md` Phase 3). Surviving lanes keep their hidden
+    /// stable ids, so external wires follow them while the `xs{i}` labels
+    /// renumber; the removed lane's external wire is dropped by the by-id
+    /// argument rebuild. Body wires referencing the removed
+    /// `ZoneInput { pin_index }` are disconnected and wires to later indices
+    /// decremented **here, at mutation time** — a repair pass has no removal
+    /// diff, and a shifted-but-in-range wire between same-typed lanes is
+    /// silently wrong rather than invalid. The remap recurses into nested HOF
+    /// bodies with exact depth + id matching (node ids collide across scopes).
+    /// Removing the last remaining lane is rejected.
+    pub fn remove_zip_with_lane(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        lane_index: usize,
+    ) -> Result<(), String> {
+        use crate::structure_designer::nodes::zip_with::{
+            ZipWithData, remap_zip_body_wires_for_lane_removal,
+        };
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or_else(|| "No active network".to_string())?;
+
+        // Read-only pre-check (see `set_zip_with_lanes`).
+        {
+            let node = self
+                .get_scope_network(scope_path)
+                .and_then(|net| net.nodes.get(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            let data = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<ZipWithData>()
+                .ok_or_else(|| "Node is not a zip_with".to_string())?;
+            if lane_index >= data.lanes.len() {
+                return Err(format!(
+                    "lane index {} out of range ({} lanes)",
+                    lane_index,
+                    data.lanes.len()
+                ));
+            }
+            if data.lanes.len() == 1 {
+                return Err("zip_with requires at least one lane".to_string());
+            }
+        }
+
+        let before = self.snapshot_network(&network_name);
+
+        {
+            let node = self
+                .get_scope_network_mut(scope_path)
+                .and_then(|net| net.nodes.get_mut(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            node.data
+                .as_any_mut()
+                .downcast_mut::<ZipWithData>()
+                .ok_or_else(|| "Node is not a zip_with".to_string())?
+                .remove_lane(lane_index)?;
+            remap_zip_body_wires_for_lane_removal(node, lane_index);
+        }
+
+        self.finish_zip_with_lane_edit(scope_path, node_id, &network_name, before);
+        Ok(())
+    }
+
+    /// Shared tail of the two lane mutation ops: repair (the zip's external
+    /// arguments rebuild by lane id in `repair_node_network`'s populate pass,
+    /// and `repair_zone_body` drops retype-incompatible / out-of-range depth-1
+    /// body wires), re-validate, mark refresh state, and push the
+    /// whole-network undo command. The caller has already established that the
+    /// lane list actually changed, so the command is always meaningful.
+    fn finish_zip_with_lane_edit(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        network_name: &str,
+        before: Option<super::serialization::node_networks_serialization::SerializableNodeNetwork>,
+    ) {
+        // Split-borrow pattern: take the network out so `repair_node_network`
+        // can consult the registry it lives in.
+        if let Some(mut network) = self.node_type_registry.node_networks.remove(network_name) {
+            self.node_type_registry.repair_node_network(&mut network);
+            self.node_type_registry
+                .node_networks
+                .insert(network_name.to_string(), network);
+        }
+        self.validate_active_network();
+
+        self.set_dirty(true);
+        self.pending_changes
+            .mark_node_data_changed_scoped(scope_path, node_id);
+        // Wire fallout can reach nodes other than the edited one (dropped
+        // external wire, body remap), so a partial refresh keyed on the zip
+        // node alone would leave stale output.
+        self.mark_full_refresh();
+
+        if let (Some(before_snapshot), Some(after_snapshot)) =
+            (before, self.snapshot_network(network_name))
+        {
+            self.push_command(
+                super::undo::commands::zip_with_lane_edit::ZipWithLaneEditCommand {
+                    network_name: network_name.to_string(),
+                    before_snapshot,
+                    after_snapshot,
+                },
+            );
+        }
+    }
+
     // Refresh special gadgets that are dependent on the scene, not only on node data.
     fn refresh_scene_dependent_node_data(&mut self) {
         self.refresh_scene_dependent_edit_atom_data();

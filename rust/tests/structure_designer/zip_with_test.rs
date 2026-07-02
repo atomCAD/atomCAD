@@ -1985,3 +1985,955 @@ fn zip_phase2_cnnd_roundtrip_preserves_wires_and_derives() {
     let elements = extract_ints(drain_iter_with_designer(&loaded, result));
     assert_eq!(elements, vec![5, 16, 27]);
 }
+
+// ============================================================================
+// Phase 3: lane editing — add / remove / retype + repair + undo
+// (`doc/design_zip_with.md` §Phase 3)
+// ============================================================================
+
+use rust_lib_flutter_cad::structure_designer::node_data::DragDirection;
+use rust_lib_flutter_cad::structure_designer::text_format::edit_network;
+use serde_json::Value;
+
+/// A 3×Int-lane zip whose body computes `element1 + element3` (lane 2 is wired
+/// externally but unused in the body — the shape whose evaluation result is
+/// unchanged by removing lane 2). Returns (zip_id, r1, r2, r3, expr_id).
+fn build_three_lane_ac_zip(designer: &mut StructureDesigner) -> (u64, u64, u64, u64, u64) {
+    let zip_id = add_zip(
+        designer,
+        "main",
+        vec![DataType::Int, DataType::Int, DataType::Int],
+        DataType::Int,
+        600.0,
+    );
+    let r1 = add_range(designer, "main", 1, 1, 3, 0.0); // [1,2,3]
+    let r2 = add_range(designer, "main", 7, 1, 3, 200.0); // [7,8,9]
+    let r3 = add_range(designer, "main", 100, 100, 3, 400.0); // [100,200,300]
+    designer.connect_nodes(r1, 0, zip_id, 0);
+    designer.connect_nodes(r2, 0, zip_id, 1);
+    designer.connect_nodes(r3, 0, zip_id, 2);
+
+    let expr_id = add_expr_to_body(
+        designer,
+        "main",
+        zip_id,
+        "a + c",
+        vec![
+            ("a".to_string(), DataType::Int),
+            ("c".to_string(), DataType::Int),
+        ],
+    );
+    wire_zone_input_pin_to_body_node(designer, "main", zip_id, 0, expr_id, 0);
+    wire_zone_input_pin_to_body_node(designer, "main", zip_id, 2, expr_id, 1);
+    wire_body_node_to_zone_output(designer, "main", zip_id, expr_id);
+    (zip_id, r1, r2, r3, expr_id)
+}
+
+/// A 3×Int-lane zip whose body is `range → map → collect`, where the `map`'s
+/// own body reads the zip's `element1` and `element3` as **depth-2** deep
+/// captures. The map node is the first node added to the zip body, so its
+/// body-local id numerically equals the zip's top-level id — the collision
+/// that pins the depth+id matching of the remap. Returns
+/// (zip_id, map_id, inner_expr_id).
+fn build_zip_with_nested_map_deep_captures(designer: &mut StructureDesigner) -> (u64, u64, u64) {
+    let zip_id = designer.add_node("zip_with", DVec2::new(600.0, 0.0));
+    set_node_data(
+        designer,
+        "main",
+        zip_id,
+        Box::new(zip_data(
+            vec![DataType::Int, DataType::Int, DataType::Int],
+            DataType::Array(Box::new(DataType::Int)),
+        )),
+    );
+
+    // Zip body: map (added FIRST so its body-local id collides with zip_id),
+    // range, collect.
+    let (map_id, rng_id, collect_id) = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let map_id = body.add_node(
+            "map",
+            DVec2::new(200.0, 0.0),
+            2,
+            Box::new(MapData {
+                input_type: DataType::Int,
+                output_type: DataType::Int,
+            }),
+        );
+        let rng_id = body.add_node(
+            "range",
+            DVec2::new(0.0, 0.0),
+            3,
+            Box::new(RangeData {
+                start: 0,
+                step: 1,
+                count: 2,
+            }),
+        ); // [0,1]
+        let collect_id = body.add_node(
+            "collect",
+            DVec2::new(400.0, 0.0),
+            2,
+            Box::new(CollectData {
+                element_type: DataType::Int,
+                limit: None,
+                offset: 0,
+            }),
+        );
+        (map_id, rng_id, collect_id)
+    };
+    assert_eq!(
+        map_id, zip_id,
+        "test precondition: the body map's id must numerically collide with the zip's id"
+    );
+
+    // Populate body nodes' custom-type caches (also initializes the map's
+    // zone state).
+    for nid in [map_id, rng_id, collect_id] {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&nid)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Zip-body wiring: map.xs ← range, collect.xs ← map, zip.result ← collect.
+    {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        body.nodes.get_mut(&map_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: rng_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+        body.nodes.get_mut(&collect_id).unwrap().arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: map_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap();
+        let zip_node = network.nodes.get_mut(&zip_id).unwrap();
+        if zip_node.zone_output_arguments.is_empty() {
+            zip_node.zone_output_arguments.push(Argument::new());
+        }
+        zip_node.zone_output_arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: collect_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+
+    // Map body: expr `x + a + c` — x = the map's own element (depth 1),
+    // a/c = the zip's element1/element3 (depth 2 deep captures).
+    let inner_expr_id = {
+        let map_body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let inner_expr_id = add_expr_to_network(
+            map_body,
+            "x + a + c",
+            vec![
+                ("x".to_string(), DataType::Int),
+                ("a".to_string(), DataType::Int),
+                ("c".to_string(), DataType::Int),
+            ],
+        );
+        let expr = map_body.nodes.get_mut(&inner_expr_id).unwrap();
+        expr.arguments[0].incoming_wires.push(IncomingWire {
+            source_node_id: map_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 0 },
+            source_scope_depth: 1,
+        });
+        expr.arguments[1].incoming_wires.push(IncomingWire {
+            source_node_id: zip_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 0 },
+            source_scope_depth: 2,
+        });
+        expr.arguments[2].incoming_wires.push(IncomingWire {
+            source_node_id: zip_id,
+            source_pin: SourcePin::ZoneInput { pin_index: 2 },
+            source_scope_depth: 2,
+        });
+        inner_expr_id
+    };
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&inner_expr_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    // Map's body-return ← expr.
+    {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&zip_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let map_node = body.nodes.get_mut(&map_id).unwrap();
+        if map_node.zone_output_arguments.is_empty() {
+            map_node.zone_output_arguments.push(Argument::new());
+        }
+        map_node.zone_output_arguments[0]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: inner_expr_id,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 0,
+            });
+    }
+
+    // External lanes.
+    let r1 = add_range(designer, "main", 1, 1, 2, 0.0); // [1,2]
+    let r2 = add_range(designer, "main", 5, 1, 2, 200.0); // [5,6]
+    let r3 = add_range(designer, "main", 100, 100, 2, 400.0); // [100,200]
+    designer.connect_nodes(r1, 0, zip_id, 0);
+    designer.connect_nodes(r2, 0, zip_id, 1);
+    designer.connect_nodes(r3, 0, zip_id, 2);
+
+    (zip_id, map_id, inner_expr_id)
+}
+
+/// Drain the zip's `Iter[Array[Int]]` output into a Vec<Vec<i32>>.
+fn drain_int_arrays(designer: &StructureDesigner, result: NetworkResult) -> Vec<Vec<i32>> {
+    drain_iter_with_designer(designer, result)
+        .into_iter()
+        .map(|r| match r {
+            NetworkResult::Array(items) => extract_ints(items),
+            other => panic!("expected Array element, got {}", other.to_display_string()),
+        })
+        .collect()
+}
+
+/// The (source_node_id, zone-input pin_index, depth) triple of the single wire
+/// on the given body-node argument; panics on a different wire shape.
+fn zone_input_wire_of(arg: &Argument) -> (u64, usize, u8) {
+    assert_eq!(arg.incoming_wires.len(), 1, "expected exactly one wire");
+    let w = &arg.incoming_wires[0];
+    match w.source_pin {
+        SourcePin::ZoneInput { pin_index } => (w.source_node_id, pin_index, w.source_scope_depth),
+        SourcePin::NodeOutput { .. } => panic!("expected a ZoneInput wire"),
+    }
+}
+
+/// Normalized whole-network JSON for undo/redo state comparison — sorts the
+/// HashMap-derived arrays (`nodes`, `displayed_node_ids`,
+/// `displayed_output_pins`) the way `undo_test.rs::normalize_json` does.
+fn network_json(designer: &mut StructureDesigner, name: &str) -> Value {
+    let snapshot = designer
+        .snapshot_network(name)
+        .expect("network must snapshot");
+    let mut value = serde_json::to_value(&snapshot).unwrap();
+    normalize_network_json(&mut value);
+    value
+}
+
+fn normalize_network_json(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, val) in map.iter_mut() {
+                if key == "displayed_node_ids" || key == "displayed_output_pins" {
+                    if let Value::Array(arr) = val {
+                        arr.sort_by(|a, b| {
+                            let id_a = a
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let id_b = b
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            id_a.cmp(&id_b)
+                        });
+                    }
+                    normalize_network_json(val);
+                } else if key == "nodes" {
+                    if let Value::Array(arr) = val {
+                        arr.sort_by(|a, b| {
+                            let id_a = a
+                                .as_object()
+                                .and_then(|o| o.get("id"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let id_b = b
+                                .as_object()
+                                .and_then(|o| o.get("id"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            id_a.cmp(&id_b)
+                        });
+                    }
+                    normalize_network_json(val);
+                } else {
+                    normalize_network_json(val);
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for val in arr.iter_mut() {
+                normalize_network_json(val);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Design test 1 — remove the middle lane of 3 (id-accurate path): the removed
+/// lane's external wire is dropped, the later lane's wire survives on the
+/// renumbered pin (old `xs3` → new `xs2`, same id), body wires to the removed
+/// `element2` index are remapped (here: the `element3` wire decrements to
+/// index 1), the network re-validates without manual fixes, and the
+/// **evaluation result** is unchanged for the surviving lanes.
+#[test]
+fn zip_phase3_remove_middle_lane_preserves_surviving_wires() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, r1, r2, r3, expr_id) = build_three_lane_ac_zip(&mut designer);
+
+    let before = extract_ints(drain_iter_with_designer(
+        &designer,
+        evaluate_node(&designer, "main", zip_id),
+    ));
+    assert_eq!(before, vec![101, 202, 303]);
+
+    designer
+        .remove_zip_with_lane(&[], zip_id, 1)
+        .expect("middle-lane removal must succeed");
+
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let zip_node = net.nodes.get(&zip_id).unwrap();
+        let ct = zip_node.custom_node_type.as_ref().unwrap();
+        assert_eq!(ct.parameters.len(), 3, "xs1 + xs2 + f");
+        assert_eq!(ct.parameters[0].name, "xs1");
+        assert_eq!(ct.parameters[1].name, "xs2");
+        assert_eq!(
+            ct.parameters[1].id,
+            Some(3),
+            "the renumbered xs2 must carry the old lane 3's id"
+        );
+
+        // External wires: the removed lane's wire is gone, the later lane's
+        // wire followed its id onto the renumbered pin.
+        assert_eq!(zip_node.arguments[0].get_node_id(), Some(r1));
+        assert_eq!(
+            zip_node.arguments[1].get_node_id(),
+            Some(r3),
+            "old xs3's wire must survive on the renumbered xs2"
+        );
+        assert!(
+            !zip_node.arguments.iter().any(|a| a.has_source(r2)),
+            "the removed lane's external wire must be dropped"
+        );
+
+        // Body wires: `a` untouched at index 0, `c` decremented 2 → 1.
+        let body = zip_node.zone.as_ref().unwrap();
+        let expr = body.nodes.get(&expr_id).unwrap();
+        assert_eq!(zone_input_wire_of(&expr.arguments[0]), (zip_id, 0, 1));
+        assert_eq!(
+            zone_input_wire_of(&expr.arguments[1]),
+            (zip_id, 1, 1),
+            "the element3 body wire must be decremented to index 1"
+        );
+
+        assert!(
+            net.valid,
+            "the network must re-validate without manual fixes; errors: {:?}",
+            net.validation_errors
+                .iter()
+                .map(|e| e.error_text.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    let after = extract_ints(drain_iter_with_designer(
+        &designer,
+        evaluate_node(&designer, "main", zip_id),
+    ));
+    assert_eq!(
+        after, before,
+        "evaluation must be unchanged for the surviving lanes"
+    );
+}
+
+/// Design test 2 — nested-body remap with an id collision: a `map` inside the
+/// zip body (whose body-local id numerically equals the zip's id) deep-reads
+/// the zip's `element1` and `element3` at depth 2. Removing lane 2 decrements
+/// the depth-2 `element3` wire to index 1, leaves the depth-2 `element1` wire
+/// untouched, and leaves the map's **own** depth-1 `element` wire untouched —
+/// a match on `source_node_id` alone would corrupt it. Asserted by evaluation
+/// result, not just structure.
+#[test]
+fn zip_phase3_nested_body_remap_with_id_collision() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, map_id, inner_expr_id) = build_zip_with_nested_map_deep_captures(&mut designer);
+
+    let before = drain_int_arrays(&designer, evaluate_node(&designer, "main", zip_id));
+    assert_eq!(before, vec![vec![101, 102], vec![202, 203]]);
+
+    designer
+        .remove_zip_with_lane(&[], zip_id, 1)
+        .expect("removal must succeed");
+
+    {
+        let net = designer
+            .node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap();
+        let map_body = net
+            .nodes
+            .get(&zip_id)
+            .unwrap()
+            .zone
+            .as_ref()
+            .unwrap()
+            .nodes
+            .get(&map_id)
+            .unwrap()
+            .zone
+            .as_ref()
+            .unwrap();
+        let expr = map_body.nodes.get(&inner_expr_id).unwrap();
+        assert_eq!(
+            zone_input_wire_of(&expr.arguments[0]),
+            (map_id, 0, 1),
+            "the map's own depth-1 element wire must be untouched despite the id collision"
+        );
+        assert_eq!(
+            zone_input_wire_of(&expr.arguments[1]),
+            (zip_id, 0, 2),
+            "the depth-2 element1 wire must be untouched"
+        );
+        assert_eq!(
+            zone_input_wire_of(&expr.arguments[2]),
+            (zip_id, 1, 2),
+            "the depth-2 element3 wire must be decremented to index 1"
+        );
+    }
+
+    let after = drain_int_arrays(&designer, evaluate_node(&designer, "main", zip_id));
+    assert_eq!(after, before, "evaluation must be unchanged");
+}
+
+/// Design test 3 — remove the last lane: no renumbering, only the dropped
+/// lane's wires (external + body) disappear.
+#[test]
+fn zip_phase3_remove_last_lane_drops_only_its_wires() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int, DataType::Int, DataType::Int],
+        DataType::Int,
+        600.0,
+    );
+    let r1 = add_range(&mut designer, "main", 1, 1, 3, 0.0);
+    let r2 = add_range(&mut designer, "main", 10, 10, 3, 200.0);
+    let r3 = add_range(&mut designer, "main", 100, 100, 3, 400.0);
+    designer.connect_nodes(r1, 0, zip_id, 0);
+    designer.connect_nodes(r2, 0, zip_id, 1);
+    designer.connect_nodes(r3, 0, zip_id, 2);
+    let expr_id = add_expr_to_body(
+        &mut designer,
+        "main",
+        zip_id,
+        "a + b + c",
+        vec![
+            ("a".to_string(), DataType::Int),
+            ("b".to_string(), DataType::Int),
+            ("c".to_string(), DataType::Int),
+        ],
+    );
+    for pin in 0..3 {
+        wire_zone_input_pin_to_body_node(&mut designer, "main", zip_id, pin, expr_id, pin);
+    }
+    wire_body_node_to_zone_output(&mut designer, "main", zip_id, expr_id);
+
+    designer
+        .remove_zip_with_lane(&[], zip_id, 2)
+        .expect("last-lane removal must succeed");
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let zip_node = net.nodes.get(&zip_id).unwrap();
+    let ct = zip_node.custom_node_type.as_ref().unwrap();
+    assert_eq!(ct.parameters.len(), 3, "xs1 + xs2 + f");
+    assert_eq!(ct.parameters[0].id, Some(1));
+    assert_eq!(ct.parameters[1].id, Some(2));
+    assert_eq!(zip_node.arguments[0].get_node_id(), Some(r1));
+    assert_eq!(zip_node.arguments[1].get_node_id(), Some(r2));
+    assert!(
+        !zip_node.arguments.iter().any(|a| a.has_source(r3)),
+        "the dropped lane's external wire must be gone"
+    );
+
+    let body = zip_node.zone.as_ref().unwrap();
+    let expr = body.nodes.get(&expr_id).unwrap();
+    assert_eq!(zone_input_wire_of(&expr.arguments[0]), (zip_id, 0, 1));
+    assert_eq!(zone_input_wire_of(&expr.arguments[1]), (zip_id, 1, 1));
+    assert!(
+        expr.arguments[2].is_empty(),
+        "the body wire to the dropped element3 must be disconnected"
+    );
+}
+
+/// Design test 4 — retype a lane `Int → Crystal`: the now-incompatible body
+/// wire is disconnected (`repair_zone_body`), the compatible one is kept, the
+/// lane keeps its id, and the external wire stays for the usual wire-type
+/// revalidation to flag.
+#[test]
+fn zip_phase3_retype_lane_drops_incompatible_body_wires() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = build_sum_zip(&mut designer, "main", Some((0, 1, 3)), Some((10, 10, 3)));
+
+    designer
+        .set_zip_with_lanes(&[], zip_id, vec![DataType::Int, DataType::Crystal])
+        .expect("retype must succeed");
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let zip_node = net.nodes.get(&zip_id).unwrap();
+
+    // Retype preserves lane identity.
+    let data = zip_node
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap();
+    assert_eq!(data.lanes[1].id, Some(2));
+    assert_eq!(data.lanes[1].data_type, DataType::Crystal);
+
+    // Body: the Crystal element2 → Int expr param wire is dropped; the
+    // untouched Int lane's wire is kept.
+    let body = zip_node.zone.as_ref().unwrap();
+    let expr = body
+        .nodes
+        .values()
+        .find(|n| n.node_type_name == "expr")
+        .expect("body expr");
+    assert_eq!(zone_input_wire_of(&expr.arguments[0]), (zip_id, 0, 1));
+    assert!(
+        expr.arguments[1].is_empty(),
+        "the retype-incompatible body wire must be disconnected by repair"
+    );
+
+    // The external Iter[Int] → Iter[Crystal] wire stays and validation flags
+    // it (the usual wire-type revalidation).
+    assert_eq!(zip_node.arguments[1].len(), 1);
+    assert!(
+        !net.valid,
+        "the incompatible external wire must flag the network invalid"
+    );
+}
+
+/// Design test 5 — add a lane: the new pins appear unwired, existing wires
+/// are untouched, and the fresh id is minted from `next_lane_id`, never
+/// recycling a consumed id (the `next_param_id` regression shape): remove the
+/// highest-id lane, grow back, and the removed id must not reappear.
+#[test]
+fn zip_phase3_add_lane_never_recycles_ids() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = build_sum_zip(&mut designer, "main", Some((0, 1, 3)), Some((10, 10, 3)));
+
+    // Remove the highest-id lane (index 1, id 2)…
+    designer.remove_zip_with_lane(&[], zip_id, 1).unwrap();
+    // …then grow back to two lanes.
+    designer
+        .set_zip_with_lanes(&[], zip_id, vec![DataType::Int, DataType::Int])
+        .unwrap();
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let zip_node = net.nodes.get(&zip_id).unwrap();
+    let data = zip_node
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap();
+    assert_eq!(data.lanes[0].id, Some(1));
+    assert_eq!(
+        data.lanes[1].id,
+        Some(3),
+        "the new lane must mint id 3 from the counter, not recycle the removed id 2"
+    );
+    assert_eq!(data.next_lane_id, 4);
+
+    // Existing wire untouched, new pin unwired.
+    assert_eq!(zip_node.arguments[0].len(), 1);
+    assert!(zip_node.arguments[1].is_empty(), "new xs2 must be unwired");
+    let ct = zip_node.custom_node_type.as_ref().unwrap();
+    assert_eq!(ct.parameters[1].id, Some(3));
+}
+
+/// Design test 6 — positional text merge: a `lane_types` shrink through
+/// `set_text_properties` (the `edit_network` incremental path) preserves
+/// position-stable ids AND **disconnects** a nested depth-2 wire to a dropped
+/// tail index (not just flags it red).
+#[test]
+fn zip_phase3_text_merge_shrink_disconnects_nested_wires() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, map_id, inner_expr_id) = build_zip_with_nested_map_deep_captures(&mut designer);
+
+    // Bind the node to a text-format name.
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut("main")
+        .unwrap()
+        .nodes
+        .get_mut(&zip_id)
+        .unwrap()
+        .custom_name = Some("z".to_string());
+
+    // Incremental text edit shrinking the lane list 3 → 2 (a tail drop — the
+    // text format has no way to say "remove lane 2 specifically").
+    let result = {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove("main")
+            .unwrap();
+        let result = edit_network(
+            &mut network,
+            &designer.node_type_registry,
+            "z = zip_with { lane_types: [Int, Int] }",
+            false,
+        );
+        designer
+            .node_type_registry
+            .node_networks
+            .insert("main".to_string(), network);
+        result
+    };
+    assert!(
+        result.success,
+        "text edit must succeed: {:?}",
+        result.errors
+    );
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let zip_node = net.nodes.get(&zip_id).unwrap();
+    let data = zip_node
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap();
+    assert_eq!(data.lanes.len(), 2);
+    assert_eq!(data.lanes[0].id, Some(1), "position-stable id preserved");
+    assert_eq!(data.lanes[1].id, Some(2), "position-stable id preserved");
+
+    let map_body = zip_node
+        .zone
+        .as_ref()
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .unwrap();
+    let expr = map_body.nodes.get(&inner_expr_id).unwrap();
+    assert_eq!(
+        zone_input_wire_of(&expr.arguments[0]),
+        (map_id, 0, 1),
+        "the map's own element wire must be untouched"
+    );
+    assert_eq!(
+        zone_input_wire_of(&expr.arguments[1]),
+        (zip_id, 0, 2),
+        "the depth-2 wire to a surviving index must be untouched (no decrement on a tail drop)"
+    );
+    assert!(
+        expr.arguments[2].is_empty(),
+        "the nested depth-2 wire to the dropped tail index must be disconnected, not just flagged"
+    );
+}
+
+/// Design test 7 — minimum arity enforced: `remove_zip_with_lane` on a 1-lane
+/// node and an empty lane list through `set_zip_with_lanes` both return an
+/// error and leave the node unchanged.
+#[test]
+fn zip_phase3_minimum_arity_enforced() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = add_zip(
+        &mut designer,
+        "main",
+        vec![DataType::Int],
+        DataType::Int,
+        400.0,
+    );
+
+    assert!(designer.remove_zip_with_lane(&[], zip_id, 0).is_err());
+    assert!(designer.set_zip_with_lanes(&[], zip_id, vec![]).is_err());
+    // Out-of-range index is also rejected cleanly.
+    assert!(designer.remove_zip_with_lane(&[], zip_id, 5).is_err());
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    let data = net
+        .nodes
+        .get(&zip_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ZipWithData>()
+        .unwrap();
+    assert_eq!(data.lanes.len(), 1);
+    assert_eq!(data.lanes[0].id, Some(1));
+}
+
+/// Design test 8 (pinning) — a bare scalar wired to a lane produces no
+/// validation error or warning: the implicit `S → Iter[T]` broadcast is
+/// silently allowed by design (the 1-element evaluation behavior is pinned by
+/// `zip_scalar_broadcast_lane_yields_single_element`).
+#[test]
+fn zip_phase3_scalar_broadcast_no_validation_error() {
+    let mut designer = setup_designer_with_network("main");
+    let zip_id = build_sum_zip(&mut designer, "main", None, Some((10, 10, 5)));
+    let k_id = designer.add_node("int", DVec2::new(0.0, 0.0));
+    set_node_data(&mut designer, "main", k_id, Box::new(IntData { value: 7 }));
+    designer.connect_nodes(k_id, 0, zip_id, 0);
+
+    designer.validate_active_network();
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(net.valid);
+    assert!(
+        net.validation_errors
+            .iter()
+            .all(|e| e.node_id != Some(zip_id)),
+        "a scalar-fed lane must produce no error or warning on the zip; got: {:?}",
+        net.validation_errors
+            .iter()
+            .filter(|e| e.node_id == Some(zip_id))
+            .map(|e| e.error_text.clone())
+            .collect::<Vec<_>>()
+    );
+}
+
+/// Phase 3 deliverable — `adapt_for_drag_source` peels the drag source's
+/// element type into lane 1 and `output_type`, leaving lane 2 at its Float
+/// default.
+#[test]
+fn zip_phase3_adapt_for_drag_source_peels_element_type() {
+    let registry = NodeTypeRegistry::new();
+    let data = ZipWithData::default();
+
+    let adapted = data
+        .adapt_for_drag_source(
+            &DataType::Iterator(Box::new(DataType::Vec3)),
+            DragDirection::FromOutput,
+            &registry,
+        )
+        .expect("an Iter source must adapt");
+    let adapted = adapted.as_any_ref().downcast_ref::<ZipWithData>().unwrap();
+    assert_eq!(adapted.lanes[0].data_type, DataType::Vec3);
+    assert_eq!(adapted.lanes[1].data_type, DataType::Float, "lane 2 stays");
+    assert_eq!(adapted.output_type, DataType::Vec3);
+}
+
+/// Design test 10a — undo/redo of an id-accurate middle-lane removal with
+/// wires attached in the immediate body: the whole-network JSON state
+/// (including `next_lane_id`, the removed lane's external wire, and the
+/// remapped body wires) is restored exactly.
+#[test]
+fn zip_phase3_undo_redo_remove_middle_lane() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, _r1, _r2, _r3, _expr_id) = build_three_lane_ac_zip(&mut designer);
+    designer.validate_active_network();
+
+    let before = network_json(&mut designer, "main");
+    designer.remove_zip_with_lane(&[], zip_id, 1).unwrap();
+    let after = network_json(&mut designer, "main");
+    assert_ne!(before, after);
+
+    assert!(designer.undo(), "undo must report a command");
+    assert_eq!(
+        network_json(&mut designer, "main"),
+        before,
+        "undo must restore the exact whole-network state"
+    );
+    let restored = extract_ints(drain_iter_with_designer(
+        &designer,
+        evaluate_node(&designer, "main", zip_id),
+    ));
+    assert_eq!(
+        restored,
+        vec![101, 202, 303],
+        "undone network must evaluate"
+    );
+
+    assert!(designer.redo(), "redo must report a command");
+    assert_eq!(
+        network_json(&mut designer, "main"),
+        after,
+        "redo must restore the exact post-edit state"
+    );
+}
+
+/// Design test 10b — undo/redo of a removal whose body remap reaches a
+/// nested body (the depth-2 wires of `zip_phase3_nested_body_remap…`).
+#[test]
+fn zip_phase3_undo_redo_nested_body_removal() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, _map_id, _inner_expr_id) = build_zip_with_nested_map_deep_captures(&mut designer);
+    designer.validate_active_network();
+
+    let before = network_json(&mut designer, "main");
+    designer.remove_zip_with_lane(&[], zip_id, 1).unwrap();
+    let after = network_json(&mut designer, "main");
+    assert_ne!(before, after);
+
+    assert!(designer.undo());
+    assert_eq!(network_json(&mut designer, "main"), before);
+    let restored = drain_int_arrays(&designer, evaluate_node(&designer, "main", zip_id));
+    assert_eq!(restored, vec![vec![101, 102], vec![202, 203]]);
+
+    assert!(designer.redo());
+    assert_eq!(network_json(&mut designer, "main"), after);
+}
+
+/// Design test 10c — undo/redo of a whole-list edit that retypes AND shrinks
+/// (dropping a body wire the node-data snapshot could never restore).
+#[test]
+fn zip_phase3_undo_redo_retype_and_shrink() {
+    let mut designer = setup_designer_with_network("main");
+    let (zip_id, _r1, _r2, _r3, _expr_id) = build_three_lane_ac_zip(&mut designer);
+    designer.validate_active_network();
+
+    let before = network_json(&mut designer, "main");
+    designer
+        .set_zip_with_lanes(&[], zip_id, vec![DataType::Int, DataType::Float])
+        .unwrap();
+    let after = network_json(&mut designer, "main");
+    assert_ne!(before, after);
+
+    assert!(designer.undo());
+    assert_eq!(network_json(&mut designer, "main"), before);
+    assert!(designer.redo());
+    assert_eq!(network_json(&mut designer, "main"), after);
+
+    // A no-op whole-list edit pushes nothing: after undoing, re-setting the
+    // identical lane list must not truncate the redo tail (a pushed command
+    // would).
+    designer.undo();
+    designer
+        .set_zip_with_lanes(
+            &[],
+            zip_id,
+            vec![DataType::Int, DataType::Int, DataType::Int],
+        )
+        .unwrap();
+    assert!(
+        designer.redo(),
+        "a no-op lane edit must not have pushed a command (the redo tail survives)"
+    );
+    assert_eq!(network_json(&mut designer, "main"), after);
+}
