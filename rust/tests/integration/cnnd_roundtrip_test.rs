@@ -410,3 +410,117 @@ fn dotted_record_def_cnnd_roundtrip() {
         )))
     );
 }
+
+/// Phase 3 (issue #381): a network using both `free_sphere` and `free_circle`,
+/// with a `vec3` wired into `free_sphere.center` and a `float` into its
+/// `radius`, survives a `.cnnd` save → load round-trip with its stored
+/// real-space (Å) float data and its wires intact. These nodes serialize their
+/// `center` / `radius` through the ordinary fixed-pin path (`dvec3_serializer` /
+/// `dvec2_serializer` + `f64`), so this is greenfield coverage of that path.
+#[test]
+fn free_geometry_nodes_cnnd_roundtrip() {
+    use glam::f64::{DVec2, DVec3};
+    use rust_lib_flutter_cad::structure_designer::nodes::free_circle::FreeCircleData;
+    use rust_lib_flutter_cad::structure_designer::nodes::free_sphere::FreeSphereData;
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+
+    // free_sphere with stored (soon-overridden) center/radius, plus a wired
+    // vec3 → center (pin 0) and float → radius (pin 1).
+    let fs = designer.add_node("free_sphere", DVec2::new(0.0, 0.0));
+    let fc = designer.add_node("free_circle", DVec2::new(0.0, 200.0));
+    let vc = designer.add_node("vec3", DVec2::new(-200.0, 0.0));
+    let fr = designer.add_node("float", DVec2::new(-200.0, 100.0));
+
+    // Set fractional stored data (not representable in whole cells).
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("Main")
+            .unwrap();
+        network.set_node_network_data(
+            fs,
+            Box::new(FreeSphereData {
+                center: DVec3::new(1.5, 2.25, -0.75),
+                radius: 4.2,
+            }),
+        );
+        network.set_node_network_data(
+            fc,
+            Box::new(FreeCircleData {
+                center: DVec2::new(0.5, 1.25),
+                radius: 3.0,
+            }),
+        );
+    }
+    designer.validate_active_network();
+    designer.connect_nodes(vc, 0, fs, 0); // vec3 → free_sphere.center
+    designer.connect_nodes(fr, 0, fs, 1); // float → free_sphere.radius
+
+    // Save → reload into a fresh registry.
+    let temp_dir = tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("free_geometry.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save");
+
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("reload");
+
+    let network = registry2.node_networks.get("Main").unwrap();
+
+    // Node types survive.
+    assert_eq!(
+        network.nodes.get(&fs).unwrap().node_type_name,
+        "free_sphere"
+    );
+    assert_eq!(
+        network.nodes.get(&fc).unwrap().node_type_name,
+        "free_circle"
+    );
+
+    // Stored float data survives byte-exactly.
+    let fs_data = network
+        .nodes
+        .get(&fs)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<FreeSphereData>()
+        .expect("fs should be FreeSphereData");
+    assert_eq!(fs_data.center, DVec3::new(1.5, 2.25, -0.75));
+    assert_eq!(fs_data.radius, 4.2);
+
+    let fc_data = network
+        .nodes
+        .get(&fc)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<FreeCircleData>()
+        .expect("fc should be FreeCircleData");
+    assert_eq!(fc_data.center, DVec2::new(0.5, 1.25));
+    assert_eq!(fc_data.radius, 3.0);
+
+    // Wires into center (pin 0) and radius (pin 1) survive.
+    let fs_node = network.nodes.get(&fs).unwrap();
+    assert_eq!(
+        fs_node.arguments[0].get_source_pin(vc),
+        Some(0),
+        "free_sphere.center ← vec3 pin 0"
+    );
+    assert_eq!(
+        fs_node.arguments[1].get_source_pin(fr),
+        Some(0),
+        "free_sphere.radius ← float pin 0"
+    );
+}

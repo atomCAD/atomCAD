@@ -3606,3 +3606,260 @@ output z
         assert_eq!(z_node.arguments[1].get_source_pin(b_id), Some(0));
     }
 }
+
+// ============================================================================
+// free_sphere / free_circle text format (issue #381, Phase 3)
+//
+// Both nodes store real-space (Å) float properties (`center`, `radius`) that go
+// through the existing `TextValue::Vec3` / `Vec2` / `Float` arms — no parser or
+// serializer change was needed. These tests lock in that the stored floats
+// parse → serialize → reparse identically, that whole-number component lists
+// (`center: (1, 2, 3)`) parse via the `IVec3`→`as_vec3` path, and that wires
+// into `center` / `radius` survive a text roundtrip. Zone bodies are N/A (these
+// are fixed-pin primitives).
+// ============================================================================
+mod free_geometry_text_format_tests {
+    use rust_lib_flutter_cad::structure_designer::nodes::free_circle::FreeCircleData;
+    use rust_lib_flutter_cad::structure_designer::nodes::free_sphere::FreeSphereData;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+    use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
+
+    fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+        let mut designer = StructureDesigner::new();
+        designer.add_node_network(network_name);
+        designer.set_active_node_network_name(Some(network_name.to_string()));
+        designer
+    }
+
+    fn edit_designer_network(
+        designer: &mut StructureDesigner,
+        network_name: &str,
+        code: &str,
+        replace: bool,
+    ) -> rust_lib_flutter_cad::structure_designer::text_format::EditResult {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove(network_name)
+            .unwrap();
+        let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert(network_name.to_string(), network);
+        result
+    }
+
+    /// The design's canonical example (`doc/design_free_sphere_circle.md`
+    /// §"Text format"): a `free_sphere` and `free_circle` with fractional
+    /// float center/radius, the circle feeding an `extrude`. Parse → serialize
+    /// → reparse must produce byte-identical text, proving `format_float`
+    /// stability on the stored floats.
+    const NETWORK: &str = r#"
+        fs = free_sphere { center: (1.5, 2.25, -0.75), radius: 4.2 }
+        fc = free_circle { center: (0.5, 1.25), radius: 3.0 }
+        e = extrude { shape: fc, height: 2 }
+        output fs
+    "#;
+
+    #[test]
+    fn free_geometry_text_roundtrip_identical() {
+        let mut designer = setup_designer_with_network("net");
+        let result = edit_designer_network(&mut designer, "net", NETWORK, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("net")
+            .unwrap();
+        let serialized = serialize_network(network, &designer.node_type_registry, None);
+
+        // Fractional floats survive verbatim (no lattice quantization, and
+        // `format_float` keeps the decimal point).
+        assert!(
+            serialized.contains("center: (1.5, 2.25, -0.75)"),
+            "free_sphere fractional center should serialize verbatim, got:\n{serialized}"
+        );
+        assert!(
+            serialized.contains("radius: 4.2"),
+            "free_sphere fractional radius should serialize verbatim, got:\n{serialized}"
+        );
+        // Whole-valued floats keep their `.0` (float, not int — type inference
+        // on reparse depends on it).
+        assert!(
+            serialized.contains("radius: 3.0"),
+            "free_circle radius 3.0 should keep its decimal point, got:\n{serialized}"
+        );
+
+        // Reparse into a fresh network and serialize again — must be identical.
+        let mut designer2 = setup_designer_with_network("net2");
+        let result2 = edit_designer_network(&mut designer2, "net2", &serialized, true);
+        assert!(
+            result2.success,
+            "Reparse should succeed: {:?}",
+            result2.errors
+        );
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("net2")
+            .unwrap();
+        let serialized2 = serialize_network(network2, &designer2.node_type_registry, None);
+        assert_eq!(
+            serialized, serialized2,
+            "Double roundtrip should produce identical text"
+        );
+    }
+
+    /// Stored float properties land on the node data after parsing.
+    #[test]
+    fn free_geometry_text_parses_stored_floats() {
+        let mut designer = setup_designer_with_network("net");
+        let result = edit_designer_network(&mut designer, "net", NETWORK, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("net")
+            .unwrap();
+        let data_of = |name: &str| {
+            network
+                .nodes
+                .values()
+                .find(|n| n.custom_name.as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("node '{name}' not found"))
+        };
+
+        let fs = data_of("fs")
+            .data
+            .as_any_ref()
+            .downcast_ref::<FreeSphereData>()
+            .expect("fs should be FreeSphereData");
+        assert_eq!(fs.center, glam::f64::DVec3::new(1.5, 2.25, -0.75));
+        assert_eq!(fs.radius, 4.2);
+
+        let fc = data_of("fc")
+            .data
+            .as_any_ref()
+            .downcast_ref::<FreeCircleData>()
+            .expect("fc should be FreeCircleData");
+        assert_eq!(fc.center, glam::f64::DVec2::new(0.5, 1.25));
+        assert_eq!(fc.radius, 3.0);
+    }
+
+    /// Whole-number component lists parse through the `IVec3`/`IVec2`→`as_vec3`/
+    /// `as_vec2` path: `center: (1, 2, 3)` (parser yields `IVec3`) is accepted
+    /// and stored as the equivalent `DVec3`.
+    #[test]
+    fn free_geometry_text_accepts_whole_number_centers() {
+        let mut designer = setup_designer_with_network("net");
+        let code = r#"
+            fs = free_sphere { center: (1, 2, 3), radius: 4 }
+            fc = free_circle { center: (5, 6), radius: 7 }
+            output fs
+        "#;
+        let result = edit_designer_network(&mut designer, "net", code, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("net")
+            .unwrap();
+        let data_of = |name: &str| {
+            network
+                .nodes
+                .values()
+                .find(|n| n.custom_name.as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("node '{name}' not found"))
+        };
+
+        let fs = data_of("fs")
+            .data
+            .as_any_ref()
+            .downcast_ref::<FreeSphereData>()
+            .expect("fs should be FreeSphereData");
+        assert_eq!(fs.center, glam::f64::DVec3::new(1.0, 2.0, 3.0));
+        assert_eq!(fs.radius, 4.0);
+
+        let fc = data_of("fc")
+            .data
+            .as_any_ref()
+            .downcast_ref::<FreeCircleData>()
+            .expect("fc should be FreeCircleData");
+        assert_eq!(fc.center, glam::f64::DVec2::new(5.0, 6.0));
+        assert_eq!(fc.radius, 7.0);
+
+        // After the first serialization, whole-number centers gain their `.0`
+        // (they are stored as floats), and thereafter roundtrip identically.
+        let serialized = serialize_network(network, &designer.node_type_registry, None);
+        assert!(
+            serialized.contains("center: (1.0, 2.0, 3.0)"),
+            "whole-number free_sphere center should serialize as floats, got:\n{serialized}"
+        );
+    }
+
+    /// Wires into `center` / `radius` survive a text roundtrip (serialize emits
+    /// the node references; reparse reconnects them).
+    #[test]
+    fn free_geometry_text_roundtrip_preserves_wires() {
+        let mut designer = setup_designer_with_network("net");
+        let code = r#"
+            c = vec3 { value: (1.0, 2.0, 3.0) }
+            r = float { value: 4.5 }
+            fs = free_sphere { center: c, radius: r }
+            output fs
+        "#;
+        let result = edit_designer_network(&mut designer, "net", code, true);
+        assert!(result.success, "Edit should succeed: {:?}", result.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("net")
+            .unwrap();
+        let serialized = serialize_network(network, &designer.node_type_registry, None);
+        assert!(
+            serialized.contains("center: c") && serialized.contains("radius: r"),
+            "wired center/radius should serialize as node refs, got:\n{serialized}"
+        );
+
+        // Reparse and confirm the wires land on free_sphere's pins 0 and 1.
+        let mut designer2 = setup_designer_with_network("net2");
+        let result2 = edit_designer_network(&mut designer2, "net2", &serialized, true);
+        assert!(
+            result2.success,
+            "Reparse should succeed: {:?}",
+            result2.errors
+        );
+
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("net2")
+            .unwrap();
+        let id_of = |name: &str| -> u64 {
+            network2
+                .nodes
+                .iter()
+                .find(|(_, n)| n.custom_name.as_deref() == Some(name))
+                .map(|(&id, _)| id)
+                .unwrap_or_else(|| panic!("node '{name}' not found"))
+        };
+        let c = id_of("c");
+        let r = id_of("r");
+        let fs = network2.nodes.get(&id_of("fs")).unwrap();
+        assert_eq!(
+            fs.arguments[0].get_source_pin(c),
+            Some(0),
+            "free_sphere.center ← vec3 pin 0"
+        );
+        assert_eq!(
+            fs.arguments[1].get_source_pin(r),
+            Some(0),
+            "free_sphere.radius ← float pin 0"
+        );
+    }
+}

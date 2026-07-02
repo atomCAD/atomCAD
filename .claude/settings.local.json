@@ -293,7 +293,8 @@
       "PowerShell($gh = \"C:\\\\Program Files\\\\GitHub CLI\\\\gh.exe\"; & $gh issue view 368 --repo atomCAD/atomCAD 2>&1 | Select-Object -First 20)",
       "Bash(sed -i '1728,1928d' src/api/structure_designer/atom_edit_api.rs)",
       "Bash(sed -i '/^use crate::api::api_common::to_api_vec3;$/d' src/api/structure_designer/atom_edit_api.rs)",
-      "Bash(bash /tmp/count_analysis.sh)"
+      "Bash(bash /tmp/count_analysis.sh)",
+      "Bash(rg *)"
     ]
   }
 }
