@@ -151,6 +151,9 @@ mod raytrace_per_node_test;
 #[path = "structure_designer/atom_edit_unchanged_test.rs"]
 mod atom_edit_unchanged_test;
 
+#[path = "structure_designer/atom_edit_add_atom_marker_test.rs"]
+mod atom_edit_add_atom_marker_test;
+
 #[path = "structure_designer/atom_edit_subnetwork_caching_test.rs"]
 mod atom_edit_subnetwork_caching_test;
 

@@ -3,10 +3,10 @@ use super::atom_edit_data::{
 };
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure::atom::{
     HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
 };
+use crate::crystolecule::atomic_structure::{HitTestResult, UNCHANGED_ATOMIC_NUMBER};
 use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::crystolecule::guided_placement::{
     BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, Hybridization,
@@ -252,13 +252,28 @@ pub fn start_guided_placement(
         return GuidedPlacementStartResult::NoAtomHit;
     }
 
-    // Resolve to diff atom ID (promote base atom if needed)
+    // Resolve to diff atom ID (promote base atom if needed).
+    //
+    // Adding an adjacent atom must NOT override the clicked base atom — merely
+    // being a bond partner is not an edit of that atom. So a base anchor is
+    // recorded as an UNCHANGED marker (a pure bond-endpoint reference at the base
+    // position, no element/anchor), which `apply_diff` passes through with the
+    // base atom's *current* element and position. The one exception is a non-Auto
+    // toolbar hybridization: that stores a per-atom override flag on the anchor (a
+    // real edit), and marker metadata is copied from the base — not the diff — atom
+    // by `apply_diff`, so the flag would be lost. In that case fall back to a full
+    // element+position promotion. See the Anchor Invariant note in AGENTS.md.
+    let hyb_flag = hybridization_to_flag(hybridization_override);
     let diff_atom_id = if is_diff_view {
         hit_atom_info.0
     } else {
         match &atom_source {
             Some(AtomSource::BasePassthrough(_)) => {
-                atom_edit_data.add_atom_recorded(hit_atom_info.1.0, hit_atom_info.1.1)
+                if hyb_flag != HYBRIDIZATION_AUTO {
+                    atom_edit_data.add_atom_recorded(hit_atom_info.1.0, hit_atom_info.1.1)
+                } else {
+                    atom_edit_data.add_atom_recorded(UNCHANGED_ATOMIC_NUMBER, hit_atom_info.1.1)
+                }
             }
             Some(AtomSource::DiffMatchedBase { diff_id, .. })
             | Some(AtomSource::DiffAdded(diff_id)) => *diff_id,
@@ -268,7 +283,7 @@ pub fn start_guided_placement(
 
     // Enter guided placement mode based on the placement result
     let is_dative = placement_result.is_dative_bond;
-    let toolbar_hyb = hybridization_to_flag(hybridization_override);
+    let toolbar_hyb = hyb_flag;
     let guide_count = match &placement_result.mode {
         GuidedPlacementMode::FixedDots { guide_dots } => {
             let count = guide_dots.len();

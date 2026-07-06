@@ -90,6 +90,16 @@ Diff atoms have an optional **anchor position** that tells `apply_diff` which ba
 
 If you need to move an atom that is already in the diff, call `move_in_diff`. If you need to move a base atom that is not yet in the diff, first promote it (`add_atom` + `set_anchor_position`), then call `move_in_diff`.
 
+## Base-Anchor Override Policy (issue #386)
+
+A base atom must be given a **full override entry** in the diff (a real element+position diff atom, optionally anchored) **only when the user explicitly edits that atom** — replace its element, move/transform/drag it, delete it, or set a per-atom flag (frozen / hybridization override). Merely being *adjacent* to an edit is not an edit:
+
+- **Adjacency records UNCHANGED markers, not overrides.** Adding an atom bonded to a base atom (`add_atom_tool.rs`), or adding/deleting/re-ordering a bond touching base atoms (`add_bond_tool.rs`, `operations.rs`), records the touched base atoms as **UNCHANGED markers** (`UNCHANGED_ATOMIC_NUMBER`, no anchor) — pure bond-endpoint references. `apply_diff` then passes the base atom through with its **current** element and position, so a later upstream change (e.g. Si→C) is honored instead of being pinned to the element that happened to be there at edit time. The one exception in `start_guided_placement`: a **non-Auto toolbar hybridization** stores a flag on the anchor (a real per-atom edit), and `apply_diff` copies an UNCHANGED marker's metadata from the *base* atom (not the diff atom) — so the flag would be lost. That case falls back to a full promotion.
+
+- **Minimization must never move a marker's stored position.** A matched UNCHANGED marker is a `DiffMatchedBase` result atom, but it is not an edit. In `minimization.rs`: `FreezeBase` freezes marker-matched atoms alongside base pass-throughs; the other modes (`FreeAll` / `FreeSelected` / continuous drag) let them move but must **promote the marker in place** at write-back (`promote_marker_or_move`: set element + anchor at the pre-move position + new position), *not* `set_position_recorded` on the marker. Moving a marker's own position breaks its positional match in `apply_diff`, which then drops it as an orphaned tracked atom — silently deleting the atom.
+
+Tests: `tests/structure_designer/atom_edit_add_atom_marker_test.rs`.
+
 ## Tool Files
 
 - **`default_tool.rs`**: Pointer event state machine (`pointer_down` → `pointer_move` → `pointer_up`). Handles click-select, drag threshold, screen-plane dragging, and marquee selection. Clicking an already-selected bond cycles its order (single→double→triple→single; specialized orders enter cycle at single).

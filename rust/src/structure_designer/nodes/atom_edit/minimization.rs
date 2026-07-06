@@ -86,14 +86,22 @@ pub fn minimize_atom_edit(
                 .iter()
                 .enumerate()
                 .filter(|(_, result_id)| {
-                    let is_base = matches!(
-                        eval_cache.provenance.sources.get(result_id),
-                        Some(AtomSource::BasePassthrough(_))
-                    );
+                    // Freeze anything that is not an explicit edit of that atom:
+                    // base pass-throughs, UNCHANGED markers (bond-endpoint
+                    // references recorded when an adjacent atom/bond was placed —
+                    // see the Anchor Invariant in AGENTS.md), and flag-frozen atoms.
+                    let is_base_or_marker = match eval_cache.provenance.sources.get(result_id) {
+                        Some(AtomSource::BasePassthrough(_)) => true,
+                        Some(AtomSource::DiffMatchedBase { diff_id, .. }) => atom_edit_data
+                            .diff
+                            .get_atom(*diff_id)
+                            .is_some_and(|a| a.is_unchanged_marker()),
+                        _ => false,
+                    };
                     let is_frozen = result_structure
                         .get_atom(**result_id)
                         .is_some_and(|atom| atom.is_frozen());
-                    is_base || is_frozen
+                    is_base_or_marker || is_frozen
                 })
                 .map(|(i, _)| i)
                 .collect(),
@@ -169,12 +177,16 @@ pub fn minimize_atom_edit(
         }
 
         match source {
-            Some(AtomSource::DiffAdded(diff_id))
-            | Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
+            Some(AtomSource::DiffAdded(diff_id)) => {
                 atom_edit_data.set_position_recorded(*diff_id, new_pos);
             }
+            Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
+                promote_marker_or_move(atom_edit_data, *diff_id, old_pos, new_pos, || {
+                    topology.atomic_numbers[topo_idx]
+                });
+            }
             Some(AtomSource::BasePassthrough(_)) => {
-                // FreeAll mode only — base atom moved, add to diff with anchor
+                // FreeAll / FreeSelected — base atom moved, add to diff with anchor
                 let atomic_number = topology.atomic_numbers[topo_idx];
                 let new_diff_id = atom_edit_data.add_atom_recorded(atomic_number, new_pos);
                 atom_edit_data.set_anchor_recorded(new_diff_id, old_pos);
@@ -426,9 +438,13 @@ fn continuous_minimize_impl(
         }
 
         match source {
-            Some(AtomSource::DiffAdded(diff_id))
-            | Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
+            Some(AtomSource::DiffAdded(diff_id)) => {
                 atom_edit_data.set_position_recorded(*diff_id, new_pos);
+            }
+            Some(AtomSource::DiffMatchedBase { diff_id, .. }) => {
+                promote_marker_or_move(atom_edit_data, *diff_id, old_pos, new_pos, || {
+                    topology.atomic_numbers[topo_idx]
+                });
             }
             Some(AtomSource::BasePassthrough(base_id)) => {
                 // Base atom moved by minimizer — promote to diff.
@@ -454,4 +470,37 @@ fn continuous_minimize_impl(
     }
 
     Ok(())
+}
+
+/// Write back a minimized position for a diff atom that matched a base atom.
+///
+/// If `diff_id` is an UNCHANGED marker — a bond-endpoint reference recorded when an
+/// adjacent atom or bond was placed, not an edit of this atom (see the Anchor
+/// Invariant in AGENTS.md) — then simply moving its stored position would break its
+/// positional match to the base atom in `apply_diff`, which then drops it as an
+/// orphaned tracked atom (silently deleting the atom). Instead, promote the marker
+/// in place to a real anchored diff atom: give it the base element, anchor it at its
+/// pre-move position (so it keeps matching the base atom), and record the new
+/// position. For a genuine (already-promoted) diff atom, just move it.
+///
+/// `atomic_number` is a thunk so callers can avoid indexing the topology unless a
+/// promotion actually happens.
+fn promote_marker_or_move(
+    atom_edit_data: &mut AtomEditData,
+    diff_id: u32,
+    old_pos: DVec3,
+    new_pos: DVec3,
+    atomic_number: impl FnOnce() -> i16,
+) {
+    let is_marker = atom_edit_data
+        .diff
+        .get_atom(diff_id)
+        .is_some_and(|a| a.is_unchanged_marker());
+    if is_marker {
+        atom_edit_data.set_atomic_number_recorded(diff_id, atomic_number());
+        atom_edit_data.set_anchor_recorded(diff_id, old_pos);
+        atom_edit_data.set_position_recorded(diff_id, new_pos);
+    } else {
+        atom_edit_data.set_position_recorded(diff_id, new_pos);
+    }
 }
