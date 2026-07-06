@@ -237,6 +237,101 @@ fn test_delete_diff_view_mixed() {
     assert!(data.selection.is_empty());
 }
 
+/// Regression for issue #385 at the `apply_delete_diff_view` layer: selecting a
+/// pure-addition atom together with a bond incident to it and deleting both in
+/// diff view. The atom loop removes the atom (and its incident bonds) first, so
+/// the bond loop then processes an already-gone bond — which must not corrupt the
+/// `num_bonds` counter (the underflow that produced the "capacity overflow" panic).
+#[test]
+fn test_delete_diff_view_atom_and_incident_bond_together() {
+    let mut data = AtomEditData::new();
+    let id_a = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let id_b = data.diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    data.diff.add_bond(id_a, id_b, BOND_SINGLE);
+    assert_eq!(data.diff.get_num_of_bonds(), 1);
+
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
+    data.selection.selected_diff_atoms.insert(id_a);
+    data.selection.selected_bonds.insert(bond_ref.clone());
+
+    data.apply_delete_diff_view(&[(id_a, DiffAtomKind::PureAddition)], &[bond_ref]);
+
+    // Atom A gone, its bond gone, B remains bondless, and the bond counter is
+    // consistent (not underflowed to a huge value).
+    assert!(data.diff.get_atom(id_a).is_none());
+    assert_eq!(data.diff.get_num_of_atoms(), 1);
+    assert_eq!(data.diff.get_num_of_bonds(), 0);
+    assert!(data.diff.get_atom(id_b).unwrap().bonds.is_empty());
+    assert!(data.selection.is_empty());
+}
+
+/// Locks the `num_bonds` invariant after a plain diff-view bond delete. The other
+/// bond tests only check `atom.bonds.is_empty()`, never the aggregate counter that
+/// actually overflowed in issue #385.
+#[test]
+fn test_delete_diff_view_bond_count_stays_consistent() {
+    let mut data = AtomEditData::new();
+    let id_a = data.diff.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let id_b = data.diff.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    data.diff.add_bond(id_a, id_b, BOND_SINGLE);
+    assert_eq!(data.diff.get_num_of_bonds(), 1);
+
+    let bond_ref = BondReference {
+        atom_id1: id_a,
+        atom_id2: id_b,
+    };
+    data.apply_delete_diff_view(&[], &[bond_ref]);
+
+    assert_eq!(data.diff.get_num_of_bonds(), 0);
+}
+
+/// The `DiffAtomKind::Unchanged` arm of `apply_delete_diff_view` (removes the
+/// tracked-but-unchanged marker entirely) — previously exercised only via
+/// `classify_diff_atom`, never through the delete path.
+#[test]
+fn test_delete_diff_view_removes_unchanged_marker() {
+    let mut data = AtomEditData::new();
+    let id = data
+        .diff
+        .add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(1.0, 0.0, 0.0));
+    data.selection.selected_diff_atoms.insert(id);
+
+    data.apply_delete_diff_view(&[(id, DiffAtomKind::Unchanged)], &[]);
+
+    assert_eq!(data.diff.get_num_of_atoms(), 0);
+    assert!(data.selection.selected_diff_atoms.is_empty());
+}
+
+/// A moved base atom (MatchedBase) that also carries a diff bond. Deleting it in
+/// diff view converts it to a delete marker at its anchor and drops the bond; the
+/// dropped bond must leave `num_bonds` consistent.
+#[test]
+fn test_delete_diff_view_matched_base_with_bonds_keeps_count_consistent() {
+    let mut data = AtomEditData::new();
+    let matched = data.diff.add_atom(6, DVec3::new(2.0, 0.0, 0.0));
+    data.diff.set_anchor_position(matched, DVec3::new(1.0, 0.0, 0.0));
+    let other = data.diff.add_atom(6, DVec3::new(3.5, 0.0, 0.0));
+    data.diff.add_bond(matched, other, BOND_SINGLE);
+    assert_eq!(data.diff.get_num_of_bonds(), 1);
+    data.selection.selected_diff_atoms.insert(matched);
+
+    data.apply_delete_diff_view(&[(matched, DiffAtomKind::MatchedBase)], &[]);
+
+    // Original matched atom gone, its bond dropped, counter consistent.
+    assert!(data.diff.get_atom(matched).is_none());
+    assert_eq!(data.diff.get_num_of_bonds(), 0);
+    assert!(data.diff.get_atom(other).unwrap().bonds.is_empty());
+    // A delete marker now sits at the anchor position.
+    let has_delete_marker = data.diff.iter_atoms().any(|(_, a)| {
+        a.atomic_number == DELETED_SITE_ATOMIC_NUMBER
+            && (a.position - DVec3::new(1.0, 0.0, 0.0)).length() < 1e-10
+    });
+    assert!(has_delete_marker);
+}
+
 // =============================================================================
 // apply_delete_result_view tests
 // =============================================================================
