@@ -102,7 +102,7 @@ Objects in the node network flow through three concrete phases:
 | **Crystal** | Structure + Geometry (opt) + Atoms | *Construction.* Atoms have been carved out of the structure; atoms + geometry are rigidly coupled. |
 | **Molecule** | Geometry (opt) + Atoms | *Deployment.* No structure association; free-floating. |
 
-Three **abstract** supertypes name two-out-of-three combinations (each used only as an input-pin type):
+Three **abstract** supertypes name two-out-of-three combinations. Built-in nodes use them only as input-pin types, but they can also appear as *statically declared* output types: a user-declared function type with an abstract return (e.g. a `closure` declared `(Float) -> HasAtoms`) puts the abstract type on the consuming `apply`'s output pin. `resolve_output_type` resolves such a `Fixed(abstract)` pin to the abstract type, so it wires into pins accepting the same abstract type (identity conversion); abstract → concrete downcasts and cross-abstract edges remain rejected. Runtime values are always a concrete phase variant regardless:
 
 | Abstract | Members | Property |
 |---|---|---|

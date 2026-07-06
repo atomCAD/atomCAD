@@ -312,7 +312,8 @@ fn test_delete_diff_view_removes_unchanged_marker() {
 fn test_delete_diff_view_matched_base_with_bonds_keeps_count_consistent() {
     let mut data = AtomEditData::new();
     let matched = data.diff.add_atom(6, DVec3::new(2.0, 0.0, 0.0));
-    data.diff.set_anchor_position(matched, DVec3::new(1.0, 0.0, 0.0));
+    data.diff
+        .set_anchor_position(matched, DVec3::new(1.0, 0.0, 0.0));
     let other = data.diff.add_atom(6, DVec3::new(3.5, 0.0, 0.0));
     data.diff.add_bond(matched, other, BOND_SINGLE);
     assert_eq!(data.diff.get_num_of_bonds(), 1);

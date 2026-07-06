@@ -450,8 +450,15 @@ impl DataType {
     }
 
     /// Returns true for abstract phase supertypes (HasAtoms, HasStructure, HasFreeLinOps).
-    /// Abstract types appear only as declared input-pin types on built-in polymorphic
-    /// nodes; no `NetworkResult` value ever carries an abstract `DataType`.
+    /// Abstract types appear as declared input-pin types on built-in polymorphic
+    /// nodes, and can also appear as *statically declared* output types — a
+    /// user-declared function type with an abstract return (e.g. a `closure`
+    /// declared `(Float) -> HasAtoms`) puts the abstract type on the consuming
+    /// `apply`'s output pin. Such an output is wirable into pins accepting the
+    /// same abstract type (identity), but never into a concrete or
+    /// cross-abstract pin (`can_be_converted_to` has no downcast rules). No
+    /// `NetworkResult` *value* ever carries an abstract `DataType` — runtime
+    /// values are always a concrete phase variant.
     pub fn is_abstract(&self) -> bool {
         matches!(
             self,

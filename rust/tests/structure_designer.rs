@@ -385,6 +385,9 @@ mod function_pin_unification_test;
 #[path = "structure_designer/apply_function_pin_iter_test.rs"]
 mod apply_function_pin_iter_test;
 
+#[path = "structure_designer/abstract_output_type_test.rs"]
+mod abstract_output_type_test;
+
 #[path = "structure_designer/hierarchical_records_test.rs"]
 mod hierarchical_records_test;
 

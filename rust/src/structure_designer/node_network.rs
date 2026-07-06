@@ -1343,9 +1343,12 @@ impl NodeNetwork {
         let dest_param_type =
             node_type_registry.get_node_param_data_type(dest_node, dest_param_index);
 
-        // Get the resolved concrete output type of the source pin. For a
-        // polymorphic pin that cannot yet be resolved (e.g. its own input is
-        // disconnected), the connection is considered invalid.
+        // Get the resolved output type of the source pin. For a polymorphic
+        // pin that cannot yet be resolved (e.g. its own input is
+        // disconnected), the connection is considered invalid. A `Fixed`
+        // abstract output (a user-declared function type with an abstract
+        // return, applied by `apply`) resolves to the abstract type and is
+        // accepted below iff the destination accepts the same abstract type.
         let source_output_type = match node_type_registry.resolve_output_type_scoped(
             source_node,
             self,

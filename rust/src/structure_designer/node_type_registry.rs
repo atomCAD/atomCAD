@@ -989,19 +989,22 @@ impl NodeTypeRegistry {
         node_type.parameters[parameter_index].data_type.clone()
     }
 
-    /// Resolves the concrete `DataType` of one of `node`'s output pins in `network`.
+    /// Resolves the `DataType` of one of `node`'s output pins in `network`.
     ///
     /// - `output_pin_index == -1` returns the node's function type.
-    /// - For a `Fixed(t)` pin, returns `Some(t)` (or `None` if `t` is abstract).
-    /// - For `SameAsInput`, resolves the concrete type of the upstream wire
-    ///   feeding the named input pin (recursively). When the input pin has zero
+    /// - For a `Fixed(t)` pin, returns `Some(t)` — including when `t` is an
+    ///   abstract phase supertype (a user-declared function type with an
+    ///   abstract return, applied by `apply`, puts `Fixed(HasAtoms)` etc. on an
+    ///   output pin; such a source is wirable into pins accepting the same
+    ///   abstract type).
+    /// - For `SameAsInput`, resolves the type of the upstream wire feeding the
+    ///   named input pin (recursively). When the input pin has zero
     ///   connections, the pin's `fallback_if_disconnected` is returned if set.
     /// - For `SameAsArrayElements(name)`, resolves the concrete element type
     ///   common to every source feeding the array input (`None` on mismatch,
-    ///   disconnected, or unresolved upstream).
+    ///   disconnected, abstract, or unresolved upstream).
     ///
-    /// Returns `None` whenever resolution fails for any reason. The returned
-    /// type is never abstract.
+    /// Returns `None` whenever resolution fails for any reason.
     pub fn resolve_output_type(
         &self,
         node: &Node,
@@ -1116,16 +1119,21 @@ impl NodeTypeRegistry {
         ancestor_hof_ids: &[u64],
     ) -> Option<ResolvedOutputType> {
         match pin_type {
-            PinOutputType::Fixed(t) => {
-                if t.is_abstract() {
-                    None
-                } else {
-                    Some(ResolvedOutputType {
-                        data_type: t.clone(),
-                        via_fallback: false,
-                    })
-                }
-            }
+            // A `Fixed` type resolves to itself — including the abstract phase
+            // supertypes (`HasAtoms`, …). An abstract `Fixed` output arises when
+            // a user-declared function type has an abstract return type (e.g. a
+            // `closure` declared `(Float, Float) -> HasAtoms` consumed by
+            // `apply` — the post-pass installs `Fixed(HasAtoms)` on the apply's
+            // output pin). Resolving it, rather than returning `None`, lets such
+            // an output be wired into pins that accept the same abstract type
+            // (identity conversion), while `can_be_converted_to` still rejects
+            // abstract → concrete downcasts and cross-abstract edges. Runtime
+            // values stay concrete (Crystal/Molecule/…) regardless of the
+            // static annotation — see `DataType::is_abstract`.
+            PinOutputType::Fixed(t) => Some(ResolvedOutputType {
+                data_type: t.clone(),
+                via_fallback: false,
+            }),
             PinOutputType::SameAsInput {
                 input_pin_name,
                 fallback_if_disconnected,
@@ -1205,13 +1213,13 @@ impl NodeTypeRegistry {
         }
     }
 
-    /// Resolve the concrete output type produced by a single incoming wire,
+    /// Resolve the output type produced by a single incoming wire,
     /// following local node outputs (depth 0), cross-scope captures
     /// (`NodeOutput` at depth ≥ 1), and zone-input / delayed-argument sources
     /// (`ZoneInput` at depth ≥ 1). `network` is the wire's storage network and
     /// `ancestors` / `ancestor_hof_ids` are its enclosing-zone chain (see
-    /// [`Self::resolve_output_type_scoped`]). Returns `None` for abstract or
-    /// otherwise-unresolvable sources, matching the rest of the resolver.
+    /// [`Self::resolve_output_type_scoped`]). Returns `None` for
+    /// unresolvable sources, matching the rest of the resolver.
     fn resolve_wire_source_type_scoped(
         &self,
         wire: &IncomingWire,
@@ -1264,8 +1272,7 @@ impl NodeTypeRegistry {
                 let pin = hof_node_type.zone_input_pins.get(pin_index)?;
                 // Resolve the zone-input pin's declared type against the HOF's
                 // own scope. For the common `Fixed(concrete)` case this returns
-                // the concrete element type (and `None` for an abstract
-                // declaration — concrete-only, like every other pin).
+                // the concrete element type.
                 let new_ancestors = &ancestors[..ancestors.len() - depth];
                 let new_hof_ids = &ancestor_hof_ids[..ancestor_hof_ids.len() - depth];
                 self.resolve_pin_output_type_scoped(

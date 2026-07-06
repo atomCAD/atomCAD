@@ -696,10 +696,13 @@ fn build_node_view(
         .iter()
         .enumerate()
         .map(|(i, pin_def)| {
-            let needs_resolution = match &pin_def.data_type {
-                crate::structure_designer::node_type::PinOutputType::Fixed(t) => t.is_abstract(),
-                _ => true,
-            };
+            // A `Fixed` pin (abstract or not) resolves to its declared type
+            // verbatim, so re-resolving would only echo `data_type` back;
+            // resolution is informative solely for polymorphic pins.
+            let needs_resolution = !matches!(
+                &pin_def.data_type,
+                crate::structure_designer::node_type::PinOutputType::Fixed(_)
+            );
             let (resolved_data_type, resolved_via_fallback) = if needs_resolution {
                 match cad_instance
                     .structure_designer
