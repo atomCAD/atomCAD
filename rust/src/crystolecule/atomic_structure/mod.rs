@@ -511,6 +511,15 @@ impl AtomicStructure {
 
     /// Delete a bond by BondReference
     pub fn delete_bond(&mut self, bond_ref: &BondReference) {
+        // Only adjust the unique-bond count if the bond actually exists. Callers
+        // (e.g. atom_edit's diff-view delete) may request deletion of a bond
+        // whose endpoint atoms were already removed in the same operation, in
+        // which case there is nothing to remove. Decrementing unconditionally
+        // underflows `num_bonds` (a `usize`), which later blows up a Vec
+        // allocation ("capacity overflow") when the tessellator sizes its bond
+        // buffers from `get_num_of_bonds()`. See issue #385.
+        let bond_existed = self.has_bond_between(bond_ref.atom_id1, bond_ref.atom_id2);
+
         // Remove bond from first atom
         if let Some(atom1) = self.get_atom_mut(bond_ref.atom_id1) {
             atom1
@@ -525,7 +534,9 @@ impl AtomicStructure {
                 .retain(|bond| bond.other_atom_id() != bond_ref.atom_id1);
         }
 
-        self.num_bonds -= 1; // Decrement unique bond count
+        if bond_existed {
+            self.num_bonds -= 1; // Decrement unique bond count
+        }
 
         // Remove from selected bonds
         self.decorator.deselect_bond(bond_ref);

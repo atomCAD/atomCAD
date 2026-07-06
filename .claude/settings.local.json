@@ -294,7 +294,9 @@
       "Bash(sed -i '1728,1928d' src/api/structure_designer/atom_edit_api.rs)",
       "Bash(sed -i '/^use crate::api::api_common::to_api_vec3;$/d' src/api/structure_designer/atom_edit_api.rs)",
       "Bash(bash /tmp/count_analysis.sh)",
-      "Bash(rg *)"
+      "Bash(rg *)",
+      "Bash(cargo run *)",
+      "Bash(FREEZE_BOTTOM=1 cargo run -j 4 --example debug_relax)"
     ]
   }
 }

@@ -264,6 +264,54 @@ fn test_delete_bond_removes_from_both_atoms() {
     assert!(!atom2.bonds.iter().any(|b| b.other_atom_id() == id1));
 }
 
+/// Regression for issue #385: deleting a bond that does not exist must not
+/// decrement `num_bonds`. An unconditional decrement underflows the `usize`
+/// counter to `usize::MAX`, which later panics with "capacity overflow" when
+/// the tessellator reserves bond buffers sized from `get_num_of_bonds()`.
+#[test]
+fn test_delete_nonexistent_bond_does_not_underflow_count() {
+    let mut structure = AtomicStructure::new();
+    let id1 = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let id2 = structure.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    // No bond added between id1 and id2.
+    assert_eq!(structure.get_num_of_bonds(), 0);
+
+    let bond_ref = BondReference {
+        atom_id1: id1,
+        atom_id2: id2,
+    };
+    structure.delete_bond(&bond_ref);
+
+    // Count must stay 0, not underflow to usize::MAX.
+    assert_eq!(structure.get_num_of_bonds(), 0);
+}
+
+/// Regression for issue #385: deleting a bond whose endpoint atoms have already
+/// been removed (the exact atom_edit diff-view delete scenario — a bond and its
+/// endpoint atoms selected together) must not double-decrement `num_bonds`.
+#[test]
+fn test_delete_bond_after_endpoints_deleted_keeps_count_consistent() {
+    let mut structure = AtomicStructure::new();
+    let id1 = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let id2 = structure.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    structure.add_bond(id1, id2, 1);
+    assert_eq!(structure.get_num_of_bonds(), 1);
+
+    // Deleting an endpoint atom removes the bond and its count.
+    structure.delete_atom(id1);
+    assert_eq!(structure.get_num_of_bonds(), 0);
+
+    // Now delete the (already-gone) bond, as diff-view delete does.
+    let bond_ref = BondReference {
+        atom_id1: id1,
+        atom_id2: id2,
+    };
+    structure.delete_bond(&bond_ref);
+
+    // Count must stay 0, not underflow.
+    assert_eq!(structure.get_num_of_bonds(), 0);
+}
+
 #[test]
 fn test_bond_reference_equality() {
     let ref1 = BondReference {
