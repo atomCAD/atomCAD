@@ -58,8 +58,9 @@ void showNodeDescriptionDialog(BuildContext context, String nodeTypeName) {
   );
 }
 
-/// Dialog that displays the node type description, rendered as Markdown.
-class _DescriptionDialog extends StatelessWidget {
+/// Dialog that displays the node type description, rendered as Markdown, with a
+/// simple find bar that scrolls to matches.
+class _DescriptionDialog extends StatefulWidget {
   final String nodeTypeName;
   final String description;
 
@@ -69,12 +70,126 @@ class _DescriptionDialog extends StatelessWidget {
   });
 
   @override
+  State<_DescriptionDialog> createState() => _DescriptionDialogState();
+}
+
+class _DescriptionDialogState extends State<_DescriptionDialog> {
+  final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
+
+  /// The description split into renderable blocks (paragraphs / code fences /
+  /// headings), each with its own [GlobalKey] so the find bar can scroll the
+  /// block containing a match into view.
+  late final List<String> _blocks;
+  late final List<GlobalKey> _blockKeys;
+
+  String _query = '';
+
+  /// For each match occurrence (in document order), the index of the block it
+  /// lives in. Length is the total match count; index into it with
+  /// [_currentMatch].
+  List<int> _matchBlocks = const [];
+  int _currentMatch = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _blocks = _splitIntoBlocks(widget.description);
+    _blockKeys = List.generate(_blocks.length, (_) => GlobalKey());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// Splits Markdown into blocks on blank lines, but never inside a fenced code
+  /// block (so a ``` example stays intact). Matches the paragraph boundaries a
+  /// reader perceives, which is the granularity the find bar scrolls to.
+  static List<String> _splitIntoBlocks(String src) {
+    final blocks = <String>[];
+    final current = <String>[];
+    var inFence = false;
+    for (final line in src.split('\n')) {
+      if (line.trimLeft().startsWith('```')) {
+        inFence = !inFence;
+      }
+      if (line.trim().isEmpty && !inFence) {
+        if (current.isNotEmpty) {
+          blocks.add(current.join('\n'));
+          current.clear();
+        }
+      } else {
+        current.add(line);
+      }
+    }
+    if (current.isNotEmpty) {
+      blocks.add(current.join('\n'));
+    }
+    return blocks;
+  }
+
+  void _onQueryChanged(String query) {
+    setState(() {
+      _query = query;
+      final matches = <int>[];
+      if (query.isNotEmpty) {
+        final needle = query.toLowerCase();
+        for (var i = 0; i < _blocks.length; i++) {
+          final hay = _blocks[i].toLowerCase();
+          var from = 0;
+          while (true) {
+            final idx = hay.indexOf(needle, from);
+            if (idx < 0) break;
+            matches.add(i);
+            from = idx + needle.length;
+          }
+        }
+      }
+      _matchBlocks = matches;
+      _currentMatch = 0;
+    });
+    _scrollToCurrentMatch();
+  }
+
+  void _step(int delta) {
+    if (_matchBlocks.isEmpty) return;
+    setState(() {
+      _currentMatch =
+          (_currentMatch + delta) % _matchBlocks.length;
+      if (_currentMatch < 0) _currentMatch += _matchBlocks.length;
+    });
+    _scrollToCurrentMatch();
+  }
+
+  void _scrollToCurrentMatch() {
+    if (_matchBlocks.isEmpty) return;
+    final key = _blockKeys[_matchBlocks[_currentMatch]];
+    // Defer to after the frame so the keyed block has a live context.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = key.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          alignment: 0.1, // near the top of the viewport
+        );
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Size the content area relative to the window so long references (like the
     // expr language cheat sheet) get room to breathe, while short one-paragraph
     // descriptions still render in a compact box (the Column is min-sized).
     final media = MediaQuery.of(context);
     final maxContentHeight = media.size.height * 0.7;
+    final styleSheet = buildDescriptionMarkdownStyleSheet(context);
+    final hasDescription = widget.description.isNotEmpty;
 
     return DraggableDialog(
       backgroundColor: Colors.grey[900]!,
@@ -91,7 +206,7 @@ class _DescriptionDialog extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    nodeTypeName,
+                    widget.nodeTypeName,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -109,6 +224,10 @@ class _DescriptionDialog extends StatelessWidget {
                 ),
               ],
             ),
+            if (hasDescription) ...[
+              const SizedBox(height: 8),
+              _buildFindBar(),
+            ],
             const SizedBox(height: 12),
             // Description body, rendered as Markdown. Wrapped in a
             // SelectionArea so text can be selected contiguously across
@@ -120,11 +239,23 @@ class _DescriptionDialog extends StatelessWidget {
                 constraints: BoxConstraints(maxHeight: maxContentHeight),
                 child: SelectionArea(
                   child: SingleChildScrollView(
-                    child: description.isNotEmpty
-                        ? MarkdownBody(
-                            data: description,
-                            styleSheet:
-                                buildDescriptionMarkdownStyleSheet(context),
+                    controller: _scrollController,
+                    child: hasDescription
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (var i = 0; i < _blocks.length; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: KeyedSubtree(
+                                    key: _blockKeys[i],
+                                    child: MarkdownBody(
+                                      data: _blocks[i],
+                                      styleSheet: styleSheet,
+                                    ),
+                                  ),
+                                ),
+                            ],
                           )
                         : const Text(
                             'No description available.',
@@ -141,6 +272,84 @@ class _DescriptionDialog extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFindBar() {
+    final hasQuery = _query.isNotEmpty;
+    final hasMatches = _matchBlocks.isNotEmpty;
+    final String countLabel;
+    if (!hasQuery) {
+      countLabel = '';
+    } else if (!hasMatches) {
+      countLabel = 'No matches';
+    } else {
+      countLabel = '${_currentMatch + 1} / ${_matchBlocks.length}';
+    }
+
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 34,
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onQueryChanged,
+              onSubmitted: (_) => _step(1),
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: Colors.black.withValues(alpha: 0.3),
+                hintText: 'Find in description…',
+                hintStyle: const TextStyle(color: Colors.white38),
+                prefixIcon: const Icon(Icons.search,
+                    size: 16, color: Colors.white54),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 32, minHeight: 32),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  borderSide: BorderSide(color: Colors.grey[700]!),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(4),
+                  borderSide: BorderSide(color: Colors.grey[700]!),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 68,
+          child: Text(
+            countLabel,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: (hasQuery && !hasMatches)
+                  ? Colors.orange[300]
+                  : Colors.white54,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_arrow_up),
+          iconSize: 20,
+          color: Colors.white70,
+          tooltip: 'Previous match',
+          onPressed: hasMatches ? () => _step(-1) : null,
+        ),
+        IconButton(
+          icon: const Icon(Icons.keyboard_arrow_down),
+          iconSize: 20,
+          color: Colors.white70,
+          tooltip: 'Next match',
+          onPressed: hasMatches ? () => _step(1) : null,
+        ),
+      ],
     );
   }
 }
