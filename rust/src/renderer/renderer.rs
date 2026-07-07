@@ -28,16 +28,17 @@ struct CameraUniform {
     _padding0: u32,
 
     head_light_dir: [f32; 3],
-    _padding1: u32,
 
-    // Orthographic rendering flag (1.0 = orthographic, 0.0 = perspective)
+    // Orthographic rendering flag (1.0 = orthographic, 0.0 = perspective).
+    // No padding before this field: in WGSL the f32 following a vec3<f32>
+    // packs into the vec3's 4-byte tail slot, so it must do the same here.
     is_orthographic: f32,
 
     // Half height for orthographic projection (used for zoom level)
     ortho_half_height: f32,
 
-    // Additional padding to maintain 16-byte alignment
-    _padding2: [u32; 2],
+    // Additional padding to maintain 16-byte struct alignment
+    _padding1: [u32; 3],
 }
 
 impl CameraUniform {
@@ -49,10 +50,9 @@ impl CameraUniform {
             camera_position: Vec3::new(0.0, 0.0, 0.0).to_array(),
             _padding0: 0,
             head_light_dir: Vec3::new(0.0, -1.0, 0.0).to_array(),
-            _padding1: 0,
             is_orthographic: 0.0,    // Default to perspective mode
             ortho_half_height: 10.0, // Default orthographic half height
-            _padding2: [0, 0],
+            _padding1: [0, 0, 0],
         }
     }
 

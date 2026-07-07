@@ -38,6 +38,25 @@ struct BondImpostorVertexOutput {
 }
 
 // ============================================================================
+// Camera Helper Functions
+// ============================================================================
+
+// Points from the scene toward the eye (right-handed view space +Z),
+// extracted from the view matrix rows.
+fn camera_backward() -> vec3<f32> {
+    return vec3<f32>(camera.view_matrix[0][2], camera.view_matrix[1][2], camera.view_matrix[2][2]);
+}
+
+// Direction from a surface point toward the viewer. In orthographic mode all
+// view rays are parallel, so the eye position must not be used per-point.
+fn camera_view_vector(world_position: vec3<f32>) -> vec3<f32> {
+    if camera.is_orthographic > 0.5 {
+        return camera_backward();
+    }
+    return normalize(camera.camera_position - world_position);
+}
+
+// ============================================================================
 // Math Helper Functions
 // ============================================================================
 
@@ -138,9 +157,9 @@ fn calculate_bond_lighting(
     color: vec3<f32>
 ) -> vec3<f32> {
     let N = normalize(normal);
-    let V = normalize(camera.camera_position - world_position);
+    let V = camera_view_vector(world_position);
     let L = normalize(-camera.head_light_dir);
-    
+
     // Simple Lambertian diffuse + ambient
     let NdotL = max(dot(N, L), 0.0);
     let diffuse = color * NdotL;
@@ -202,7 +221,7 @@ fn calculate_pbr_lighting(
     metallic: f32
 ) -> vec3<f32> {
     let N = normalize(normal);
-    let V = normalize(camera.camera_position - world_position);
+    let V = camera_view_vector(world_position);
     let L = normalize(-camera.head_light_dir);
     let H = normalize(V + L);
 
@@ -267,8 +286,14 @@ fn vs_main(input: BondImpostorVertexInput) -> BondImpostorVertexOutput {
     let bond_length = length(bond_vector);
     let bond_dir = bond_vector / bond_length;
     
-    // Calculate camera forward direction (from bond center to camera)
-    let camera_forward = normalize(camera.camera_position - bond_center);
+    // Calculate camera forward direction (from bond center to camera).
+    // Orthographic projection has no per-bond eye direction; use the shared one.
+    var camera_forward: vec3<f32>;
+    if camera.is_orthographic > 0.5 {
+        camera_forward = camera_backward();
+    } else {
+        camera_forward = normalize(camera.camera_position - bond_center);
+    }
     
     // Create billboard vectors - right is perpendicular to both bond and camera direction
     let right = normalize(cross(bond_dir, camera_forward));
@@ -316,8 +341,18 @@ fn fs_main(input: BondImpostorVertexOutput) -> BondFragmentOutput {
     // Ray-cylinder intersection approach (mathematically correct)
     
     // Step 1: Set up ray
-    let ray_origin = camera.camera_position;
-    let ray_dir = normalize(input.world_position - ray_origin);
+    var ray_origin: vec3<f32>;
+    var ray_dir: vec3<f32>;
+    if camera.is_orthographic > 0.5 {
+        // Parallel rays. The quad plane contains the cylinder axis, so start
+        // the ray one diameter behind the fragment to keep intersections at
+        // positive t for the selection logic below.
+        ray_dir = -camera_backward();
+        ray_origin = input.world_position - ray_dir * (input.radius * 2.0);
+    } else {
+        ray_origin = camera.camera_position;
+        ray_dir = normalize(input.world_position - ray_origin);
+    }
     
     // Step 2: Define cylinder parameters
     let cylinder_start = input.world_start;

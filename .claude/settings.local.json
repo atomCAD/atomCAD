@@ -296,7 +296,11 @@
       "Bash(bash /tmp/count_analysis.sh)",
       "Bash(rg *)",
       "Bash(cargo run *)",
-      "Bash(FREEZE_BOTTOM=1 cargo run -j 4 --example debug_relax)"
+      "Bash(FREEZE_BOTTOM=1 cargo run -j 4 --example debug_relax)",
+      "Bash(flutter run *)",
+      "Bash(./build/windows/x64/runner/Debug/atomCAD.exe *)",
+      "Bash(tasklist //FI \"IMAGENAME eq atomCAD.exe\")",
+      "Bash(netstat -ano)"
     ]
   }
 }

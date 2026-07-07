@@ -42,6 +42,34 @@ struct AtomImpostorVertexOutput {
 }
 
 // ============================================================================
+// Camera Helper Functions
+// ============================================================================
+
+// Camera basis vectors in world space, extracted from the view matrix rows
+// (the rotation part of a look-at matrix stores the camera axes as rows).
+fn camera_right() -> vec3<f32> {
+    return vec3<f32>(camera.view_matrix[0][0], camera.view_matrix[1][0], camera.view_matrix[2][0]);
+}
+
+fn camera_up() -> vec3<f32> {
+    return vec3<f32>(camera.view_matrix[0][1], camera.view_matrix[1][1], camera.view_matrix[2][1]);
+}
+
+// Points from the scene toward the eye (right-handed view space +Z).
+fn camera_backward() -> vec3<f32> {
+    return vec3<f32>(camera.view_matrix[0][2], camera.view_matrix[1][2], camera.view_matrix[2][2]);
+}
+
+// Direction from a surface point toward the viewer. In orthographic mode all
+// view rays are parallel, so the eye position must not be used per-point.
+fn camera_view_vector(world_position: vec3<f32>) -> vec3<f32> {
+    if camera.is_orthographic > 0.5 {
+        return camera_backward();
+    }
+    return normalize(camera.camera_position - world_position);
+}
+
+// ============================================================================
 // PBR Helper Functions (copied from mesh.wgsl)
 // ============================================================================
 
@@ -81,7 +109,7 @@ fn calculate_pbr_lighting(
     metallic: f32
 ) -> vec3<f32> {
     let N = normalize(normal);
-    let V = normalize(camera.camera_position - world_position);
+    let V = camera_view_vector(world_position);
     let L = normalize(-camera.head_light_dir);
     let H = normalize(V + L);
 
@@ -137,16 +165,20 @@ fn vs_main(input: AtomImpostorVertexInput) -> AtomImpostorVertexOutput {
     // Transform atom center to world space
     let world_center = (model.model_matrix * vec4<f32>(input.center_position, 1.0)).xyz;
     
-    // Extract camera right and up vectors from view matrix
-    // The view_proj matrix is view * projection, so we need to extract from the view part
-    // We can get the inverse view matrix vectors by using the transpose approach
-    // For now, let's calculate them manually from camera position
-    let view_dir = normalize(camera.camera_position - world_center);
-    
-    // Use the same robust method as before but simpler
-    let world_up = vec3<f32>(0.0, 1.0, 0.0);
-    let right = normalize(cross(world_up, view_dir));
-    let up = normalize(cross(view_dir, right));
+    var right: vec3<f32>;
+    var up: vec3<f32>;
+    if camera.is_orthographic > 0.5 {
+        // Parallel projection: every quad must face the shared view direction.
+        // A per-atom eye-facing billboard tilts off-axis quads and breaks the
+        // ray-cast coverage. The view matrix rows give a non-degenerate basis.
+        right = camera_right();
+        up = camera_up();
+    } else {
+        let view_dir = normalize(camera.camera_position - world_center);
+        let world_up = vec3<f32>(0.0, 1.0, 0.0);
+        right = normalize(cross(world_up, view_dir));
+        up = normalize(cross(view_dir, right));
+    }
     
     // Create camera-facing billboard quad
     // Pad quad beyond sphere radius so edge fragments (where rim is strongest)
@@ -187,8 +219,18 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     }
 
     // Ray-sphere intersection using view space for better precision (following reference)
-    let ray_origin = camera.camera_position;
-    let ray_dir = normalize(input.world_position - ray_origin);
+    var ray_origin: vec3<f32>;
+    var ray_dir: vec3<f32>;
+    if camera.is_orthographic > 0.5 {
+        // Parallel rays. The quad plane passes through the sphere center, so
+        // start the ray one diameter behind the fragment to keep both
+        // intersections at positive t for the selection logic below.
+        ray_dir = -camera_backward();
+        ray_origin = input.world_position - ray_dir * (input.radius * 2.0);
+    } else {
+        ray_origin = camera.camera_position;
+        ray_dir = normalize(input.world_position - ray_origin);
+    }
 
     // Optimized ray-sphere intersection (following reference)
     let oc = input.world_center - ray_origin;
@@ -226,7 +268,7 @@ fn fs_main(input: AtomImpostorVertexOutput) -> AtomFragmentOutput {
     let depth = hit_clip.z / hit_clip.w;
 
     // Rim highlight: blend rim color into albedo before PBR so the rim is lit
-    let V = normalize(camera.camera_position - hit_point);
+    let V = camera_view_vector(hit_point);
     let NdotV = max(dot(world_normal, V), 0.0);
     let rim_start = 0.18;
     let rim_full = 0.22;
