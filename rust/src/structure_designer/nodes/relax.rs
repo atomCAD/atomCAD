@@ -110,8 +110,12 @@ impl NodeData for RelaxData {
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "relax".to_string(),
-        description: "".to_string(),
-        summary: None,
+        description: "Relaxes an atomic structure toward a local energy minimum using the \
+            UFF (Universal Force Field). Accepts a `Crystal` or `Molecule` and returns the \
+            same kind with atom positions adjusted; bonds and elements are unchanged. Atoms \
+            marked **frozen** are held fixed and act as boundary constraints for the rest."
+            .to_string(),
+        summary: Some("UFF energy minimization".to_string()),
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![Parameter {
             id: None,

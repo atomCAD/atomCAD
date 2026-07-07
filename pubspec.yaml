@@ -53,6 +53,7 @@ dependencies:
   args: ^2.4.0
   http: ^1.1.0
   freezed_annotation: ^3.1.0
+  flutter_markdown_plus: ^1.0.3
 
 dev_dependencies:
   flutter_test:

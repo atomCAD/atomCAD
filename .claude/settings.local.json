@@ -300,7 +300,9 @@
       "Bash(flutter run *)",
       "Bash(./build/windows/x64/runner/Debug/atomCAD.exe *)",
       "Bash(tasklist //FI \"IMAGENAME eq atomCAD.exe\")",
-      "Bash(netstat -ano)"
+      "Bash(netstat -ano)",
+      "Read(//c/Users/Ádám Nagy/AppData/Local/Pub/Cache/hosted/**)",
+      "Bash(find /c -maxdepth 6 -path '*flutter_markdown_plus*/lib/flutter_markdown_plus.dart')"
     ]
   }
 }

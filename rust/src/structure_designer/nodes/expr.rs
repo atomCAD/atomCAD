@@ -385,31 +385,13 @@ pub fn get_node_type() -> NodeType {
 
 ## Defining Input Parameters
 
-The `parameters` property defines which variables can be used in the expression. Each parameter becomes an input pin on the node.
-
-**Text format syntax:**
-```
-# Default: single parameter 'x' of type Int
-result = expr { expression: "x * 2", x: some_int_node }
-
-# Multiple parameters: must specify the parameters array
-result = expr {
-  expression: "a + b",
-  parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }],
-  a: node1,
-  b: node2
-}
-```
+The `parameters` property defines which variables can be used in the expression. Each parameter becomes an input pin on the node. In the node editor UI, input pins can be added dynamically via the node's property panel.
 
 **Available data types:** Int, Float, Bool, Vec2, Vec3, IVec2, IVec3
-
-In the node editor UI, input pins can be added dynamically via the node's property panel.
 
 ## Expression Language Features
 
 The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
-
-## Expression Language Features
 
 ### Literals
 - Integer literals (e.g., `42`, `-10`)
@@ -475,14 +457,16 @@ Integers and integer vectors automatically promote to floats and float vectors w
   array types.
 
 Examples:
-  [1, 2, 3]                          // Array[Int]
-  [1, 2.0]                           // Array[Float] (Int promoted)
-  [ivec3(1,2,3), ivec3(4,5,6)]       // Array[IVec3]
-  []IVec3                            // empty Array[IVec3]
-  []Structure                        // empty Array[Structure]
-  [][IVec3]                          // empty Array[Array[IVec3]]
-  [][[Int]]                          // empty Array[Array[Array[Int]]]
-  [[]Int]                            // 1-element Array[Array[Int]] containing one empty Array[Int]
+```
+[1, 2, 3]                          // Array[Int]
+[1, 2.0]                           // Array[Float] (Int promoted)
+[ivec3(1,2,3), ivec3(4,5,6)]       // Array[IVec3]
+[]IVec3                            // empty Array[IVec3]
+[]Structure                        // empty Array[Structure]
+[][IVec3]                          // empty Array[Array[IVec3]]
+[][[Int]]                          // empty Array[Array[Array[Int]]]
+[[]Int]                            // 1-element Array[Array[Int]] containing one empty Array[Int]
+```
 
 The leading `[]` marks an empty-array literal; the trailing TypeExpr declares the
 element type. The abstract supertypes HasAtoms, HasStructure, HasFreeLinOps are
@@ -493,26 +477,32 @@ types in the position immediately after `[]`, so naming a parameter after a type
 ### String Template Literals
 
 Build a String value with optional interpolation:
-
-  `text-only literal`                      // String
-  `${x}`                                   // stringification of x
-  `prefix-${x}-suffix`                     // mixed
-  `${a.species}_${a.size}.xyz`             // record-field interpolation
+```
+`text-only literal`                      // String
+`${x}`                                   // stringification of x
+`prefix-${x}-suffix`                     // mixed
+`${a.species}_${a.size}.xyz`             // record-field interpolation
+```
 
 Interpolation `${expr}` accepts String, Int, Float, or Bool. Anything else
 is a validation error.
 
 Stringification:
-  String → passthrough
-  Int    → decimal (e.g. -7, 42)
-  Float  → Rust default Display (e.g. 0.1, 3.14, 1)
-  Bool   → true / false
+```
+String → passthrough
+Int    → decimal (e.g. -7, 42)
+Float  → Rust default Display (e.g. 0.1, 3.14, 1)
+Bool   → true / false
+```
 
 Non-finite Float values (NaN, +inf, -inf) are rejected at evaluation time.
 
-Escapes: \` \\ \$ \n \t \r. Bare $ not followed by { is literal, so
-`cost: $5` works without escaping. To write a literal ${...}, escape the
-dollar: `\${literal}`.
+Supported escapes (inside a `` ` ``-delimited template):
+```
+\`  \\  \$  \n  \t  \r
+```
+A bare `$` not followed by `{` is literal, so `` `cost: $5` `` works without
+escaping. To write a literal `${...}`, escape the dollar as `\${...}`.
 
 ### Array Access
 
@@ -578,6 +568,23 @@ dot3(normalize3(a), normalize3(b))  // Normalized dot product
 sin(3.14159 / 4) * 2                // Trigonometry
 vec2(x, y).x + vec2(z, w).y         // Member access
 distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
+```
+
+## Text Format
+
+Most users define parameters and the expression through the property panel. When
+editing the node network as text instead, they are given inline:
+```
+# Default: single parameter 'x' of type Int
+result = expr { expression: "x * 2", x: some_int_node }
+
+# Multiple parameters: must specify the parameters array
+result = expr {
+  expression: "a + b",
+  parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }],
+  a: node1,
+  b: node2
+}
 ```"#.to_string(),
       summary: None,
       category: NodeTypeCategory::MathAndProgramming,

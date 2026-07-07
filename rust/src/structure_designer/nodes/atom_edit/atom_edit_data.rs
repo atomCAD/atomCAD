@@ -2402,23 +2402,26 @@ pub fn get_node_type() -> NodeType {
             (additions, deletions, replacements, moves) applied to the input structure. \
             Selection is transient and not serialized.\n\
             \n\
-            The 'diff' property uses a line-based text format:\n\
+            The `diff` property uses a line-based text format.\n\
             \n\
-            Atom lines:\n\
-            +C @ (1.0, 2.0, 3.0)                         # Add carbon atom at position\n\
+            **Atom lines:**\n\
+            ```\n\
+            +C @ (1.0, 2.0, 3.0)                          # Add carbon atom at position\n\
             - @ (4.0, 5.0, 6.0)                           # Delete atom at position\n\
             ~C @ (7.0, 8.0, 9.0)                          # Replace atom at position (e.g. Si->C)\n\
-            ~Si @ (7.0, 8.0, 9.0) [from (7.0, 8.5, 9.0)] # Move atom: Si at new pos, matched at old pos\n\
+            ~Si @ (7.0, 8.0, 9.0) [from (7.0, 8.5, 9.0)]  # Move atom: Si at new pos, matched at old pos\n\
+            ```\n\
+            The `~` prefix means the atom is expected to match a base atom (replacement or move). \
+            The `+` prefix means a new atom addition. Both use positional matching internally.\n\
             \n\
-            The ~ prefix means the atom is expected to match a base atom (replacement or move).\n\
-            The + prefix means a new atom addition. Both use positional matching internally.\n\
-            \n\
-            Bond lines (atom indices are 1-based, referencing atom line order above):\n\
-            bond 1-2 single                                # Add bond (single/double/triple/aromatic/...)\n\
-            unbond 3-4                                     # Delete bond between atoms 3 and 4\n\
-            \n\
+            **Bond lines** (atom indices are 1-based, referencing atom line order above):\n\
+            ```\n\
+            bond 1-2 single                               # Add bond (single/double/triple/aromatic/...)\n\
+            unbond 3-4                                    # Delete bond between atoms 3 and 4\n\
+            ```\n\
             Supported bond orders: single, double, triple, quadruple, aromatic, dative, metallic.\n\
-            Lines starting with # are comments. Blank lines are ignored."
+            \n\
+            Lines starting with `#` are comments. Blank lines are ignored."
             .to_string(),
         summary: Some("Edit atoms via diff".to_string()),
         category: NodeTypeCategory::AtomicStructure,

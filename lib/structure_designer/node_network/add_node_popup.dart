@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
 
 /// Keys for the Add Node Popup used in integration testing.
 class AddNodePopupKeys {
@@ -271,13 +273,14 @@ class _AddNodePopupState extends State<AddNodePopup> {
                                     if (_hoveredNode!
                                         .description.isNotEmpty) ...[
                                       SizedBox(height: 8),
-                                      Text(
+                                      MarkdownBody(
                                         key: AddNodePopupKeys.descriptionText,
-                                        _hoveredNode!.description,
-                                        style: TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 13,
-                                          height: 1.4,
+                                        data: _hoveredNode!.description,
+                                        selectable: true,
+                                        styleSheet:
+                                            buildDescriptionMarkdownStyleSheet(
+                                          context,
+                                          baseFontSize: 13,
                                         ),
                                       ),
                                     ],

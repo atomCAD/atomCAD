@@ -6,6 +6,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
 
 /// Editor widget for expression nodes
 class ExprEditor extends StatefulWidget {
@@ -195,6 +196,24 @@ class ExprEditorState extends State<ExprEditor> {
               maxLines: 12,
               minLines: 1,
               keyboardType: TextInputType.multiline,
+            ),
+          ),
+
+          // Discoverable entry point to the expression-language cheat sheet.
+          // Opens the same Markdown description dialog as the header ⓘ button,
+          // but labeled and placed right beside the expression field so users
+          // hunting for "which functions exist?" actually find it.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => showNodeDescriptionDialog(context, 'expr'),
+              icon: const Icon(Icons.menu_book_outlined, size: 16),
+              label: const Text('Syntax reference'),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
           ),
 
