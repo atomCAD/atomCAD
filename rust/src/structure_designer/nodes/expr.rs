@@ -547,6 +547,8 @@ dollar: `\${literal}`.
 
 ### Mathematical Functions
 - `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
+- `asin(x)`, `acos(x)`, `atan(x)` - Inverse trigonometric functions (result in radians; `asin`/`acos` reject arguments outside `[-1, 1]`)
+- `atan2(y, x)` - Quadrant-aware arc tangent of `y / x` (result in radians)
 - `sqrt(x)` - Square root
 - `abs(x)` - Absolute value (float)
 - `abs_int(x)` - Absolute value (integer)

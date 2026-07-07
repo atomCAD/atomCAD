@@ -345,6 +345,107 @@ mod evaluation_tests {
     }
 
     #[test]
+    fn test_function_call_asin() {
+        let expr = Expr::Call("asin".to_string(), vec![Expr::Float(1.0)]);
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Float(val) => assert!((val - std::f64::consts::FRAC_PI_2).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_asin_out_of_range() {
+        let expr = Expr::Call("asin".to_string(), vec![Expr::Float(1.5)]);
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Error(msg) => assert!(msg.contains("asin() argument out of range")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_acos() {
+        let expr = Expr::Call("acos".to_string(), vec![Expr::Float(-1.0)]);
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Float(val) => assert!((val - std::f64::consts::PI).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_acos_out_of_range() {
+        let expr = Expr::Call("acos".to_string(), vec![Expr::Float(-1.5)]);
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Error(msg) => assert!(msg.contains("acos() argument out of range")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_atan() {
+        let expr = Expr::Call("atan".to_string(), vec![Expr::Float(1.0)]);
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Float(val) => assert!((val - std::f64::consts::FRAC_PI_4).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_atan2() {
+        // atan2(y, x): atan2(1, 1) = π/4
+        let expr = Expr::Call(
+            "atan2".to_string(),
+            vec![Expr::Float(1.0), Expr::Float(1.0)],
+        );
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Float(val) => assert!((val - std::f64::consts::FRAC_PI_4).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_atan2_quadrant() {
+        // atan2 resolves the quadrant: atan2(1, -1) = 3π/4
+        let expr = Expr::Call(
+            "atan2".to_string(),
+            vec![Expr::Float(1.0), Expr::Float(-1.0)],
+        );
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        let result = expr.evaluate(&variables, functions);
+        match result {
+            NetworkResult::Float(val) => {
+                assert!((val - 3.0 * std::f64::consts::FRAC_PI_4).abs() < 1e-10)
+            }
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
     fn test_function_call_sqrt() {
         let expr = Expr::Call("sqrt".to_string(), vec![Expr::Float(16.0)]);
         let variables = HashMap::new();

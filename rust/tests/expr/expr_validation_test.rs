@@ -128,6 +128,33 @@ mod validation_tests {
     }
 
     #[test]
+    fn test_inverse_trig_function_validation() {
+        let variables = HashMap::new();
+        for name in ["asin", "acos", "atan"] {
+            let expr = Expr::Call(name.to_string(), vec![Expr::Float(0.5)]);
+            let result = expr.validate(&variables, get_function_signatures());
+            assert_eq!(result, Ok(DataType::Float), "{}", name);
+        }
+
+        let expr = Expr::Call(
+            "atan2".to_string(),
+            vec![Expr::Float(1.0), Expr::Float(2.0)],
+        );
+        let result = expr.validate(&variables, get_function_signatures());
+        assert_eq!(result, Ok(DataType::Float));
+    }
+
+    #[test]
+    fn test_atan2_validation_wrong_arg_count() {
+        let expr = Expr::Call("atan2".to_string(), vec![Expr::Float(1.0)]);
+        let variables = HashMap::new();
+
+        let result = expr.validate(&variables, get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects 2 arguments, got 1"));
+    }
+
+    #[test]
     fn test_function_call_validation_unknown_function() {
         let expr = Expr::Call("unknown_func".to_string(), vec![Expr::Float(1.0)]);
         let variables = HashMap::new();

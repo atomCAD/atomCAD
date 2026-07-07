@@ -62,6 +62,22 @@ fn create_standard_function_signatures() -> HashMap<String, FunctionSignature> {
         FunctionSignature::new(vec![DataType::Float], DataType::Float),
     );
     functions.insert(
+        "asin".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "acos".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "atan".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "atan2".to_string(),
+        FunctionSignature::new(vec![DataType::Float, DataType::Float], DataType::Float),
+    );
+    functions.insert(
         "sqrt".to_string(),
         FunctionSignature::new(vec![DataType::Float], DataType::Float),
     );
@@ -277,6 +293,73 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             match args[0].clone().extract_float() {
                 Some(val) => NetworkResult::Float(val.tan()),
                 None => NetworkResult::Error("tan() requires a float argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "asin".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("asin() requires exactly 1 argument".to_string());
+            }
+            match args[0].clone().extract_float() {
+                Some(val) => {
+                    if !(-1.0..=1.0).contains(&val) {
+                        NetworkResult::Error("asin() argument out of range [-1, 1]".to_string())
+                    } else {
+                        NetworkResult::Float(val.asin())
+                    }
+                }
+                None => NetworkResult::Error("asin() requires a float argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "acos".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("acos() requires exactly 1 argument".to_string());
+            }
+            match args[0].clone().extract_float() {
+                Some(val) => {
+                    if !(-1.0..=1.0).contains(&val) {
+                        NetworkResult::Error("acos() argument out of range [-1, 1]".to_string())
+                    } else {
+                        NetworkResult::Float(val.acos())
+                    }
+                }
+                None => NetworkResult::Error("acos() requires a float argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "atan".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("atan() requires exactly 1 argument".to_string());
+            }
+            match args[0].clone().extract_float() {
+                Some(val) => NetworkResult::Float(val.atan()),
+                None => NetworkResult::Error("atan() requires a float argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "atan2".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 2 {
+                return NetworkResult::Error("atan2() requires exactly 2 arguments".to_string());
+            }
+            match (
+                args[0].clone().extract_float(),
+                args[1].clone().extract_float(),
+            ) {
+                (Some(y), Some(x)) => NetworkResult::Float(y.atan2(x)),
+                _ => NetworkResult::Error("atan2() requires float arguments".to_string()),
             }
         }) as EvaluationFunction,
     );
