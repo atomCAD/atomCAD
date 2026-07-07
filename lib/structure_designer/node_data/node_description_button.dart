@@ -110,25 +110,31 @@ class _DescriptionDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            // Description body, rendered as Markdown.
+            // Description body, rendered as Markdown. Wrapped in a
+            // SelectionArea so text can be selected contiguously across
+            // paragraphs and code blocks (MarkdownBody's own per-widget
+            // `selectable` only allows selecting within a single block, and
+            // conflicts with SelectionArea, so it is left off here).
             Flexible(
               child: ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: maxContentHeight),
-                child: SingleChildScrollView(
-                  child: description.isNotEmpty
-                      ? MarkdownBody(
-                          data: description,
-                          selectable: true,
-                          styleSheet: buildDescriptionMarkdownStyleSheet(context),
-                        )
-                      : const Text(
-                          'No description available.',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                            height: 1.5,
+                child: SelectionArea(
+                  child: SingleChildScrollView(
+                    child: description.isNotEmpty
+                        ? MarkdownBody(
+                            data: description,
+                            styleSheet:
+                                buildDescriptionMarkdownStyleSheet(context),
+                          )
+                        : const Text(
+                            'No description available.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                              height: 1.5,
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
             ),

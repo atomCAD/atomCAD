@@ -257,34 +257,36 @@ class _AddNodePopupState extends State<AddNodePopup> {
                               onExit: (_) => setState(() {
                                 _hoveredNode = null;
                               }),
-                              child: SingleChildScrollView(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      key: AddNodePopupKeys.descriptionTitle,
-                                      _hoveredNode!.name,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    if (_hoveredNode!
-                                        .description.isNotEmpty) ...[
-                                      SizedBox(height: 8),
-                                      MarkdownBody(
-                                        key: AddNodePopupKeys.descriptionText,
-                                        data: _hoveredNode!.description,
-                                        selectable: true,
-                                        styleSheet:
-                                            buildDescriptionMarkdownStyleSheet(
-                                          context,
-                                          baseFontSize: 13,
+                              child: SelectionArea(
+                                child: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        key: AddNodePopupKeys.descriptionTitle,
+                                        _hoveredNode!.name,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
+                                      if (_hoveredNode!
+                                          .description.isNotEmpty) ...[
+                                        SizedBox(height: 8),
+                                        MarkdownBody(
+                                          key: AddNodePopupKeys.descriptionText,
+                                          data: _hoveredNode!.description,
+                                          styleSheet:
+                                              buildDescriptionMarkdownStyleSheet(
+                                            context,
+                                            baseFontSize: 13,
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
                             )
