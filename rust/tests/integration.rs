@@ -13,5 +13,8 @@ mod lattice_space_migration_test;
 #[path = "integration/iterator_migration_test.rs"]
 mod iterator_migration_test;
 
+#[path = "integration/degree_angle_migration_test.rs"]
+mod degree_angle_migration_test;
+
 #[path = "integration/patch_roundtrip_test.rs"]
 mod patch_roundtrip_test;

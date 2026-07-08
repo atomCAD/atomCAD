@@ -171,7 +171,7 @@ Rotates an unanchored object — a `Blueprint` or a `Molecule` — around an axi
 **Input pins**
 
 - `input: HasFreeLinOps` — the Blueprint or Molecule to rotate.
-- `angle: Float` (optional) — rotation angle in radians.
+- `angle: Float` (optional) — rotation angle in degrees. (Stored on the node as `angle_degrees`; the pin keeps the short name `angle`.)
 - `rot_axis: Vec3` (optional) — axis of rotation (will be normalized).
 - `pivot_point: Vec3` (optional) — pivot point, in ångströms. Defaults to the origin.
 

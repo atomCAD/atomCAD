@@ -5,8 +5,10 @@
 
 use glam::f64::{DVec2, DVec3};
 use std::collections::{HashMap, HashSet};
+use std::f64::consts::FRAC_PI_2;
 
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -15,6 +17,8 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
 };
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_network_gadget::NodeNetworkGadget;
+use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::free_rot::{FreeRotData, FreeRotGadget};
 use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
@@ -109,7 +113,81 @@ fn set_free_rot(
     data.pivot_point = DVec3::ZERO;
 }
 
+/// Add a top-level `expr` node computing `degrees(x)` (one `Float` parameter
+/// `x`). Mirrors the node the v5→v6 migration synthesizes on a wired angle pin.
+fn add_degrees_expr(designer: &mut StructureDesigner, network_name: &str) -> u64 {
+    let id = designer.add_node("expr", DVec2::new(150.0, 100.0));
+    let mut expr_data = ExprData {
+        parameters: vec![ExprParameter {
+            id: None,
+            name: "x".to_string(),
+            data_type: DataType::Float,
+            data_type_str: None,
+        }],
+        expression: "degrees(x)".to_string(),
+        expr: None,
+        error: None,
+        output_type: None,
+    };
+    let _ = expr_data.parse_and_validate(0);
+
+    let registry = &mut designer.node_type_registry;
+    let network = registry.node_networks.get_mut(network_name).unwrap();
+    let node = network.nodes.get_mut(&id).unwrap();
+    node.data = Box::new(expr_data);
+    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        &registry.built_in_node_types,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+        node,
+        true,
+    );
+    id
+}
+
 // ---- Eval semantics: the load-bearing assertion of the whole change ----
+
+/// The golden equivalence proof for the v5→v6 migration: a radian value that a
+/// pre-v6 file fed straight into `free_rot.angle` still produces the SAME
+/// rotation once the migration splices a `degrees(x)` node onto the wire. Builds
+/// the exact post-migration topology (`float(radians) → degrees(x) → free_rot`)
+/// and checks a known atom rotates by the original radian amount.
+#[test]
+fn synthesized_degrees_node_preserves_radian_era_rotation() {
+    let mut designer = setup_designer("t");
+    let src = add_single_atom_source(&mut designer, "t", DVec3::new(1.0, 0.0, 0.0));
+    let rot = designer.add_node("free_rot", DVec2::new(400.0, 0.0));
+    // Stored angle is irrelevant — the wire drives it.
+    set_free_rot(&mut designer, "t", rot, 0.0, DVec3::new(0.0, 0.0, 1.0));
+    designer.connect_nodes(src, 0, rot, 0);
+
+    // A pre-v6 file carried PI/2 *radians* on this wire.
+    let float_id = designer.add_node("float", DVec2::new(0.0, 150.0));
+    {
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("t")
+            .unwrap();
+        let node = network.nodes.get_mut(&float_id).unwrap();
+        let data = node.data.as_any_mut().downcast_mut::<FloatData>().unwrap();
+        data.value = FRAC_PI_2;
+    }
+
+    // The synthesized degrees(x) node converts radians → degrees on the wire.
+    let expr_id = add_degrees_expr(&mut designer, "t");
+    designer.connect_nodes(float_id, 0, expr_id, 0);
+    designer.connect_nodes(expr_id, 0, rot, 1);
+
+    // PI/2 radians → degrees → a quarter turn about Z: (1,0,0) → (0,1,0).
+    let pos = single_atom_position(evaluate_raw(&designer, "t", rot));
+    assert!(
+        (pos - DVec3::new(0.0, 1.0, 0.0)).length() < 1e-9,
+        "radian-era PI/2 through the synthesized degrees(x) node must still be a \
+         quarter turn: expected (0,1,0), got {:?}",
+        pos
+    );
+}
 
 #[test]
 fn free_rot_stored_angle_degrees_90_rotates_quarter_turn() {

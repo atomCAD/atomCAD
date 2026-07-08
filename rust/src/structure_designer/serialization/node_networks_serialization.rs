@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 5;
+const SERIALIZATION_VERSION: u32 = 6;
 
 /// Sentinel `data_type` written for custom (user-network) node instances. Their
 /// `node_type_name` is a key in `node_networks`, not `built_in_node_types`, so
@@ -868,17 +868,18 @@ pub fn load_node_networks_from_file(
 
     // Chained historical up-converters. Each pass runs only if the loaded
     // file pre-dates the version after that pass. A v2 file chains through
-    // both passes; a v3 file runs only v3→v4.
+    // all passes; a v3 file runs v3→v4 then v5→v6; a v5 file runs only v5→v6.
     //
-    // Note: there is no v4→v5 transform pass. The constant is held at
-    // `SERIALIZATION_VERSION = 5`, so a v4 (or v3-chained-to-v4) file has its
-    // in-memory version bumped to 5 below with no structural rewrite. The
-    // legacy main-branch function-pin idiom (a node's `-1` pin feeding an HOF
-    // `f` pin with some inputs wired as captures) loads directly: the custom
-    // `Argument` deserializer converts the wire storage shape, and the
-    // function-pin synthesizer (`build_node_function_closure`) reproduces the
-    // capture/parameter partition at evaluation time. See
+    // Note: there is no v4→v5 transform pass — v4 and v5 are structurally
+    // identical. The legacy main-branch function-pin idiom (a node's `-1` pin
+    // feeding an HOF `f` pin with some inputs wired as captures) loads
+    // directly: the custom `Argument` deserializer converts the wire storage
+    // shape, and the function-pin synthesizer (`build_node_function_closure`)
+    // reproduces the capture/parameter partition at evaluation time. See
     // `doc/design_node_function_pin_captures.md`.
+    //
+    // v5→v6 (issue #384): `free_rot`'s angle input switches radians → degrees.
+    // See `doc/design_degree_angle_inputs.md` and `migrate_v5_to_v6`.
     if version < 3 {
         super::migrate_v2_to_v3::migrate_v2_to_v3(&mut root_value).map_err(|e| {
             io::Error::new(
@@ -892,6 +893,14 @@ pub fn load_node_networks_from_file(
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("v3→v4 migration failed: {}", e),
+            )
+        })?;
+    }
+    if version < 6 {
+        super::migrate_v5_to_v6::migrate_v5_to_v6(&mut root_value).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("v5→v6 migration failed: {}", e),
             )
         })?;
     }
