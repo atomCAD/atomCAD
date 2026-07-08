@@ -77,6 +77,48 @@ fn create_standard_function_signatures() -> HashMap<String, FunctionSignature> {
         "atan2".to_string(),
         FunctionSignature::new(vec![DataType::Float, DataType::Float], DataType::Float),
     );
+
+    // Degree-based angle functions (issue #384). The classic trig functions
+    // above stay radian-based (standard math convention); these carry a `deg`
+    // suffix and convert at the boundary. `degrees` / `radians` are unit
+    // conversions. See doc/design_degree_angle_inputs.md.
+    functions.insert(
+        "degrees".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "radians".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "sindeg".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "cosdeg".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "tandeg".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "asindeg".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "acosdeg".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "atandeg".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "atan2deg".to_string(),
+        FunctionSignature::new(vec![DataType::Float, DataType::Float], DataType::Float),
+    );
+
     functions.insert(
         "sqrt".to_string(),
         FunctionSignature::new(vec![DataType::Float], DataType::Float),
@@ -374,6 +416,140 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             match (as_f64(&args[0]), as_f64(&args[1])) {
                 (Some(y), Some(x)) => NetworkResult::Float(y.atan2(x)),
                 _ => NetworkResult::Error("atan2() requires numeric arguments".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    // Degree-based angle functions (issue #384). All use the `as_f64`
+    // Int-coercing helper (not the strict `extract_float`) so an Int literal
+    // like `sindeg(90)` works at runtime, avoiding the known latent bug in
+    // sin/cos/tan. Domain errors return `Error` (no NaN propagation), matching
+    // the sqrt/asin precedent. See doc/design_degree_angle_inputs.md.
+    functions.insert(
+        "degrees".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("degrees() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.to_degrees()),
+                None => NetworkResult::Error("degrees() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "radians".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("radians() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.to_radians()),
+                None => NetworkResult::Error("radians() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "sindeg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("sindeg() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.to_radians().sin()),
+                None => NetworkResult::Error("sindeg() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "cosdeg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("cosdeg() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.to_radians().cos()),
+                None => NetworkResult::Error("cosdeg() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "tandeg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("tandeg() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.to_radians().tan()),
+                None => NetworkResult::Error("tandeg() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "asindeg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("asindeg() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => {
+                    if !(-1.0..=1.0).contains(&val) {
+                        NetworkResult::Error("asindeg() argument out of range [-1, 1]".to_string())
+                    } else {
+                        NetworkResult::Float(val.asin().to_degrees())
+                    }
+                }
+                None => NetworkResult::Error("asindeg() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "acosdeg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("acosdeg() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => {
+                    if !(-1.0..=1.0).contains(&val) {
+                        NetworkResult::Error("acosdeg() argument out of range [-1, 1]".to_string())
+                    } else {
+                        NetworkResult::Float(val.acos().to_degrees())
+                    }
+                }
+                None => NetworkResult::Error("acosdeg() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "atandeg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("atandeg() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.atan().to_degrees()),
+                None => NetworkResult::Error("atandeg() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    functions.insert(
+        "atan2deg".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 2 {
+                return NetworkResult::Error("atan2deg() requires exactly 2 arguments".to_string());
+            }
+            match (as_f64(&args[0]), as_f64(&args[1])) {
+                (Some(y), Some(x)) => NetworkResult::Float(y.atan2(x).to_degrees()),
+                _ => NetworkResult::Error("atan2deg() requires numeric arguments".to_string()),
             }
         }) as EvaluationFunction,
     );

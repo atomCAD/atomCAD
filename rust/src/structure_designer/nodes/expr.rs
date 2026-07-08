@@ -536,9 +536,13 @@ escaping. To write a literal `${...}`, escape the dollar as `\${...}`.
 - `icross(ivec3, ivec3)` - 3D integer cross product (returns ivec3)
 
 ### Mathematical Functions
-- `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
+- `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions (argument in radians)
 - `asin(x)`, `acos(x)`, `atan(x)` - Inverse trigonometric functions (result in radians; `asin`/`acos` reject arguments outside `[-1, 1]`)
 - `atan2(y, x)` - Quadrant-aware arc tangent of `y / x` (result in radians)
+- `sindeg(x)`, `cosdeg(x)`, `tandeg(x)` - Trigonometric functions with the argument in degrees
+- `asindeg(x)`, `acosdeg(x)`, `atandeg(x)` - Inverse trigonometric functions returning degrees (`asindeg`/`acosdeg` reject arguments outside `[-1, 1]`)
+- `atan2deg(y, x)` - Quadrant-aware arc tangent of `y / x`, result in degrees
+- `degrees(x)` - Convert radians to degrees; `radians(x)` - Convert degrees to radians
 - `sqrt(x)` - Square root
 - `exp(x)` - Exponential e^x
 - `log(x)` - Natural logarithm (ln); rejects x <= 0
@@ -549,6 +553,9 @@ escaping. To write a literal `${...}`, escape the dollar as `\${...}`.
 - `clamp(x, lo, hi)` - Constrain x to [lo, hi]; type-preserving
 - `sign(x)` - Three-way sign (-1, 0, +1); type-preserving
 - `lerp(a, b, t)` - Linear interpolation a + (b - a) * t (unclamped, Float)
+
+### Constants
+- `pi` - The constant π as a Float. A parameter of the same name shadows it.
 
 ### Operator Precedence (highest to lowest)
 1. Function calls, member access, parentheses

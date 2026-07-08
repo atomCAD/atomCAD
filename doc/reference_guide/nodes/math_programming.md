@@ -366,9 +366,14 @@ line2`                                           // also two lines — raw newli
 
 **Mathematical Functions:**
 
-- `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions
+- `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions (argument in radians)
 - `asin(x)`, `acos(x)`, `atan(x)` - Inverse trigonometric functions (result in radians; `asin`/`acos` reject arguments outside `[-1, 1]`)
 - `atan2(y, x)` - Quadrant-aware arc tangent of `y / x` (result in radians)
+- `sindeg(x)`, `cosdeg(x)`, `tandeg(x)` - Trigonometric functions with the argument in **degrees**
+- `asindeg(x)`, `acosdeg(x)`, `atandeg(x)` - Inverse trigonometric functions returning **degrees** (`asindeg`/`acosdeg` reject arguments outside `[-1, 1]`)
+- `atan2deg(y, x)` - Quadrant-aware arc tangent of `y / x`, result in **degrees**
+- `degrees(x)` - Convert radians to degrees
+- `radians(x)` - Convert degrees to radians
 - `sqrt(x)` - Square root
 - `exp(x)` - Exponential `e^x`
 - `log(x)` - Natural logarithm (`ln`); rejects `x <= 0`
@@ -387,6 +392,10 @@ These are **type-preserving** like the arithmetic operators — when every argum
 **Interpolation:**
 
 - `lerp(a, b, t)` - Linear interpolation `a + (b - a) * t`, always returning `Float`. `t` is **unclamped** (values outside `[0, 1]` extrapolate); wrap with `clamp(t, 0, 1)` to bound it.
+
+**Constants:**
+
+- `pi` - The constant π as a `Float` (`3.14159…`). A parameter of the same name shadows it.
 
 **Operator Precedence (highest to lowest):**
 1. Function calls, member access, parentheses

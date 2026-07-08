@@ -78,6 +78,16 @@ impl Expr {
             Expr::Var(name) => variables
                 .get(name)
                 .cloned()
+                // Fall back to the built-in `pi` constant. A parameter of the
+                // same name shadows it (the `variables` lookup wins). See
+                // doc/design_degree_angle_inputs.md.
+                .or_else(|| {
+                    if name == "pi" {
+                        Some(DataType::Float)
+                    } else {
+                        None
+                    }
+                })
                 .ok_or_else(|| format!("Unknown variable: {}", name)),
             Expr::Unary(op, expr) => {
                 let expr_type = expr.validate(variables, functions)?;
@@ -594,10 +604,15 @@ impl Expr {
             Expr::Int(n) => NetworkResult::Int(*n),
             Expr::Float(n) => NetworkResult::Float(*n),
             Expr::Bool(b) => NetworkResult::Bool(*b),
-            Expr::Var(name) => variables
-                .get(name)
-                .cloned()
-                .unwrap_or_else(|| NetworkResult::Error(format!("Unknown variable: {}", name))),
+            Expr::Var(name) => variables.get(name).cloned().unwrap_or_else(|| {
+                // Built-in `pi` constant; shadowed by a same-named parameter
+                // (the `variables` lookup above wins).
+                if name == "pi" {
+                    NetworkResult::Float(std::f64::consts::PI)
+                } else {
+                    NetworkResult::Error(format!("Unknown variable: {}", name))
+                }
+            }),
             Expr::Unary(op, expr) => {
                 let value = expr.evaluate(variables, functions);
                 if let NetworkResult::Error(_) = value {

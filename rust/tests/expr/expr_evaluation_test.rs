@@ -446,6 +446,149 @@ mod evaluation_tests {
     }
 
     #[test]
+    fn test_degree_functions_round_angles() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // sindeg(90) == 1.
+        match Expr::Call("sindeg".to_string(), vec![Expr::Float(90.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // cosdeg(180) == -1.
+        match Expr::Call("cosdeg".to_string(), vec![Expr::Float(180.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - -1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // tandeg(45) == 1.
+        match Expr::Call("tandeg".to_string(), vec![Expr::Float(45.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // asindeg(1) == 90.
+        match Expr::Call("asindeg".to_string(), vec![Expr::Float(1.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 90.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // acosdeg(-1) == 180.
+        match Expr::Call("acosdeg".to_string(), vec![Expr::Float(-1.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 180.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // atandeg(1) == 45.
+        match Expr::Call("atandeg".to_string(), vec![Expr::Float(1.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 45.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // atan2deg(1, 1) == 45.
+        match Expr::Call(
+            "atan2deg".to_string(),
+            vec![Expr::Float(1.0), Expr::Float(1.0)],
+        )
+        .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 45.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_degrees_radians_conversion() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // degrees(pi) == 180.
+        match Expr::Call("degrees".to_string(), vec![Expr::Var("pi".to_string())])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 180.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // radians(180) == pi.
+        match Expr::Call("radians".to_string(), vec![Expr::Float(180.0)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - std::f64::consts::PI).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_degree_functions_int_arg_coercion() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // sindeg(90) with an Int literal must coerce at runtime (the as_f64
+        // guard), not error like the latent sin/cos/tan Int bug.
+        match Expr::Call("sindeg".to_string(), vec![Expr::Int(90)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        match Expr::Call("degrees".to_string(), vec![Expr::Int(0)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 0.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_degree_functions_domain_errors() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // asindeg / acosdeg reject |x| > 1.
+        match Expr::Call("asindeg".to_string(), vec![Expr::Float(1.5)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Error(msg) => assert!(msg.contains("asindeg() argument out of range")),
+            _ => panic!("Expected Error result"),
+        }
+        match Expr::Call("acosdeg".to_string(), vec![Expr::Float(-1.5)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Error(msg) => assert!(msg.contains("acosdeg() argument out of range")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_pi_constant_evaluation() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // Bare `pi` evaluates to std::f64::consts::PI.
+        match Expr::Var("pi".to_string()).evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert_eq!(v, std::f64::consts::PI),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_pi_shadowed_by_parameter_evaluation() {
+        let functions = get_function_implementations();
+        // A parameter named `pi` shadows the built-in constant at runtime.
+        let mut variables = HashMap::new();
+        variables.insert("pi".to_string(), NetworkResult::Float(42.0));
+        match Expr::Var("pi".to_string()).evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert_eq!(v, 42.0),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
     fn test_function_call_sqrt() {
         let expr = Expr::Call("sqrt".to_string(), vec![Expr::Float(16.0)]);
         let variables = HashMap::new();

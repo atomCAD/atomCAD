@@ -145,6 +145,95 @@ mod validation_tests {
     }
 
     #[test]
+    fn test_degree_functions_validation() {
+        let variables = HashMap::new();
+        // Single-arg degree functions accept Float and Int, return Float.
+        for name in [
+            "degrees", "radians", "sindeg", "cosdeg", "tandeg", "asindeg", "acosdeg", "atandeg",
+        ] {
+            let expr = Expr::Call(name.to_string(), vec![Expr::Float(0.5)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Float),
+                "{} (float arg)",
+                name
+            );
+            let expr = Expr::Call(name.to_string(), vec![Expr::Int(1)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Float),
+                "{} (int arg)",
+                name
+            );
+        }
+
+        // atan2deg is two-arg.
+        let expr = Expr::Call(
+            "atan2deg".to_string(),
+            vec![Expr::Float(1.0), Expr::Float(1.0)],
+        );
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Float)
+        );
+        let expr = Expr::Call("atan2deg".to_string(), vec![Expr::Int(1), Expr::Int(1)]);
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Float)
+        );
+    }
+
+    #[test]
+    fn test_degree_functions_reject_wrong_arity_and_types() {
+        let variables = HashMap::new();
+
+        // Single-arg function with two args.
+        let expr = Expr::Call(
+            "sindeg".to_string(),
+            vec![Expr::Float(1.0), Expr::Float(2.0)],
+        );
+        let result = expr.validate(&variables, get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects 1 arguments, got 2"));
+
+        // atan2deg with one arg.
+        let expr = Expr::Call("atan2deg".to_string(), vec![Expr::Float(1.0)]);
+        let result = expr.validate(&variables, get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects 2 arguments, got 1"));
+
+        // Wrong argument type.
+        let expr = Expr::Call("degrees".to_string(), vec![Expr::Bool(true)]);
+        let result = expr.validate(&variables, get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects type"));
+    }
+
+    #[test]
+    fn test_pi_constant_validation() {
+        // Bare `pi` types as Float.
+        let expr = Expr::Var("pi".to_string());
+        let variables = HashMap::new();
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Float)
+        );
+    }
+
+    #[test]
+    fn test_pi_shadowed_by_parameter() {
+        // A user parameter named `pi` shadows the built-in constant, keeping
+        // its declared type.
+        let expr = Expr::Var("pi".to_string());
+        let mut variables = HashMap::new();
+        variables.insert("pi".to_string(), DataType::Int);
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Int)
+        );
+    }
+
+    #[test]
     fn test_min_max_validation_int_preserving() {
         let variables = HashMap::new();
         for name in ["min", "max"] {
