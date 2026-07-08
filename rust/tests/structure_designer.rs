@@ -196,6 +196,9 @@ mod sequence_node_test;
 #[path = "structure_designer/array_at_test.rs"]
 mod array_at_test;
 
+#[path = "structure_designer/if_test.rs"]
+mod if_test;
+
 #[path = "structure_designer/array_len_test.rs"]
 mod array_len_test;
 

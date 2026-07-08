@@ -2488,6 +2488,14 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setIfData(BigInt nodeId, APIIfData data) {
+    structure_designer_api.setIfData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   void setFoldData(BigInt nodeId, APIFoldData data) {
     structure_designer_api.setFoldData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

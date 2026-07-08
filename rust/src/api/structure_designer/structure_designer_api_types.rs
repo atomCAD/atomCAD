@@ -1259,6 +1259,11 @@ pub struct APIArrayAtData {
     pub index: i32,
 }
 
+pub struct APIIfData {
+    /// Type of the `then` / `else` value pins and of the output pin.
+    pub value_type: APIDataType,
+}
+
 pub struct APISequenceData {
     pub element_type: APIDataType,
     pub input_count: i32,

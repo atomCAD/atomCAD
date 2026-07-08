@@ -398,6 +398,35 @@ vec2(x, y).x + vec2(z, w).y        // Member access
 distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
 ```
 
+## if
+
+Selects one of two values based on a boolean condition: outputs the `then` value when `cond` is `true`, otherwise the `else` value.
+
+This overlaps with `expr`'s `if condition then value1 else value2` construct, but the dedicated node adds two things `expr` cannot:
+
+- **It selects values of any type**, including structural ones — `Crystal`, `Molecule`, `Blueprint`, `Geometry`, `Function`, etc. — not just the scalar / vector / record types the `expr` language operates on. Choosing between two whole geometries or two atomic structures by a condition is the node's primary use.
+- **It is lazy.** Only the taken branch is evaluated: with `cond` true, the `else` branch's entire upstream chain is never computed, and vice-versa. An error or an expensive computation (a `relax`, a large `materialize`) on the untaken branch costs nothing and does not affect the output. An `expr` node, by contrast, eagerly evaluates every wired input before running the expression.
+
+**Property**
+
+- `Value type` — the type `T` of the `then` / `else` value pins and of the output. Defaults to `Float`; set it to whatever the two branches produce.
+
+**Input pins** (all optional)
+
+- `cond: Bool` — the condition.
+- `then: T` — the value chosen when `cond` is `true`.
+- `else: T` — the value chosen when `cond` is `false`.
+
+**Behavior**
+
+Every pin is optional, following the node network's convention that any wire may be absent:
+
+- If `cond` is unconnected, the node is inert and outputs nothing (`None`), regardless of the branch pins.
+- Otherwise the condition picks a branch. If the taken branch pin is unconnected, the output is `None` (a downstream required input then reports a missing input; an optional one falls back to its default). The other, untaken branch is never evaluated.
+- An error produced while evaluating `cond` propagates to the output.
+
+For chained conditions (an "else if" ladder), wire one `if` node's output into another `if` node's `else` pin. For a numeric or simple scalar selection where you already need an `expr` node for the condition anyway, the inline `if … then … else …` inside a single `expr` node is often simpler.
+
 ## Iterator types
 
 An **iterator type** `Iter[T]` represents a lazily-evaluated stream of `T` values. Iterators travel along wires the same way arrays do, but downstream nodes pull elements one at a time rather than allocating the full payload upfront. This is the backbone of the `range → map → filter → fold` pipeline: a million-element `range` followed by a `map` and a `fold` keeps only one element alive at a time, regardless of stream length.

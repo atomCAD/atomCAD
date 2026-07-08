@@ -40,6 +40,7 @@ pub mod geo_trans;
 pub mod get_structure;
 pub mod half_plane;
 pub mod half_space;
+pub mod if_else;
 pub mod imat2_cols;
 pub mod imat2_diag;
 pub mod imat2_rows;

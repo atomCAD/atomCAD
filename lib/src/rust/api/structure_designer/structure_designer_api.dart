@@ -979,6 +979,10 @@ APIArrayAtData? getArrayAtData(
         .crateApiStructureDesignerStructureDesignerApiGetArrayAtData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIIfData? getIfData({required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiGetIfData(
+        scopePath: scopePath, nodeId: nodeId);
+
 APIFoldData? getFoldData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1601,6 +1605,13 @@ void setArrayAtData(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetArrayAtData(
             scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setIfData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIIfData data}) =>
+    RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiSetIfData(
+        scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setFoldData(
         {required Uint64List scopePath,

@@ -29,6 +29,7 @@ import 'package:flutter_cad/structure_designer/node_data/print_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/zip_with_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/array_at_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/if_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/foreach_editor.dart';
@@ -560,6 +561,17 @@ class NodeDataWidget extends StatelessWidget {
         return ArrayAtEditor(
           nodeId: selectedNode.id,
           data: arrayAtData,
+          model: model,
+        );
+      case 'if':
+        final ifData = getIfData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return IfEditor(
+          nodeId: selectedNode.id,
+          data: ifData,
           model: model,
         );
       case 'fold':

@@ -42,6 +42,7 @@ use super::nodes::geo_trans::get_node_type as geo_trans_get_node_type;
 use super::nodes::get_structure::get_node_type as get_structure_get_node_type;
 use super::nodes::half_plane::get_node_type as half_plane_get_node_type;
 use super::nodes::half_space::get_node_type as half_space_get_node_type;
+use super::nodes::if_else::get_node_type as if_else_get_node_type;
 use super::nodes::imat2_cols::get_node_type as imat2_cols_get_node_type;
 use super::nodes::imat2_diag::get_node_type as imat2_diag_get_node_type;
 use super::nodes::imat2_rows::get_node_type as imat2_rows_get_node_type;
@@ -473,6 +474,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(record_destructure_get_node_type());
         ret.add_node_type(product_get_node_type());
         ret.add_node_type(array_at_get_node_type());
+        ret.add_node_type(if_else_get_node_type());
         ret.add_node_type(array_len_get_node_type());
         ret.add_node_type(array_concat_get_node_type());
         ret.add_node_type(array_append_get_node_type());

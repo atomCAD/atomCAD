@@ -25,6 +25,7 @@ use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIForeachData;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
+use super::structure_designer_api_types::APIIfData;
 use super::structure_designer_api_types::APIImportCIFData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIInferBondsData;
@@ -168,6 +169,7 @@ use crate::structure_designer::nodes::free_sphere::FreeSphereData;
 use crate::structure_designer::nodes::geo_trans::GeoTransData;
 use crate::structure_designer::nodes::half_plane::HalfPlaneData;
 use crate::structure_designer::nodes::half_space::HalfSpaceData;
+use crate::structure_designer::nodes::if_else::IfData;
 use crate::structure_designer::nodes::imat2_cols::IMat2ColsData;
 use crate::structure_designer::nodes::imat2_diag::IMat2DiagData;
 use crate::structure_designer::nodes::imat2_rows::IMat2RowsData;
@@ -4659,6 +4661,25 @@ pub fn get_array_at_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayA
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_if_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIfData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let if_data = node_data.as_any_ref().downcast_ref::<IfData>()?;
+
+                Some(APIIfData {
+                    value_type: data_type_to_api_data_type(&if_data.value_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_fold_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFoldData> {
     unsafe {
         with_cad_instance_or(
@@ -6311,6 +6332,25 @@ pub fn set_array_at_data(scope_path: Vec<u64>, node_id: u64, data: APIArrayAtDat
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, array_at_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_if_data(scope_path: Vec<u64>, node_id: u64, data: APIIfData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let value_type = match api_data_type_to_data_type(&data.value_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            let if_data = Box::new(IfData { value_type });
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, if_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

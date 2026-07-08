@@ -212,6 +212,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHybridization dco_decode_api_hybridization(dynamic raw);
 
   @protected
+  APIIfData dco_decode_api_if_data(dynamic raw);
+
+  @protected
   APIImportCIFData dco_decode_api_import_cif_data(dynamic raw);
 
   @protected
@@ -563,6 +566,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIHoveredAtomInfo dco_decode_box_autoadd_api_hovered_atom_info(dynamic raw);
+
+  @protected
+  APIIfData dco_decode_box_autoadd_api_if_data(dynamic raw);
 
   @protected
   APIImportCIFData dco_decode_box_autoadd_api_import_cif_data(dynamic raw);
@@ -1067,6 +1073,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIIfData? dco_decode_opt_box_autoadd_api_if_data(dynamic raw);
+
+  @protected
   APIImportCIFData? dco_decode_opt_box_autoadd_api_import_cif_data(dynamic raw);
 
   @protected
@@ -1534,6 +1543,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIHybridization sse_decode_api_hybridization(SseDeserializer deserializer);
 
   @protected
+  APIIfData sse_decode_api_if_data(SseDeserializer deserializer);
+
+  @protected
   APIImportCIFData sse_decode_api_import_cif_data(SseDeserializer deserializer);
 
   @protected
@@ -1948,6 +1960,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIHoveredAtomInfo sse_decode_box_autoadd_api_hovered_atom_info(
       SseDeserializer deserializer);
+
+  @protected
+  APIIfData sse_decode_box_autoadd_api_if_data(SseDeserializer deserializer);
 
   @protected
   APIImportCIFData sse_decode_box_autoadd_api_import_cif_data(
@@ -2551,6 +2566,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIIfData? sse_decode_opt_box_autoadd_api_if_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIImportCIFData? sse_decode_opt_box_autoadd_api_import_cif_data(
       SseDeserializer deserializer);
 
@@ -3086,6 +3105,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIHybridization self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_if_data(APIIfData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_import_cif_data(
       APIImportCIFData self, SseSerializer serializer);
 
@@ -3519,6 +3541,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_hovered_atom_info(
       APIHoveredAtomInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_if_data(
+      APIIfData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_import_cif_data(
@@ -4133,6 +4159,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_hovered_atom_info(
       APIHoveredAtomInfo? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_if_data(
+      APIIfData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_import_cif_data(

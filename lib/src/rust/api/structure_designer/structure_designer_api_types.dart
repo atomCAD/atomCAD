@@ -1600,6 +1600,25 @@ enum APIHybridization {
   ;
 }
 
+class APIIfData {
+  /// Type of the `then` / `else` value pins and of the output pin.
+  final APIDataType valueType;
+
+  const APIIfData({
+    required this.valueType,
+  });
+
+  @override
+  int get hashCode => valueType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIfData &&
+          runtimeType == other.runtimeType &&
+          valueType == other.valueType;
+}
+
 class APIImportCIFData {
   final String? fileName;
   final String? blockName;

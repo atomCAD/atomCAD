@@ -302,7 +302,12 @@
       "Bash(tasklist //FI \"IMAGENAME eq atomCAD.exe\")",
       "Bash(netstat -ano)",
       "Read(//c/Users/Ádám Nagy/AppData/Local/Pub/Cache/hosted/**)",
-      "Bash(find /c -maxdepth 6 -path '*flutter_markdown_plus*/lib/flutter_markdown_plus.dart')"
+      "Bash(find /c -maxdepth 6 -path '*flutter_markdown_plus*/lib/flutter_markdown_plus.dart')",
+      "Bash(sed 's/pub fn //')",
+      "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/for_generated/**)",
+      "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/misc/**)",
+      "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/thread_pool/**)",
+      "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/handler/implementation/**)"
     ]
   }
 }
