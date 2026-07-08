@@ -3903,7 +3903,7 @@ pub fn get_free_rot_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeRo
                     None => return None,
                 };
                 Some(APIFreeRotData {
-                    angle: free_rot_data.angle,
+                    angle_degrees: free_rot_data.angle_degrees,
                     rot_axis: to_api_vec3(&free_rot_data.rot_axis),
                     pivot_point: to_api_vec3(&free_rot_data.pivot_point),
                 })
@@ -5459,7 +5459,7 @@ pub fn set_free_rot_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeRotDat
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             let free_rot_data = Box::new(FreeRotData {
-                angle: data.angle,
+                angle_degrees: data.angle_degrees,
                 rot_axis: from_api_vec3(&data.rot_axis),
                 pivot_point: from_api_vec3(&data.pivot_point),
             });

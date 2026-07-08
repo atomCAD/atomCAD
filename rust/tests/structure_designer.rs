@@ -420,3 +420,6 @@ mod extrude_structure_test;
 
 #[path = "structure_designer/free_geometry_nodes_test.rs"]
 mod free_geometry_nodes_test;
+
+#[path = "structure_designer/free_rot_test.rs"]
+mod free_rot_test;

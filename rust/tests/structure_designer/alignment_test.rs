@@ -342,7 +342,7 @@ fn free_rot_forces_lattice_unaligned_blueprint() {
             .as_any_mut()
             .downcast_mut::<FreeRotData>()
             .unwrap();
-        data.angle = 0.5;
+        data.angle_degrees = 30.0;
         data.rot_axis = DVec3::new(0.0, 0.0, 1.0);
     }
     designer.connect_nodes(cuboid_id, 0, rot_id, 0);

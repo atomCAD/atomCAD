@@ -2912,7 +2912,7 @@ fn map_body_zone_input_refines_polymorphic_output_type() {
             DVec2::new(x, 0.0),
             4,
             Box::new(FreeRotData {
-                angle: 0.0,
+                angle_degrees: 0.0,
                 rot_axis: DVec3::new(0.0, 0.0, 1.0),
                 pivot_point: DVec3::ZERO,
             }),

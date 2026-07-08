@@ -592,7 +592,7 @@ pub struct APIFreeCircleData {
 }
 
 pub struct APIFreeRotData {
-    pub angle: f64, // In radians
+    pub angle_degrees: f64, // In degrees
     pub rot_axis: APIVec3,
     pub pivot_point: APIVec3,
 }

@@ -37,7 +37,10 @@ pub struct FreeRotEvalCache {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FreeRotData {
-    pub angle: f64,
+    /// Rotation angle in **degrees** (converted to radians at the eval math
+    /// boundary). Renamed from the radian-era `angle` so stale snippets fail
+    /// loudly rather than being silently reinterpreted (issue #384).
+    pub angle_degrees: f64,
     #[serde(with = "dvec3_serializer")]
     pub rot_axis: DVec3,
     #[serde(with = "dvec3_serializer")]
@@ -53,7 +56,7 @@ impl NodeData for FreeRotData {
         let cache = eval_cache.downcast_ref::<FreeRotEvalCache>()?;
 
         Some(Box::new(FreeRotGadget::new(
-            self.angle,
+            self.angle_degrees.to_radians(),
             cache.rot_axis,
             cache.pivot_point,
         )))
@@ -78,13 +81,15 @@ impl NodeData for FreeRotData {
             return EvalOutput::single(input_val);
         }
 
-        let angle = match network_evaluator.evaluate_or_default(
+        // The value flowing through pin 1 is now in degrees (issue #384);
+        // convert to radians at the single math boundary below.
+        let angle_degrees = match network_evaluator.evaluate_or_default(
             network_stack,
             node_id,
             registry,
             context,
             1,
-            self.angle,
+            self.angle_degrees,
             NetworkResult::extract_float,
         ) {
             Ok(value) => value,
@@ -133,7 +138,7 @@ impl NodeData for FreeRotData {
             }));
         }
 
-        let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle);
+        let rotation_quat = DQuat::from_axis_angle(normalized_axis, angle_degrees.to_radians());
         let tr = Transform::new_rotation_around_point(pivot_point, rotation_quat);
 
         match input_val {
@@ -147,7 +152,7 @@ impl NodeData for FreeRotData {
                     || {
                         format!(
                             "free_rot rotates the cutter by {:.2}° in world space (off-lattice)",
-                            angle.to_degrees()
+                            angle_degrees
                         )
                     },
                 );
@@ -181,17 +186,27 @@ impl NodeData for FreeRotData {
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
         vec![
-            ("angle".to_string(), TextValue::Float(self.angle)),
+            (
+                "angle_degrees".to_string(),
+                TextValue::Float(self.angle_degrees),
+            ),
             ("rot_axis".to_string(), TextValue::Vec3(self.rot_axis)),
             ("pivot_point".to_string(), TextValue::Vec3(self.pivot_point)),
         ]
     }
 
     fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
-        if let Some(v) = props.get("angle") {
-            self.angle = v
+        // Reject the radian-era key explicitly so stale snippets fail loudly
+        // instead of no-oping invisibly (issue #384). The wiring path uses the
+        // pin name `angle`, which is unchanged — this only affects a literal
+        // `angle: <number>` property.
+        if props.contains_key("angle") {
+            return Err("angle was renamed to angle_degrees and is now in degrees".to_string());
+        }
+        if let Some(v) = props.get("angle_degrees") {
+            self.angle_degrees = v
                 .as_float()
-                .ok_or_else(|| "angle must be a float".to_string())?;
+                .ok_or_else(|| "angle_degrees must be a float".to_string())?;
         }
         if let Some(v) = props.get("rot_axis") {
             self.rot_axis = v
@@ -210,15 +225,14 @@ impl NodeData for FreeRotData {
         let show_angle = !connected_input_pins.contains("angle");
         let show_axis = !connected_input_pins.contains("rot_axis");
 
-        if self.angle == 0.0 {
+        if self.angle_degrees == 0.0 {
             return None;
         }
 
         let mut parts = Vec::new();
 
         if show_angle {
-            let degrees = self.angle.to_degrees();
-            parts.push(format!("{:.1}°", degrees));
+            parts.push(format!("{:.1}°", self.angle_degrees));
         }
 
         if show_axis {
@@ -229,7 +243,7 @@ impl NodeData for FreeRotData {
                 (x, y, z) if (x + 1.0).abs() < 0.001 && y.abs() < 0.001 && z.abs() < 0.001 => "-X",
                 (x, y, z) if x.abs() < 0.001 && (y + 1.0).abs() < 0.001 && z.abs() < 0.001 => "-Y",
                 (x, y, z) if x.abs() < 0.001 && y.abs() < 0.001 && (z + 1.0).abs() < 0.001 => "-Z",
-                _ => return Some(format!("{:.1}° custom", self.angle.to_degrees())),
+                _ => return Some(format!("{:.1}° custom", self.angle_degrees)),
             };
             parts.push(axis_name.to_string());
         }
@@ -244,6 +258,17 @@ impl NodeData for FreeRotData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("input".to_string(), (true, None));
+        // The pin name (`angle`) diverges from the property name
+        // (`angle_degrees`) after issue #384, so the text-format introspection
+        // fallback would wrongly mark this optional pin as required. Precedent:
+        // `extrude`'s `dir` ↔ `extrude_direction` split.
+        m.insert(
+            "angle".to_string(),
+            (
+                false,
+                Some("0 (degrees; stored as angle_degrees)".to_string()),
+            ),
+        );
         m
     }
 }
@@ -372,7 +397,9 @@ impl Gadget for FreeRotGadget {
 impl NodeNetworkGadget for FreeRotGadget {
     fn sync_data(&self, data: &mut dyn NodeData) {
         if let Some(d) = data.as_any_mut().downcast_mut::<FreeRotData>() {
-            d.angle = self.angle;
+            // The gadget's `angle` is radians (its rotation/tessellation math is
+            // radian-native); convert to degrees at this data boundary (#384).
+            d.angle_degrees = self.angle.to_degrees();
         }
     }
 
@@ -452,6 +479,7 @@ pub fn get_node_type() -> NodeType {
     NodeType {
         name: "free_rot".to_string(),
         description: "Rotates an unanchored object (Blueprint or Molecule) around an axis in world space.
+The angle is in degrees.
 For a Blueprint, only the geometry (the cutter) rotates; the structure stays fixed. This can drift the cutter off-lattice.
 For a Molecule, atoms and geometry rotate together.
 Crystal inputs are rejected (exit_structure first, or use structure_rot to stay in lattice space).".to_string(),
@@ -485,7 +513,7 @@ Crystal inputs are rejected (exit_structure first, or use structure_rot to stay 
         public: true,
         node_data_creator: || {
             Box::new(FreeRotData {
-                angle: 0.0,
+                angle_degrees: 0.0,
                 rot_axis: DVec3::new(0.0, 0.0, 1.0),
                 pivot_point: DVec3::ZERO,
             })

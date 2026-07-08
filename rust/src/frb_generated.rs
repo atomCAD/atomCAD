@@ -12329,11 +12329,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIFreeRotData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_angle = <f64>::sse_decode(deserializer);
+        let mut var_angleDegrees = <f64>::sse_decode(deserializer);
         let mut var_rotAxis = <crate::api::common_api_types::APIVec3>::sse_decode(deserializer);
         let mut var_pivotPoint = <crate::api::common_api_types::APIVec3>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIFreeRotData {
-            angle: var_angle,
+            angle_degrees: var_angleDegrees,
             rot_axis: var_rotAxis,
             pivot_point: var_pivotPoint,
         };
@@ -17877,7 +17877,7 @@ impl flutter_rust_bridge::IntoDart
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.angle.into_into_dart().into_dart(),
+            self.angle_degrees.into_into_dart().into_dart(),
             self.rot_axis.into_into_dart().into_dart(),
             self.pivot_point.into_into_dart().into_dart(),
         ]
@@ -21697,7 +21697,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIFreeRotData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <f64>::sse_encode(self.angle, serializer);
+        <f64>::sse_encode(self.angle_degrees, serializer);
         <crate::api::common_api_types::APIVec3>::sse_encode(self.rot_axis, serializer);
         <crate::api::common_api_types::APIVec3>::sse_encode(self.pivot_point, serializer);
     }

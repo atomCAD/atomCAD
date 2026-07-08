@@ -1324,25 +1324,26 @@ class APIFreeMoveData {
 }
 
 class APIFreeRotData {
-  final double angle;
+  final double angleDegrees;
   final APIVec3 rotAxis;
   final APIVec3 pivotPoint;
 
   const APIFreeRotData({
-    required this.angle,
+    required this.angleDegrees,
     required this.rotAxis,
     required this.pivotPoint,
   });
 
   @override
-  int get hashCode => angle.hashCode ^ rotAxis.hashCode ^ pivotPoint.hashCode;
+  int get hashCode =>
+      angleDegrees.hashCode ^ rotAxis.hashCode ^ pivotPoint.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIFreeRotData &&
           runtimeType == other.runtimeType &&
-          angle == other.angle &&
+          angleDegrees == other.angleDegrees &&
           rotAxis == other.rotAxis &&
           pivotPoint == other.pivotPoint;
 }

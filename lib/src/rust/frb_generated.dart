@@ -14339,7 +14339,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (arr.length != 3)
       throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APIFreeRotData(
-      angle: dco_decode_f_64(arr[0]),
+      angleDegrees: dco_decode_f_64(arr[0]),
       rotAxis: dco_decode_api_vec_3(arr[1]),
       pivotPoint: dco_decode_api_vec_3(arr[2]),
     );
@@ -18176,11 +18176,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   APIFreeRotData sse_decode_api_free_rot_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_angle = sse_decode_f_64(deserializer);
+    var var_angleDegrees = sse_decode_f_64(deserializer);
     var var_rotAxis = sse_decode_api_vec_3(deserializer);
     var var_pivotPoint = sse_decode_api_vec_3(deserializer);
     return APIFreeRotData(
-        angle: var_angle, rotAxis: var_rotAxis, pivotPoint: var_pivotPoint);
+        angleDegrees: var_angleDegrees,
+        rotAxis: var_rotAxis,
+        pivotPoint: var_pivotPoint);
   }
 
   @protected
@@ -22595,7 +22597,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_free_rot_data(
       APIFreeRotData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_f_64(self.angle, serializer);
+    sse_encode_f_64(self.angleDegrees, serializer);
     sse_encode_api_vec_3(self.rotAxis, serializer);
     sse_encode_api_vec_3(self.pivotPoint, serializer);
   }

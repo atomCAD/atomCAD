@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
@@ -49,25 +48,22 @@ class FreeRotEditorState extends State<FreeRotEditor> {
     return 'Custom';
   }
 
-  double _radiansToDegrees(double radians) => radians * 180.0 / math.pi;
-  double _degreesToRadians(double degrees) => degrees * math.pi / 180.0;
-
   void _updateRotationAxis(APIVec3 newAxis) {
     widget.model.setFreeRotData(
       widget.nodeId,
       APIFreeRotData(
-        angle: widget.data!.angle,
+        angleDegrees: widget.data!.angleDegrees,
         rotAxis: newAxis,
         pivotPoint: widget.data!.pivotPoint,
       ),
     );
   }
 
-  void _updateAngle(double newAngleRadians) {
+  void _updateAngle(double newAngleDegrees) {
     widget.model.setFreeRotData(
       widget.nodeId,
       APIFreeRotData(
-        angle: newAngleRadians,
+        angleDegrees: newAngleDegrees,
         rotAxis: widget.data!.rotAxis,
         pivotPoint: widget.data!.pivotPoint,
       ),
@@ -78,7 +74,7 @@ class FreeRotEditorState extends State<FreeRotEditor> {
     widget.model.setFreeRotData(
       widget.nodeId,
       APIFreeRotData(
-        angle: widget.data!.angle,
+        angleDegrees: widget.data!.angleDegrees,
         rotAxis: widget.data!.rotAxis,
         pivotPoint: newPivotPoint,
       ),
@@ -135,10 +131,8 @@ class FreeRotEditorState extends State<FreeRotEditor> {
           // Angle input (in degrees)
           FloatInput(
             label: 'Angle (degrees)',
-            value: _radiansToDegrees(widget.data!.angle),
-            onChanged: (newValue) {
-              _updateAngle(_degreesToRadians(newValue));
-            },
+            value: widget.data!.angleDegrees,
+            onChanged: _updateAngle,
           ),
           const SizedBox(height: 8),
 
@@ -159,7 +153,7 @@ class FreeRotEditorState extends State<FreeRotEditor> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Current rotation: ${_radiansToDegrees(widget.data!.angle).toStringAsFixed(1)}°',
+                    'Current rotation: ${widget.data!.angleDegrees.toStringAsFixed(1)}°',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
