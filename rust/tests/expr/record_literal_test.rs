@@ -31,7 +31,7 @@ mod lexer_tests {
                 Token::LBrace,
                 Token::Ident("x".to_string()),
                 Token::Colon,
-                Token::Number(1.0),
+                Token::Number(1.0, false),
                 Token::RBrace,
                 Token::Eof,
             ]
@@ -269,9 +269,6 @@ mod validation_tests {
         // Author order `{y, x}` validates to a canonicalized type `{x, y}` so
         // that derived `PartialEq` / `Hash` work — author order on the AST is
         // separate from type-level canonical order.
-        // Note: the existing expr lexer collapses `2.0` to `Int(2)` (see
-        // `Token::Number` handling in parser.rs); use `2.5` to keep the
-        // float-ness through parsing.
         let ty = validate("{y: 2.5, x: 1}", HashMap::new()).expect("should validate");
         match ty {
             DataType::Record(RecordType::Anonymous(fields)) => {

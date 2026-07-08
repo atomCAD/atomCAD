@@ -394,8 +394,8 @@ The `parameters` property defines which variables can be used in the expression.
 The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
 
 ### Literals
-- Integer literals (e.g., `42`, `-10`)
-- Floating point literals (e.g., `3.14`, `1.5e-3`, `.5`)
+- Integer literals (e.g., `42`, `-10`) — digits with no decimal point or exponent are Int.
+- Floating point literals (e.g., `3.14`, `1.5e-3`, `.5`) — a decimal point or exponent makes it a Float, including whole-number forms: `2.0` is a Float, `2` is an Int (so `2.0 / 4` is `0.5`, but `2 / 4` is `0`). Int args promote to Float, so `sqrt(4)` works.
 - Boolean values (`true`, `false`)
 
 ### Arithmetic Operators
@@ -540,9 +540,15 @@ escaping. To write a literal `${...}`, escape the dollar as `\${...}`.
 - `asin(x)`, `acos(x)`, `atan(x)` - Inverse trigonometric functions (result in radians; `asin`/`acos` reject arguments outside `[-1, 1]`)
 - `atan2(y, x)` - Quadrant-aware arc tangent of `y / x` (result in radians)
 - `sqrt(x)` - Square root
-- `abs(x)` - Absolute value (float)
-- `abs_int(x)` - Absolute value (integer)
+- `exp(x)` - Exponential e^x
+- `log(x)` - Natural logarithm (ln); rejects x <= 0
+- `abs(x)` - Absolute value; type-preserving (Int->Int, Float->Float)
+- `abs_int(x)` - Deprecated Int-only alias of `abs`
 - `floor(x)`, `ceil(x)`, `round(x)` - Rounding functions
+- `min(a, b, ...)`, `max(a, b, ...)` - Variadic min/max; type-preserving
+- `clamp(x, lo, hi)` - Constrain x to [lo, hi]; type-preserving
+- `sign(x)` - Three-way sign (-1, 0, +1); type-preserving
+- `lerp(a, b, t)` - Linear interpolation a + (b - a) * t (unclamped, Float)
 
 ### Operator Precedence (highest to lowest)
 1. Function calls, member access, parentheses

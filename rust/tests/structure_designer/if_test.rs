@@ -428,9 +428,19 @@ fn test_if_float_value_type() {
     let cond = add_bool(&mut designer, "test", false, 0.0);
 
     let then_f = designer.add_node("float", DVec2::new(0.0, 100.0));
-    set_node_data(&mut designer, "test", then_f, Box::new(FloatData { value: 1.5 }));
+    set_node_data(
+        &mut designer,
+        "test",
+        then_f,
+        Box::new(FloatData { value: 1.5 }),
+    );
     let else_f = designer.add_node("float", DVec2::new(0.0, 200.0));
-    set_node_data(&mut designer, "test", else_f, Box::new(FloatData { value: 2.5 }));
+    set_node_data(
+        &mut designer,
+        "test",
+        else_f,
+        Box::new(FloatData { value: 2.5 }),
+    );
 
     let if_id = add_if(&mut designer, "test", DataType::Float, 300.0);
     designer.validate_active_network();

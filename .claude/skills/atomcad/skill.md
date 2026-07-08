@@ -716,7 +716,8 @@ EOF
 - Logic: `&&`, `||`, !
 - Conditionals: `if condition then value1 else value2`
 - Vectors: `vec2(x,y)`, `vec3(x,y,z)`, `ivec2`, `ivec3`, member access `.x`, `.y`, `.z`
-- Functions: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sqrt`, `abs`, `floor`, `ceil`, `round`, `length2`, `length3`, `normalize2`, `normalize3`, `dot2`, `dot3`, `cross`, `distance2`, `distance3`
+- Functions: `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `sqrt`, `exp`, `log`, `abs`, `min`, `max`, `clamp`, `sign`, `lerp`, `floor`, `ceil`, `round`, `length2`, `length3`, `normalize2`, `normalize3`, `dot2`, `dot3`, `cross`, `distance2`, `distance3`
+  - `min`/`max` are variadic (≥2 args); `min`/`max`/`clamp`/`sign`/`abs` are type-preserving (all-Int args → Int result, else Float). `abs_int` is a deprecated Int-only alias of `abs`. `log` is natural log; `lerp(a,b,t)` is unclamped and returns Float.
 
 ## Important Notes
 

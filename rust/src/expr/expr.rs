@@ -364,6 +364,52 @@ impl Expr {
                     return Ok(DataType::Array(Box::new(unified)));
                 }
 
+                // Special-case the polymorphic, Int-preserving numeric functions
+                // (min/max/clamp/abs/sign). Like the +/-/* operators, they return
+                // Int when every argument is Int and Float when any is Float — a
+                // type-dependent return type the fixed-signature registry cannot
+                // express. min/max are variadic (>= 2 args); clamp is 3-ary;
+                // abs/sign are unary. `abs_int` stays a fixed-signature Int→Int
+                // entry (deprecated alias, kept for backward compatibility).
+                if matches!(name.as_str(), "min" | "max") {
+                    if args.len() < 2 {
+                        return Err(format!(
+                            "Function {} expects at least 2 arguments, got {}",
+                            name,
+                            args.len()
+                        ));
+                    }
+                    let mut arg_types = Vec::with_capacity(args.len());
+                    for arg in args {
+                        arg_types.push(arg.validate(variables, functions)?);
+                    }
+                    return int_preserving_numeric_result(name, &arg_types);
+                }
+                if name == "clamp" {
+                    if args.len() != 3 {
+                        return Err(format!(
+                            "Function clamp expects 3 arguments, got {}",
+                            args.len()
+                        ));
+                    }
+                    let mut arg_types = Vec::with_capacity(3);
+                    for arg in args {
+                        arg_types.push(arg.validate(variables, functions)?);
+                    }
+                    return int_preserving_numeric_result(name, &arg_types);
+                }
+                if matches!(name.as_str(), "abs" | "sign") {
+                    if args.len() != 1 {
+                        return Err(format!(
+                            "Function {} expects 1 argument, got {}",
+                            name,
+                            args.len()
+                        ));
+                    }
+                    let arg_type = args[0].validate(variables, functions)?;
+                    return int_preserving_numeric_result(name, &[arg_type]);
+                }
+
                 // Validate function exists
                 let signature = functions
                     .get(name)
@@ -1295,6 +1341,35 @@ pub(crate) fn unify_array_element_types(a: &DataType, b: &DataType) -> Result<Da
         }
         _ => Err(()),
     }
+}
+
+/// Validation-side result type for the polymorphic Int-preserving numeric
+/// functions (`min`/`max`/`clamp`/`abs`/`sign`). Every argument must be `Int`
+/// or `Float`; the result is `Int` when they are all `Int`, otherwise `Float`.
+/// This mirrors the `Int op Int -> Int`, mixed `-> Float` rule of the
+/// arithmetic operators (`expr.rs` `BinOp::Add` etc.), so `min(i, j)` of two
+/// indices stays an `Int` usable in array subscripts.
+fn int_preserving_numeric_result(name: &str, arg_types: &[DataType]) -> Result<DataType, String> {
+    let mut all_int = true;
+    for (i, ty) in arg_types.iter().enumerate() {
+        match ty {
+            DataType::Int => {}
+            DataType::Float => all_int = false,
+            other => {
+                return Err(format!(
+                    "Function {} argument {} expects Int or Float, got {}",
+                    name,
+                    i + 1,
+                    other
+                ));
+            }
+        }
+    }
+    Ok(if all_int {
+        DataType::Int
+    } else {
+        DataType::Float
+    })
 }
 
 /// Returns true if `member` is a valid matrix accessor name of the form `m<i><j>`

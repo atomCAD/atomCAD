@@ -472,6 +472,185 @@ mod evaluation_tests {
     }
 
     #[test]
+    fn test_function_call_min_max_int_preserving() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // All-Int -> Int (variadic).
+        let expr = Expr::Call(
+            "min".to_string(),
+            vec![Expr::Int(5), Expr::Int(2), Expr::Int(8)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(v) => assert_eq!(v, 2),
+            _ => panic!("Expected Int result"),
+        }
+
+        let expr = Expr::Call(
+            "max".to_string(),
+            vec![Expr::Int(5), Expr::Int(2), Expr::Int(8)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(v) => assert_eq!(v, 8),
+            _ => panic!("Expected Int result"),
+        }
+
+        // Mixed Int/Float -> Float.
+        let expr = Expr::Call("min".to_string(), vec![Expr::Int(5), Expr::Float(2.5)]);
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert_eq!(v, 2.5),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_clamp() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // Int-preserving, below range.
+        let expr = Expr::Call(
+            "clamp".to_string(),
+            vec![Expr::Int(-3), Expr::Int(0), Expr::Int(10)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Int(v) => assert_eq!(v, 0),
+            _ => panic!("Expected Int result"),
+        }
+
+        // Float, in range.
+        let expr = Expr::Call(
+            "clamp".to_string(),
+            vec![Expr::Float(5.5), Expr::Float(0.0), Expr::Float(10.0)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert_eq!(v, 5.5),
+            _ => panic!("Expected Float result"),
+        }
+
+        // lo > hi is an error.
+        let expr = Expr::Call(
+            "clamp".to_string(),
+            vec![Expr::Int(5), Expr::Int(10), Expr::Int(0)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Error(msg) => assert!(msg.contains("lo <= hi")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_sign() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        match Expr::Call("sign".to_string(), vec![Expr::Int(-7)]).evaluate(&variables, functions) {
+            NetworkResult::Int(v) => assert_eq!(v, -1),
+            _ => panic!("Expected Int result"),
+        }
+        match Expr::Call("sign".to_string(), vec![Expr::Int(0)]).evaluate(&variables, functions) {
+            NetworkResult::Int(v) => assert_eq!(v, 0),
+            _ => panic!("Expected Int result"),
+        }
+        // Float zero returns 0.0 (unlike f64::signum, which returns 1.0).
+        match Expr::Call("sign".to_string(), vec![Expr::Float(0.0)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert_eq!(v, 0.0),
+            _ => panic!("Expected Float result"),
+        }
+        match Expr::Call("sign".to_string(), vec![Expr::Float(-2.5)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert_eq!(v, -1.0),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_abs_polymorphic() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // Unified abs preserves Int.
+        match Expr::Call("abs".to_string(), vec![Expr::Int(-4)]).evaluate(&variables, functions) {
+            NetworkResult::Int(v) => assert_eq!(v, 4),
+            _ => panic!("Expected Int result"),
+        }
+        match Expr::Call("abs".to_string(), vec![Expr::Float(-4.5)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert_eq!(v, 4.5),
+            _ => panic!("Expected Float result"),
+        }
+        // Deprecated alias still works.
+        match Expr::Call("abs_int".to_string(), vec![Expr::Int(-4)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Int(v) => assert_eq!(v, 4),
+            _ => panic!("Expected Int result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_lerp() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        // Midpoint.
+        let expr = Expr::Call(
+            "lerp".to_string(),
+            vec![Expr::Float(0.0), Expr::Float(10.0), Expr::Float(0.5)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert_eq!(v, 5.0),
+            _ => panic!("Expected Float result"),
+        }
+        // Int args are coerced (would error under strict extract_float).
+        let expr = Expr::Call(
+            "lerp".to_string(),
+            vec![Expr::Int(0), Expr::Int(10), Expr::Float(0.5)],
+        );
+        match expr.evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert_eq!(v, 5.0),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_exp_log() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        match Expr::Call("exp".to_string(), vec![Expr::Float(0.0)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // log is natural log: log(e) == 1.
+        match Expr::Call("log".to_string(), vec![Expr::Float(std::f64::consts::E)])
+            .evaluate(&variables, functions)
+        {
+            NetworkResult::Float(v) => assert!((v - 1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+        // Int arg is coerced.
+        match Expr::Call("exp".to_string(), vec![Expr::Int(0)]).evaluate(&variables, functions) {
+            NetworkResult::Float(v) => assert!((v - 1.0).abs() < 1e-10),
+            _ => panic!("Expected Float result"),
+        }
+    }
+
+    #[test]
+    fn test_function_call_log_non_positive() {
+        let variables = HashMap::new();
+        let functions = get_function_implementations();
+
+        match Expr::Call("log".to_string(), vec![Expr::Float(0.0)]).evaluate(&variables, functions)
+        {
+            NetworkResult::Error(msg) => assert!(msg.contains("non-positive")),
+            _ => panic!("Expected Error result"),
+        }
+    }
+
+    #[test]
     fn test_function_call_unknown() {
         let expr = Expr::Call("unknown_func".to_string(), vec![Expr::Float(1.0)]);
         let variables = HashMap::new();

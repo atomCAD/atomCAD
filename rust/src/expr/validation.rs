@@ -82,9 +82,26 @@ fn create_standard_function_signatures() -> HashMap<String, FunctionSignature> {
         FunctionSignature::new(vec![DataType::Float], DataType::Float),
     );
     functions.insert(
-        "abs".to_string(),
+        "exp".to_string(),
         FunctionSignature::new(vec![DataType::Float], DataType::Float),
     );
+    functions.insert(
+        "log".to_string(),
+        FunctionSignature::new(vec![DataType::Float], DataType::Float),
+    );
+    functions.insert(
+        "lerp".to_string(),
+        FunctionSignature::new(
+            vec![DataType::Float, DataType::Float, DataType::Float],
+            DataType::Float,
+        ),
+    );
+    // Note: `abs`, `min`, `max`, `clamp`, and `sign` are not registered here.
+    // They are polymorphic, Int-preserving numeric functions handled by a
+    // special case in `Expr::Call::validate` (their return type depends on
+    // whether the arguments are all Int); only their runtime implementations
+    // live in `create_standard_function_implementations`. `abs_int` remains a
+    // fixed Int→Int signature below (deprecated alias of the unified `abs`).
     functions.insert(
         "floor".to_string(),
         FunctionSignature::new(vec![DataType::Float], DataType::Float),
@@ -264,9 +281,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("sin() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.sin()),
-                None => NetworkResult::Error("sin() requires a float argument".to_string()),
+                None => NetworkResult::Error("sin() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -277,9 +294,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("cos() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.cos()),
-                None => NetworkResult::Error("cos() requires a float argument".to_string()),
+                None => NetworkResult::Error("cos() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -290,9 +307,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("tan() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.tan()),
-                None => NetworkResult::Error("tan() requires a float argument".to_string()),
+                None => NetworkResult::Error("tan() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -303,7 +320,7 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("asin() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => {
                     if !(-1.0..=1.0).contains(&val) {
                         NetworkResult::Error("asin() argument out of range [-1, 1]".to_string())
@@ -311,7 +328,7 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
                         NetworkResult::Float(val.asin())
                     }
                 }
-                None => NetworkResult::Error("asin() requires a float argument".to_string()),
+                None => NetworkResult::Error("asin() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -322,7 +339,7 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("acos() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => {
                     if !(-1.0..=1.0).contains(&val) {
                         NetworkResult::Error("acos() argument out of range [-1, 1]".to_string())
@@ -330,7 +347,7 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
                         NetworkResult::Float(val.acos())
                     }
                 }
-                None => NetworkResult::Error("acos() requires a float argument".to_string()),
+                None => NetworkResult::Error("acos() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -341,9 +358,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("atan() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.atan()),
-                None => NetworkResult::Error("atan() requires a float argument".to_string()),
+                None => NetworkResult::Error("atan() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -354,12 +371,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 2 {
                 return NetworkResult::Error("atan2() requires exactly 2 arguments".to_string());
             }
-            match (
-                args[0].clone().extract_float(),
-                args[1].clone().extract_float(),
-            ) {
+            match (as_f64(&args[0]), as_f64(&args[1])) {
                 (Some(y), Some(x)) => NetworkResult::Float(y.atan2(x)),
-                _ => NetworkResult::Error("atan2() requires float arguments".to_string()),
+                _ => NetworkResult::Error("atan2() requires numeric arguments".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -370,7 +384,7 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("sqrt() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => {
                     if val < 0.0 {
                         NetworkResult::Error("sqrt() of negative number".to_string())
@@ -378,20 +392,152 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
                         NetworkResult::Float(val.sqrt())
                     }
                 }
-                None => NetworkResult::Error("sqrt() requires a float argument".to_string()),
+                None => NetworkResult::Error("sqrt() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
 
+    // Unified polymorphic `abs`: Int -> Int, Float -> Float (validated by the
+    // special case in `Expr::Call::validate`). `abs_int` below is the
+    // deprecated Int-only alias, kept so existing files keep working.
     functions.insert(
         "abs".to_string(),
         Box::new(|args: &[NetworkResult]| {
             if args.len() != 1 {
                 return NetworkResult::Error("abs() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
-                Some(val) => NetworkResult::Float(val.abs()),
-                None => NetworkResult::Error("abs() requires a float argument".to_string()),
+            match &args[0] {
+                NetworkResult::Int(val) => NetworkResult::Int(val.abs()),
+                NetworkResult::Float(val) => NetworkResult::Float(val.abs()),
+                _ => NetworkResult::Error("abs() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    // Variadic (>= 2 args), Int-preserving minimum / maximum.
+    functions.insert(
+        "min".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            numeric_reduce(args, "min", |a, b| a.min(b), |a, b| a.min(b))
+        }) as EvaluationFunction,
+    );
+    functions.insert(
+        "max".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            numeric_reduce(args, "max", |a, b| a.max(b), |a, b| a.max(b))
+        }) as EvaluationFunction,
+    );
+
+    // clamp(x, lo, hi): Int-preserving. Errors on lo > hi (or a NaN bound),
+    // mirroring the guards elsewhere (sqrt-of-negative etc.).
+    functions.insert(
+        "clamp".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 3 {
+                return NetworkResult::Error("clamp() requires exactly 3 arguments".to_string());
+            }
+            let all_int = args.iter().all(|a| matches!(a, NetworkResult::Int(_)));
+            if all_int {
+                let (x, lo, hi) = match (&args[0], &args[1], &args[2]) {
+                    (NetworkResult::Int(x), NetworkResult::Int(lo), NetworkResult::Int(hi)) => {
+                        (*x, *lo, *hi)
+                    }
+                    _ => unreachable!("all_int checked above"),
+                };
+                if lo > hi {
+                    return NetworkResult::Error("clamp() requires lo <= hi".to_string());
+                }
+                NetworkResult::Int(x.clamp(lo, hi))
+            } else {
+                match (as_f64(&args[0]), as_f64(&args[1]), as_f64(&args[2])) {
+                    (Some(x), Some(lo), Some(hi)) => {
+                        // Guard NaN bounds and lo > hi: f64::clamp panics on
+                        // either, so reject them as an error instead.
+                        if lo.is_nan() || hi.is_nan() || lo > hi {
+                            NetworkResult::Error(
+                                "clamp() requires lo <= hi (and non-NaN bounds)".to_string(),
+                            )
+                        } else {
+                            NetworkResult::Float(x.clamp(lo, hi))
+                        }
+                    }
+                    _ => NetworkResult::Error("clamp() requires numeric arguments".to_string()),
+                }
+            }
+        }) as EvaluationFunction,
+    );
+
+    // sign(x): three-way sign (-1, 0, +1), Int-preserving. Unlike f64::signum,
+    // this returns 0 for a zero input.
+    functions.insert(
+        "sign".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("sign() requires exactly 1 argument".to_string());
+            }
+            match &args[0] {
+                NetworkResult::Int(v) => NetworkResult::Int(v.signum()),
+                NetworkResult::Float(v) => {
+                    let s = if *v > 0.0 {
+                        1.0
+                    } else if *v < 0.0 {
+                        -1.0
+                    } else {
+                        0.0
+                    };
+                    NetworkResult::Float(s)
+                }
+                _ => NetworkResult::Error("sign() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    // lerp(a, b, t) = a + (b - a) * t. Always Float; t is unclamped
+    // (extrapolates outside [0, 1] — compose with clamp() to bound it).
+    functions.insert(
+        "lerp".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 3 {
+                return NetworkResult::Error("lerp() requires exactly 3 arguments".to_string());
+            }
+            match (as_f64(&args[0]), as_f64(&args[1]), as_f64(&args[2])) {
+                (Some(a), Some(b), Some(t)) => NetworkResult::Float(a + (b - a) * t),
+                _ => NetworkResult::Error("lerp() requires numeric arguments".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    // exp(x) = e^x.
+    functions.insert(
+        "exp".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("exp() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => NetworkResult::Float(val.exp()),
+                None => NetworkResult::Error("exp() requires a numeric argument".to_string()),
+            }
+        }) as EvaluationFunction,
+    );
+
+    // log(x): natural logarithm (ln). Errors for x <= 0 (avoids -inf / NaN
+    // propagation, following the sqrt-of-negative precedent).
+    functions.insert(
+        "log".to_string(),
+        Box::new(|args: &[NetworkResult]| {
+            if args.len() != 1 {
+                return NetworkResult::Error("log() requires exactly 1 argument".to_string());
+            }
+            match as_f64(&args[0]) {
+                Some(val) => {
+                    if val <= 0.0 {
+                        NetworkResult::Error("log() of non-positive number".to_string())
+                    } else {
+                        NetworkResult::Float(val.ln())
+                    }
+                }
+                None => NetworkResult::Error("log() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -402,9 +548,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("floor() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.floor()),
-                None => NetworkResult::Error("floor() requires a float argument".to_string()),
+                None => NetworkResult::Error("floor() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -415,9 +561,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("ceil() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.ceil()),
-                None => NetworkResult::Error("ceil() requires a float argument".to_string()),
+                None => NetworkResult::Error("ceil() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -428,9 +574,9 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
             if args.len() != 1 {
                 return NetworkResult::Error("round() requires exactly 1 argument".to_string());
             }
-            match args[0].clone().extract_float() {
+            match as_f64(&args[0]) {
                 Some(val) => NetworkResult::Float(val.round()),
-                None => NetworkResult::Error("round() requires a float argument".to_string()),
+                None => NetworkResult::Error("round() requires a numeric argument".to_string()),
             }
         }) as EvaluationFunction,
     );
@@ -1130,6 +1276,57 @@ fn create_standard_function_implementations() -> HashMap<String, EvaluationFunct
     );
 
     functions
+}
+
+/// Coerces a scalar `NetworkResult` (`Int` or `Float`) to `f64`, returning None
+/// for any other type. Used by the Float-returning numeric functions
+/// (`lerp`/`exp`/`log`) so an `Int` argument works at runtime — plain
+/// `extract_float` only matches `Float` and would error on an `Int` that passed
+/// validation via the Int↔Float compatibility rule.
+fn as_f64(value: &NetworkResult) -> Option<f64> {
+    match value {
+        NetworkResult::Int(v) => Some(*v as f64),
+        NetworkResult::Float(v) => Some(*v),
+        _ => None,
+    }
+}
+
+/// Runtime side of the variadic Int-preserving `min` / `max`. Requires at least
+/// two arguments, all numeric. Folds with `int_op` when every argument is `Int`
+/// (result `Int`) and with `float_op` otherwise (result `Float`), matching the
+/// return type `int_preserving_numeric_result` computed at validation time.
+fn numeric_reduce(
+    args: &[NetworkResult],
+    name: &str,
+    int_op: impl Fn(i32, i32) -> i32,
+    float_op: impl Fn(f64, f64) -> f64,
+) -> NetworkResult {
+    if args.len() < 2 {
+        return NetworkResult::Error(format!("{}() requires at least 2 arguments", name));
+    }
+    if args.iter().all(|a| matches!(a, NetworkResult::Int(_))) {
+        let mut acc = match &args[0] {
+            NetworkResult::Int(v) => *v,
+            _ => unreachable!("all-Int checked above"),
+        };
+        for a in &args[1..] {
+            if let NetworkResult::Int(v) = a {
+                acc = int_op(acc, *v);
+            }
+        }
+        return NetworkResult::Int(acc);
+    }
+    let mut acc = match as_f64(&args[0]) {
+        Some(v) => v,
+        None => return NetworkResult::Error(format!("{}() requires numeric arguments", name)),
+    };
+    for a in &args[1..] {
+        match as_f64(a) {
+            Some(v) => acc = float_op(acc, v),
+            None => return NetworkResult::Error(format!("{}() requires numeric arguments", name)),
+        }
+    }
+    NetworkResult::Float(acc)
 }
 
 /// Promotes a Vec3 or IVec3 `NetworkResult` to a `DVec3`, returning None for other types.

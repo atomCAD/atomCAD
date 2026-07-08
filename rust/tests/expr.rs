@@ -1,6 +1,9 @@
 #[path = "expr/expr_test.rs"]
 mod expr_test;
 
+#[path = "expr/float_literal_test.rs"]
+mod float_literal_test;
+
 #[path = "expr/expr_evaluation_test.rs"]
 mod expr_evaluation_test;
 

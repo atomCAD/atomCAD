@@ -154,9 +154,11 @@ The expr node supports scalar arithmetic, vector operations, conditional express
 
 **Literals**
 
-- integer literals (e.g., `42`, `-10`)
-- floating point literals (e.g., `3.14`, `1.5e-3`, `.5`)
+- integer literals (e.g., `42`, `-10`) — a bare run of digits with no decimal point or exponent is an `Int`.
+- floating point literals (e.g., `3.14`, `1.5e-3`, `.5`) — a literal is a `Float` whenever it is written with a decimal point or an exponent. This includes **whole-number** float forms like `2.0` or `1e3`: `2.0` is a `Float`, while `2` is an `Int`. (Consequently `2.0 / 4` is `0.5`, whereas `2 / 4` is integer division and yields `0`.)
 - boolean values (`true`, `false`)
+
+Integer arguments are accepted wherever a `Float` is expected (they promote automatically), so `sqrt(4)` and `sin(0)` work and return `Float`.
 
 **Arithmetic Operators:**
 
@@ -368,9 +370,23 @@ line2`                                           // also two lines — raw newli
 - `asin(x)`, `acos(x)`, `atan(x)` - Inverse trigonometric functions (result in radians; `asin`/`acos` reject arguments outside `[-1, 1]`)
 - `atan2(y, x)` - Quadrant-aware arc tangent of `y / x` (result in radians)
 - `sqrt(x)` - Square root
-- `abs(x)` - Absolute value (float)
-- `abs_int(x)` - Absolute value (integer)
+- `exp(x)` - Exponential `e^x`
+- `log(x)` - Natural logarithm (`ln`); rejects `x <= 0`
+- `abs(x)` - Absolute value. **Type-preserving**: `Int → Int`, `Float → Float`. (`abs_int(x)` is a deprecated `Int`-only alias kept for backward compatibility; prefer `abs`.)
 - `floor(x)`, `ceil(x)`, `round(x)` - Rounding functions
+
+**Numeric min / max / clamp / sign:**
+
+These are **type-preserving** like the arithmetic operators — when every argument is an `Int` the result is an `Int` (so `arr[min(i, n-1)]` stays a valid index), and if any argument is a `Float` the result is a `Float`.
+
+- `min(a, b, …)` - Smallest of its arguments. **Variadic**: takes two or more arguments (`min(a, b, c)`).
+- `max(a, b, …)` - Largest of its arguments. **Variadic** (two or more).
+- `clamp(x, lo, hi)` - Constrains `x` to the range `[lo, hi]`. Errors if `lo > hi`.
+- `sign(x)` - Three-way sign: `-1`, `0`, or `+1` (unlike floating-point `signum`, `sign(0.0)` is `0`).
+
+**Interpolation:**
+
+- `lerp(a, b, t)` - Linear interpolation `a + (b - a) * t`, always returning `Float`. `t` is **unclamped** (values outside `[0, 1]` extrapolate); wrap with `clamp(t, 0, 1)` to bound it.
 
 **Operator Precedence (highest to lowest):**
 1. Function calls, member access, parentheses

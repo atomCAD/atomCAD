@@ -9,20 +9,21 @@ mod lexer_tests {
 
     #[test]
     fn test_tokenize_numbers() {
+        // `42` is int-form (is_float = false); the rest are float-form.
         let tokens = tokenize("42");
-        assert_eq!(tokens, vec![Token::Number(42.0), Token::Eof]);
+        assert_eq!(tokens, vec![Token::Number(42.0, false), Token::Eof]);
 
         let tokens = tokenize("3.14");
-        assert_eq!(tokens, vec![Token::Number(3.14), Token::Eof]);
+        assert_eq!(tokens, vec![Token::Number(3.14, true), Token::Eof]);
 
         let tokens = tokenize("1.5e10");
-        assert_eq!(tokens, vec![Token::Number(1.5e10), Token::Eof]);
+        assert_eq!(tokens, vec![Token::Number(1.5e10, true), Token::Eof]);
 
         let tokens = tokenize("2.5E-3");
-        assert_eq!(tokens, vec![Token::Number(2.5e-3), Token::Eof]);
+        assert_eq!(tokens, vec![Token::Number(2.5e-3, true), Token::Eof]);
 
         let tokens = tokenize(".5");
-        assert_eq!(tokens, vec![Token::Number(0.5), Token::Eof]);
+        assert_eq!(tokens, vec![Token::Number(0.5, true), Token::Eof]);
     }
 
     #[test]
@@ -95,13 +96,13 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Number(2.0),
+                Token::Number(2.0, false),
                 Token::Star,
                 Token::Ident("x".to_string()),
                 Token::Plus,
                 Token::Ident("sin".to_string()),
                 Token::LParen,
-                Token::Number(3.14),
+                Token::Number(3.14, true),
                 Token::RParen,
                 Token::Eof
             ]
@@ -161,7 +162,7 @@ mod lexer_tests {
             vec![
                 Token::Ident("x".to_string()),
                 Token::EqEq,
-                Token::Number(5.0),
+                Token::Number(5.0, false),
                 Token::And,
                 Token::Not,
                 Token::Ident("flag".to_string()),
@@ -203,12 +204,12 @@ mod lexer_tests {
                 Token::If,
                 Token::Ident("x".to_string()),
                 Token::Gt,
-                Token::Number(0.0),
+                Token::Number(0.0, false),
                 Token::Then,
-                Token::Number(1.0),
+                Token::Number(1.0, false),
                 Token::Else,
                 Token::Minus,
-                Token::Number(1.0),
+                Token::Number(1.0, false),
                 Token::Eof
             ]
         );
@@ -572,9 +573,9 @@ mod parser_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Number(7.0),
+                Token::Number(7.0, false),
                 Token::Percent,
-                Token::Number(3.0),
+                Token::Number(3.0, false),
                 Token::Eof
             ]
         );

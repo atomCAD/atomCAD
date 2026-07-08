@@ -262,9 +262,12 @@ impl Parser {
     fn parse_bp(&mut self, min_bp: u8) -> Result<Expr, String> {
         // parse prefix / primary
         let mut lhs = match self.bump() {
-            Token::Number(n) => {
-                // Determine if this should be Int or Float based on whether it has a decimal point
-                if n.fract() == 0.0 && n >= i32::MIN as f64 && n <= i32::MAX as f64 {
+            Token::Number(n, is_float) => {
+                // A float-form literal (`2.0`, `1e3`) is always a Float. An
+                // int-form literal is an Int when it fits in i32, otherwise it
+                // falls back to Float (it cannot be represented as an Int).
+                if !is_float && n.fract() == 0.0 && (i32::MIN as f64..=i32::MAX as f64).contains(&n)
+                {
                     Expr::Int(n as i32)
                 } else {
                     Expr::Float(n)

@@ -1,6 +1,12 @@
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
-    Number(f64),
+    /// A numeric literal. The `f64` is the parsed value; the `bool` records
+    /// whether the literal was written in **float form** — i.e. it contained a
+    /// `.` or an exponent (`e`/`E`). The parser needs this to classify `2.0` as
+    /// a `Float` rather than reconstructing int-ness from the value alone
+    /// (`2.0` and `2` have the same f64 value; only the source form differs).
+    /// See issue #389.
+    Number(f64, bool),
     Bool(bool),
     Ident(String),
     Plus,
@@ -211,9 +217,12 @@ impl<'a> Lexer<'a> {
                     }
                     s += &self.eat_while(|ch| ch.is_ascii_digit());
                 }
+                // A literal is float-form if it carries a decimal point or an
+                // exponent; `42` is int-form, `42.0` / `4.2e1` are float-form.
+                let is_float = s.contains('.') || s.contains('e') || s.contains('E');
                 match s.parse::<f64>() {
-                    Ok(n) => Token::Number(n),
-                    Err(_) => Token::Number(0.0), // fallback; could return error
+                    Ok(n) => Token::Number(n, is_float),
+                    Err(_) => Token::Number(0.0, is_float), // fallback; could return error
                 }
             }
             Some(c) if c.is_ascii_alphabetic() || c == '_' => {

@@ -78,8 +78,7 @@ impl NodeData for IfData {
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
         // Evaluate the condition (pin 0). Unwired → inert (None); error → propagate.
-        let cond_val =
-            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
+        let cond_val = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0);
         match &cond_val {
             NetworkResult::None => return EvalOutput::single(NetworkResult::None),
             NetworkResult::Error(_) => return EvalOutput::single(cond_val),

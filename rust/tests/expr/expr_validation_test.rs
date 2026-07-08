@@ -145,6 +145,145 @@ mod validation_tests {
     }
 
     #[test]
+    fn test_min_max_validation_int_preserving() {
+        let variables = HashMap::new();
+        for name in ["min", "max"] {
+            // All-Int args -> Int result.
+            let expr = Expr::Call(name.to_string(), vec![Expr::Int(2), Expr::Int(3)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Int),
+                "{}",
+                name
+            );
+            // Any Float -> Float result.
+            let expr = Expr::Call(name.to_string(), vec![Expr::Int(2), Expr::Float(3.0)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Float),
+                "{}",
+                name
+            );
+            // Variadic: more than two args are accepted.
+            let expr = Expr::Call(
+                name.to_string(),
+                vec![Expr::Int(1), Expr::Int(2), Expr::Int(3)],
+            );
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Int),
+                "{}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_min_validation_too_few_args() {
+        let expr = Expr::Call("min".to_string(), vec![Expr::Int(1)]);
+        let result = expr.validate(&HashMap::new(), get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("at least 2 arguments"));
+    }
+
+    #[test]
+    fn test_min_validation_rejects_non_numeric() {
+        let expr = Expr::Call("min".to_string(), vec![Expr::Int(1), Expr::Bool(true)]);
+        let result = expr.validate(&HashMap::new(), get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects Int or Float"));
+    }
+
+    #[test]
+    fn test_clamp_validation_int_preserving() {
+        let variables = HashMap::new();
+        let expr = Expr::Call(
+            "clamp".to_string(),
+            vec![Expr::Int(5), Expr::Int(0), Expr::Int(10)],
+        );
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Int)
+        );
+        let expr = Expr::Call(
+            "clamp".to_string(),
+            vec![Expr::Float(5.0), Expr::Int(0), Expr::Int(10)],
+        );
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Float)
+        );
+    }
+
+    #[test]
+    fn test_clamp_validation_wrong_arg_count() {
+        let expr = Expr::Call("clamp".to_string(), vec![Expr::Int(1), Expr::Int(2)]);
+        let result = expr.validate(&HashMap::new(), get_function_signatures());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expects 3 arguments"));
+    }
+
+    #[test]
+    fn test_abs_sign_validation_int_preserving() {
+        let variables = HashMap::new();
+        for name in ["abs", "sign"] {
+            let expr = Expr::Call(name.to_string(), vec![Expr::Int(-3)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Int),
+                "{}",
+                name
+            );
+            let expr = Expr::Call(name.to_string(), vec![Expr::Float(-3.0)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Float),
+                "{}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_abs_int_deprecated_alias_still_validates() {
+        let expr = Expr::Call("abs_int".to_string(), vec![Expr::Int(-3)]);
+        assert_eq!(
+            expr.validate(&HashMap::new(), get_function_signatures()),
+            Ok(DataType::Int)
+        );
+    }
+
+    #[test]
+    fn test_lerp_exp_log_validation() {
+        let variables = HashMap::new();
+        let expr = Expr::Call(
+            "lerp".to_string(),
+            vec![Expr::Float(0.0), Expr::Float(10.0), Expr::Float(0.5)],
+        );
+        assert_eq!(
+            expr.validate(&variables, get_function_signatures()),
+            Ok(DataType::Float)
+        );
+        for name in ["exp", "log"] {
+            let expr = Expr::Call(name.to_string(), vec![Expr::Float(2.0)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Float),
+                "{}",
+                name
+            );
+            // Int arg is accepted via Int->Float compatibility.
+            let expr = Expr::Call(name.to_string(), vec![Expr::Int(2)]);
+            assert_eq!(
+                expr.validate(&variables, get_function_signatures()),
+                Ok(DataType::Float),
+                "{} (int arg)",
+                name
+            );
+        }
+    }
+
+    #[test]
     fn test_atan2_validation_wrong_arg_count() {
         let expr = Expr::Call("atan2".to_string(), vec![Expr::Float(1.0)]);
         let variables = HashMap::new();

@@ -24,11 +24,11 @@ mod lexer_tests {
             tokens,
             vec![
                 Token::LBracket,
-                Token::Number(1.0),
+                Token::Number(1.0, false),
                 Token::Comma,
-                Token::Number(2.0),
+                Token::Number(2.0, false),
                 Token::Comma,
-                Token::Number(3.0),
+                Token::Number(3.0, false),
                 Token::RBracket,
                 Token::Eof,
             ]
@@ -271,10 +271,9 @@ mod validation_tests {
 
     #[test]
     fn test_validate_promoted_to_float() {
-        // Note: existing expr lexer collapses `2.0` to Int(2) (pre-existing
-        // behavior — see Token::Number handling in parser.rs). Use 2.5 to keep
-        // the float-ness intact through parsing.
-        let result = validate("[1, 2.5, 3]", HashMap::new()).expect("should validate");
+        // `2.0` is a float-form literal (issue #389), so the array element type
+        // unifies to Float even though the other elements are int-form.
+        let result = validate("[1, 2.0, 3]", HashMap::new()).expect("should validate");
         assert_eq!(result, DataType::Array(Box::new(DataType::Float)));
     }
 
