@@ -17,6 +17,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::serialization_utils::ivec2_serializer;
 use crate::util::transform::Transform2D;
+use glam::f64::{DMat2, DVec2};
 use glam::i32::IVec2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -88,18 +89,35 @@ impl NodeData for CircleData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        // Convert to 2D real-space coordinates using effective unit cell
-        let real_center = drawing_plane
-            .effective_unit_cell
-            .ivec2_lattice_to_real(&center);
-        let real_radius = drawing_plane
-            .effective_unit_cell
-            .int_lattice_to_real(radius);
+        // Convert to 2D real-space coordinates using the effective unit cell.
+        let uc = &drawing_plane.effective_unit_cell;
+        let real_center = uc.ivec2_lattice_to_real(&center);
+
+        // For radius <= 0 keep today's Euclidean emission verbatim: the fractional
+        // disk |u - c₀| <= r is a single point for r == 0 (the radius-0 circle) and
+        // empty for r < 0 (an everywhere-positive SDF). Building `basis = r·L₂` for a
+        // negative radius would silently flip "empty" into a full-size shape, since
+        // neither the circular-basis snap nor the ellipse membership test can see the
+        // sign of the basis columns.
+        let geo_tree_root = if radius <= 0 {
+            GeoNode::circle(real_center, radius as f64 * uc.a.length())
+        } else {
+            // The lattice image of a circle: the disk in fractional coordinates
+            // {u : |u - c₀| <= r} mapped through the drawing plane's effective 2×2
+            // cell. On (near-)square cells the constructor's circular-basis fast path
+            // snaps this back to a plain Circle, so the square case stays
+            // byte-identical to today. `a`/`b` are embedded into the plane the same
+            // way as `dvec2_lattice_to_real` (drop the z component).
+            let a2 = DVec2::new(uc.a.x, uc.a.y);
+            let b2 = DVec2::new(uc.b.x, uc.b.y);
+            let basis = DMat2::from_cols(a2, b2) * (radius as f64);
+            GeoNode::ellipse(real_center, basis)
+        };
 
         EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
             drawing_plane,
             frame_transform: Transform2D::new(real_center, 0.0),
-            geo_tree_root: GeoNode::circle(real_center, real_radius),
+            geo_tree_root,
         }))
     }
 
@@ -156,7 +174,8 @@ impl NodeData for CircleData {
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "circle".to_string(),
-        description: "Outputs a circle with integer center coordinates and integer radius."
+        description: "Outputs the lattice image of a circle: integer center and \
+            radius in lattice cells; an ellipse on non-square effective cells."
             .to_string(),
         summary: None,
         category: NodeTypeCategory::Geometry2D,
