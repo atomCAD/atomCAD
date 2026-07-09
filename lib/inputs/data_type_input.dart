@@ -58,7 +58,7 @@ class _DataTypeInputState extends State<DataTypeInput> {
           decoration: AppInputDecorations.standard.copyWith(
             labelText: widget.label,
           ),
-          items: APIDataTypeBase.values.where(_baseSelectable).map((base) {
+          items: _orderedSelectableBases().map((base) {
             return DropdownMenuItem(
               value: base,
               child: Text(_getDataTypeBaseDisplayName(base)),
@@ -202,6 +202,17 @@ class _DataTypeInputState extends State<DataTypeInput> {
       initialValue: widget.value,
       onChanged: widget.onChanged,
     );
+  }
+
+  /// Selectable base types in dropdown display order. `Record` is hoisted to
+  /// the top because it is very frequently needed (issue #350); the remaining
+  /// bases keep their enum declaration order.
+  List<APIDataTypeBase> _orderedSelectableBases() {
+    final bases = APIDataTypeBase.values.where(_baseSelectable).toList();
+    if (bases.remove(APIDataTypeBase.record)) {
+      bases.insert(0, APIDataTypeBase.record);
+    }
+    return bases;
   }
 
   /// Which base-type dropdown entries are offered, given the `allowOptional` /
