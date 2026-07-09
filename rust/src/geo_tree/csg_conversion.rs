@@ -2,6 +2,7 @@ use super::csg_cache::CsgConversionCache;
 use super::{GeoNode, GeoNodeKind};
 use crate::geo_tree::csg_types::CSGMesh;
 use crate::geo_tree::csg_types::CSGSketch;
+use crate::geo_tree::csg_utils::dmat3_affine_to_csg_matrix4;
 use crate::geo_tree::csg_utils::dvec3_to_point3;
 use crate::geo_tree::csg_utils::dvec3_to_vector3;
 use crate::geo_tree::csg_utils::scale_to_csg;
@@ -9,7 +10,7 @@ use crate::util::transform::Transform;
 use csgrs::mesh::polygon::Polygon;
 use csgrs::mesh::vertex::Vertex;
 use csgrs::traits::CSG;
-use glam::f64::{DQuat, DVec2, DVec3};
+use glam::f64::{DMat3, DQuat, DVec2, DVec3};
 
 impl GeoNode {
     /// Convert to CSG mesh without caching
@@ -91,6 +92,12 @@ impl GeoNode {
                 Some(Self::half_space_to_csg(*normal, *center, is_root))
             }
             GeoNodeKind::Sphere { center, radius } => Some(Self::sphere_to_csg(*center, *radius)),
+            GeoNodeKind::Ellipsoid {
+                center,
+                basis,
+                lipschitz_scale,
+                ..
+            } => Some(Self::ellipsoid_to_csg(*center, *basis, *lipschitz_scale)),
             GeoNodeKind::Extrude {
                 height,
                 direction,
@@ -176,6 +183,19 @@ impl GeoNode {
             scale_to_csg(center.y),
             scale_to_csg(center.z),
         )
+    }
+
+    fn ellipsoid_to_csg(center: DVec3, basis: DMat3, lipschitz_scale: f64) -> CSGMesh {
+        if lipschitz_scale == 0.0 {
+            return CSGMesh::new(); // degenerate cell → empty mesh
+        }
+        // Same tessellation density as Sphere: a unit sphere (radius 1.0, NOT
+        // scale_to_csg(1.0)) followed by a single affine map. A linear map sends
+        // sphere-inscribed vertices to ellipsoid-inscribed vertices one-to-one.
+        let segments = 24;
+        let stacks = 12;
+        let affine = dmat3_affine_to_csg_matrix4(basis, center);
+        CSGMesh::sphere(1.0, segments, stacks, None).transform(&affine)
     }
 
     fn polygon_to_csg(vertices: &[DVec2]) -> CSGSketch {

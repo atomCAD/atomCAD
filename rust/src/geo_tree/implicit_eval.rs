@@ -2,7 +2,7 @@ use super::{GeoNode, GeoNodeKind};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
 use crate::geo_tree::implicit_geometry::{BATCH_SIZE, ImplicitGeometry3D};
 use crate::util::transform::Transform;
-use glam::f64::{DVec2, DVec3};
+use glam::f64::{DMat3, DVec2, DVec3};
 
 impl ImplicitGeometry2D for GeoNode {
     fn get_gradient_2d(&self, sample_point: &DVec2) -> (DVec2, f64) {
@@ -109,6 +109,12 @@ impl ImplicitGeometry3D for GeoNode {
             GeoNodeKind::Sphere { center, radius } => {
                 Self::sphere_implicit_eval(*center, *radius, sample_point)
             }
+            GeoNodeKind::Ellipsoid {
+                center,
+                inv_basis,
+                lipschitz_scale,
+                ..
+            } => Self::ellipsoid_implicit_eval(*center, inv_basis, *lipschitz_scale, sample_point),
             GeoNodeKind::Extrude {
                 height,
                 direction,
@@ -150,6 +156,18 @@ impl ImplicitGeometry3D for GeoNode {
             GeoNodeKind::Sphere { center, radius } => {
                 Self::sphere_implicit_eval_batch(*center, *radius, sample_points, results)
             }
+            GeoNodeKind::Ellipsoid {
+                center,
+                inv_basis,
+                lipschitz_scale,
+                ..
+            } => Self::ellipsoid_implicit_eval_batch(
+                *center,
+                inv_basis,
+                *lipschitz_scale,
+                sample_points,
+                results,
+            ),
             GeoNodeKind::Extrude {
                 height,
                 direction,
@@ -191,6 +209,7 @@ impl ImplicitGeometry3D for GeoNode {
             &self.kind,
             GeoNodeKind::HalfSpace { .. }
                 | GeoNodeKind::Sphere { .. }
+                | GeoNodeKind::Ellipsoid { .. }
                 | GeoNodeKind::Extrude { .. }
                 | GeoNodeKind::Transform { .. }
                 | GeoNodeKind::Union3D { .. }
@@ -279,6 +298,43 @@ impl GeoNode {
         // This is highly optimizable since it's just vector operations
         for i in 0..BATCH_SIZE {
             results[i] = (sample_points[i] - center).length() - radius;
+        }
+    }
+
+    /// SDF of the ellipsoid `E = { x : |inv_basis·(x − center)| ≤ 1 }`.
+    ///
+    /// The value has the *exact* sign and zero set of the ellipsoid; its
+    /// magnitude is a guaranteed underestimate of true Euclidean distance.
+    /// Scaling `|q| − 1` (1-Lipschitz in `q`) by `σ_min(basis) = lipschitz_scale`
+    /// makes the result exactly 1-Lipschitz in `x`, so `|f(x)| ≤ dist(x, ∂E)`.
+    /// A degenerate basis is flagged by `lipschitz_scale == 0.0` → empty shape.
+    fn ellipsoid_implicit_eval(
+        center: DVec3,
+        inv_basis: &DMat3,
+        lipschitz_scale: f64,
+        sample_point: &DVec3,
+    ) -> f64 {
+        if lipschitz_scale == 0.0 {
+            return f64::MAX; // degenerate cell → empty shape
+        }
+        let q = *inv_basis * (*sample_point - center);
+        (q.length() - 1.0) * lipschitz_scale
+    }
+
+    fn ellipsoid_implicit_eval_batch(
+        center: DVec3,
+        inv_basis: &DMat3,
+        lipschitz_scale: f64,
+        sample_points: &[DVec3; BATCH_SIZE],
+        results: &mut [f64; BATCH_SIZE],
+    ) {
+        if lipschitz_scale == 0.0 {
+            results.fill(f64::MAX);
+            return;
+        }
+        for i in 0..BATCH_SIZE {
+            let q = *inv_basis * (sample_points[i] - center);
+            results[i] = (q.length() - 1.0) * lipschitz_scale;
         }
     }
 

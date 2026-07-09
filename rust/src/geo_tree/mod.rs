@@ -1,6 +1,7 @@
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use crate::util::transform::Transform;
 use blake3;
+use glam::f64::DMat3;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::fmt;
@@ -34,6 +35,13 @@ enum GeoNodeKind {
     Sphere {
         center: DVec3,
         radius: f64,
+    },
+    Ellipsoid {
+        center: DVec3, // real-space center = L·c₀
+        basis: DMat3,  // columns = r·a, r·b, r·c (maps the unit ball → the ellipsoid)
+        // Derived, precomputed by the constructor; EXCLUDED from hashing.
+        inv_basis: DMat3,     // basis.inverse() (unused when degenerate)
+        lipschitz_scale: f64, // σ_min(basis); 0.0 marks a degenerate (empty) ellipsoid
     },
     Polygon {
         vertices: Vec<DVec2>,
@@ -121,6 +129,16 @@ impl GeoNode {
                     prefix,
                     format_vec3(center),
                     format_f64(radius)
+                )
+            }
+            GeoNodeKind::Ellipsoid { center, basis, .. } => {
+                format!(
+                    "{}Ellipsoid(center: {}, basis: [{}, {}, {}])",
+                    prefix,
+                    format_vec3(center),
+                    format_vec3(&basis.x_axis),
+                    format_vec3(&basis.y_axis),
+                    format_vec3(&basis.z_axis)
                 )
             }
             GeoNodeKind::Polygon { vertices } => {
@@ -267,6 +285,71 @@ impl GeoNode {
 
         Self {
             kind: GeoNodeKind::Sphere { center, radius },
+            hash: hasher.finalize(),
+        }
+    }
+
+    /// Construct the lattice image of a sphere: a ball in fractional (lattice)
+    /// coordinates mapped to real space through `basis` (columns = r·a, r·b, r·c),
+    /// centered at `center` (= L·c₀). This is an ellipsoid in general.
+    ///
+    /// Two normalizations run, in order:
+    /// 1. **Spherical-basis fast path** — if the basis columns are pairwise
+    ///    orthogonal with equal lengths, the shape is a true Euclidean sphere and
+    ///    a plain `GeoNodeKind::Sphere` is returned instead. This makes
+    ///    (approximately) cubic cells byte-identical to a directly constructed
+    ///    sphere (same SDF/CSG arms, same hash), and also catches
+    ///    rotated-orthonormal bases.
+    /// 2. **Degenerate basis** — if `|det(basis)|` is ~0 the ellipsoid is empty;
+    ///    a degenerate marker (`lipschitz_scale = 0.0`) is stored and eval returns
+    ///    `f64::MAX` everywhere (never panics).
+    pub fn ellipsoid(center: DVec3, basis: DMat3) -> Self {
+        // 1. Spherical-basis fast path (the cubic-regression guard).
+        if let Some(radius) = spherical_radius_3d(&basis) {
+            return Self::sphere(center, radius);
+        }
+
+        // 2. Degenerate basis → empty shape.
+        if basis.determinant().abs() < 1e-12 {
+            return Self::ellipsoid_from_parts(center, basis, DMat3::ZERO, 0.0);
+        }
+
+        // 3. General ellipsoid.
+        let inv_basis = basis.inverse();
+        // σ_min(basis) = √λ_min(basisᵀ·basis); this is the tightest single-scalar
+        // rescaling that makes the SDF exactly 1-Lipschitz (see implicit_eval.rs).
+        let gram = basis.transpose() * basis;
+        let lipschitz_scale = min_eigenvalue_symmetric_3x3(&gram).max(0.0).sqrt();
+        Self::ellipsoid_from_parts(center, basis, inv_basis, lipschitz_scale)
+    }
+
+    /// Assembles an `Ellipsoid` node, hashing **only** `center` + `basis`
+    /// (tag `0x0E`); the derived `inv_basis` / `lipschitz_scale` must not affect
+    /// identity.
+    fn ellipsoid_from_parts(
+        center: DVec3,
+        basis: DMat3,
+        inv_basis: DMat3,
+        lipschitz_scale: f64,
+    ) -> Self {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&[0x0E]); // variant tag
+        hasher.update(&center.x.to_le_bytes());
+        hasher.update(&center.y.to_le_bytes());
+        hasher.update(&center.z.to_le_bytes());
+        for col in [basis.x_axis, basis.y_axis, basis.z_axis] {
+            hasher.update(&col.x.to_le_bytes());
+            hasher.update(&col.y.to_le_bytes());
+            hasher.update(&col.z.to_le_bytes());
+        }
+
+        Self {
+            kind: GeoNodeKind::Ellipsoid {
+                center,
+                basis,
+                inv_basis,
+                lipschitz_scale,
+            },
             hash: hasher.finalize(),
         }
     }
@@ -422,6 +505,78 @@ impl GeoNode {
     }
 }
 
+/// If the basis columns are pairwise orthogonal with (approximately) equal
+/// lengths, the mapped ball is a true Euclidean sphere; returns its radius (the
+/// common column length). Otherwise `None`. Tolerance `1e-9` (relative); a zero
+/// or near-zero column length disqualifies the basis (it is not spherical — it
+/// is degenerate, handled separately).
+fn spherical_radius_3d(basis: &DMat3) -> Option<f64> {
+    const TOL: f64 = 1e-9;
+    let c0 = basis.x_axis;
+    let c1 = basis.y_axis;
+    let c2 = basis.z_axis;
+    let l0 = c0.length();
+    let l1 = c1.length();
+    let l2 = c2.length();
+    if l0 <= 0.0 || l1 <= 0.0 || l2 <= 0.0 {
+        return None;
+    }
+    // Pairwise orthogonality: |cᵢ·cⱼ| ≤ tol·|cᵢ|·|cⱼ|.
+    if c0.dot(c1).abs() > TOL * l0 * l1
+        || c0.dot(c2).abs() > TOL * l0 * l2
+        || c1.dot(c2).abs() > TOL * l1 * l2
+    {
+        return None;
+    }
+    // Equal lengths: ||cᵢ| − |cⱼ|| ≤ tol·max_k|cₖ|.
+    let max_l = l0.max(l1).max(l2);
+    if (l0 - l1).abs() > TOL * max_l
+        || (l0 - l2).abs() > TOL * max_l
+        || (l1 - l2).abs() > TOL * max_l
+    {
+        return None;
+    }
+    Some(l0)
+}
+
+/// Smallest eigenvalue of a symmetric 3×3 matrix via the standard closed-form
+/// trigonometric solution (Smith 1961). Used to obtain `σ_min` of a basis as
+/// `√λ_min(basisᵀ·basis)` without an SVD library. `m` is assumed symmetric.
+fn min_eigenvalue_symmetric_3x3(m: &DMat3) -> f64 {
+    // Column-major glam storage: x_axis is column 0, etc.
+    let a11 = m.x_axis.x;
+    let a22 = m.y_axis.y;
+    let a33 = m.z_axis.z;
+    let a12 = m.y_axis.x; // (row 0, col 1)
+    let a13 = m.z_axis.x; // (row 0, col 2)
+    let a23 = m.z_axis.y; // (row 1, col 2)
+
+    let p1 = a12 * a12 + a13 * a13 + a23 * a23;
+    if p1 == 0.0 {
+        // Already diagonal.
+        return a11.min(a22).min(a33);
+    }
+
+    let q = (a11 + a22 + a33) / 3.0;
+    let p2 = (a11 - q) * (a11 - q) + (a22 - q) * (a22 - q) + (a33 - q) * (a33 - q) + 2.0 * p1;
+    let p = (p2 / 6.0).sqrt();
+
+    // B = (1/p)·(A − q·I); r = det(B)/2 ∈ [−1, 1].
+    let b11 = (a11 - q) / p;
+    let b22 = (a22 - q) / p;
+    let b33 = (a33 - q) / p;
+    let b12 = a12 / p;
+    let b13 = a13 / p;
+    let b23 = a23 / p;
+    let det_b = b11 * (b22 * b33 - b23 * b23) - b12 * (b12 * b33 - b23 * b13)
+        + b13 * (b12 * b23 - b22 * b13);
+    let r = (det_b / 2.0).clamp(-1.0, 1.0);
+
+    let phi = r.acos() / 3.0;
+    // Smallest of the three eigenvalues q + 2p·cos(φ + 2πk/3).
+    q + 2.0 * p * (phi + 2.0 * std::f64::consts::PI / 3.0).cos()
+}
+
 // Helper functions for formatting
 fn format_vec2(v: &DVec2) -> String {
     format!("({}, {})", format_f64(&v.x), format_f64(&v.y))
@@ -465,6 +620,11 @@ impl MemorySizeEstimator for GeoNode {
             GeoNodeKind::HalfPlane { .. } => std::mem::size_of::<DVec2>() * 2,
             GeoNodeKind::Circle { .. } => std::mem::size_of::<DVec2>() + std::mem::size_of::<f64>(),
             GeoNodeKind::Sphere { .. } => std::mem::size_of::<DVec3>() + std::mem::size_of::<f64>(),
+            GeoNodeKind::Ellipsoid { .. } => {
+                std::mem::size_of::<DVec3>()
+                    + 2 * std::mem::size_of::<DMat3>()
+                    + std::mem::size_of::<f64>()
+            }
 
             // Polygon - has a Vec of vertices
             GeoNodeKind::Polygon { vertices } => {
