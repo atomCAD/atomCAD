@@ -3009,6 +3009,45 @@ class APISupercellData {
           c == other.c;
 }
 
+/// Editable state of a `switch` node (select a value by matching a selector
+/// against literal cases; `doc/design_switch_node.md`). Case values cross the
+/// API as **strings** — the editor edits plain text fields and Rust parses each
+/// per `selector_type` (an Int selector rejects a non-integer field, surfaced
+/// through the setter's `APIResult`). The hidden per-case stable ids are managed
+/// Rust-side and never cross the API — only the ordered case values, the
+/// selector type, and the value type are exposed. See `doc/design_switch_node.md`
+/// (Phase 4).
+class APISwitchData {
+  /// The selector pin type — Int or String.
+  final APIDataType selectorType;
+
+  /// The value type of the case pins, the `default` pin, and the output pin.
+  final APIDataType valueType;
+
+  /// The case literals in pin order, each rendered as a string (parsed back
+  /// into the selector domain by the setter).
+  final List<String> caseValues;
+
+  const APISwitchData({
+    required this.selectorType,
+    required this.valueType,
+    required this.caseValues,
+  });
+
+  @override
+  int get hashCode =>
+      selectorType.hashCode ^ valueType.hashCode ^ caseValues.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISwitchData &&
+          runtimeType == other.runtimeType &&
+          selectorType == other.selectorType &&
+          valueType == other.valueType &&
+          caseValues == other.caseValues;
+}
+
 /// Result of applying text format edits to the active network.
 class APITextEditResult {
   final bool success;

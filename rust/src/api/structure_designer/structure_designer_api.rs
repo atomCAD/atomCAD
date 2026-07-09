@@ -50,6 +50,7 @@ use super::structure_designer_api_types::APIRegPolyData;
 use super::structure_designer_api_types::APISequenceData;
 use super::structure_designer_api_types::APISimpleParamType;
 use super::structure_designer_api_types::APISourcePin;
+use super::structure_designer_api_types::APISwitchData;
 use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
@@ -210,6 +211,7 @@ use crate::structure_designer::nodes::string::StringData;
 use crate::structure_designer::nodes::structure_move::StructureMoveData;
 use crate::structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
 use crate::structure_designer::nodes::supercell::SupercellData;
+use crate::structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
 use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use crate::structure_designer::nodes::zip_with::ZipWithData;
@@ -4561,6 +4563,36 @@ pub fn get_zip_with_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIZipWit
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_switch_data(scope_path: Vec<u64>, node_id: u64) -> Option<APISwitchData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let switch_data = node_data.as_any_ref().downcast_ref::<SwitchData>()?;
+
+                Some(APISwitchData {
+                    selector_type: data_type_to_api_data_type(&switch_data.selector_type),
+                    value_type: data_type_to_api_data_type(&switch_data.value_type),
+                    // Case values cross as plain strings; the editor renders them
+                    // in text fields and the setter reparses per selector type.
+                    case_values: switch_data
+                        .cases
+                        .iter()
+                        .map(|c| match &c.value {
+                            SwitchCaseValue::Int(i) => i.to_string(),
+                            SwitchCaseValue::String(s) => s.clone(),
+                        })
+                        .collect(),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_patch_build_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPatchBuildData> {
     unsafe {
         with_cad_instance_or(
@@ -6246,6 +6278,81 @@ pub fn remove_zip_with_lane(scope_path: Vec<u64>, node_id: u64, lane_index: usiz
             );
             refresh_structure_designer_auto(cad_instance);
         });
+    }
+}
+
+/// Whole-data edit on a `switch` node (selector type, value type, and case
+/// list, `doc/design_switch_node.md` Phase 4). Case values arrive as the
+/// editor's text fields and are parsed here into the selector domain — a field
+/// that is not a valid integer under an Int selector is reported back through
+/// the `APIResult` so the panel can display it inline (nothing is mutated).
+/// Otherwise delegates to `StructureDesigner::set_switch_data`, which performs
+/// the value-keyed id merge and pushes the shared `NodeStructureEditCommand`
+/// undo capture — the API layer adds no undo logic and never sees the hidden
+/// case ids.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_switch_data(scope_path: Vec<u64>, node_id: u64, data: APISwitchData) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let selector_type =
+                    api_data_type_to_data_type(&data.selector_type).unwrap_or(DataType::None);
+                let value_type =
+                    api_data_type_to_data_type(&data.value_type).unwrap_or(DataType::None);
+
+                if !matches!(selector_type, DataType::Int | DataType::String) {
+                    return APIResult {
+                        success: false,
+                        error_message: "selector_type must be Int or String".to_string(),
+                    };
+                }
+
+                // Parse the editor's text fields into the target selector domain.
+                // A bad Int is surfaced to the panel rather than silently dropped.
+                let mut case_values = Vec::with_capacity(data.case_values.len());
+                for s in &data.case_values {
+                    let value = match selector_type {
+                        DataType::String => SwitchCaseValue::String(s.clone()),
+                        _ => match s.trim().parse::<i32>() {
+                            Ok(i) => SwitchCaseValue::Int(i),
+                            Err(_) => {
+                                return APIResult {
+                                    success: false,
+                                    error_message: format!(
+                                        "case value \"{}\" is not a valid integer",
+                                        s
+                                    ),
+                                };
+                            }
+                        },
+                    };
+                    case_values.push(value);
+                }
+
+                let result = cad_instance.structure_designer.set_switch_data(
+                    &scope_path,
+                    node_id,
+                    selector_type,
+                    value_type,
+                    case_values,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(e) => APIResult {
+                        success: false,
+                        error_message: e,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
     }
 }
 

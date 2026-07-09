@@ -6,7 +6,7 @@ The `if` node (`nodes/if_else.rs`, see `nodes/AGENTS.md`) gave the network a
 lazy two-way branch on a `Bool`. Its design deferred the natural follow-up: an
 n-way branch keyed by a value. `switch` fills that gap:
 
-- **Selector** — a `value` input pin of a user-selected *selector type*
+- **Selector** — a `selector` input pin of a user-selected *selector type*
   (**Int or String**).
 - **Cases** — a user-edited list of literal case values (edited in the
   property panel, not wired). Each case contributes one input pin whose name
@@ -31,7 +31,7 @@ reuses the hidden-stable-id machinery built there.
 | Branch/output type | **Separate `value_type`** property (any concrete type, mirroring `if.value_type`), independent of the Int/String `selector_type`. |
 | Case pin naming | **`case_<value>`, sanitized** — names derived from the literal values; wires keyed by a hidden stable id per case, so the name is cosmetic. No backtick-quoting (sanitized names always lex as bare identifiers). |
 | Duplicate case values | **Rejected at edit time** — the property setter and `set_text_properties` refuse a duplicate value with an error; the node can never hold duplicates through supported edit paths. |
-| Default / laziness | **Mirror `if`** — all pins optional; unwired `value` → inert `None`; no match + unwired `default` → `None`; strictly lazy (selector first, then only the matched branch's upstream cone). No warning for an unwired `default`. |
+| Default / laziness | **Mirror `if`** — all pins optional; unwired `selector` → inert `None`; no match + unwired `default` → `None`; strictly lazy (selector first, then only the matched branch's upstream cone). No warning for an unwired `default`. |
 
 ## Node shape
 
@@ -41,12 +41,12 @@ parameters):
 
 | Pin | Index | Type | Notes |
 |---|---|---|---|
-| `value` | 0 | `selector_type` (Int \| String) | the selector |
+| `selector` | 0 | `selector_type` (Int \| String) | the selector |
 | `case_<v1>` … `case_<vN>` | 1 … N | `value_type` | one per case, `Parameter.id = case.id` |
 | `default` | N+1 | `value_type` | fixed name, `id: None` |
 | output | 0 | `value_type` | `OutputPinDefinition::single_fixed` |
 
-The fixed names `value` / `default` cannot collide with case pins — every case
+The fixed names `selector` / `default` cannot collide with case pins — every case
 pin carries the `case_` prefix. The prefix also keeps case pins from colliding
 with the text-format property keys (`selector_type`, `value_type`, `cases`) in
 the node's `{ … }` block.
@@ -78,7 +78,7 @@ pub struct SwitchCase {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwitchData {
-    /// Type of the `value` selector pin. Restricted to Int | String —
+    /// Type of the `selector` pin. Restricted to Int | String —
     /// validated by every setter; a hand-authored other type is healed at
     /// load (see "Healing" below).
     pub selector_type: DataType,
@@ -142,7 +142,7 @@ of the derived name are therefore free.
 1. `evaluate_arg(pin 0)` — the selector. `None` → node is inert, output
    `EvalOutput::single(None)`. `Error` → propagate. Extract per
    `selector_type` (`NetworkResult::Int` / `NetworkResult::String`); any other
-   variant → `switch.value: expected Int, got …` error. (A `Float` wired to an
+   variant → `switch.selector: expected Int, got …` error. (A `Float` wired to an
    Int selector already truncated at the wire — the standard conversion.)
 2. Find the case whose literal equals the selector value — `i32` equality /
    exact case-sensitive string equality. Values are unique through supported
@@ -260,7 +260,7 @@ text edits are covered by `TextEditNetworkCommand` (no double push).
 
 ```
 s = switch { selector_type: Int, value_type: Crystal, cases: [1, 2, 5],
-             value: sel, case_1: a, case_2: b, case_5: c, default: d }
+             selector: sel, case_1: a, case_2: b, case_5: c, default: d }
 ```
 
 - `get_text_properties`: `selector_type` / `value_type` as
@@ -300,7 +300,7 @@ migration**. Loader healing (mirrors `zip_with`'s):
 - **`get_subtitle`**: `Int → Crystal (3 cases)`.
 - **`adapt_for_drag_source`**: mirror `if` — set `value_type` to the source
   type in both drag directions; reject abstract types and `Iter[T]`. (A
-  dragged Int also matches the static `value` pin of the default node, so
+  dragged Int also matches the static `selector` pin of the default node, so
   `switch` still surfaces for an integer drag without adaptation; a String
   drag adapts the *value* side — users flip `selector_type` manually when the
   string is meant as the selector.)

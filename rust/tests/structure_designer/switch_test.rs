@@ -165,7 +165,7 @@ fn test_switch_registered_in_registry() {
     assert!(nt.public);
     // value + 2 cases + default
     assert_eq!(nt.parameters.len(), 4);
-    assert_eq!(nt.parameters[0].name, "value");
+    assert_eq!(nt.parameters[0].name, "selector");
     assert_eq!(nt.parameters[0].data_type, DataType::Int);
     assert_eq!(nt.parameters[1].name, "case_0");
     assert_eq!(nt.parameters[2].name, "case_1");
@@ -192,9 +192,9 @@ fn test_switch_custom_type_shape() {
     );
     let custom = data.calculate_custom_node_type(base).unwrap();
 
-    // value (Int) + 3 cases (Crystal) + default (Crystal).
+    // selector (Int) + 3 cases (Crystal) + default (Crystal).
     assert_eq!(custom.parameters.len(), 5);
-    assert_eq!(custom.parameters[0].name, "value");
+    assert_eq!(custom.parameters[0].name, "selector");
     assert_eq!(custom.parameters[0].data_type, DataType::Int);
     assert_eq!(custom.parameters[1].name, "case_3");
     assert_eq!(custom.parameters[2].name, "case_neg3");
@@ -203,7 +203,7 @@ fn test_switch_custom_type_shape() {
     for i in 1..=4 {
         assert_eq!(custom.parameters[i].data_type, DataType::Crystal);
     }
-    // Case pins carry their stable ids; value / default do not.
+    // Case pins carry their stable ids; selector / default do not.
     assert_eq!(custom.parameters[1].id, Some(1));
     assert_eq!(custom.parameters[2].id, Some(2));
     assert_eq!(custom.parameters[3].id, Some(3));
@@ -915,7 +915,7 @@ fn test_set_switch_data_remove_middle_keeps_wires() {
 
     // Pins renumber: value, case_10, case_30, default.
     let names = switch_case_pin_names(&designer, "test", sw);
-    assert_eq!(names, vec!["value", "case_10", "case_30", "default"]);
+    assert_eq!(names, vec!["selector", "case_10", "case_30", "default"]);
 
     // case_10 keeps its wire at pin 1; case_30's wire follows its id onto the
     // renumbered pin 2; the removed case_20's wire is gone.
@@ -961,7 +961,7 @@ fn test_set_switch_data_edit_in_place_keeps_wire() {
     let names = switch_case_pin_names(&designer, "test", sw);
     assert_eq!(
         names,
-        vec!["value", "case_10", "case_25", "case_30", "default"]
+        vec!["selector", "case_10", "case_25", "case_30", "default"]
     );
     assert_eq!(
         switch_arg_source(&designer, "test", sw, 2),
@@ -1011,9 +1011,9 @@ fn test_set_switch_data_no_positional_steal_wires() {
         )
         .expect("reorder-insert must succeed");
 
-    // New pin order: value, case_3, case_1, default.
+    // New pin order: selector, case_3, case_1, default.
     let names = switch_case_pin_names(&designer, "test", sw);
-    assert_eq!(names, vec!["value", "case_3", "case_1", "default"]);
+    assert_eq!(names, vec!["selector", "case_3", "case_1", "default"]);
     // case_1 (pin 2) keeps s1; case_3 (pin 1) is fresh/unwired; s2 dropped.
     assert_eq!(switch_arg_source(&designer, "test", sw, 2), Some(s1));
     assert_eq!(switch_arg_source(&designer, "test", sw, 1), None);
@@ -1044,7 +1044,7 @@ fn test_set_switch_data_selector_flip_keeps_wires() {
     let names = switch_case_pin_names(&designer, "test", sw);
     assert_eq!(
         names,
-        vec!["value", "case_10", "case_20", "case_30", "default"]
+        vec!["selector", "case_10", "case_20", "case_30", "default"]
     );
     // Every case wire survived (value match after conversion).
     assert_eq!(switch_arg_source(&designer, "test", sw, 1), Some(s10));
@@ -1665,5 +1665,174 @@ fn switch_phase3_heal_is_noop_on_valid_data() {
             .iter()
             .map(|c| c.value.clone())
             .collect::<Vec<_>>()
+    );
+}
+
+// ============================================================================
+// Phase 4 (API): the scope-aware setter reaches a body-internal switch.
+//
+// The API layer is a thin wrapper (tested via the underlying core function per
+// `rust/AGENTS.md`), but the property-panel-wrong-node bug class — a setter
+// resolving a body node by bare id and hitting a same-id top-level node — must
+// be pinned by a `scope_path`-driven test of the `StructureDesigner` op the API
+// forwards to.
+// ============================================================================
+
+/// Read the `SwitchData` of a node living inside `map_id`'s zone body.
+fn body_switch_data<'a>(
+    designer: &'a StructureDesigner,
+    network: &str,
+    map_id: u64,
+    sw_id: u64,
+) -> &'a SwitchData {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap()
+        .nodes
+        .get(&map_id)
+        .unwrap()
+        .zone
+        .as_ref()
+        .expect("map body")
+        .nodes
+        .get(&sw_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<SwitchData>()
+        .expect("body node is a switch")
+}
+
+/// `set_switch_data` with a non-empty `scope_path` edits the switch inside a
+/// `map` body, not a same-id node in the active top-level network.
+#[test]
+fn test_set_switch_data_targets_body_node_via_scope_path() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+
+    // A body switch with id 4, plus a top-level switch that happens to share the
+    // numeric id 4 would be the collision — but top-level ids are auto-assigned,
+    // so instead we plant a top-level switch with distinct cases and prove the
+    // scoped edit leaves it untouched while the body switch changes.
+    let top_sw = add_switch(
+        &mut designer,
+        "main",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        600.0,
+    );
+
+    let sw_id = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .expect("map body must init");
+        body.add_node(
+            "switch",
+            DVec2::new(0.0, 0.0),
+            top_sw as usize, // same numeric id as the top-level switch — the bug class
+            Box::new(switch_data(
+                DataType::Int,
+                DataType::Int,
+                vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+            )),
+        )
+    };
+    // Populate the body switch's custom-type cache (mirrors set_node_data,
+    // resolved through the body network).
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&sw_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    designer.validate_active_network();
+
+    // Edit the body switch through its scope path.
+    designer
+        .set_switch_data(
+            &[map_id],
+            sw_id,
+            DataType::Int,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::Int(0),
+                SwitchCaseValue::Int(1),
+                SwitchCaseValue::Int(2),
+            ],
+        )
+        .expect("scoped body switch edit must succeed");
+
+    // The body switch got the new third case…
+    let body = body_switch_data(&designer, "main", map_id, sw_id);
+    assert_eq!(
+        body.cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            SwitchCaseValue::Int(0),
+            SwitchCaseValue::Int(1),
+            SwitchCaseValue::Int(2),
+        ],
+        "the body switch (targeted by scope_path) must have gained the new case"
+    );
+
+    // …while the same-id top-level switch is untouched.
+    let top = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .nodes
+        .get(&top_sw)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<SwitchData>()
+        .unwrap();
+    assert_eq!(
+        top.cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>(),
+        vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        "the same-id top-level switch must NOT be affected by the scoped edit"
     );
 }

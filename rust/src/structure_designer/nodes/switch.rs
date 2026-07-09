@@ -4,7 +4,7 @@
 //! `if` gave the network a lazy two-way branch on a `Bool`; `switch` is the
 //! n-way generalization keyed by a value:
 //!
-//! - **Selector** — a `value` input pin of a user-selected *selector type*
+//! - **Selector** — a `selector` input pin of a user-selected *selector type*
 //!   (**Int or String**).
 //! - **Cases** — a user-edited list of literal case values (edited in the
 //!   property panel, not wired). Each case contributes one input pin whose name
@@ -68,7 +68,7 @@ pub struct SwitchCase {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwitchData {
-    /// Type of the `value` selector pin. Restricted to Int | String — validated
+    /// Type of the `selector` pin. Restricted to Int | String — validated
     /// by every setter; a hand-authored other type is healed at load
     /// (Phase 3).
     pub selector_type: DataType,
@@ -418,14 +418,14 @@ impl NodeData for SwitchData {
         let mut custom = base_node_type.clone();
 
         // Built from scratch (like `zip_with`/`expr`, not by indexing base
-        // parameters — the count varies): the `value` selector pin, then one
+        // parameters — the count varies): the `selector` pin, then one
         // pin per case (carrying the case's hidden stable id), then the fixed
         // `default` pin.
         let case_names = self.derived_case_pin_names();
         let mut parameters = Vec::with_capacity(self.cases.len() + 2);
         parameters.push(Parameter {
             id: None,
-            name: "value".to_string(),
+            name: "selector".to_string(),
             data_type: self.selector_type.clone(),
         });
         for (case, name) in self.cases.iter().zip(case_names) {
@@ -479,7 +479,7 @@ impl NodeData for SwitchData {
                 .position(|c| c.value == SwitchCaseValue::String(s.clone())),
             other => {
                 return EvalOutput::single(NetworkResult::Error(format!(
-                    "switch.value: expected {}, got {:?}",
+                    "switch.selector: expected {}, got {:?}",
                     self.selector_type,
                     other.infer_data_type()
                 )));
@@ -582,8 +582,8 @@ impl NodeData for SwitchData {
         // Mirror `if`: the case pins / `default` / output are all plain `T`, so
         // in both drag directions the useful adaptation is `value_type = T`.
         // Reject types that can't be a clean concrete value pin (abstract phase
-        // supertypes, `Iter[T]`). A dragged Int also matches the static `value`
-        // selector pin, so `switch` still surfaces for an integer drag; a
+        // supertypes, `Iter[T]`). A dragged Int also matches the static
+        // `selector` pin, so `switch` still surfaces for an integer drag; a
         // String drag adapts the *value* side (users flip `selector_type`
         // manually when the string is meant as the selector).
         if source_type.is_abstract() || matches!(source_type, DataType::Iterator(_)) {
@@ -641,8 +641,8 @@ pub fn get_node_type() -> NodeType {
         name: "switch".to_string(),
         description:
             "Selects a value by matching a selector against a list of literal cases (an n-way \
-             generalization of `if`, also known as select / match / multiplex). The `value` \
-             selector pin is compared against the user-edited case literals; the matching case's \
+             generalization of `if`, also known as select / match / multiplex). The `selector` \
+             pin is compared against the user-edited case literals; the matching case's \
              pin — or the fixed `default` pin when nothing matches — is the one and only branch \
              evaluated (the others' inputs are never computed). The selector type is Int or \
              String; the case / default / output value type is selectable and can be any concrete \
@@ -658,7 +658,7 @@ pub fn get_node_type() -> NodeType {
         parameters: vec![
             Parameter {
                 id: None,
-                name: "value".to_string(),
+                name: "selector".to_string(),
                 data_type: DataType::Int,
             },
             Parameter {

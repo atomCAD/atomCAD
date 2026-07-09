@@ -1144,6 +1144,24 @@ pub struct APIZipWithData {
     pub output_type: APIDataType,
 }
 
+/// Editable state of a `switch` node (select a value by matching a selector
+/// against literal cases; `doc/design_switch_node.md`). Case values cross the
+/// API as **strings** — the editor edits plain text fields and Rust parses each
+/// per `selector_type` (an Int selector rejects a non-integer field, surfaced
+/// through the setter's `APIResult`). The hidden per-case stable ids are managed
+/// Rust-side and never cross the API — only the ordered case values, the
+/// selector type, and the value type are exposed. See `doc/design_switch_node.md`
+/// (Phase 4).
+pub struct APISwitchData {
+    /// The selector pin type — Int or String.
+    pub selector_type: APIDataType,
+    /// The value type of the case pins, the `default` pin, and the output pin.
+    pub value_type: APIDataType,
+    /// The case literals in pin order, each rendered as a string (parsed back
+    /// into the selector domain by the setter).
+    pub case_values: Vec<String>,
+}
+
 pub struct APICollectData {
     pub element_type: APIDataType,
     /// Optional cap on the number of elements collected. `None` collects the

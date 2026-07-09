@@ -452,6 +452,34 @@ Every pin is optional, following the node network's convention that any wire may
 
 For chained conditions (an "else if" ladder), wire one `if` node's output into another `if` node's `else` pin. For a numeric or simple scalar selection where you already need an `expr` node for the condition anyway, the inline `if … then … else …` inside a single `expr` node is often simpler.
 
+## switch
+
+Selects a value by matching a **selector** against a user-edited list of literal **cases** — the n-way generalization of [`if`](#if) (also known as *select* / *match* / *multiplex*). Where `if` branches two ways on a `Bool`, `switch` branches N+1 ways on an `Int` or `String`: it compares the selector against each case literal and evaluates the matching case's pin, or the fixed `default` pin when nothing matches.
+
+Like `if`, it selects values of **any type** (including structural ones — `Crystal`, `Molecule`, `Blueprint`, `Geometry`, `Function`) and it is **lazy**: only the matched branch's upstream chain is evaluated, so an error or an expensive computation on an unmatched case costs nothing. This is what `expr`'s conditional cannot do — `expr` carries only scalar/vector/record values and eagerly evaluates every wired input.
+
+**Properties**
+
+- `Selector Type` — the type of the `selector` pin: **Int** or **String** (the only two selector domains). Flipping it converts the existing case literals into the new domain (e.g. `5 ↔ "5"`); a `String → Int` flip that leaves an unparseable value, or that makes two cases collide (`"5"` and `"05"` both become `5`), is rejected with an inline error and nothing changes.
+- `Value Type` — the type `T` of every case pin, the `default` pin, and the output. Defaults to `Float`; set it to whatever the branches produce (any concrete type, including structural).
+- `Cases` — the ordered list of case literals, edited one text field per case. **Add Case** appends a new case (the smallest unused non-negative integer, or an unused placeholder string); the per-case delete button is disabled at one case (the minimum). Case values must be **unique** — a duplicate is rejected with an inline error. Case order affects only pin order (cosmetic); there is no separate "match priority."
+
+**Input pins** (all optional)
+
+- `selector: SelectorType` — the value compared against the case literals.
+- `case_<value>: T` — one pin per case, named after its literal (`case_5`, `case_neg3` for `-3`, sanitized for strings). The name is cosmetic — a hidden stable identity keeps each case's wire attached across renames, value edits, and removal of an earlier case.
+- `default: T` — chosen when no case matches.
+
+**Behavior**
+
+Every pin is optional, following the node network's convention that any wire may be absent:
+
+- If `selector` is unconnected, the node is inert and outputs nothing (`None`).
+- Otherwise the selector picks the matching case's pin, or `default` if none matches. If the chosen pin is unconnected the output is `None`; the other, unmatched branches are never evaluated.
+- An error produced while evaluating `selector` propagates to the output.
+
+`switch` covers the value-keyed multi-way branch; for a two-way boolean choice use [`if`](#if), and for indexed selection over an array use [`array_at`](#array_at) (a `switch` with integer cases `0..N` is just indexed selection).
+
 ## Iterator types
 
 An **iterator type** `Iter[T]` represents a lazily-evaluated stream of `T` values. Iterators travel along wires the same way arrays do, but downstream nodes pull elements one at a time rather than allocating the full payload upfront. This is the backbone of the `range → map → filter → fold` pipeline: a million-element `range` followed by a `map` and a `fold` keeps only one element alive at a time, regardless of stream length.

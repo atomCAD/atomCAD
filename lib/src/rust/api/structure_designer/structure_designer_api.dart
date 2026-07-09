@@ -955,6 +955,12 @@ APIZipWithData? getZipWithData(
         .crateApiStructureDesignerStructureDesignerApiGetZipWithData(
             scopePath: scopePath, nodeId: nodeId);
 
+APISwitchData? getSwitchData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetSwitchData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIPatchBuildData? getPatchBuildData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1548,7 +1554,7 @@ void setForeachData(
 
 /// Whole-list lane + output-type edit on a `zip_with` node (the positional id
 /// merge). Delegates to `StructureDesigner::set_zip_with_data` so the shared
-/// `ZipWithLaneEditCommand` undo capture (whole-network snapshots covering the
+/// `NodeStructureEditCommand` undo capture (whole-network snapshots covering the
 /// wire fallout) is used — the API layer adds no undo logic of its own. Lane
 /// ids are managed Rust-side and never cross the API.
 void setZipWithData(
@@ -1573,6 +1579,23 @@ void removeZipWithLane(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiRemoveZipWithLane(
             scopePath: scopePath, nodeId: nodeId, laneIndex: laneIndex);
+
+/// Whole-data edit on a `switch` node (selector type, value type, and case
+/// list, `doc/design_switch_node.md` Phase 4). Case values arrive as the
+/// editor's text fields and are parsed here into the selector domain — a field
+/// that is not a valid integer under an Int selector is reported back through
+/// the `APIResult` so the panel can display it inline (nothing is mutated).
+/// Otherwise delegates to `StructureDesigner::set_switch_data`, which performs
+/// the value-keyed id merge and pushes the shared `NodeStructureEditCommand`
+/// undo capture — the API layer adds no undo logic and never sees the hidden
+/// case ids.
+APIResult setSwitchData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APISwitchData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetSwitchData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setPatchBuildData(
         {required Uint64List scopePath,

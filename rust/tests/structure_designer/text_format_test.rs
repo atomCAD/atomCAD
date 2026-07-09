@@ -3948,7 +3948,7 @@ a = int { value: 100 }
 b = int { value: 200 }
 c = int { value: 500 }
 d = int { value: 999 }
-s = switch { selector_type: Int, value_type: Int, cases: [1, 2, 5], value: sel, case_1: a, case_2: b, case_5: c, default: d }
+s = switch { selector_type: Int, value_type: Int, cases: [1, 2, 5], selector: sel, case_1: a, case_2: b, case_5: c, default: d }
 output s
 ";
         let r = edit_designer_network(&mut designer, "test", code, true);
@@ -3979,7 +3979,7 @@ output s
         );
 
         let s = node_id_by_name(network, "s");
-        // value(0), case_1(1), case_2(2), case_5(3), default(4).
+        // selector(0), case_1(1), case_2(2), case_5(3), default(4).
         assert_eq!(
             arg_src(network, s, 0),
             Some(node_id_by_name(network, "sel"))

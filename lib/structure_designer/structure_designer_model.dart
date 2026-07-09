@@ -2464,6 +2464,20 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Whole-data edit on a `switch` node (selector type, value type, case list).
+  /// Case values cross as strings; Rust parses them per selector type and the
+  /// value-keyed id merge (plus its shared `NodeStructureEditCommand` undo
+  /// capture) runs Rust-side. Returns the `APIResult` so the editor can display
+  /// a parse/duplicate error inline; nothing is mutated on failure.
+  APIResult setSwitchData(BigInt nodeId, APISwitchData data) {
+    final result = structure_designer_api.setSwitchData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+    return result;
+  }
+
   void setPatchBuildData(BigInt nodeId, APIPatchBuildData data) {
     structure_designer_api.setPatchBuildData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),
