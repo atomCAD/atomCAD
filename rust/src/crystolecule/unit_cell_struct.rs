@@ -251,12 +251,12 @@ impl UnitCellStruct {
         self.dvec2_lattice_to_real(&lattice_pos.as_dvec2())
     }
 
+    /// Scales a scalar lattice value by `|a|` (the length of the first basis
+    /// vector). This is **not** a general lattice→real length conversion: it
+    /// ignores `b`, `c`, and all cell angles, so it is only meaningful along
+    /// `a` or on cubic cells. Currently used for grid sizing in `half_plane`.
     pub fn float_lattice_to_real(&self, lattice_value: f64) -> f64 {
         lattice_value * self.a.length()
-    }
-
-    pub fn int_lattice_to_real(&self, lattice_value: i32) -> f64 {
-        self.float_lattice_to_real(lattice_value as f64)
     }
 
     /// Converts a position from real space coordinates to lattice space coordinates.

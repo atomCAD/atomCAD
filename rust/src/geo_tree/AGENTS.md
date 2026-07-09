@@ -21,7 +21,7 @@ geo_tree/
 | Type | Location | Purpose |
 |------|----------|---------|
 | `GeoNode` | `mod.rs` | Core type: immutable tree of geometric operations with pre-computed BLAKE3 hash |
-| `GeoNodeKind` | `mod.rs` | Enum: primitives (HalfSpace, Sphere, Circle, HalfPlane, Polygon) + operations (Union, Intersection, Difference, Transform, Extrude) |
+| `GeoNodeKind` | `mod.rs` | Enum: primitives (HalfSpace, Sphere, Circle, Ellipsoid, Ellipse, HalfPlane, Polygon) + operations (Union, Intersection, Difference, Transform, Extrude) |
 | `ImplicitGeometry3D` | `implicit_geometry.rs` | Trait: `implicit_eval_3d`, `implicit_eval_3d_batch`, `get_gradient`, `is3d` |
 | `ImplicitGeometry2D` | `implicit_geometry.rs` | Trait: `implicit_eval_2d`, `implicit_eval_2d_batch`, `get_gradient_2d`, `is2d` |
 | `BatchedImplicitEvaluator` | `batched_implicit_evaluator.rs` | Accumulates points, evaluates in 1024-point batches, optional rayon parallelism |
@@ -31,13 +31,13 @@ geo_tree/
 
 ## Core Concepts
 
-**GeoNode Hashing**: Every `GeoNode` has a pre-computed BLAKE3 hash (computed at construction time). Each variant uses a unique tag byte (0x01-0x0D) plus parameter bytes. Composite nodes hash their children's hashes. This enables O(1) cache lookups, change detection, and subtree deduplication.
+**GeoNode Hashing**: Every `GeoNode` has a pre-computed BLAKE3 hash (computed at construction time). Each variant uses a unique tag byte (0x01-0x0F) plus parameter bytes. Composite nodes hash their children's hashes. This enables O(1) cache lookups, change detection, and subtree deduplication. For `Ellipsoid` (0x0E) / `Ellipse` (0x0F) only `center` + `basis` are hashed; the derived `inv_basis` / `lipschitz_scale` are excluded from identity.
 
 **SDF Evaluation**: Returns signed distance from a point to the geometry surface. Negative = inside, zero = on surface, positive = outside. Operations compose as: Union = `min(a, b)`, Intersection = `max(a, b)`, Difference = `max(base, -sub)`. Transform applies inverse transform to the sample point.
 
 **Batch Evaluation**: `BATCH_SIZE = 1024`. Points are processed in fixed-size arrays for better cache locality and branch prediction. `BatchedImplicitEvaluator` pads to BATCH_SIZE multiples and truncates results. Multi-threading threshold: 2048+ points, max 7 threads (rayon work-stealing).
 
-**CSG Conversion**: Recursively converts GeoNode trees to polygon meshes via `csgrs`. Circle = 36-segment polygon, Sphere = 24x12 mesh. Results optionally cached by hash in `CsgConversionCache` with LRU eviction.
+**CSG Conversion**: Recursively converts GeoNode trees to polygon meshes via `csgrs`. Circle = 36-segment polygon, Sphere = 24x12 mesh. `Ellipsoid` / `Ellipse` build the unit sphere/circle (radius 1.0) and apply one affine map (`basis` columns + `center` translation, scaled once by `scale_to_csg`) via `CSGOps::transform`, so a linear map carries sphere-inscribed vertices to ellipsoid-inscribed vertices at the same tessellation density. Results optionally cached by hash in `CsgConversionCache` with LRU eviction.
 
 ## Dependencies
 
@@ -70,7 +70,7 @@ tests/geo_tree/
 
 ## Modifying This Module
 
-**Adding a new primitive**: Add variant to `GeoNodeKind` in `mod.rs` with a unique tag byte (next: 0x0E). Add constructor, Display match arm, MemorySizeEstimator match arm. Implement SDF evaluation in `implicit_eval.rs` (both 2D/3D trait as appropriate). Implement CSG conversion in `csg_conversion.rs`. Add tests.
+**Adding a new primitive**: Add variant to `GeoNodeKind` in `mod.rs` with a unique tag byte (next: 0x10). Add constructor, Display match arm, MemorySizeEstimator match arm. Implement SDF evaluation in `implicit_eval.rs` (both 2D/3D trait as appropriate). Implement CSG conversion in `csg_conversion.rs`. Add tests.
 
 **Adding a new CSG operation**: Same as primitive but the operation must compose child results (e.g., min/max for union/intersection).
 
