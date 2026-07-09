@@ -2,7 +2,7 @@ use super::{GeoNode, GeoNodeKind};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
 use crate::geo_tree::implicit_geometry::{BATCH_SIZE, ImplicitGeometry3D};
 use crate::util::transform::Transform;
-use glam::f64::{DMat3, DVec2, DVec3};
+use glam::f64::{DMat2, DMat3, DVec2, DVec3};
 
 impl ImplicitGeometry2D for GeoNode {
     fn get_gradient_2d(&self, sample_point: &DVec2) -> (DVec2, f64) {
@@ -24,6 +24,12 @@ impl ImplicitGeometry2D for GeoNode {
             GeoNodeKind::Circle { center, radius } => {
                 Self::circle_implicit_eval(*center, *radius, sample_point)
             }
+            GeoNodeKind::Ellipse {
+                center,
+                inv_basis,
+                lipschitz_scale,
+                ..
+            } => Self::ellipse_implicit_eval(*center, inv_basis, *lipschitz_scale, sample_point),
             GeoNodeKind::Polygon { vertices } => {
                 Self::polygon_implicit_eval(vertices, sample_point)
             }
@@ -51,6 +57,18 @@ impl ImplicitGeometry2D for GeoNode {
             GeoNodeKind::Circle { center, radius } => {
                 Self::circle_implicit_eval_batch(*center, *radius, sample_points, results)
             }
+            GeoNodeKind::Ellipse {
+                center,
+                inv_basis,
+                lipschitz_scale,
+                ..
+            } => Self::ellipse_implicit_eval_batch(
+                *center,
+                inv_basis,
+                *lipschitz_scale,
+                sample_points,
+                results,
+            ),
             GeoNodeKind::Union2D { shapes } => {
                 Self::union_2d_implicit_eval_batch(shapes, sample_points, results)
             }
@@ -74,6 +92,7 @@ impl ImplicitGeometry2D for GeoNode {
             &self.kind,
             GeoNodeKind::HalfPlane { .. }
                 | GeoNodeKind::Circle { .. }
+                | GeoNodeKind::Ellipse { .. }
                 | GeoNodeKind::Polygon { .. }
                 | GeoNodeKind::Union2D { .. }
                 | GeoNodeKind::Intersection2D { .. }
@@ -281,6 +300,41 @@ impl GeoNode {
         // This is highly optimizable since it's just vector operations
         for i in 0..BATCH_SIZE {
             results[i] = (sample_points[i] - center).length() - radius;
+        }
+    }
+
+    /// SDF of the ellipse `E = { y : |inv_basis·(y − center)| ≤ 1 }` — the 2D
+    /// analog of [`GeoNode::ellipsoid_implicit_eval`]. Exact sign/zero set;
+    /// magnitude is a 1-Lipschitz underestimate of true distance (scaling
+    /// `|q| − 1` by `σ_min(basis) = lipschitz_scale`). `lipschitz_scale == 0.0`
+    /// marks a degenerate (empty) ellipse → `f64::MAX`.
+    fn ellipse_implicit_eval(
+        center: DVec2,
+        inv_basis: &DMat2,
+        lipschitz_scale: f64,
+        sample_point: &DVec2,
+    ) -> f64 {
+        if lipschitz_scale == 0.0 {
+            return f64::MAX; // degenerate cell → empty shape
+        }
+        let q = *inv_basis * (*sample_point - center);
+        (q.length() - 1.0) * lipschitz_scale
+    }
+
+    fn ellipse_implicit_eval_batch(
+        center: DVec2,
+        inv_basis: &DMat2,
+        lipschitz_scale: f64,
+        sample_points: &[DVec2; BATCH_SIZE],
+        results: &mut [f64; BATCH_SIZE],
+    ) {
+        if lipschitz_scale == 0.0 {
+            results.fill(f64::MAX);
+            return;
+        }
+        for i in 0..BATCH_SIZE {
+            let q = *inv_basis * (sample_points[i] - center);
+            results[i] = (q.length() - 1.0) * lipschitz_scale;
         }
     }
 

@@ -2,6 +2,7 @@ use super::csg_cache::CsgConversionCache;
 use super::{GeoNode, GeoNodeKind};
 use crate::geo_tree::csg_types::CSGMesh;
 use crate::geo_tree::csg_types::CSGSketch;
+use crate::geo_tree::csg_utils::dmat2_affine_to_csg_matrix4;
 use crate::geo_tree::csg_utils::dmat3_affine_to_csg_matrix4;
 use crate::geo_tree::csg_utils::dvec3_to_point3;
 use crate::geo_tree::csg_utils::dvec3_to_vector3;
@@ -10,7 +11,7 @@ use crate::util::transform::Transform;
 use csgrs::mesh::polygon::Polygon;
 use csgrs::mesh::vertex::Vertex;
 use csgrs::traits::CSG;
-use glam::f64::{DMat3, DQuat, DVec2, DVec3};
+use glam::f64::{DMat2, DMat3, DQuat, DVec2, DVec3};
 
 impl GeoNode {
     /// Convert to CSG mesh without caching
@@ -55,6 +56,12 @@ impl GeoNode {
                 Some(Self::half_plane_to_csg(*point1, *point2))
             }
             GeoNodeKind::Circle { center, radius } => Some(Self::circle_to_csg(*center, *radius)),
+            GeoNodeKind::Ellipse {
+                center,
+                basis,
+                lipschitz_scale,
+                ..
+            } => Some(Self::ellipse_to_csg(*center, *basis, *lipschitz_scale)),
             GeoNodeKind::Polygon { vertices } => Some(Self::polygon_to_csg(vertices)),
             GeoNodeKind::Union2D { shapes } => Self::union_2d_to_csg(shapes, cache.as_deref_mut()),
             GeoNodeKind::Intersection2D { shapes } => {
@@ -167,6 +174,18 @@ impl GeoNode {
             scale_to_csg(center.y),
             0.0,
         )
+    }
+
+    fn ellipse_to_csg(center: DVec2, basis: DMat2, lipschitz_scale: f64) -> CSGSketch {
+        if lipschitz_scale == 0.0 {
+            return CSGSketch::new(); // degenerate cell → empty sketch
+        }
+        // Same tessellation density as Circle: a unit circle (radius 1.0, NOT
+        // scale_to_csg(1.0)) followed by a single affine map. A linear map sends
+        // circle-inscribed vertices to ellipse-inscribed vertices one-to-one.
+        let segments = 36;
+        let affine = dmat2_affine_to_csg_matrix4(basis, center);
+        CSGSketch::circle(1.0, segments, None).transform(&affine)
     }
 
     fn sphere_to_csg(center: DVec3, radius: f64) -> CSGMesh {

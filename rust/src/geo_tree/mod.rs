@@ -1,6 +1,7 @@
 use crate::util::memory_size_estimator::MemorySizeEstimator;
 use crate::util::transform::Transform;
 use blake3;
+use glam::f64::DMat2;
 use glam::f64::DMat3;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -31,6 +32,13 @@ enum GeoNodeKind {
     Circle {
         center: DVec2,
         radius: f64,
+    },
+    Ellipse {
+        center: DVec2, // real-space center = L₂·c₀
+        basis: DMat2,  // columns = r·a₂, r·b₂ (maps the unit disk → the ellipse)
+        // Derived, precomputed by the constructor; EXCLUDED from hashing.
+        inv_basis: DMat2,     // basis.inverse() (unused when degenerate)
+        lipschitz_scale: f64, // σ_min(basis); 0.0 marks a degenerate (empty) ellipse
     },
     Sphere {
         center: DVec3,
@@ -121,6 +129,15 @@ impl GeoNode {
                     prefix,
                     format_vec2(center),
                     format_f64(radius)
+                )
+            }
+            GeoNodeKind::Ellipse { center, basis, .. } => {
+                format!(
+                    "{}Ellipse(center: {}, basis: [{}, {}])",
+                    prefix,
+                    format_vec2(center),
+                    format_vec2(&basis.x_axis),
+                    format_vec2(&basis.y_axis)
                 )
             }
             GeoNodeKind::Sphere { center, radius } => {
@@ -271,6 +288,67 @@ impl GeoNode {
 
         Self {
             kind: GeoNodeKind::Circle { center, radius },
+            hash: hasher.finalize(),
+        }
+    }
+
+    /// Construct the lattice image of a circle: a disk in fractional (lattice)
+    /// coordinates mapped to real space through `basis` (columns = r·a₂, r·b₂),
+    /// centered at `center` (= L₂·c₀). This is an ellipse in general — the 2D
+    /// analog of [`GeoNode::ellipsoid`], with the same two normalizations:
+    /// 1. **Circular-basis fast path** — if the basis columns are orthogonal with
+    ///    equal lengths, the shape is a true Euclidean circle and a plain
+    ///    `GeoNodeKind::Circle` is returned (square effective cells become
+    ///    byte-identical to a directly constructed circle; also catches rotated
+    ///    orthonormal bases).
+    /// 2. **Degenerate basis** — if `|det(basis)|` is ~0 the ellipse is empty;
+    ///    a degenerate marker (`lipschitz_scale = 0.0`) is stored and eval returns
+    ///    `f64::MAX` everywhere (never panics).
+    pub fn ellipse(center: DVec2, basis: DMat2) -> Self {
+        // 1. Circular-basis fast path (the square-cell-regression guard).
+        if let Some(radius) = circular_radius_2d(&basis) {
+            return Self::circle(center, radius);
+        }
+
+        // 2. Degenerate basis → empty shape.
+        if basis.determinant().abs() < 1e-12 {
+            return Self::ellipse_from_parts(center, basis, DMat2::ZERO, 0.0);
+        }
+
+        // 3. General ellipse.
+        let inv_basis = basis.inverse();
+        // σ_min(basis) = √λ_min(basisᵀ·basis); the tightest single-scalar rescaling
+        // that makes the SDF exactly 1-Lipschitz (see implicit_eval.rs).
+        let gram = basis.transpose() * basis;
+        let lipschitz_scale = min_eigenvalue_symmetric_2x2(&gram).max(0.0).sqrt();
+        Self::ellipse_from_parts(center, basis, inv_basis, lipschitz_scale)
+    }
+
+    /// Assembles an `Ellipse` node, hashing **only** `center` + `basis`
+    /// (tag `0x0F`); the derived `inv_basis` / `lipschitz_scale` must not affect
+    /// identity.
+    fn ellipse_from_parts(
+        center: DVec2,
+        basis: DMat2,
+        inv_basis: DMat2,
+        lipschitz_scale: f64,
+    ) -> Self {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&[0x0F]); // variant tag
+        hasher.update(&center.x.to_le_bytes());
+        hasher.update(&center.y.to_le_bytes());
+        for col in [basis.x_axis, basis.y_axis] {
+            hasher.update(&col.x.to_le_bytes());
+            hasher.update(&col.y.to_le_bytes());
+        }
+
+        Self {
+            kind: GeoNodeKind::Ellipse {
+                center,
+                basis,
+                inv_basis,
+                lipschitz_scale,
+            },
             hash: hasher.finalize(),
         }
     }
@@ -539,6 +617,44 @@ fn spherical_radius_3d(basis: &DMat3) -> Option<f64> {
     Some(l0)
 }
 
+/// 2D analog of [`spherical_radius_3d`]: if the two basis columns are orthogonal
+/// with (approximately) equal lengths, the mapped disk is a true Euclidean circle;
+/// returns its radius (the common column length). Otherwise `None`. A zero or
+/// near-zero column length disqualifies the basis (degenerate, handled separately).
+fn circular_radius_2d(basis: &DMat2) -> Option<f64> {
+    const TOL: f64 = 1e-9;
+    let c0 = basis.x_axis;
+    let c1 = basis.y_axis;
+    let l0 = c0.length();
+    let l1 = c1.length();
+    if l0 <= 0.0 || l1 <= 0.0 {
+        return None;
+    }
+    // Orthogonality: |c₀·c₁| ≤ tol·|c₀|·|c₁|.
+    if c0.dot(c1).abs() > TOL * l0 * l1 {
+        return None;
+    }
+    // Equal lengths: ||c₀| − |c₁|| ≤ tol·max(|c₀|, |c₁|).
+    if (l0 - l1).abs() > TOL * l0.max(l1) {
+        return None;
+    }
+    Some(l0)
+}
+
+/// Smallest eigenvalue of a symmetric 2×2 matrix `[[a, b], [b, c]]` via the
+/// quadratic formula: `λ = (a+c)/2 ± √(((a−c)/2)² + b²)`. Used to obtain `σ_min`
+/// of a 2D basis as `√λ_min(basisᵀ·basis)`. `m` is assumed symmetric.
+fn min_eigenvalue_symmetric_2x2(m: &DMat2) -> f64 {
+    // Column-major glam storage: x_axis is column 0, y_axis is column 1.
+    let a = m.x_axis.x;
+    let c = m.y_axis.y;
+    let b = m.y_axis.x; // (row 0, col 1)
+    let mean = (a + c) / 2.0;
+    let half_diff = (a - c) / 2.0;
+    let disc = (half_diff * half_diff + b * b).max(0.0).sqrt();
+    mean - disc
+}
+
 /// Smallest eigenvalue of a symmetric 3×3 matrix via the standard closed-form
 /// trigonometric solution (Smith 1961). Used to obtain `σ_min` of a basis as
 /// `√λ_min(basisᵀ·basis)` without an SVD library. `m` is assumed symmetric.
@@ -619,6 +735,11 @@ impl MemorySizeEstimator for GeoNode {
             GeoNodeKind::HalfSpace { .. } => std::mem::size_of::<DVec3>() * 2,
             GeoNodeKind::HalfPlane { .. } => std::mem::size_of::<DVec2>() * 2,
             GeoNodeKind::Circle { .. } => std::mem::size_of::<DVec2>() + std::mem::size_of::<f64>(),
+            GeoNodeKind::Ellipse { .. } => {
+                std::mem::size_of::<DVec2>()
+                    + 2 * std::mem::size_of::<DMat2>()
+                    + std::mem::size_of::<f64>()
+            }
             GeoNodeKind::Sphere { .. } => std::mem::size_of::<DVec3>() + std::mem::size_of::<f64>(),
             GeoNodeKind::Ellipsoid { .. } => {
                 std::mem::size_of::<DVec3>()

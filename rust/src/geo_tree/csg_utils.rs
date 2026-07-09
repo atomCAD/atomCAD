@@ -1,5 +1,5 @@
 use csgrs::float_types::Real;
-use glam::{DMat3, DVec3};
+use glam::{DMat2, DMat3, DVec2, DVec3};
 use nalgebra::{Matrix4, Point3, Vector3};
 
 /// Scaling factor for CSG operations to handle large geometry.
@@ -57,6 +57,37 @@ pub fn dmat3_affine_to_csg_matrix4(basis: DMat3, translation: DVec3) -> Matrix4<
         scale_to_csg(c1.z) as Real,
         scale_to_csg(c2.z) as Real,
         scale_to_csg(translation.z) as Real,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    )
+}
+
+/// Build the 4×4 affine matrix for the 2D map `y ↦ basis·y + translation`,
+/// embedded in the XY plane with a z-passthrough. `Sketch::transform` reads only
+/// the top-left 2×2 sub-block plus the translation column (m14, m24), so the z
+/// row/column here are the identity and never affect the result.
+///
+/// As in [`dmat3_affine_to_csg_matrix4`], `basis` columns and `translation` carry
+/// length units, so `scale_to_csg` is applied to each exactly once (the source
+/// sketch must be built at plain unit size, e.g. `CSGSketch::circle(1.0, ..)`).
+pub fn dmat2_affine_to_csg_matrix4(basis: DMat2, translation: DVec2) -> Matrix4<Real> {
+    let c0 = basis.x_axis; // maps unit-disk +X
+    let c1 = basis.y_axis; // maps unit-disk +Y
+    Matrix4::new(
+        scale_to_csg(c0.x) as Real,
+        scale_to_csg(c1.x) as Real,
+        0.0,
+        scale_to_csg(translation.x) as Real,
+        scale_to_csg(c0.y) as Real,
+        scale_to_csg(c1.y) as Real,
+        0.0,
+        scale_to_csg(translation.y) as Real,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
         0.0,
         0.0,
         0.0,
