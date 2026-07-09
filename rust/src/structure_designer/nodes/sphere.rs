@@ -17,6 +17,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::util::serialization_utils::ivec3_serializer;
+use glam::DMat3;
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -88,12 +89,29 @@ impl NodeData for SphereData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        let real_center = structure.lattice_vecs.ivec3_lattice_to_real(&center);
-        let real_radius = structure.lattice_vecs.int_lattice_to_real(radius);
+        let l = &structure.lattice_vecs;
+        let real_center = l.ivec3_lattice_to_real(&center);
+
+        // For radius <= 0 keep today's Euclidean emission verbatim: the fractional
+        // ball |u - c₀| <= r is a single point for r == 0 (the radius-0 sphere) and
+        // empty for r < 0 (an everywhere-positive SDF). Building `basis = r·L` for a
+        // negative radius would silently flip "empty" into a full-size shape, since
+        // neither the spherical-basis snap nor the ellipsoid membership test can see
+        // the sign of the basis columns.
+        let geo_tree_root = if radius <= 0 {
+            GeoNode::sphere(real_center, radius as f64 * l.a.length())
+        } else {
+            // The lattice image of a sphere: the ball in fractional coordinates
+            // {u : |u - c₀| <= r} mapped through the lattice matrix. On (near-)cubic
+            // cells the constructor's spherical-basis fast path snaps this back to a
+            // plain Sphere, so the cubic case stays byte-identical to today.
+            let basis = DMat3::from_cols(l.a, l.b, l.c) * (radius as f64);
+            GeoNode::ellipsoid(real_center, basis)
+        };
 
         EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
             structure,
-            geo_tree_root: GeoNode::sphere(real_center, real_radius),
+            geo_tree_root,
             alignment: Alignment::Aligned,
             alignment_reason: None,
         }))
@@ -158,7 +176,8 @@ impl NodeData for SphereData {
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "sphere".to_string(),
-        description: "Outputs a sphere with integer center coordinates and integer radius."
+        description: "Outputs the lattice image of a sphere: integer center and \
+            radius in lattice cells; an ellipsoid on non-cubic cells."
             .to_string(),
         summary: None,
         category: NodeTypeCategory::Geometry3D,
