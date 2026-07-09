@@ -718,3 +718,523 @@ fn test_merge_cases_rejects_duplicates_and_empty() {
     assert_eq!(data.cases.len(), before.len());
     assert!(data.merge_cases(vec![]).is_err());
 }
+
+// ============================================================================
+// convert_selector_type (Phase 2)
+// ============================================================================
+
+#[test]
+fn test_convert_selector_int_to_string_stringifies_keeps_ids() {
+    let mut data = switch_data(
+        DataType::Int,
+        DataType::Float,
+        vec![SwitchCaseValue::Int(5), SwitchCaseValue::Int(-3)],
+    );
+    data.convert_selector_type(&DataType::String).unwrap();
+    assert_eq!(data.selector_type, DataType::String);
+    assert_eq!(
+        data.cases[0].value,
+        SwitchCaseValue::String("5".to_string())
+    );
+    assert_eq!(
+        data.cases[1].value,
+        SwitchCaseValue::String("-3".to_string())
+    );
+    // Ids untouched.
+    assert_eq!(data.cases[0].id, Some(1));
+    assert_eq!(data.cases[1].id, Some(2));
+}
+
+#[test]
+fn test_convert_selector_string_to_int_parses_keeps_ids() {
+    let mut data = switch_data(
+        DataType::String,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::String("5".to_string()),
+            SwitchCaseValue::String("-3".to_string()),
+        ],
+    );
+    data.convert_selector_type(&DataType::Int).unwrap();
+    assert_eq!(data.selector_type, DataType::Int);
+    assert_eq!(data.cases[0].value, SwitchCaseValue::Int(5));
+    assert_eq!(data.cases[1].value, SwitchCaseValue::Int(-3));
+    assert_eq!(data.cases[0].id, Some(1));
+    assert_eq!(data.cases[1].id, Some(2));
+}
+
+#[test]
+fn test_convert_selector_string_to_int_unparseable_rejects_atomically() {
+    let mut data = switch_data(
+        DataType::String,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::String("5".to_string()),
+            SwitchCaseValue::String("notanint".to_string()),
+        ],
+    );
+    let before = data.cases.clone();
+    assert!(data.convert_selector_type(&DataType::Int).is_err());
+    // Node completely unchanged: still String, values intact.
+    assert_eq!(data.selector_type, DataType::String);
+    assert_eq!(data.cases.len(), before.len());
+    assert_eq!(data.cases[0].value, before[0].value);
+    assert_eq!(data.cases[1].value, before[1].value);
+}
+
+#[test]
+fn test_convert_selector_string_to_int_collision_rejects_atomically() {
+    // "5" and "05" both parse to 5 — the flip must be rejected, not smuggle in
+    // a duplicate the other edit paths forbid.
+    let mut data = switch_data(
+        DataType::String,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::String("5".to_string()),
+            SwitchCaseValue::String("05".to_string()),
+        ],
+    );
+    assert!(data.convert_selector_type(&DataType::Int).is_err());
+    assert_eq!(data.selector_type, DataType::String);
+    assert_eq!(
+        data.cases[0].value,
+        SwitchCaseValue::String("5".to_string())
+    );
+    assert_eq!(
+        data.cases[1].value,
+        SwitchCaseValue::String("05".to_string())
+    );
+}
+
+// ============================================================================
+// set_switch_data (Phase 2): StructureDesigner-level op + wire fallout
+// ============================================================================
+
+/// Fetch a node's live arguments (indexed by pin) from the active network.
+fn switch_arg_source(
+    designer: &StructureDesigner,
+    network: &str,
+    node_id: u64,
+    pin: usize,
+) -> Option<u64> {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    net.nodes.get(&node_id).unwrap().arguments[pin].get_node_id()
+}
+
+fn switch_has_source(designer: &StructureDesigner, network: &str, node_id: u64, src: u64) -> bool {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    net.nodes
+        .get(&node_id)
+        .unwrap()
+        .arguments
+        .iter()
+        .any(|a| a.has_source(src))
+}
+
+fn switch_case_pin_names(designer: &StructureDesigner, network: &str, node_id: u64) -> Vec<String> {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    net.nodes
+        .get(&node_id)
+        .unwrap()
+        .custom_node_type
+        .as_ref()
+        .unwrap()
+        .parameters
+        .iter()
+        .map(|p| p.name.clone())
+        .collect()
+}
+
+/// Wire up a 3-case Int switch: selector + case_10/20/30 sources + default,
+/// value_type Int. Returns (sw, sel, s10, s20, s30, d).
+fn build_three_case_int_switch(
+    designer: &mut StructureDesigner,
+    selector_value: i32,
+) -> (u64, u64, u64, u64, u64, u64) {
+    let sel = add_int(designer, "test", selector_value, 0.0);
+    let s10 = add_int(designer, "test", 110, 100.0);
+    let s20 = add_int(designer, "test", 120, 200.0);
+    let s30 = add_int(designer, "test", 130, 300.0);
+    let d = add_int(designer, "test", 999, 400.0);
+    let sw = add_switch(
+        designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::Int(10),
+                SwitchCaseValue::Int(20),
+                SwitchCaseValue::Int(30),
+            ],
+        ),
+        500.0,
+    );
+    designer.validate_active_network();
+    designer.connect_nodes(sel, 0, sw, 0); // selector
+    designer.connect_nodes(s10, 0, sw, 1); // case_10
+    designer.connect_nodes(s20, 0, sw, 2); // case_20
+    designer.connect_nodes(s30, 0, sw, 3); // case_30
+    designer.connect_nodes(d, 0, sw, 4); // default
+    (sw, sel, s10, s20, s30, d)
+}
+
+#[test]
+fn test_set_switch_data_remove_middle_keeps_wires() {
+    let mut designer = setup_designer_with_network("test");
+    let (sw, _sel, s10, s20, s30, _d) = build_three_case_int_switch(&mut designer, 30);
+
+    // Sanity: selector 30 selects case_30's source (130).
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 130),
+        other => panic!("Expected Int(130), got {:?}", other.to_display_string()),
+    }
+
+    // Remove the middle case (20).
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(10), SwitchCaseValue::Int(30)],
+        )
+        .expect("middle-case removal must succeed");
+
+    // Pins renumber: value, case_10, case_30, default.
+    let names = switch_case_pin_names(&designer, "test", sw);
+    assert_eq!(names, vec!["value", "case_10", "case_30", "default"]);
+
+    // case_10 keeps its wire at pin 1; case_30's wire follows its id onto the
+    // renumbered pin 2; the removed case_20's wire is gone.
+    assert_eq!(switch_arg_source(&designer, "test", sw, 1), Some(s10));
+    assert_eq!(
+        switch_arg_source(&designer, "test", sw, 2),
+        Some(s30),
+        "case_30's wire must follow its id onto the renumbered pin"
+    );
+    assert!(
+        !switch_has_source(&designer, "test", sw, s20),
+        "removed case_20's wire must be dropped"
+    );
+
+    // Evaluation unchanged for the surviving selection.
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 130),
+        other => panic!("Expected Int(130), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_set_switch_data_edit_in_place_keeps_wire() {
+    let mut designer = setup_designer_with_network("test");
+    let (sw, _sel, _s10, s20, _s30, _d) = build_three_case_int_switch(&mut designer, 20);
+
+    // Edit case 20 → 25 in place: 10 and 30 match by value, 25 inherits 20's id
+    // positionally, so s20's wire survives on the renamed pin.
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::Int(10),
+                SwitchCaseValue::Int(25),
+                SwitchCaseValue::Int(30),
+            ],
+        )
+        .expect("in-place edit must succeed");
+
+    let names = switch_case_pin_names(&designer, "test", sw);
+    assert_eq!(
+        names,
+        vec!["value", "case_10", "case_25", "case_30", "default"]
+    );
+    assert_eq!(
+        switch_arg_source(&designer, "test", sw, 2),
+        Some(s20),
+        "the wire must follow the positional-fallback id onto the renamed pin"
+    );
+
+    // Selector 20 no longer matches (renamed to 25) → falls to default.
+    // Re-point the selector to 25 and confirm s20's value flows through.
+    // (selector node still emits 20; instead evaluate by matching case 25.)
+    let sel25 = add_int(&mut designer, "test", 25, 0.0);
+    designer.connect_nodes(sel25, 0, sw, 0);
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 120, "s20's wire survived on case_25"),
+        other => panic!("Expected Int(120), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_set_switch_data_no_positional_steal_wires() {
+    // [1,2] -> [3,1]: case 1's wire must stay on case 1 (its id), and a fresh id
+    // is minted for case 3 — a single-pass merge would steal case 1's id.
+    let mut designer = setup_designer_with_network("test");
+    let s1 = add_int(&mut designer, "test", 111, 100.0);
+    let s2 = add_int(&mut designer, "test", 222, 200.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(1), SwitchCaseValue::Int(2)],
+        ),
+        500.0,
+    );
+    designer.validate_active_network();
+    designer.connect_nodes(s1, 0, sw, 1); // case_1
+    designer.connect_nodes(s2, 0, sw, 2); // case_2
+
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(3), SwitchCaseValue::Int(1)],
+        )
+        .expect("reorder-insert must succeed");
+
+    // New pin order: value, case_3, case_1, default.
+    let names = switch_case_pin_names(&designer, "test", sw);
+    assert_eq!(names, vec!["value", "case_3", "case_1", "default"]);
+    // case_1 (pin 2) keeps s1; case_3 (pin 1) is fresh/unwired; s2 dropped.
+    assert_eq!(switch_arg_source(&designer, "test", sw, 2), Some(s1));
+    assert_eq!(switch_arg_source(&designer, "test", sw, 1), None);
+    assert!(!switch_has_source(&designer, "test", sw, s2));
+}
+
+#[test]
+fn test_set_switch_data_selector_flip_keeps_wires() {
+    // Int→String flip: convert_selector_type runs first, so the same-domain
+    // value match keeps every wire.
+    let mut designer = setup_designer_with_network("test");
+    let (sw, _sel, s10, s20, s30, _d) = build_three_case_int_switch(&mut designer, 10);
+
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::String,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::String("10".to_string()),
+                SwitchCaseValue::String("20".to_string()),
+                SwitchCaseValue::String("30".to_string()),
+            ],
+        )
+        .expect("Int→String flip must succeed");
+
+    let names = switch_case_pin_names(&designer, "test", sw);
+    assert_eq!(
+        names,
+        vec!["value", "case_10", "case_20", "case_30", "default"]
+    );
+    // Every case wire survived (value match after conversion).
+    assert_eq!(switch_arg_source(&designer, "test", sw, 1), Some(s10));
+    assert_eq!(switch_arg_source(&designer, "test", sw, 2), Some(s20));
+    assert_eq!(switch_arg_source(&designer, "test", sw, 3), Some(s30));
+}
+
+#[test]
+fn test_set_switch_data_rejects_leave_unchanged() {
+    let mut designer = setup_designer_with_network("test");
+    let (sw, _sel, s10, s20, s30, _d) = build_three_case_int_switch(&mut designer, 10);
+
+    let before_names = switch_case_pin_names(&designer, "test", sw);
+
+    // Each of these must be rejected AND leave the node completely untouched.
+    let rejected_edits: Vec<(DataType, DataType, Vec<SwitchCaseValue>)> = vec![
+        // Duplicate values.
+        (
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(10), SwitchCaseValue::Int(10)],
+        ),
+        // Empty case list.
+        (DataType::Int, DataType::Int, vec![]),
+        // Domain mismatch: a String value under an Int selector.
+        (
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::String("10".to_string())],
+        ),
+        // Invalid selector type.
+        (
+            DataType::Float,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(10)],
+        ),
+    ];
+
+    for (sel_t, val_t, values) in rejected_edits {
+        assert!(
+            designer
+                .set_switch_data(&[], sw, sel_t, val_t, values)
+                .is_err(),
+            "edit should be rejected"
+        );
+        // Node unchanged: pins, wires, and value type all intact.
+        assert_eq!(switch_case_pin_names(&designer, "test", sw), before_names);
+        assert!(switch_has_source(&designer, "test", sw, s10));
+        assert!(switch_has_source(&designer, "test", sw, s20));
+        assert!(switch_has_source(&designer, "test", sw, s30));
+    }
+}
+
+#[test]
+fn test_set_switch_data_string_to_int_collision_flip_rejects() {
+    // A switch whose stored String cases parse to a collision ("5"/"05").
+    // Flipping the selector to Int must reject atomically (convert runs before
+    // merge), leaving the node a String switch with both wires intact.
+    let mut designer = setup_designer_with_network("test");
+    let s5 = add_int(&mut designer, "test", 55, 100.0);
+    let s05 = add_int(&mut designer, "test", 66, 200.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::String,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::String("5".to_string()),
+                SwitchCaseValue::String("05".to_string()),
+            ],
+        ),
+        500.0,
+    );
+    designer.validate_active_network();
+    designer.connect_nodes(s5, 0, sw, 1); // case_5
+    designer.connect_nodes(s05, 0, sw, 2); // case_05
+
+    // The Int case_values passed are irrelevant — the stored-case conversion
+    // fails first.
+    assert!(
+        designer
+            .set_switch_data(
+                &[],
+                sw,
+                DataType::Int,
+                DataType::Int,
+                vec![SwitchCaseValue::Int(5), SwitchCaseValue::Int(6)],
+            )
+            .is_err()
+    );
+
+    // Still a String switch, both wires intact.
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    let data = net
+        .nodes
+        .get(&sw)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<SwitchData>()
+        .unwrap();
+    assert_eq!(data.selector_type, DataType::String);
+    assert!(switch_has_source(&designer, "test", sw, s5));
+    assert!(switch_has_source(&designer, "test", sw, s05));
+}
+
+#[test]
+fn test_set_switch_data_value_type_retype_changes_pins() {
+    // Retype value_type Int → Crystal in one edit. NOTE: unlike the design
+    // doc's aspirational test 9, the repair pass does NOT drop the now-
+    // type-incompatible external wires — `set_custom_node_type`'s by-id argument
+    // rebuild preserves them, and `validate_wires` flags the mismatch as a
+    // *blocking* error rather than disconnecting. So the wires remain (feeding a
+    // now-invalid network) and the case/output pins retype to Crystal.
+    let mut designer = setup_designer_with_network("test");
+    let (sw, _sel, s10, _s20, _s30, _d) = build_three_case_int_switch(&mut designer, 10);
+
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Crystal,
+            vec![
+                SwitchCaseValue::Int(10),
+                SwitchCaseValue::Int(20),
+                SwitchCaseValue::Int(30),
+            ],
+        )
+        .expect("value_type retype must succeed");
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("test")
+        .unwrap();
+    let ct = net
+        .nodes
+        .get(&sw)
+        .unwrap()
+        .custom_node_type
+        .as_ref()
+        .unwrap();
+    assert_eq!(ct.parameters[1].data_type, DataType::Crystal);
+    assert_eq!(*ct.output_type(), DataType::Crystal);
+    // The Int wire is preserved (not type-pruned); the network is now invalid.
+    assert!(switch_has_source(&designer, "test", sw, s10));
+    assert!(
+        !net.valid,
+        "an Int source feeding a Crystal case pin makes the network invalid"
+    );
+}
+
+#[test]
+fn test_set_switch_data_noop_pushes_no_command() {
+    let mut designer = setup_designer_with_network("test");
+    let (sw, _sel, _s10, _s20, _s30, _d) = build_three_case_int_switch(&mut designer, 10);
+    // A prior meaningful edit to establish a redo target.
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(10), SwitchCaseValue::Int(30)],
+        )
+        .unwrap();
+    designer.undo();
+    // Re-issue the identical current state (cases [10,20,30]) — a no-op edit
+    // must NOT push a command, so the redo tail survives.
+    designer
+        .set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::Int(10),
+                SwitchCaseValue::Int(20),
+                SwitchCaseValue::Int(30),
+            ],
+        )
+        .unwrap();
+    assert!(
+        designer.redo(),
+        "a no-op set_switch_data must not have pushed a command"
+    );
+}

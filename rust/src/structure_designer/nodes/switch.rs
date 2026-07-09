@@ -237,6 +237,70 @@ impl SwitchData {
             .collect();
         Ok(())
     }
+
+    /// Convert the **stored** case values in place to a new selector type, ids
+    /// untouched (`doc/design_switch_node.md` §Selector-type change). This is
+    /// the only place values cross the Int/String boundary; `merge_cases`
+    /// itself never compares across types (plain same-type equality), so a
+    /// flip-and-edit runs this first, then `merge_cases` on the now-same-type
+    /// values.
+    ///
+    /// - Int → String: stringify (`5` → `"5"`), always succeeds.
+    /// - String → Int: parse each; **any failure rejects the whole edit**. Parse
+    ///   success alone is not enough — distinct strings can parse to the same
+    ///   int (`"5"` / `"05"`), so the converted list is re-checked for
+    ///   duplicates and a collision **also rejects the whole edit**, otherwise
+    ///   the flip would smuggle in the duplicate state every other edit path
+    ///   rejects. Either rejection leaves the node unchanged.
+    /// - Same type: no-op.
+    pub fn convert_selector_type(&mut self, new_type: &DataType) -> Result<(), String> {
+        match (&self.selector_type, new_type) {
+            (DataType::Int, DataType::Int) | (DataType::String, DataType::String) => {
+                return Ok(());
+            }
+            (DataType::Int, DataType::String) => {
+                for case in self.cases.iter_mut() {
+                    if let SwitchCaseValue::Int(i) = &case.value {
+                        case.value = SwitchCaseValue::String(i.to_string());
+                    }
+                }
+            }
+            (DataType::String, DataType::Int) => {
+                // Parse everything into a scratch vec first so a failure
+                // partway through leaves the node untouched.
+                let mut converted = Vec::with_capacity(self.cases.len());
+                for case in &self.cases {
+                    if let SwitchCaseValue::String(s) = &case.value {
+                        let parsed = s.parse::<i32>().map_err(|_| {
+                            format!(
+                                "cannot convert case value {} to Int",
+                                case.value.to_display_string()
+                            )
+                        })?;
+                        converted.push(parsed);
+                    }
+                }
+                // Distinct strings can parse to the same int — reject the flip
+                // rather than smuggle in a duplicate.
+                for i in 0..converted.len() {
+                    for j in (i + 1)..converted.len() {
+                        if converted[i] == converted[j] {
+                            return Err(format!(
+                                "converting to Int makes case values collide at {}",
+                                converted[i]
+                            ));
+                        }
+                    }
+                }
+                for (case, v) in self.cases.iter_mut().zip(converted) {
+                    case.value = SwitchCaseValue::Int(v);
+                }
+            }
+            _ => return Err("selector_type must be Int or String".to_string()),
+        }
+        self.selector_type = new_type.clone();
+        Ok(())
+    }
 }
 
 impl NodeData for SwitchData {

@@ -6199,7 +6199,7 @@ pub fn set_foreach_data(scope_path: Vec<u64>, node_id: u64, data: APIForeachData
 
 /// Whole-list lane + output-type edit on a `zip_with` node (the positional id
 /// merge). Delegates to `StructureDesigner::set_zip_with_data` so the shared
-/// `ZipWithLaneEditCommand` undo capture (whole-network snapshots covering the
+/// `NodeStructureEditCommand` undo capture (whole-network snapshots covering the
 /// wire fallout) is used — the API layer adds no undo logic of its own. Lane
 /// ids are managed Rust-side and never cross the API.
 #[flutter_rust_bridge::frb(sync)]

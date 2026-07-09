@@ -4215,10 +4215,10 @@ impl StructureDesigner {
     /// referencing the dropped tail indices** (recursively, including nested
     /// HOF bodies — validation rule 3 only flags those red, it never cleans
     /// them). An empty lane list is rejected. Undo: whole-top-level-network
-    /// before/after snapshots via [`ZipWithLaneEditCommand`] — a node-data
+    /// before/after snapshots via [`NodeStructureEditCommand`] — a node-data
     /// snapshot cannot capture the wire fallout.
     ///
-    /// [`ZipWithLaneEditCommand`]: super::undo::commands::zip_with_lane_edit::ZipWithLaneEditCommand
+    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
     pub fn set_zip_with_lanes(
         &mut self,
         scope_path: &[u64],
@@ -4254,10 +4254,10 @@ impl StructureDesigner {
     /// alongside so a retype of the `result` zone-output pin flows through the
     /// same repair + undo path (`repair_zone_body` drops an incompatible result
     /// wire). Empty lane list is rejected. Undo: whole-top-level-network
-    /// before/after snapshots via [`ZipWithLaneEditCommand`], shared with
+    /// before/after snapshots via [`NodeStructureEditCommand`], shared with
     /// [`Self::remove_zip_with_lane`] — the API layer adds no undo logic.
     ///
-    /// [`ZipWithLaneEditCommand`]: super::undo::commands::zip_with_lane_edit::ZipWithLaneEditCommand
+    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
     pub fn set_zip_with_data(
         &mut self,
         scope_path: &[u64],
@@ -4314,7 +4314,13 @@ impl StructureDesigner {
             }
         }
 
-        self.finish_zip_with_lane_edit(scope_path, node_id, &network_name, before);
+        self.finish_node_structure_edit(
+            scope_path,
+            node_id,
+            &network_name,
+            before,
+            "Edit zip_with lanes",
+        );
         Ok(())
     }
 
@@ -4382,22 +4388,141 @@ impl StructureDesigner {
             remap_zip_body_wires_for_lane_removal(node, lane_index);
         }
 
-        self.finish_zip_with_lane_edit(scope_path, node_id, &network_name, before);
+        self.finish_node_structure_edit(
+            scope_path,
+            node_id,
+            &network_name,
+            before,
+            "Edit zip_with lanes",
+        );
         Ok(())
     }
 
-    /// Shared tail of the two lane mutation ops: repair (the zip's external
-    /// arguments rebuild by lane id in `repair_node_network`'s populate pass,
-    /// and `repair_zone_body` drops retype-incompatible / out-of-range depth-1
-    /// body wires), re-validate, mark refresh state, and push the
-    /// whole-network undo command. The caller has already established that the
-    /// lane list actually changed, so the command is always meaningful.
-    fn finish_zip_with_lane_edit(
+    /// Whole-data edit on a `switch` node (`doc/design_switch_node.md` Phase 2):
+    /// set the `selector_type`, `value_type`, and case list in one step, with
+    /// the value-keyed id merge preserving wires. `case_values` are already in
+    /// the **target** selector domain (the API layer parses the editor's text
+    /// fields per `selector_type`).
+    ///
+    /// Order is load-bearing: `convert_selector_type` flips the stored cases
+    /// into the new domain (ids untouched) **before** `merge_cases`, so a
+    /// same-type value match can still follow a wire across a selector flip
+    /// (String `"1"` ≠ Int `1` otherwise). The edit is validated on a **clone**
+    /// first, so any rejection (bad selector type, unparseable / colliding
+    /// String→Int flip, duplicate / empty case list, domain mismatch) leaves the
+    /// designer completely untouched — no snapshot, no command. Undo: whole-
+    /// top-level-network before/after snapshots via
+    /// [`NodeStructureEditCommand`] (a node-data snapshot cannot capture the
+    /// dropped-case / retype wire fallout), shared with the `zip_with` ops.
+    ///
+    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    pub fn set_switch_data(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        selector_type: DataType,
+        value_type: DataType,
+        case_values: Vec<crate::structure_designer::nodes::switch::SwitchCaseValue>,
+    ) -> Result<(), String> {
+        use crate::structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
+
+        if !matches!(selector_type, DataType::Int | DataType::String) {
+            return Err("selector_type must be Int or String".to_string());
+        }
+        // Every supplied value must already match the target selector domain.
+        for v in &case_values {
+            let matches_domain = matches!(
+                (&selector_type, v),
+                (DataType::Int, SwitchCaseValue::Int(_))
+                    | (DataType::String, SwitchCaseValue::String(_))
+            );
+            if !matches_domain {
+                return Err(format!(
+                    "case value {} does not match selector type {}",
+                    v.to_display_string(),
+                    selector_type
+                ));
+            }
+        }
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or_else(|| "No active network".to_string())?;
+
+        // Read-only pre-check: resolve the node, then run the full edit on a
+        // clone so a convert/merge rejection leaves the designer untouched.
+        let (old_selector, old_value_type, old_values, new_data) = {
+            let node = self
+                .get_scope_network(scope_path)
+                .and_then(|net| net.nodes.get(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            let data = node
+                .data
+                .as_any_ref()
+                .downcast_ref::<SwitchData>()
+                .ok_or_else(|| "Node is not a switch".to_string())?;
+            let old_selector = data.selector_type.clone();
+            let old_value_type = data.value_type.clone();
+            let old_values: Vec<SwitchCaseValue> =
+                data.cases.iter().map(|c| c.value.clone()).collect();
+            let mut trial = data.clone();
+            trial.convert_selector_type(&selector_type)?;
+            trial.value_type = value_type.clone();
+            trial.merge_cases(case_values.clone())?;
+            (old_selector, old_value_type, old_values, trial)
+        };
+
+        // No-op check: identical selector / value type / case values means the
+        // ids and wires are unchanged too — don't push an empty command (which
+        // would truncate the redo tail).
+        if old_selector == selector_type
+            && old_value_type == value_type
+            && old_values == case_values
+        {
+            return Ok(());
+        }
+
+        let before = self.snapshot_network(&network_name);
+
+        {
+            let node = self
+                .get_scope_network_mut(scope_path)
+                .and_then(|net| net.nodes.get_mut(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            let data = node
+                .data
+                .as_any_mut()
+                .downcast_mut::<SwitchData>()
+                .ok_or_else(|| "Node is not a switch".to_string())?;
+            *data = new_data;
+        }
+
+        self.finish_node_structure_edit(
+            scope_path,
+            node_id,
+            &network_name,
+            before,
+            "Edit switch cases",
+        );
+        Ok(())
+    }
+
+    /// Shared tail of the variadic-pin structural edit ops (`zip_with` lane
+    /// edits, `switch` case edits): repair (the node's external arguments
+    /// rebuild by hidden stable id in `repair_node_network`'s populate pass,
+    /// and — for zone-bearing nodes — `repair_zone_body` drops retype-
+    /// incompatible / out-of-range depth-1 body wires), re-validate, mark
+    /// refresh state, and push the whole-network undo command with `description`
+    /// as its history label. The caller has already established that the edit
+    /// actually changed the network, so the command is always meaningful.
+    fn finish_node_structure_edit(
         &mut self,
         scope_path: &[u64],
         node_id: u64,
         network_name: &str,
         before: Option<super::serialization::node_networks_serialization::SerializableNodeNetwork>,
+        description: &str,
     ) {
         // Split-borrow pattern: take the network out so `repair_node_network`
         // can consult the registry it lives in.
@@ -4413,7 +4538,7 @@ impl StructureDesigner {
         self.pending_changes
             .mark_node_data_changed_scoped(scope_path, node_id);
         // Wire fallout can reach nodes other than the edited one (dropped
-        // external wire, body remap), so a partial refresh keyed on the zip
+        // external wire, body remap), so a partial refresh keyed on the edited
         // node alone would leave stale output.
         self.mark_full_refresh();
 
@@ -4421,8 +4546,9 @@ impl StructureDesigner {
             (before, self.snapshot_network(network_name))
         {
             self.push_command(
-                super::undo::commands::zip_with_lane_edit::ZipWithLaneEditCommand {
+                super::undo::commands::node_structure_edit::NodeStructureEditCommand {
                     network_name: network_name.to_string(),
+                    description: description.to_string(),
                     before_snapshot,
                     after_snapshot,
                 },

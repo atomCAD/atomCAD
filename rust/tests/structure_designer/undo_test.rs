@@ -1,8 +1,10 @@
 use glam::{DVec2, DVec3, IVec3};
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_network::{CollapseMode, SourcePin};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
+use rust_lib_flutter_cad::structure_designer::nodes::switch::SwitchCaseValue;
 use rust_lib_flutter_cad::structure_designer::nodes::vec3::Vec3Data;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
     SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
@@ -2654,6 +2656,61 @@ fn undo_intra_body_wire() {
 
     assert_undo_redo_roundtrip(&mut designer, |d| {
         d.connect_nodes_scoped(&scope, int_id, 0, collect_id, 0);
+    });
+}
+
+// ===== switch case-list edits (NodeStructureEditCommand, design Phase 2) =====
+
+/// Design test 8 (top level): undo/redo of a `switch` case removal with a wire
+/// attached restores the wire and `next_case_id` exactly. The default switch
+/// (cases `[0, 1]`, ids 1/2, `next_case_id = 3`) has a float wired into
+/// `case_1`; removing case 1 drops that wire — a fallout the node-data blob
+/// alone could not restore, hence the whole-network `NodeStructureEditCommand`.
+#[test]
+fn undo_switch_remove_wired_case() {
+    let mut designer = setup_designer_with_network("test");
+    let sw = designer.add_node("switch", DVec2::new(300.0, 0.0));
+    let f0 = designer.add_node("float", DVec2::new(0.0, 0.0));
+    let f1 = designer.add_node("float", DVec2::new(0.0, 100.0));
+    designer.validate_active_network();
+    designer.connect_nodes(f0, 0, sw, 1); // case_0
+    designer.connect_nodes(f1, 0, sw, 2); // case_1
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_switch_data(
+            &[],
+            sw,
+            DataType::Int,
+            DataType::Float,
+            vec![SwitchCaseValue::Int(0)], // drop case 1 (and f1's wire)
+        )
+        .expect("case removal must succeed");
+    });
+}
+
+/// Design test 8 (body-internal): the same edit against a `switch` nested inside
+/// a `map` body, addressed by `scope_path = [map_id]`. Proves the top-level
+/// snapshot carries the body, so the body edit round-trips.
+#[test]
+fn undo_switch_case_edit_in_body() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let sw = designer.add_node_scoped(&scope, "switch", DVec2::new(50.0, 0.0), None);
+    let f = designer.add_node_scoped(&scope, "float", DVec2::new(0.0, 0.0), None);
+    designer.connect_nodes_scoped(&scope, f, 0, sw, 2); // wire into case_1
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_switch_data(
+            &scope,
+            sw,
+            DataType::Int,
+            DataType::Float,
+            vec![SwitchCaseValue::Int(0)], // drop case 1 (and f's body wire)
+        )
+        .expect("body-internal case removal must succeed");
     });
 }
 
