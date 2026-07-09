@@ -47,6 +47,7 @@ use crate::structure_designer::nodes::if_else::IfData;
 use crate::structure_designer::nodes::map::MapData;
 use crate::structure_designer::nodes::parameter::ParameterData;
 use crate::structure_designer::nodes::sequence::SequenceData;
+use crate::structure_designer::nodes::switch::SwitchData;
 use crate::structure_designer::nodes::zip_with::ZipWithData;
 
 /// Canonicalize every `DataType::Function` reachable from `network` in place.
@@ -184,6 +185,9 @@ fn canonicalize_node_data(data: &mut dyn NodeData) {
     } else if let Some(d) = any.downcast_mut::<CollectData>() {
         canonicalize_data_type(&mut d.element_type);
     } else if let Some(d) = any.downcast_mut::<IfData>() {
+        canonicalize_data_type(&mut d.value_type);
+    } else if let Some(d) = any.downcast_mut::<SwitchData>() {
+        canonicalize_data_type(&mut d.selector_type);
         canonicalize_data_type(&mut d.value_type);
     }
     // Record* / ProductData store schema names (Strings), not DataTypes —

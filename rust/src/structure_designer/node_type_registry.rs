@@ -90,6 +90,7 @@ use super::nodes::structure_move::get_node_type as structure_move_get_node_type;
 use super::nodes::structure_rot::get_node_type as structure_rot_get_node_type;
 use super::nodes::structure_unpack::get_node_type as structure_unpack_get_node_type;
 use super::nodes::supercell::get_node_type as supercell_get_node_type;
+use super::nodes::switch::get_node_type as switch_get_node_type;
 use super::nodes::union::get_node_type as union_get_node_type;
 use super::nodes::union_2d::get_node_type as union_2d_get_node_type;
 use super::nodes::value::get_node_type as value_get_node_type;
@@ -475,6 +476,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(product_get_node_type());
         ret.add_node_type(array_at_get_node_type());
         ret.add_node_type(if_else_get_node_type());
+        ret.add_node_type(switch_get_node_type());
         ret.add_node_type(array_len_get_node_type());
         ret.add_node_type(array_concat_get_node_type());
         ret.add_node_type(array_append_get_node_type());

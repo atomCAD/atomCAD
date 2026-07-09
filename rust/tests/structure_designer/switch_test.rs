@@ -1,0 +1,720 @@
+//! Phase 1 tests for the `switch` node (`doc/design_switch_node.md`).
+//!
+//! Covers: Int/String selector matching, default fallback, optional-pin
+//! inertness, laziness (untaken branch never evaluated), structural value
+//! pass-through, selector error propagation, derived pin-name generation, and
+//! the hand-authored-duplicate first-match-wins behavior.
+
+use glam::f64::DVec2;
+use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+};
+use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
+use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
+use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::array_at::ArrayAtData;
+use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
+use rust_lib_flutter_cad::structure_designer::nodes::sequence::SequenceData;
+use rust_lib_flutter_cad::structure_designer::nodes::string::StringData;
+use rust_lib_flutter_cad::structure_designer::nodes::switch::{
+    SwitchCase, SwitchCaseValue, SwitchData,
+};
+use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+
+// ============================================================================
+// Helpers (mirror if_test.rs)
+// ============================================================================
+
+fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network(network_name);
+    designer.set_active_node_network_name(Some(network_name.to_string()));
+    designer
+}
+
+fn evaluate_node(designer: &StructureDesigner, network_name: &str, node_id: u64) -> NetworkResult {
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(network_name).unwrap();
+    let evaluator = NetworkEvaluator::new();
+    let mut context = NetworkEvaluationContext::new();
+    let network_stack = vec![NetworkStackElement {
+        node_network: network,
+        node_id: 0,
+    }];
+    evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
+}
+
+fn set_node_data(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    node_id: u64,
+    data: Box<dyn NodeData>,
+) {
+    let registry = &mut designer.node_type_registry;
+    let network = registry.node_networks.get_mut(network_name).unwrap();
+    let node = network.nodes.get_mut(&node_id).unwrap();
+    node.data = data;
+    NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+        &registry.built_in_node_types,
+        &registry.record_type_defs,
+        &registry.built_in_record_type_defs,
+        node,
+        true,
+    );
+}
+
+fn add_int(designer: &mut StructureDesigner, network: &str, value: i32, y: f64) -> u64 {
+    let id = designer.add_node("int", DVec2::new(0.0, y));
+    set_node_data(designer, network, id, Box::new(IntData { value }));
+    id
+}
+
+fn add_string(designer: &mut StructureDesigner, network: &str, value: &str, y: f64) -> u64 {
+    let id = designer.add_node("string", DVec2::new(0.0, y));
+    set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(StringData {
+            value: value.to_string(),
+        }),
+    );
+    id
+}
+
+/// Build a `SwitchData` with sequential case ids (1..=N) — the shape supported
+/// edit paths produce.
+fn switch_data(
+    selector_type: DataType,
+    value_type: DataType,
+    values: Vec<SwitchCaseValue>,
+) -> SwitchData {
+    let cases: Vec<SwitchCase> = values
+        .into_iter()
+        .enumerate()
+        .map(|(i, value)| SwitchCase {
+            id: Some((i + 1) as u64),
+            value,
+        })
+        .collect();
+    let next_case_id = cases.len() as u64 + 1;
+    SwitchData {
+        selector_type,
+        value_type,
+        cases,
+        next_case_id,
+    }
+}
+
+fn add_switch(designer: &mut StructureDesigner, network: &str, data: SwitchData, x: f64) -> u64 {
+    let id = designer.add_node("switch", DVec2::new(x, 0.0));
+    set_node_data(designer, network, id, Box::new(data));
+    id
+}
+
+/// An `array_at` reading index 0 of an empty typed array → an out-of-bounds
+/// error. Used to prove a branch is *not* evaluated: if it were, the switch
+/// output would be that error. Mirrors `if_test.rs`.
+fn add_erroring_int_source(designer: &mut StructureDesigner, network: &str, y: f64) -> u64 {
+    let seq_id = designer.add_node("sequence", DVec2::new(-200.0, y));
+    set_node_data(
+        designer,
+        network,
+        seq_id,
+        Box::new(SequenceData {
+            element_type: DataType::Int,
+            input_count: 1,
+        }),
+    );
+    let at_id = designer.add_node("array_at", DVec2::new(-100.0, y));
+    set_node_data(
+        designer,
+        network,
+        at_id,
+        Box::new(ArrayAtData {
+            element_type: DataType::Int,
+            index: 0,
+        }),
+    );
+    designer.validate_active_network();
+    designer.connect_nodes(seq_id, 0, at_id, 0);
+    at_id
+}
+
+// ============================================================================
+// Registration & defaults
+// ============================================================================
+
+#[test]
+fn test_switch_default() {
+    let data = SwitchData::default();
+    assert_eq!(data.selector_type, DataType::Int);
+    assert_eq!(data.value_type, DataType::Float);
+    assert_eq!(data.cases.len(), 2);
+    assert_eq!(data.cases[0].value, SwitchCaseValue::Int(0));
+    assert_eq!(data.cases[1].value, SwitchCaseValue::Int(1));
+    assert_eq!(data.next_case_id, 3);
+}
+
+#[test]
+fn test_switch_registered_in_registry() {
+    let registry = NodeTypeRegistry::new();
+    let nt = registry.get_node_type("switch").expect("switch registered");
+    assert_eq!(nt.name, "switch");
+    assert!(nt.public);
+    // value + 2 cases + default
+    assert_eq!(nt.parameters.len(), 4);
+    assert_eq!(nt.parameters[0].name, "value");
+    assert_eq!(nt.parameters[0].data_type, DataType::Int);
+    assert_eq!(nt.parameters[1].name, "case_0");
+    assert_eq!(nt.parameters[2].name, "case_1");
+    assert_eq!(nt.parameters[3].name, "default");
+    assert_eq!(nt.output_pins.len(), 1);
+}
+
+// ============================================================================
+// calculate_custom_node_type
+// ============================================================================
+
+#[test]
+fn test_switch_custom_type_shape() {
+    let registry = NodeTypeRegistry::new();
+    let base = registry.get_node_type("switch").unwrap();
+    let data = switch_data(
+        DataType::Int,
+        DataType::Crystal,
+        vec![
+            SwitchCaseValue::Int(3),
+            SwitchCaseValue::Int(-3),
+            SwitchCaseValue::Int(7),
+        ],
+    );
+    let custom = data.calculate_custom_node_type(base).unwrap();
+
+    // value (Int) + 3 cases (Crystal) + default (Crystal).
+    assert_eq!(custom.parameters.len(), 5);
+    assert_eq!(custom.parameters[0].name, "value");
+    assert_eq!(custom.parameters[0].data_type, DataType::Int);
+    assert_eq!(custom.parameters[1].name, "case_3");
+    assert_eq!(custom.parameters[2].name, "case_neg3");
+    assert_eq!(custom.parameters[3].name, "case_7");
+    assert_eq!(custom.parameters[4].name, "default");
+    for i in 1..=4 {
+        assert_eq!(custom.parameters[i].data_type, DataType::Crystal);
+    }
+    // Case pins carry their stable ids; value / default do not.
+    assert_eq!(custom.parameters[1].id, Some(1));
+    assert_eq!(custom.parameters[2].id, Some(2));
+    assert_eq!(custom.parameters[3].id, Some(3));
+    assert_eq!(custom.parameters[0].id, None);
+    assert_eq!(custom.parameters[4].id, None);
+    assert_eq!(*custom.output_type(), DataType::Crystal);
+}
+
+// ============================================================================
+// Evaluation: Int selector matching + default + optional pins
+// ============================================================================
+
+#[test]
+fn test_switch_int_matches_case() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 1, 0.0);
+    let a = add_int(&mut designer, "test", 100, 100.0);
+    let b = add_int(&mut designer, "test", 200, 200.0);
+    let d = add_int(&mut designer, "test", 999, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0); // selector
+    designer.connect_nodes(a, 0, sw, 1); // case_0
+    designer.connect_nodes(b, 0, sw, 2); // case_1
+    designer.connect_nodes(d, 0, sw, 3); // default
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 200),
+        other => panic!("Expected Int(200), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_switch_no_match_selects_default() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 5, 0.0);
+    let a = add_int(&mut designer, "test", 100, 100.0);
+    let b = add_int(&mut designer, "test", 200, 200.0);
+    let d = add_int(&mut designer, "test", 999, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2);
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 999),
+        other => panic!("Expected Int(999), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_switch_no_match_unwired_default_is_none() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 5, 0.0);
+    let a = add_int(&mut designer, "test", 100, 100.0);
+    let b = add_int(&mut designer, "test", 200, 200.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2);
+    // default (pin 3) unwired
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::None => {}
+        other => panic!("Expected None, got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_switch_unwired_selector_is_inert() {
+    let mut designer = setup_designer_with_network("test");
+    let a = add_int(&mut designer, "test", 100, 100.0);
+    let b = add_int(&mut designer, "test", 200, 200.0);
+    let d = add_int(&mut designer, "test", 999, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    // selector (pin 0) unwired, everything else wired
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2);
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::None => {}
+        other => panic!("Expected None, got {:?}", other.to_display_string()),
+    }
+}
+
+// ============================================================================
+// Evaluation: String selector (exact, case-sensitive)
+// ============================================================================
+
+#[test]
+fn test_switch_string_exact_case_sensitive() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_string(&mut designer, "test", "beta", 0.0);
+    let a = add_int(&mut designer, "test", 10, 100.0);
+    let b = add_int(&mut designer, "test", 20, 200.0);
+    let d = add_int(&mut designer, "test", 99, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::String,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::String("alpha".to_string()),
+                SwitchCaseValue::String("beta".to_string()),
+            ],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2);
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 20),
+        other => panic!("Expected Int(20), got {:?}", other.to_display_string()),
+    }
+}
+
+#[test]
+fn test_switch_string_case_mismatch_falls_to_default() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_string(&mut designer, "test", "Beta", 0.0); // wrong case
+    let a = add_int(&mut designer, "test", 10, 100.0);
+    let b = add_int(&mut designer, "test", 20, 200.0);
+    let d = add_int(&mut designer, "test", 99, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::String,
+            DataType::Int,
+            vec![
+                SwitchCaseValue::String("alpha".to_string()),
+                SwitchCaseValue::String("beta".to_string()),
+            ],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2);
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 99),
+        other => panic!(
+            "Expected Int(99) (case-sensitive miss), got {:?}",
+            other.to_display_string()
+        ),
+    }
+}
+
+// ============================================================================
+// Evaluation: laziness (untaken case pin never evaluated)
+// ============================================================================
+
+#[test]
+fn test_switch_untaken_case_not_evaluated() {
+    // case_1's source errors; selecting case_0 must not touch it.
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 0, 0.0);
+    let good = add_int(&mut designer, "test", 7, 100.0);
+    let bad = add_erroring_int_source(&mut designer, "test", 200.0);
+    let d = add_int(&mut designer, "test", 999, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(good, 0, sw, 1); // case_0 (taken)
+    designer.connect_nodes(bad, 0, sw, 2); // case_1 (untaken, erroring)
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 7),
+        other => panic!(
+            "Expected Int(7) (untaken case not evaluated), got {:?}",
+            other.to_display_string()
+        ),
+    }
+}
+
+#[test]
+fn test_switch_untaken_default_not_evaluated() {
+    // default source errors; a matching case must not touch it.
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 1, 0.0);
+    let a = add_int(&mut designer, "test", 100, 100.0);
+    let b = add_int(&mut designer, "test", 200, 150.0);
+    let bad = add_erroring_int_source(&mut designer, "test", 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2); // taken
+    designer.connect_nodes(bad, 0, sw, 3); // default (untaken, erroring)
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 200),
+        other => panic!(
+            "Expected Int(200) (untaken default not evaluated), got {:?}",
+            other.to_display_string()
+        ),
+    }
+}
+
+// ============================================================================
+// Evaluation: structural value_type flows through intact
+// ============================================================================
+
+#[test]
+fn test_switch_structural_value_passes_through() {
+    // value_type = Blueprint: a matched structural value flows through the
+    // switch unchanged (exactly the case `expr` cannot handle).
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 0, 0.0);
+    let cuboid = designer.add_node("cuboid", DVec2::new(0.0, 100.0));
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Blueprint,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(cuboid, 0, sw, 1); // case_0 (taken)
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Blueprint(_) => {}
+        other => panic!("Expected Blueprint, got {:?}", other.to_display_string()),
+    }
+}
+
+// ============================================================================
+// Evaluation: selector error propagates
+// ============================================================================
+
+#[test]
+fn test_switch_selector_error_propagates() {
+    let mut designer = setup_designer_with_network("test");
+    let bad_sel = add_erroring_int_source(&mut designer, "test", 0.0); // Int error source
+    let a = add_int(&mut designer, "test", 100, 100.0);
+    let b = add_int(&mut designer, "test", 200, 200.0);
+    let d = add_int(&mut designer, "test", 999, 300.0);
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(bad_sel, 0, sw, 0);
+    designer.connect_nodes(a, 0, sw, 1);
+    designer.connect_nodes(b, 0, sw, 2);
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Error(_) => {}
+        other => panic!("Expected Error, got {:?}", other.to_display_string()),
+    }
+}
+
+// ============================================================================
+// Derived pin names
+// ============================================================================
+
+#[test]
+fn test_derived_pin_names_int() {
+    let data = switch_data(
+        DataType::Int,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::Int(5),
+            SwitchCaseValue::Int(-3),
+            SwitchCaseValue::Int(0),
+        ],
+    );
+    assert_eq!(
+        data.derived_case_pin_names(),
+        vec!["case_5", "case_neg3", "case_0"]
+    );
+}
+
+#[test]
+fn test_derived_pin_names_string_sanitize_truncate_dedup() {
+    let data = switch_data(
+        DataType::String,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::String("a b".to_string()),
+            SwitchCaseValue::String("a_b".to_string()),
+            SwitchCaseValue::String("slot-1".to_string()),
+            SwitchCaseValue::String("this_is_a_very_long_case_name_exceeding_limit".to_string()),
+            SwitchCaseValue::String("!@#".to_string()),
+        ],
+    );
+    let names = data.derived_case_pin_names();
+    // "a b" sanitizes to "a_b" → base "case_a_b"; "a_b" also → "case_a_b",
+    // deduped to "case_a_b__2".
+    assert_eq!(names[0], "case_a_b");
+    assert_eq!(names[1], "case_a_b__2");
+    // "slot-1" → "slot_1".
+    assert_eq!(names[2], "case_slot_1");
+    // Truncation: 24 chars of the sanitized value kept after the `case_` prefix.
+    assert_eq!(names[3], "case_this_is_a_very_long_case");
+    assert_eq!(names[3].len(), "case_".len() + 24);
+    // "!@#" sanitizes to "___".
+    assert_eq!(names[4], "case____");
+}
+
+// ============================================================================
+// Hand-authored duplicate case values: first match wins, no panic
+// ============================================================================
+
+#[test]
+fn test_switch_hand_built_duplicate_first_match_wins() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 5, 0.0);
+    let first = add_int(&mut designer, "test", 111, 100.0);
+    let second = add_int(&mut designer, "test", 222, 200.0);
+    let d = add_int(&mut designer, "test", 999, 300.0);
+    // Bypass the setters: two cases with the same value 5. Derived names dedup
+    // to case_5 / case_5__2, so both pins exist and are wirable.
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Int,
+            vec![SwitchCaseValue::Int(5), SwitchCaseValue::Int(5)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+
+    designer.connect_nodes(sel, 0, sw, 0);
+    designer.connect_nodes(first, 0, sw, 1); // case_5
+    designer.connect_nodes(second, 0, sw, 2); // case_5__2
+    designer.connect_nodes(d, 0, sw, 3);
+
+    match evaluate_node(&designer, "test", sw) {
+        NetworkResult::Int(v) => assert_eq!(v, 111, "first duplicate match wins"),
+        other => panic!("Expected Int(111), got {:?}", other.to_display_string()),
+    }
+}
+
+// ============================================================================
+// merge_cases (used by set_text_properties; core value-keyed id merge)
+// ============================================================================
+
+#[test]
+fn test_merge_cases_removes_middle_keeps_ids_by_value() {
+    let mut data = switch_data(
+        DataType::Int,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::Int(1),
+            SwitchCaseValue::Int(2),
+            SwitchCaseValue::Int(3),
+        ],
+    );
+    // Drop the middle case.
+    data.merge_cases(vec![SwitchCaseValue::Int(1), SwitchCaseValue::Int(3)])
+        .unwrap();
+    assert_eq!(data.cases.len(), 2);
+    assert_eq!(data.cases[0].value, SwitchCaseValue::Int(1));
+    assert_eq!(data.cases[0].id, Some(1)); // kept by value
+    assert_eq!(data.cases[1].value, SwitchCaseValue::Int(3));
+    assert_eq!(data.cases[1].id, Some(3)); // kept by value
+}
+
+#[test]
+fn test_merge_cases_edit_in_place_keeps_id_positionally() {
+    let mut data = switch_data(
+        DataType::Int,
+        DataType::Float,
+        vec![
+            SwitchCaseValue::Int(1),
+            SwitchCaseValue::Int(2),
+            SwitchCaseValue::Int(3),
+        ],
+    );
+    // Edit the middle value 2 → 5: 1 and 3 match by value, 5 inherits 2's id.
+    data.merge_cases(vec![
+        SwitchCaseValue::Int(1),
+        SwitchCaseValue::Int(5),
+        SwitchCaseValue::Int(3),
+    ])
+    .unwrap();
+    assert_eq!(data.cases[1].value, SwitchCaseValue::Int(5));
+    assert_eq!(data.cases[1].id, Some(2)); // positional fallback keeps the wire
+}
+
+#[test]
+fn test_merge_cases_no_positional_steal() {
+    // [1,2] -> [3,1]: value-match must resolve case 1's id BEFORE any
+    // positional fallback, else 3 steals case 1's id. A correct two-pass merge
+    // keeps 1's id on 1 and mints a fresh id for 3.
+    let mut data = switch_data(
+        DataType::Int,
+        DataType::Float,
+        vec![SwitchCaseValue::Int(1), SwitchCaseValue::Int(2)],
+    );
+    let next_before = data.next_case_id;
+    data.merge_cases(vec![SwitchCaseValue::Int(3), SwitchCaseValue::Int(1)])
+        .unwrap();
+    // case 1 kept its original id 1.
+    let case1 = data
+        .cases
+        .iter()
+        .find(|c| c.value == SwitchCaseValue::Int(1))
+        .unwrap();
+    assert_eq!(case1.id, Some(1));
+    // case 3 got a freshly minted id (not 1, not 2), from next_case_id.
+    let case3 = data
+        .cases
+        .iter()
+        .find(|c| c.value == SwitchCaseValue::Int(3))
+        .unwrap();
+    assert_eq!(case3.id, Some(next_before));
+    assert_eq!(data.next_case_id, next_before + 1);
+}
+
+#[test]
+fn test_merge_cases_rejects_duplicates_and_empty() {
+    let mut data = SwitchData::default();
+    let before = data.cases.clone();
+    assert!(
+        data.merge_cases(vec![SwitchCaseValue::Int(5), SwitchCaseValue::Int(5)])
+            .is_err()
+    );
+    // node unchanged on error
+    assert_eq!(data.cases.len(), before.len());
+    assert!(data.merge_cases(vec![]).is_err());
+}

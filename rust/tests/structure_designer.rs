@@ -352,6 +352,9 @@ mod custom_node_property_panel_test;
 #[path = "structure_designer/record_construct_property_panel_test.rs"]
 mod record_construct_property_panel_test;
 
+#[path = "structure_designer/switch_test.rs"]
+mod switch_test;
+
 #[path = "structure_designer/zip_with_test.rs"]
 mod zip_with_test;
 

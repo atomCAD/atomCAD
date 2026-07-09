@@ -88,6 +88,7 @@ pub mod structure_move;
 pub mod structure_rot;
 pub mod structure_unpack;
 pub mod supercell;
+pub mod switch;
 pub mod union;
 pub mod union_2d;
 pub mod value;
