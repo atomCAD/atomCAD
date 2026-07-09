@@ -28,13 +28,15 @@ use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
-    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
+use std::io;
 
 /// A single case literal, always matching the node's `selector_type`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -208,9 +210,14 @@ impl SwitchData {
             }
         }
 
-        // Pass 3: positional fallback for unmatched new values.
+        // Pass 3: positional fallback for unmatched new values. A new value at
+        // index `ni` inherits the old case at the *same* index, if that old case
+        // exists and its id was not already claimed by the value-match pass. The
+        // `consumed`/`old` vectors are old-length, so `ni` can run past them when
+        // the list grows — treat an out-of-range index as "no old case here"
+        // (mint below) rather than indexing out of bounds.
         for (ni, slot) in assigned.iter_mut().enumerate() {
-            if slot.is_some() || consumed[ni] {
+            if slot.is_some() || consumed.get(ni).copied().unwrap_or(true) {
                 continue;
             }
             if let Some(id) = old.get(ni).and_then(|c| c.id) {
@@ -300,6 +307,102 @@ impl SwitchData {
         }
         self.selector_type = new_type.clone();
         Ok(())
+    }
+
+    /// Restore every invariant the setters enforce after a raw deserialize of a
+    /// possibly hand-authored `.cnnd` blob (`doc/design_switch_node.md`
+    /// §Serialization, healing). Idempotent — a normally-saved switch (valid
+    /// selector, matching value variants, present distinct ids, `next_case_id`
+    /// past the max) passes through unchanged, so a round-trip of a good file is
+    /// a no-op.
+    ///
+    /// 1. A `selector_type` outside {Int, String} resets to `Int` (the default
+    ///    domain).
+    /// 2. Each case value is converted into the selector domain via the
+    ///    canonical string form (Int↔String); a value that can't convert is
+    ///    **dropped**, and a value that duplicates an earlier survivor is
+    ///    **dropped** too (distinct strings can parse to the same int).
+    /// 3. If no case survives, the list resets to the default two cases in the
+    ///    selector domain — never empty.
+    /// 4. `next_case_id` is bumped past every surviving id and any case still
+    ///    lacking an id (or one minted for a reset case) is assigned a fresh id,
+    ///    so wire matching never silently degrades to name/positional.
+    pub fn heal(&mut self) {
+        // 1. Selector domain.
+        if !matches!(self.selector_type, DataType::Int | DataType::String) {
+            self.selector_type = DataType::Int;
+        }
+
+        // 2. Convert values into the selector domain, dropping the unconvertible
+        //    and later duplicates. Ids ride along on the survivors.
+        let mut healed: Vec<SwitchCase> = Vec::with_capacity(self.cases.len());
+        let mut seen: Vec<SwitchCaseValue> = Vec::new();
+        for case in std::mem::take(&mut self.cases) {
+            let converted = match (&self.selector_type, &case.value) {
+                (DataType::Int, SwitchCaseValue::Int(_))
+                | (DataType::String, SwitchCaseValue::String(_)) => Some(case.value.clone()),
+                (DataType::Int, SwitchCaseValue::String(s)) => {
+                    s.parse::<i32>().ok().map(SwitchCaseValue::Int)
+                }
+                (DataType::String, SwitchCaseValue::Int(i)) => {
+                    Some(SwitchCaseValue::String(i.to_string()))
+                }
+                // selector_type was healed to Int|String above, so this arm is
+                // unreachable in practice.
+                _ => None,
+            };
+            if let Some(v) = converted
+                && !seen.contains(&v)
+            {
+                seen.push(v.clone());
+                healed.push(SwitchCase {
+                    id: case.id,
+                    value: v,
+                });
+            }
+        }
+        self.cases = healed;
+
+        // 3. Never empty: reset to the default two cases in the selector domain.
+        if self.cases.is_empty() {
+            self.cases = match self.selector_type {
+                DataType::String => vec![
+                    SwitchCase {
+                        id: None,
+                        value: SwitchCaseValue::String("0".to_string()),
+                    },
+                    SwitchCase {
+                        id: None,
+                        value: SwitchCaseValue::String("1".to_string()),
+                    },
+                ],
+                _ => vec![
+                    SwitchCase {
+                        id: None,
+                        value: SwitchCaseValue::Int(0),
+                    },
+                    SwitchCase {
+                        id: None,
+                        value: SwitchCaseValue::Int(1),
+                    },
+                ],
+            };
+        }
+
+        // 4. Heal id state: bump the counter past every existing id, then mint
+        //    fresh ids for any id-less case (from the reset, or a hand-authored
+        //    id: None). Computed over the final case list so a dropped id never
+        //    leaves the counter behind a survivor.
+        let max_id = self.cases.iter().filter_map(|c| c.id).max().unwrap_or(0);
+        if self.next_case_id <= max_id {
+            self.next_case_id = max_id + 1;
+        }
+        for case in &mut self.cases {
+            if case.id.is_none() {
+                case.id = Some(self.next_case_id);
+                self.next_case_id += 1;
+            }
+        }
     }
 }
 
@@ -443,7 +546,13 @@ impl NodeData for SwitchData {
             if !matches!(dt, DataType::Int | DataType::String) {
                 return Err("selector_type must be Int or String".to_string());
             }
-            self.selector_type = dt.clone();
+            // Convert the **stored** case values into the new domain *before* any
+            // `cases` merge below (`doc/design_switch_node.md` §Selector-type
+            // change). Setting `selector_type` directly instead would leave the
+            // old-domain stored values un-matchable against the new-domain text
+            // values (String "1" ≠ Int 1 under same-type equality), silently
+            // degrading every id to the positional fallback.
+            self.convert_selector_type(dt)?;
         }
         if let Some(v) = props.get("value_type") {
             self.value_type = v
@@ -512,6 +621,21 @@ fn coerce_case_value(
     }
 }
 
+/// Loader that heals persisted case-id / selector-domain state (missing/zero
+/// `next_case_id`, id-less cases, value variants disagreeing with
+/// `selector_type`, a `selector_type` outside {Int, String}, post-conversion
+/// duplicates, and an all-dropped case list) after the generic deserialize.
+/// Mirrors `zip_with_node_data_loader`.
+fn switch_node_data_loader(
+    value: &Value,
+    _design_dir: Option<&str>,
+) -> io::Result<Box<dyn NodeData>> {
+    let mut data: SwitchData = serde_json::from_value(value.clone())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    data.heal();
+    Ok(Box::new(data))
+}
+
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "switch".to_string(),
@@ -559,6 +683,6 @@ pub fn get_node_type() -> NodeType {
         public: true,
         node_data_creator: || Box::new(SwitchData::default()),
         node_data_saver: generic_node_data_saver::<SwitchData>,
-        node_data_loader: generic_node_data_loader::<SwitchData>,
+        node_data_loader: switch_node_data_loader,
     }
 }

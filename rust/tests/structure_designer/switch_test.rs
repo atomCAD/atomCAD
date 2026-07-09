@@ -1238,3 +1238,432 @@ fn test_set_switch_data_noop_pushes_no_command() {
         "a no-op set_switch_data must not have pushed a command"
     );
 }
+
+// ============================================================================
+// Phase 3 — `.cnnd` serialization round-trips + loader healing
+//
+// Round-trips a network through the serializable (`.cnnd`) form the file path
+// uses (`node_network_to_serializable` -> JSON -> `serializable_to_node_network`,
+// which invokes `switch_node_data_loader` + healing) and asserts the normalized
+// JSON is byte-identical. Also drives the loader healing directly (missing ids,
+// zero counter, selector/value-variant mismatch, post-conversion duplicates,
+// all-dropped reset). Text-format round-trips live in
+// `text_format_test.rs::switch_text_format_tests`.
+// ============================================================================
+
+use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
+use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+    SerializableNodeNetwork, node_network_to_serializable, serializable_to_node_network,
+};
+use serde_json::Value;
+
+/// Normalized whole-network JSON (sorts the HashMap-derived `nodes` /
+/// `displayed_*` arrays so the compare is order-independent — same shape as
+/// `undo_test.rs::normalize_json` / `zip_with_test.rs`).
+fn network_json(designer: &mut StructureDesigner, name: &str) -> Value {
+    let snapshot = designer
+        .snapshot_network(name)
+        .expect("network must snapshot");
+    let mut value = serde_json::to_value(&snapshot).unwrap();
+    normalize_network_json(&mut value);
+    value
+}
+
+fn normalize_network_json(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (key, val) in map.iter_mut() {
+                if key == "displayed_node_ids" || key == "displayed_output_pins" {
+                    if let Value::Array(arr) = val {
+                        arr.sort_by(|a, b| {
+                            let id_a = a
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            let id_b = b
+                                .as_array()
+                                .and_then(|a| a.first())
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0);
+                            id_a.cmp(&id_b)
+                        });
+                    }
+                } else if key == "nodes"
+                    && let Value::Array(arr) = val
+                {
+                    arr.sort_by(|a, b| {
+                        let id_a = a
+                            .as_object()
+                            .and_then(|o| o.get("id"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let id_b = b
+                            .as_object()
+                            .and_then(|o| o.get("id"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        id_a.cmp(&id_b)
+                    });
+                }
+                normalize_network_json(val);
+            }
+        }
+        Value::Array(arr) => {
+            for val in arr.iter_mut() {
+                normalize_network_json(val);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// saver -> JSON -> loader (`serializable_to_node_network`, which runs
+/// `switch_node_data_loader` + healing) -> saver again; the normalized JSON must
+/// be byte-identical.
+fn assert_cnnd_roundtrip(designer: &mut StructureDesigner, name: &str) {
+    let before = network_json(designer, name);
+
+    let snap = designer.snapshot_network(name).expect("snapshot network");
+    let json = serde_json::to_string(&snap).unwrap();
+    let reloaded: SerializableNodeNetwork = serde_json::from_str(&json).unwrap();
+
+    let built_in = &designer.node_type_registry.built_in_node_types;
+    let mut net2 =
+        serializable_to_node_network(&reloaded, built_in, None).expect("load network back");
+    let snap2 = node_network_to_serializable(&mut net2, built_in, None).unwrap();
+    let mut after = serde_json::to_value(&snap2).unwrap();
+    normalize_network_json(&mut after);
+
+    assert_eq!(
+        before, after,
+        "cnnd roundtrip changed the network JSON for '{}'",
+        name
+    );
+}
+
+/// Test 4: a top-level `switch` with wired cases and a **structural**
+/// `value_type` (Blueprint) round-trips exactly through the `.cnnd` form.
+#[test]
+fn switch_phase3_cnnd_roundtrip_wired_cases_structural_value_type() {
+    let mut designer = setup_designer_with_network("test");
+    let sel = add_int(&mut designer, "test", 0, 0.0);
+    let cuboid0 = designer.add_node("cuboid", DVec2::new(0.0, 100.0));
+    let cuboid_default = designer.add_node("cuboid", DVec2::new(0.0, 200.0));
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        switch_data(
+            DataType::Int,
+            DataType::Blueprint,
+            vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+        ),
+        400.0,
+    );
+    designer.validate_active_network();
+    designer.connect_nodes(sel, 0, sw, 0); // selector
+    designer.connect_nodes(cuboid0, 0, sw, 1); // case_0 (Blueprint)
+    designer.connect_nodes(cuboid_default, 0, sw, 3); // default (Blueprint)
+
+    assert_cnnd_roundtrip(&mut designer, "test");
+}
+
+/// Test 4b: a **body-internal** `switch` (inside a `map` zone body) survives the
+/// round-trip — the recursive body serialization + the healing loader run on a
+/// body node.
+#[test]
+fn switch_phase3_cnnd_roundtrip_body_internal_switch() {
+    let mut designer = setup_designer_with_network("main");
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+
+    // Insert a switch into the map's inline zone body.
+    let sw_id = {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .expect("map body must init");
+        body.add_node(
+            "switch",
+            DVec2::new(0.0, 0.0),
+            4,
+            Box::new(switch_data(
+                DataType::Int,
+                DataType::Int,
+                vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)],
+            )),
+        )
+    };
+    // Populate the body switch's custom-type cache (mirrors set_node_data, but
+    // resolved through the body network).
+    {
+        let registry = &mut designer.node_type_registry;
+        let node = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&map_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap()
+            .nodes
+            .get_mut(&sw_id)
+            .unwrap();
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+
+    assert_cnnd_roundtrip(&mut designer, "main");
+}
+
+/// Null every case `id` and zero `next_case_id` on the switch node's serialized
+/// `data` blob — the shape a hand-authored `.cnnd` file has.
+fn strip_switch_case_ids(network_json: &mut Value, switch_id: u64) {
+    let nodes = network_json
+        .get_mut("nodes")
+        .and_then(|v| v.as_array_mut())
+        .expect("nodes array");
+    for node in nodes {
+        if node.get("id").and_then(|v| v.as_u64()) == Some(switch_id) {
+            let data = node.get_mut("data").expect("node data");
+            data["next_case_id"] = Value::from(0u64);
+            for case in data
+                .get_mut("cases")
+                .and_then(|v| v.as_array_mut())
+                .expect("cases array")
+            {
+                case["id"] = Value::Null;
+            }
+        }
+    }
+}
+
+/// Test 5a: a hand-authored file with null case ids, a zero counter, and Int
+/// case values stored under a **String** selector loads sanely — the loader
+/// stringifies the values into the selector domain, mints fresh distinct ids,
+/// advances the counter past them, and the external (positional) case wires
+/// survive.
+#[test]
+fn switch_phase3_load_heals_missing_ids_and_selector_mismatch() {
+    let mut designer = setup_designer_with_network("test");
+    let s1 = add_int(&mut designer, "test", 100, 100.0);
+    let s2 = add_int(&mut designer, "test", 200, 200.0);
+    let s3 = add_int(&mut designer, "test", 300, 300.0);
+    // A String selector holding Int case values (constructed directly, bypassing
+    // the setters, to mimic hand-authored corruption). value_type Int, so the
+    // case pins accept the int sources.
+    let sw = add_switch(
+        &mut designer,
+        "test",
+        SwitchData {
+            selector_type: DataType::String,
+            value_type: DataType::Int,
+            cases: vec![
+                SwitchCase {
+                    id: Some(1),
+                    value: SwitchCaseValue::Int(1),
+                },
+                SwitchCase {
+                    id: Some(2),
+                    value: SwitchCaseValue::Int(2),
+                },
+                SwitchCase {
+                    id: Some(3),
+                    value: SwitchCaseValue::Int(3),
+                },
+            ],
+            next_case_id: 4,
+        },
+        500.0,
+    );
+    designer.validate_active_network();
+    designer.connect_nodes(s1, 0, sw, 1); // case pin 1
+    designer.connect_nodes(s2, 0, sw, 2); // case pin 2
+    designer.connect_nodes(s3, 0, sw, 3); // case pin 3
+
+    let snap = designer.snapshot_network("test").unwrap();
+    let mut json = serde_json::to_value(&snap).unwrap();
+    strip_switch_case_ids(&mut json, sw);
+
+    let reloaded: SerializableNodeNetwork = serde_json::from_value(json).unwrap();
+    let built_in = &designer.node_type_registry.built_in_node_types;
+    let net2 = serializable_to_node_network(&reloaded, built_in, None).expect("load heals");
+
+    let sw_node = net2.nodes.get(&sw).unwrap();
+    let data = sw_node
+        .data
+        .as_any_ref()
+        .downcast_ref::<SwitchData>()
+        .unwrap();
+    // Selector is a valid domain; values were stringified into it.
+    assert_eq!(data.selector_type, DataType::String);
+    assert_eq!(
+        data.cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>(),
+        vec![
+            SwitchCaseValue::String("1".to_string()),
+            SwitchCaseValue::String("2".to_string()),
+            SwitchCaseValue::String("3".to_string()),
+        ]
+    );
+    // Fresh distinct ids, counter past every id.
+    let ids: Vec<u64> = data
+        .cases
+        .iter()
+        .map(|c| c.id.expect("healed id"))
+        .collect();
+    let unique: std::collections::HashSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "healed case ids must be distinct");
+    assert!(data.next_case_id > *ids.iter().max().unwrap());
+    // Positional case wires survive the id-less load.
+    assert!(
+        !sw_node.arguments[1].is_empty()
+            && !sw_node.arguments[2].is_empty()
+            && !sw_node.arguments[3].is_empty(),
+        "external case wires must survive an id-less load"
+    );
+}
+
+/// Test 5b: `heal` drops a post-conversion duplicate. Two distinct strings
+/// ("5"/"05") that parse to the same Int under an Int selector — the second is
+/// dropped (never a duplicate, never smuggled past the setters' uniqueness rule).
+#[test]
+fn switch_phase3_heal_drops_post_conversion_duplicate() {
+    let mut data = SwitchData {
+        selector_type: DataType::Int,
+        value_type: DataType::Int,
+        cases: vec![
+            SwitchCase {
+                id: Some(1),
+                value: SwitchCaseValue::String("5".to_string()),
+            },
+            SwitchCase {
+                id: Some(2),
+                value: SwitchCaseValue::String("05".to_string()),
+            },
+            SwitchCase {
+                id: Some(3),
+                value: SwitchCaseValue::String("7".to_string()),
+            },
+        ],
+        next_case_id: 0,
+    };
+    data.heal();
+
+    // "05" collides with "5" after parsing and is dropped; "5" and "7" survive.
+    assert_eq!(
+        data.cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>(),
+        vec![SwitchCaseValue::Int(5), SwitchCaseValue::Int(7)]
+    );
+    let ids: Vec<u64> = data.cases.iter().map(|c| c.id.unwrap()).collect();
+    let unique: std::collections::HashSet<u64> = ids.iter().copied().collect();
+    assert_eq!(unique.len(), ids.len(), "surviving ids stay distinct");
+    assert!(data.next_case_id > *ids.iter().max().unwrap());
+}
+
+/// Test 5c: `heal` resets an all-dropped case list to the default two cases
+/// (never empty), and repairs a selector type outside {Int, String}.
+#[test]
+fn switch_phase3_heal_resets_all_dropped_and_bad_selector() {
+    // Every case value is an unparseable string under an Int selector -> all
+    // dropped -> reset to the default [0, 1].
+    let mut data = SwitchData {
+        selector_type: DataType::Int,
+        value_type: DataType::Int,
+        cases: vec![
+            SwitchCase {
+                id: Some(1),
+                value: SwitchCaseValue::String("x".to_string()),
+            },
+            SwitchCase {
+                id: Some(2),
+                value: SwitchCaseValue::String("y".to_string()),
+            },
+        ],
+        next_case_id: 3,
+    };
+    data.heal();
+    assert_eq!(
+        data.cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>(),
+        vec![SwitchCaseValue::Int(0), SwitchCaseValue::Int(1)]
+    );
+    assert!(data.cases.iter().all(|c| c.id.is_some()));
+
+    // A selector_type outside {Int, String} resets to Int.
+    let mut bad_sel = SwitchData {
+        selector_type: DataType::Float,
+        value_type: DataType::Int,
+        cases: vec![SwitchCase {
+            id: Some(1),
+            value: SwitchCaseValue::Int(7),
+        }],
+        next_case_id: 2,
+    };
+    bad_sel.heal();
+    assert_eq!(bad_sel.selector_type, DataType::Int);
+    assert_eq!(bad_sel.cases.len(), 1);
+    assert_eq!(bad_sel.cases[0].value, SwitchCaseValue::Int(7));
+}
+
+/// Test: `heal` is a no-op on a well-formed switch (the round-trip of a good
+/// file must not perturb it — the loader runs `heal` on every load).
+#[test]
+fn switch_phase3_heal_is_noop_on_valid_data() {
+    let good = switch_data(
+        DataType::Int,
+        DataType::Crystal,
+        vec![
+            SwitchCaseValue::Int(3),
+            SwitchCaseValue::Int(-7),
+            SwitchCaseValue::Int(42),
+        ],
+    );
+    let mut healed = good.clone();
+    healed.heal();
+    assert_eq!(healed.selector_type, good.selector_type);
+    assert_eq!(healed.value_type, good.value_type);
+    assert_eq!(healed.next_case_id, good.next_case_id);
+    assert_eq!(
+        healed.cases.iter().map(|c| c.id).collect::<Vec<_>>(),
+        good.cases.iter().map(|c| c.id).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        healed
+            .cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>(),
+        good.cases
+            .iter()
+            .map(|c| c.value.clone())
+            .collect::<Vec<_>>()
+    );
+}

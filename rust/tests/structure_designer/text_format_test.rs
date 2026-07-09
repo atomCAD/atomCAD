@@ -3863,3 +3863,286 @@ mod free_geometry_text_format_tests {
         );
     }
 }
+
+// ============================================================================
+// switch text format (`doc/design_switch_node.md` §Phase 3)
+//
+// Case pins carry derived names (`case_<value>`, sanitized/deduped), so case
+// connections serialize/parse by derived pin name and the case list is a plain
+// `cases` array (Int or String literals). Case identity rides on a hidden
+// stable id per case (matched by-id on the argument rebuild), so incremental
+// `cases`-only and selector-flip edits preserve ids and external wires. Zone
+// bodies do not apply (switch is bodyless); `.cnnd` round-trips live in
+// `switch_test.rs`.
+// ============================================================================
+mod switch_text_format_tests {
+    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
+    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+    use rust_lib_flutter_cad::structure_designer::text_format::{
+        EditResult, edit_network, serialize_network,
+    };
+
+    fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
+        let mut designer = StructureDesigner::new();
+        designer.add_node_network(network_name);
+        designer.set_active_node_network_name(Some(network_name.to_string()));
+        designer
+    }
+
+    fn edit_designer_network(
+        designer: &mut StructureDesigner,
+        network_name: &str,
+        code: &str,
+        replace: bool,
+    ) -> EditResult {
+        let mut network = designer
+            .node_type_registry
+            .node_networks
+            .remove(network_name)
+            .unwrap();
+        let result = edit_network(&mut network, &designer.node_type_registry, code, replace);
+        designer
+            .node_type_registry
+            .node_networks
+            .insert(network_name.to_string(), network);
+        result
+    }
+
+    fn node_id_by_name(network: &NodeNetwork, name: &str) -> u64 {
+        network
+            .nodes
+            .iter()
+            .find(|(_, n)| n.custom_name.as_deref() == Some(name))
+            .map(|(id, _)| *id)
+            .unwrap_or_else(|| panic!("no node named '{}'", name))
+    }
+
+    fn switch_data<'a>(network: &'a NodeNetwork, name: &str) -> &'a SwitchData {
+        let id = node_id_by_name(network, name);
+        network
+            .nodes
+            .get(&id)
+            .unwrap()
+            .data
+            .as_any_ref()
+            .downcast_ref::<SwitchData>()
+            .expect("node is a switch")
+    }
+
+    /// The source node id wired into `switch` pin `pin` (single-source pins).
+    fn arg_src(network: &NodeNetwork, switch_id: u64, pin: usize) -> Option<u64> {
+        network.nodes.get(&switch_id).unwrap().arguments[pin].get_node_id()
+    }
+
+    /// Test 1: parse the canonical example shape — a `cases` array plus per-case
+    /// connections by derived pin name — and confirm the wires land on the right
+    /// case pins (value -> 0, case_<v> -> 1.., default -> last).
+    #[test]
+    fn parse_creates_cases_and_wires() {
+        let mut designer = setup_designer_with_network("test");
+        let code = "\
+sel = int { value: 2 }
+a = int { value: 100 }
+b = int { value: 200 }
+c = int { value: 500 }
+d = int { value: 999 }
+s = switch { selector_type: Int, value_type: Int, cases: [1, 2, 5], value: sel, case_1: a, case_2: b, case_5: c, default: d }
+output s
+";
+        let r = edit_designer_network(&mut designer, "test", code, true);
+        assert!(
+            r.errors.is_empty(),
+            "unexpected edit errors: {:?}",
+            r.errors
+        );
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let data = switch_data(network, "s");
+        assert_eq!(data.selector_type, DataType::Int);
+        assert_eq!(data.value_type, DataType::Int);
+        assert_eq!(
+            data.cases
+                .iter()
+                .map(|c| c.value.clone())
+                .collect::<Vec<_>>(),
+            vec![
+                SwitchCaseValue::Int(1),
+                SwitchCaseValue::Int(2),
+                SwitchCaseValue::Int(5)
+            ]
+        );
+
+        let s = node_id_by_name(network, "s");
+        // value(0), case_1(1), case_2(2), case_5(3), default(4).
+        assert_eq!(
+            arg_src(network, s, 0),
+            Some(node_id_by_name(network, "sel"))
+        );
+        assert_eq!(arg_src(network, s, 1), Some(node_id_by_name(network, "a")));
+        assert_eq!(arg_src(network, s, 2), Some(node_id_by_name(network, "b")));
+        assert_eq!(arg_src(network, s, 3), Some(node_id_by_name(network, "c")));
+        assert_eq!(arg_src(network, s, 4), Some(node_id_by_name(network, "d")));
+    }
+
+    /// Test 2: serialize -> re-parse -> serialize is byte-equal, exercising both
+    /// a String dedup-suffix pin name (`case_a_b__2`) and a negative-Int pin
+    /// name (`case_neg3`).
+    #[test]
+    fn serialize_roundtrip_byte_equal_dedup_and_negative() {
+        let mut designer = setup_designer_with_network("test");
+        let code = "\
+x = int { value: 1 }
+si = switch { selector_type: String, value_type: Int, cases: [\"a b\", \"a_b\"], case_a_b: x, case_a_b__2: x }
+ni = switch { selector_type: Int, value_type: Int, cases: [-3, 5], case_neg3: x, case_5: x }
+output ni
+";
+        let r = edit_designer_network(&mut designer, "test", code, true);
+        assert!(r.errors.is_empty(), "edit errors: {:?}", r.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let text1 = serialize_network(network, &designer.node_type_registry, None);
+
+        // The derived dedup-suffix and negative-Int names must actually appear.
+        assert!(text1.contains("case_a_b__2:"), "{}", text1);
+        assert!(text1.contains("case_neg3:"), "{}", text1);
+        assert!(text1.contains("cases: [\"a b\", \"a_b\"]"), "{}", text1);
+        assert!(text1.contains("cases: [-3, 5]"), "{}", text1);
+
+        // Re-parse into a fresh network and re-serialize; the two must match.
+        let mut designer2 = setup_designer_with_network("test");
+        let r2 = edit_designer_network(&mut designer2, "test", &text1, true);
+        assert!(r2.errors.is_empty(), "re-parse errors: {:?}", r2.errors);
+        let network2 = designer2
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let text2 = serialize_network(network2, &designer2.node_type_registry, None);
+        assert_eq!(text1, text2, "switch text serialization is not stable");
+    }
+
+    /// Test 3a: an incremental edit changing only `cases` (adding a case)
+    /// preserves the existing cases' ids and their external wires; the new case
+    /// mints a fresh id.
+    #[test]
+    fn incremental_cases_edit_preserves_ids_and_wires() {
+        let mut designer = setup_designer_with_network("test");
+        let code = "\
+a = int { value: 100 }
+b = int { value: 200 }
+s = switch { selector_type: Int, value_type: Int, cases: [1, 2], case_1: a, case_2: b }
+output s
+";
+        let r = edit_designer_network(&mut designer, "test", code, true);
+        assert!(r.errors.is_empty(), "edit errors: {:?}", r.errors);
+
+        // Capture the ids the initial parse assigned to cases 1 and 2 (their
+        // exact values depend on the default-node value-match, so we compare
+        // stability, not literals).
+        let (id1, id2) = {
+            let network = designer
+                .node_type_registry
+                .node_networks
+                .get("test")
+                .unwrap();
+            let data = switch_data(network, "s");
+            (data.cases[0].id, data.cases[1].id)
+        };
+
+        // Add case 5, mention nothing else.
+        let r2 = edit_designer_network(
+            &mut designer,
+            "test",
+            "s = switch { cases: [1, 2, 5] }",
+            false,
+        );
+        assert!(r2.errors.is_empty(), "incremental errors: {:?}", r2.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let data = switch_data(network, "s");
+        // Existing cases keep their ids; the new case gets a fresh (minted) id.
+        assert_eq!(data.cases[0].id, id1);
+        assert_eq!(data.cases[1].id, id2);
+        assert_eq!(data.cases[2].value, SwitchCaseValue::Int(5));
+        assert!(data.cases[2].id.is_some() && data.cases[2].id != id1 && data.cases[2].id != id2);
+
+        // The original two case wires are untouched.
+        let s = node_id_by_name(network, "s");
+        assert_eq!(arg_src(network, s, 1), Some(node_id_by_name(network, "a")));
+        assert_eq!(arg_src(network, s, 2), Some(node_id_by_name(network, "b")));
+    }
+
+    /// Test 3b: a text edit flipping `selector_type` (with the `cases` array
+    /// rewritten into the new domain) preserves ids and external wires — the
+    /// conversion-before-merge rule holds on the text path too.
+    #[test]
+    fn incremental_selector_flip_preserves_ids_and_wires() {
+        let mut designer = setup_designer_with_network("test");
+        let code = "\
+a = int { value: 100 }
+b = int { value: 200 }
+s = switch { selector_type: Int, value_type: Int, cases: [1, 2], case_1: a, case_2: b }
+output s
+";
+        let r = edit_designer_network(&mut designer, "test", code, true);
+        assert!(r.errors.is_empty(), "edit errors: {:?}", r.errors);
+
+        // Capture the ids assigned to cases 1 and 2 by the initial parse.
+        let (id1, id2) = {
+            let network = designer
+                .node_type_registry
+                .node_networks
+                .get("test")
+                .unwrap();
+            let data = switch_data(network, "s");
+            (data.cases[0].id, data.cases[1].id)
+        };
+
+        // Flip Int -> String, rewriting the cases into the string domain.
+        let r2 = edit_designer_network(
+            &mut designer,
+            "test",
+            "s = switch { selector_type: String, cases: [\"1\", \"2\"] }",
+            false,
+        );
+        assert!(r2.errors.is_empty(), "flip errors: {:?}", r2.errors);
+
+        let network = designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap();
+        let data = switch_data(network, "s");
+        assert_eq!(data.selector_type, DataType::String);
+        // Ids survive the flip (convert-then-merge value-matches in one domain).
+        assert_eq!(data.cases[0].id, id1);
+        assert_eq!(data.cases[1].id, id2);
+        assert_eq!(
+            data.cases[0].value,
+            SwitchCaseValue::String("1".to_string())
+        );
+        assert_eq!(
+            data.cases[1].value,
+            SwitchCaseValue::String("2".to_string())
+        );
+
+        // External wires follow their ids onto the (renamed) case_1 / case_2.
+        let s = node_id_by_name(network, "s");
+        assert_eq!(arg_src(network, s, 1), Some(node_id_by_name(network, "a")));
+        assert_eq!(arg_src(network, s, 2), Some(node_id_by_name(network, "b")));
+    }
+}
