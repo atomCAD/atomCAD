@@ -7408,6 +7408,7 @@ pub fn set_collapse_mode(scope_path: Vec<u64>, hof_node_id: u64, mode: APICollap
 pub fn resize_comment_node(scope_path: Vec<u64>, node_id: u64, width: f64, height: f64) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            let mut mutated = false;
             if let Some(network) = cad_instance
                 .structure_designer
                 .get_scope_network_mut(&scope_path)
@@ -7417,8 +7418,12 @@ pub fn resize_comment_node(scope_path: Vec<u64>, node_id: u64, width: f64, heigh
                     {
                         comment_data.width = width.max(100.0);
                         comment_data.height = height.max(60.0);
+                        mutated = true;
                     }
                 }
+            }
+            if mutated {
+                cad_instance.structure_designer.set_dirty(true);
             }
         });
     }
@@ -7431,6 +7436,7 @@ pub fn resize_comment_node(scope_path: Vec<u64>, node_id: u64, width: f64, heigh
 pub fn update_comment_node(scope_path: Vec<u64>, node_id: u64, label: String, text: String) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            let mut mutated = false;
             if let Some(network) = cad_instance
                 .structure_designer
                 .get_scope_network_mut(&scope_path)
@@ -7440,8 +7446,12 @@ pub fn update_comment_node(scope_path: Vec<u64>, node_id: u64, label: String, te
                     {
                         comment_data.label = label;
                         comment_data.text = text;
+                        mutated = true;
                     }
                 }
+            }
+            if mutated {
+                cad_instance.structure_designer.set_dirty(true);
             }
         });
     }
