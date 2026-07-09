@@ -61,6 +61,7 @@ Tests live in `rust/tests/geo_tree/` (never inline `#[cfg(test)]`). Test modules
 ```
 tests/geo_tree/
 ├── implicit_eval_test.rs                   # SDF evaluation correctness
+├── ellipsoid_test.rs                       # Ellipsoid/Ellipse: sign/zero-set, conservativeness, sphere/circle snap, hash, CSG verts
 ├── csg_cache_test.rs                       # Cache hit/miss, eviction, statistics
 ├── batched_implicit_evaluator_test.rs      # Batch evaluation, padding, result ordering
 └── multi_threaded_batch_evaluator_test.rs  # Parallel evaluation correctness
