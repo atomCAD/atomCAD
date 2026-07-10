@@ -9,112 +9,13 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::{
     apply_diff, compose_diffs, compose_two_diffs,
 };
 
+use crate::structure_equivalence::assert_structures_equivalent;
+
 const TOL: f64 = 0.1;
 
 // ============================================================================
 // Test Helpers
 // ============================================================================
-
-/// Compares two AtomicStructure results for semantic equality using position-based matching.
-fn assert_structures_equal(a: &AtomicStructure, b: &AtomicStructure, tolerance: f64) {
-    assert_eq!(
-        a.get_num_of_atoms(),
-        b.get_num_of_atoms(),
-        "atom count mismatch: a={}, b={}",
-        a.get_num_of_atoms(),
-        b.get_num_of_atoms()
-    );
-
-    let tol_sq = tolerance * tolerance;
-
-    // Build position-based bijection from a → b
-    let mut b_claimed: Vec<bool> = vec![false; b.get_num_of_atoms()];
-    let b_atoms: Vec<_> = b.atoms_values().collect();
-    let mut a_to_b: Vec<(u32, u32)> = Vec::new(); // (a_id, b_id)
-
-    for a_atom in a.atoms_values() {
-        let mut best_idx = None;
-        let mut best_dist = f64::MAX;
-        for (i, b_atom) in b_atoms.iter().enumerate() {
-            if b_claimed[i] {
-                continue;
-            }
-            let dist = a_atom.position.distance_squared(b_atom.position);
-            if dist < best_dist {
-                best_dist = dist;
-                best_idx = Some(i);
-            }
-        }
-        let idx = best_idx.expect("no matching b atom found");
-        assert!(
-            best_dist <= tol_sq,
-            "atom at {:?} (Z={}) has no match within tolerance in b (nearest dist={})",
-            a_atom.position,
-            a_atom.atomic_number,
-            best_dist.sqrt()
-        );
-        b_claimed[idx] = true;
-        let b_atom = b_atoms[idx];
-        assert_eq!(
-            a_atom.atomic_number, b_atom.atomic_number,
-            "element mismatch at position {:?}: a={}, b={}",
-            a_atom.position, a_atom.atomic_number, b_atom.atomic_number
-        );
-        // Check flags (excluding selection bit 0)
-        assert_eq!(
-            a_atom.flags & !0x1,
-            b_atom.flags & !0x1,
-            "flags mismatch at position {:?}",
-            a_atom.position,
-        );
-        a_to_b.push((a_atom.id, b_atom.id));
-    }
-
-    // Build ID mapping
-    let a_id_to_b_id: std::collections::HashMap<u32, u32> = a_to_b.iter().cloned().collect();
-
-    // Compare bonds
-    assert_eq!(
-        a.get_num_of_bonds(),
-        b.get_num_of_bonds(),
-        "bond count mismatch: a={}, b={}",
-        a.get_num_of_bonds(),
-        b.get_num_of_bonds()
-    );
-
-    for a_atom in a.atoms_values() {
-        for bond in &a_atom.bonds {
-            let other_a_id = bond.other_atom_id();
-            if a_atom.id >= other_a_id {
-                continue; // only check each bond once
-            }
-            let b_id1 = a_id_to_b_id[&a_atom.id];
-            let b_id2 = a_id_to_b_id[&other_a_id];
-            assert!(
-                b.has_bond_between(b_id1, b_id2),
-                "bond between positions {:?} and {:?} exists in a but not in b",
-                a_atom.position,
-                a.get_atom(other_a_id).unwrap().position
-            );
-            // Check bond order
-            let b_order = b
-                .get_atom(b_id1)
-                .unwrap()
-                .bonds
-                .iter()
-                .find(|bb| bb.other_atom_id() == b_id2)
-                .unwrap()
-                .bond_order();
-            assert_eq!(
-                bond.bond_order(),
-                b_order,
-                "bond order mismatch between {:?} and {:?}",
-                a_atom.position,
-                a.get_atom(other_a_id).unwrap().position
-            );
-        }
-    }
-}
 
 /// Verifies the core correctness invariant:
 ///   apply_diff(apply_diff(base, diff1), diff2) == apply_diff(base, compose(diffs))
@@ -129,7 +30,7 @@ fn assert_compose_equivalence(base: &AtomicStructure, diffs: &[&AtomicStructure]
     let composed = compose_diffs(diffs, tolerance).unwrap();
     let composed_result = apply_diff(base, &composed.composed, tolerance).result;
 
-    assert_structures_equal(&sequential, &composed_result, tolerance);
+    assert_structures_equivalent(&sequential, &composed_result, tolerance);
 }
 
 // ============================================================================

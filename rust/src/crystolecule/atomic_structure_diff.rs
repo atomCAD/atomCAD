@@ -8,8 +8,11 @@
 //! operation on atomic structures, not specific to any particular node type.
 
 use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::DELETED_SITE_ATOMIC_NUMBER;
 use crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
+use crate::crystolecule::atomic_structure::atom::DURABLE_FLAGS_MASK;
 use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
+use glam::f64::DVec3;
 use rustc_hash::FxHashMap;
 
 /// Result of applying a diff to a base structure.
@@ -875,6 +878,166 @@ pub fn compose_diffs(diffs: &[&AtomicStructure], tolerance: f64) -> Option<DiffC
             Some(result)
         }
     }
+}
+
+// ============================================================================
+// Diff Extraction
+// ============================================================================
+
+/// Derives a diff (`is_diff = true`) such that applying it to `before`
+/// reproduces `after`. Atoms are correlated BY ID: callers must guarantee
+/// that `after` was produced from `before` by in-place mutation (surviving
+/// atoms keep their ids). All target nodes for this feature satisfy this.
+///
+/// `position_epsilon`: an atom whose position moved by no more than this
+/// (and whose element/durable flags are unchanged) is treated as untouched
+/// and omitted from the diff. Pass `0.0` for exact comparison.
+///
+/// The result is deterministic: atoms are swept in ascending id order and bonds
+/// in ascending canonical-pair order, so the emitted diff — and hence its
+/// serialization — is stable across runs. Runs in O(n_atoms + n_bonds).
+///
+/// See `doc/design_diff_outputs_for_atom_ops.md` §1.
+pub fn extract_diff(
+    before: &AtomicStructure,
+    after: &AtomicStructure,
+    position_epsilon: f64,
+) -> AtomicStructure {
+    let mut diff = AtomicStructure::new_diff();
+    // endpoint id (shared between before/after) → its representative atom id in `diff`
+    let mut reps: FxHashMap<u32, u32> = FxHashMap::default();
+
+    let epsilon_sq = position_epsilon * position_epsilon;
+
+    // --- Atom sweep, ascending id (ids are 1-based slot indices) ---
+    let max_slots = before
+        .get_num_of_atoms_including_deleted()
+        .max(after.get_num_of_atoms_including_deleted());
+
+    for idx in 0..max_slots {
+        let id = (idx + 1) as u32;
+        match (before.get_atom(id), after.get_atom(id)) {
+            (Some(b), Some(a)) => {
+                let moved = b.position.distance_squared(a.position) > epsilon_sq;
+                let element_changed = b.atomic_number != a.atomic_number;
+                let flags_changed =
+                    (b.flags & DURABLE_FLAGS_MASK) != (a.flags & DURABLE_FLAGS_MASK);
+                if moved || element_changed || flags_changed {
+                    // Modified: after's element/position/metadata, anchored to before's position.
+                    let diff_id = diff.add_atom(a.atomic_number, a.position);
+                    diff.set_atom_flags(diff_id, a.flags & DURABLE_FLAGS_MASK);
+                    diff.set_atom_in_crystal_depth(diff_id, a.in_crystal_depth);
+                    diff.set_anchor_position(diff_id, b.position);
+                    reps.insert(id, diff_id);
+                }
+                // else: untouched — materialized lazily as an UNCHANGED marker only
+                // if a bond entry below needs it as an endpoint (§1.3).
+            }
+            (Some(b), None) => {
+                // Deleted: delete marker at before's position.
+                let diff_id = diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, b.position);
+                diff.set_anchor_position(diff_id, b.position);
+                reps.insert(id, diff_id);
+            }
+            (None, Some(a)) => {
+                // Pure addition: after's state, no anchor.
+                let diff_id = diff.add_atom(a.atomic_number, a.position);
+                diff.set_atom_flags(diff_id, a.flags & DURABLE_FLAGS_MASK);
+                diff.set_atom_in_crystal_depth(diff_id, a.in_crystal_depth);
+                reps.insert(id, diff_id);
+            }
+            (None, None) => {}
+        }
+    }
+
+    // --- Bond sweep, ascending canonical pair ---
+    let before_bonds = canonical_bonds(before);
+    let after_bonds = canonical_bonds(after);
+
+    let mut pairs: Vec<(u32, u32)> = before_bonds
+        .keys()
+        .chain(after_bonds.keys())
+        .copied()
+        .collect();
+    pairs.sort_unstable();
+    pairs.dedup();
+
+    for (a, b) in pairs {
+        match (before_bonds.get(&(a, b)), after_bonds.get(&(a, b))) {
+            (Some(_), None) => {
+                // Bond only in `before`. If both endpoints survive into `after`,
+                // emit an explicit BOND_DELETED. If an endpoint was deleted, emit
+                // nothing — apply_diff drops bonds to deleted base atoms automatically.
+                if after.get_atom(a).is_some() && after.get_atom(b).is_some() {
+                    let ra = endpoint_rep(&mut diff, &mut reps, before, a);
+                    let rb = endpoint_rep(&mut diff, &mut reps, before, b);
+                    diff.add_bond(ra, rb, BOND_DELETED);
+                }
+            }
+            (None, Some(&after_order)) => {
+                // Bond only in `after` → new bond.
+                let ra = endpoint_rep(&mut diff, &mut reps, before, a);
+                let rb = endpoint_rep(&mut diff, &mut reps, before, b);
+                diff.add_bond(ra, rb, after_order);
+            }
+            (Some(&before_order), Some(&after_order)) => {
+                if before_order != after_order {
+                    // Order changed → override with after's order.
+                    let ra = endpoint_rep(&mut diff, &mut reps, before, a);
+                    let rb = endpoint_rep(&mut diff, &mut reps, before, b);
+                    diff.add_bond(ra, rb, after_order);
+                }
+                // else: order unchanged → base bond passes through at apply time
+                // (even when an endpoint is a modified atom — apply_diff step 3a
+                // re-adds it), so nothing is emitted.
+            }
+            (None, None) => unreachable!("pair came from the union of bond keys"),
+        }
+    }
+
+    diff
+}
+
+/// Builds the canonical bond set `{(min_id, max_id) → order}` of a structure.
+/// Bonds are stored bidirectionally, so the `atom.id < other` guard yields each
+/// unique bond exactly once.
+fn canonical_bonds(structure: &AtomicStructure) -> FxHashMap<(u32, u32), u8> {
+    let mut bonds: FxHashMap<(u32, u32), u8> = FxHashMap::default();
+    for atom in structure.atoms_values() {
+        for bond in &atom.bonds {
+            let other = bond.other_atom_id();
+            if atom.id < other {
+                bonds.insert((atom.id, other), bond.bond_order());
+            }
+        }
+    }
+    bonds
+}
+
+/// Returns the diff-atom id that represents endpoint `id` in the emitted diff.
+///
+/// If a modified/added atom was already emitted for `id`, that atom is its
+/// representative. Otherwise `id` is an untouched atom, and an UNCHANGED marker
+/// is created on demand at its `before` position and memoized. Only ever called
+/// for endpoints of emitted bonds, whose atoms are guaranteed to exist in `after`
+/// (and therefore are never delete markers).
+fn endpoint_rep(
+    diff: &mut AtomicStructure,
+    reps: &mut FxHashMap<u32, u32>,
+    before: &AtomicStructure,
+    id: u32,
+) -> u32 {
+    if let Some(&rep) = reps.get(&id) {
+        return rep;
+    }
+    let pos = before
+        .get_atom(id)
+        .map(|atom| atom.position)
+        .unwrap_or(DVec3::ZERO);
+    let marker_id = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, pos);
+    diff.set_anchor_position(marker_id, pos);
+    reps.insert(id, marker_id);
+    marker_id
 }
 
 #[cfg(test)]

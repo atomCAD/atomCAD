@@ -24,6 +24,18 @@ const ATOM_FLAG_GHOST: u16 = 1 << 5;
 /// drop-unwelded-ghosts step. See `doc/design_surface_patches.md` §4.
 pub const ATOM_FLAG_PATCH_GHOST: u16 = 1 << 6;
 
+/// Mask of the *durable* flag bits — the ones that carry real structural state
+/// and should participate in diff extraction / structural equivalence.
+///
+/// Durable: hydrogen_passivation (1), frozen (2), hybridization override (3–4),
+/// patch-ghost (6). Deliberately excludes the transient bits — selected (0) and
+/// display-ghost (5) — which are UI/render state that must not leak into a diff.
+/// See `doc/design_diff_outputs_for_atom_ops.md` §1.1.
+pub const DURABLE_FLAGS_MASK: u16 = ATOM_FLAG_HYDROGEN_PASSIVATION
+    | ATOM_FLAG_FROZEN
+    | ATOM_FLAG_HYBRIDIZATION_MASK
+    | ATOM_FLAG_PATCH_GHOST;
+
 pub const HYBRIDIZATION_AUTO: u8 = 0;
 pub const HYBRIDIZATION_SP3: u8 = 1;
 pub const HYBRIDIZATION_SP2: u8 = 2;
