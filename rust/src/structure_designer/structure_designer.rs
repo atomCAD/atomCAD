@@ -24,8 +24,7 @@ use crate::api::structure_designer::structure_designer_preferences::{
 };
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
-use crate::crystolecule::io::mol_exporter::save_mol_v3000;
-use crate::crystolecule::io::xyz_saver::save_xyz;
+use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
@@ -7676,22 +7675,20 @@ impl StructureDesigner {
         }
 
         // Determine file format from extension and save accordingly
-        let file_path_lower = file_path.to_lowercase();
-        if file_path_lower.ends_with(".xyz") {
-            match save_xyz(&merged_structure, file_path) {
-                Ok(()) => Ok(()),
-                Err(err) => Err(format!("Failed to save XYZ file '{}': {}", file_path, err)),
-            }
-        } else if file_path_lower.ends_with(".mol") {
-            match save_mol_v3000(&merged_structure, file_path) {
-                Ok(()) => Ok(()),
-                Err(err) => Err(format!("Failed to save MOL file '{}': {}", file_path, err)),
-            }
-        } else {
-            Err(format!(
-                "Unsupported file format. Please use .xyz or .mol extension. Got: {}",
+        match AtomExportFormat::from_path(file_path) {
+            Some(format) => format.save(&merged_structure, file_path).map_err(|err| {
+                format!(
+                    "Failed to save {} file '{}': {}",
+                    format.label(),
+                    file_path,
+                    err
+                )
+            }),
+            None => Err(format!(
+                "Unsupported file format. Please use {} extension. Got: {}",
+                AtomExportFormat::supported_extensions_display(),
                 file_path
-            ))
+            )),
         }
     }
 

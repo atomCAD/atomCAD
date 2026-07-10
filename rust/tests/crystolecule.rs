@@ -31,6 +31,9 @@ mod unit_cell_test;
 #[path = "crystolecule/unit_cell_symmetries_test.rs"]
 mod unit_cell_symmetries_test;
 
+#[path = "crystolecule/io/atom_export_test.rs"]
+mod atom_export_test;
+
 #[path = "crystolecule/io/cif_parser_test.rs"]
 mod cif_parser_test;
 
