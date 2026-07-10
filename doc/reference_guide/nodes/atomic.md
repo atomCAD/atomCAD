@@ -161,6 +161,8 @@ Translates an unanchored object — a `Blueprint` or a `Molecule` — by a vecto
 
 For a `Blueprint`, only the geometry (the cookie cutter) moves; the structure stays fixed. The cutter typically drifts off-lattice as a result, so the output is flagged `lattice_unaligned`. For a `Molecule`, atoms and geometry move together freely.
 
+`free_move` also exposes a `diff` output pin capturing the atom motion (a Blueprint input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes).
+
 **Gadget controls**
 
 Drag the gadget axes to adjust the translation vector interactively.
@@ -179,6 +181,8 @@ Rotates an unanchored object — a `Blueprint` or a `Molecule` — around an axi
 - `pivot_point: Vec3` (optional) — pivot point, in ångströms. Defaults to the origin.
 
 For a `Blueprint`, only the geometry rotates; the structure stays fixed, so the output is flagged `lattice_unaligned`. For a `Molecule`, atoms and geometry rotate together.
+
+`free_rot` also exposes a `diff` output pin capturing the atom motion (a Blueprint input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes).
 
 **Gadget controls**
 
@@ -218,6 +222,23 @@ The composition uses position-based matching to merge the diffs: a `diff_1` modi
 
 A typical use is collapsing a long edit history into a single distributable patch: chain several `atom_edit` nodes, take their `diff` outputs, feed them through `atom_composediff`, and the result is one `Molecule` value that encodes the entire edit sequence.
 
+## Diff output pins on atom-manipulating nodes
+
+`atom_edit` is not the only node that can expose its effect as a **diff**. `relax`, the movement nodes (`free_move`, `free_rot`, `structure_move`, `structure_rot`), `atom_replace`, and `atom_cut` each carry a second **`diff`** output pin (pin 1) in addition to their primary `result` pin (pin 0) — the same two-pin shape as `atom_edit`. The `diff` pin is always a `Molecule` and encodes the node's effect (moved / replaced / deleted atoms) as an atomic diff that can be re-applied to a *different* base via `apply_diff`, composed with other diffs via `atom_composediff`, or repositioned with a movement node — exactly like an `atom_edit` diff.
+
+By default only the `result` pin is shown in the viewport; toggle the `diff` pin's eye icon to display the diff atoms (with anchor arrows) instead of, or alongside, the result.
+
+**The motivating workflow (relax a mockup, apply to the monster).** You want to relax a small feature of a large structure — say a tool tip on a full-size SPM probe of thousands of atoms. Instead of threading the whole structure (including its many frozen boundary atoms) through `relax`, relax a small **mockup proxy**, take its `diff` output, and `apply_diff` that diff onto the full-size structure. `relax` holds frozen atoms exactly fixed, so they never enter the diff automatically — the relax diff of a mockup with a frozen boundary contains only the atoms that actually moved.
+
+Per-node specifics:
+
+- **`relax`** — the diff contains every atom that moved during minimization (frozen atoms excluded). Because minimization nudges essentially every mobile atom at least slightly, `relax` has a `diff_min_move` property (default `0.0`, in Ångströms): an atom that moved by no more than this is treated as unchanged and pruned from the diff. Pruning makes "apply the diff" differ from "relax directly" by up to `diff_min_move` per atom; the default keeps exact behavior.
+- **Movement nodes** (`free_move`, `free_rot`, `structure_move`, `structure_rot`) — the diff captures the **atom motion only**. Geometry motion (a Blueprint's cutter) and the atoms⇄geometry rigid coupling of a `Crystal` are *not* representable in a diff, so applying a movement diff to another structure moves its atoms but not its geometry. A `Blueprint` input (no atoms) yields an **empty diff** rather than an error, so stamp templates can be written generically.
+- **`atom_replace`** — the diff contains only the replaced atoms (element-changed, anchored at their unchanged positions) and any rule-deleted atoms (delete markers). With the `region` pin wired, out-of-region atoms are untouched and never appear in the diff.
+- **`atom_cut`** — a delete-only operation, so its diff is purely delete markers for the removed atoms; cut bonds produce no diff entries (a bond to a deleted atom drops out at apply time).
+
+Feeding a structure that is *itself* a diff (e.g. an `atom_edit` `diff` pin) into these nodes is not supported.
+
 ## Restricting an atom operation to a region
 
 Several atom operations — `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, and `unfreeze` — accept an optional **`region: Blueprint`** input pin (always the last pin) that confines their effect to a volume you draw. With `region` disconnected, the operation applies to **all** atoms (its original behavior). With `region` connected, the operation only touches atoms **inside** the region volume; atoms outside pass through untouched.
@@ -234,6 +255,8 @@ Performs UFF (Universal Force Field) energy minimization on an atomic structure.
 This node is useful in node-network workflows where you want to relax a structure non-destructively as part of a parametric pipeline. For interactive minimization during atom editing, use the energy minimization feature built into the `atom_edit` node instead.
 
 **Frozen atoms.** `relax` honors the per-atom *frozen* flag: atoms marked frozen (by an upstream `freeze` node) are held fixed during minimization while their mobile neighbors move and settle. A frozen atom still participates in the force field — it pulls on its neighbors — it just doesn't move itself. This is how you relax only a sub-volume of a structure: freeze everything you want to hold, then `relax`. `relax` itself has no `region` pin; compose it with `freeze` / `unfreeze` to scope which atoms move.
+
+**Diff output pin.** `relax` exposes a second `diff` output pin (and the `diff_min_move` pruning property) — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes) for the relax-a-mockup-apply-to-the-monster workflow.
 
 ## freeze
 
@@ -317,6 +340,8 @@ When `rules` is wired, the wired array entirely replaces the property list — t
 
 The node subtitle summarizes the active rules (e.g. `C→Si, O→S`, or `H→(del)` for a deletion rule), with a `… (+N more)` suffix when the list is longer than three entries. Suppressed when `rules` is wired.
 
+`atom_replace` also exposes a `diff` output pin containing only the replaced and rule-deleted atoms (in-region only when `region` is wired) — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes).
+
 **Text format**
 
 The rule list serializes as an array of `(from_atomic_number, to_atomic_number)` pairs, with `0` representing *Delete*:
@@ -344,6 +369,8 @@ Cuts an atomic structure using cutter geometries. Unlike `materialize` which cre
 - `Unit Cell Size` — The unit cell size in Ångströms used to normalize atom positions when evaluating against the cutter geometry.
 
 Bonds connected to removed atoms are automatically deleted.
+
+`atom_cut` also exposes a `diff` output pin — since the operation is delete-only, the diff is a set of delete markers for the removed atoms — see [Diff output pins on atom-manipulating nodes](#diff-output-pins-on-atom-manipulating-nodes).
 
 ## Surface reconstruction patches (`patch_build` + `patch_latticefill`)
 

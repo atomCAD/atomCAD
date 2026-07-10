@@ -4,7 +4,9 @@ use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::evaluator::atom_op::map_atomic;
+use crate::structure_designer::evaluator::atom_op::{
+    eval_output_with_diff, map_atomic, snapshot_atoms,
+};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -53,25 +55,35 @@ impl NodeData for AtomCutData {
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = molecule_input_val {
-            return EvalOutput::single(molecule_input_val);
+            // Propagate the error on both pins (result + diff) so diff consumers
+            // don't silently see `None` on pin 1 (§2).
+            return EvalOutput::multi(vec![molecule_input_val.clone(), molecule_input_val]);
         }
 
         let shapes_val =
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
 
-        if let NetworkResult::None = shapes_val {
-            // no cutters plugged in; just return the input atomic structure unmodified
-            return EvalOutput::single(map_atomic(molecule_input_val, |s| s));
+        if let NetworkResult::Error(_) = shapes_val {
+            return EvalOutput::multi(vec![shapes_val.clone(), shapes_val]);
         }
 
-        if let NetworkResult::Error(_) = shapes_val {
-            return EvalOutput::single(shapes_val);
+        // Snapshot the input atoms before the (possibly no-op) mutation so the
+        // `diff` pin can be extracted by id (§2, §1.5). atom_cut is delete-only,
+        // so the diff is purely delete markers (§1.5).
+        let before = snapshot_atoms(&molecule_input_val);
+
+        if let NetworkResult::None = shapes_val {
+            // No cutters plugged in; the input passes through unmodified and the
+            // diff pin is an empty diff.
+            let result = map_atomic(molecule_input_val, |s| s);
+            return eval_output_with_diff(result, before);
         }
 
         let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
             array_elements
         } else {
-            return EvalOutput::single(NetworkResult::Error("Invalid shapes input.".to_string()));
+            let err = NetworkResult::Error("Invalid shapes input.".to_string());
+            return EvalOutput::multi(vec![err.clone(), err]);
         };
 
         let mut shapes: Vec<GeoNode> = Vec::new();
@@ -85,7 +97,7 @@ impl NodeData for AtomCutData {
         let cut_sdf_value = self.cut_sdf_value;
         let unit_cell_size = self.unit_cell_size;
 
-        EvalOutput::single(map_atomic(molecule_input_val, |mut atomic_structure| {
+        let result = map_atomic(molecule_input_val, |mut atomic_structure| {
             cut_atomic_structure(
                 &mut atomic_structure,
                 &cutter_geo_tree_root,
@@ -93,7 +105,9 @@ impl NodeData for AtomCutData {
                 unit_cell_size,
             );
             atomic_structure
-        }))
+        });
+
+        eval_output_with_diff(result, before)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -188,7 +202,10 @@ fn cut_atomic_structure(
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "atom_cut".to_string(),
-        description: "Cuts an atomic structure using cutter geometries.".to_string(),
+        description: "Cuts an atomic structure using cutter geometries. \
+                      The `diff` output pin captures the removed atoms as delete markers \
+                      in a Molecule diff applicable via apply_diff."
+            .to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
@@ -203,7 +220,14 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Array(Box::new(DataType::Blueprint)),
             },
         ],
-        output_pins: OutputPinDefinition::single_same_as("molecule"),
+        output_pins: vec![
+            // Keep atom_cut's existing pin-0 resolution (same_as_input) — just
+            // split into the two-element vec.
+            OutputPinDefinition::same_as_input("result", "molecule"),
+            // The diff is always a free-floating Molecule regardless of the input
+            // phase (matches atom_edit / atom_composediff conventions).
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
+        ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,

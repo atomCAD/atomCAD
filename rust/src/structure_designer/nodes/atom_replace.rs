@@ -2,7 +2,9 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use crate::structure_designer::data_type::{DataType, RecordType};
-use crate::structure_designer::evaluator::atom_op::map_atomic_in_region;
+use crate::structure_designer::evaluator::atom_op::{
+    eval_output_with_diff, map_atomic_in_region, snapshot_atoms,
+};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -61,7 +63,9 @@ impl NodeData for AtomReplaceData {
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
 
         if let NetworkResult::Error(_) = molecule_input_val {
-            return EvalOutput::single(molecule_input_val);
+            // Propagate the error on both pins (result + diff) so diff consumers
+            // don't silently see `None` on pin 1 (§2).
+            return EvalOutput::multi(vec![molecule_input_val.clone(), molecule_input_val]);
         }
 
         // Optional `rules` pin (param index 1). Disconnected → fall back to
@@ -71,16 +75,22 @@ impl NodeData for AtomReplaceData {
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
         let replacements = match rules_input {
             NetworkResult::None => self.replacements.clone(),
-            NetworkResult::Error(_) => return EvalOutput::single(rules_input),
+            NetworkResult::Error(_) => {
+                return EvalOutput::multi(vec![rules_input.clone(), rules_input]);
+            }
             NetworkResult::Array(items) => match parse_rules_from_records(items) {
                 Ok(r) => r,
-                Err(e) => return EvalOutput::single(NetworkResult::Error(e)),
+                Err(e) => {
+                    let err = NetworkResult::Error(e);
+                    return EvalOutput::multi(vec![err.clone(), err]);
+                }
             },
             other => {
-                return EvalOutput::single(NetworkResult::Error(format!(
+                let err = NetworkResult::Error(format!(
                     "atom_replace.rules: expected Array[Record], got {:?}",
                     other.infer_data_type()
-                )));
+                ));
+                return EvalOutput::multi(vec![err.clone(), err]);
             }
         };
 
@@ -92,17 +102,24 @@ impl NodeData for AtomReplaceData {
             network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 2);
         let region_geo = match region_input {
             NetworkResult::None => None,
-            NetworkResult::Error(_) => return EvalOutput::single(region_input),
+            NetworkResult::Error(_) => {
+                return EvalOutput::multi(vec![region_input.clone(), region_input]);
+            }
             NetworkResult::Blueprint(bp) => Some(bp.geo_tree_root),
             other => {
-                return EvalOutput::single(NetworkResult::Error(format!(
+                let err = NetworkResult::Error(format!(
                     "atom_replace.region: expected Blueprint, got {:?}",
                     other.infer_data_type()
-                )));
+                ));
+                return EvalOutput::multi(vec![err.clone(), err]);
             }
         };
 
-        EvalOutput::single(map_atomic_in_region(
+        // Snapshot the input atoms before the in-place mutation so the `diff`
+        // pin can be extracted by id (§2, §1.5).
+        let before = snapshot_atoms(&molecule_input_val);
+
+        let result = map_atomic_in_region(
             molecule_input_val,
             region_geo.as_ref(),
             DEFAULT_REGION_MARGIN,
@@ -149,7 +166,9 @@ impl NodeData for AtomReplaceData {
 
                 structure
             },
-        ))
+        );
+
+        eval_output_with_diff(result, before)
     }
 
     fn clone_box(&self) -> Box<dyn NodeData> {
@@ -276,7 +295,9 @@ pub fn get_node_type() -> NodeType {
         name: "atom_replace".to_string(),
         description: "Replaces elements in an atomic structure. Define replacement rules \
                       mapping source elements to target elements. Atoms not matching any \
-                      rule pass through unchanged."
+                      rule pass through unchanged. \
+                      The `diff` output pin captures only the replaced (and rule-deleted) \
+                      atoms as a Molecule diff applicable via apply_diff."
             .to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
@@ -299,7 +320,14 @@ pub fn get_node_type() -> NodeType {
                 data_type: DataType::Blueprint,
             },
         ],
-        output_pins: OutputPinDefinition::single_same_as("molecule"),
+        output_pins: vec![
+            // Keep atom_replace's existing pin-0 resolution (same_as_input) — just
+            // split into the two-element vec.
+            OutputPinDefinition::same_as_input("result", "molecule"),
+            // The diff is always a free-floating Molecule regardless of the input
+            // phase (matches atom_edit / atom_composediff conventions).
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
+        ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,

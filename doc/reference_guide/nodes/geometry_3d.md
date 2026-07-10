@@ -167,6 +167,8 @@ The component-wise divisibility of `translation` by `subdivision` decides whethe
 
 For a `Blueprint`, only the geometry (the cookie cutter) moves; latent atoms remain anchored to the structure. For a `Crystal`, atoms and geometry move together rigidly.
 
+`structure_move` also exposes a `diff` output pin capturing the atom motion only (the geometry/structure component is not representable in a diff; a `Blueprint` input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](atomic.md#diff-output-pins-on-atom-manipulating-nodes).
+
 You can directly enter the translation vector or drag the axes of the gadget. *Continuous* transformation in lattice space is not supported (use `free_move` for that).
 
 ## structure_rot
@@ -185,3 +187,5 @@ Rotates a structure-bound object — a `Blueprint` or a `Crystal` — in lattice
 Lattice alignment is always preserved by the rotation itself, but the rotation may or may not be a symmetry of the motif (or, with a non-zero `motif_offset`, of the motif placement). When the rotation maps every motif site and bond to itself, the output stays `aligned`; otherwise it is flagged `motif_unaligned`. See [Blueprint alignment](../node_networks.md#blueprint-alignment).
 
 For a `Blueprint`, only the geometry rotates. For a `Crystal`, atoms and geometry rotate together.
+
+`structure_rot` also exposes a `diff` output pin capturing the atom motion only (a `Blueprint` input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](atomic.md#diff-output-pins-on-atom-manipulating-nodes).
