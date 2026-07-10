@@ -164,7 +164,7 @@ When multiple nodes have their output visible in the 3D viewport, you can click 
 
 ### Execute action (side-effect nodes)
 
-Some nodes exist to *do something* rather than to produce a value: `export_xyz` writes an XYZ file to disk; `foreach` runs a body once per element of an upstream stream; future effect nodes will follow the same pattern. These nodes return the [`Unit` data type](./node_networks.md#data-types) (a value that carries no information) so the node graph can wire them around without misrepresenting them as data sources.
+Some nodes exist to *do something* rather than to produce a value: `export_atoms` writes an atomic-structure file (`.xyz` or `.mol`) to disk; `foreach` runs a body once per element of an upstream stream; future effect nodes will follow the same pattern. These nodes return the [`Unit` data type](./node_networks.md#data-types) (a value that carries no information) so the node graph can wire them around without misrepresenting them as data sources.
 
 Effect nodes only fire when the user **explicitly invokes them**. To run an effect node, **right-click the node and choose Execute** from the context menu. This is the *only* way an effect node fires — display passes (the implicit re-evaluations triggered by editing parameters, moving nodes, panning the camera, etc.) skip over Unit-returning nodes entirely, even when the node is visible. That eliminates a whole class of footguns where editing an unrelated parameter would silently overwrite an exported file.
 
@@ -172,7 +172,7 @@ The Execute action is **one-shot**: invoking it runs a single evaluation pass wi
 
 While an Execute pass is running, a small modal **"Executing…"** dialog appears so you know the app is working and not frozen. (The Rust evaluator runs synchronously on the UI thread, so the dialog does not animate while the pass is in flight; it disappears as soon as the pass completes.) On success, a status snackbar confirms completion; on error, a snackbar surfaces the message and the targeted node lights up red in the graph.
 
-The most common pattern is a `product → foreach( variant → export_xyz(...) )` pipeline: edit the product axes freely (no files written), then right-click the `foreach` node and choose Execute to write one file per variant. See the [`foreach`](./nodes/math_programming.md#foreach) and [`export_xyz`](./nodes/atomic.md#export_xyz) reference entries for full pipeline examples.
+The most common pattern is a `product → foreach( variant → export_atoms(...) )` pipeline: edit the product axes freely (no files written), then right-click the `foreach` node and choose Execute to write one file per variant. See the [`foreach`](./nodes/math_programming.md#foreach) and [`export_atoms`](./nodes/atomic.md#export_atoms) reference entries for full pipeline examples.
 
 ## Console panel
 

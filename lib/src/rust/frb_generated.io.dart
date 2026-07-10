@@ -74,6 +74,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIAtomEditTool dco_decode_api_atom_edit_tool(dynamic raw);
 
   @protected
+  APIAtomExportFormat dco_decode_api_atom_export_format(dynamic raw);
+
+  @protected
   APIAtomReplaceData dco_decode_api_atom_replace_data(dynamic raw);
 
   @protected
@@ -830,6 +833,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<APIAtomExportFormat> dco_decode_list_api_atom_export_format(dynamic raw);
+
+  @protected
   List<APIAtomReplaceRule> dco_decode_list_api_atom_replace_rule(dynamic raw);
 
   @protected
@@ -1400,6 +1406,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIAtomEditTool sse_decode_api_atom_edit_tool(SseDeserializer deserializer);
+
+  @protected
+  APIAtomExportFormat sse_decode_api_atom_export_format(
+      SseDeserializer deserializer);
 
   @protected
   APIAtomReplaceData sse_decode_api_atom_replace_data(
@@ -2283,6 +2293,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<APIAtomExportFormat> sse_decode_list_api_atom_export_format(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIAtomReplaceRule> sse_decode_list_api_atom_replace_rule(
       SseDeserializer deserializer);
 
@@ -2954,6 +2968,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_atom_edit_tool(
       APIAtomEditTool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_atom_export_format(
+      APIAtomExportFormat self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_atom_replace_data(
@@ -3881,6 +3899,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_atom_export_format(
+      List<APIAtomExportFormat> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_atom_replace_rule(

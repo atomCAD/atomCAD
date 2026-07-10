@@ -363,6 +363,41 @@ enum APIAtomEditTool {
   ;
 }
 
+/// A single supported atom-export format, projected from
+/// `crystolecule::io::atom_export::AtomExportFormat` for the Flutter UI. The
+/// format dialog, the reactive format indicator, and any future format chooser
+/// are all built from `get_atom_export_formats()` so adding a format in Rust
+/// updates the UI with no Flutter edits.
+class APIAtomExportFormat {
+  /// Canonical extension without a leading dot (`"xyz"` / `"mol"`).
+  final String extension_;
+
+  /// Short human-readable label (`"XYZ"` / `"MOL (V3000)"`).
+  final String label;
+
+  /// One-line description of what the format captures.
+  final String description;
+
+  const APIAtomExportFormat({
+    required this.extension_,
+    required this.label,
+    required this.description,
+  });
+
+  @override
+  int get hashCode =>
+      extension_.hashCode ^ label.hashCode ^ description.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIAtomExportFormat &&
+          runtimeType == other.runtimeType &&
+          extension_ == other.extension_ &&
+          label == other.label &&
+          description == other.description;
+}
+
 class APIAtomReplaceData {
   /// List of (from_atomic_number, to_atomic_number) replacement rules.
   final List<APIAtomReplaceRule> replacements;

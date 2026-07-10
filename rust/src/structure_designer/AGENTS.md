@@ -204,7 +204,7 @@ A user does not distinguish "validation error" from "runtime error" — both jus
 
 ## Execute action & effect nodes
 
-A small set of nodes (`export_xyz`, `foreach`, future effects) exist for their **side effects** rather than to produce a value. These nodes return `DataType::Unit` so the graph passes them through cleanly without misrepresenting them as data sources, and they fire only when the user explicitly invokes the right-click → Execute action.
+A small set of nodes (`export_atoms`, `foreach`, future effects) exist for their **side effects** rather than to produce a value. These nodes return `DataType::Unit` so the graph passes them through cleanly without misrepresenting them as data sources, and they fire only when the user explicitly invokes the right-click → Execute action.
 
 The mechanism is one flag, one rule, one helper:
 
@@ -216,7 +216,7 @@ The mechanism is one flag, one rule, one helper:
 
 `StructureDesigner.print_log: Vec<PrintLogEntry>` accumulates entries pushed by the `print` node (and any future node that wants to surface text to the in-app Console panel). `take_print_log()` drains and returns; `clear_print_log()` empties without returning.
 
-Authoring guidance for effect-node `eval` arms: call effect logic unconditionally — the central rule guarantees `eval` is only invoked under `context.execute == true`. **Do not** add `if context.execute` guards inside individual effect nodes' `eval`. Light per-eval input validation that used to surface during display now defers to Execute; recover eager UX feedback via `get_subtitle` (see `nodes/export_xyz.rs::get_subtitle` for the `(no file name)` pattern). Design doc: `doc/design_node_execution.md`.
+Authoring guidance for effect-node `eval` arms: call effect logic unconditionally — the central rule guarantees `eval` is only invoked under `context.execute == true`. **Do not** add `if context.execute` guards inside individual effect nodes' `eval`. Light per-eval input validation that used to surface during display now defers to Execute; recover eager UX feedback via `get_subtitle` (see `nodes/export_atoms.rs::get_subtitle` for the `(no file name)` pattern). Design doc: `doc/design_node_execution.md`.
 
 ## Reflow on Footprint Growth
 

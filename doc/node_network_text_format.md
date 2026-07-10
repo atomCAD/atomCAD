@@ -346,7 +346,7 @@ trans1 = atom_trans {
 
 # Import/export
 import1 = import_xyz { filename: "molecule.xyz" }
-export1 = export_xyz { molecule: fill1, filename: "output.xyz" }
+export1 = export_atoms { molecule: fill1, file_name: "output.xyz" }
 ```
 
 ## Edit Semantics

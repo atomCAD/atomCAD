@@ -308,7 +308,9 @@
       "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/misc/**)",
       "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/thread_pool/**)",
       "Read(//c/Users/Ádám Nagy/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/flutter_rust_bridge-2.10.0/src/handler/implementation/**)",
-      "Bash(perl -0pi -e 's/\\\\\\\\\"version\\\\\\\\\": 5/\\\\\\\\\"version\\\\\\\\\": 6/g; s/tagged version: 5/tagged version: 6/g' tests/integration/lattice_space_migration_test.rs)"
+      "Bash(perl -0pi -e 's/\\\\\\\\\"version\\\\\\\\\": 5/\\\\\\\\\"version\\\\\\\\\": 6/g; s/tagged version: 5/tagged version: 6/g' tests/integration/lattice_space_migration_test.rs)",
+      "Bash(sed -i 's/export_xyz/export_atoms/g' doc/reference_guide/nodes/math_programming.md doc/reference_guide/node_networks.md)",
+      "Bash(sed -i 's/export_xyz/export_atoms/g; s|atomic.md#export_atoms|atomic.md#export_atoms|g' doc/reference_guide/ui.md)"
     ]
   }
 }

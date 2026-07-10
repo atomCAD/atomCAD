@@ -72,10 +72,12 @@ void main() {
       await tester.tap(find.byKey(TestKeys.exportVisibleMenuItem));
       await tester.pumpAndSettle();
 
-      // Verify export format dialog appears
+      // Verify export format dialog appears. Format tiles are built from the
+      // Rust registry (get_atom_export_formats), so titles read
+      // "<label> (.<ext>)".
       expect(find.text('Select Export Format'), findsOneWidget);
-      expect(find.text('MOL format (.mol)'), findsOneWidget);
-      expect(find.text('XYZ format (.xyz)'), findsOneWidget);
+      expect(find.text('MOL (V3000) (.mol)'), findsOneWidget);
+      expect(find.text('XYZ (.xyz)'), findsOneWidget);
 
       // Close the dialog
       await tester.tap(find.text('Cancel'));

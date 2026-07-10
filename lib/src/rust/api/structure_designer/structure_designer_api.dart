@@ -841,6 +841,13 @@ APIExportAtomsData? getExportAtomsData(
         .crateApiStructureDesignerStructureDesignerApiGetExportAtomsData(
             scopePath: scopePath, nodeId: nodeId);
 
+/// The supported atom-export formats, a thin projection of
+/// `AtomExportFormat::ALL`. The `export_atoms` editor's format indicator and the
+/// shared format-chooser dialog are built from this list, so a new format added
+/// in Rust surfaces in the UI with no Flutter edits.
+List<APIAtomExportFormat> getAtomExportFormats() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetAtomExportFormats();
+
 APISphereData? getSphereData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api

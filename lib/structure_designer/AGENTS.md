@@ -180,7 +180,7 @@ Model methods: `StructureDesignerModel.beginMoveNodes()` / `endMoveNodes()`.
 
 ## Execute action & Console panel
 
-Right-click a node → **Execute** triggers a one-shot evaluation pass on that node with the side-effect flag set, gating effect nodes (`export_xyz`, `foreach`, `print` with `execute_only`) to actually fire. The Flutter side runs the FFI synchronously — `frb(sync)` — because `CAD_INSTANCE` has no internal synchronization and the persistent per-frame `provide_texture` callback would race against a worker-thread Rust call (see `doc/design_node_execution.md` "Why not async (worker thread) FFI"). To give the user feedback while the call blocks, the model method follows this recipe:
+Right-click a node → **Execute** triggers a one-shot evaluation pass on that node with the side-effect flag set, gating effect nodes (`export_atoms`, `foreach`, `print` with `execute_only`) to actually fire. The Flutter side runs the FFI synchronously — `frb(sync)` — because `CAD_INSTANCE` has no internal synchronization and the persistent per-frame `provide_texture` callback would race against a worker-thread Rust call (see `doc/design_node_execution.md` "Why not async (worker thread) FFI"). To give the user feedback while the call blocks, the model method follows this recipe:
 
 1. Show a non-dismissable `DraggableDialog` placard ("Executing…") with `barrierDismissible: false` and `dismissible: false`.
 2. `await SchedulerBinding.instance.endOfFrame` so the dialog frame actually paints before the sync FFI takes over the UI thread.

@@ -47,7 +47,7 @@ In `evaluate_all_outputs`, before dispatching to `NodeData::eval`:
 
 > If `!context.execute` **and** every resolved output pin of the node has `DataType::Unit`, skip the call and synthesise an `EvalOutput` of all `NetworkResult::Unit` directly.
 
-This gates *every* effect node (`export_xyz`, `foreach`, future Unit-returning nodes) in one place — no per-node `if context.execute` guards, no risk of forgetting one. The check uses the **resolved** output type (via the existing `NodeTypeRegistry::resolve_output_type` machinery), not the declared `OutputPinDefinition` — so a hypothetical future `SameAsInput` pin that resolves to `Unit` is also covered. The rule applies only when **all** output pins are Unit; a hypothetical mixed-output node (some Float, some Unit) is evaluated normally because the non-Unit outputs may be needed downstream and we cannot synthesise a Float without running `eval`. Design doc: `doc/design_node_execution.md` ("Central skip rule for Unit-returning nodes").
+This gates *every* effect node (`export_atoms`, `foreach`, future Unit-returning nodes) in one place — no per-node `if context.execute` guards, no risk of forgetting one. The check uses the **resolved** output type (via the existing `NodeTypeRegistry::resolve_output_type` machinery), not the declared `OutputPinDefinition` — so a hypothetical future `SameAsInput` pin that resolves to `Unit` is also covered. The rule applies only when **all** output pins are Unit; a hypothetical mixed-output node (some Float, some Unit) is evaluated normally because the non-Unit outputs may be needed downstream and we cannot synthesise a Float without running `eval`. Design doc: `doc/design_node_execution.md` ("Central skip rule for Unit-returning nodes").
 
 ## Multi-Output Evaluation
 
@@ -70,7 +70,7 @@ Array(Vec<NetworkResult>), Record(Vec<(String, NetworkResult)>),
 Iterator(Walker), Function(ZoneClosure), Unit, Error(String)
 ```
 
-`Unit` is the empty-payload variant used as the runtime value of effect nodes (`export_xyz`, `foreach`). `infer_data_type` returns `DataType::Unit`, `to_display_string` returns `"()"`, and `convert_to(any, &DataType::Unit)` collapses every non-Error source to `NetworkResult::Unit` (an iterator on the source side is dropped without being drained — the desired "discard" semantic). The reverse `Unit → T` is rejected. See `doc/design_node_execution.md` ("The Unit type").
+`Unit` is the empty-payload variant used as the runtime value of effect nodes (`export_atoms`, `foreach`). `infer_data_type` returns `DataType::Unit`, `to_display_string` returns `"()"`, and `convert_to(any, &DataType::Unit)` collapses every non-Error source to `NetworkResult::Unit` (an iterator on the source side is dropped without being drained — the desired "discard" semantic). The reverse `Unit → T` is rejected. See `doc/design_node_execution.md` ("The Unit type").
 
 - **Three-phase payload structs** (lattice-space refactoring):
   - `BlueprintData { structure, geo_tree_root }` — geometry + structure, no atoms.

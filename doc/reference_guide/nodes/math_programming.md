@@ -323,7 +323,7 @@ Examples:
 
 **String Template Literals:**
 
-Backtick-delimited literals (`` `…` ``) build a `String` value with optional inline interpolation. They cover both the pure-string case (no interpolations) and string composition (one or more interpolations), which is the easiest path from "I have these record fields" to "I have a per-variant filename." The motivating use case is systematic file-path assembly for batch export — e.g. mapping a `product` stream of variant records into an `export_xyz.file_name` pin.
+Backtick-delimited literals (`` `…` ``) build a `String` value with optional inline interpolation. They cover both the pure-string case (no interpolations) and string composition (one or more interpolations), which is the easiest path from "I have these record fields" to "I have a per-variant filename." The motivating use case is systematic file-path assembly for batch export — e.g. mapping a `product` stream of variant records into an `export_atoms.file_name` pin.
 
 - `` `text` `` — a literal `String`. Empty `` `` `` is the empty string.
 - `` `${expr}` `` — interpolation. `expr` is the full expression grammar — arithmetic, member access, conditionals, function calls, record literals, etc. all work inside `${…}`.
@@ -778,7 +778,7 @@ A summation body is one `expr` with parameters `a: Int` and `x: Int` (wired from
 
 ## foreach
 
-Side-effect counterpart of `map`: walks a stream of values and runs the body on every element for its side effect, discarding each return value. The output type is `Unit`, so `foreach` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — on a normal display pass the central skip rule short-circuits the node entirely without pulling a single element from `xs`, even when the upstream iterator would have been a million elements long. The motivating use case is **batch export**: a `product` node fans variants into a stream, and a `foreach` whose body wires `element` into an `export_xyz` node writes one file per variant when the user invokes Execute.
+Side-effect counterpart of `map`: walks a stream of values and runs the body on every element for its side effect, discarding each return value. The output type is `Unit`, so `foreach` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — on a normal display pass the central skip rule short-circuits the node entirely without pulling a single element from `xs`, even when the upstream iterator would have been a million elements long. The motivating use case is **batch export**: a `product` node fans variants into a stream, and a `foreach` whose body wires `element` into an `export_atoms` node writes one file per variant when the user invokes Execute.
 
 **Property**
 
@@ -793,14 +793,14 @@ Side-effect counterpart of `map`: walks a stream of values and runs the body on 
 **Body (inline)**
 
 - Zone-input `element: InputType` — the current iteration value.
-- Zone-output `out: Unit` — the body's per-iteration return value (discarded). Because the universal `T → Unit` widening applies at the body's return position, the body can end in *any* node — `export_xyz` (the natural fit), `print` (returns `String`, widened to `Unit`), or even a pure data computation whose value is silently discarded. Must have at least one incoming wire.
+- Zone-output `out: Unit` — the body's per-iteration return value (discarded). Because the universal `T → Unit` widening applies at the body's return position, the body can end in *any* node — `export_atoms` (the natural fit), `print` (returns `String`, widened to `Unit`), or even a pure data computation whose value is silently discarded. Must have at least one incoming wire.
 
 **Behavior**
 
 - **Display passes (no Execute):** zero work. The central skip rule prevents `eval` from running on any all-Unit-output node when `execute = false`, so neither `xs` nor the body is touched. This is what makes a `product → foreach` pipeline cheap during normal editing.
 - **Execute passes:** drains `xs` left-to-right; for each element, runs the body and discards the result. **Fail-fast on errors:** if the body returns an error for any element, `foreach` halts immediately and surfaces that error as its output. This matches `fold` and `collect`'s mid-stream error semantics — silently producing a partial result set is the worst of all worlds for batch operations.
 
-`map` keeps its data semantics; the `map`-with-`export_xyz`-in-the-body pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. A `map`-only pipeline produces an `Iter[Unit]` whose elements are only realized when the iterator is *consumed* — and you'd typically consume it by displaying a `collect` for inspection. `foreach` skips that ceremony: it consumes the stream itself and is the natural sink for "do something for every element."
+`map` keeps its data semantics; the `map`-with-`export_atoms`-in-the-body pattern still works under Execute (the flag propagates through the higher-order-function machinery), but `foreach` is the recommended primitive for batch export because of the display-pass short-circuit. A `map`-only pipeline produces an `Iter[Unit]` whose elements are only realized when the iterator is *consumed* — and you'd typically consume it by displaying a `collect` for inspection. `foreach` skips that ceremony: it consumes the stream itself and is the natural sink for "do something for every element."
 
 ## Function values and closures
 

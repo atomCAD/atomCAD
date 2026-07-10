@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../common/draggable_dialog.dart';
+import '../common/export_format_dialog.dart';
 import '../common/menu_widget.dart';
 import '../common/section.dart';
 import 'structure_designer_model.dart';
@@ -862,38 +863,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
   /// Export visible atomic structures as XYZ or MOL file
   Future<void> _exportVisible() async {
     try {
-      // First, let user select the format
+      // First, let user select the format (shared with the export_atoms node
+      // editor's Browse button — see lib/common/export_format_dialog.dart).
       if (!mounted) return;
-      String? selectedFormat = await showDraggableAlertDialog<String>(
-        context: context,
-        title: const Text('Select Export Format'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Choose the file format for export:'),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.description),
-              title: const Text('MOL format (.mol)'),
-              subtitle: const Text('Molecular structure with bond information'),
-              onTap: () => Navigator.of(context).pop('mol'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.scatter_plot),
-              title: const Text('XYZ format (.xyz)'),
-              subtitle: const Text('Atomic coordinates only'),
-              onTap: () => Navigator.of(context).pop('xyz'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-        ],
-      );
+      String? selectedFormat = await showAtomExportFormatDialog(context);
 
       if (selectedFormat == null) return;
 

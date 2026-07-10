@@ -10,22 +10,25 @@ Imports an atomic structure from an XYZ file. Outputs a `Molecule` — XYZ files
 
 It converts file paths to relative paths whenever possible (if the file is in the same directory as the node or in a subdirectory) so that when you copy your whole project to another location or machine the XYZ file references will remain valid.
 
-## export_xyz
+## export_atoms
 
-Saves the atomic structure on its `molecule` input as an XYZ file. This is an **effect node**: its output type is `Unit`, and the file write only happens when the node is invoked through the right-click **Execute** action (or transitively from a `foreach` upstream of it). Display passes — including normal scene refreshes triggered by editing — never write a file. See [Execute action (side-effect nodes)](../ui.md#execute-action-side-effect-nodes).
+Saves the atomic structure on its `molecule` input to a file. The **output format is chosen by the file extension** — `.xyz` for plain atomic coordinates, `.mol` for MOL V3000 (molecular structure with bond information). This is an **effect node**: its output type is `Unit`, and the file write only happens when the node is invoked through the right-click **Execute** action (or transitively from a `foreach` upstream of it). Display passes — including normal scene refreshes triggered by editing — never write a file. See [Execute action (side-effect nodes)](../ui.md#execute-action-side-effect-nodes).
 
 ![](../../atomCAD_images/export_xyz.png)
 
 **Input pins**
 
 - `molecule: HasAtoms` — the `Crystal` or `Molecule` to write.
-- `file_name: String` — the file path. May be wired in (typical when batch-exporting) or set as a stored property. Relative paths are resolved against the design's directory; absolute paths are stored relative when the file lives under the design tree, so projects remain portable when copied.
+- `file_name: String` — the file path; its extension selects the format. May be wired in (typical when batch-exporting) or set as a stored property. Relative paths are resolved against the design's directory; absolute paths are stored relative when the file lives under the design tree, so projects remain portable when copied. An unrecognized or missing extension is reported as an error (in the property panel's format indicator while editing, in the node subtitle in the graph, and as a localized error at Execute time).
+- `metadata: Record` (optional) — wire a record here to also write a `<file>.params.json` sidecar alongside the exported file, containing those generation parameters plus a BLAKE3 hash of the exported file for machine-readable verification. Written for every format.
 
 **Output (single pin)**
 
 - `Unit`. The pin is not displayable in the 3D viewport; its only purpose is to be wired into a `foreach` body (or to be the target of an explicit Execute) so the side effect fires when intended.
 
-> **Note on the signature change.** `export_xyz` previously passed the molecule through unchanged on its output pin and wrote the file as a side effect of any evaluation that reached it (which made editing upstream parameters silently overwrite files). It now returns `Unit` and writes only on Execute. If you want both the export side effect *and* the molecule downstream, wire the molecule directly into the downstream consumer and treat `export_xyz` as a sibling sink.
+The property panel shows a **format indicator** under the file-path field that reflects the extension you type (e.g. "Format: XYZ", "Format: MOL (V3000)", or an error for an unrecognized extension); when `file_name` is wired, it notes that the format is decided from the wired value at Execute time. The **Browse** button first asks which format to save, then opens the OS save dialog for that single extension.
+
+> **Note on `export_xyz` → `export_atoms`.** This node was formerly `export_xyz` (XYZ only). It was renamed and generalized to derive the format from the extension; old `.cnnd` projects are migrated automatically on load. (An even earlier version passed the molecule through on its output pin and wrote the file on any evaluation that reached it; it now returns `Unit` and writes only on Execute. If you want both the export side effect *and* the molecule downstream, wire the molecule directly into the downstream consumer and treat `export_atoms` as a sibling sink.)
 
 ## import_cif
 

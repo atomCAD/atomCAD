@@ -1094,6 +1094,20 @@ pub struct APIExportAtomsData {
     pub file_name: String,
 }
 
+/// A single supported atom-export format, projected from
+/// `crystolecule::io::atom_export::AtomExportFormat` for the Flutter UI. The
+/// format dialog, the reactive format indicator, and any future format chooser
+/// are all built from `get_atom_export_formats()` so adding a format in Rust
+/// updates the UI with no Flutter edits.
+pub struct APIAtomExportFormat {
+    /// Canonical extension without a leading dot (`"xyz"` / `"mol"`).
+    pub extension: String,
+    /// Short human-readable label (`"XYZ"` / `"MOL (V3000)"`).
+    pub label: String,
+    /// One-line description of what the format captures.
+    pub description: String,
+}
+
 pub struct APICommentData {
     pub label: String,
     pub text: String,

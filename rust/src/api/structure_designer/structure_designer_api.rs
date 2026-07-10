@@ -2,6 +2,7 @@ use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::APIApplyData;
 use super::structure_designer_api_types::APIArgumentKind;
 use super::structure_designer_api_types::APIArrayAtData;
+use super::structure_designer_api_types::APIAtomExportFormat;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APICandidateNode;
@@ -126,6 +127,7 @@ use crate::api::structure_designer::structure_designer_api_types::{
 use crate::api::structure_designer::structure_designer_api_types::{
     APILatticeSymopData, APIRotationalSymmetry, APIStructureMoveData, APIStructureRotData,
 };
+use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
 };
@@ -3509,6 +3511,22 @@ pub fn get_export_atoms_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIEx
             None,
         )
     }
+}
+
+/// The supported atom-export formats, a thin projection of
+/// `AtomExportFormat::ALL`. The `export_atoms` editor's format indicator and the
+/// shared format-chooser dialog are built from this list, so a new format added
+/// in Rust surfaces in the UI with no Flutter edits.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_atom_export_formats() -> Vec<APIAtomExportFormat> {
+    AtomExportFormat::ALL
+        .iter()
+        .map(|format| APIAtomExportFormat {
+            extension: format.extension().to_string(),
+            label: format.label().to_string(),
+            description: format.description().to_string(),
+        })
+        .collect()
 }
 
 #[flutter_rust_bridge::frb(sync)]
