@@ -1,4 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::display::gadget::Gadget;
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::{Material, Mesh};
@@ -33,6 +35,17 @@ use std::collections::HashSet;
 pub struct FreeRotEvalCache {
     pub pivot_point: DVec3,
     pub rot_axis: DVec3,
+}
+
+/// Wraps an extracted (or empty) diff as the `Molecule` value for the node's
+/// `diff` output pin (issue #295, `doc/design_diff_outputs_for_atom_ops.md` §2).
+/// A `Blueprint` input has no atoms, so it yields an empty diff (§2.3).
+fn diff_pin(mut diff: AtomicStructure) -> NetworkResult {
+    diff.decorator_mut().show_anchor_arrows = true;
+    NetworkResult::Molecule(MoleculeData {
+        atoms: diff,
+        geo_tree_root: None,
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -78,7 +91,9 @@ impl NodeData for FreeRotData {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
-            return EvalOutput::single(input_val);
+            // Propagate the error on both pins (result + diff) so diff consumers
+            // don't silently see `None` on pin 1 (§2).
+            return EvalOutput::multi(vec![input_val.clone(), input_val]);
         }
 
         // The value flowing through pin 1 is now in degrees (issue #384);
@@ -93,7 +108,7 @@ impl NodeData for FreeRotData {
             NetworkResult::extract_float,
         ) {
             Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
+            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
         let rot_axis = match network_evaluator.evaluate_or_default(
@@ -106,7 +121,7 @@ impl NodeData for FreeRotData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
+            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
         let pivot_point = match network_evaluator.evaluate_or_default(
@@ -119,16 +134,23 @@ impl NodeData for FreeRotData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
+            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
         let normalized_axis = rot_axis.normalize_or_zero();
         if normalized_axis == DVec3::ZERO {
-            // Invalid axis — return input unchanged (must still respect type).
-            return EvalOutput::single(match input_val {
-                NetworkResult::Blueprint(_) | NetworkResult::Molecule(_) => input_val,
-                _ => runtime_type_error_in_input(0),
-            });
+            // Degenerate axis: the mutation is skipped, but we must still yield
+            // two pins — the input unchanged on pin 0 and an empty diff on pin 1
+            // (§3 Phase 3, never `EvalOutput::single`).
+            return match input_val {
+                NetworkResult::Blueprint(_) | NetworkResult::Molecule(_) => {
+                    EvalOutput::multi(vec![input_val, diff_pin(AtomicStructure::new_diff())])
+                }
+                _ => {
+                    let err = runtime_type_error_in_input(0);
+                    EvalOutput::multi(vec![err.clone(), err])
+                }
+            };
         }
 
         if network_stack.len() == 1 {
@@ -156,27 +178,41 @@ impl NodeData for FreeRotData {
                         )
                     },
                 );
-                EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
-                    structure: shape.structure,
-                    geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
-                    alignment,
-                    alignment_reason,
-                }))
+                EvalOutput::multi(vec![
+                    NetworkResult::Blueprint(BlueprintData {
+                        structure: shape.structure,
+                        geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                        alignment,
+                        alignment_reason,
+                    }),
+                    // Blueprint has no atoms → empty diff (§2.3).
+                    diff_pin(AtomicStructure::new_diff()),
+                ])
             }
             NetworkResult::Molecule(mol) => {
                 let mut atoms = mol.atoms;
+                // Snapshot before the in-place transform; atom ids are stable, so
+                // the diff is an exact id-keyed comparison (§1.5).
+                let before = atoms.clone();
                 atoms.transform(&DQuat::IDENTITY, &(-pivot_point));
                 atoms.transform(&rotation_quat, &DVec3::ZERO);
                 atoms.transform(&DQuat::IDENTITY, &pivot_point);
+                let diff = extract_diff(&before, &atoms, 0.0);
                 let new_geo = mol
                     .geo_tree_root
                     .map(|gt| GeoNode::transform(tr, Box::new(gt)));
-                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
-                    atoms,
-                    geo_tree_root: new_geo,
-                }))
+                EvalOutput::multi(vec![
+                    NetworkResult::Molecule(MoleculeData {
+                        atoms,
+                        geo_tree_root: new_geo,
+                    }),
+                    diff_pin(diff),
+                ])
             }
-            _ => EvalOutput::single(runtime_type_error_in_input(0)),
+            _ => {
+                let err = runtime_type_error_in_input(0);
+                EvalOutput::multi(vec![err.clone(), err])
+            }
         }
     }
 
@@ -482,7 +518,8 @@ pub fn get_node_type() -> NodeType {
 The angle is in degrees.
 For a Blueprint, only the geometry (the cutter) rotates; the structure stays fixed. This can drift the cutter off-lattice.
 For a Molecule, atoms and geometry rotate together.
-Crystal inputs are rejected (exit_structure first, or use structure_rot to stay in lattice space).".to_string(),
+Crystal inputs are rejected (exit_structure first, or use structure_rot to stay in lattice space).
+The `diff` output pin captures the atom motion only (a Molecule diff applicable via apply_diff); geometry motion is not represented in the diff. A Blueprint input yields an empty diff.".to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
@@ -507,7 +544,10 @@ Crystal inputs are rejected (exit_structure first, or use structure_rot to stay 
                 data_type: DataType::Vec3,
             },
         ],
-        output_pins: OutputPinDefinition::single_same_as("input"),
+        output_pins: vec![
+            OutputPinDefinition::same_as_input("result", "input"),
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
+        ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,

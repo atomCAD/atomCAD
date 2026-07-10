@@ -1,4 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::Gadget;
 use crate::geo_tree::GeoNode;
@@ -30,6 +32,17 @@ use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct FreeMoveEvalCache {}
+
+/// Wraps an extracted (or empty) diff as the `Molecule` value for the node's
+/// `diff` output pin (issue #295, `doc/design_diff_outputs_for_atom_ops.md` §2).
+/// A `Blueprint` input has no atoms, so it yields an empty diff (§2.3).
+fn diff_pin(mut diff: AtomicStructure) -> NetworkResult {
+    diff.decorator_mut().show_anchor_arrows = true;
+    NetworkResult::Molecule(MoleculeData {
+        atoms: diff,
+        geo_tree_root: None,
+    })
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FreeMoveData {
@@ -64,7 +77,9 @@ impl NodeData for FreeMoveData {
         let input_val =
             network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
         if let NetworkResult::Error(_) = input_val {
-            return EvalOutput::single(input_val);
+            // Propagate the error on both pins (result + diff) so diff consumers
+            // don't silently see `None` on pin 1 (§2).
+            return EvalOutput::multi(vec![input_val.clone(), input_val]);
         }
 
         let translation = match network_evaluator.evaluate_or_default(
@@ -77,7 +92,7 @@ impl NodeData for FreeMoveData {
             NetworkResult::extract_vec3,
         ) {
             Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
+            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
         if network_stack.len() == 1 {
@@ -101,25 +116,39 @@ impl NodeData for FreeMoveData {
                         )
                     },
                 );
-                EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
-                    structure: shape.structure,
-                    geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
-                    alignment,
-                    alignment_reason,
-                }))
+                EvalOutput::multi(vec![
+                    NetworkResult::Blueprint(BlueprintData {
+                        structure: shape.structure,
+                        geo_tree_root: GeoNode::transform(tr, Box::new(shape.geo_tree_root)),
+                        alignment,
+                        alignment_reason,
+                    }),
+                    // Blueprint has no atoms → empty diff (§2.3).
+                    diff_pin(AtomicStructure::new_diff()),
+                ])
             }
             NetworkResult::Molecule(mol) => {
                 let mut atoms = mol.atoms;
+                // Snapshot before the in-place transform; atom ids are stable, so
+                // the diff is an exact id-keyed comparison (§1.5).
+                let before = atoms.clone();
                 atoms.transform(&DQuat::IDENTITY, &translation);
+                let diff = extract_diff(&before, &atoms, 0.0);
                 let new_geo = mol
                     .geo_tree_root
                     .map(|gt| GeoNode::transform(tr, Box::new(gt)));
-                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
-                    atoms,
-                    geo_tree_root: new_geo,
-                }))
+                EvalOutput::multi(vec![
+                    NetworkResult::Molecule(MoleculeData {
+                        atoms,
+                        geo_tree_root: new_geo,
+                    }),
+                    diff_pin(diff),
+                ])
             }
-            _ => EvalOutput::single(runtime_type_error_in_input(0)),
+            _ => {
+                let err = runtime_type_error_in_input(0);
+                EvalOutput::multi(vec![err.clone(), err])
+            }
         }
     }
 
@@ -276,7 +305,8 @@ pub fn get_node_type() -> NodeType {
         description: "Translates an unanchored object (Blueprint or Molecule) by a vector in world space (Cartesian coordinates).
 For a Blueprint, only the geometry (the cutter) moves; the structure stays fixed. This can drift the cutter off-lattice.
 For a Molecule, atoms and geometry move together freely.
-Crystal inputs are rejected (exit_structure first to get a Molecule, or use structure_move to stay in lattice space).".to_string(),
+Crystal inputs are rejected (exit_structure first to get a Molecule, or use structure_move to stay in lattice space).
+The `diff` output pin captures the atom motion only (a Molecule diff applicable via apply_diff); geometry motion is not represented in the diff. A Blueprint input yields an empty diff.".to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
         parameters: vec![
@@ -291,7 +321,14 @@ Crystal inputs are rejected (exit_structure first to get a Molecule, or use stru
                 data_type: DataType::Vec3,
             },
         ],
-        output_pins: OutputPinDefinition::single_same_as("input"),
+        output_pins: vec![
+            // Keep free_move's existing pin-0 resolution (plain same_as_input) —
+            // just split into the two-element vec.
+            OutputPinDefinition::same_as_input("result", "input"),
+            // The diff is always a free-floating Molecule regardless of the input
+            // phase (matches atom_edit / atom_composediff conventions).
+            OutputPinDefinition::fixed("diff", DataType::Molecule),
+        ],
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,

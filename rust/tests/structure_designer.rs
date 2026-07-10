@@ -141,6 +141,9 @@ mod diff_test_support;
 #[path = "structure_designer/relax_diff_output_test.rs"]
 mod relax_diff_output_test;
 
+#[path = "structure_designer/movement_diff_output_test.rs"]
+mod movement_diff_output_test;
+
 #[path = "structure_designer/atom_composediff_test.rs"]
 mod atom_composediff_test;
 
