@@ -124,3 +124,104 @@ ex = extrude { shape: c, height: 1, dir: (0, 0, 1) }
         "extrude should carry the silicon PARAM default (Z=14), not carbon (Z=6)"
     );
 }
+
+// ============================================================================
+// Plane-normal extrusion mode (issue #364)
+//
+// `extrude` can derive its direction from the drawing plane's normal
+// (`plane_normal: true`) instead of a fixed stored vector. The observable that
+// captures the bug: a fixed `dir` that is parallel to a (reoriented) plane
+// errors out ("parallel to plane"), while plane-normal mode always extrudes
+// perpendicular to whatever plane it is drawn on.
+// ============================================================================
+
+/// Helper: build a circle-on-plane-then-extrude network with the given
+/// `m_index` and extrude property snippet, and return the extrude result.
+fn extrude_on_plane(m_index: &str, extrude_props: &str) -> NetworkResult {
+    let network_name = "test_extrude_plane_normal";
+    let mut designer = setup(network_name);
+    let text = format!(
+        r#"
+dp = drawing_plane {{ m_index: {m_index} }}
+c = circle {{ radius: 3, d_plane: dp }}
+ex = extrude {{ shape: c, {extrude_props} }}
+"#
+    );
+    apply_text(&mut designer, network_name, &text);
+    let extrude_id = node_id_by_type(&designer, network_name, "extrude");
+    evaluate_node(&designer, network_name, extrude_id)
+}
+
+/// Baseline: on the axis-aligned (0,0,1) plane a fixed `dir: (0,0,1)` works —
+/// this is the legacy direct-mode behavior that existing files rely on.
+#[test]
+fn extrude_direct_mode_axis_plane_ok() {
+    let result = extrude_on_plane(
+        "(0, 0, 1)",
+        "height: 1, dir: (0, 0, 1), plane_normal: false",
+    );
+    assert!(
+        matches!(result, NetworkResult::Blueprint(_)),
+        "direct-mode extrude along (0,0,1) on a (0,0,1) plane should succeed, got {:?}",
+        result.infer_data_type()
+    );
+}
+
+/// The bug: a fixed `dir: (0,0,1)` on a reoriented (1,0,0) plane is parallel to
+/// that plane, so direct mode errors out. This is exactly the "brittle
+/// hardcoded setting" the issue describes — rotating the plane later strands
+/// the stored direction.
+#[test]
+fn extrude_direct_mode_reoriented_plane_errors() {
+    let result = extrude_on_plane(
+        "(1, 0, 0)",
+        "height: 1, dir: (0, 0, 1), plane_normal: false",
+    );
+    assert!(
+        matches!(result, NetworkResult::Error(_)),
+        "direct-mode extrude with a stale (0,0,1) dir on a (1,0,0) plane should error, got {:?}",
+        result.infer_data_type()
+    );
+}
+
+/// The fix: plane-normal mode extrudes perpendicular to the (1,0,0) plane with
+/// no fixed direction, so the same reorientation that broke direct mode just
+/// works — the direction tracks the plane.
+#[test]
+fn extrude_plane_normal_mode_reoriented_plane_ok() {
+    let result = extrude_on_plane("(1, 0, 0)", "height: 1, plane_normal: true");
+    assert!(
+        matches!(result, NetworkResult::Blueprint(_)),
+        "plane-normal extrude on a (1,0,0) plane should succeed, got {:?}",
+        result.infer_data_type()
+    );
+}
+
+/// Plane-normal mode is robust across plane orientations: the very plane that
+/// errors in direct mode (1,0,0) and the axis plane (0,0,1) both succeed,
+/// because the direction is recomputed from each plane rather than stored.
+#[test]
+fn extrude_plane_normal_mode_tracks_multiple_planes() {
+    for m_index in ["(0, 0, 1)", "(1, 0, 0)", "(0, 1, 0)", "(1, 1, 1)"] {
+        let result = extrude_on_plane(m_index, "height: 1, plane_normal: true");
+        assert!(
+            matches!(result, NetworkResult::Blueprint(_)),
+            "plane-normal extrude on plane {m_index} should succeed, got {:?}",
+            result.infer_data_type()
+        );
+    }
+}
+
+/// A wired/explicit `dir` still overrides plane-normal mode. Here both are set:
+/// `plane_normal: true` *and* a stored `dir: (0,0,1)` on a (1,0,0) plane. Since
+/// no `dir` *pin* is wired in the text network, the mode wins and it succeeds —
+/// confirming plane-normal takes precedence over the stored vector.
+#[test]
+fn extrude_plane_normal_beats_stored_direction() {
+    let result = extrude_on_plane("(1, 0, 0)", "height: 1, dir: (0, 0, 1), plane_normal: true");
+    assert!(
+        matches!(result, NetworkResult::Blueprint(_)),
+        "plane-normal mode should ignore the stored (0,0,1) dir and extrude along the plane normal, got {:?}",
+        result.infer_data_type()
+    );
+}

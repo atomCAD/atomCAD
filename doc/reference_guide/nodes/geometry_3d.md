@@ -16,7 +16,9 @@ Extrudes a 2D geometry to a 3D geometry.
 
 You can create a finite or infinite extrusion. Infinite extrusion is unbounded both in the positive and negative extrusion direction. Finite extrusions start from the plane and is also finite in the (positive) extrusion direction.
 
-The extrusion direction can be specified as miller indices. The *'Set dir from plane'* button makes the extrusion direction the miller direction of the drawing plane.
+By default the extrusion is **perpendicular to the drawing plane** (the *Extrude perpendicular to plane* checkbox is on). In this mode the direction is recomputed from the plane on every evaluation, so re-orienting the drawing plane later keeps the extrusion perpendicular instead of leaving it slanted along a stale direction.
+
+Uncheck *Extrude perpendicular to plane* to specify the direction explicitly as Miller indices (this is the legacy behavior). A wired `dir` input pin overrides both — the precedence is wired pin > perpendicular mode > stored direction.
 
 
 ## cuboid

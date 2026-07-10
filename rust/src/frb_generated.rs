@@ -12307,11 +12307,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_infinite = <bool>::sse_decode(deserializer);
         let mut var_subdivision = <i32>::sse_decode(deserializer);
+        let mut var_planeNormal = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIExtrudeData {
             height: var_height,
             extrude_direction: var_extrudeDirection,
             infinite: var_infinite,
             subdivision: var_subdivision,
+            plane_normal: var_planeNormal,
         };
     }
 }
@@ -17827,6 +17829,7 @@ impl flutter_rust_bridge::IntoDart
             self.extrude_direction.into_into_dart().into_dart(),
             self.infinite.into_into_dart().into_dart(),
             self.subdivision.into_into_dart().into_dart(),
+            self.plane_normal.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -21832,6 +21835,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.extrude_direction, serializer);
         <bool>::sse_encode(self.infinite, serializer);
         <i32>::sse_encode(self.subdivision, serializer);
+        <bool>::sse_encode(self.plane_normal, serializer);
     }
 }
 

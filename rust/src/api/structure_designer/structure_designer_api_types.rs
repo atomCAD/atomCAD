@@ -486,6 +486,7 @@ pub struct APIExtrudeData {
     pub extrude_direction: APIIVec3,
     pub infinite: bool,
     pub subdivision: i32,
+    pub plane_normal: bool,
 }
 
 pub struct APICuboidData {

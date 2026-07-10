@@ -847,6 +847,7 @@ fn test_extrude_roundtrip() {
         extrude_direction: IVec3::new(0, 0, 1),
         infinite: false,
         subdivision: 1,
+        plane_normal: false,
     });
     // Test with infinite extrusion
     test_roundtrip(&ExtrudeData {
@@ -854,6 +855,15 @@ fn test_extrude_roundtrip() {
         extrude_direction: IVec3::new(1, 1, 0),
         infinite: true,
         subdivision: 2,
+        plane_normal: false,
+    });
+    // Test with plane-normal mode enabled
+    test_roundtrip(&ExtrudeData {
+        height: 5,
+        extrude_direction: IVec3::new(0, 0, 1),
+        infinite: false,
+        subdivision: 1,
+        plane_normal: true,
     });
 }
 

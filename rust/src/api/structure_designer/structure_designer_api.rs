@@ -2671,6 +2671,7 @@ pub fn get_extrude_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExtrude
                     extrude_direction: to_api_ivec3(&extrude_data.extrude_direction),
                     infinite: extrude_data.infinite,
                     subdivision: extrude_data.subdivision,
+                    plane_normal: extrude_data.plane_normal,
                 })
             },
             None,
@@ -5309,6 +5310,7 @@ pub fn set_extrude_data(scope_path: Vec<u64>, node_id: u64, data: APIExtrudeData
                 extrude_direction: from_api_ivec3(&data.extrude_direction),
                 infinite: data.infinite,
                 subdivision: data.subdivision,
+                plane_normal: data.plane_normal,
             });
             cad_instance
                 .structure_designer

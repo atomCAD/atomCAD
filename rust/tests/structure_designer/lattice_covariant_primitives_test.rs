@@ -622,6 +622,7 @@ fn circle_extrude_materialize_count(
                 extrude_direction,
                 infinite: false,
                 subdivision: 1,
+                plane_normal: false,
             }),
         );
         network.connect_nodes(circle_id, 0, ext_id, 0, false);
@@ -899,6 +900,7 @@ fn circle_non_square_extrude_materialize() {
                 extrude_direction: IVec3::new(1, 1, 1),
                 infinite: false,
                 subdivision: 1,
+                plane_normal: false,
             }),
         );
         network.connect_nodes(id, 0, ext_id, 0, false);

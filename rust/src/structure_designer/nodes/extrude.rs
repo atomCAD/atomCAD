@@ -32,6 +32,17 @@ fn default_infinite() -> bool {
 fn default_subdivision() -> i32 {
     1
 }
+
+/// serde default for `plane_normal`. Deliberately `false` (direct mode) so that
+/// existing `.cnnd` files — which have no `plane_normal` key — load with the
+/// exact legacy behavior (a fixed stored `extrude_direction`). Newly created
+/// nodes default to `true` instead (see `node_data_creator`), giving the
+/// plane-perpendicular default that issue #364 asks for. serde-default and
+/// creator-default are independent, so no file migration is needed.
+fn default_plane_normal() -> bool {
+    false
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtrudeData {
     pub height: i32,
@@ -42,6 +53,13 @@ pub struct ExtrudeData {
     pub infinite: bool,
     #[serde(default = "default_subdivision")]
     pub subdivision: i32,
+    /// When `true`, the extrusion direction is the drawing plane's own normal,
+    /// recomputed from the plane on every evaluation. This keeps the extrusion
+    /// perpendicular to the plane even after the plane is later reoriented,
+    /// instead of pointing along a stale hardcoded `extrude_direction`. A wired
+    /// `dir` input pin still overrides this (wired > mode > stored).
+    #[serde(default = "default_plane_normal")]
+    pub plane_normal: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -94,18 +112,16 @@ impl NodeData for ExtrudeData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        let extrude_direction = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            3,
-            self.extrude_direction,
-            NetworkResult::extract_ivec3,
-        ) {
-            Ok(value) => value,
-            Err(error) => return EvalOutput::single(error),
-        };
+        // Direction precedence: wired `dir` pin > plane-normal mode > stored
+        // vector. Evaluate the pin first; `None` means unwired, so we defer the
+        // choice between mode and stored value until we have the drawing plane
+        // (the plane-normal case needs the plane's Miller index).
+        let wired_direction =
+            match network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 3) {
+                NetworkResult::None => None,
+                result if result.is_error() => return EvalOutput::single(result),
+                result => result.extract_ivec3(),
+            };
 
         let infinite = match network_evaluator.evaluate_or_default(
             network_stack,
@@ -155,6 +171,21 @@ impl NodeData for ExtrudeData {
                 context.selected_node_eval_cache = Some(Box::new(eval_cache));
             }
 
+            // Resolve the effective direction now that the plane is known.
+            // In plane-normal mode the direction *is* the plane's Miller index,
+            // so `validate_extrude_direction` always succeeds (its projection is
+            // the plane normal onto itself). A wired pin still wins.
+            let extrude_direction = match wired_direction {
+                Some(dir) => dir,
+                None => {
+                    if self.plane_normal {
+                        shape.drawing_plane.miller_index
+                    } else {
+                        self.extrude_direction
+                    }
+                }
+            };
+
             // Validate extrusion direction for this plane (in world space)
             let (world_direction, d_spacing) = match shape
                 .drawing_plane
@@ -201,15 +232,21 @@ impl NodeData for ExtrudeData {
 
     fn get_subtitle(
         &self,
-        _connected_input_pins: &std::collections::HashSet<String>,
+        connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
-        Some(format!(
-            "h: {} dir: [{},{},{}]",
-            self.height,
-            self.extrude_direction.x,
-            self.extrude_direction.y,
-            self.extrude_direction.z
-        ))
+        // The `dir` pin overrides both the mode and the stored vector, so if it
+        // is wired the stored direction is irrelevant to display.
+        let dir_str = if connected_input_pins.contains("dir") {
+            "dir: wired".to_string()
+        } else if self.plane_normal {
+            "dir: plane normal".to_string()
+        } else {
+            format!(
+                "dir: [{},{},{}]",
+                self.extrude_direction.x, self.extrude_direction.y, self.extrude_direction.z
+            )
+        };
+        Some(format!("h: {} {}", self.height, dir_str))
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {
@@ -217,6 +254,10 @@ impl NodeData for ExtrudeData {
             ("height".to_string(), TextValue::Int(self.height)),
             // Property names must match parameter names for describe command
             ("dir".to_string(), TextValue::IVec3(self.extrude_direction)),
+            (
+                "plane_normal".to_string(),
+                TextValue::Bool(self.plane_normal),
+            ),
             ("inf".to_string(), TextValue::Bool(self.infinite)),
             ("subdivision".to_string(), TextValue::Int(self.subdivision)),
         ]
@@ -233,6 +274,11 @@ impl NodeData for ExtrudeData {
             self.extrude_direction = v
                 .as_ivec3()
                 .ok_or_else(|| "dir must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("plane_normal") {
+            self.plane_normal = v
+                .as_bool()
+                .ok_or_else(|| "plane_normal must be a boolean".to_string())?;
         }
         if let Some(v) = props.get("inf").or_else(|| props.get("infinite")) {
             self.infinite = v
@@ -306,6 +352,9 @@ pub fn get_node_type() -> NodeType {
                 extrude_direction: IVec3::new(0, 0, 1),
                 infinite: false,
                 subdivision: 1,
+                // New nodes default to plane-perpendicular extrusion (issue #364);
+                // loaded files without the key stay in direct mode via serde default.
+                plane_normal: true,
             })
         },
         node_data_saver: generic_node_data_saver::<ExtrudeData>,

@@ -7,7 +7,14 @@ import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
-/// Editor widget for extrude nodes
+/// Editor widget for extrude nodes.
+///
+/// The extrusion direction has three sources, in precedence order:
+///   1. a wired `dir` input pin (parameter index 3) — overrides everything;
+///   2. plane-normal mode (`plane_normal == true`) — the direction tracks the
+///      drawing plane's normal, recomputed on every evaluation;
+///   3. the stored `extrude_direction` vector (direct mode).
+/// See issue #364.
 class ExtrudeEditor extends StatefulWidget {
   final BigInt nodeId;
   final APIExtrudeData? data;
@@ -24,14 +31,33 @@ class ExtrudeEditor extends StatefulWidget {
   State<ExtrudeEditor> createState() => ExtrudeEditorState();
 }
 
+/// The `dir` input pin's parameter index on the extrude node
+/// (shape=0, structure=1, height=2, dir=3, inf=4, subdivision=5).
+const int _dirParamIndex = 3;
+
 class ExtrudeEditorState extends State<ExtrudeEditor> {
-  // Direct API calls are made in onChanged handlers
+  /// True when the `dir` input pin is wired — a wired direction overrides both
+  /// the mode checkbox and the stored vector, so we disable both.
+  bool _isDirConnected() {
+    final view = widget.model.nodeNetworkView;
+    if (view == null) return false;
+    for (final wire in view.wires) {
+      if (wire.destNodeId == widget.nodeId &&
+          wire.destParamIndex == BigInt.from(_dirParamIndex)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     if (widget.data == null) {
       return const Center(child: CircularProgressIndicator());
     }
+
+    final data = widget.data!;
+    final dirConnected = _isDirConnected();
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -46,16 +72,17 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Infinite'),
-            value: widget.data!.infinite,
+            value: data.infinite,
             onChanged: (newValue) {
               if (newValue == null) return;
               widget.model.setExtrudeData(
                 widget.nodeId,
                 APIExtrudeData(
-                  height: widget.data!.height,
-                  extrudeDirection: widget.data!.extrudeDirection,
+                  height: data.height,
+                  extrudeDirection: data.extrudeDirection,
                   infinite: newValue,
-                  subdivision: widget.data!.subdivision,
+                  subdivision: data.subdivision,
+                  planeNormal: data.planeNormal,
                 ),
               );
             },
@@ -63,88 +90,124 @@ class ExtrudeEditorState extends State<ExtrudeEditor> {
           const SizedBox(height: 8),
           IntInput(
             label: 'Height',
-            value: widget.data!.height,
+            value: data.height,
             minimumValue: 1,
             onChanged: (newValue) {
               widget.model.setExtrudeData(
                 widget.nodeId,
                 APIExtrudeData(
                   height: newValue,
-                  extrudeDirection: widget.data!.extrudeDirection,
-                  infinite: widget.data!.infinite,
-                  subdivision: widget.data!.subdivision,
+                  extrudeDirection: data.extrudeDirection,
+                  infinite: data.infinite,
+                  subdivision: data.subdivision,
+                  planeNormal: data.planeNormal,
                 ),
               );
             },
           ),
           const SizedBox(height: 8),
-          IVec3Input(
-            label: 'Extrude Direction',
-            value: widget.data!.extrudeDirection,
-            onChanged: (newValue) {
-              widget.model.setExtrudeData(
-                widget.nodeId,
-                APIExtrudeData(
-                  height: widget.data!.height,
-                  extrudeDirection: newValue,
-                  infinite: widget.data!.infinite,
-                  subdivision: widget.data!.subdivision,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: TextButton(
-              onPressed: () {
-                final millerDir = structure_designer_api
-                    .getExtrudeDrawingPlaneMillerDirection(
-                  nodeId: widget.nodeId,
-                );
-
-                if (millerDir == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                          'Drawing plane direction is not available (select the node and ensure it evaluates).'),
-                      duration: Duration(seconds: 3),
-                    ),
-                  );
-                  return;
-                }
-
-                widget.model.setExtrudeData(
-                  widget.nodeId,
-                  APIExtrudeData(
-                    height: widget.data!.height,
-                    extrudeDirection: millerDir,
-                    infinite: widget.data!.infinite,
-                    subdivision: widget.data!.subdivision,
-                  ),
-                );
-              },
-              child: const Text('Set dir from plane'),
+          if (dirConnected) ...[
+            const Text(
+              'Direction supplied by `dir` input. Disconnect to edit inline.',
+              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Opacity(
+            opacity: dirConnected ? 0.5 : 1.0,
+            child: IgnorePointer(
+              ignoring: dirConnected,
+              child: _buildDirectionControls(context, data),
             ),
           ),
           const SizedBox(height: 8),
           IntInput(
             label: 'Subdivision',
-            value: widget.data!.subdivision,
+            value: data.subdivision,
             minimumValue: 1,
             onChanged: (newValue) {
               widget.model.setExtrudeData(
                 widget.nodeId,
                 APIExtrudeData(
-                  height: widget.data!.height,
-                  extrudeDirection: widget.data!.extrudeDirection,
-                  infinite: widget.data!.infinite,
+                  height: data.height,
+                  extrudeDirection: data.extrudeDirection,
+                  infinite: data.infinite,
                   subdivision: newValue,
+                  planeNormal: data.planeNormal,
                 ),
               );
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDirectionControls(BuildContext context, APIExtrudeData data) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Extrude perpendicular to plane'),
+          subtitle: const Text(
+            'Direction follows the drawing plane, even if it is reoriented '
+            'later.',
+            style: TextStyle(fontSize: 11),
+          ),
+          value: data.planeNormal,
+          onChanged: (newValue) {
+            if (newValue == null) return;
+            _setPlaneNormal(data, newValue);
+          },
+        ),
+        if (!data.planeNormal) ...[
+          const SizedBox(height: 8),
+          IVec3Input(
+            label: 'Extrude Direction',
+            value: data.extrudeDirection,
+            onChanged: (newValue) {
+              widget.model.setExtrudeData(
+                widget.nodeId,
+                APIExtrudeData(
+                  height: data.height,
+                  extrudeDirection: newValue,
+                  infinite: data.infinite,
+                  subdivision: data.subdivision,
+                  planeNormal: data.planeNormal,
+                ),
+              );
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Toggles plane-normal mode. When switching *off* (to direct mode), seed the
+  /// stored direction from the drawing plane's current normal so explicit
+  /// editing starts from the direction the user was just looking at, rather than
+  /// a stale stored vector. Best-effort — if the plane normal is unavailable
+  /// (node not selected/evaluated), keep the existing stored direction.
+  void _setPlaneNormal(APIExtrudeData data, bool planeNormal) {
+    var direction = data.extrudeDirection;
+    if (!planeNormal) {
+      final millerDir =
+          structure_designer_api.getExtrudeDrawingPlaneMillerDirection(
+        nodeId: widget.nodeId,
+      );
+      if (millerDir != null) {
+        direction = millerDir;
+      }
+    }
+    widget.model.setExtrudeData(
+      widget.nodeId,
+      APIExtrudeData(
+        height: data.height,
+        extrudeDirection: direction,
+        infinite: data.infinite,
+        subdivision: data.subdivision,
+        planeNormal: planeNormal,
       ),
     );
   }
