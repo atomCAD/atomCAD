@@ -148,10 +148,10 @@ fn test_promote_rejects_unknown_node_id() {
 }
 
 #[test]
-fn test_promote_rejects_export_xyz_unit_output() {
-    // export_xyz returns Unit â€” should be rejected as not parameterizable.
+fn test_promote_rejects_export_atoms_unit_output() {
+    // export_atoms returns Unit â€” should be rejected as not parameterizable.
     let mut designer = setup_designer("net");
-    let export_id = designer.add_node("export_xyz", DVec2::new(0.0, 0.0));
+    let export_id = designer.add_node("export_atoms", DVec2::new(0.0, 0.0));
 
     let err = designer.promote_node_to_parameter(export_id).unwrap_err();
     assert!(

@@ -127,7 +127,7 @@ impl NodeData for ForeachData {
 
         // c. Build inner context for the body's iterations. Inherits
         // `execute` (true here by construction — see the comment at the top
-        // of this function) so nested `export_xyz`/`print` actually fire.
+        // of this function) so nested `export_atoms`/`print` actually fire.
         let mut inner_ctx = context.fresh_inner_for_eager_body();
 
         // d. Drain the source walker eagerly; run the closure once per element

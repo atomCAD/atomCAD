@@ -25,7 +25,7 @@ use super::nodes::drawing_plane::get_node_type as drawing_plane_get_node_type;
 use super::nodes::edit_atom::edit_atom::get_node_type as edit_atom_get_node_type;
 use super::nodes::enter_structure::get_node_type as enter_structure_get_node_type;
 use super::nodes::exit_structure::get_node_type as exit_structure_get_node_type;
-use super::nodes::export_xyz::get_node_type as export_xyz_get_node_type;
+use super::nodes::export_atoms::get_node_type as export_atoms_get_node_type;
 use super::nodes::expr::get_node_type as expr_get_node_type;
 use super::nodes::extrude::get_node_type as extrude_get_node_type;
 use super::nodes::facet_shell::get_node_type as facet_shell_get_node_type;
@@ -530,7 +530,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(atom_composediff_get_node_type());
         ret.add_node_type(import_xyz_get_node_type());
         ret.add_node_type(import_cif_get_node_type());
-        ret.add_node_type(export_xyz_get_node_type());
+        ret.add_node_type(export_atoms_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(relax_get_node_type());
         ret.add_node_type(add_hydrogen_get_node_type());

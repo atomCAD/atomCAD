@@ -7475,7 +7475,7 @@ impl StructureDesigner {
     /// Triggered from the right-click context menu in the node-graph UI. Sets
     /// `context.execute = true` for one evaluation pass through
     /// `with_eval_context`, which is what gates side-effect nodes
-    /// (`export_xyz`, `foreach`, `print` with `execute_only`, …) to actually
+    /// (`export_atoms`, `foreach`, `print` with `execute_only`, …) to actually
     /// fire. Independent of display state: whether the node is visible or
     /// not, the targeted node and its transitive inputs are evaluated fresh.
     /// One-shot: no subscription, no recurring trigger — the user must invoke
@@ -7536,7 +7536,7 @@ impl StructureDesigner {
         let pass_start = self.print_log.len();
         // Run the pass with `execute = true`. The central skip rule in the
         // evaluator only invokes `eval` on a Unit-returning node when this
-        // flag is set; that is what lets `export_xyz` / `foreach` /
+        // flag is set; that is what lets `export_atoms` / `foreach` /
         // `print(execute_only)` fire here while staying inert during display.
         let result = self.with_eval_context(true, |evaluator, registry, _prefs, context| {
             let network = registry.node_networks.get(&network_name_owned).unwrap();

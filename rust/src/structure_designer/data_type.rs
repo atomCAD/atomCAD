@@ -141,7 +141,7 @@ pub enum DataType {
     Motif,
     Structure,
     /// The type with exactly one value — return type of effect nodes
-    /// (`export_xyz`, `foreach`, …). A universal `T → Unit` widening is
+    /// (`export_atoms`, `foreach`, …). A universal `T → Unit` widening is
     /// added at field-level so any sub-network output can be consumed by an
     /// effect-typed pin. Reverse `Unit → T` is forbidden. See
     /// `doc/design_node_execution.md`.

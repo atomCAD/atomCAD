@@ -161,7 +161,7 @@ pub struct NetworkEvaluationContext {
     pub top_level_parameters: HashMap<String, NetworkResult>,
     /// Whether to use spatial grid cutoff for vdW interactions during minimization.
     pub use_vdw_cutoff: bool,
-    /// When `true`, side-effect nodes (`export_xyz`, `print` with
+    /// When `true`, side-effect nodes (`export_atoms`, `print` with
     /// `execute_only`, future effect nodes) actually perform their effect
     /// during this evaluation pass. Set to `true` only when the user
     /// triggers an explicit Execute action; `false` for all normal display
@@ -1535,7 +1535,7 @@ impl NetworkEvaluator {
         // an explicit Execute and every resolved output pin of this node is
         // `DataType::Unit`, skip `NodeData::eval` entirely and synthesise an
         // `EvalOutput` of all `NetworkResult::Unit` values directly. This is
-        // what gates side-effect nodes (`export_xyz`, `foreach`, future
+        // what gates side-effect nodes (`export_atoms`, `foreach`, future
         // effect nodes) on display passes — `eval` only runs when the user
         // actually invokes Execute. The check uses **resolved** output types
         // (via `resolve_output_type`) so polymorphic pins resolving to Unit
@@ -1734,7 +1734,7 @@ impl NetworkEvaluator {
             // every resolved output pin of this node is `DataType::Unit`, we
             // synthesise `NetworkResult::Unit` directly instead of running
             // the node's `eval`. This is what makes side-effect nodes
-            // (`export_xyz`, `foreach`, …) cost-free on display passes
+            // (`export_atoms`, `foreach`, …) cost-free on display passes
             // regardless of whether they are reached via
             // `evaluate_all_outputs` (top-level displayed node) or via
             // `evaluate` (consumed as another node's input). See

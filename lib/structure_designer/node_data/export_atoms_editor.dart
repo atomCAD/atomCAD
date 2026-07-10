@@ -5,13 +5,13 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 
-/// Editor widget for export_xyz nodes
-class ExportXyzEditor extends StatefulWidget {
+/// Editor widget for export_atoms nodes
+class ExportAtomsEditor extends StatefulWidget {
   final BigInt nodeId;
-  final APIExportXYZData? data;
+  final APIExportAtomsData? data;
   final StructureDesignerModel model;
 
-  const ExportXyzEditor({
+  const ExportAtomsEditor({
     super.key,
     required this.nodeId,
     required this.data,
@@ -19,24 +19,24 @@ class ExportXyzEditor extends StatefulWidget {
   });
 
   @override
-  State<ExportXyzEditor> createState() => _ExportXyzEditorState();
+  State<ExportAtomsEditor> createState() => _ExportAtomsEditorState();
 }
 
-class _ExportXyzEditorState extends State<ExportXyzEditor> {
+class _ExportAtomsEditorState extends State<ExportAtomsEditor> {
   void _updateFileName(String fileName) {
-    widget.model.setExportXyzData(
+    widget.model.setExportAtomsData(
       widget.nodeId,
-      APIExportXYZData(fileName: fileName),
+      APIExportAtomsData(fileName: fileName),
     );
   }
 
   Future<void> _browseFile() async {
     try {
       String? outputFile = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save XYZ file',
+        dialogTitle: 'Save atoms file',
         fileName: 'structure.xyz',
         type: FileType.custom,
-        allowedExtensions: ['xyz'],
+        allowedExtensions: ['xyz', 'mol'],
       );
 
       if (outputFile != null) {
@@ -60,8 +60,8 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const NodeEditorHeader(
-            title: 'Export XYZ File',
-            nodeTypeName: 'export_xyz',
+            title: 'Export Atoms',
+            nodeTypeName: 'export_atoms',
           ),
           const SizedBox(height: 16),
 
@@ -69,7 +69,7 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
           SizedBox(
             width: double.infinity,
             child: StringInput(
-              label: 'XYZ File Path',
+              label: 'File Path',
               value: widget.data?.fileName ?? '',
               onChanged: _updateFileName,
             ),
@@ -111,8 +111,8 @@ class _ExportXyzEditorState extends State<ExportXyzEditor> {
                 const SizedBox(width: 8.0),
                 Expanded(
                   child: Text(
-                    'The XYZ file will be exported when the node network is evaluated. Specify a file path above to set the export destination. '
-                    'Wire a record into the optional "metadata" pin to also write a "<file>.xyz.params.json" sidecar containing those generation parameters plus a BLAKE3 hash of the XYZ file.',
+                    'The file is written when the node is Executed; the format is chosen by the file extension (.xyz, .mol). '
+                    'Wire a record into the optional "metadata" pin to also write a "<file>.params.json" sidecar containing those generation parameters plus a BLAKE3 hash of the exported file.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurface,
                       fontSize: 14.0,

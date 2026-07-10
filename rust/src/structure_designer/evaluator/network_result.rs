@@ -263,7 +263,7 @@ pub enum NetworkResult {
     /// `doc/design_record_types.md`.
     Record(Vec<(String, NetworkResult)>),
     /// The single value of `DataType::Unit`. Produced by effect nodes
-    /// (`export_xyz`, `foreach`) and by the universal `T → Unit` widening
+    /// (`export_atoms`, `foreach`) and by the universal `T → Unit` widening
     /// applied at wire conversion time. See `doc/design_node_execution.md`.
     Unit,
     Error(String),

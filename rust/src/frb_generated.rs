@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -121651393;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -216236603;
 
 // Section: executor
 
@@ -4454,14 +4454,14 @@ fn wire__crate__api__structure_designer__structure_designer_api__get_edit_atom_d
         },
     )
 }
-fn wire__crate__api__structure_designer__structure_designer_api__get_export_xyz_data_impl(
+fn wire__crate__api__structure_designer__structure_designer_api__get_export_atoms_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "get_export_xyz_data",
+            debug_name: "get_export_atoms_data",
             port: None,
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
         },
@@ -4480,7 +4480,7 @@ fn wire__crate__api__structure_designer__structure_designer_api__get_export_xyz_
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(
-                    crate::api::structure_designer::structure_designer_api::get_export_xyz_data(
+                    crate::api::structure_designer::structure_designer_api::get_export_atoms_data(
                         api_scope_path,
                         api_node_id,
                     ),
@@ -9810,19 +9810,19 @@ fn wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_selected_e
         },
     )
 }
-fn wire__crate__api__structure_designer__structure_designer_api__set_export_xyz_data_impl(
+fn wire__crate__api__structure_designer__structure_designer_api__set_export_atoms_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "set_export_xyz_data", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "set_export_atoms_data", port: None, mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync }, move || { 
             let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
             let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_scope_path = <Vec<u64>>::sse_decode(&mut deserializer);
 let api_node_id = <u64>::sse_decode(&mut deserializer);
-let api_data = <crate::api::structure_designer::structure_designer_api_types::APIExportXYZData>::sse_decode(&mut deserializer);deserializer.end();
+let api_data = <crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData>::sse_decode(&mut deserializer);deserializer.end();
                 transform_result_sse::<_, ()>((move || {
-                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_export_xyz_data(api_scope_path, api_node_id, api_data); })?;   Ok(output_ok)
+                     let output_ok = Result::<_,()>::Ok({ crate::api::structure_designer::structure_designer_api::set_export_atoms_data(api_scope_path, api_node_id, api_data); })?;   Ok(output_ok)
                 })()) })
 }
 fn wire__crate__api__structure_designer__structure_designer_api__set_expr_data_impl(
@@ -12204,11 +12204,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
-impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIExportXYZData {
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData
+{
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_fileName = <String>::sse_decode(deserializer);
-        return crate::api::structure_designer::structure_designer_api_types::APIExportXYZData {
+        return crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData {
             file_name: var_fileName,
         };
     }
@@ -14832,12 +14834,12 @@ impl SseDecode
 }
 
 impl SseDecode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIExportXYZData>
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::structure_designer::structure_designer_api_types::APIExportXYZData>::sse_decode(deserializer));
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -16347,7 +16349,7 @@ fn pde_ffi_dispatcher_sync_impl(
 153 => wire__crate__api__structure_designer__structure_designer_api__get_direct_editing_mode_impl(ptr, rust_vec_len, data_len),
 154 => wire__crate__api__structure_designer__structure_designer_api__get_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
 155 => wire__crate__api__structure_designer__structure_designer_api__get_edit_atom_data_impl(ptr, rust_vec_len, data_len),
-156 => wire__crate__api__structure_designer__structure_designer_api__get_export_xyz_data_impl(ptr, rust_vec_len, data_len),
+156 => wire__crate__api__structure_designer__structure_designer_api__get_export_atoms_data_impl(ptr, rust_vec_len, data_len),
 157 => wire__crate__api__structure_designer__structure_designer_api__get_expr_data_impl(ptr, rust_vec_len, data_len),
 158 => wire__crate__api__structure_designer__structure_designer_api__get_extrude_data_impl(ptr, rust_vec_len, data_len),
 159 => wire__crate__api__structure_designer__structure_designer_api__get_extrude_drawing_plane_miller_direction_impl(ptr, rust_vec_len, data_len),
@@ -16520,7 +16522,7 @@ fn pde_ffi_dispatcher_sync_impl(
 334 => wire__crate__api__structure_designer__structure_designer_api__set_direct_editing_mode_impl(ptr, rust_vec_len, data_len),
 335 => wire__crate__api__structure_designer__structure_designer_api__set_drawing_plane_data_impl(ptr, rust_vec_len, data_len),
 336 => wire__crate__api__structure_designer__edit_atom_api__set_edit_atom_selected_element_impl(ptr, rust_vec_len, data_len),
-337 => wire__crate__api__structure_designer__structure_designer_api__set_export_xyz_data_impl(ptr, rust_vec_len, data_len),
+337 => wire__crate__api__structure_designer__structure_designer_api__set_export_atoms_data_impl(ptr, rust_vec_len, data_len),
 338 => wire__crate__api__structure_designer__structure_designer_api__set_expr_data_impl(ptr, rust_vec_len, data_len),
 339 => wire__crate__api__structure_designer__structure_designer_api__set_extrude_data_impl(ptr, rust_vec_len, data_len),
 340 => wire__crate__api__structure_designer__facet_shell_api__set_facet_shell_center_impl(ptr, rust_vec_len, data_len),
@@ -17647,24 +17649,24 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
-    for crate::api::structure_designer::structure_designer_api_types::APIExportXYZData
+    for crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [self.file_name.into_into_dart().into_dart()].into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::structure_designer::structure_designer_api_types::APIExportXYZData
+    for crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData
 {
 }
 impl
     flutter_rust_bridge::IntoIntoDart<
-        crate::api::structure_designer::structure_designer_api_types::APIExportXYZData,
-    > for crate::api::structure_designer::structure_designer_api_types::APIExportXYZData
+        crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData,
+    > for crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData
 {
     fn into_into_dart(
         self,
-    ) -> crate::api::structure_designer::structure_designer_api_types::APIExportXYZData {
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData {
         self
     }
 }
@@ -21691,7 +21693,9 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
-impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIExportXYZData {
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData
+{
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.file_name, serializer);
@@ -23657,13 +23661,13 @@ impl SseEncode
 }
 
 impl SseEncode
-    for Option<crate::api::structure_designer::structure_designer_api_types::APIExportXYZData>
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData>
 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <crate::api::structure_designer::structure_designer_api_types::APIExportXYZData>::sse_encode(value, serializer);
+            <crate::api::structure_designer::structure_designer_api_types::APIExportAtomsData>::sse_encode(value, serializer);
         }
     }
 }

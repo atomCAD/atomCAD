@@ -95,7 +95,7 @@ List<String> aiListNetworks() => RustLib.instance.api
 /// ```text
 /// === Geometry3D ===
 ///   `cuboid`  - Outputs a cuboid with integer corner and extent
-///   `sphere`  - Outputs a sphere with integer center and radius
+///   `sphere`  - Outputs the lattice image of a sphere (ellipsoid on non-cubic cells)
 ///   ...
 /// ```
 /// Note: In verbose mode, descriptions are truncated to first line/sentence (max ~150 chars).
@@ -121,7 +121,7 @@ String aiListNodeTypes({String? category, required bool verbose}) =>
 /// ```text
 /// Node: sphere
 /// Category: Geometry3D
-/// Description: Outputs a sphere with integer center coordinates and integer radius.
+/// Description: Outputs the lattice image of a sphere: integer center and radius in lattice cells (an ellipsoid on non-cubic cells).
 ///
 /// Parameters (input pins):
 ///   center    : IVec3     [default: (0, 0, 0)]

@@ -81,7 +81,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => -121651393;
+  int get rustContentHash => -216236603;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -624,8 +624,8 @@ abstract class RustLibApi extends BaseApi {
   APIEditAtomData? crateApiStructureDesignerStructureDesignerApiGetEditAtomData(
       {required Uint64List scopePath, required BigInt nodeId});
 
-  APIExportXYZData?
-      crateApiStructureDesignerStructureDesignerApiGetExportXyzData(
+  APIExportAtomsData?
+      crateApiStructureDesignerStructureDesignerApiGetExportAtomsData(
           {required Uint64List scopePath, required BigInt nodeId});
 
   APIExprData? crateApiStructureDesignerStructureDesignerApiGetExprData(
@@ -1232,10 +1232,10 @@ abstract class RustLibApi extends BaseApi {
   void crateApiStructureDesignerEditAtomApiSetEditAtomSelectedElement(
       {required int atomicNumber});
 
-  void crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
+  void crateApiStructureDesignerStructureDesignerApiSetExportAtomsData(
       {required Uint64List scopePath,
       required BigInt nodeId,
-      required APIExportXYZData data});
+      required APIExportAtomsData data});
 
   APIResult crateApiStructureDesignerStructureDesignerApiSetExprData(
       {required Uint64List scopePath,
@@ -6098,8 +6098,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  APIExportXYZData?
-      crateApiStructureDesignerStructureDesignerApiGetExportXyzData(
+  APIExportAtomsData?
+      crateApiStructureDesignerStructureDesignerApiGetExportAtomsData(
           {required Uint64List scopePath, required BigInt nodeId}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
@@ -6109,20 +6109,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 156)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_opt_box_autoadd_api_export_xyz_data,
+        decodeSuccessData: sse_decode_opt_box_autoadd_api_export_atoms_data,
         decodeErrorData: null,
       ),
       constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiGetExportXyzDataConstMeta,
+          kCrateApiStructureDesignerStructureDesignerApiGetExportAtomsDataConstMeta,
       argValues: [scopePath, nodeId],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiGetExportXyzDataConstMeta =>
+      get kCrateApiStructureDesignerStructureDesignerApiGetExportAtomsDataConstMeta =>
           const TaskConstMeta(
-            debugName: "get_export_xyz_data",
+            debugName: "get_export_atoms_data",
             argNames: ["scopePath", "nodeId"],
           );
 
@@ -11141,16 +11141,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
-  void crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
+  void crateApiStructureDesignerStructureDesignerApiSetExportAtomsData(
       {required Uint64List scopePath,
       required BigInt nodeId,
-      required APIExportXYZData data}) {
+      required APIExportAtomsData data}) {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
-        sse_encode_box_autoadd_api_export_xyz_data(data, serializer);
+        sse_encode_box_autoadd_api_export_atoms_data(data, serializer);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 337)!;
       },
       codec: SseCodec(
@@ -11158,16 +11158,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: null,
       ),
       constMeta:
-          kCrateApiStructureDesignerStructureDesignerApiSetExportXyzDataConstMeta,
+          kCrateApiStructureDesignerStructureDesignerApiSetExportAtomsDataConstMeta,
       argValues: [scopePath, nodeId, data],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta
-      get kCrateApiStructureDesignerStructureDesignerApiSetExportXyzDataConstMeta =>
+      get kCrateApiStructureDesignerStructureDesignerApiSetExportAtomsDataConstMeta =>
           const TaskConstMeta(
-            debugName: "set_export_xyz_data",
+            debugName: "set_export_atoms_data",
             argNames: ["scopePath", "nodeId", "data"],
           );
 
@@ -14253,12 +14253,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIExportXYZData dco_decode_api_export_xyz_data(dynamic raw) {
+  APIExportAtomsData dco_decode_api_export_atoms_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 1)
       throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
-    return APIExportXYZData(
+    return APIExportAtomsData(
       fileName: dco_decode_String(arr[0]),
     );
   }
@@ -15692,9 +15692,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIExportXYZData dco_decode_box_autoadd_api_export_xyz_data(dynamic raw) {
+  APIExportAtomsData dco_decode_box_autoadd_api_export_atoms_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_api_export_xyz_data(raw);
+    return dco_decode_api_export_atoms_data(raw);
   }
 
   @protected
@@ -16853,10 +16853,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIExportXYZData? dco_decode_opt_box_autoadd_api_export_xyz_data(
+  APIExportAtomsData? dco_decode_opt_box_autoadd_api_export_atoms_data(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_api_export_xyz_data(raw);
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_api_export_atoms_data(raw);
   }
 
   @protected
@@ -18147,11 +18149,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIExportXYZData sse_decode_api_export_xyz_data(
+  APIExportAtomsData sse_decode_api_export_atoms_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_fileName = sse_decode_String(deserializer);
-    return APIExportXYZData(fileName: var_fileName);
+    return APIExportAtomsData(fileName: var_fileName);
   }
 
   @protected
@@ -19508,10 +19510,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIExportXYZData sse_decode_box_autoadd_api_export_xyz_data(
+  APIExportAtomsData sse_decode_box_autoadd_api_export_atoms_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_api_export_xyz_data(deserializer));
+    return (sse_decode_api_export_atoms_data(deserializer));
   }
 
   @protected
@@ -21043,12 +21045,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  APIExportXYZData? sse_decode_opt_box_autoadd_api_export_xyz_data(
+  APIExportAtomsData? sse_decode_opt_box_autoadd_api_export_atoms_data(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_api_export_xyz_data(deserializer));
+      return (sse_decode_box_autoadd_api_export_atoms_data(deserializer));
     } else {
       return null;
     }
@@ -22622,8 +22624,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_api_export_xyz_data(
-      APIExportXYZData self, SseSerializer serializer) {
+  void sse_encode_api_export_atoms_data(
+      APIExportAtomsData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.fileName, serializer);
   }
@@ -23737,10 +23739,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_api_export_xyz_data(
-      APIExportXYZData self, SseSerializer serializer) {
+  void sse_encode_box_autoadd_api_export_atoms_data(
+      APIExportAtomsData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_api_export_xyz_data(self, serializer);
+    sse_encode_api_export_atoms_data(self, serializer);
   }
 
   @protected
@@ -25106,13 +25108,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_api_export_xyz_data(
-      APIExportXYZData? self, SseSerializer serializer) {
+  void sse_encode_opt_box_autoadd_api_export_atoms_data(
+      APIExportAtomsData? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_box_autoadd_api_export_xyz_data(self, serializer);
+      sse_encode_box_autoadd_api_export_atoms_data(self, serializer);
     }
   }
 

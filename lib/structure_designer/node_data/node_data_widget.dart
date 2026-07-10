@@ -58,7 +58,7 @@ import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/import_cif_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/infer_bonds_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_replace_editor.dart';
-import 'package:flutter_cad/structure_designer/node_data/export_xyz_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/export_atoms_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/apply_diff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_composediff_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_cut_editor.dart';
@@ -846,16 +846,16 @@ class NodeDataWidget extends StatelessWidget {
           data: atomReplaceData,
           model: model,
         );
-      case 'export_xyz':
-        // Fetch the export_xyz data here in the parent widget
-        final exportXyzData = getExportXyzData(
+      case 'export_atoms':
+        // Fetch the export_atoms data here in the parent widget
+        final exportAtomsData = getExportAtomsData(
           scopePath: scopePath,
           nodeId: selectedNode.id,
         );
 
-        return ExportXyzEditor(
+        return ExportAtomsEditor(
           nodeId: selectedNode.id,
-          data: exportXyzData,
+          data: exportAtomsData,
           model: model,
         );
       case 'apply_diff':

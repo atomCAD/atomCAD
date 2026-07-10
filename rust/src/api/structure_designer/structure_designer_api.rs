@@ -16,7 +16,7 @@ use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDerivedShapeView;
 use super::structure_designer_api_types::APIDragSource;
 use super::structure_designer_api_types::APIExecuteResult;
-use super::structure_designer_api_types::APIExportXYZData;
+use super::structure_designer_api_types::APIExportAtomsData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
@@ -155,7 +155,7 @@ use crate::structure_designer::nodes::drawing_plane::DrawingPlaneData;
 use crate::structure_designer::nodes::drawing_plane::DrawingPlaneEvalCache;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
 use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
-use crate::structure_designer::nodes::export_xyz::ExportXYZData;
+use crate::structure_designer::nodes::export_atoms::ExportAtomsData;
 use crate::structure_designer::nodes::expr::ExprData;
 use crate::structure_designer::nodes::extrude::ExtrudeData;
 use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
@@ -3486,7 +3486,7 @@ pub fn get_import_xyz_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIImpo
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn get_export_xyz_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExportXYZData> {
+pub fn get_export_atoms_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExportAtomsData> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -3497,12 +3497,13 @@ pub fn get_export_xyz_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExpo
                     Some(data) => data,
                     None => return None,
                 };
-                let export_xyz_data = match node_data.as_any_ref().downcast_ref::<ExportXYZData>() {
-                    Some(data) => data,
-                    None => return None,
-                };
-                Some(APIExportXYZData {
-                    file_name: export_xyz_data.file_name.clone(),
+                let export_atoms_data =
+                    match node_data.as_any_ref().downcast_ref::<ExportAtomsData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
+                Some(APIExportAtomsData {
+                    file_name: export_atoms_data.file_name.clone(),
                 })
             },
             None,
@@ -5712,15 +5713,15 @@ pub fn set_atom_replace_data(scope_path: Vec<u64>, node_id: u64, data: APIAtomRe
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_export_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIExportXYZData) {
+pub fn set_export_atoms_data(scope_path: Vec<u64>, node_id: u64, data: APIExportAtomsData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let export_xyz_data = Box::new(ExportXYZData {
+            let export_atoms_data = Box::new(ExportAtomsData {
                 file_name: data.file_name.clone(),
             });
             cad_instance
                 .structure_designer
-                .set_node_network_data_scoped(&scope_path, node_id, export_xyz_data);
+                .set_node_network_data_scoped(&scope_path, node_id, export_atoms_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }
@@ -7539,7 +7540,7 @@ pub fn evaluate_node(
 
 /// Run an explicit Execute pass on a node — the right-click → Execute action
 /// in the node-graph UI. Sets `execute = true` for one evaluation pass on the
-/// targeted node, which is what gates side-effect nodes (`export_xyz`,
+/// targeted node, which is what gates side-effect nodes (`export_atoms`,
 /// `foreach`, future effect nodes) to actually fire. See
 /// `doc/design_node_execution.md` (Phase 3 — Triggering execute mode from
 /// the UI).

@@ -2618,16 +2618,16 @@ class StructureDesignerModel extends ChangeNotifier {
         scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
-  void setExportXyzData(BigInt nodeId, APIExportXYZData data) {
-    structure_designer_api.setExportXyzData(
+  void setExportAtomsData(BigInt nodeId, APIExportAtomsData data) {
+    structure_designer_api.setExportAtomsData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);
     refreshFromKernel();
   }
 
-  APIExportXYZData? getExportXyzData(BigInt nodeId) {
-    return structure_designer_api.getExportXyzData(
+  APIExportAtomsData? getExportAtomsData(BigInt nodeId) {
+    return structure_designer_api.getExportAtomsData(
         scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 

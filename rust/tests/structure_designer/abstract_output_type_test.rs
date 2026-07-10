@@ -192,11 +192,11 @@ fn apply_with_abstract_function_return_resolves_output_to_abstract_type() {
 #[test]
 fn connect_gate_accepts_abstract_to_same_abstract_and_rejects_downcasts() {
     let (mut designer, app) = setup_abstract_return_apply();
-    let xyz = designer.add_node("export_xyz", DVec2::new(200.0, 0.0));
+    let xyz = designer.add_node("export_atoms", DVec2::new(200.0, 0.0));
     let smove = designer.add_node("structure_move", DVec2::new(200.0, 100.0));
     let v3 = designer.add_node("vec3", DVec2::new(200.0, 200.0));
 
-    // export_xyz.molecule is declared HasAtoms — identity conversion.
+    // export_atoms.molecule is declared HasAtoms — identity conversion.
     assert!(
         designer.can_connect_nodes(app, 0, xyz, 0),
         "HasAtoms output must be connectable to a HasAtoms input pin"
@@ -216,7 +216,7 @@ fn connect_gate_accepts_abstract_to_same_abstract_and_rejects_downcasts() {
 #[test]
 fn abstract_to_same_abstract_wire_validates_clean() {
     let (mut designer, app) = setup_abstract_return_apply();
-    let xyz = designer.add_node("export_xyz", DVec2::new(200.0, 0.0));
+    let xyz = designer.add_node("export_atoms", DVec2::new(200.0, 0.0));
     designer.connect_nodes(app, 0, xyz, 0);
     designer.validate_active_network();
 

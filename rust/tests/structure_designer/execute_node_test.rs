@@ -1,7 +1,7 @@
 //! Phase 3 tests for the node-execution design (`doc/design_node_execution.md`).
 //!
 //! Phase 3 lands the user-visible payoff:
-//!  - `export_xyz` returns `Unit` (no longer pass-through Molecule) and
+//!  - `export_atoms` returns `Unit` (no longer pass-through Molecule) and
 //!    becomes a side-effect node gated by the central skip rule.
 //!  - The new `foreach` node iterates a stream of values, runs a body per
 //!    element for its side effects, and returns `Unit`. Display-pass cost is
@@ -12,7 +12,7 @@
 //! The `CounterUnitNode` fixture from `execute_flag_test.rs` is **not** reused
 //! here. That file covers the central skip rule and Walker context propagation
 //! in isolation; this file exercises the integration with the real
-//! `export_xyz` and `foreach` built-ins, plus the orchestrator API.
+//! `export_atoms` and `foreach` built-ins, plus the orchestrator API.
 
 use std::path::PathBuf;
 
@@ -24,7 +24,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 };
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
+use rust_lib_flutter_cad::structure_designer::nodes::export_atoms::ExportAtomsData;
 use rust_lib_flutter_cad::structure_designer::nodes::foreach::ForeachData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -62,7 +62,7 @@ fn add_inline_import_xyz(designer: &mut StructureDesigner, network_name: &str) -
     id
 }
 
-fn set_export_xyz_file_name(
+fn set_export_atoms_file_name(
     designer: &mut StructureDesigner,
     network_name: &str,
     node_id: u64,
@@ -77,7 +77,7 @@ fn set_export_xyz_file_name(
         .get_node_network_data_mut(node_id)
         .unwrap()
         .as_any_mut()
-        .downcast_mut::<ExportXYZData>()
+        .downcast_mut::<ExportAtomsData>()
         .unwrap();
     data.file_name = path.to_string();
 }
@@ -164,19 +164,19 @@ fn foreach_calculate_custom_node_type_uses_unit_output_and_zone_pins() {
 }
 
 // ============================================================================
-// export_xyz Unit-ification — central skip rule keeps it inert on display
+// export_atoms Unit-ification — central skip rule keeps it inert on display
 // ============================================================================
 
 #[test]
-fn export_xyz_does_not_write_file_on_display_pass() {
+fn export_atoms_does_not_write_file_on_display_pass() {
     let mut designer = setup_designer_with_network("main");
     let import_id = add_inline_import_xyz(&mut designer, "main");
-    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
     designer.connect_nodes(import_id, 0, export_id, 0);
 
     let tmp = TempDir::new().expect("tempdir");
     let out_path = tmp.path().join("display_pass.xyz");
-    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
 
     // execute = false (the default) — central rule must short-circuit the
     // whole eval, so save_xyz is never called.
@@ -188,44 +188,44 @@ fn export_xyz_does_not_write_file_on_display_pass() {
     );
     assert!(
         !out_path.exists(),
-        "export_xyz should NOT have written a file on a display pass: {:?}",
+        "export_atoms should NOT have written a file on a display pass: {:?}",
         out_path
     );
 }
 
 #[test]
-fn export_xyz_writes_file_on_execute_pass() {
+fn export_atoms_writes_file_on_execute_pass() {
     let mut designer = setup_designer_with_network("main");
     let import_id = add_inline_import_xyz(&mut designer, "main");
-    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
     designer.connect_nodes(import_id, 0, export_id, 0);
 
     let tmp = TempDir::new().expect("tempdir");
     let out_path = tmp.path().join("execute_pass.xyz");
-    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
 
     let result = evaluate_with_execute(&designer, "main", export_id, true);
     assert!(matches!(result, NetworkResult::Unit), "expected Unit");
     assert!(
         out_path.exists(),
-        "export_xyz should have written a file under Execute: {:?}",
+        "export_atoms should have written a file under Execute: {:?}",
         out_path
     );
 }
 
 #[test]
-fn execute_node_orchestrator_writes_file_for_export_xyz() {
-    // End-to-end test of the Phase 3 API: drive `export_xyz` through
+fn execute_node_orchestrator_writes_file_for_export_atoms() {
+    // End-to-end test of the Phase 3 API: drive `export_atoms` through
     // `StructureDesigner::execute_node` and assert both the success result
     // and the file landing on disk.
     let mut designer = setup_designer_with_network("main");
     let import_id = add_inline_import_xyz(&mut designer, "main");
-    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
     designer.connect_nodes(import_id, 0, export_id, 0);
 
     let tmp = TempDir::new().expect("tempdir");
     let out_path = tmp.path().join("orchestrated.xyz");
-    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
 
     let api_result = designer
         .execute_node("main", &[], export_id)
@@ -520,7 +520,7 @@ fn foreach_drains_all_elements_under_execute() {
 }
 
 // ============================================================================
-// foreach + export_xyz — the headline batch-export integration
+// foreach + export_atoms — the headline batch-export integration
 // ============================================================================
 
 /// Returns a list of XYZ filenames present in `dir`, sorted.
@@ -536,10 +536,10 @@ fn xyz_files_in(dir: &std::path::Path) -> Vec<String> {
 }
 
 #[test]
-fn foreach_with_export_xyz_body_writes_n_files_under_execute() {
+fn foreach_with_export_atoms_body_writes_n_files_under_execute() {
     // Phase 5 — zone-based version of the headline batch-export integration:
     // build a `foreach` whose inline zone body holds an `import_xyz` + a
-    // path-templating `expr` + an `export_xyz`. The foreach drains the range
+    // path-templating `expr` + an `export_atoms`. The foreach drains the range
     // under Execute, fires the body per element, and one file lands per
     // upstream element.
     use rust_lib_flutter_cad::structure_designer::node_network::{
@@ -595,7 +595,7 @@ fn foreach_with_export_xyz_body_writes_n_files_under_execute() {
     }
     designer.connect_nodes(range_id, 0, foreach_id, 0);
 
-    // Build the zone body: import_xyz → export_xyz; path comes from an expr
+    // Build the zone body: import_xyz → export_atoms; path comes from an expr
     // that templates the per-element file name from the `element` zone-input.
     let mut import_atom = AtomicStructure::new();
     import_atom.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
@@ -632,10 +632,10 @@ fn foreach_with_export_xyz_body_writes_n_files_under_execute() {
         let _ = expr_data.parse_and_validate(0);
         let expr_id = body.add_node("expr", DVec2::new(0.0, 100.0), 1, Box::new(expr_data));
 
-        // export_xyz takes 2 inputs (molecule, file_name).
-        let export_data = ExportXYZData::default();
+        // export_atoms takes 2 inputs (molecule, file_name).
+        let export_data = ExportAtomsData::default();
         let export_id = body.add_node(
-            "export_xyz",
+            "export_atoms",
             DVec2::new(100.0, 0.0),
             2,
             Box::new(export_data),
@@ -882,14 +882,14 @@ fn foreach_body_returning_non_error_value_is_discarded_as_unit() {
 }
 
 // ============================================================================
-// export_xyz generation-parameters sidecar
+// export_atoms generation-parameters sidecar
 // ============================================================================
 //
-// When a record is wired into the optional `metadata` pin, export_xyz writes a
-// `<file>.xyz.params.json` sidecar containing the parameters plus a BLAKE3 hash
-// of the XYZ file. When the pin is unconnected, behaviour is unchanged (no
-// sidecar). The pin type is an empty anonymous record, so any record shape
-// flows in via width subtyping and all fields pass through at eval.
+// When a record is wired into the optional `metadata` pin, export_atoms writes a
+// `<file>.params.json` sidecar containing the parameters plus a BLAKE3 hash of
+// the exported file (any format). When the pin is unconnected, behaviour is
+// unchanged (no sidecar). The pin type is an empty anonymous record, so any
+// record shape flows in via width subtyping and all fields pass through at eval.
 
 /// Adds a top-level `expr` node holding a (parameter-free) record literal and
 /// returns its id. The node's output is the evaluated record value.
@@ -925,11 +925,11 @@ fn add_record_literal_expr(
 }
 
 #[test]
-fn export_xyz_metadata_pin_is_registered() {
+fn export_atoms_metadata_pin_is_registered() {
     let registry = NodeTypeRegistry::new();
     let nt = registry
-        .get_node_type("export_xyz")
-        .expect("export_xyz should be registered");
+        .get_node_type("export_atoms")
+        .expect("export_atoms should be registered");
     assert_eq!(nt.parameters.len(), 3);
     assert_eq!(nt.parameters[0].name, "molecule");
     assert_eq!(nt.parameters[1].name, "file_name");
@@ -938,10 +938,10 @@ fn export_xyz_metadata_pin_is_registered() {
 }
 
 #[test]
-fn export_xyz_writes_generation_parameters_sidecar() {
+fn export_atoms_writes_generation_parameters_sidecar() {
     let mut designer = setup_designer_with_network("main");
     let import_id = add_inline_import_xyz(&mut designer, "main");
-    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
     designer.connect_nodes(import_id, 0, export_id, 0);
 
     // Wire a record literal into the optional `metadata` pin (index 2).
@@ -951,7 +951,7 @@ fn export_xyz_writes_generation_parameters_sidecar() {
 
     let tmp = TempDir::new().expect("tempdir");
     let out_path = tmp.path().join("slab.xyz");
-    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
 
     let result = evaluate_with_execute(&designer, "main", export_id, true);
     assert!(
@@ -972,13 +972,13 @@ fn export_xyz_writes_generation_parameters_sidecar() {
     let doc: serde_json::Value = serde_json::from_str(&json_text).expect("sidecar is valid JSON");
 
     assert_eq!(doc["format"], "atomcad-generation-parameters");
-    assert_eq!(doc["version"], 1);
-    assert_eq!(doc["xyz_file"], "slab.xyz");
+    assert_eq!(doc["version"], 2);
+    assert_eq!(doc["file"], "slab.xyz");
 
     // The recorded hash must match the actual bytes on disk.
     let xyz_bytes = std::fs::read(&out_path).expect("read xyz");
     let expected_hash = blake3::hash(&xyz_bytes).to_hex().to_string();
-    assert_eq!(doc["xyz_blake3"], expected_hash);
+    assert_eq!(doc["blake3"], expected_hash);
 
     // Parameters round-tripped structurally from the record literal.
     assert_eq!(doc["parameters"]["width"], 4);
@@ -987,15 +987,15 @@ fn export_xyz_writes_generation_parameters_sidecar() {
 }
 
 #[test]
-fn export_xyz_writes_no_sidecar_when_metadata_unconnected() {
+fn export_atoms_writes_no_sidecar_when_metadata_unconnected() {
     let mut designer = setup_designer_with_network("main");
     let import_id = add_inline_import_xyz(&mut designer, "main");
-    let export_id = designer.add_node("export_xyz", DVec2::ZERO);
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
     designer.connect_nodes(import_id, 0, export_id, 0);
 
     let tmp = TempDir::new().expect("tempdir");
     let out_path = tmp.path().join("plain.xyz");
-    set_export_xyz_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
 
     let result = evaluate_with_execute(&designer, "main", export_id, true);
     assert!(matches!(result, NetworkResult::Unit));
@@ -1006,4 +1006,138 @@ fn export_xyz_writes_no_sidecar_when_metadata_unconnected() {
         !sidecar_path.exists(),
         "no sidecar should be written when the metadata pin is unconnected"
     );
+}
+
+// ============================================================================
+// export_atoms multi-format dispatch (issue #353) — the format is derived from
+// the file extension via `AtomExportFormat`.
+// ============================================================================
+
+#[test]
+fn export_atoms_writes_mol_v3000_for_mol_extension() {
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("part.mol");
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    assert!(
+        matches!(result, NetworkResult::Unit),
+        "expected Unit (got {})",
+        result.to_display_string()
+    );
+    assert!(out_path.exists(), "mol file should exist");
+
+    // The `.mol` extension must dispatch to the V3000 MOL saver.
+    let contents = std::fs::read_to_string(&out_path).expect("read mol");
+    assert!(
+        contents.contains("V3000"),
+        "a .mol export must be written in V3000 format; got:\n{}",
+        contents
+    );
+    assert!(
+        contents.contains("M  V30 BEGIN CTAB"),
+        "a .mol export must contain the V3000 CTAB block"
+    );
+}
+
+#[test]
+fn export_atoms_errors_on_unsupported_extension() {
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("structure.pdb");
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    match result {
+        NetworkResult::Error(msg) => {
+            // The error must name the supported extensions, rendered from the
+            // format registry (never hardcoded here).
+            assert!(
+                msg.contains(".xyz") && msg.contains(".mol"),
+                "error should list the supported extensions; got: {}",
+                msg
+            );
+        }
+        other => panic!(
+            "expected an Error for an unsupported extension, got {}",
+            other.to_display_string()
+        ),
+    }
+    assert!(
+        !out_path.exists(),
+        "no file should be written for an unsupported extension"
+    );
+}
+
+#[test]
+fn export_atoms_errors_on_missing_extension() {
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("structure");
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    assert!(
+        matches!(result, NetworkResult::Error(_)),
+        "a missing extension must be a localized error (got {})",
+        result.to_display_string()
+    );
+    assert!(
+        !out_path.exists(),
+        "no file should be written for a missing extension"
+    );
+}
+
+#[test]
+fn export_atoms_writes_sidecar_next_to_mol_with_v2_keys() {
+    // The generation-parameters sidecar works for every format, not just xyz.
+    let mut designer = setup_designer_with_network("main");
+    let import_id = add_inline_import_xyz(&mut designer, "main");
+    let export_id = designer.add_node("export_atoms", DVec2::ZERO);
+    designer.connect_nodes(import_id, 0, export_id, 0);
+
+    let expr_id = add_record_literal_expr(&mut designer, "main", "{width: 4, height: 2}");
+    designer.connect_nodes(expr_id, 0, export_id, 2);
+
+    let tmp = TempDir::new().expect("tempdir");
+    let out_path = tmp.path().join("part.mol");
+    set_export_atoms_file_name(&mut designer, "main", export_id, out_path.to_str().unwrap());
+
+    let result = evaluate_with_execute(&designer, "main", export_id, true);
+    assert!(matches!(result, NetworkResult::Unit));
+    assert!(out_path.exists(), "mol should exist");
+
+    let sidecar_path = PathBuf::from(format!("{}.params.json", out_path.to_str().unwrap()));
+    assert!(
+        sidecar_path.exists(),
+        "sidecar {:?} should exist next to the mol",
+        sidecar_path
+    );
+
+    let json_text = std::fs::read_to_string(&sidecar_path).expect("read sidecar");
+    let doc: serde_json::Value = serde_json::from_str(&json_text).expect("sidecar is valid JSON");
+
+    assert_eq!(doc["format"], "atomcad-generation-parameters");
+    assert_eq!(doc["version"], 2);
+    assert_eq!(doc["file"], "part.mol");
+
+    let mol_bytes = std::fs::read(&out_path).expect("read mol");
+    let expected_hash = blake3::hash(&mol_bytes).to_hex().to_string();
+    assert_eq!(doc["blake3"], expected_hash);
+
+    assert_eq!(doc["parameters"]["width"], 4);
+    assert_eq!(doc["parameters"]["height"], 2);
 }

@@ -38,7 +38,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsDa
 use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
 // I/O nodes
-use rust_lib_flutter_cad::structure_designer::nodes::export_xyz::ExportXYZData;
+use rust_lib_flutter_cad::structure_designer::nodes::export_atoms::ExportAtomsData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_cif::ImportCifData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_xyz::ImportXYZData;
 // Programming nodes
@@ -1046,8 +1046,8 @@ fn test_materialize_roundtrip() {
 // ============================================================================
 
 #[test]
-fn test_export_xyz_roundtrip() {
-    test_roundtrip(&ExportXYZData {
+fn test_export_atoms_roundtrip() {
+    test_roundtrip(&ExportAtomsData {
         file_name: "test_output.xyz".to_string(),
     });
 }

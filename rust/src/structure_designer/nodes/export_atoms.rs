@@ -1,5 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::io::xyz_saver::save_xyz;
+use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -17,11 +17,11 @@ use std::collections::HashMap;
 use std::io;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ExportXYZData {
+pub struct ExportAtomsData {
     pub file_name: String, // If empty, the file name is not given yet.
 }
 
-impl NodeData for ExportXYZData {
+impl NodeData for ExportAtomsData {
     fn provide_gadget(
         &self,
         _structure_designer: &StructureDesigner,
@@ -75,7 +75,7 @@ impl NodeData for ExportXYZData {
         // Check if file name is empty
         if file_name.is_empty() {
             return EvalOutput::single(NetworkResult::Error(
-                "Missing export XYZ file name".to_string(),
+                "Missing export file name".to_string(),
             ));
         }
 
@@ -96,18 +96,37 @@ impl NodeData for ExportXYZData {
             }
         };
 
-        if let Err(err) = save_xyz(&atomic_structure, &resolved_path) {
+        // The export format is derived from the file extension (single source of
+        // truth in `crystolecule::io::atom_export`). An unrecognized or missing
+        // extension is a localized error at Execute time — consistent with the
+        // effect-node error model, and given eager while-editing feedback by
+        // `get_subtitle`'s unsupported-format arm.
+        let format = match AtomExportFormat::from_path(&resolved_path) {
+            Some(format) => format,
+            None => {
+                return EvalOutput::single(NetworkResult::Error(format!(
+                    "Unsupported export format for '{}'. Supported extensions: {}",
+                    file_name,
+                    AtomExportFormat::supported_extensions_display()
+                )));
+            }
+        };
+
+        if let Err(err) = format.save(&atomic_structure, &resolved_path) {
             return EvalOutput::single(NetworkResult::Error(format!(
-                "Failed to save XYZ file '{}': {}",
-                file_name, err
+                "Failed to save {} file '{}': {}",
+                format.label(),
+                file_name,
+                err
             )));
         }
 
         // Optional `metadata` record (pin 2) → write a machine-readable sidecar
-        // next to the XYZ file. The pin type is an empty anonymous record, so
-        // any record value flows in (width subtyping) carrying all its fields.
-        // When the pin is unconnected, `evaluate_arg` returns `None` and no
-        // sidecar is written — preserving the original single-file behaviour.
+        // next to the exported file (any format). The pin type is an empty
+        // anonymous record, so any record value flows in (width subtyping)
+        // carrying all its fields. When the pin is unconnected, `evaluate_arg`
+        // returns `None` and no sidecar is written — preserving the original
+        // single-file behaviour.
         let metadata = network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 2);
         match metadata {
             NetworkResult::None => {}
@@ -115,8 +134,10 @@ impl NodeData for ExportXYZData {
             record => {
                 if let Err(err) = write_generation_parameters_sidecar(&resolved_path, &record) {
                     return EvalOutput::single(NetworkResult::Error(format!(
-                        "Saved XYZ but failed to write generation-parameters sidecar for '{}': {}",
-                        file_name, err
+                        "Saved {} but failed to write generation-parameters sidecar for '{}': {}",
+                        format.label(),
+                        file_name,
+                        err
                     )));
                 }
             }
@@ -142,6 +163,11 @@ impl NodeData for ExportXYZData {
             // the central skip rule). See `doc/design_node_execution.md`
             // ("Tradeoff: lost runtime input feedback on Unit nodes").
             Some("(no file name)".to_string())
+        } else if AtomExportFormat::from_path(&self.file_name).is_none() {
+            // Eager feedback for the Execute-deferred format check: the stored
+            // file name has an unrecognized/missing extension, so evaluating
+            // this node would surface an "unsupported format" error.
+            Some(format!("{} (unsupported format)", self.file_name))
         } else {
             Some(self.file_name.clone())
         }
@@ -165,13 +191,13 @@ impl NodeData for ExportXYZData {
     }
 }
 
-impl Default for ExportXYZData {
+impl Default for ExportAtomsData {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ExportXYZData {
+impl ExportAtomsData {
     pub fn new() -> Self {
         Self {
             file_name: String::new(),
@@ -179,12 +205,12 @@ impl ExportXYZData {
     }
 }
 
-/// Special saver for ExportXYZData that converts file path to relative before saving
-pub fn export_xyz_data_saver(
+/// Special saver for ExportAtomsData that converts file path to relative before saving
+pub fn export_atoms_data_saver(
     node_data: &mut dyn NodeData,
     design_dir: Option<&str>,
 ) -> io::Result<Value> {
-    if let Some(data) = node_data.as_any_mut().downcast_mut::<ExportXYZData>() {
+    if let Some(data) = node_data.as_any_mut().downcast_mut::<ExportAtomsData>() {
         // If there's a file name and design directory, try to convert to relative path
         if let (Some(design_dir), file_name) = (design_dir, &data.file_name)
             && !file_name.is_empty()
@@ -202,35 +228,39 @@ pub fn export_xyz_data_saver(
     } else {
         Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "Data type mismatch for export_xyz",
+            "Data type mismatch for export_atoms",
         ))
     }
 }
 
-/// Special loader for ExportXYZData that loads the data after deserializing
-pub fn export_xyz_data_loader(
+/// Special loader for ExportAtomsData that loads the data after deserializing
+pub fn export_atoms_data_loader(
     value: &Value,
     _design_dir: Option<&str>,
 ) -> io::Result<Box<dyn NodeData>> {
     // Simply deserialize the data - no special loading needed for export
-    let data: ExportXYZData = serde_json::from_value(value.clone())
+    let data: ExportAtomsData = serde_json::from_value(value.clone())
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
     Ok(Box::new(data))
 }
 
-/// Writes the generation-parameters sidecar next to an exported XYZ file.
+/// Writes the generation-parameters sidecar next to an exported atom file.
 ///
-/// For `foo.xyz` the sidecar is `foo.xyz.params.json`. It records the wired
-/// metadata record (as JSON), a BLAKE3 hash of the just-written XYZ file so the
+/// For `foo.mol` the sidecar is `foo.mol.params.json`. It records the wired
+/// metadata record (as JSON), a BLAKE3 hash of the just-written file so the
 /// pairing can be verified later, and a versioned `format` tag leaving room for
-/// future fields (e.g. a hash of the generating network).
-fn write_generation_parameters_sidecar(xyz_path: &str, metadata: &NetworkResult) -> io::Result<()> {
-    // Hash the bytes we just wrote so the sidecar verifiably pins this XYZ.
-    let xyz_bytes = std::fs::read(xyz_path)?;
-    let xyz_blake3 = blake3::hash(&xyz_bytes).to_hex().to_string();
+/// future fields (e.g. a hash of the generating network). Format-agnostic: the
+/// same sidecar shape is written regardless of the exported format.
+fn write_generation_parameters_sidecar(
+    export_path: &str,
+    metadata: &NetworkResult,
+) -> io::Result<()> {
+    // Hash the bytes we just wrote so the sidecar verifiably pins this file.
+    let export_bytes = std::fs::read(export_path)?;
+    let export_blake3 = blake3::hash(&export_bytes).to_hex().to_string();
 
-    let xyz_file_name = std::path::Path::new(xyz_path)
+    let export_file_name = std::path::Path::new(export_path)
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or("")
@@ -238,13 +268,13 @@ fn write_generation_parameters_sidecar(xyz_path: &str, metadata: &NetworkResult)
 
     let doc = serde_json::json!({
         "format": "atomcad-generation-parameters",
-        "version": 1,
-        "xyz_file": xyz_file_name,
-        "xyz_blake3": xyz_blake3,
+        "version": 2,
+        "file": export_file_name,
+        "blake3": export_blake3,
         "parameters": network_result_to_json(metadata),
     });
 
-    let sidecar_path = format!("{}.params.json", xyz_path);
+    let sidecar_path = format!("{}.params.json", export_path);
     let json_text = serde_json::to_string_pretty(&doc)
         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     std::fs::write(&sidecar_path, json_text)
@@ -290,11 +320,12 @@ fn network_result_to_json(value: &NetworkResult) -> Value {
 
 pub fn get_node_type() -> NodeType {
     NodeType {
-        name: "export_xyz".to_string(),
-        description: "Exports atomic structure on its `molecule` input into an XYZ file. \
-            When a record is wired into the optional `metadata` pin, also writes a \
-            `<file>.xyz.params.json` sidecar containing those parameters plus a BLAKE3 \
-            hash of the XYZ file for machine-readable verification."
+        name: "export_atoms".to_string(),
+        description: "Exports the atomic structure on its `molecule` input to a file; the \
+            format is chosen by the file extension (.xyz, .mol). When a record is wired into \
+            the optional `metadata` pin, also writes a `<file>.params.json` sidecar containing \
+            those parameters plus a BLAKE3 hash of the exported file for machine-readable \
+            verification."
             .to_string(),
         summary: None,
         category: NodeTypeCategory::AtomicStructure,
@@ -315,7 +346,7 @@ pub fn get_node_type() -> NodeType {
                 // Empty anonymous record: accepts any record value via width
                 // subtyping; all fields pass through unchanged at eval. Wire
                 // generation parameters here to emit a `<file>.params.json`
-                // sidecar alongside the exported XYZ.
+                // sidecar alongside the exported file.
                 data_type: DataType::Record(RecordType::anonymous(vec![])),
             },
         ],
@@ -323,8 +354,8 @@ pub fn get_node_type() -> NodeType {
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,
-        node_data_creator: || Box::new(ExportXYZData::new()),
-        node_data_saver: export_xyz_data_saver,
-        node_data_loader: export_xyz_data_loader,
+        node_data_creator: || Box::new(ExportAtomsData::new()),
+        node_data_saver: export_atoms_data_saver,
+        node_data_loader: export_atoms_data_loader,
     }
 }

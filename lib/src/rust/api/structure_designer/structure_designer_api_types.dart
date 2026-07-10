@@ -1008,7 +1008,7 @@ enum APIEditAtomTool {
 
 /// Result of an explicit Execute pass triggered from the UI on a single node.
 ///
-/// Side-effect nodes (`export_xyz`, `print` with `execute_only`, future effect
+/// Side-effect nodes (`export_atoms`, `print` with `execute_only`, future effect
 /// nodes) only fire under `context.execute == true`; the Execute action sets
 /// that flag for the duration of one evaluation pass on the targeted node.
 /// `logs` carries the print entries produced by *this* pass only — earlier
@@ -1046,10 +1046,10 @@ class APIExecuteResult {
           logs == other.logs;
 }
 
-class APIExportXYZData {
+class APIExportAtomsData {
   final String fileName;
 
-  const APIExportXYZData({
+  const APIExportAtomsData({
     required this.fileName,
   });
 
@@ -1059,7 +1059,7 @@ class APIExportXYZData {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is APIExportXYZData &&
+      other is APIExportAtomsData &&
           runtimeType == other.runtimeType &&
           fileName == other.fileName;
 }

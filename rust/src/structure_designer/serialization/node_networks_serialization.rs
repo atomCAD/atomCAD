@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 // The current version of the serialization format
-const SERIALIZATION_VERSION: u32 = 6;
+const SERIALIZATION_VERSION: u32 = 7;
 
 /// Sentinel `data_type` written for custom (user-network) node instances. Their
 /// `node_type_name` is a key in `node_networks`, not `built_in_node_types`, so
@@ -868,7 +868,8 @@ pub fn load_node_networks_from_file(
 
     // Chained historical up-converters. Each pass runs only if the loaded
     // file pre-dates the version after that pass. A v2 file chains through
-    // all passes; a v3 file runs v3→v4 then v5→v6; a v5 file runs only v5→v6.
+    // all passes; a v3 file runs v3→v4, v5→v6, then v6→v7; a v6 file runs
+    // only v6→v7.
     //
     // Note: there is no v4→v5 transform pass — v4 and v5 are structurally
     // identical. The legacy main-branch function-pin idiom (a node's `-1` pin
@@ -880,6 +881,11 @@ pub fn load_node_networks_from_file(
     //
     // v5→v6 (issue #384): `free_rot`'s angle input switches radians → degrees.
     // See `doc/design_degree_angle_inputs.md` and `migrate_v5_to_v6`.
+    //
+    // v6→v7 (issue #353): the built-in `export_xyz` node is renamed to
+    // `export_atoms` (format now derived from the file extension). Mechanical
+    // whole-tree rename of the `node_type_name` / `data_type` reference keys.
+    // See `doc/design_export_atoms_node.md` and `migrate_v6_to_v7`.
     if version < 3 {
         super::migrate_v2_to_v3::migrate_v2_to_v3(&mut root_value).map_err(|e| {
             io::Error::new(
@@ -901,6 +907,14 @@ pub fn load_node_networks_from_file(
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("v5→v6 migration failed: {}", e),
+            )
+        })?;
+    }
+    if version < 7 {
+        super::migrate_v6_to_v7::migrate_v6_to_v7(&mut root_value).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("v6→v7 migration failed: {}", e),
             )
         })?;
     }

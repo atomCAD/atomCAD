@@ -1090,7 +1090,7 @@ pub struct APIAtomReplaceRule {
     pub to_atomic_number: i32,
 }
 
-pub struct APIExportXYZData {
+pub struct APIExportAtomsData {
     pub file_name: String,
 }
 
@@ -1347,7 +1347,7 @@ pub struct BatchCliConfig {
 
 /// Result of an explicit Execute pass triggered from the UI on a single node.
 ///
-/// Side-effect nodes (`export_xyz`, `print` with `execute_only`, future effect
+/// Side-effect nodes (`export_atoms`, `print` with `execute_only`, future effect
 /// nodes) only fire under `context.execute == true`; the Execute action sets
 /// that flag for the duration of one evaluation pass on the targeted node.
 /// `logs` carries the print entries produced by *this* pass only — earlier

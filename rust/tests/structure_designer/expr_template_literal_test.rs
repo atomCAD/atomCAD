@@ -5,7 +5,7 @@
 //! - An expr node with a template-literal expression validates to `String`.
 //! - The expression survives a `.cnnd` save/load roundtrip with all derived
 //!   state (parsed Expr, output_type) restored.
-//! - The String output of an expr is type-compatible with `export_xyz`'s
+//! - The String output of an expr is type-compatible with `export_atoms`'s
 //!   `file_name` input pin.
 
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
@@ -224,8 +224,8 @@ fn test_expr_template_literal_cnnd_roundtrip() {
 }
 
 #[test]
-fn test_template_string_output_compatible_with_export_xyz_file_name_pin() {
-    // The `file_name` pin on `export_xyz` is `DataType::String`, and the expr
+fn test_template_string_output_compatible_with_export_atoms_file_name_pin() {
+    // The `file_name` pin on `export_atoms` is `DataType::String`, and the expr
     // template literal output is `DataType::String`. `can_be_converted_to`
     // must therefore accept the wire.
     let registry = NodeTypeRegistry::new();
@@ -233,6 +233,6 @@ fn test_template_string_output_compatible_with_export_xyz_file_name_pin() {
     let dest = DataType::String;
     assert!(
         DataType::can_be_converted_to(&source, &dest, &registry),
-        "String -> String should be a permitted connection (expr template -> export_xyz.file_name)"
+        "String -> String should be a permitted connection (expr template -> export_atoms.file_name)"
     );
 }

@@ -835,10 +835,10 @@ APIImportXYZData? getImportXyzData(
         .crateApiStructureDesignerStructureDesignerApiGetImportXyzData(
             scopePath: scopePath, nodeId: nodeId);
 
-APIExportXYZData? getExportXyzData(
+APIExportAtomsData? getExportAtomsData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiGetExportXyzData(
+        .crateApiStructureDesignerStructureDesignerApiGetExportAtomsData(
             scopePath: scopePath, nodeId: nodeId);
 
 APISphereData? getSphereData(
@@ -1436,12 +1436,12 @@ void setAtomReplaceData(
         .crateApiStructureDesignerStructureDesignerApiSetAtomReplaceData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
-void setExportXyzData(
+void setExportAtomsData(
         {required Uint64List scopePath,
         required BigInt nodeId,
-        required APIExportXYZData data}) =>
+        required APIExportAtomsData data}) =>
     RustLib.instance.api
-        .crateApiStructureDesignerStructureDesignerApiSetExportXyzData(
+        .crateApiStructureDesignerStructureDesignerApiSetExportAtomsData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setParameterData(
@@ -1947,7 +1947,7 @@ APINodeEvaluationResult evaluateNode(
 
 /// Run an explicit Execute pass on a node — the right-click → Execute action
 /// in the node-graph UI. Sets `execute = true` for one evaluation pass on the
-/// targeted node, which is what gates side-effect nodes (`export_xyz`,
+/// targeted node, which is what gates side-effect nodes (`export_atoms`,
 /// `foreach`, future effect nodes) to actually fire. See
 /// `doc/design_node_execution.md` (Phase 3 — Triggering execute mode from
 /// the UI).
