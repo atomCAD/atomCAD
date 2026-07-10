@@ -582,6 +582,11 @@ pub struct APIFreeMoveData {
     pub translation: APIVec3,
 }
 
+pub struct APIRelaxData {
+    /// Prune threshold (Å) for the `diff` output pin. `0.0` = exact.
+    pub diff_min_move: f64,
+}
+
 pub struct APIFreeSphereData {
     pub center: APIVec3,
     pub radius: f64,

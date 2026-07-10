@@ -24,6 +24,8 @@ import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
+    as relax_api;
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/print_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
@@ -481,9 +483,15 @@ class NodeDataWidget extends StatelessWidget {
           model: model,
         );
       case 'relax':
-        // Relax editor doesn't need to fetch data - it gets it from the API
+        // The minimization message comes from the API live; the diff_min_move
+        // property is fetched here (scope-aware) and passed in.
+        final relaxData = relax_api.getRelaxData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
         return RelaxEditor(
           nodeId: selectedNode.id,
+          data: relaxData,
           model: model,
         );
       case 'parameter':

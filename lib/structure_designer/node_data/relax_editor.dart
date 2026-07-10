@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
+import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
-/// Editor widget for relax nodes - displays energy minimization results
+/// Editor widget for relax nodes - displays energy minimization results and
+/// exposes the `diff_min_move` pruning threshold for the diff output pin.
 class RelaxEditor extends StatefulWidget {
   final BigInt nodeId;
+  final APIRelaxData? data;
   final StructureDesignerModel model;
 
   const RelaxEditor({
     super.key,
     required this.nodeId,
+    required this.data,
     required this.model,
   });
 
@@ -87,6 +92,24 @@ class _RelaxEditorState extends State<RelaxEditor> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          if (widget.data != null)
+            FloatInput(
+              label: 'Diff min move (Å)',
+              value: widget.data!.diffMinMove,
+              onChanged: (newValue) {
+                widget.model.setRelaxData(
+                  widget.nodeId,
+                  APIRelaxData(diffMinMove: newValue),
+                );
+              },
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'Atoms moving less than this are pruned from the diff output pin '
+            '(0 = exact).',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 16),
         ],

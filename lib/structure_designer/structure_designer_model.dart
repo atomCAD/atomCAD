@@ -21,6 +21,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
     as import_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
+    as relax_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 /// Distinguishes the five kinds of pin slots a node can expose. Replaces the
@@ -2270,6 +2272,14 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setFreeSphereData(BigInt nodeId, APIFreeSphereData data) {
     structure_designer_api.setFreeSphereData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  void setRelaxData(BigInt nodeId, APIRelaxData data) {
+    relax_api.setRelaxData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);

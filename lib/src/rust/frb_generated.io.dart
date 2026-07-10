@@ -336,6 +336,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRegPolyData dco_decode_api_reg_poly_data(dynamic raw);
 
   @protected
+  APIRelaxData dco_decode_api_relax_data(dynamic raw);
+
+  @protected
   APIResult dco_decode_api_result(dynamic raw);
 
   @protected
@@ -654,6 +657,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData dco_decode_box_autoadd_api_reg_poly_data(dynamic raw);
+
+  @protected
+  APIRelaxData dco_decode_box_autoadd_api_relax_data(dynamic raw);
 
   @protected
   APISequenceData dco_decode_box_autoadd_api_sequence_data(dynamic raw);
@@ -1170,6 +1176,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData? dco_decode_opt_box_autoadd_api_reg_poly_data(dynamic raw);
+
+  @protected
+  APIRelaxData? dco_decode_opt_box_autoadd_api_relax_data(dynamic raw);
 
   @protected
   APISequenceData? dco_decode_opt_box_autoadd_api_sequence_data(dynamic raw);
@@ -1699,6 +1708,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRegPolyData sse_decode_api_reg_poly_data(SseDeserializer deserializer);
 
   @protected
+  APIRelaxData sse_decode_api_relax_data(SseDeserializer deserializer);
+
+  @protected
   APIResult sse_decode_api_result(SseDeserializer deserializer);
 
   @protected
@@ -2085,6 +2097,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRegPolyData sse_decode_box_autoadd_api_reg_poly_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRelaxData sse_decode_box_autoadd_api_relax_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2704,6 +2720,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRelaxData? sse_decode_opt_box_autoadd_api_relax_data(
+      SseDeserializer deserializer);
+
+  @protected
   APISequenceData? sse_decode_opt_box_autoadd_api_sequence_data(
       SseDeserializer deserializer);
 
@@ -3294,6 +3314,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRegPolyData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_relax_data(APIRelaxData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_result(APIResult self, SseSerializer serializer);
 
   @protected
@@ -3688,6 +3711,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_relax_data(
+      APIRelaxData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_sequence_data(
@@ -4314,6 +4341,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_reg_poly_data(
       APIRegPolyData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_relax_data(
+      APIRelaxData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_sequence_data(

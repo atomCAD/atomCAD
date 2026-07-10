@@ -130,6 +130,17 @@ mod atom_edit_move_in_diff_test;
 #[path = "structure_designer/apply_diff_node_test.rs"]
 mod apply_diff_node_test;
 
+// Shared support for the per-node diff-output roundtrip (issue #295 Phase 2+).
+// `structure_equivalence` provides the `≡` used by `diff_test_support`.
+#[path = "test_support/structure_equivalence.rs"]
+mod structure_equivalence;
+
+#[path = "structure_designer/diff_test_support.rs"]
+mod diff_test_support;
+
+#[path = "structure_designer/relax_diff_output_test.rs"]
+mod relax_diff_output_test;
+
 #[path = "structure_designer/atom_composediff_test.rs"]
 mod atom_composediff_test;
 

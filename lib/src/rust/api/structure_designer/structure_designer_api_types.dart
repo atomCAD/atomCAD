@@ -2853,6 +2853,25 @@ class APIRegPolyData {
           radius == other.radius;
 }
 
+class APIRelaxData {
+  /// Prune threshold (Å) for the `diff` output pin. `0.0` = exact.
+  final double diffMinMove;
+
+  const APIRelaxData({
+    required this.diffMinMove,
+  });
+
+  @override
+  int get hashCode => diffMinMove.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIRelaxData &&
+          runtimeType == other.runtimeType &&
+          diffMinMove == other.diffMinMove;
+}
+
 class APIRotationalSymmetry {
   final APIVec3 axis;
   final int nFold;

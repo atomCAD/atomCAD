@@ -5,6 +5,23 @@
 
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'structure_designer_api_types.dart';
 
 String getRelaxMessage() =>
     RustLib.instance.api.crateApiStructureDesignerRelaxApiGetRelaxMessage();
+
+/// Reads the stored data of a `relax` node (currently just `diff_min_move`).
+/// Takes a `scope_path` like every sibling node-data accessor.
+APIRelaxData? getRelaxData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiStructureDesignerRelaxApiGetRelaxData(
+        scopePath: scopePath, nodeId: nodeId);
+
+/// Writes the stored data of a `relax` node. Undoable via the shared
+/// `SetNodeDataCommand` pushed by `set_node_network_data_scoped`.
+void setRelaxData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIRelaxData data}) =>
+    RustLib.instance.api.crateApiStructureDesignerRelaxApiSetRelaxData(
+        scopePath: scopePath, nodeId: nodeId, data: data);
