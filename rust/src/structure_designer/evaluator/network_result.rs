@@ -388,6 +388,20 @@ impl NetworkResult {
         }
     }
 
+    /// The construction plane this result is defined on, if any. Unlike
+    /// [`extract_drawing_plane`], this also reaches into a `Geometry2D`'s
+    /// embedded `drawing_plane` — a `rect`/`circle`/`polygon` etc. output
+    /// carries the same plane its downstream `extrude` reads for its normal, so
+    /// "use the displayed plane" (issue #349) must find it there too. Returns a
+    /// clone so callers don't hold a borrow on the result.
+    pub fn construction_plane(&self) -> Option<DrawingPlane> {
+        match self {
+            NetworkResult::DrawingPlane(dp) => Some(dp.clone()),
+            NetworkResult::Geometry2D(geometry) => Some(geometry.drawing_plane.clone()),
+            _ => None,
+        }
+    }
+
     /// Returns the UnitCellStruct associated with this NetworkResult.
     /// For LatticeVecs, DrawingPlane, Geometry2D, and Blueprint variants, returns their unit cell.
     /// For all other variants, returns None.

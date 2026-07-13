@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../src/rust/api/common_api_types.dart';
 import 'structure_designer_model.dart';
+import 'view_up_axis_dialog.dart';
 
 class CameraControlWidget extends StatelessWidget {
   final StructureDesignerModel model;
@@ -69,9 +70,47 @@ class CameraControlWidget extends StatelessWidget {
                   }
                 },
               ),
+              const SizedBox(width: 8),
+              // Navigation up-axis button (issue #349). Highlighted when a
+              // non-default axis is active so a rotated turntable is never a
+              // mystery. Shaped as the "navigation up-axis" entry so #97's free
+              // mode and #391's gizmo slot in without redesign (D7).
+              _buildUpAxisButton(context, model),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildUpAxisButton(
+      BuildContext context, StructureDesignerModel model) {
+    final info = model.viewUpInfo;
+    final label = info?.label ?? 'Z';
+    final isDefault = info?.isDefault ?? true;
+    final primary = Theme.of(context).primaryColor;
+    return Tooltip(
+      message: 'Navigation up-axis (screen-vertical while orbiting)',
+      child: TextButton.icon(
+        key: const Key('camera_up_axis_button'),
+        icon: Icon(
+          Icons.vertical_align_top,
+          size: 18,
+          color: isDefault ? Colors.grey : primary,
+        ),
+        label: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 90),
+          child: Text(
+            'Up: $label',
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              color: isDefault ? null : primary,
+              fontWeight: isDefault ? FontWeight.normal : FontWeight.bold,
+            ),
+          ),
+        ),
+        onPressed: () => showViewUpAxisDialog(context, model),
       ),
     );
   }

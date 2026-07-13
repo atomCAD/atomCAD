@@ -488,6 +488,7 @@ fn test_node_scene_data_interactive_pin_single() {
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
+        construction_plane: None,
         show_unit_cell_wireframe: false,
         selected_node_eval_cache: None,
     };
@@ -524,6 +525,7 @@ fn test_node_scene_data_interactive_pin_multi() {
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
+        construction_plane: None,
         show_unit_cell_wireframe: false,
         selected_node_eval_cache: None,
     };
@@ -561,6 +563,7 @@ fn test_node_scene_data_interactive_pin_only_pin1() {
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
+        construction_plane: None,
         show_unit_cell_wireframe: false,
         selected_node_eval_cache: None,
     };
@@ -583,6 +586,7 @@ fn test_node_scene_data_interactive_pin_empty() {
         node_errors: std::collections::HashMap::new(),
         node_output_strings: std::collections::HashMap::new(),
         unit_cell: None,
+        construction_plane: None,
         show_unit_cell_wireframe: false,
         selected_node_eval_cache: None,
     };

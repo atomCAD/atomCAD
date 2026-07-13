@@ -311,7 +311,8 @@
       "Bash(perl -0pi -e 's/\\\\\\\\\"version\\\\\\\\\": 5/\\\\\\\\\"version\\\\\\\\\": 6/g; s/tagged version: 5/tagged version: 6/g' tests/integration/lattice_space_migration_test.rs)",
       "Bash(sed -i 's/export_xyz/export_atoms/g' doc/reference_guide/nodes/math_programming.md doc/reference_guide/node_networks.md)",
       "Bash(sed -i 's/export_xyz/export_atoms/g; s|atomic.md#export_atoms|atomic.md#export_atoms|g' doc/reference_guide/ui.md)",
-      "Bash(GH_PAGER=cat gh issue view 295 --repo atomCAD/atomCAD --comments)"
+      "Bash(GH_PAGER=cat gh issue view 295 --repo atomCAD/atomCAD --comments)",
+      "Bash(perl -0pi -e 's/\\(        unit_cell: None,\\\\n\\)/$1        construction_plane: None,\\\\n/g' tests/structure_designer/multi_output_unit_test.rs)"
     ]
   }
 }

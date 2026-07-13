@@ -303,11 +303,26 @@ lightweight refresh so the viewport re-renders.
 - `set_view_up_from_active_drawing_plane() -> Option<String>` — if the
   active node's **interactive pin** (lowest-indexed displayed output pin,
   the same rule hit-testing uses — `NodeSceneData::interactive_pin_index()`)
-  evaluates to a `DrawingPlane`, use its plane normal
+  carries a construction plane, use its plane normal
   (`ivec3_miller_index_to_plane_props(miller_index).normal` on the plane's
   own `unit_cell`); label from its Miller index. Error if that pin does
-  not carry a drawing plane. This is the one-click path for the
-  motivating workflow.
+  not carry a plane. This is the one-click path for the motivating workflow.
+
+  **A "construction plane" is broader than a `DrawingPlane` output**
+  (as-built correction — the original spec below assumed the interactive
+  output *is* a `DrawingPlane`). A `rect`/`circle`/`polygon`/… node outputs
+  `Geometry2D`, whose `GeometrySummary2D` **embeds** the `drawing_plane` it is
+  drawn on — the same plane its downstream `extrude` reads for its normal — so
+  the action must find it there too, not only on a literal `drawing_plane`
+  node. Two things follow: (1) extraction is `NetworkResult::construction_plane()`
+  (matches both `DrawingPlane` and `Geometry2D.drawing_plane`); (2) the scene's
+  `NodeOutput` is **lossy** (no `Geometry2D` variant — it collapses to a point
+  cloud/mesh and drops the plane), so the plane cannot be read back from
+  `NodeOutput` at API time. It is instead **derived onto `NodeSceneData`**
+  (`construction_plane: Option<DrawingPlane>`, from the interactive pin's
+  wire-level `NetworkResult`) during `generate_scene`, mirroring the existing
+  `unit_cell` field, and the setter reads that. See
+  `rust/src/structure_designer/evaluator/AGENTS.md` ("Scene Output Types").
 
 **Error decisions live in the core, not the wrappers.** So the failure
 branches are testable under the `rust/AGENTS.md` "test the core, skip the

@@ -129,3 +129,23 @@ See `doc/testing.md` for test coverage details.
 ## Documentation
 
 See `doc/` directory for architecture, tutorials, and platform setup guides.
+
+### User-facing reference guide — keep it in sync
+
+`doc/atomCAD_reference_guide.md` is the **user-facing reference manual** (a hub
+that links out to the pages under `doc/reference_guide/` — `ui.md`,
+`node_networks.md`, `direct_editing.md`, the per-node pages under
+`reference_guide/nodes/`, etc.). It documents the application from a user's
+point of view: what each UI panel/control does, how navigation works, what every
+node type does. It is distinct from the `doc/design_*.md` design docs (which
+capture engineering rationale) and from the `AGENTS.md` files (which capture
+conventions for contributors).
+
+**When you add or change user-visible behavior — a new node type, a new UI
+control, a changed interaction, a new menu item, a renamed field — update the
+relevant reference-guide page in the same change.** Treat it like a test that
+must be kept green: a feature is not "done" until the guide reflects it. If you
+are unsure which page a change belongs on, grep `doc/reference_guide/` for the
+nearest existing topic. Backend-only or internal-only changes (evaluator
+internals, refactors, new private helpers) do **not** need a guide update — only
+things a user can see or do.

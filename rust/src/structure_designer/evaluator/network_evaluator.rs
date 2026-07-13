@@ -701,6 +701,17 @@ impl NetworkEvaluator {
             .cloned()
             .unwrap_or_else(|| HashSet::from([0]));
 
+        // Capture the construction plane of the interactive (lowest-displayed)
+        // pin from the wire-level result, so the view-up "from displayed plane"
+        // action (issue #349) can read it even though the display-level
+        // NodeOutput drops it. Uses the wire-level result (not display override)
+        // for the same reason the alignment capture above does.
+        let construction_plane = displayed_pins
+            .iter()
+            .copied()
+            .min()
+            .and_then(|pin| eval_output.get(pin).construction_plane());
+
         // Show unit cell wireframe when eval explicitly provided a unit cell
         // (motif_edit sets unit_cell_override; other nodes don't)
         let show_unit_cell_wireframe = eval_output.unit_cell_override.is_some();
@@ -715,6 +726,7 @@ impl NetworkEvaluator {
             node_errors: context.node_errors.clone(),
             node_output_strings: context.node_output_strings.clone(),
             unit_cell,
+            construction_plane,
             show_unit_cell_wireframe,
             selected_node_eval_cache: context.selected_node_eval_cache.take(),
         }

@@ -120,6 +120,16 @@ When overlapping outputs are detected (within 0.1 Å), a disambiguation overlay 
 
 Design doc: `doc/design_click_to_activate_node.md`.
 
+## Navigation Up-Axis (view-up picker, issue #349)
+
+The turntable's screen-vertical axis is pickable (default world +Z). Orbit math lives in `lib/common/cad_viewport.dart::rotateCamera`, which reads the axis from `camera.navUp` (on the extended `APICamera`) for **both** the horizontal-orbit axis and the no-roll up reference — the two spots that used to hard-code `Vector3(0,0,1)`. The Rust setters re-align `up` to the new axis at pick time (design D3), so by the time you orbit the pose is already roll-free w.r.t. the axis; the existing pole guard is axis-agnostic and carries over. This math is **not** unit-tested — verify by manual walkthrough (`doc/design_view_up_axis.md` Verification).
+
+- **Camera-row control** (`camera_control_widget.dart` `_buildUpAxisButton`): an "Up: ⟨label⟩" `TextButton` after the ortho toggle; highlighted (primaryColor + bold) when the axis is non-default. The label is `ConstrainedBox(maxWidth: 90)` + ellipsis so a long index like `[10 10 10]` can't overflow the sidebar next to the `Expanded` canonical-view dropdown.
+- **Dialog** (`view_up_axis_dialog.dart`, `showViewUpAxisDialog`): a `DraggableDialog` with a Plane(hkl)/Direction[uvw] `SegmentedButton`, the shared `MillerIndexMap` + `IVec3Input` (one `_index` reused across modes), the lattice-source line, a **From displayed plane** button, and Apply / Reset (Z) / Close with inline error text. `_adoptFromLabel` parses the kernel's provenance label (`"(h k l)"`/`"[u v w]"`) back into `_index`+`_mode` — called on open (`initState`) and after a successful "From displayed plane", so the fields always reflect the live axis (without this, Apply after From-displayed-plane re-resolved the stale default and jumped the camera).
+- **Model** (`structure_designer_model.dart`): `viewUpInfo` (`APIViewUpInfo?`, mirrored each `refreshFromKernel` via `getViewUp()`); wrappers `setViewUpFromMillerPlane` / `setViewUpFromLatticeDirection` / `setViewUpFromActiveDrawingPlane` (each returns the kernel's error string, surfaced inline) and `resetViewUp`. No `scope_path` — camera is global to the active network, like the other camera methods.
+
+The interim dialog is a deliberately replaceable front-end (design D7): #391 later swaps the body for a unified gizmo calling the same setters. Design doc: `doc/design_view_up_axis.md`.
+
 ## Record Types
 
 The user-types panel and main content area handle two kinds of user-defined types: node networks and record type defs.

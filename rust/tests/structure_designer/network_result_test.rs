@@ -1,9 +1,13 @@
+use glam::{DVec2, IVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
+use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
-    CrystalData, MoleculeData, NetworkResult,
+    CrystalData, GeometrySummary2D, MoleculeData, NetworkResult,
 };
+use rust_lib_flutter_cad::util::transform::Transform2D;
 
 fn make_crystal() -> NetworkResult {
     NetworkResult::Crystal(CrystalData {
@@ -52,6 +56,51 @@ fn extract_molecule_only_matches_molecule() {
     assert!(make_molecule().extract_molecule().is_some());
     assert!(make_crystal().extract_molecule().is_none());
     assert!(NetworkResult::Int(1).extract_molecule().is_none());
+}
+
+// --- construction_plane ---------------------------------------------------
+//
+// `construction_plane()` backs the view-up "from displayed plane" action
+// (issue #349). Unlike `extract_drawing_plane`, it must also reach into a
+// `Geometry2D`'s embedded plane — a `rect`/`circle` output carries the same
+// plane its downstream `extrude` reads, so the action has to find it there too.
+
+/// A drawing plane with a distinctive `center` so a returned plane can be
+/// proven to be *this* one (embedded pass-through), not a coincidental default.
+fn plane_with_marker() -> DrawingPlane {
+    let mut dp = DrawingPlane::default();
+    dp.center = IVec3::new(3, 4, 5);
+    dp
+}
+
+#[test]
+fn construction_plane_from_drawing_plane_result() {
+    let result = NetworkResult::DrawingPlane(plane_with_marker());
+    let plane = result.construction_plane().expect("DrawingPlane has a plane");
+    assert_eq!(plane.center, IVec3::new(3, 4, 5));
+}
+
+#[test]
+fn construction_plane_reaches_into_geometry2d() {
+    // The bug (issue #349 follow-up): a rect node's Geometry2D output dropped
+    // its plane at the scene level, so "from displayed plane" failed on it even
+    // though extrude could read the same plane.
+    let result = NetworkResult::Geometry2D(GeometrySummary2D {
+        drawing_plane: plane_with_marker(),
+        frame_transform: Transform2D::new(DVec2::ZERO, 0.0),
+        geo_tree_root: GeoNode::circle(DVec2::ZERO, 1.0),
+    });
+    let plane = result
+        .construction_plane()
+        .expect("Geometry2D carries an embedded plane");
+    assert_eq!(plane.center, IVec3::new(3, 4, 5));
+}
+
+#[test]
+fn construction_plane_none_for_non_geometry() {
+    assert!(NetworkResult::Int(1).construction_plane().is_none());
+    assert!(make_crystal().construction_plane().is_none());
+    assert!(NetworkResult::None.construction_plane().is_none());
 }
 
 // --- to_display_string_capped --------------------------------------------

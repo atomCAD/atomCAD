@@ -516,9 +516,15 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final camera = getCamera();
     final cameraTransform = getCameraTransform(camera);
 
-    // Horizontal component - rotate around global up vector (Z-up)
+    // Turntable screen-vertical axis (issue #349). Defaults to world +Z, but
+    // the user can pick a different axis (e.g. a crystal plane normal) so tilted
+    // surfaces orbit level on screen. The camera's `nav_up` is the resolved
+    // world-space vector; the Rust setters re-align `up` to it at pick time, so
+    // by the time we orbit the pose is already roll-free w.r.t. this axis.
+    final vertAxis = apiVec3ToVector3(camera!.navUp).normalized();
+
+    // Horizontal component - rotate around the nav-up axis
     final horizAngle = relPointerPos.dx * _rotPerPixel;
-    final vertAxis = vector_math.Vector3(0.0, 0.0, 1.0);
     var newEye = rotatePointAroundAxis(
         cameraTransform!.pivotPoint, vertAxis, horizAngle, cameraTransform.eye);
 
@@ -534,8 +540,8 @@ abstract class CadViewportState<T extends CadViewport> extends State<T> {
     final newForward2 = rotatePointAroundAxis(
         vector_math.Vector3.zero(), newRight, vertAngle, newForward);
 
-    // Global up vector (Z-up)
-    final globalUp = vector_math.Vector3(0.0, 0.0, 1.0);
+    // No-roll up reference is the same nav-up axis
+    final globalUp = vertAxis;
 
     // Calculate right vector as cross product of forward and global up
     final newRight2 = newForward2.cross(globalUp).normalized();

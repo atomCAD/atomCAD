@@ -197,6 +197,11 @@ class StructureDesignerModel extends ChangeNotifier {
 
   APICameraCanonicalView cameraCanonicalView = APICameraCanonicalView.custom;
   bool isOrthographic = false;
+
+  /// Navigation-up-axis state (issue #349) for the camera-row indicator and the
+  /// view-up dialog. Mirrored from the kernel each refresh. Null before the
+  /// first refresh only.
+  APIViewUpInfo? viewUpInfo;
   StructureDesignerPreferences? preferences;
   bool isDirty = false;
   String? filePath;
@@ -308,6 +313,34 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setOrthographicMode(bool orthographic) {
     common_api.setOrthographicMode(orthographic: orthographic);
+    refreshFromKernel();
+  }
+
+  // View-up axis (issue #349). Camera is global to the active network, so these
+  // take no scope_path (like the other camera methods above). Each returns the
+  // kernel's error string (`null` on success) so the dialog can surface it
+  // inline; the refresh mirrors the new `viewUpInfo` and re-renders the
+  // viewport with the re-aligned turntable.
+  String? setViewUpFromMillerPlane(APIIVec3 hkl) {
+    final error = common_api.setViewUpFromMillerPlane(hkl: hkl);
+    refreshFromKernel();
+    return error;
+  }
+
+  String? setViewUpFromLatticeDirection(APIIVec3 uvw) {
+    final error = common_api.setViewUpFromLatticeDirection(uvw: uvw);
+    refreshFromKernel();
+    return error;
+  }
+
+  String? setViewUpFromActiveDrawingPlane() {
+    final error = common_api.setViewUpFromActiveDrawingPlane();
+    refreshFromKernel();
+    return error;
+  }
+
+  void resetViewUp() {
+    common_api.resetViewUp();
     refreshFromKernel();
   }
 
@@ -2746,6 +2779,7 @@ class StructureDesignerModel extends ChangeNotifier {
     activeAtomEditTool = atom_edit_api.getActiveAtomEditTool();
     cameraCanonicalView = common_api.getCameraCanonicalView();
     isOrthographic = common_api.isOrthographic();
+    viewUpInfo = common_api.getViewUp();
     preferences = structure_designer_api.getStructureDesignerPreferences();
     isDirty = structure_designer_api.isDesignDirty();
     filePath = structure_designer_api.getDesignFilePath();

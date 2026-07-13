@@ -84,6 +84,14 @@ pub struct NodeSceneData {
     /// Unit cell associated with this node's output (if applicable)
     pub unit_cell: Option<UnitCellStruct>,
 
+    /// Construction plane carried by this node's interactive-pin output, if any
+    /// (a `drawing_plane` output, or the plane embedded in a `Geometry2D`
+    /// output). Derived at scene-generation time so the view-up "from displayed
+    /// plane" action (issue #349) can find it — the display-level `NodeOutput`
+    /// is lossy (a `Geometry2D` becomes a `SurfacePointCloud2D`/`PolyMesh` and
+    /// drops the plane). `None` when the interactive output carries no plane.
+    pub construction_plane: Option<DrawingPlane>,
+
     /// Whether to render a unit cell wireframe for this node (motif_edit only)
     pub show_unit_cell_wireframe: bool,
 
@@ -102,6 +110,7 @@ impl NodeSceneData {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
             unit_cell: None,
+            construction_plane: None,
             show_unit_cell_wireframe: false,
             selected_node_eval_cache: None,
         }

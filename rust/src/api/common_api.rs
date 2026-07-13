@@ -24,7 +24,6 @@ use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::renderer::Renderer;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::structure_designer_scene::NodeOutput;
 use crate::util::transform::Transform;
 use dlopen::{
     Error as LibError,
@@ -659,9 +658,13 @@ pub fn set_view_up_from_active_drawing_plane() -> Option<String> {
                     Some(nd) => nd,
                     None => return Some("The active node has no displayed output".to_string()),
                 };
-                match node_data.interactive_output() {
-                    Some(NodeOutput::DrawingPlane(dp)) => dp.clone(),
-                    _ => {
+                // `construction_plane` is derived at scene-generation time and
+                // covers both a `DrawingPlane` output and the plane embedded in
+                // a `Geometry2D` output (rect/circle/extrude-source) — the
+                // display-level `NodeOutput` is lossy and can't be matched here.
+                match &node_data.construction_plane {
+                    Some(dp) => dp.clone(),
+                    None => {
                         return Some(
                             "The active node's interactive pin does not carry a drawing plane"
                                 .to_string(),

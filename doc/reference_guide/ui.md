@@ -39,7 +39,9 @@ You can navigate the viewport with the mouse or touchpad. Although it is possibl
 
 All three operations use a *pivot point*. The pivot is the point where you click when you start dragging: if you click an object, the pivot is the hit point on that object; otherwise the pivot is the point on the XY plane under the cursor. You can visualize the pivot as a small red cube in **Edit → Preferences** (`Display camera pivot point`). For example, orbiting rotates the camera around the pivot point, and zooming moves the camera toward (or away from) the pivot point.
 
-Orbiting is constrained so the camera never rolls (no tilt). This prevents users from getting disoriented. If you need complete freedom, a 6-degree-of-freedom (6DoF) camera mode will be developed soon. 
+Orbiting is constrained so the camera never rolls (no tilt). This prevents users from getting disoriented. If you need complete freedom, a 6-degree-of-freedom (6DoF) camera mode will be developed soon.
+
+By default the axis kept vertical on screen while orbiting is the world **Z** axis. When you work on a crystal surface that is not aligned with Z — a (111) or (110) surface, for example — that surface never levels out on screen and orbiting around it feels awkward. You can pick a different **navigation up-axis** (typically the surface's plane normal) so the surface stays level and orbits naturally. Use the **Up:** button in the [Camera Control Panel](#camera-control-panel). Changing the axis is a view-only convenience: it does not move or re-orient your model, and the background grid keeps showing the true world/lattice orientation.
 
 ## Node network composability and Node Networks list panel
 
@@ -254,6 +256,15 @@ Even when a non-Manual policy is active, you can still toggle a pin's visibility
 Contains common settings for the camera.
 
 ![](../atomCAD_images/camera_control_panel.png)
+
+- **View dropdown:** Snaps the camera to a canonical orientation — Top, Bottom, Front, Back, Left, or Right — or shows *Custom* when the current orientation is none of these. The canonical views follow the navigation up-axis: with a (111) up-axis, *Top* faces the (111) surface.
+- **Perspective / Orthographic buttons:** Switch between perspective and orthographic projection. The active mode is highlighted.
+- **Up: ⟨axis⟩ button:** Sets the navigation up-axis — the axis kept vertical on screen while orbiting (see [3D Viewport](#3d-viewport)). The label shows the current axis (`Z` by default); a non-default axis is highlighted so a tilted turntable is never a mystery. Clicking it opens the **Navigation Up Axis** dialog:
+  - Choose **Plane (hkl)** to use a crystal plane's normal, or **Direction [uvw]** to use a lattice direction. (These differ on non-cubic lattices — the plane normal is not the lattice direction of the same index.) Enter the index with the map or the numeric fields. The dialog shows which lattice the index is interpreted in (the active node's lattice, or a cubic-diamond fallback).
+  - **From displayed plane** is a one-click shortcut: if the active node produces or is drawn on a construction plane (a `drawing_plane`, or a 2D shape such as `rect`/`circle`), it takes that plane's normal directly.
+  - **Apply** sets the axis, **Reset (Z)** returns to the world-Z default, and **Close** dismisses the dialog. When you apply a new axis the image rolls until the new axis reads as vertical — that is the expected confirmation, not a glitch.
+
+  The chosen axis is stored per node network (like the rest of the camera settings) and saved in the `.cnnd` file. A freshly created network starts from the default Z axis.
 
 ## Menu Bar
 
