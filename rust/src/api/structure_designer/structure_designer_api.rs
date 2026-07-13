@@ -3374,6 +3374,7 @@ pub fn get_cuboid_data(scope_path: Vec<u64>, node_id: u64) -> Option<APICuboidDa
                 Some(APICuboidData {
                     min_corner: to_api_ivec3(&cuboid_data.min_corner),
                     extent: to_api_ivec3(&cuboid_data.extent),
+                    subdivision: cuboid_data.subdivision,
                 })
             },
             None,
@@ -5327,6 +5328,7 @@ pub fn set_cuboid_data(scope_path: Vec<u64>, node_id: u64, data: APICuboidData) 
             let cuboid_data = Box::new(CuboidData {
                 min_corner: from_api_ivec3(&data.min_corner),
                 extent: from_api_ivec3(&data.extent),
+                subdivision: data.subdivision,
             });
             cad_instance
                 .structure_designer

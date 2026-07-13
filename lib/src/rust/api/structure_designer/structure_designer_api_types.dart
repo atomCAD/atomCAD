@@ -700,14 +700,17 @@ class APICompatibilityReport {
 class APICuboidData {
   final APIIVec3 minCorner;
   final APIIVec3 extent;
+  final int subdivision;
 
   const APICuboidData({
     required this.minCorner,
     required this.extent,
+    required this.subdivision,
   });
 
   @override
-  int get hashCode => minCorner.hashCode ^ extent.hashCode;
+  int get hashCode =>
+      minCorner.hashCode ^ extent.hashCode ^ subdivision.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -715,7 +718,8 @@ class APICuboidData {
       other is APICuboidData &&
           runtimeType == other.runtimeType &&
           minCorner == other.minCorner &&
-          extent == other.extent;
+          extent == other.extent &&
+          subdivision == other.subdivision;
 }
 
 class APIDataType {

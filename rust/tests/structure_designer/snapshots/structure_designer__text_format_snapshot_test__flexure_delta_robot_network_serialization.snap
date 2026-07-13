@@ -39,7 +39,7 @@ BOND INTERIOR4 ++.CORNER
 BOND INTERIOR4 ...FACE_Z
 BOND INTERIOR4 .+.FACE_Y
 BOND INTERIOR4 +..FACE_X""", visible: true }
-cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1) }
+cuboid1 = cuboid { min_corner: (0, 0, 0), extent: (1, 1, 1), subdivision: 1 }
 get_structure1 = get_structure { input: cuboid1 }
 structure1 = structure { structure: get_structure1, motif: motif1 }
 with_structure1 = with_structure { shape: cuboid1, structure: structure1 }

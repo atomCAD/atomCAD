@@ -14232,11 +14232,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APICuboidData dco_decode_api_cuboid_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return APICuboidData(
       minCorner: dco_decode_apii_vec_3(arr[0]),
       extent: dco_decode_apii_vec_3(arr[1]),
+      subdivision: dco_decode_i_32(arr[2]),
     );
   }
 
@@ -18170,7 +18171,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_minCorner = sse_decode_apii_vec_3(deserializer);
     var var_extent = sse_decode_apii_vec_3(deserializer);
-    return APICuboidData(minCorner: var_minCorner, extent: var_extent);
+    var var_subdivision = sse_decode_i_32(deserializer);
+    return APICuboidData(
+        minCorner: var_minCorner,
+        extent: var_extent,
+        subdivision: var_subdivision);
   }
 
   @protected
@@ -22732,6 +22737,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.minCorner, serializer);
     sse_encode_apii_vec_3(self.extent, serializer);
+    sse_encode_i_32(self.subdivision, serializer);
   }
 
   @protected

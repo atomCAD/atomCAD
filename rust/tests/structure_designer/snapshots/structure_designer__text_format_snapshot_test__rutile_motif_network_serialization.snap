@@ -6,7 +6,7 @@ expression: text
 
 unit_cell_rutile1 = unit_cell_rutile
 structure1 = structure { lattice_vecs: unit_cell_rutile1 }
-cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (1, 1, 1), visible: true }
+cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (1, 1, 1), subdivision: 1, visible: true }
 get_structure1 = get_structure { input: cuboid1 }
 motif1 = motif { definition: """#_cell_length_a   4.65327200
 #_cell_length_b   4.65327200

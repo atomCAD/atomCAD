@@ -7,7 +7,7 @@ expression: text
 unit_cell_MOF51 = unit_cell_MOF5
 motif_MOF51 = motif_MOF5
 structure2 = structure { lattice_vecs: unit_cell_MOF51 }
-cuboid1 = cuboid { structure: structure2, min_corner: (-1, -1, -1), extent: (2, 2, 2) }
+cuboid1 = cuboid { structure: structure2, min_corner: (-1, -1, -1), extent: (2, 2, 2), subdivision: 1 }
 get_structure1 = get_structure { input: cuboid1 }
 structure3 = structure { structure: get_structure1, motif: motif_MOF51 }
 with_structure1 = with_structure { shape: cuboid1, structure: structure3 }

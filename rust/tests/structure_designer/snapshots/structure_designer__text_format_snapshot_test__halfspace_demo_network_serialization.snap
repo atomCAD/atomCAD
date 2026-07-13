@@ -27,7 +27,7 @@ BOND Po8 ...Po7
 """, name: "α_polonium" }
 α_polonium_unit_cell1 = α_polonium_unit_cell
 structure1 = structure { lattice_vecs: α_polonium_unit_cell1 }
-cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (4, 4, 3), visible: true }
+cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (4, 4, 3), subdivision: 1, visible: true }
 get_structure1 = get_structure { input: cuboid1 }
 structure2 = structure { structure: get_structure1, motif: motif1 }
 with_structure1 = with_structure { shape: cuboid1, structure: structure2 }

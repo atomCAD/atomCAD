@@ -492,6 +492,7 @@ pub struct APIExtrudeData {
 pub struct APICuboidData {
     pub min_corner: APIIVec3,
     pub extent: APIIVec3,
+    pub subdivision: i32,
 }
 
 pub struct APISphereData {

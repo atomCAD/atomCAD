@@ -4,8 +4,8 @@ expression: text
 ---
 # Network: sample
 
-cuboid1 = cuboid { min_corner: (16, -2, -2), extent: (4, 10, 4) }
-cuboid2 = cuboid { min_corner: (13, 4, -2), extent: (10, 4, 4) }
+cuboid1 = cuboid { min_corner: (16, -2, -2), extent: (4, 10, 4), subdivision: 1 }
+cuboid2 = cuboid { min_corner: (13, 4, -2), extent: (10, 4, 4), subdivision: 1 }
 union1 = union { shapes: [cuboid1, cuboid2] }
 structure_move1 = structure_move { input: union1, translation: (5, 5, 0), subdivision: 1 }
 int2 = int { value: 0 }

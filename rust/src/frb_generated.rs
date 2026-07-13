@@ -12105,9 +12105,11 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_minCorner = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
         let mut var_extent = <crate::api::common_api_types::APIIVec3>::sse_decode(deserializer);
+        let mut var_subdivision = <i32>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APICuboidData {
             min_corner: var_minCorner,
             extent: var_extent,
+            subdivision: var_subdivision,
         };
     }
 }
@@ -17508,6 +17510,7 @@ impl flutter_rust_bridge::IntoDart
         [
             self.min_corner.into_into_dart().into_dart(),
             self.extent.into_into_dart().into_dart(),
+            self.subdivision.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -21755,6 +21758,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.min_corner, serializer);
         <crate::api::common_api_types::APIIVec3>::sse_encode(self.extent, serializer);
+        <i32>::sse_encode(self.subdivision, serializer);
     }
 }
 

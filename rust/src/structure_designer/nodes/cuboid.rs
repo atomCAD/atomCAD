@@ -29,6 +29,12 @@ pub struct CuboidData {
     pub min_corner: IVec3,
     #[serde(with = "ivec3_serializer")]
     pub extent: IVec3,
+    #[serde(default = "default_subdivision")]
+    pub subdivision: i32,
+}
+
+fn default_subdivision() -> i32 {
+    1
 }
 
 impl NodeData for CuboidData {
@@ -91,10 +97,26 @@ impl NodeData for CuboidData {
             Err(error) => return EvalOutput::single(error),
         };
 
+        let subdivision = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            3,
+            self.subdivision,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value.max(1), // Ensure minimum value of 1
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        // Both the corner and the extent are expressed in units of 1/subdivision of a
+        // unit cell, so a fractional cuboid can be authored while the pins stay integer.
+        let inv_subdivision = 1.0 / subdivision as f64;
         let geo_tree_root = create_parallelepiped_from_lattice(
             &structure.lattice_vecs,
-            min_corner.as_dvec3(),
-            extent.as_dvec3(),
+            min_corner.as_dvec3() * inv_subdivision,
+            extent.as_dvec3() * inv_subdivision,
         );
 
         EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
@@ -115,26 +137,30 @@ impl NodeData for CuboidData {
     ) -> Option<String> {
         let show_min_corner = !connected_input_pins.contains("min_corner");
         let show_extent = !connected_input_pins.contains("extent");
+        let show_subdivision =
+            !connected_input_pins.contains("subdivision") && self.subdivision != 1;
 
-        match (show_min_corner, show_extent) {
-            (true, true) => Some(format!(
-                "mc: ({},{},{}) e: ({},{},{})",
-                self.min_corner.x,
-                self.min_corner.y,
-                self.min_corner.z,
-                self.extent.x,
-                self.extent.y,
-                self.extent.z
-            )),
-            (true, false) => Some(format!(
+        let mut parts = Vec::new();
+        if show_min_corner {
+            parts.push(format!(
                 "mc: ({},{},{})",
                 self.min_corner.x, self.min_corner.y, self.min_corner.z
-            )),
-            (false, true) => Some(format!(
+            ));
+        }
+        if show_extent {
+            parts.push(format!(
                 "e: ({},{},{})",
                 self.extent.x, self.extent.y, self.extent.z
-            )),
-            (false, false) => None,
+            ));
+        }
+        if show_subdivision {
+            parts.push(format!("sub: {}", self.subdivision));
+        }
+
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join(" "))
         }
     }
 
@@ -142,6 +168,7 @@ impl NodeData for CuboidData {
         vec![
             ("min_corner".to_string(), TextValue::IVec3(self.min_corner)),
             ("extent".to_string(), TextValue::IVec3(self.extent)),
+            ("subdivision".to_string(), TextValue::Int(self.subdivision)),
         ]
     }
 
@@ -155,6 +182,11 @@ impl NodeData for CuboidData {
             self.extent = v
                 .as_ivec3()
                 .ok_or_else(|| "extent must be an IVec3".to_string())?;
+        }
+        if let Some(v) = props.get("subdivision") {
+            self.subdivision = v
+                .as_int()
+                .ok_or_else(|| "subdivision must be an integer".to_string())?;
         }
         Ok(())
     }
@@ -244,7 +276,7 @@ fn create_parallelepiped_from_lattice(
 pub fn get_node_type() -> NodeType {
     NodeType {
       name: "cuboid".to_string(),
-      description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped.".to_string(),
+      description: "Outputs a cuboid with integer minimum corner coordinates and integer extent coordinates. If the unit cell is not cubic, the shape will not necessarily be a cuboid: in the most general case it will be a parallelepiped. The subdivision parameter (default 1) refines the lattice grid: both the minimum corner and the extent are measured in units of 1/subdivision of a unit cell, allowing sub-cell resolution while keeping the pins integer-typed.".to_string(),
       summary: None,
       category: NodeTypeCategory::Geometry3D,
       parameters: vec![
@@ -263,6 +295,11 @@ pub fn get_node_type() -> NodeType {
           name: "structure".to_string(),
           data_type: DataType::Structure,
         },
+        Parameter {
+          id: None,
+          name: "subdivision".to_string(),
+          data_type: DataType::Int,
+        },
       ],
       output_pins: OutputPinDefinition::single(DataType::Blueprint),
       zone_input_pins: vec![],
@@ -271,6 +308,7 @@ pub fn get_node_type() -> NodeType {
       node_data_creator: || Box::new(CuboidData {
         min_corner: IVec3::new(0, 0, 0),
         extent: IVec3::new(1, 1, 1),
+        subdivision: 1,
       }),
       node_data_saver: generic_node_data_saver::<CuboidData>,
       node_data_loader: generic_node_data_loader::<CuboidData>,

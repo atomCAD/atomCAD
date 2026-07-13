@@ -322,6 +322,7 @@ fn test_kernel_complex_csg_network() {
     k.set_node_network_data("test_network", cuboid_node, Box::new(CuboidData {
         min_corner: IVec3::new(-1, -1, -1),
         extent: IVec3::new(4, 2, 2),  // extends from -1 to 3 in x
+        subdivision: 1,
     }));
 
     // Connect nodes: (sphere1 ∪ sphere2) ∩ cuboid

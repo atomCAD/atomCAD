@@ -254,10 +254,11 @@ fn test_cuboid_data_text_properties() {
     let data = CuboidData {
         min_corner: IVec3::new(0, 0, 0),
         extent: IVec3::new(10, 20, 30),
+        subdivision: 3,
     };
     let props = data.get_text_properties();
 
-    assert_eq!(props.len(), 2);
+    assert_eq!(props.len(), 3);
     assert_eq!(
         props[0],
         (
@@ -272,6 +273,7 @@ fn test_cuboid_data_text_properties() {
             TextValue::IVec3(IVec3::new(10, 20, 30))
         )
     );
+    assert_eq!(props[2], ("subdivision".to_string(), TextValue::Int(3)));
 }
 
 // ============================================================================
@@ -826,6 +828,7 @@ fn test_cuboid_roundtrip() {
     test_roundtrip(&CuboidData {
         min_corner: IVec3::new(-1, -2, -3),
         extent: IVec3::new(2, 4, 6),
+        subdivision: 2,
     });
 }
 
