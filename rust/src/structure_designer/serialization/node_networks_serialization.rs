@@ -42,6 +42,25 @@ pub struct SerializableCameraSettings {
     pub ortho_half_height: f64,
     #[serde(with = "dvec3_serializer")]
     pub pivot_point: DVec3,
+    // Navigation up-axis (issue #349). New fields on old files default to +Z /
+    // "Z" — semantically correct since old files were authored under a Z
+    // turntable, so no version bump / migration (D6). NOTE: a plain
+    // `#[serde(default)]` on a DVec3 yields (0,0,0), which NaN-poisons the
+    // nav-frame math for every old file — the custom default fn is required.
+    #[serde(with = "dvec3_serializer", default = "default_nav_up")]
+    pub nav_up: DVec3,
+    #[serde(default = "default_nav_up_label")]
+    pub nav_up_label: String,
+}
+
+/// serde default for `nav_up` — must be `+Z`, never the `(0,0,0)` a plain
+/// `#[serde(default)]` would produce (see D6 in `doc/design_view_up_axis.md`).
+fn default_nav_up() -> DVec3 {
+    DVec3::Z
+}
+
+fn default_nav_up_label() -> String {
+    "Z".to_string()
 }
 
 impl Default for SerializableCameraSettings {
@@ -53,6 +72,8 @@ impl Default for SerializableCameraSettings {
             orthographic: false,
             ortho_half_height: 10.0,
             pivot_point: DVec3::new(0.0, 0.0, 0.0),
+            nav_up: default_nav_up(),
+            nav_up_label: default_nav_up_label(),
         }
     }
 }
@@ -596,6 +617,8 @@ pub fn node_network_to_serializable(
             orthographic: cs.orthographic,
             ortho_half_height: cs.ortho_half_height,
             pivot_point: cs.pivot_point,
+            nav_up: cs.nav_up,
+            nav_up_label: cs.nav_up_label.clone(),
         });
 
     // Create the serializable network
@@ -734,13 +757,26 @@ pub fn serializable_to_node_network(
     network.camera_settings = serializable
         .camera_settings
         .as_ref()
-        .map(|scs| CameraSettings {
-            eye: scs.eye,
-            target: scs.target,
-            up: scs.up,
-            orthographic: scs.orthographic,
-            ortho_half_height: scs.ortho_half_height,
-            pivot_point: scs.pivot_point,
+        .map(|scs| {
+            // Sanitize nav_up (D6): a non-finite or near-zero vector falls back
+            // to +Z / "Z"; anything else is re-normalized. This guards the
+            // deserialization path (old files, hand-edits); the setters' own
+            // zero-vector check (Phase 2) guards user input.
+            let (nav_up, nav_up_label) = if scs.nav_up.is_finite() && scs.nav_up.length() >= 1e-6 {
+                (scs.nav_up.normalize(), scs.nav_up_label.clone())
+            } else {
+                (DVec3::Z, "Z".to_string())
+            };
+            CameraSettings {
+                eye: scs.eye,
+                target: scs.target,
+                up: scs.up,
+                orthographic: scs.orthographic,
+                ortho_half_height: scs.ortho_half_height,
+                pivot_point: scs.pivot_point,
+                nav_up,
+                nav_up_label,
+            }
         });
 
     Ok(network)

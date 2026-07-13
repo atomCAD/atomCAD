@@ -123,6 +123,8 @@ impl Renderer {
             orthographic: false,     // Default to perspective mode
             ortho_half_height: 10.0, // Default orthographic half height
             pivot_point: DVec3::new(0.0, 0.0, 0.0),
+            nav_up: DVec3::Z,
+            nav_up_label: "Z".to_string(),
         };
 
         // Initialize GPU

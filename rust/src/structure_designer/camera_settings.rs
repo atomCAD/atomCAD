@@ -9,6 +9,11 @@ pub struct CameraSettings {
     pub orthographic: bool,
     pub ortho_half_height: f64,
     pub pivot_point: DVec3,
+    /// Navigation up-axis (turntable screen-vertical). Default `+Z`. See
+    /// issue #349 / `doc/design_view_up_axis.md`.
+    pub nav_up: DVec3,
+    /// Cosmetic provenance label for `nav_up` (e.g. `"Z"`, `"(1 1 1)"`).
+    pub nav_up_label: String,
 }
 
 impl Default for CameraSettings {
@@ -20,6 +25,8 @@ impl Default for CameraSettings {
             orthographic: false,
             ortho_half_height: 10.0,
             pivot_point: DVec3::new(0.0, 0.0, 0.0),
+            nav_up: DVec3::Z,
+            nav_up_label: "Z".to_string(),
         }
     }
 }

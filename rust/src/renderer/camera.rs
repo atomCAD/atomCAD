@@ -1,3 +1,4 @@
+use glam::f64::DMat3;
 use glam::f64::DMat4;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
@@ -24,6 +25,15 @@ pub struct Camera {
     pub orthographic: bool,
     pub ortho_half_height: f64,
     pub pivot_point: DVec3,
+    /// Resolved world-space unit vector that acts as the turntable's
+    /// screen-vertical ("navigation up"). Default `+Z`. See issue #349 /
+    /// `doc/design_view_up_axis.md` (D1).
+    pub nav_up: DVec3,
+    /// Cosmetic provenance label for `nav_up` (e.g. `"Z"`, `"(1 1 1)"`,
+    /// `"[1 1 0]"`). Lives on `Camera` because `sync_camera_to_active_network`
+    /// rebuilds `CameraSettings` from `Camera` on every camera move — a label
+    /// stored only on `CameraSettings` would be wiped by the first drag.
+    pub nav_up_label: String,
 }
 
 impl Camera {
@@ -66,6 +76,56 @@ impl Camera {
         rotation * forward
     }
 
+    /// Builds the rotated navigation basis (D4): the rotation taking the world
+    /// basis to the frame whose `Z'` is `nav_up` and whose side axes stay as
+    /// world-aligned as possible.
+    ///
+    /// ```text
+    /// Z' = nav_up
+    /// Y' = normalize(Y − Z'·(Y·Z'))    // world +Y projected ⊥ nav_up
+    ///      (fallback when nav_up ∥ ±Y: Y' = normalize(Z − Z'·(Z·Z')))
+    /// X' = Y' × Z'
+    /// ```
+    ///
+    /// Reduces to the identity for `nav_up = +Z`, so canonical views under the
+    /// default axis are byte-identical to the pre-feature behavior.
+    pub fn nav_frame(&self) -> DQuat {
+        let z_axis = self.nav_up.normalize();
+        // World +Y projected onto the plane perpendicular to nav_up.
+        let y_proj = DVec3::Y - z_axis * DVec3::Y.dot(z_axis);
+        let y_axis = if y_proj.length() < 1e-6 {
+            // nav_up ∥ ±Y — fall back to projecting world +Z instead.
+            (DVec3::Z - z_axis * DVec3::Z.dot(z_axis)).normalize()
+        } else {
+            y_proj.normalize()
+        };
+        let x_axis = y_axis.cross(z_axis);
+        DQuat::from_mat3(&DMat3::from_cols(x_axis, y_axis, z_axis))
+    }
+
+    /// Re-aligns `up` so `nav_up` reads as screen-vertical, by a pure roll about
+    /// the current forward vector (D3). Eye, target, and forward are unchanged.
+    /// No-op in the degenerate case where forward ∥ ±nav_up (any roll is equally
+    /// valid), mirroring the existing pole guard in the Flutter turntable.
+    pub fn realign_up_to_nav_axis(&mut self) {
+        let forward = (self.target - self.eye).normalize();
+        // nav_up projected onto the plane perpendicular to forward.
+        let up_proj = self.nav_up - forward * self.nav_up.dot(forward);
+        if up_proj.length() < 1e-6 {
+            // forward ∥ ±nav_up: keep the current up unchanged.
+            return;
+        }
+        self.up = up_proj.normalize();
+    }
+
+    /// Restores the default navigation axis (`+Z` / `"Z"`) and re-aligns `up`
+    /// per D3. Used by the D8 `None`-restore rule and the `reset_view_up` API.
+    pub fn reset_nav_up(&mut self) {
+        self.nav_up = DVec3::Z;
+        self.nav_up_label = "Z".to_string();
+        self.realign_up_to_nav_axis();
+    }
+
     pub fn get_canonical_view(&self) -> CameraCanonicalView {
         // Calculate view direction (from eye to target)
         let view_dir = (self.target - self.eye).normalize();
@@ -74,20 +134,25 @@ impl Camera {
         // We use a small epsilon for floating point comparison
         const EPSILON: f64 = 0.001;
 
-        // Check if the view direction is aligned with positive or negative X, Y, or Z axis
+        // Canonical views follow the navigation frame (D4): compare the view
+        // direction against the cardinal directions rotated into that frame, so
+        // the dropdown indicator stays consistent under a tilted nav_up.
+        let frame = self.nav_frame();
+        let rotated = |v: DVec3| frame * v;
+
         // These direction checks must match the directions set in set_canonical_view
         // Z-up coordinate system: X=right, Y=forward, Z=up
-        if (view_dir - DVec3::new(-1.0, 0.0, 0.0)).length_squared() < EPSILON {
+        if (view_dir - rotated(DVec3::new(-1.0, 0.0, 0.0))).length_squared() < EPSILON {
             return CameraCanonicalView::Right;
-        } else if (view_dir - DVec3::new(1.0, 0.0, 0.0)).length_squared() < EPSILON {
+        } else if (view_dir - rotated(DVec3::new(1.0, 0.0, 0.0))).length_squared() < EPSILON {
             return CameraCanonicalView::Left;
-        } else if (view_dir - DVec3::new(0.0, 0.0, -1.0)).length_squared() < EPSILON {
+        } else if (view_dir - rotated(DVec3::new(0.0, 0.0, -1.0))).length_squared() < EPSILON {
             return CameraCanonicalView::Top;
-        } else if (view_dir - DVec3::new(0.0, 0.0, 1.0)).length_squared() < EPSILON {
+        } else if (view_dir - rotated(DVec3::new(0.0, 0.0, 1.0))).length_squared() < EPSILON {
             return CameraCanonicalView::Bottom;
-        } else if (view_dir - DVec3::new(0.0, -1.0, 0.0)).length_squared() < EPSILON {
+        } else if (view_dir - rotated(DVec3::new(0.0, -1.0, 0.0))).length_squared() < EPSILON {
             return CameraCanonicalView::Back;
-        } else if (view_dir - DVec3::new(0.0, 1.0, 0.0)).length_squared() < EPSILON {
+        } else if (view_dir - rotated(DVec3::new(0.0, 1.0, 0.0))).length_squared() < EPSILON {
             return CameraCanonicalView::Front;
         }
 
@@ -140,6 +205,13 @@ impl Camera {
                 (DVec3::new(0.0, 1.0, 0.0), DVec3::new(0.0, 0.0, 1.0))
             }
         };
+
+        // Canonical views follow the navigation frame (D4): rotate both the
+        // table's view direction and up vector into the nav frame before use.
+        // For nav_up = +Z this is the identity, so behavior is unchanged.
+        let frame = self.nav_frame();
+        let view_dir = frame * view_dir;
+        let up = frame * up;
 
         // Set eye position at CANONICAL_DISTANCE away from the origin in the view direction
         // We subtract the view_dir because we want to look toward the target from that direction

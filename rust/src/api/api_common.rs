@@ -502,6 +502,8 @@ pub fn sync_camera_to_active_network(cad_instance: &mut CADInstance) {
             orthographic: camera.orthographic,
             ortho_half_height: camera.ortho_half_height,
             pivot_point: camera.pivot_point,
+            nav_up: camera.nav_up,
+            nav_up_label: camera.nav_up_label.clone(),
         });
     }
     // Camera settings are saved per network, so mark design as dirty
@@ -518,6 +520,16 @@ pub fn apply_camera_settings(renderer: &mut Renderer, settings: Option<&CameraSe
         renderer.camera.orthographic = s.orthographic;
         renderer.camera.ortho_half_height = s.ortho_half_height;
         renderer.camera.pivot_point = s.pivot_point;
+        renderer.camera.nav_up = s.nav_up;
+        renderer.camera.nav_up_label = s.nav_up_label.clone();
+        renderer.update_camera_buffer();
+    } else {
+        // D8: a network with no saved camera_settings counts as "saved value =
+        // default". Reset the nav axis (and roll-realign `up`) so a tilted axis
+        // never leaks into a fresh network — eye/target stay untouched as
+        // before. The subsequent camera drag would otherwise persist the leaked
+        // axis via sync_camera_to_active_network.
+        renderer.camera.reset_nav_up();
         renderer.update_camera_buffer();
     }
 }

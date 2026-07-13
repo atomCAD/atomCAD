@@ -449,3 +449,6 @@ mod lattice_covariant_primitives_test;
 
 #[path = "structure_designer/free_rot_test.rs"]
 mod free_rot_test;
+
+#[path = "structure_designer/camera_settings_serialization_test.rs"]
+mod camera_settings_serialization_test;
