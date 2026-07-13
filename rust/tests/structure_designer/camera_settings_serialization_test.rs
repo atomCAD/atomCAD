@@ -44,8 +44,11 @@ fn convert_with_camera(
         camera_settings: Some(camera),
     };
 
-    let network = serializable_to_node_network(&serializable, &built_in_node_types(), None).unwrap();
-    network.camera_settings.expect("camera_settings should be present")
+    let network =
+        serializable_to_node_network(&serializable, &built_in_node_types(), None).unwrap();
+    network
+        .camera_settings
+        .expect("camera_settings should be present")
 }
 
 fn base_camera(nav_up: DVec3, nav_up_label: &str) -> SerializableCameraSettings {

@@ -52,6 +52,25 @@ pub struct APICamera {
     pub orthographic: bool,     // Whether to use orthographic projection
     pub ortho_half_height: f64, // Half height for orthographic projection (controls zoom level)
     pub pivot_point: APIVec3,
+    /// Resolved world-space navigation-up axis (turntable screen-vertical).
+    /// Consumed by the Flutter turntable math. See issue #349 / Phase 2.
+    pub nav_up: APIVec3,
+}
+
+/// Navigation-up-axis state for the view-up dialog and camera-row indicator
+/// (issue #349, Phase 2). See `doc/design_view_up_axis.md` (D7 / `get_view_up`).
+pub struct APIViewUpInfo {
+    /// The resolved world-space nav-up unit vector.
+    pub axis: APIVec3,
+    /// Cosmetic provenance label (e.g. `"Z"`, `"(1 1 1)"`, `"[1 1 0]"`).
+    pub label: String,
+    /// True when `axis` is (within epsilon) the default `+Z` — drives the
+    /// highlight on the camera-row control.
+    pub is_default: bool,
+    /// What lattice Miller/direction indices currently resolve against (the
+    /// active node's name, or the cubic-diamond fallback). Surfaced in the
+    /// dialog so the fallback is never silent (D5).
+    pub lattice_source_label: String,
 }
 
 pub struct APITransform {

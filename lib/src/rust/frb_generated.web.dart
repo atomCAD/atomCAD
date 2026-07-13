@@ -395,6 +395,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3Data dco_decode_api_vec_3_data(dynamic raw);
 
   @protected
+  APIViewUpInfo dco_decode_api_view_up_info(dynamic raw);
+
+  @protected
   APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw);
 
   @protected
@@ -1770,6 +1773,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data sse_decode_api_vec_3_data(SseDeserializer deserializer);
+
+  @protected
+  APIViewUpInfo sse_decode_api_view_up_info(SseDeserializer deserializer);
 
   @protected
   APIViewportPickResult sse_decode_api_viewport_pick_result(
@@ -3378,6 +3384,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_vec_3_data(APIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_view_up_info(
+      APIViewUpInfo self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_viewport_pick_result(

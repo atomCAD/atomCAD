@@ -7,9 +7,10 @@ import '../frb_generated.dart';
 import 'common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_camera_canonical_view`, `to_renderer_camera_canonical_view`
+// These functions are ignored because they are not marked as `pub`: `active_scene_lattice_source_label`, `active_scene_unit_cell`, `apply_view_up`, `generate_mock_image`, `initialize_cad_instance_async`, `send_texture`, `to_api_camera_canonical_view`, `to_renderer_camera_canonical_view`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `RGBA_FUNCTION`, `TEXTURE_RGBA_RENDERER_PLUGIN`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `deref`, `deref`, `initialize`, `initialize`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `drawing_plane_up`, `resolve_lattice_direction_up`, `resolve_miller_plane_up`
 
 /// Set the viewport size for rendering
 void setViewportSize({required int width, required int height}) =>
@@ -100,6 +101,40 @@ APICameraCanonicalView getCameraCanonicalView() =>
 /// If Custom is provided, no changes will be made to the camera orientation
 void setCameraCanonicalView({required APICameraCanonicalView view}) =>
     RustLib.instance.api.crateApiCommonApiSetCameraCanonicalView(view: view);
+
+/// Sets the navigation-up axis from a raw world-space vector (the escape hatch
+/// every other entry point ultimately funnels through). `label` is the caller's
+/// cosmetic provenance string. Returns an error string for a (near-)zero or
+/// non-finite vector, else `None`.
+String? setViewUpAxis({required APIVec3 axis, required String label}) =>
+    RustLib.instance.api
+        .crateApiCommonApiSetViewUpAxis(axis: axis, label: label);
+
+/// Sets the navigation-up axis from a Miller *plane* `(h k l)`, resolved against
+/// the active node's lattice (D2/D5). Returns an error string on failure.
+String? setViewUpFromMillerPlane({required APIIVec3 hkl}) =>
+    RustLib.instance.api.crateApiCommonApiSetViewUpFromMillerPlane(hkl: hkl);
+
+/// Sets the navigation-up axis from a *lattice direction* `[u v w]`, resolved
+/// against the active node's lattice (D2/D5). Returns an error string on failure.
+String? setViewUpFromLatticeDirection({required APIIVec3 uvw}) =>
+    RustLib.instance.api
+        .crateApiCommonApiSetViewUpFromLatticeDirection(uvw: uvw);
+
+/// One-click path for the motivating workflow: if the active node's interactive
+/// pin (lowest-indexed displayed output pin) carries a `DrawingPlane`, use its
+/// plane normal as the nav-up axis. Returns an error string if that pin does not
+/// carry a drawing plane.
+String? setViewUpFromActiveDrawingPlane() =>
+    RustLib.instance.api.crateApiCommonApiSetViewUpFromActiveDrawingPlane();
+
+/// Resets the navigation-up axis to the default `+Z` / `"Z"` (re-aligned per D3).
+void resetViewUp() => RustLib.instance.api.crateApiCommonApiResetViewUp();
+
+/// Returns the current navigation-up state for the dialog and the camera-row
+/// indicator. `is_default` drives the highlight; `lattice_source_label` reports
+/// what indices resolve against (D5).
+APIViewUpInfo getViewUp() => RustLib.instance.api.crateApiCommonApiGetViewUp();
 
 String greet({required String name}) =>
     RustLib.instance.api.crateApiCommonApiGreet(name: name);

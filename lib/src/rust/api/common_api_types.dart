@@ -21,6 +21,10 @@ class APICamera {
   final double orthoHalfHeight;
   final APIVec3 pivotPoint;
 
+  /// Resolved world-space navigation-up axis (turntable screen-vertical).
+  /// Consumed by the Flutter turntable math. See issue #349 / Phase 2.
+  final APIVec3 navUp;
+
   const APICamera({
     required this.eye,
     required this.target,
@@ -32,6 +36,7 @@ class APICamera {
     required this.orthographic,
     required this.orthoHalfHeight,
     required this.pivotPoint,
+    required this.navUp,
   });
 
   @override
@@ -45,7 +50,8 @@ class APICamera {
       zfar.hashCode ^
       orthographic.hashCode ^
       orthoHalfHeight.hashCode ^
-      pivotPoint.hashCode;
+      pivotPoint.hashCode ^
+      navUp.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -61,7 +67,8 @@ class APICamera {
           zfar == other.zfar &&
           orthographic == other.orthographic &&
           orthoHalfHeight == other.orthoHalfHeight &&
-          pivotPoint == other.pivotPoint;
+          pivotPoint == other.pivotPoint &&
+          navUp == other.navUp;
 }
 
 enum APICameraCanonicalView {
@@ -160,6 +167,49 @@ class APIVec3 {
           x == other.x &&
           y == other.y &&
           z == other.z;
+}
+
+/// Navigation-up-axis state for the view-up dialog and camera-row indicator
+/// (issue #349, Phase 2). See `doc/design_view_up_axis.md` (D7 / `get_view_up`).
+class APIViewUpInfo {
+  /// The resolved world-space nav-up unit vector.
+  final APIVec3 axis;
+
+  /// Cosmetic provenance label (e.g. `"Z"`, `"(1 1 1)"`, `"[1 1 0]"`).
+  final String label;
+
+  /// True when `axis` is (within epsilon) the default `+Z` — drives the
+  /// highlight on the camera-row control.
+  final bool isDefault;
+
+  /// What lattice Miller/direction indices currently resolve against (the
+  /// active node's name, or the cubic-diamond fallback). Surfaced in the
+  /// dialog so the fallback is never silent (D5).
+  final String latticeSourceLabel;
+
+  const APIViewUpInfo({
+    required this.axis,
+    required this.label,
+    required this.isDefault,
+    required this.latticeSourceLabel,
+  });
+
+  @override
+  int get hashCode =>
+      axis.hashCode ^
+      label.hashCode ^
+      isDefault.hashCode ^
+      latticeSourceLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIViewUpInfo &&
+          runtimeType == other.runtimeType &&
+          axis == other.axis &&
+          label == other.label &&
+          isDefault == other.isDefault &&
+          latticeSourceLabel == other.latticeSourceLabel;
 }
 
 class APIIVec2 {

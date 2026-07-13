@@ -754,30 +754,27 @@ pub fn serializable_to_node_network(
     }
 
     // Convert camera settings if present
-    network.camera_settings = serializable
-        .camera_settings
-        .as_ref()
-        .map(|scs| {
-            // Sanitize nav_up (D6): a non-finite or near-zero vector falls back
-            // to +Z / "Z"; anything else is re-normalized. This guards the
-            // deserialization path (old files, hand-edits); the setters' own
-            // zero-vector check (Phase 2) guards user input.
-            let (nav_up, nav_up_label) = if scs.nav_up.is_finite() && scs.nav_up.length() >= 1e-6 {
-                (scs.nav_up.normalize(), scs.nav_up_label.clone())
-            } else {
-                (DVec3::Z, "Z".to_string())
-            };
-            CameraSettings {
-                eye: scs.eye,
-                target: scs.target,
-                up: scs.up,
-                orthographic: scs.orthographic,
-                ortho_half_height: scs.ortho_half_height,
-                pivot_point: scs.pivot_point,
-                nav_up,
-                nav_up_label,
-            }
-        });
+    network.camera_settings = serializable.camera_settings.as_ref().map(|scs| {
+        // Sanitize nav_up (D6): a non-finite or near-zero vector falls back
+        // to +Z / "Z"; anything else is re-normalized. This guards the
+        // deserialization path (old files, hand-edits); the setters' own
+        // zero-vector check (Phase 2) guards user input.
+        let (nav_up, nav_up_label) = if scs.nav_up.is_finite() && scs.nav_up.length() >= 1e-6 {
+            (scs.nav_up.normalize(), scs.nav_up_label.clone())
+        } else {
+            (DVec3::Z, "Z".to_string())
+        };
+        CameraSettings {
+            eye: scs.eye,
+            target: scs.target,
+            up: scs.up,
+            orthographic: scs.orthographic,
+            ortho_half_height: scs.ortho_half_height,
+            pivot_point: scs.pivot_point,
+            nav_up,
+            nav_up_label,
+        }
+    });
 
     Ok(network)
 }

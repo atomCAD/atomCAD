@@ -1,5 +1,6 @@
 use crate::api::api_common::CAD_INSTANCE;
 use crate::api::api_common::CADInstance;
+use crate::api::api_common::from_api_ivec3;
 use crate::api::api_common::from_api_transform;
 use crate::api::api_common::from_api_vec3;
 use crate::api::api_common::refresh_structure_designer_auto;
@@ -12,18 +13,25 @@ use crate::api::api_common::with_mut_cad_instance;
 use crate::api::api_common::with_mut_cad_instance_or;
 use crate::api::common_api_types::APICamera;
 use crate::api::common_api_types::APICameraCanonicalView;
+use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec3;
+use crate::api::common_api_types::APIViewUpInfo;
 use crate::api::common_api_types::ElementSummary;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_constants::ATOM_INFO;
+use crate::crystolecule::drawing_plane::DrawingPlane;
+use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::renderer::Renderer;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use crate::structure_designer::structure_designer_scene::NodeOutput;
 use crate::util::transform::Transform;
 use dlopen::{
     Error as LibError,
     symbor::{Library, Symbol},
 };
+use glam::f64::DVec3;
+use glam::i32::IVec3;
 use std::ffi::{c_int, c_void};
 use std::time::Instant;
 
@@ -220,6 +228,7 @@ pub fn get_camera() -> Option<APICamera> {
                 orthographic: camera.orthographic,
                 ortho_half_height: camera.ortho_half_height,
                 pivot_point: to_api_vec3(&camera.pivot_point),
+                nav_up: to_api_vec3(&camera.nav_up),
             }
         })
     }
@@ -468,6 +477,243 @@ pub fn set_camera_canonical_view(view: APICameraCanonicalView) {
             sync_camera_to_active_network(cad_instance);
             refresh_structure_designer_auto(cad_instance);
         });
+    }
+}
+
+// --- Navigation up axis (issue #349, Phase 2) ---------------------------
+//
+// The pickable turntable screen-vertical. See `doc/design_view_up_axis.md`.
+// The pure resolution helpers below carry all the error decisions so they are
+// testable under the `rust/AGENTS.md` "test the core, skip the API wrapper"
+// rule; the `set_view_up_*` wrappers only map the result into the returned
+// error string plus a refresh.
+
+/// Resolves a Miller *plane* `(h k l)` to its real-space normal (D2: the
+/// reciprocal-space plane normal, *not* the `[hkl]` lattice direction). The
+/// returned vector is already normalized.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn resolve_miller_plane_up(cell: &UnitCellStruct, hkl: IVec3) -> Result<DVec3, String> {
+    if hkl == IVec3::ZERO {
+        return Err("Miller plane index (h k l) cannot be zero".to_string());
+    }
+    let props = cell.ivec3_miller_index_to_plane_props(&hkl)?;
+    Ok(props.normal)
+}
+
+/// Resolves a *lattice direction* `[u v w]` to a normalized real-space vector
+/// (D2: the direct-space direction, distinct from the `(uvw)` plane normal for
+/// non-cubic cells).
+#[flutter_rust_bridge::frb(ignore)]
+pub fn resolve_lattice_direction_up(cell: &UnitCellStruct, uvw: IVec3) -> Result<DVec3, String> {
+    if uvw == IVec3::ZERO {
+        return Err("Lattice direction [u v w] cannot be zero".to_string());
+    }
+    let real = cell.ivec3_lattice_to_real(&uvw);
+    if !real.is_finite() || real.length() < 1e-6 {
+        return Err("Lattice direction resolves to a near-zero vector".to_string());
+    }
+    Ok(real.normalize())
+}
+
+/// Pure extraction of the nav-up axis + label from an already-resolved drawing
+/// plane. The plane's `miller_index` was validated at plane-construction time,
+/// so the normal is always computable (mirrors the `expect` used throughout
+/// `drawing_plane.rs`).
+#[flutter_rust_bridge::frb(ignore)]
+pub fn drawing_plane_up(plane: &DrawingPlane) -> (DVec3, String) {
+    let normal = plane
+        .unit_cell
+        .ivec3_miller_index_to_plane_props(&plane.miller_index)
+        .expect("DrawingPlane miller_index is always valid")
+        .normal;
+    let label = format!(
+        "({} {} {})",
+        plane.miller_index.x, plane.miller_index.y, plane.miller_index.z
+    );
+    (normal, label)
+}
+
+/// The lattice that Miller/direction indices resolve against (D5): the active
+/// node's evaluated lattice, with the cubic-diamond fallback the background
+/// grid also uses.
+fn active_scene_unit_cell(cad_instance: &CADInstance) -> UnitCellStruct {
+    cad_instance
+        .structure_designer
+        .last_generated_structure_designer_scene
+        .unit_cell
+        .clone()
+        .unwrap_or_else(UnitCellStruct::cubic_diamond)
+}
+
+/// Cosmetic description of the current lattice source for the dialog (D5): the
+/// active node's name when a lattice is present, else the fallback marker.
+fn active_scene_lattice_source_label(cad_instance: &CADInstance) -> String {
+    let scene = &cad_instance
+        .structure_designer
+        .last_generated_structure_designer_scene;
+    if scene.unit_cell.is_none() {
+        return "cubic diamond (fallback)".to_string();
+    }
+    scene
+        .active_node_id
+        .and_then(|id| {
+            cad_instance
+                .structure_designer
+                .get_active_node_network()
+                .and_then(|net| net.nodes.get(&id))
+                .map(|node| node.node_type_name.clone())
+        })
+        .unwrap_or_else(|| "active node".to_string())
+}
+
+/// Common tail for every axis-setting entry point: store the resolved axis +
+/// label, re-align `up` per D3, and refresh the viewport lightly.
+fn apply_view_up(cad_instance: &mut CADInstance, nav_up: DVec3, label: String) {
+    cad_instance.renderer.camera.nav_up = nav_up;
+    cad_instance.renderer.camera.nav_up_label = label;
+    cad_instance.renderer.camera.realign_up_to_nav_axis();
+    cad_instance.renderer.update_camera_buffer();
+    sync_camera_to_active_network(cad_instance);
+    cad_instance.structure_designer.mark_lightweight_refresh();
+    refresh_structure_designer_auto(cad_instance);
+}
+
+/// Sets the navigation-up axis from a raw world-space vector (the escape hatch
+/// every other entry point ultimately funnels through). `label` is the caller's
+/// cosmetic provenance string. Returns an error string for a (near-)zero or
+/// non-finite vector, else `None`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_view_up_axis(axis: APIVec3, label: String) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let v = from_api_vec3(&axis);
+            if !v.is_finite() || v.length() < 1e-6 {
+                return Some("View-up axis cannot be a zero or non-finite vector".to_string());
+            }
+            apply_view_up(cad_instance, v.normalize(), label);
+            None
+        })
+        .flatten()
+    }
+}
+
+/// Sets the navigation-up axis from a Miller *plane* `(h k l)`, resolved against
+/// the active node's lattice (D2/D5). Returns an error string on failure.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_view_up_from_miller_plane(hkl: APIIVec3) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let cell = active_scene_unit_cell(cad_instance);
+            match resolve_miller_plane_up(&cell, from_api_ivec3(&hkl)) {
+                Ok(up) => {
+                    apply_view_up(cad_instance, up, format!("({} {} {})", hkl.x, hkl.y, hkl.z));
+                    None
+                }
+                Err(e) => Some(e),
+            }
+        })
+        .flatten()
+    }
+}
+
+/// Sets the navigation-up axis from a *lattice direction* `[u v w]`, resolved
+/// against the active node's lattice (D2/D5). Returns an error string on failure.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_view_up_from_lattice_direction(uvw: APIIVec3) -> Option<String> {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let cell = active_scene_unit_cell(cad_instance);
+            match resolve_lattice_direction_up(&cell, from_api_ivec3(&uvw)) {
+                Ok(up) => {
+                    apply_view_up(cad_instance, up, format!("[{} {} {}]", uvw.x, uvw.y, uvw.z));
+                    None
+                }
+                Err(e) => Some(e),
+            }
+        })
+        .flatten()
+    }
+}
+
+/// One-click path for the motivating workflow: if the active node's interactive
+/// pin (lowest-indexed displayed output pin) carries a `DrawingPlane`, use its
+/// plane normal as the nav-up axis. Returns an error string if that pin does not
+/// carry a drawing plane.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_view_up_from_active_drawing_plane() -> Option<String> {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            // Extract (and clone) the interactive drawing plane before the
+            // mutable `apply_view_up` borrow. The interactive-pin selection and
+            // the "is it a DrawingPlane" test stay here in the (skippable) API
+            // wrapper; only the pure extraction lives in `drawing_plane_up`.
+            let plane = {
+                let scene = &cad_instance
+                    .structure_designer
+                    .last_generated_structure_designer_scene;
+                let active_id = match scene.active_node_id {
+                    Some(id) => id,
+                    None => return Some("No active node to read a drawing plane from".to_string()),
+                };
+                let node_data = match scene.node_data.get(&active_id) {
+                    Some(nd) => nd,
+                    None => return Some("The active node has no displayed output".to_string()),
+                };
+                match node_data.interactive_output() {
+                    Some(NodeOutput::DrawingPlane(dp)) => dp.clone(),
+                    _ => {
+                        return Some(
+                            "The active node's interactive pin does not carry a drawing plane"
+                                .to_string(),
+                        );
+                    }
+                }
+            };
+            let (up, label) = drawing_plane_up(&plane);
+            apply_view_up(cad_instance, up, label);
+            None
+        })
+        .flatten()
+    }
+}
+
+/// Resets the navigation-up axis to the default `+Z` / `"Z"` (re-aligned per D3).
+#[flutter_rust_bridge::frb(sync)]
+pub fn reset_view_up() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.renderer.camera.reset_nav_up();
+            cad_instance.renderer.update_camera_buffer();
+            sync_camera_to_active_network(cad_instance);
+            cad_instance.structure_designer.mark_lightweight_refresh();
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Returns the current navigation-up state for the dialog and the camera-row
+/// indicator. `is_default` drives the highlight; `lattice_source_label` reports
+/// what indices resolve against (D5).
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_view_up() -> APIViewUpInfo {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let camera = &cad_instance.renderer.camera;
+                APIViewUpInfo {
+                    axis: to_api_vec3(&camera.nav_up),
+                    label: camera.nav_up_label.clone(),
+                    is_default: (camera.nav_up - DVec3::Z).length() < 1e-6,
+                    lattice_source_label: active_scene_lattice_source_label(cad_instance),
+                }
+            },
+            APIViewUpInfo {
+                axis: to_api_vec3(&DVec3::Z),
+                label: "Z".to_string(),
+                is_default: true,
+                lattice_source_label: "cubic diamond (fallback)".to_string(),
+            },
+        )
     }
 }
 
