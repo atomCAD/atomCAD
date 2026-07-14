@@ -15,6 +15,7 @@ use crate::renderer::camera::Camera;
 use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::tessellator::tessellator::{TessellationOutput, tessellate_cuboid};
+use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::structure_designer::structure_designer_scene::{NodeOutput, StructureDesignerScene};
 use glam::f32::Vec3;
 use glam::f64::{DQuat, DVec3};
@@ -33,6 +34,7 @@ pub fn tessellate_scene_content(
     LineMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
+    TransparentImpostorMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
 ) {
@@ -46,6 +48,7 @@ pub fn tessellate_scene_content(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
+        transparent_impostor_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     ) = if !lightweight {
@@ -57,6 +60,7 @@ pub fn tessellate_scene_content(
             LineMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
+            TransparentImpostorMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
         )
@@ -69,6 +73,7 @@ pub fn tessellate_scene_content(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
+        transparent_impostor_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     )
@@ -120,6 +125,7 @@ fn tessellate_non_lightweight_content(
     LineMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
+    TransparentImpostorMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
 ) {
@@ -127,6 +133,9 @@ fn tessellate_non_lightweight_content(
     let mut wireframe_mesh = LineMesh::new();
     let mut atom_impostor_mesh = AtomImpostorMesh::new();
     let mut bond_impostor_mesh = BondImpostorMesh::new();
+    // Merged transparent impostor mesh for x-rayed (alpha < 1.0) atoms/bonds.
+    // Stays empty in TriangleMesh mode (atoms tessellate opaque there).
+    let mut transparent_impostor_mesh = TransparentImpostorMesh::new();
     // Gadget impostor meshes (kept for API compatibility, currently empty)
     let gadget_atom_impostor_mesh = AtomImpostorMesh::new();
     let gadget_bond_impostor_mesh = BondImpostorMesh::new();
@@ -234,6 +243,7 @@ fn tessellate_non_lightweight_content(
                             atomic_tessellator::tessellate_atomic_structure_impostors(
                                 &mut atom_impostor_mesh,
                                 &mut bond_impostor_mesh,
+                                &mut transparent_impostor_mesh,
                                 atomic_structure,
                                 &preferences.atomic_structure_visualization,
                             );
@@ -360,6 +370,7 @@ fn tessellate_non_lightweight_content(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
+        transparent_impostor_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     )

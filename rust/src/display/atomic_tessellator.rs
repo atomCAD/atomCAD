@@ -11,6 +11,7 @@ use crate::display::preferences::{
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::renderer::mesh::{Material, Mesh};
+use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::util::timer::Timer;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
@@ -798,10 +799,20 @@ fn tessellate_bond_delete_marker(
 // IMPOSTOR TESSELLATION METHODS
 // ============================================================================
 
-/// Main entry point for impostor-based atomic structure tessellation
+/// Main entry point for impostor-based atomic structure tessellation.
+///
+/// Atoms and bonds with display alpha `< 1.0` (recorded by the `xray` node,
+/// see `doc/design_xray_node.md`) are routed into `transparent_impostor_mesh`
+/// instead of the opaque `atom_impostor_mesh` / `bond_impostor_mesh`. A bond's
+/// alpha is the minimum of its two endpoints' alphas (§Bond rule), so a bond
+/// crossing the region boundary fades rather than poking an opaque stick into
+/// the ghost region. Fully-opaque atoms/bonds route to the opaque meshes
+/// exactly as before. The transparent path is nothing more than a routing
+/// decision layered on top of the existing appearance computation.
 pub fn tessellate_atomic_structure_impostors(
     atom_impostor_mesh: &mut AtomImpostorMesh,
     bond_impostor_mesh: &mut BondImpostorMesh,
+    transparent_impostor_mesh: &mut TransparentImpostorMesh,
     atomic_structure: &AtomicStructure,
     atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
 ) {
@@ -835,9 +846,11 @@ pub fn tessellate_atomic_structure_impostors(
         tessellated_count += 1;
         tessellate_atom_impostor(
             atom_impostor_mesh,
+            transparent_impostor_mesh,
             atom,
             display_state,
             &atomic_viz_prefs.visualization,
+            atomic_structure.get_atom_alpha(*id),
         );
     }
 
@@ -868,13 +881,21 @@ pub fn tessellate_atomic_structure_impostors(
                         continue;
                     }
 
+                    // Bond alpha is the minimum of its two endpoints (§Bond
+                    // rule); a bond fades if either endpoint is ghosted.
+                    let bond_alpha = atomic_structure
+                        .get_atom_alpha(atom.id)
+                        .min(atomic_structure.get_atom_alpha(other_atom_id));
+
                     // Bond delete markers in diff structures render as red
                     if bond.is_delete_marker() && atomic_structure.is_diff() {
                         tessellate_bond_delete_marker_impostor(
                             bond_impostor_mesh,
+                            transparent_impostor_mesh,
                             atomic_structure,
                             atom,
                             other_atom,
+                            bond_alpha,
                         );
                     } else {
                         let radius_scale = if atomic_viz_prefs.visualization
@@ -886,11 +907,13 @@ pub fn tessellate_atomic_structure_impostors(
                         };
                         tessellate_bond_impostor_inline(
                             bond_impostor_mesh,
+                            transparent_impostor_mesh,
                             atomic_structure,
                             atom,
                             other_atom,
                             bond.bond_order(),
                             radius_scale,
+                            bond_alpha,
                         );
                     }
                 }
@@ -979,35 +1002,57 @@ fn get_atom_impostor_appearance(
     (color, roughness, base_metallic, rim_color)
 }
 
-/// Tessellate a single atom as an impostor (4 vertices, 6 indices)
+/// Tessellate a single atom as an impostor (4 vertices, 6 indices).
+///
+/// Routes to `transparent_impostor_mesh` when `alpha < 1.0`, else to the opaque
+/// `atom_impostor_mesh`. Appearance (color/roughness/metallic/rim) is computed
+/// identically for both paths.
 pub fn tessellate_atom_impostor(
     atom_impostor_mesh: &mut AtomImpostorMesh,
+    transparent_impostor_mesh: &mut TransparentImpostorMesh,
     atom: &Atom,
     display_state: AtomDisplayState,
     visualization: &AtomicStructureVisualization,
+    alpha: f32,
 ) {
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
     let (color, roughness, metallic, rim_color) = get_atom_impostor_appearance(atom, display_state);
 
-    // Add the atom quad to the impostor mesh
-    atom_impostor_mesh.add_atom_quad(
-        &atom.position.as_vec3(),
-        radius,
-        &color.to_array(),
-        roughness,
-        metallic,
-        &rim_color,
-    );
+    if alpha < 1.0 {
+        transparent_impostor_mesh.add_atom_quad(
+            &atom.position.as_vec3(),
+            radius,
+            &color.to_array(),
+            roughness,
+            metallic,
+            &rim_color,
+            alpha,
+        );
+    } else {
+        atom_impostor_mesh.add_atom_quad(
+            &atom.position.as_vec3(),
+            radius,
+            &color.to_array(),
+            roughness,
+            metallic,
+            &rim_color,
+        );
+    }
 }
 
-/// Tessellate bond impostor using inline bond data
+/// Tessellate bond impostor using inline bond data. Each generated cylinder
+/// quad routes to `transparent_impostor_mesh` when `alpha < 1.0`, else to the
+/// opaque `bond_impostor_mesh`.
+#[allow(clippy::too_many_arguments)]
 fn tessellate_bond_impostor_inline(
     bond_impostor_mesh: &mut BondImpostorMesh,
+    transparent_impostor_mesh: &mut TransparentImpostorMesh,
     atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
     bond_order: u8,
     radius_scale: f64,
+    alpha: f32,
 ) {
     let color = get_bond_color_inline(atom1.id, atom2.id, bond_order, atomic_structure);
 
@@ -1023,12 +1068,23 @@ fn tessellate_bond_impostor_inline(
         let (offset, radius) = layout.offsets[i];
         let start = atom1.position + offset;
         let end = atom2.position + offset;
-        bond_impostor_mesh.add_bond_quad(
-            &start.as_vec3(),
-            &end.as_vec3(),
-            (radius * radius_scale) as f32,
-            &color.to_array(),
-        );
+        let radius = (radius * radius_scale) as f32;
+        if alpha < 1.0 {
+            transparent_impostor_mesh.add_bond_quad(
+                &start.as_vec3(),
+                &end.as_vec3(),
+                radius,
+                &color.to_array(),
+                alpha,
+            );
+        } else {
+            bond_impostor_mesh.add_bond_quad(
+                &start.as_vec3(),
+                &end.as_vec3(),
+                radius,
+                &color.to_array(),
+            );
+        }
     }
 }
 
@@ -1036,9 +1092,11 @@ fn tessellate_bond_impostor_inline(
 /// Selection (magenta) takes priority over delete marker color (red).
 fn tessellate_bond_delete_marker_impostor(
     bond_impostor_mesh: &mut BondImpostorMesh,
+    transparent_impostor_mesh: &mut TransparentImpostorMesh,
     atomic_structure: &AtomicStructure,
     atom1: &Atom,
     atom2: &Atom,
+    alpha: f32,
 ) {
     let bond_ref = BondReference {
         atom_id1: atom1.id,
@@ -1051,12 +1109,22 @@ fn tessellate_bond_delete_marker_impostor(
         DELETE_MARKER_COLOR
     };
 
-    bond_impostor_mesh.add_bond_quad(
-        &atom1.position.as_vec3(),
-        &atom2.position.as_vec3(),
-        BAS_STICK_RADIUS as f32,
-        &color.to_array(),
-    );
+    if alpha < 1.0 {
+        transparent_impostor_mesh.add_bond_quad(
+            &atom1.position.as_vec3(),
+            &atom2.position.as_vec3(),
+            BAS_STICK_RADIUS as f32,
+            &color.to_array(),
+            alpha,
+        );
+    } else {
+        bond_impostor_mesh.add_bond_quad(
+            &atom1.position.as_vec3(),
+            &atom2.position.as_vec3(),
+            BAS_STICK_RADIUS as f32,
+            &color.to_array(),
+        );
+    }
 }
 
 // ============================================================================
