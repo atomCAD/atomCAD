@@ -36,6 +36,8 @@ fn ball_and_stick_prefs() -> AtomicStructureVisualizationPreferences {
         rendering_method: AtomicRenderingMethod::Impostors,
         ball_and_stick_cull_depth: None,
         space_filling_cull_depth: None,
+        scene_transparency_enabled: false,
+        scene_alpha: 1.0,
     }
 }
 
@@ -45,6 +47,8 @@ fn space_filling_prefs() -> AtomicStructureVisualizationPreferences {
         rendering_method: AtomicRenderingMethod::Impostors,
         ball_and_stick_cull_depth: None,
         space_filling_cull_depth: None,
+        scene_transparency_enabled: false,
+        scene_alpha: 1.0,
     }
 }
 
@@ -348,6 +352,8 @@ fn display_prefs(rendering_method: AtomicRenderingMethod) -> DisplayPreferences 
             rendering_method,
             ball_and_stick_cull_depth: None,
             space_filling_cull_depth: None,
+            scene_transparency_enabled: false,
+            scene_alpha: 1.0,
         },
         background: BackgroundPreferences {
             show_axes: false,
@@ -420,4 +426,87 @@ fn scene_triangle_mesh_mode_leaves_transparent_empty() {
     );
     assert_eq!(transparent.indices.len(), 0);
     assert_eq!(transparent.quad_centers.len(), 0);
+}
+
+// ============================================================================
+// Global scene-transparency lens (preferences)
+// ============================================================================
+
+/// Ball-and-stick prefs with the global scene-transparency lens enabled at the
+/// given alpha.
+fn scene_transparent_prefs(alpha: f32) -> AtomicStructureVisualizationPreferences {
+    let mut p = ball_and_stick_prefs();
+    p.scene_transparency_enabled = true;
+    p.scene_alpha = alpha;
+    p
+}
+
+/// With the global lens on, atoms carrying no per-atom `xray` alpha still route
+/// into the transparent mesh, each vertex tagged with exactly `scene_alpha`.
+#[test]
+fn scene_transparency_ghosts_untouched_atoms() {
+    let mut s = AtomicStructure::new();
+    let a = s.add_atom(6, DVec3::new(-1.0, 0.0, 0.0));
+    let b = s.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    s.add_bond(a, b, BOND_SINGLE);
+    // No set_atom_alpha calls — every atom is opaque (1.0) at the xray layer.
+
+    let m = tessellate(&s, &scene_transparent_prefs(0.5));
+
+    assert_eq!(atom_quads(&m.atom), 0, "no opaque atoms under the lens");
+    assert_eq!(bond_quads(&m.bond), 0, "no opaque bonds under the lens");
+    assert_eq!(
+        transparent_quads_of_kind(&m.transparent, 0),
+        2,
+        "ghost atoms"
+    );
+    assert_eq!(
+        transparent_quads_of_kind(&m.transparent, 1),
+        1,
+        "ghost bond"
+    );
+    for v in &m.transparent.vertices {
+        assert!(
+            (v.alpha - 0.5).abs() < 1e-6,
+            "1.0 (untouched) * 0.5 (lens) = scene_alpha on every vertex"
+        );
+    }
+}
+
+/// The global lens composes with per-atom `xray` alpha by multiplication: a
+/// ghosted atom becomes even more transparent, an untouched atom picks up the
+/// plain scene alpha.
+#[test]
+fn scene_transparency_multiplies_with_xray_alpha() {
+    let mut s = AtomicStructure::new();
+    let a = s.add_atom(6, DVec3::new(-1.0, 0.0, 0.0));
+    let b = s.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    s.set_atom_alpha(a, 0.4); // xray-ghosted
+    // b untouched (1.0).
+
+    let m = tessellate(&s, &scene_transparent_prefs(0.5));
+
+    let alpha_at = |x: f32| {
+        m.transparent
+            .vertices
+            .iter()
+            .find(|v| v.kind == 0 && (v.position_a[0] - x).abs() < 1e-6)
+            .map(|v| v.alpha)
+            .unwrap_or_else(|| panic!("no ghost atom at x={x}"))
+    };
+    assert!((alpha_at(-1.0) - 0.2).abs() < 1e-6, "0.4 * 0.5 = 0.2");
+    assert!((alpha_at(1.0) - 0.5).abs() < 1e-6, "1.0 * 0.5 = 0.5");
+}
+
+/// A `scene_alpha` of `1.0` (or an out-of-range value clamped down to it) with
+/// the lens enabled is a no-op: everything stays opaque.
+#[test]
+fn scene_transparency_alpha_one_is_opaque() {
+    let mut s = AtomicStructure::new();
+    s.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    let m = tessellate(&s, &scene_transparent_prefs(1.0));
+
+    assert_eq!(atom_quads(&m.atom), 1, "alpha 1.0 lens leaves atoms opaque");
+    assert_eq!(m.transparent.vertices.len(), 0, "transparent mesh empty");
 }

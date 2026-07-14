@@ -39,6 +39,9 @@ class PreferencesKeys {
       Key('pref_ball_and_stick_cull_depth_input');
   static const Key spaceFillingCullDepthInput =
       Key('pref_space_filling_cull_depth_input');
+  static const Key sceneTransparencyCheckbox =
+      Key('pref_scene_transparency_checkbox');
+  static const Key sceneAlphaInput = Key('pref_scene_alpha_input');
 
   // Other settings
   static const Key displayCameraPivotCheckbox =
@@ -647,6 +650,113 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                               ),
                             ),
                           ],
+
+                          const SizedBox(height: AppSpacing.medium),
+                          const Divider(),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Global scene transparency (impostor mode only) — a
+                          // viewing lens that ghosts the whole scene without
+                          // xray nodes. Composes with xray alpha by
+                          // multiplication.
+                          Row(
+                            children: [
+                              Checkbox(
+                                key: PreferencesKeys.sceneTransparencyCheckbox,
+                                value: _preferences
+                                    .atomicStructureVisualizationPreferences
+                                    .sceneTransparencyEnabled,
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences
+                                          .atomicStructureVisualizationPreferences
+                                          .sceneTransparencyEnabled = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text('Make whole scene transparent'),
+                              ),
+                            ],
+                          ),
+
+                          // Alpha slider + numeric field, disabled when the
+                          // checkbox is off (but the value is preserved).
+                          IgnorePointer(
+                            ignoring: !_preferences
+                                .atomicStructureVisualizationPreferences
+                                .sceneTransparencyEnabled,
+                            child: Opacity(
+                              opacity: _preferences
+                                      .atomicStructureVisualizationPreferences
+                                      .sceneTransparencyEnabled
+                                  ? 1.0
+                                  : 0.4,
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 24),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Slider(
+                                        value: _preferences
+                                            .atomicStructureVisualizationPreferences
+                                            .sceneAlpha
+                                            .clamp(0.0, 1.0),
+                                        min: 0.0,
+                                        max: 1.0,
+                                        divisions: 100,
+                                        label: _preferences
+                                            .atomicStructureVisualizationPreferences
+                                            .sceneAlpha
+                                            .toStringAsFixed(2),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _preferences
+                                                .atomicStructureVisualizationPreferences
+                                                .sceneAlpha = value;
+                                          });
+                                          _applyPreferences();
+                                        },
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 90,
+                                      child: FloatInput(
+                                        key: PreferencesKeys.sceneAlphaInput,
+                                        label: '',
+                                        value: _preferences
+                                            .atomicStructureVisualizationPreferences
+                                            .sceneAlpha,
+                                        onChanged: (value) {
+                                          setState(() {
+                                            _preferences
+                                                .atomicStructureVisualizationPreferences
+                                                .sceneAlpha =
+                                                value.clamp(0.0, 1.0);
+                                          });
+                                          _applyPreferences();
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ghosts every atom (impostor rendering only). '
+                            'xray nodes multiply on top, so ghosted regions '
+                            'stay more transparent than their surroundings.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
                         ],
                       ),
                     ),

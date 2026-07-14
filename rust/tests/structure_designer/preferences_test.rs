@@ -312,6 +312,8 @@ fn test_non_default_values_roundtrip() {
             rendering_method: AtomicRenderingMethod::TriangleMesh,
             ball_and_stick_cull_depth: Some(10.0),
             space_filling_cull_depth: None,
+            scene_transparency_enabled: true,
+            scene_alpha: 0.35,
         },
         background_preferences: BackgroundPreferences {
             background_color: APIIVec3 {
@@ -460,6 +462,17 @@ fn test_non_default_values_roundtrip() {
             .atomic_structure_visualization_preferences
             .space_filling_cull_depth,
         None
+    );
+    assert!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .scene_transparency_enabled
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .scene_alpha,
+        0.35
     );
 
     assert_eq!(

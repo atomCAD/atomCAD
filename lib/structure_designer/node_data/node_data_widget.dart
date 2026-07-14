@@ -26,6 +26,9 @@ import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
     as relax_api;
+import 'package:flutter_cad/structure_designer/node_data/xray_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
+    as xray_api;
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/print_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
@@ -492,6 +495,18 @@ class NodeDataWidget extends StatelessWidget {
         return RelaxEditor(
           nodeId: selectedNode.id,
           data: relaxData,
+          model: model,
+        );
+      case 'xray':
+        // Scope-aware fetch of the stored alpha; the wired `alpha` pin (if any)
+        // wins at eval and is not shown here.
+        final xrayData = xray_api.getXrayData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        return XrayEditor(
+          nodeId: selectedNode.id,
+          data: xrayData,
           model: model,
         );
       case 'parameter':

@@ -60,6 +60,30 @@ class AtomicStructureVisualizationWidget extends StatelessWidget {
                   model.setPreferences(model.preferences!);
                 },
               ),
+
+              // Scene transparency toggle — ghosts the whole scene (impostor
+              // mode only). The alpha is set in Preferences; this button just
+              // flips it on/off for a quick "see through everything" look.
+              _buildIconButton(
+                context,
+                Icons.opacity,
+                'Make whole scene transparent (set alpha in Preferences)',
+                key: const Key('atomic_vis_scene_transparency'),
+                isSelected: model
+                        .preferences
+                        ?.atomicStructureVisualizationPreferences
+                        .sceneTransparencyEnabled ??
+                    false,
+                onPressed: () {
+                  final prefs =
+                      model.preferences?.atomicStructureVisualizationPreferences;
+                  if (prefs != null) {
+                    prefs.sceneTransparencyEnabled =
+                        !prefs.sceneTransparencyEnabled;
+                    model.setPreferences(model.preferences!);
+                  }
+                },
+              ),
             ],
           );
         },

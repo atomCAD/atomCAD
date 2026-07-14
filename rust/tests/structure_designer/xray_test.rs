@@ -17,6 +17,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     BlueprintData, CrystalData, MoleculeData, NetworkResult,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
+use rust_lib_flutter_cad::structure_designer::nodes::xray::XrayData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
 use std::collections::HashMap;
@@ -411,6 +412,46 @@ fn xray_non_atomic_input_errors() {
         "expected Error, got {:?}",
         result.infer_data_type()
     );
+}
+
+// ============================================================================
+// Phase 6 — API-level setter is undoable/redoable
+// ============================================================================
+
+/// Setting `alpha` through the `StructureDesigner`-level node-data setter
+/// re-evaluates with the new value and is undoable/redoable — the same shared
+/// `SetNodeDataCommand` path the FRB `set_xray_data` wrapper uses.
+#[test]
+fn xray_set_data_is_undoable() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let value_id = add_value_node(
+        &mut designer,
+        net,
+        DVec2::ZERO,
+        molecule_value(carbons_at(&[0.0])),
+    );
+    let xray_id = add_xray(&mut designer, DVec2::new(200.0, 0.0));
+    designer.connect_nodes(value_id, 0, xray_id, 0);
+
+    // Default stored alpha is 0.5.
+    let result = evaluate_to_atomic(&designer, net, xray_id);
+    assert_eq!(alpha_at(&result, 0.0), 0.5, "default stored alpha");
+
+    // Edit through the StructureDesigner-level setter (what the FRB API wraps).
+    designer.set_node_network_data_scoped(&[], xray_id, Box::new(XrayData { alpha: 0.25 }));
+    let result = evaluate_to_atomic(&designer, net, xray_id);
+    assert_eq!(alpha_at(&result, 0.0), 0.25, "setter applies new alpha");
+
+    // Undo restores the previous alpha.
+    assert!(designer.undo(), "undo should report a change");
+    let result = evaluate_to_atomic(&designer, net, xray_id);
+    assert_eq!(alpha_at(&result, 0.0), 0.5, "undo restores previous alpha");
+
+    // Redo re-applies the edit.
+    assert!(designer.redo(), "redo should report a change");
+    let result = evaluate_to_atomic(&designer, net, xray_id);
+    assert_eq!(alpha_at(&result, 0.0), 0.25, "redo re-applies alpha");
 }
 
 /// Non-Blueprint on the `region` pin → localized `NetworkResult::Error`.

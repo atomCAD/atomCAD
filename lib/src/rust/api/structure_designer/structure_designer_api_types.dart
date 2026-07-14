@@ -3238,6 +3238,26 @@ sealed class APIViewportPickResult with _$APIViewportPickResult {
   const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
 }
 
+class APIXrayData {
+  /// Display alpha applied to in-region atoms, in `[0.0, 1.0]`. `1.0`
+  /// restores full opacity. Overridden by a wired `alpha` pin.
+  final double alpha;
+
+  const APIXrayData({
+    required this.alpha,
+  });
+
+  @override
+  int get hashCode => alpha.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIXrayData &&
+          runtimeType == other.runtimeType &&
+          alpha == other.alpha;
+}
+
 /// Editable state of a `zip_with` node (n-ary element-wise map, issue #382).
 /// Lane pin names (`xs1..xsN` / `element1..elementN`) are derived positionally
 /// and the hidden per-lane stable ids are managed Rust-side, so they never

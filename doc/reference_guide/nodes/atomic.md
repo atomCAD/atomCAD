@@ -241,11 +241,11 @@ Feeding a structure that is *itself* a diff (e.g. an `atom_edit` `diff` pin) int
 
 ## Restricting an atom operation to a region
 
-Several atom operations — `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, and `unfreeze` — accept an optional **`region: Blueprint`** input pin (always the last pin) that confines their effect to a volume you draw. With `region` disconnected, the operation applies to **all** atoms (its original behavior). With `region` connected, the operation only touches atoms **inside** the region volume; atoms outside pass through untouched.
+Several atom operations — `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, and `xray` — accept an optional **`region: Blueprint`** input pin (always the last pin) that confines their effect to a volume you draw. With `region` disconnected, the operation applies to **all** atoms (its original behavior). With `region` connected, the operation only touches atoms **inside** the region volume; atoms outside pass through untouched.
 
 - **Membership.** An atom is in-region when the region geometry's signed distance at the atom's position is ≤ a small margin (default 0.1 Å — the same default `materialize`'s per-region margin uses). The margin reliably captures surface atoms that sit numerically *on* a boundary you built by reusing the cutting geometry, without grabbing the layer below.
 - **Build the region** from the same geometry nodes you already use (`half_space`, `cuboid`, `sphere`, CSG combinations), in the same real space as the atoms. Only the region Blueprint's geometry is used; any `Structure` it carries is ignored. The typical region is a single `half_space` whose plane cuts through the surface you want to treat. A region disjoint from the structure is a well-defined no-op.
-- **Which atom counts.** Each operation tests the position of the **existing (host) atom** it acts on: `add_hydrogen` tests the dangling-bond atom (the new H is placed wherever the bond template puts it, even if that lands just outside the region); `remove_hydrogen` tests the heavy atom an H is bonded to (an H sitting just outside the boundary is still stripped if its host is in-region); `infer_bonds` (re)infers a bond when **at least one** endpoint is in-region; `atom_replace` / `freeze` / `unfreeze` test the atom being edited. Newly created atoms are never themselves membership-tested.
+- **Which atom counts.** Each operation tests the position of the **existing (host) atom** it acts on: `add_hydrogen` tests the dangling-bond atom (the new H is placed wherever the bond template puts it, even if that lands just outside the region); `remove_hydrogen` tests the heavy atom an H is bonded to (an H sitting just outside the boundary is still stripped if its host is in-region); `infer_bonds` (re)infers a bond when **at least one** endpoint is in-region; `atom_replace` / `freeze` / `unfreeze` / `xray` test the atom being edited. Newly created atoms are never themselves membership-tested.
 - **Multiple regions = chained nodes.** Because each of these operations returns the same kind of structure it received, you apply several regional treatments by placing several nodes in sequence, each with its own region — there is no multi-region pin on these nodes. (That painter's-algorithm pattern is unique to `materialize`, whose settings are consumed together in a single fill pass; see its *Per-region settings*.)
 
 ## relax
@@ -277,6 +277,28 @@ The inverse of `freeze`: clears the frozen flag so `relax` can move the atoms ag
 
 - `molecule: HasAtoms` — the input structure.
 - `region: Blueprint` (optional) — restrict unfreezing to atoms inside this volume. Disconnected → **all** atoms are unfrozen. See *Restricting an atom operation to a region* above.
+
+## xray
+
+Makes atoms **semi-transparent** in the 3D viewport so features buried inside a larger structure show through their ghosted surroundings — without cutting anything away or losing any atoms. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with a per-atom display alpha recorded on it. Like `freeze`/`unfreeze`, `xray` is a pure metadata pass-through: it changes only how atoms are *drawn*, never their positions, bonds, or count.
+
+**Input pins**
+
+- `molecule: HasAtoms` — the input structure.
+- `alpha: Float` (optional) — the display alpha, `0` (fully transparent) to `1` (fully opaque). A wired value overrides the stored `alpha` property (same pin-over-property precedence as `extrude`'s `dir`); while wired, the node subtitle hides and the panel value is inert.
+- `region: Blueprint` (optional, last pin) — restrict the effect to atoms inside this volume. Disconnected → **all** atoms are ghosted. See *Restricting an atom operation to a region* above.
+
+**Alpha semantics.** `alpha = 1.0` **removes** the recording (restores full opacity) — the display analog of `unfreeze`. Because of this, chained `xray` nodes compose **last-writer-wins**: an `xray` with region A at `0.3` followed by an `xray` with region B at `1.0` re-opaques the atoms in the overlap, and two nodes with disjoint regions leave each region at its own alpha. A bond fades with the more transparent of its two endpoints, so a bond crossing a region boundary ghosts rather than leaving an opaque stick poking into the transparent region.
+
+**Impostor-only.** Transparency renders in the **impostor** atomic rendering method only (the default sphere/ball-and-stick/space-filling impostor modes). In `TriangleMesh` mode, x-rayed atoms render opaque — a documented limitation.
+
+**Whole-scene alternative.** When you just want to see through *everything* temporarily — without wiring any nodes — use the **Make whole scene transparent** viewing lens instead (the opacity toggle in the [Display Preferences panel](../ui.md#atomic-visualization), alpha set in Preferences). That global lens and this node **compose by multiplication**: an atom ghosted here to α = 0.3 renders at 0.3 × the scene alpha, so `xray` regions stay more transparent than their surroundings even with the global lens on.
+
+**Limitations to keep in mind:**
+
+- **Ghost atoms stay pickable.** Viewport hit-testing (hover readouts, click-to-activate, atom-editing on a displayed result) ignores alpha, so a nearly-invisible ghost atom still intercepts clicks and hovers ahead of the buried atoms it reveals.
+- **Place `xray` near the end of the chain — after any rebuilding node.** Nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, …) silently drop the transparency recording; the atoms simply render opaque again downstream, with no error. Put `xray` after those nodes.
+- **Intersecting ghosts can blend slightly wrong.** Where ghost impostors mutually intersect (a bond shaft entering its own atom's sphere, two heavily overlapping ghost spheres) the per-pixel blend order inside the intersection can be imperfect. This is inherent to sorted alpha blending and is subtle at a uniform region alpha.
 
 ## add_hydrogen
 

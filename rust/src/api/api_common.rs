@@ -127,6 +127,12 @@ pub fn to_display_preferences(
             space_filling_cull_depth: preferences
                 .atomic_structure_visualization_preferences
                 .space_filling_cull_depth,
+            scene_transparency_enabled: preferences
+                .atomic_structure_visualization_preferences
+                .scene_transparency_enabled,
+            scene_alpha: preferences
+                .atomic_structure_visualization_preferences
+                .scene_alpha as f32,
         },
         background: display_prefs::BackgroundPreferences {
             show_axes: preferences.background_preferences.show_axes,

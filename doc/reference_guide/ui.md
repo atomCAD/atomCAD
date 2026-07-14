@@ -250,6 +250,7 @@ Even when a non-Manual policy is active, you can still toggle a pin's visibility
 
 - Ball and stick: atoms are represented with small balls (their radius is half the covalent radius) and bonds are represented as sticks.
 - Space-filling: atoms are represented as big balls: their radius is exactly the van der Waals radius (we use data published by Santiago Alvarez in 2014)
+- **Scene transparency** (opacity icon): a toggle that ghosts the whole scene so you can see internal features through their surroundings — a quick, non-destructive alternative to placing [`xray`](nodes/atomic.md#xray) nodes. It flips the *Make whole scene transparent* preference on or off; the alpha it uses (default 0.5) is set in **Edit → Preferences → Atomic Structure Visualization**. Impostor rendering only. It multiplies with any per-region `xray` transparency, so `xray`-ghosted atoms stay more transparent than the rest of the scene.
 
 ## Camera Control Panel
 
@@ -303,6 +304,8 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Rendering Method | *Impostors* (high-performance) or *Triangle Mesh* (traditional geometry). |
 | Ball & Stick Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Ball and Stick mode. Set to 0 to disable culling. |
 | Space Filling Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Space Filling mode. Set to 0 to disable culling. |
+| Make whole scene transparent | Global "see through everything" viewing lens: when enabled, **every** atom and bond renders semi-transparent at the alpha below, without any [`xray`](nodes/atomic.md#xray) nodes. Impostor rendering only (no effect in *Triangle Mesh* mode). It composes with `xray` by **multiplication** — an atom an `xray` node ghosted to α = 0.3 becomes 0.3 × the scene alpha, so ghosted regions stay more transparent than their surroundings. The same toggle is available as a one-click button in the [Display Preferences panel](#atomic-visualization). |
+| Scene transparency alpha | The global alpha (0 = fully transparent, 1 = fully opaque) used when *Make whole scene transparent* is on. Default 0.5. Editable with the slider or the numeric field; the value is kept even while the toggle is off. |
 
 ### Other Settings
 

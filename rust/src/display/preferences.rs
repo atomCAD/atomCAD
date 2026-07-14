@@ -23,6 +23,13 @@ pub struct AtomicStructureVisualizationPreferences {
     pub rendering_method: AtomicRenderingMethod,
     pub ball_and_stick_cull_depth: Option<f64>,
     pub space_filling_cull_depth: Option<f64>,
+    /// When true, all atoms/bonds in the scene render semi-transparent at
+    /// `scene_alpha` — a global viewing lens, independent of `xray` nodes.
+    /// Impostor rendering only. Composes with per-atom `xray` alpha by
+    /// multiplication (see `doc/design_xray_node.md`).
+    pub scene_transparency_enabled: bool,
+    /// Global scene alpha in `[0, 1]` applied when `scene_transparency_enabled`.
+    pub scene_alpha: f32,
 }
 
 #[derive(Clone, Debug)]

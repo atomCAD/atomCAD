@@ -588,6 +588,12 @@ pub struct APIRelaxData {
     pub diff_min_move: f64,
 }
 
+pub struct APIXrayData {
+    /// Display alpha applied to in-region atoms, in `[0.0, 1.0]`. `1.0`
+    /// restores full opacity. Overridden by a wired `alpha` pin.
+    pub alpha: f64,
+}
+
 pub struct APIFreeSphereData {
     pub center: APIVec3,
     pub radius: f64,

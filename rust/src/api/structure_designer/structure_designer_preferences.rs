@@ -169,6 +169,16 @@ pub struct AtomicStructureVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_space_filling_cull_depth")]
     pub space_filling_cull_depth: Option<f64>,
+    /// When true, every atom/bond renders semi-transparent at `scene_alpha` —
+    /// a global "see through everything" viewing lens, independent of `xray`
+    /// nodes and composed with them by multiplication. Impostor mode only.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub scene_transparency_enabled: bool,
+    /// Global scene alpha in `[0, 1]` used when `scene_transparency_enabled`.
+    #[frb(non_final)]
+    #[serde(default = "default_scene_alpha")]
+    pub scene_alpha: f64,
 }
 
 fn default_ball_and_stick_cull_depth() -> Option<f64> {
@@ -176,6 +186,9 @@ fn default_ball_and_stick_cull_depth() -> Option<f64> {
 }
 fn default_space_filling_cull_depth() -> Option<f64> {
     Some(3.0)
+}
+fn default_scene_alpha() -> f64 {
+    0.5
 }
 
 impl Default for AtomicStructureVisualizationPreferences {
@@ -185,6 +198,8 @@ impl Default for AtomicStructureVisualizationPreferences {
             rendering_method: AtomicRenderingMethod::Impostors,
             ball_and_stick_cull_depth: Some(8.0),
             space_filling_cull_depth: Some(3.0),
+            scene_transparency_enabled: false,
+            scene_alpha: 0.5,
         }
     }
 }

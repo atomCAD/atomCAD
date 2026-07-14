@@ -832,6 +832,18 @@ pub fn tessellate_atomic_structure_impostors(
     let mut culled_count = 0;
     let mut tessellated_count = 0;
 
+    // Global scene-transparency lens: a preference that ghosts the whole scene
+    // independently of `xray` nodes. It composes with per-atom `xray` alpha by
+    // multiplication (`doc/design_xray_node.md`), so an untouched atom
+    // (`get_atom_alpha` == 1.0) picks up exactly `scene_alpha`, while an
+    // xray-ghosted atom becomes even more transparent. Factor of 1.0 when
+    // disabled leaves the per-atom alpha untouched.
+    let global_alpha: f32 = if atomic_viz_prefs.scene_transparency_enabled {
+        atomic_viz_prefs.scene_alpha.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+
     // Tessellate atoms
     for (id, atom) in atomic_structure.iter_atoms() {
         // Get effective display state from decorator
@@ -850,7 +862,7 @@ pub fn tessellate_atomic_structure_impostors(
             atom,
             display_state,
             &atomic_viz_prefs.visualization,
-            atomic_structure.get_atom_alpha(*id),
+            global_alpha * atomic_structure.get_atom_alpha(*id),
         );
     }
 
@@ -882,10 +894,12 @@ pub fn tessellate_atomic_structure_impostors(
                     }
 
                     // Bond alpha is the minimum of its two endpoints (§Bond
-                    // rule); a bond fades if either endpoint is ghosted.
-                    let bond_alpha = atomic_structure
-                        .get_atom_alpha(atom.id)
-                        .min(atomic_structure.get_atom_alpha(other_atom_id));
+                    // rule); a bond fades if either endpoint is ghosted. The
+                    // global scene-transparency lens multiplies in on top.
+                    let bond_alpha = global_alpha
+                        * atomic_structure
+                            .get_atom_alpha(atom.id)
+                            .min(atomic_structure.get_atom_alpha(other_atom_id));
 
                     // Bond delete markers in diff structures render as red
                     if bond.is_delete_marker() && atomic_structure.is_diff() {

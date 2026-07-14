@@ -17,6 +17,7 @@ import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
 import 'api/structure_designer/structure_designer_api_types.dart';
 import 'api/structure_designer/structure_designer_preferences.dart';
+import 'api/structure_designer/xray_api.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ffi' as ffi;
@@ -399,6 +400,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw);
 
   @protected
+  APIXrayData dco_decode_api_xray_data(dynamic raw);
+
+  @protected
   APIZipWithData dco_decode_api_zip_with_data(dynamic raw);
 
   @protected
@@ -704,6 +708,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data dco_decode_box_autoadd_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIXrayData dco_decode_box_autoadd_api_xray_data(dynamic raw);
 
   @protected
   APIZipWithData dco_decode_box_autoadd_api_zip_with_data(dynamic raw);
@@ -1217,6 +1224,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data? dco_decode_opt_box_autoadd_api_vec_3_data(dynamic raw);
+
+  @protected
+  APIXrayData? dco_decode_opt_box_autoadd_api_xray_data(dynamic raw);
 
   @protected
   APIZipWithData? dco_decode_opt_box_autoadd_api_zip_with_data(dynamic raw);
@@ -1780,6 +1790,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIXrayData sse_decode_api_xray_data(SseDeserializer deserializer);
+
+  @protected
   APIZipWithData sse_decode_api_zip_with_data(SseDeserializer deserializer);
 
   @protected
@@ -2157,6 +2170,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data sse_decode_box_autoadd_api_vec_3_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIXrayData sse_decode_box_autoadd_api_xray_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2770,6 +2787,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIVec3Data? sse_decode_opt_box_autoadd_api_vec_3_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIXrayData? sse_decode_opt_box_autoadd_api_xray_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3392,6 +3413,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIViewportPickResult self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_xray_data(APIXrayData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_zip_with_data(
       APIZipWithData self, SseSerializer serializer);
 
@@ -3775,6 +3799,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_vec_3_data(
       APIVec3Data self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_xray_data(
+      APIXrayData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_zip_with_data(
@@ -4399,6 +4427,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_vec_3_data(
       APIVec3Data? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_xray_data(
+      APIXrayData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_zip_with_data(
