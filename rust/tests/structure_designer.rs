@@ -258,6 +258,9 @@ mod region_atom_ops_test;
 #[path = "structure_designer/freeze_test.rs"]
 mod freeze_test;
 
+#[path = "structure_designer/xray_test.rs"]
+mod xray_test;
+
 #[path = "structure_designer/network_result_test.rs"]
 mod network_result_test;
 

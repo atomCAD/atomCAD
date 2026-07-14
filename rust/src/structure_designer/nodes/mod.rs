@@ -95,4 +95,5 @@ pub mod value;
 pub mod vec2;
 pub mod vec3;
 pub mod with_structure;
+pub mod xray;
 pub mod zip_with;
