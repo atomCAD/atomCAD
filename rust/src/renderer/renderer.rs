@@ -6,6 +6,8 @@ use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::line_mesh::LineVertex;
+use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
+use crate::renderer::transparent_impostor_mesh::TransparentImpostorVertex;
 use bytemuck;
 use glam::f32::Mat4;
 use glam::f32::Vec3;
@@ -81,6 +83,7 @@ pub struct Renderer {
     background_line_pipeline: RenderPipeline,
     atom_impostor_pipeline: RenderPipeline,
     bond_impostor_pipeline: RenderPipeline,
+    transparent_impostor_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
@@ -88,6 +91,14 @@ pub struct Renderer {
     background_mesh: GPUMesh,
     atom_impostor_mesh: GPUMesh,
     bond_impostor_mesh: GPUMesh,
+    transparent_impostor_mesh: GPUMesh,
+    /// CPU-side copy of the transparent mesh's per-quad sort centers, retained
+    /// so Phase 5's lazy back-to-front re-sort can rebuild the index buffer
+    /// between mesh updates without re-tessellating. Written on every mesh
+    /// upload; not yet read until the sort lands (Phase 5 of
+    /// `doc/design_xray_node.md`).
+    #[allow(dead_code)]
+    transparent_quad_centers: Vec<Vec3>,
     gadget_atom_impostor_mesh: GPUMesh,
     gadget_bond_impostor_mesh: GPUMesh,
     texture: Texture,
@@ -185,6 +196,10 @@ impl Renderer {
         let bond_impostor_mesh =
             GPUMesh::new_empty_bond_impostor_mesh(&device, &model_bind_group_layout);
 
+        // Merged transparent impostor mesh (x-ray ghost atoms + bonds)
+        let transparent_impostor_mesh =
+            GPUMesh::new_empty_transparent_impostor_mesh(&device, &model_bind_group_layout);
+
         // Gadget impostor meshes (rendered in gadget pass, always on top)
         let gadget_atom_impostor_mesh =
             GPUMesh::new_empty_atom_impostor_mesh(&device, &model_bind_group_layout);
@@ -235,6 +250,11 @@ impl Renderer {
         let bond_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
             label: Some("Bond Impostor Shader"),
             source: ShaderSource::Wgsl(include_str!("bond_impostor.wgsl").into()),
+        });
+
+        let transparent_impostor_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Transparent Impostor Shader"),
+            source: ShaderSource::Wgsl(include_str!("transparent_impostor.wgsl").into()),
         });
 
         let camera_bind_group_layout =
@@ -320,6 +340,12 @@ impl Renderer {
         let bond_impostor_pipeline =
             Self::create_bond_impostor_pipeline(&device, &pipeline_layout, &bond_impostor_shader);
 
+        let transparent_impostor_pipeline = Self::create_transparent_impostor_pipeline(
+            &device,
+            &pipeline_layout,
+            &transparent_impostor_shader,
+        );
+
         Self {
             device,
             queue,
@@ -328,6 +354,7 @@ impl Renderer {
             background_line_pipeline,
             atom_impostor_pipeline,
             bond_impostor_pipeline,
+            transparent_impostor_pipeline,
             main_mesh,
             wireframe_mesh,
             lightweight_mesh,
@@ -335,6 +362,8 @@ impl Renderer {
             background_mesh,
             atom_impostor_mesh,
             bond_impostor_mesh,
+            transparent_impostor_mesh,
+            transparent_quad_centers: Vec::new(),
             gadget_atom_impostor_mesh,
             gadget_bond_impostor_mesh,
             texture,
@@ -590,6 +619,68 @@ impl Renderer {
         })
     }
 
+    /// Pipeline for the merged transparent impostor mesh (x-ray ghost atoms +
+    /// bonds). Standard alpha blending, depth *test* on but depth *write* off,
+    /// so ghosts test against opaque geometry (drawn first with depth writes on)
+    /// yet do not occlude one another in the buffer. Culling is disabled: each
+    /// quad is a camera-facing billboard whose real shape comes from the
+    /// per-fragment ray-cast, so back-face culling could only wrongly drop a
+    /// quad. Draw order back-to-front is handled by the index buffer (emission
+    /// order for now; Phase 5 adds the depth sort).
+    fn create_transparent_impostor_pipeline(
+        device: &Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        transparent_impostor_shader: &wgpu::ShaderModule,
+    ) -> RenderPipeline {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Transparent Impostor Render Pipeline"),
+            layout: Some(pipeline_layout),
+            vertex: VertexState {
+                module: transparent_impostor_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[TransparentImpostorVertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: transparent_impostor_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
+
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
         self.camera.eye = *eye;
         self.camera.target = *target;
@@ -645,6 +736,7 @@ impl Renderer {
         wireframe_mesh: &LineMesh,
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
+        transparent_impostor_mesh: &TransparentImpostorMesh,
         gadget_atom_impostor_mesh: &AtomImpostorMesh,
         gadget_bond_impostor_mesh: &BondImpostorMesh,
         update_non_lightweight: bool,
@@ -674,6 +766,16 @@ impl Renderer {
                 "Bond Impostors",
             );
 
+            self.transparent_impostor_mesh
+                .update_from_transparent_impostor_mesh(
+                    &self.device,
+                    transparent_impostor_mesh,
+                    "Transparent Impostors",
+                );
+            // Retain a CPU copy of the sort centers for Phase 5's lazy re-sort.
+            self.transparent_quad_centers
+                .clone_from(&transparent_impostor_mesh.quad_centers);
+
             self.gadget_atom_impostor_mesh
                 .update_from_atom_impostor_mesh(
                     &self.device,
@@ -692,6 +794,8 @@ impl Renderer {
 
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
+            self.transparent_impostor_mesh
+                .set_identity_transform(&self.queue);
             self.gadget_atom_impostor_mesh
                 .set_identity_transform(&self.queue);
             self.gadget_bond_impostor_mesh
@@ -780,6 +884,15 @@ impl Renderer {
             self.background_mesh.set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.background_line_pipeline);
             self.render_mesh(&mut render_pass, &self.background_mesh);
+
+            // Transparent impostors (x-ray) draw last in the main pass — after
+            // ALL opaque content, including the background lines — with alpha
+            // blending and depth writes off. Drawn in index-buffer order
+            // (emission order for now; Phase 5 adds the back-to-front sort).
+            self.transparent_impostor_mesh
+                .set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.transparent_impostor_pipeline);
+            self.render_mesh(&mut render_pass, &self.transparent_impostor_mesh);
         }
 
         // Second render pass for gadgets - clear depth buffer but preserve color

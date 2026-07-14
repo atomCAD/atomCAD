@@ -2,6 +2,7 @@ use super::mesh::Mesh;
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::renderer::line_mesh::LineMesh;
+use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use bytemuck;
 use glam::Mat4;
 use wgpu::{BufferUsages, Device, util::DeviceExt};
@@ -53,6 +54,9 @@ pub enum MeshType {
     AtomImpostors,
     /// Bond impostor mesh rendered as quads with cylinder ray-casting
     BondImpostors,
+    /// Merged transparent impostor mesh (x-ray): ghost atoms + bonds in one
+    /// mesh, rendered with alpha blending and depth writes off.
+    TransparentImpostors,
 }
 
 /// Represents a mesh on the GPU with vertex and index buffers and its own transform
@@ -112,6 +116,16 @@ impl GPUMesh {
                     usage: BufferUsages::VERTEX,
                 });
                 (vertex_buffer, "Empty Bond Impostor Vertex Buffer")
+            }
+            MeshType::TransparentImpostors => {
+                let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Empty Transparent Impostor Vertex Buffer"),
+                    contents: bytemuck::cast_slice(
+                        &[] as &[crate::renderer::transparent_impostor_mesh::TransparentImpostorVertex],
+                    ),
+                    usage: BufferUsages::VERTEX,
+                });
+                (vertex_buffer, "Empty Transparent Impostor Vertex Buffer")
             }
         };
 
@@ -179,6 +193,18 @@ impl GPUMesh {
         model_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         Self::new_empty(device, MeshType::BondImpostors, model_bind_group_layout)
+    }
+
+    /// Creates a new empty transparent impostor mesh
+    pub fn new_empty_transparent_impostor_mesh(
+        device: &Device,
+        model_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        Self::new_empty(
+            device,
+            MeshType::TransparentImpostors,
+            model_bind_group_layout,
+        )
     }
 
     /// Updates the GPUMesh from a CPU Triangle Mesh
@@ -312,6 +338,38 @@ impl GPUMesh {
         });
 
         self.num_indices = bond_impostor_mesh.indices.len() as u32;
+
+        // Note: The model buffer and bind group remain unchanged
+    }
+
+    /// Updates the GPUMesh from a CPU Transparent Impostor Mesh
+    pub fn update_from_transparent_impostor_mesh(
+        &mut self,
+        device: &Device,
+        transparent_impostor_mesh: &TransparentImpostorMesh,
+        label_prefix: &str,
+    ) {
+        assert!(
+            self.mesh_type == MeshType::TransparentImpostors,
+            "Cannot update a non-transparent-impostor GPUMesh with a TransparentImpostorMesh"
+        );
+
+        let vertex_label = format!("{} Transparent Impostor Vertex Buffer", label_prefix);
+        let index_label = format!("{} Transparent Impostor Index Buffer", label_prefix);
+
+        self.vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&vertex_label),
+            contents: bytemuck::cast_slice(transparent_impostor_mesh.vertices.as_slice()),
+            usage: BufferUsages::VERTEX,
+        });
+
+        self.index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&index_label),
+            contents: bytemuck::cast_slice(transparent_impostor_mesh.indices.as_slice()),
+            usage: BufferUsages::INDEX,
+        });
+
+        self.num_indices = transparent_impostor_mesh.indices.len() as u32;
 
         // Note: The model buffer and bind group remain unchanged
     }

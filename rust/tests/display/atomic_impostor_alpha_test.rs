@@ -15,10 +15,16 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
 use rust_lib_flutter_cad::display::atomic_tessellator::tessellate_atomic_structure_impostors;
 use rust_lib_flutter_cad::display::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
+    BackgroundPreferences, DisplayPreferences, GeometryVisualizationPreferences, MeshSmoothing,
 };
+use rust_lib_flutter_cad::display::scene_tessellator::tessellate_scene_content;
 use rust_lib_flutter_cad::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use rust_lib_flutter_cad::renderer::bond_impostor_mesh::BondImpostorMesh;
+use rust_lib_flutter_cad::renderer::camera::Camera;
 use rust_lib_flutter_cad::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
+use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
+    NodeOutput, NodeSceneData, StructureDesignerScene,
+};
 
 // ============================================================================
 // Helpers
@@ -299,4 +305,119 @@ fn space_filling_non_overstretched_bond_still_filtered() {
         "bond filtered, none transparent"
     );
     assert_eq!(bond_quads(&m.bond), 0, "bond filtered, none opaque");
+}
+
+// ============================================================================
+// Scene-level routing (Phase 4) — the seam the renderer actually consumes.
+// ============================================================================
+
+/// A default camera looking at the origin; the non-lightweight tessellation
+/// path the transparent mesh comes from does not use it, but the entry point
+/// requires one.
+fn test_camera() -> Camera {
+    Camera {
+        eye: DVec3::new(0.0, -30.0, 10.0),
+        target: DVec3::ZERO,
+        up: DVec3::new(0.0, 0.32, 0.95).normalize(),
+        aspect: 1.0,
+        fovy: std::f64::consts::PI * 0.15,
+        znear: 1.5,
+        zfar: 2400.0,
+        orthographic: false,
+        ortho_half_height: 10.0,
+        pivot_point: DVec3::ZERO,
+        nav_up: DVec3::Z,
+        nav_up_label: "Z".to_string(),
+    }
+}
+
+/// Minimal display preferences with the given atomic rendering method; other
+/// fields are inert for this test (no geometry, no background rendering hit).
+fn display_prefs(rendering_method: AtomicRenderingMethod) -> DisplayPreferences {
+    DisplayPreferences {
+        geometry_visualization: GeometryVisualizationPreferences {
+            wireframe_geometry: false,
+            mesh_smoothing: MeshSmoothing::Smooth,
+            display_camera_target: false,
+            wireframe_active_color: [1.0, 1.0, 1.0],
+            wireframe_inactive_color: [0.5, 0.5, 0.5],
+            hide_coplanar_edges: false,
+        },
+        atomic_structure_visualization: AtomicStructureVisualizationPreferences {
+            visualization: AtomicStructureVisualization::BallAndStick,
+            rendering_method,
+            ball_and_stick_cull_depth: None,
+            space_filling_cull_depth: None,
+        },
+        background: BackgroundPreferences {
+            show_axes: false,
+            show_grid: false,
+            grid_size: 10,
+            grid_color: [0, 0, 0],
+            grid_strong_color: [0, 0, 0],
+            show_lattice_axes: false,
+            show_lattice_grid: false,
+            lattice_grid_color: [0, 0, 0],
+            lattice_grid_strong_color: [0, 0, 0],
+            drawing_plane_grid_color: [0, 0, 0],
+            drawing_plane_grid_strong_color: [0, 0, 0],
+            unit_cell_wireframe_color: [0, 0, 0],
+        },
+    }
+}
+
+/// Build a one-node scene whose displayed output is an alpha-carrying molecule.
+fn scene_with_ghost_atoms() -> StructureDesignerScene {
+    let mut s = AtomicStructure::new();
+    let a = s.add_atom(6, DVec3::new(-1.0, 0.0, 0.0));
+    let b = s.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    s.add_bond(a, b, BOND_SINGLE);
+    s.set_atom_alpha(a, 0.3);
+    s.set_atom_alpha(b, 0.3);
+
+    let mut scene = StructureDesignerScene::new();
+    scene
+        .node_data
+        .insert(0, NodeSceneData::new(NodeOutput::Atomic(s, None)));
+    scene
+}
+
+/// `tessellate_scene_content` with impostor prefs routes the alpha-carrying
+/// structure into a non-empty transparent mesh — the exact value the renderer
+/// uploads and draws.
+#[test]
+fn scene_impostor_mode_returns_nonempty_transparent_mesh() {
+    let scene = scene_with_ghost_atoms();
+    let (.., transparent, _gadget_atoms, _gadget_bonds) = tessellate_scene_content(
+        &scene,
+        &test_camera(),
+        false, // not lightweight
+        &display_prefs(AtomicRenderingMethod::Impostors),
+    );
+
+    // Two ghost atoms + one ghost bond (both endpoints ghosted).
+    assert_eq!(transparent_quads_of_kind(&transparent, 0), 2, "ghost atoms");
+    assert_eq!(transparent_quads_of_kind(&transparent, 1), 1, "ghost bond");
+    assert!(!transparent.vertices.is_empty());
+}
+
+/// In `TriangleMesh` mode atoms tessellate opaque; the transparent mesh the
+/// renderer consumes stays empty regardless of alpha.
+#[test]
+fn scene_triangle_mesh_mode_leaves_transparent_empty() {
+    let scene = scene_with_ghost_atoms();
+    let (.., transparent, _gadget_atoms, _gadget_bonds) = tessellate_scene_content(
+        &scene,
+        &test_camera(),
+        false, // not lightweight
+        &display_prefs(AtomicRenderingMethod::TriangleMesh),
+    );
+
+    assert_eq!(
+        transparent.vertices.len(),
+        0,
+        "transparent empty in mesh mode"
+    );
+    assert_eq!(transparent.indices.len(), 0);
+    assert_eq!(transparent.quad_centers.len(), 0);
 }

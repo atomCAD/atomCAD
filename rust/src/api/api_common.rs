@@ -440,9 +440,9 @@ pub fn refresh_structure_designer(
         wireframe_mesh,
         atom_impostor_mesh,
         bond_impostor_mesh,
-        // Merged transparent impostor mesh (x-ray). Dropped here in Phase 3;
-        // the renderer starts consuming it in Phase 4 of design_xray_node.md.
-        _transparent_impostor_mesh,
+        // Merged transparent impostor mesh (x-ray), consumed by the renderer's
+        // transparent pipeline (Phase 4 of design_xray_node.md).
+        transparent_impostor_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     ) = crate::display::scene_tessellator::tessellate_scene_content(
@@ -461,6 +461,7 @@ pub fn refresh_structure_designer(
         &wireframe_mesh,
         &atom_impostor_mesh,
         &bond_impostor_mesh,
+        &transparent_impostor_mesh,
         &gadget_atom_impostor_mesh,
         &gadget_bond_impostor_mesh,
         !renderer_lightweight,
