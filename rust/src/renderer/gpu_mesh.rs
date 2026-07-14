@@ -363,10 +363,13 @@ impl GPUMesh {
             usage: BufferUsages::VERTEX,
         });
 
+        // COPY_DST so the Phase 5 back-to-front sort can rewrite the index
+        // buffer in place (a fixed-size permutation) via `queue.write_buffer`
+        // without reallocating between mesh uploads.
         self.index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&index_label),
             contents: bytemuck::cast_slice(transparent_impostor_mesh.indices.as_slice()),
-            usage: BufferUsages::INDEX,
+            usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
         });
 
         self.num_indices = transparent_impostor_mesh.indices.len() as u32;

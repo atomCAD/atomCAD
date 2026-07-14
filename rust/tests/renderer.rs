@@ -6,3 +6,6 @@ mod camera_test;
 
 #[path = "renderer/transparent_impostor_mesh_test.rs"]
 mod transparent_impostor_mesh_test;
+
+#[path = "renderer/transparent_sort_test.rs"]
+mod transparent_sort_test;

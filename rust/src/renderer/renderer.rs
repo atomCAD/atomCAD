@@ -8,6 +8,7 @@ use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::renderer::transparent_impostor_mesh::TransparentImpostorVertex;
+use crate::renderer::transparent_sort::sorted_transparent_indices;
 use bytemuck;
 use glam::f32::Mat4;
 use glam::f32::Vec3;
@@ -93,12 +94,19 @@ pub struct Renderer {
     bond_impostor_mesh: GPUMesh,
     transparent_impostor_mesh: GPUMesh,
     /// CPU-side copy of the transparent mesh's per-quad sort centers, retained
-    /// so Phase 5's lazy back-to-front re-sort can rebuild the index buffer
-    /// between mesh updates without re-tessellating. Written on every mesh
-    /// upload; not yet read until the sort lands (Phase 5 of
-    /// `doc/design_xray_node.md`).
-    #[allow(dead_code)]
+    /// so the lazy back-to-front re-sort (§Sorting of `doc/design_xray_node.md`)
+    /// can rebuild the index buffer between mesh updates without re-tessellating.
+    /// Written on every transparent-mesh upload.
     transparent_quad_centers: Vec<Vec3>,
+    /// Bumped whenever a new transparent mesh is uploaded, so the lazy re-sort
+    /// knows the centers changed even if the camera has not moved.
+    transparent_mesh_generation: u64,
+    /// The mesh generation the current sorted index buffer was built for
+    /// (`None` = never sorted). A mismatch forces a re-sort.
+    transparent_sorted_generation: Option<u64>,
+    /// The view matrix the current sorted index buffer was built for
+    /// (`None` = never sorted). A change forces a re-sort.
+    transparent_sorted_view: Option<Mat4>,
     gadget_atom_impostor_mesh: GPUMesh,
     gadget_bond_impostor_mesh: GPUMesh,
     texture: Texture,
@@ -364,6 +372,9 @@ impl Renderer {
             bond_impostor_mesh,
             transparent_impostor_mesh,
             transparent_quad_centers: Vec::new(),
+            transparent_mesh_generation: 0,
+            transparent_sorted_generation: None,
+            transparent_sorted_view: None,
             gadget_atom_impostor_mesh,
             gadget_bond_impostor_mesh,
             texture,
@@ -772,9 +783,13 @@ impl Renderer {
                     transparent_impostor_mesh,
                     "Transparent Impostors",
                 );
-            // Retain a CPU copy of the sort centers for Phase 5's lazy re-sort.
+            // Retain a CPU copy of the sort centers for the lazy re-sort, and
+            // bump the mesh generation so `render` re-sorts against the new
+            // geometry even if the camera has not moved. The freshly uploaded
+            // index buffer is in emission order; the re-sort replaces it.
             self.transparent_quad_centers
                 .clone_from(&transparent_impostor_mesh.quad_centers);
+            self.transparent_mesh_generation = self.transparent_mesh_generation.wrapping_add(1);
 
             self.gadget_atom_impostor_mesh
                 .update_from_atom_impostor_mesh(
@@ -816,6 +831,32 @@ impl Renderer {
 
     pub fn render(&mut self, background_color_rgb: [u8; 3]) -> Vec<u8> {
         let _lock = self.render_mutex.lock().unwrap();
+
+        // Lazily re-sort the transparent impostors back-to-front for the current
+        // camera before the pass draws them. Recomputes and re-uploads the index
+        // buffer only when the camera view has changed or a new transparent mesh
+        // was uploaded since the last sort — so a resting camera costs nothing,
+        // and orbiting re-sorts once per moved frame (§Sorting of
+        // `doc/design_xray_node.md`). The sort is a fixed-size permutation of the
+        // existing index buffer, so this `write_buffer` never reallocates. This
+        // is written out over disjoint fields (not a `&mut self` helper) because
+        // `_lock` holds an immutable borrow of `self` for the whole method.
+        if self.transparent_impostor_mesh.num_indices > 0 {
+            let view = self.camera.build_view_matrix().as_mat4();
+            let up_to_date = self.transparent_sorted_generation
+                == Some(self.transparent_mesh_generation)
+                && self.transparent_sorted_view == Some(view);
+            if !up_to_date {
+                let indices = sorted_transparent_indices(&self.transparent_quad_centers, &view);
+                self.queue.write_buffer(
+                    &self.transparent_impostor_mesh.index_buffer,
+                    0,
+                    bytemuck::cast_slice(&indices),
+                );
+                self.transparent_sorted_generation = Some(self.transparent_mesh_generation);
+                self.transparent_sorted_view = Some(view);
+            }
+        }
 
         let mut encoder = self
             .device
@@ -887,8 +928,9 @@ impl Renderer {
 
             // Transparent impostors (x-ray) draw last in the main pass — after
             // ALL opaque content, including the background lines — with alpha
-            // blending and depth writes off. Drawn in index-buffer order
-            // (emission order for now; Phase 5 adds the back-to-front sort).
+            // blending and depth writes off. The index buffer is kept in
+            // back-to-front order for the current camera by
+            // `resort_transparent_indices_if_needed` (called above).
             self.transparent_impostor_mesh
                 .set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.transparent_impostor_pipeline);
