@@ -391,6 +391,26 @@ impl AtomicStructure {
         }
     }
 
+    /// Sets the display alpha for an atom. Values below 0.0 clamp to 0.0;
+    /// values at or above 1.0 remove the entry (fully opaque).
+    pub fn set_atom_alpha(&mut self, atom_id: u32, alpha: f32) {
+        if alpha >= 1.0 {
+            self.decorator.atom_alpha.remove(&atom_id);
+        } else {
+            self.decorator.atom_alpha.insert(atom_id, alpha.max(0.0));
+        }
+    }
+
+    /// Returns the display alpha for an atom; atoms without an entry are
+    /// fully opaque (1.0).
+    pub fn get_atom_alpha(&self, atom_id: u32) -> f32 {
+        self.decorator
+            .atom_alpha
+            .get(&atom_id)
+            .copied()
+            .unwrap_or(1.0)
+    }
+
     pub fn delete_atom(&mut self, id: u32) {
         if id == 0 {
             return;
@@ -428,6 +448,7 @@ impl AtomicStructure {
 
         // Clear from decorator
         self.decorator.atom_display_states.remove(&id);
+        self.decorator.atom_alpha.remove(&id);
     }
 
     /// Fast deletion for lone atoms (no bonds, guaranteed to exist)
@@ -441,6 +462,7 @@ impl AtomicStructure {
         self.atoms[index] = None;
         self.num_atoms -= 1;
         self.decorator.atom_display_states.remove(&id);
+        self.decorator.atom_alpha.remove(&id);
     }
 
     /// Safe bond creation - validates atoms exist, updates or creates bond
@@ -902,6 +924,13 @@ impl AtomicStructure {
                     atom_id2: new_id2,
                 };
                 self.decorator.select_bond(&new_bond_ref);
+            }
+        }
+
+        // Merge per-atom display alphas with remapped IDs
+        for (&old_atom_id, &alpha) in &other.decorator.atom_alpha {
+            if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
+                self.decorator.atom_alpha.insert(new_atom_id, alpha);
             }
         }
 

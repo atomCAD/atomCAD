@@ -76,7 +76,9 @@ fn plane_with_marker() -> DrawingPlane {
 #[test]
 fn construction_plane_from_drawing_plane_result() {
     let result = NetworkResult::DrawingPlane(plane_with_marker());
-    let plane = result.construction_plane().expect("DrawingPlane has a plane");
+    let plane = result
+        .construction_plane()
+        .expect("DrawingPlane has a plane");
     assert_eq!(plane.center, IVec3::new(3, 4, 5));
 }
 

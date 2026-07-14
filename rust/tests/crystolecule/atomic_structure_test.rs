@@ -539,6 +539,77 @@ fn test_set_atom_hydrogen_passivation() {
     assert!(atom.is_hydrogen_passivation());
 }
 
+#[test]
+fn test_atom_alpha_set_and_get() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Absent entry (and non-existent atom) reads as fully opaque
+    assert_eq!(structure.get_atom_alpha(id), 1.0);
+    assert_eq!(structure.get_atom_alpha(9999), 1.0);
+
+    structure.set_atom_alpha(id, 0.3);
+    assert_eq!(structure.get_atom_alpha(id), 0.3);
+}
+
+#[test]
+fn test_atom_alpha_boundary_semantics() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Negative values clamp to 0.0
+    structure.set_atom_alpha(id, -0.5);
+    assert_eq!(structure.get_atom_alpha(id), 0.0);
+
+    // Setting 1.0 removes an existing entry
+    structure.set_atom_alpha(id, 0.4);
+    structure.set_atom_alpha(id, 1.0);
+    assert_eq!(structure.get_atom_alpha(id), 1.0);
+    assert!(structure.decorator().atom_alpha.is_empty());
+
+    // Values above 1.0 also remove
+    structure.set_atom_alpha(id, 0.4);
+    structure.set_atom_alpha(id, 1.5);
+    assert!(structure.decorator().atom_alpha.is_empty());
+}
+
+#[test]
+fn test_atom_alpha_cleared_on_delete() {
+    let mut structure = create_test_molecule();
+    let bonded_id = 1; // c1, has bonds
+    structure.set_atom_alpha(bonded_id, 0.3);
+    structure.delete_atom(bonded_id);
+    assert!(structure.decorator().atom_alpha.is_empty());
+
+    let mut structure = AtomicStructure::new();
+    let lone_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_alpha(lone_id, 0.3);
+    structure.delete_lone_atom(lone_id);
+    assert!(structure.decorator().atom_alpha.is_empty());
+}
+
+#[test]
+fn test_atom_alpha_remapped_on_merge() {
+    let mut target = AtomicStructure::new();
+    target.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    target.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+
+    let mut other = AtomicStructure::new();
+    let o1 = other.add_atom(8, DVec3::new(5.0, 0.0, 0.0));
+    let o2 = other.add_atom(8, DVec3::new(6.5, 0.0, 0.0));
+    other.set_atom_alpha(o1, 0.25);
+    other.set_atom_alpha(o2, 0.75);
+
+    let id_map = target.add_atomic_structure(&other);
+
+    let new_o1 = *id_map.get(&o1).unwrap();
+    let new_o2 = *id_map.get(&o2).unwrap();
+    assert_ne!(new_o1, o1); // ids actually remapped (target already had atoms)
+    assert_eq!(target.get_atom_alpha(new_o1), 0.25);
+    assert_eq!(target.get_atom_alpha(new_o2), 0.75);
+    assert_eq!(target.decorator().atom_alpha.len(), 2);
+}
+
 // ============================================================================
 // Group 5: Atom Field Setters
 // ============================================================================

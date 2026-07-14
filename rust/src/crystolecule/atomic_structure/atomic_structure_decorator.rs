@@ -82,6 +82,9 @@ pub struct AtomicStructureDecorator {
     /// Used by motif_edit to resolve ghost atom hits back to primary atoms
     /// for cross-cell bond creation.
     pub ghost_atom_metadata: FxHashMap<u32, (u32, IVec3)>,
+    /// Per-atom display alpha in [0,1). Absent = fully opaque. Runtime-only
+    /// display augmentation, like all decorator state (never serialized).
+    pub atom_alpha: FxHashMap<u32, f32>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -102,6 +105,7 @@ impl AtomicStructureDecorator {
             guideline_visuals: None,
             element_name_overrides: FxHashMap::default(),
             ghost_atom_metadata: FxHashMap::default(),
+            atom_alpha: FxHashMap::default(),
         }
     }
 
