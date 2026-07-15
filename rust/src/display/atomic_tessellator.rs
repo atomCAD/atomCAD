@@ -1,6 +1,6 @@
 use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::crystolecule::atomic_structure::{
-    Atom, AtomDisplayState, AtomicStructure, BondReference,
+    Atom, AtomDisplayState, AtomRenderStyle, AtomicStructure, BondReference,
 };
 use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
 use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
@@ -92,27 +92,66 @@ const PARAM_ELEMENT_COLORS: &[Vec3] = &[
 const PARAM_ELEMENT_COVALENT_RADIUS: f64 = 0.77;
 const PARAM_ELEMENT_VDW_RADIUS: f64 = 1.7;
 
-/// Helper function to determine if an atom should be culled based on depth
+/// The visualization mode this atom renders in: its decorator render-style
+/// override, else the global `global` preference. Every mode-branching site in
+/// this file switches from the global parameter to this per-atom lookup — see
+/// `doc/design_style_rules.md` §Per-atom render style. `display` owns this
+/// mapping because crystolecule (where the override is stored, as
+/// `AtomRenderStyle`) must not depend on `display`.
+pub fn effective_visualization(
+    structure: &AtomicStructure,
+    atom_id: u32,
+    global: &AtomicStructureVisualization,
+) -> AtomicStructureVisualization {
+    match structure.get_atom_render_style(atom_id) {
+        Some(AtomRenderStyle::BallAndStick) => AtomicStructureVisualization::BallAndStick,
+        Some(AtomRenderStyle::SpaceFilling) => AtomicStructureVisualization::SpaceFilling,
+        None => global.clone(),
+    }
+}
+
+/// Depth culling (Decision 2, `doc/design_style_rules.md`): an atom is culled
+/// only when its depth exceeds **both** the global mode's threshold and its
+/// effective mode's threshold (a `None` threshold means no culling, i.e. never
+/// exceeded). With no render-style overrides the two modes coincide and this is
+/// exactly the legacy single-threshold behavior. This protects the headline use
+/// case — a space-filling-styled dopant inside a ball-and-stick crystal stays
+/// visible even though the space-filling default threshold is shallower.
 fn should_cull_atom(
+    structure: &AtomicStructure,
     atom: &Atom,
     atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
 ) -> bool {
-    match atomic_viz_prefs.visualization {
-        AtomicStructureVisualization::BallAndStick => {
-            if let Some(cull_depth) = atomic_viz_prefs.ball_and_stick_cull_depth {
-                atom.in_crystal_depth > cull_depth as f32
-            } else {
-                false
+    let threshold = |mode: &AtomicStructureVisualization| -> Option<f64> {
+        match mode {
+            AtomicStructureVisualization::BallAndStick => {
+                atomic_viz_prefs.ball_and_stick_cull_depth
             }
+            AtomicStructureVisualization::SpaceFilling => atomic_viz_prefs.space_filling_cull_depth,
         }
-        AtomicStructureVisualization::SpaceFilling => {
-            if let Some(cull_depth) = atomic_viz_prefs.space_filling_cull_depth {
-                atom.in_crystal_depth > cull_depth as f32
-            } else {
-                false
-            }
-        }
-    }
+    };
+    let exceeds =
+        |t: Option<f64>| t.is_some_and(|cull_depth| atom.in_crystal_depth > cull_depth as f32);
+    let effective = effective_visualization(structure, atom.id, &atomic_viz_prefs.visualization);
+    exceeds(threshold(&atomic_viz_prefs.visualization)) && exceeds(threshold(&effective))
+}
+
+/// A bond renders (and picks) as **ball-and-stick** — stick radius, multi-bond
+/// layout, always drawn — iff at least one endpoint's effective mode is
+/// ball-and-stick (Decision 1, `doc/design_style_rules.md`). Both endpoints
+/// space-filling ⇒ legacy space-filling bond behavior (drawn only when
+/// overstretched, at `SPACE_FILLING_BOND_RADIUS_SCALE`× radius). With no
+/// overrides this reduces to the global mode, matching the legacy behavior.
+fn bond_is_ball_and_stick(
+    structure: &AtomicStructure,
+    atom1: &Atom,
+    atom2: &Atom,
+    global: &AtomicStructureVisualization,
+) -> bool {
+    effective_visualization(structure, atom1.id, global)
+        == AtomicStructureVisualization::BallAndStick
+        || effective_visualization(structure, atom2.id, global)
+            == AtomicStructureVisualization::BallAndStick
 }
 
 pub fn tessellate_atomic_structure(
@@ -161,7 +200,7 @@ pub fn tessellate_atomic_structure(
         let display_state = get_atom_display_state(*id, atomic_structure);
 
         // Apply depth culling if enabled
-        if should_cull_atom(atom, atomic_viz_prefs) {
+        if should_cull_atom(atomic_structure, atom, atomic_viz_prefs) {
             // Skip tessellating this atom - it's too deep inside and can't be seen
             culled_count += 1;
             continue;
@@ -174,7 +213,7 @@ pub fn tessellate_atomic_structure(
             atom,
             params,
             display_state,
-            &atomic_viz_prefs.visualization,
+            atomic_viz_prefs,
             &mut reusable_occludable_mesh,
             &mut reusable_occluder_array,
         );
@@ -185,7 +224,7 @@ pub fn tessellate_atomic_structure(
         // Iterate inline bonds - each bond only once using atom ID ordering
         for atom in atomic_structure.atoms_values() {
             // Skip bonds if this atom is culled
-            if should_cull_atom(atom, atomic_viz_prefs) {
+            if should_cull_atom(atomic_structure, atom, atomic_viz_prefs) {
                 continue;
             }
 
@@ -196,14 +235,20 @@ pub fn tessellate_atomic_structure(
                     && let Some(other_atom) = atomic_structure.get_atom(other_atom_id)
                 {
                     // Skip bond if the other atom is culled
-                    if should_cull_atom(other_atom, atomic_viz_prefs) {
+                    if should_cull_atom(atomic_structure, other_atom, atomic_viz_prefs) {
                         continue;
                     }
 
-                    // In space-filling mode, only render overstretched bonds
-                    if atomic_viz_prefs.visualization == AtomicStructureVisualization::SpaceFilling
-                        && !is_bond_overstretched(atom, other_atom)
-                    {
+                    // Decision 1: a bond is ball-and-stick iff at least one
+                    // endpoint is; a space-filling bond (both endpoints SF)
+                    // renders only when overstretched.
+                    let bond_bs = bond_is_ball_and_stick(
+                        atomic_structure,
+                        atom,
+                        other_atom,
+                        &atomic_viz_prefs.visualization,
+                    );
+                    if !bond_bs && !is_bond_overstretched(atom, other_atom) {
                         continue;
                     }
 
@@ -217,12 +262,10 @@ pub fn tessellate_atomic_structure(
                             params,
                         );
                     } else {
-                        let radius_scale = if atomic_viz_prefs.visualization
-                            == AtomicStructureVisualization::SpaceFilling
-                        {
-                            SPACE_FILLING_BOND_RADIUS_SCALE
-                        } else {
+                        let radius_scale = if bond_bs {
                             1.0
+                        } else {
+                            SPACE_FILLING_BOND_RADIUS_SCALE
                         };
                         tessellate_bond_inline(
                             output_mesh,
@@ -478,26 +521,44 @@ impl OccluderArray {
     }
 }
 
-// Calculate occluder spheres for space-filling visualization
+// Calculate occluder spheres for the mesh-path occlusion optimization.
+//
+// Decision 3 (`doc/design_style_rules.md`): only atoms that are unambiguously
+// full vdW spheres occlude — a bonded neighbor counts iff its **effective**
+// mode is space-filling, it is opaque (`get_atom_alpha == 1.0`), and it is not
+// culled. Ball-and-stick atoms never occlude (their displayed radius is far
+// smaller than the vdW sphere the optimization assumes). This runs regardless
+// of the global mode; on a plain opaque space-filling scene with no overrides
+// or culling it collects exactly the legacy all-neighbors set. It is a
+// correctness-conservative narrowing of an optimization — worst case some
+// occludable atoms are tessellated anyway.
 fn calculate_occluder_spheres(
     atom: &Atom,
     atomic_structure: &AtomicStructure,
-    visualization: &AtomicStructureVisualization,
+    atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
     occluder_array: &mut OccluderArray,
 ) {
     occluder_array.clear();
-
-    // Only calculate occlusion for space-filling mode
-    if *visualization != AtomicStructureVisualization::SpaceFilling {
-        return;
-    }
 
     // Use atom's inline bonds for neighbor access
     for bond in &atom.bonds {
         let neighbor_atom_id = bond.other_atom_id();
 
         if let Some(neighbor) = atomic_structure.get_atom(neighbor_atom_id) {
-            let neighbor_radius = get_displayed_atom_radius(neighbor, visualization);
+            let neighbor_viz = effective_visualization(
+                atomic_structure,
+                neighbor_atom_id,
+                &atomic_viz_prefs.visualization,
+            );
+            // Only opaque, unculled, effective-space-filling neighbors occlude.
+            if neighbor_viz != AtomicStructureVisualization::SpaceFilling
+                || atomic_structure.get_atom_alpha(neighbor_atom_id) < 1.0
+                || should_cull_atom(atomic_structure, neighbor, atomic_viz_prefs)
+            {
+                continue;
+            }
+
+            let neighbor_radius = get_displayed_atom_radius(neighbor, &neighbor_viz);
 
             occluder_array.push(OccluderSphere {
                 center: neighbor.position.as_vec3(),
@@ -514,7 +575,7 @@ pub(crate) fn tessellate_atom(
     atom: &Atom,
     params: &AtomicTessellatorParams,
     display_state: AtomDisplayState,
-    visualization: &AtomicStructureVisualization,
+    atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
     reusable_occludable_mesh: &mut tessellator::OccludableMesh,
     reusable_occluder_array: &mut OccluderArray,
 ) {
@@ -526,11 +587,15 @@ pub(crate) fn tessellate_atom(
     //  return; // Temporarily test without Hydrogen
     //}
 
+    // Per-atom effective visualization drives radius, sphere subdivisions, and
+    // the marker crosshair size (Phase 3, `doc/design_style_rules.md`).
+    let visualization = effective_visualization(model, atom.id, &atomic_viz_prefs.visualization);
+
     // Use shared helper for color and material calculation
     let (atom_color, roughness, metallic) =
         get_atom_color_and_material(atom, model.get_atom_color(atom.id));
 
-    // Get appropriate tessellation parameters based on visualization mode
+    // Get appropriate tessellation parameters based on effective visualization mode
     let (horizontal_divisions, vertical_divisions) = match visualization {
         AtomicStructureVisualization::BallAndStick => (
             params.ball_and_stick_sphere_horizontal_divisions,
@@ -542,29 +607,29 @@ pub(crate) fn tessellate_atom(
         ),
     };
 
-    // Calculate occluder spheres for occlusion culling
-    calculate_occluder_spheres(atom, model, visualization, reusable_occluder_array);
+    // Calculate occluder spheres for occlusion culling (Decision 3 filters the
+    // set to opaque, unculled, effective-space-filling neighbors).
+    calculate_occluder_spheres(atom, model, atomic_viz_prefs, reusable_occluder_array);
 
-    // Render the atom sphere with occlusion culling if in space-filling mode
-    if *visualization == AtomicStructureVisualization::SpaceFilling
-        && reusable_occluder_array.count > 0
-    {
+    // Render the atom sphere with occlusion culling whenever it has valid
+    // occluders (the set is already correctly filtered above).
+    if reusable_occluder_array.count > 0 {
         tessellator::tessellate_sphere_with_occlusion(
             output_mesh,
             reusable_occludable_mesh,
             &atom.position,
-            get_displayed_atom_radius(atom, visualization),
+            get_displayed_atom_radius(atom, &visualization),
             horizontal_divisions,
             vertical_divisions,
             &Material::new(&atom_color, roughness, metallic),
             reusable_occluder_array.as_slice(),
         );
     } else {
-        // Use regular tessellation for ball-and-stick or when no occlusion
+        // Use regular tessellation when there is no occlusion
         tessellator::tessellate_sphere(
             output_mesh,
             &atom.position,
-            get_displayed_atom_radius(atom, visualization),
+            get_displayed_atom_radius(atom, &visualization),
             horizontal_divisions,
             vertical_divisions,
             &Material::new(&atom_color, roughness, metallic),
@@ -582,7 +647,7 @@ pub(crate) fn tessellate_atom(
             };
 
             // Calculate crosshair dimensions
-            let radius = get_displayed_atom_radius(atom, visualization);
+            let radius = get_displayed_atom_radius(atom, &visualization);
             let half_length = radius * 1.5;
             let crosshair_radius = radius * 0.4;
 
@@ -855,18 +920,21 @@ pub fn tessellate_atomic_structure_impostors(
         let display_state = get_atom_display_state(*id, atomic_structure);
 
         // Apply depth culling if enabled
-        if should_cull_atom(atom, atomic_viz_prefs) {
+        if should_cull_atom(atomic_structure, atom, atomic_viz_prefs) {
             culled_count += 1;
             continue;
         }
 
         tessellated_count += 1;
+        // Per-atom effective visualization drives the impostor radius.
+        let effective_viz =
+            effective_visualization(atomic_structure, *id, &atomic_viz_prefs.visualization);
         tessellate_atom_impostor(
             atom_impostor_mesh,
             transparent_impostor_mesh,
             atom,
             display_state,
-            &atomic_viz_prefs.visualization,
+            &effective_viz,
             global_alpha * atomic_structure.get_atom_alpha(*id),
             atomic_structure.get_atom_color(*id),
         );
@@ -877,7 +945,7 @@ pub fn tessellate_atomic_structure_impostors(
         // Iterate inline bonds - each bond only once using atom ID ordering
         for atom in atomic_structure.atoms_values() {
             // Skip bonds if this atom is culled
-            if should_cull_atom(atom, atomic_viz_prefs) {
+            if should_cull_atom(atomic_structure, atom, atomic_viz_prefs) {
                 continue;
             }
 
@@ -888,14 +956,20 @@ pub fn tessellate_atomic_structure_impostors(
                     && let Some(other_atom) = atomic_structure.get_atom(other_atom_id)
                 {
                     // Skip bond if the other atom is culled
-                    if should_cull_atom(other_atom, atomic_viz_prefs) {
+                    if should_cull_atom(atomic_structure, other_atom, atomic_viz_prefs) {
                         continue;
                     }
 
-                    // In space-filling mode, only render overstretched bonds
-                    if atomic_viz_prefs.visualization == AtomicStructureVisualization::SpaceFilling
-                        && !is_bond_overstretched(atom, other_atom)
-                    {
+                    // Decision 1: a bond is ball-and-stick iff at least one
+                    // endpoint is; a space-filling bond (both endpoints SF)
+                    // renders only when overstretched.
+                    let bond_bs = bond_is_ball_and_stick(
+                        atomic_structure,
+                        atom,
+                        other_atom,
+                        &atomic_viz_prefs.visualization,
+                    );
+                    if !bond_bs && !is_bond_overstretched(atom, other_atom) {
                         continue;
                     }
 
@@ -918,12 +992,10 @@ pub fn tessellate_atomic_structure_impostors(
                             bond_alpha,
                         );
                     } else {
-                        let radius_scale = if atomic_viz_prefs.visualization
-                            == AtomicStructureVisualization::SpaceFilling
-                        {
-                            SPACE_FILLING_BOND_RADIUS_SCALE
-                        } else {
+                        let radius_scale = if bond_bs {
                             1.0
+                        } else {
+                            SPACE_FILLING_BOND_RADIUS_SCALE
                         };
                         tessellate_bond_impostor_inline(
                             bond_impostor_mesh,

@@ -13,6 +13,17 @@ pub enum AtomDisplayState {
     SecondaryMarked,
 }
 
+/// Per-atom render-style override. Absent from `atom_render_style` = follow the
+/// global visualization preference. Written by `apply_style`; see
+/// `doc/design_style_rules.md`. Lives in crystolecule (not `display`) because
+/// crystolecule must not depend on `display`; `display` maps it onto its own
+/// `AtomicStructureVisualization` when resolving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AtomRenderStyle {
+    BallAndStick,
+    SpaceFilling,
+}
+
 /// Visual data for rendering guided placement guide dots and anchor arrows.
 #[derive(Debug, Clone)]
 pub struct GuidePlacementVisuals {
@@ -90,6 +101,10 @@ pub struct AtomicStructureDecorator {
     /// Runtime-only display augmentation, like all decorator state (never
     /// serialized). Written by `apply_style`; see `doc/design_style_rules.md`.
     pub atom_color: FxHashMap<u32, Vec3>,
+    /// Per-atom render-style override. Absent = follow the global preference.
+    /// Runtime-only display augmentation, like all decorator state (never
+    /// serialized). Written by `apply_style`; see `doc/design_style_rules.md`.
+    pub atom_render_style: FxHashMap<u32, AtomRenderStyle>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -112,6 +127,7 @@ impl AtomicStructureDecorator {
             ghost_atom_metadata: FxHashMap::default(),
             atom_alpha: FxHashMap::default(),
             atom_color: FxHashMap::default(),
+            atom_render_style: FxHashMap::default(),
         }
     }
 

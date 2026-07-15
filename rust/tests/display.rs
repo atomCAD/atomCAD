@@ -11,3 +11,6 @@ mod atomic_impostor_alpha_test;
 
 #[path = "display/atomic_color_test.rs"]
 mod atomic_color_test;
+
+#[path = "display/atomic_render_style_test.rs"]
+mod atomic_render_style_test;

@@ -1,7 +1,9 @@
 use glam::Vec3;
 use glam::f64::{DQuat, DVec3};
 use rust_lib_flutter_cad::api::common_api_types::SelectModifier;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use rust_lib_flutter_cad::crystolecule::atomic_structure::{
+    AtomRenderStyle, AtomicStructure, BondReference,
+};
 use std::f64::consts::PI;
 
 // ============================================================================
@@ -694,6 +696,93 @@ fn test_atom_color_preserved_on_clone() {
 
     let cloned = structure.clone();
     assert_eq!(cloned.get_atom_color(id), Some(Vec3::new(0.7, 0.8, 0.9)));
+}
+
+// ============================================================================
+// Per-atom render-style override (doc/design_style_rules.md, Phase 3)
+// ============================================================================
+
+#[test]
+fn test_atom_render_style_set_get_clear() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Absent entry (and non-existent atom) reads as None = follow the global pref.
+    assert_eq!(structure.get_atom_render_style(id), None);
+    assert_eq!(structure.get_atom_render_style(9999), None);
+
+    structure.set_atom_render_style(id, AtomRenderStyle::SpaceFilling);
+    assert_eq!(
+        structure.get_atom_render_style(id),
+        Some(AtomRenderStyle::SpaceFilling)
+    );
+
+    // Overwrite replaces.
+    structure.set_atom_render_style(id, AtomRenderStyle::BallAndStick);
+    assert_eq!(
+        structure.get_atom_render_style(id),
+        Some(AtomRenderStyle::BallAndStick)
+    );
+
+    structure.clear_atom_render_style(id);
+    assert_eq!(structure.get_atom_render_style(id), None);
+    assert!(structure.decorator().atom_render_style.is_empty());
+}
+
+#[test]
+fn test_atom_render_style_cleared_on_delete() {
+    let mut structure = create_test_molecule();
+    let bonded_id = 1; // c1, has bonds
+    structure.set_atom_render_style(bonded_id, AtomRenderStyle::SpaceFilling);
+    structure.delete_atom(bonded_id);
+    assert!(structure.decorator().atom_render_style.is_empty());
+
+    let mut structure = AtomicStructure::new();
+    let lone_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_render_style(lone_id, AtomRenderStyle::SpaceFilling);
+    structure.delete_lone_atom(lone_id);
+    assert!(structure.decorator().atom_render_style.is_empty());
+}
+
+#[test]
+fn test_atom_render_style_remapped_on_merge() {
+    let mut target = AtomicStructure::new();
+    target.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    target.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+
+    let mut other = AtomicStructure::new();
+    let o1 = other.add_atom(8, DVec3::new(5.0, 0.0, 0.0));
+    let o2 = other.add_atom(8, DVec3::new(6.5, 0.0, 0.0));
+    other.set_atom_render_style(o1, AtomRenderStyle::SpaceFilling);
+    other.set_atom_render_style(o2, AtomRenderStyle::BallAndStick);
+
+    let id_map = target.add_atomic_structure(&other).expect("merge succeeds");
+
+    let new_o1 = *id_map.get(&o1).unwrap();
+    let new_o2 = *id_map.get(&o2).unwrap();
+    assert_ne!(new_o1, o1); // ids actually remapped (target already had atoms)
+    assert_eq!(
+        target.get_atom_render_style(new_o1),
+        Some(AtomRenderStyle::SpaceFilling)
+    );
+    assert_eq!(
+        target.get_atom_render_style(new_o2),
+        Some(AtomRenderStyle::BallAndStick)
+    );
+    assert_eq!(target.decorator().atom_render_style.len(), 2);
+}
+
+#[test]
+fn test_atom_render_style_preserved_on_clone() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_render_style(id, AtomRenderStyle::SpaceFilling);
+
+    let cloned = structure.clone();
+    assert_eq!(
+        cloned.get_atom_render_style(id),
+        Some(AtomRenderStyle::SpaceFilling)
+    );
 }
 
 // ============================================================================

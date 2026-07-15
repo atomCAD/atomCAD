@@ -43,7 +43,7 @@ pub mod tags;
 
 // Re-export types for convenience
 pub use atom::Atom;
-pub use atomic_structure_decorator::{AtomDisplayState, AtomicStructureDecorator};
+pub use atomic_structure_decorator::{AtomDisplayState, AtomRenderStyle, AtomicStructureDecorator};
 pub use bond_reference::BondReference;
 pub use inline_bond::{
     BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
@@ -674,6 +674,22 @@ impl AtomicStructure {
         self.decorator.atom_color.get(&atom_id).copied()
     }
 
+    /// Sets the render-style override for an atom. See `doc/design_style_rules.md`.
+    pub fn set_atom_render_style(&mut self, atom_id: u32, style: AtomRenderStyle) {
+        self.decorator.atom_render_style.insert(atom_id, style);
+    }
+
+    /// Removes an atom's render-style override, restoring the global preference.
+    pub fn clear_atom_render_style(&mut self, atom_id: u32) {
+        self.decorator.atom_render_style.remove(&atom_id);
+    }
+
+    /// Returns the render-style override for an atom; `None` = follow the global
+    /// visualization preference.
+    pub fn get_atom_render_style(&self, atom_id: u32) -> Option<AtomRenderStyle> {
+        self.decorator.atom_render_style.get(&atom_id).copied()
+    }
+
     pub fn delete_atom(&mut self, id: u32) {
         if id == 0 {
             return;
@@ -713,6 +729,7 @@ impl AtomicStructure {
         self.decorator.atom_display_states.remove(&id);
         self.decorator.atom_alpha.remove(&id);
         self.decorator.atom_color.remove(&id);
+        self.decorator.atom_render_style.remove(&id);
     }
 
     /// Fast deletion for lone atoms (no bonds, guaranteed to exist)
@@ -728,6 +745,7 @@ impl AtomicStructure {
         self.decorator.atom_display_states.remove(&id);
         self.decorator.atom_alpha.remove(&id);
         self.decorator.atom_color.remove(&id);
+        self.decorator.atom_render_style.remove(&id);
     }
 
     /// Safe bond creation - validates atoms exist, updates or creates bond
@@ -918,12 +936,31 @@ impl AtomicStructure {
             }
         }
 
-        if *visualization != AtomicStructureVisualization::BallAndStick {
+        // Fast path preserving the legacy no-override behavior exactly: a
+        // space-filling scene with no per-atom render-style overrides has no
+        // pickable bonds, so skip the bond loop entirely (§Picking,
+        // `doc/design_style_rules.md`).
+        if *visualization != AtomicStructureVisualization::BallAndStick
+            && self.decorator.atom_render_style.is_empty()
+        {
             return match closest_hit {
                 Some((hit_result, _)) => hit_result,
                 None => HitTestResult::None,
             };
         }
+
+        // A bond is pickable iff at least one endpoint's effective mode is
+        // ball-and-stick (Decision 1's first clause — *not* its overstretched
+        // clause, so overstretched space-filling–space-filling bonds stay
+        // rendered-but-unpickable). The effective mode is the atom's decorator
+        // render-style override, else the global preference.
+        let atom_is_ball_and_stick = |atom: &Atom| -> bool {
+            match self.get_atom_render_style(atom.id) {
+                Some(AtomRenderStyle::BallAndStick) => true,
+                Some(AtomRenderStyle::SpaceFilling) => false,
+                None => *visualization == AtomicStructureVisualization::BallAndStick,
+            }
+        };
 
         for atom in self.atoms_values() {
             for bond in &atom.bonds {
@@ -936,6 +973,10 @@ impl AtomicStructure {
                 let Some(other_atom) = self.get_atom(other_atom_id) else {
                     continue;
                 };
+
+                if !atom_is_ball_and_stick(atom) && !atom_is_ball_and_stick(other_atom) {
+                    continue;
+                }
 
                 let Some(distance) = hit_test_utils::cylinder_hit_test(
                     &atom.position,
@@ -1224,6 +1265,13 @@ impl AtomicStructure {
         for (&old_atom_id, &color) in &other.decorator.atom_color {
             if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
                 self.decorator.atom_color.insert(new_atom_id, color);
+            }
+        }
+
+        // Merge per-atom render-style overrides with remapped IDs
+        for (&old_atom_id, &style) in &other.decorator.atom_render_style {
+            if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
+                self.decorator.atom_render_style.insert(new_atom_id, style);
             }
         }
 
