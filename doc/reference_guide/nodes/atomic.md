@@ -300,6 +300,34 @@ Makes atoms **semi-transparent** in the 3D viewport so features buried inside a 
 - **Place `xray` near the end of the chain — after any rebuilding node.** Nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, …) silently drop the transparency recording; the atoms simply render opaque again downstream, with no error. Put `xray` after those nodes.
 - **Intersecting ghosts can blend slightly wrong.** Where ghost impostors mutually intersect (a bond shaft entering its own atom's sphere, two heavily overlapping ghost spheres) the per-pixel blend order inside the intersection can be imperfect. This is inherent to sorted alpha blending and is subtle at a uniform region alpha.
 
+## tag
+
+Attaches a **named tag** to atoms — a piece of inert, durable metadata that marks a group of atoms so downstream tools can select them. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with the tag recorded on the selected atoms. Like `freeze`/`unfreeze`/`xray`, `tag` is a pure metadata pass-through: it changes only which group an atom belongs to, never its position, bonds, or count.
+
+**Input pins**
+
+- `molecule: HasAtoms` — the input structure.
+- `name: String` (optional) — the tag name. A wired value overrides the stored `name` property (same pin-over-property precedence as `xray`'s `alpha`); while wired, the node subtitle hides.
+- `region: Blueprint` (optional, last pin) — restrict tagging to atoms inside this volume. Disconnected → **all** atoms are tagged. See *Restricting an atom operation to a region* above.
+
+**Tags are selectors, not property carriers.** A tag has **no visual effect on its own** and no behavior — it only records "these atoms belong to a group named X". Tags are invisible in the viewport; **hover an atom to see the tags it carries** (they show on their own `Tags:` line in the hover popup). This is the only way to inspect tags today — a future visual-rules system will let tags drive per-atom color and rendering.
+
+**Editor.** The properties panel offers a free-text `name` field plus one-click chips listing the tag names already present on the input structure (a suggestion source populated after the node evaluates — empty while the input is unwired or the upstream errors). The field stays free text because `tag`'s usual job is introducing a *new* name.
+
+**Composition & limits.** Tagging accumulates per atom: `tag "a"` → `tag "b"` leaves both tags on the overlap, and re-tagging an already-tagged atom is a no-op (idempotent). Tag names are trimmed of surrounding whitespace and are case-sensitive. A structure supports at most **32 distinct tag names**; a `tag` node that would exceed that (or is given an empty name) surfaces a localized error on the node and produces no output. Because `tag` applies to *atoms*, structure-rebuilding nodes (`materialize`, lattice fill) create **untagged** atoms — tag *after* materializing.
+
+## untag
+
+The inverse of `tag`: removes a named tag from atoms. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved).
+
+**Input pins**
+
+- `molecule: HasAtoms` — the input structure.
+- `name: String` (optional) — the tag name to remove. **An empty name removes *every* tag** from the affected atoms (the blanket-clear analog of `xray`'s α = 1.0 / `unfreeze`). A wired value overrides the stored property.
+- `region: Blueprint` (optional, last pin) — restrict the effect to atoms inside this volume. Disconnected → **all** atoms are affected. See *Restricting an atom operation to a region* above.
+
+Removing a tag an atom does not carry is a no-op. As with `tag`, the editor offers the input's existing tag names as one-click chips.
+
 ## add_hydrogen
 
 Adds hydrogen atoms to satisfy valence requirements of undersaturated atoms. Takes a `Crystal` or `Molecule` input and outputs a hydrogen-passivated structure, preserving the concrete input type.

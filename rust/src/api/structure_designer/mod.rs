@@ -9,4 +9,5 @@ pub mod relax_api;
 pub mod structure_designer_api;
 pub mod structure_designer_api_types;
 pub mod structure_designer_preferences;
+pub mod tag_api;
 pub mod xray_api;

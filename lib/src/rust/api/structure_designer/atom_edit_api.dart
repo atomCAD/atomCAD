@@ -333,6 +333,32 @@ void atomEditClearFrozen() => RustLib.instance.api
 bool atomEditHasFrozenAtoms() => RustLib.instance.api
     .crateApiStructureDesignerAtomEditApiAtomEditHasFrozenAtoms();
 
+/// Adds tag `name` to all currently selected atoms (additive). Base atoms are
+/// promoted to full diff overrides first (#386 policy), carrying their existing
+/// tags. Returns `Some(error)` when the tag could not be applied — an empty
+/// name or the 32-name limit — with no change applied (all selected atoms take
+/// the same name, so the first intern failure means none succeed); `None` on
+/// success.
+String? atomEditAddTag({required String name}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditAddTag(name: name);
+
+/// Removes tag `name` from all currently selected atoms. Base atoms are promoted
+/// to full diff overrides first (carrying their remaining tags). An atom that
+/// does not carry the tag is a no-op.
+void atomEditRemoveTag({required String name}) => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditRemoveTag(name: name);
+
+/// Removes **all** tags from all currently selected atoms. Base atoms are
+/// promoted to full diff overrides first (then cleared).
+void atomEditClearSelectionTags() => RustLib.instance.api
+    .crateApiStructureDesignerAtomEditApiAtomEditClearSelectionTags();
+
+/// Lists the tag names present on the atom_edit node's evaluated result
+/// structure (base + diff), offered as suggestions in the Tag/Untag picker
+/// (§Existing-names suggestions). Empty when the node hasn't evaluated.
+List<String> atomEditTagNames() =>
+    RustLib.instance.api.crateApiStructureDesignerAtomEditApiAtomEditTagNames();
+
 /// Sets the hybridization override on all currently selected atoms.
 /// `Auto` removes the override (restoring bond-based inference).
 /// Base atoms are promoted to diff first.

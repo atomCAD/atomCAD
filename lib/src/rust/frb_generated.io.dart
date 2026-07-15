@@ -17,6 +17,7 @@ import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
 import 'api/structure_designer/structure_designer_api_types.dart';
 import 'api/structure_designer/structure_designer_preferences.dart';
+import 'api/structure_designer/tag_api.dart';
 import 'api/structure_designer/xray_api.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -373,6 +374,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISwitchData dco_decode_api_switch_data(dynamic raw);
 
   @protected
+  APITagData dco_decode_api_tag_data(dynamic raw);
+
+  @protected
   APITextEditResult dco_decode_api_text_edit_result(dynamic raw);
 
   @protected
@@ -380,6 +384,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform dco_decode_api_transform(dynamic raw);
+
+  @protected
+  APIUntagData dco_decode_api_untag_data(dynamic raw);
 
   @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
@@ -695,7 +702,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISwitchData dco_decode_box_autoadd_api_switch_data(dynamic raw);
 
   @protected
+  APITagData dco_decode_box_autoadd_api_tag_data(dynamic raw);
+
+  @protected
   APITransform dco_decode_box_autoadd_api_transform(dynamic raw);
+
+  @protected
+  APIUntagData dco_decode_box_autoadd_api_untag_data(dynamic raw);
 
   @protected
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
@@ -1214,7 +1227,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISwitchData? dco_decode_opt_box_autoadd_api_switch_data(dynamic raw);
 
   @protected
+  APITagData? dco_decode_opt_box_autoadd_api_tag_data(dynamic raw);
+
+  @protected
   APITransform? dco_decode_opt_box_autoadd_api_transform(dynamic raw);
+
+  @protected
+  APIUntagData? dco_decode_opt_box_autoadd_api_untag_data(dynamic raw);
 
   @protected
   APIVec2Data? dco_decode_opt_box_autoadd_api_vec_2_data(dynamic raw);
@@ -1761,6 +1780,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISwitchData sse_decode_api_switch_data(SseDeserializer deserializer);
 
   @protected
+  APITagData sse_decode_api_tag_data(SseDeserializer deserializer);
+
+  @protected
   APITextEditResult sse_decode_api_text_edit_result(
       SseDeserializer deserializer);
 
@@ -1769,6 +1791,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APITransform sse_decode_api_transform(SseDeserializer deserializer);
+
+  @protected
+  APIUntagData sse_decode_api_untag_data(SseDeserializer deserializer);
 
   @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
@@ -2155,7 +2180,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APITagData sse_decode_box_autoadd_api_tag_data(SseDeserializer deserializer);
+
+  @protected
   APITransform sse_decode_box_autoadd_api_transform(
+      SseDeserializer deserializer);
+
+  @protected
+  APIUntagData sse_decode_box_autoadd_api_untag_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2775,7 +2807,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APITagData? sse_decode_opt_box_autoadd_api_tag_data(
+      SseDeserializer deserializer);
+
+  @protected
   APITransform? sse_decode_opt_box_autoadd_api_transform(
+      SseDeserializer deserializer);
+
+  @protected
+  APIUntagData? sse_decode_opt_box_autoadd_api_untag_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3383,6 +3423,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_switch_data(APISwitchData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_tag_data(APITagData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_text_edit_result(
       APITextEditResult self, SseSerializer serializer);
 
@@ -3391,6 +3434,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_transform(APITransform self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_untag_data(APIUntagData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -3783,8 +3829,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APISwitchData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_tag_data(
+      APITagData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_transform(
       APITransform self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_untag_data(
+      APIUntagData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -4413,8 +4467,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APISwitchData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_tag_data(
+      APITagData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_transform(
       APITransform? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_untag_data(
+      APIUntagData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_vec_2_data(

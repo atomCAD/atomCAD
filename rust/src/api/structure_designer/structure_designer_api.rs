@@ -8381,6 +8381,11 @@ pub fn query_hovered_atom_info(
                     is_frozen: atom.is_frozen(),
                     hybridization_override: atom.hybridization_override(),
                     inferred_hybridization,
+                    tags: structure
+                        .atom_tags(atom.id)
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                     node_name,
                     overlapping_node_names,
                 })

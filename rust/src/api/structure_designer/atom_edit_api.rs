@@ -1510,6 +1510,164 @@ pub fn atom_edit_has_frozen_atoms() -> bool {
     }
 }
 
+// --- Tag API (doc/design_atom_tags.md, Phase 5) ---
+
+/// Adds tag `name` to all currently selected atoms (additive). Base atoms are
+/// promoted to full diff overrides first (#386 policy), carrying their existing
+/// tags. Returns `Some(error)` when the tag could not be applied — an empty
+/// name or the 32-name limit — with no change applied (all selected atoms take
+/// the same name, so the first intern failure means none succeed); `None` on
+/// success.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_add_tag(name: String) -> Option<String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Some("Tag name is empty".to_string());
+    }
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let sd = &mut cad_instance.structure_designer;
+            // Phase 1: gather base atom promotion info (immutable borrow).
+            let base_info = gather_selected_base_promotion_info_including_frozen(sd);
+            // Phase 2: promote and tag (mutable borrow via with_atom_edit_undo).
+            let tag_error = std::cell::RefCell::new(None::<String>);
+            atom_edit::with_atom_edit_undo(sd, "Tag selection", |sd| {
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    // Promote base atoms to diff.
+                    for info in &base_info {
+                        let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                            data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                            data.set_anchor_recorded(existing_id, info.position);
+                            existing_id
+                        } else {
+                            let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                            data.set_anchor_recorded(new_id, info.position);
+                            new_id
+                        };
+                        data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
+                        data.selection.selected_base_atoms.remove(&info.base_id);
+                        data.selection.selected_diff_atoms.insert(diff_id);
+                    }
+                    // Tag all selected diff atoms (promoted + originally-diff).
+                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                        if let Err(e) = data.add_tag_recorded(diff_id, &name) {
+                            *tag_error.borrow_mut() = Some(e.to_string());
+                            break;
+                        }
+                    }
+                }
+            });
+            refresh_structure_designer_auto(cad_instance);
+            tag_error.into_inner()
+        })
+        .flatten()
+    }
+}
+
+/// Removes tag `name` from all currently selected atoms. Base atoms are promoted
+/// to full diff overrides first (carrying their remaining tags). An atom that
+/// does not carry the tag is a no-op.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_remove_tag(name: String) {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return;
+    }
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let sd = &mut cad_instance.structure_designer;
+            let base_info = gather_selected_base_promotion_info_including_frozen(sd);
+            atom_edit::with_atom_edit_undo(sd, "Untag selection", |sd| {
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    for info in &base_info {
+                        let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                            data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                            data.set_anchor_recorded(existing_id, info.position);
+                            existing_id
+                        } else {
+                            let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                            data.set_anchor_recorded(new_id, info.position);
+                            new_id
+                        };
+                        data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
+                        data.selection.selected_base_atoms.remove(&info.base_id);
+                        data.selection.selected_diff_atoms.insert(diff_id);
+                    }
+                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                        data.remove_tag_recorded(diff_id, &name);
+                    }
+                }
+            });
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Removes **all** tags from all currently selected atoms. Base atoms are
+/// promoted to full diff overrides first (then cleared).
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_clear_selection_tags() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let sd = &mut cad_instance.structure_designer;
+            let base_info = gather_selected_base_promotion_info_including_frozen(sd);
+            atom_edit::with_atom_edit_undo(sd, "Clear selection tags", |sd| {
+                if let Some(data) = atom_edit::get_selected_atom_edit_data_mut(sd) {
+                    for info in &base_info {
+                        let diff_id = if let Some(existing_id) = info.existing_diff_id {
+                            data.set_atomic_number_recorded(existing_id, info.atomic_number);
+                            data.set_anchor_recorded(existing_id, info.position);
+                            existing_id
+                        } else {
+                            let new_id = data.add_atom_recorded(info.atomic_number, info.position);
+                            data.set_anchor_recorded(new_id, info.position);
+                            new_id
+                        };
+                        data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
+                        data.selection.selected_base_atoms.remove(&info.base_id);
+                        data.selection.selected_diff_atoms.insert(diff_id);
+                    }
+                    for &diff_id in &data.selection.selected_diff_atoms.clone() {
+                        data.clear_tags_recorded(diff_id);
+                    }
+                }
+            });
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Lists the tag names present on the atom_edit node's evaluated result
+/// structure (base + diff), offered as suggestions in the Tag/Untag picker
+/// (§Existing-names suggestions). Empty when the node hasn't evaluated.
+#[flutter_rust_bridge::frb(sync)]
+pub fn atom_edit_tag_names() -> Vec<String> {
+    use crate::api::api_common::with_cad_instance_or;
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let sd = &cad_instance.structure_designer;
+                match sd.get_atomic_structure_from_selected_node() {
+                    Some(structure) => {
+                        // The interned table can hold dead names (reclaimable
+                        // slots); only surface names an atom actually carries.
+                        let mut names: Vec<String> = structure
+                            .tag_names()
+                            .iter()
+                            .filter(|name| !structure.atoms_with_tag(name).is_empty())
+                            .cloned()
+                            .collect();
+                        names.sort();
+                        names
+                    }
+                    None => Vec::new(),
+                }
+            },
+            Vec::new(),
+        )
+    }
+}
+
 // --- Hybridization override API ---
 
 /// Sets the hybridization override on all currently selected atoms.

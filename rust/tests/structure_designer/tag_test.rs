@@ -603,6 +603,65 @@ fn tag_name_text_format_roundtrip() {
     let reserialized = serialize_network(&network2, &registry, Some("test"));
     assert_eq!(serialized, reserialized, "text round-trip is stable");
 }
+// ============================================================================
+// Phase 5 — StructureDesigner-level setter (behind get/set_tag_data) is
+// undoable/redoable
+// ============================================================================
+
+/// Setting `TagData` via the shared `set_node_network_data_scoped` seam (which
+/// backs the `set_tag_data` FRB wrapper) re-evaluates with the new stored name
+/// and is undoable/redoable — the "persisted mutations must be undoable" rule.
+#[test]
+fn tag_set_data_is_undoable() {
+    use rust_lib_flutter_cad::structure_designer::nodes::tag::TagData;
+    use std::cell::RefCell;
+
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let value_id = add_value_node(
+        &mut designer,
+        net,
+        DVec2::ZERO,
+        molecule_value(carbons_at(&[0.0])),
+    );
+    let tag_id = add_tag_node(&mut designer, net, "tag", DVec2::new(200.0, 0.0), "surface");
+    designer.connect_nodes(value_id, 0, tag_id, 0);
+
+    let before = evaluate_to_atomic(&designer, net, tag_id);
+    assert_eq!(tags_at(&before, 0.0), vec!["surface"], "initial stored name");
+
+    // Set new node data through the StructureDesigner-level setter.
+    designer.set_node_network_data_scoped(
+        &[],
+        tag_id,
+        Box::new(TagData {
+            name: "active-site".to_string(),
+            available_tags: RefCell::new(Vec::new()),
+        }),
+    );
+    let after = evaluate_to_atomic(&designer, net, tag_id);
+    assert_eq!(
+        tags_at(&after, 0.0),
+        vec!["active-site"],
+        "setter re-evaluates with the new name"
+    );
+
+    assert!(designer.undo(), "undo should report a change");
+    let undone = evaluate_to_atomic(&designer, net, tag_id);
+    assert_eq!(
+        tags_at(&undone, 0.0),
+        vec!["surface"],
+        "undo restores the previous name"
+    );
+
+    assert!(designer.redo(), "redo should report a change");
+    let redone = evaluate_to_atomic(&designer, net, tag_id);
+    assert_eq!(
+        tags_at(&redone, 0.0),
+        vec!["active-site"],
+        "redo re-applies the name"
+    );
+}
 
 /// Builds an empty custom network to author test nodes into.
 fn make_empty_network() -> rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork {

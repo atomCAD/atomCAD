@@ -41,6 +41,16 @@ The Default tool provides four freeze-related buttons:
 - **Select frozen** — Replaces the current selection with all frozen atoms.
 - **Clear frozen** — Removes the frozen flag from all atoms.
 
+**Tag atoms:**
+
+Atoms can carry named **tags** — inert, durable metadata that marks a group of atoms for downstream tools (the same tags the [`tag` node](nodes/atomic.md#tag) applies). The **Tags** section (a collapsible panel alongside *Energy Minimization* and *Add Hydrogen*, shown with the Default tool active) offers three actions on the current selection:
+
+- **Tag selected…** — opens a dialog to type a tag name (or pick one of the structure's existing tags from the suggestion chips) and adds it to the selected atoms.
+- **Untag selected…** — the same dialog; removes the entered/picked tag from the selected atoms.
+- **Clear all tags on selection** — removes every tag from the selected atoms.
+
+Tagging inside `atom_edit` records a normal, undoable edit and persists in the project file. Tags have **no visual effect** on their own — **hover an atom to see the tags it carries** (they appear on a `Tags:` line in the hover popup). A structure supports at most 32 distinct tag names; exceeding that reports an error and applies no change.
+
 **Energy minimization:**
 
 The Default tool integrates UFF (Universal Force Field) energy minimization:

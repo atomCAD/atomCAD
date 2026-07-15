@@ -175,6 +175,8 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
             const SizedBox(height: AppSpacing.large),
             _buildCollapsibleMinimizeSection(),
             const SizedBox(height: AppSpacing.small),
+            _buildCollapsibleTagSection(),
+            const SizedBox(height: AppSpacing.small),
             _buildCollapsibleAddHydrogenSection(),
             if (_stagedData!.hasSelection) ...[
               const SizedBox(height: AppSpacing.small),
@@ -793,8 +795,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   }
 
   void _createGuideline() {
-    final error =
-        widget.model.guidelineCreateFromDefining(_guidelineDirection);
+    final error = widget.model.guidelineCreateFromDefining(_guidelineDirection);
     if (error.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -1120,6 +1121,73 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
     );
   }
 
+  Widget _buildCollapsibleTagSection() {
+    return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        title: Text('Tags',
+            style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+        tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.medium),
+        childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.medium, 0, AppSpacing.medium, AppSpacing.medium),
+        initiallyExpanded: false,
+        dense: true,
+        children: [
+          _buildTagSectionContent(),
+        ],
+      ),
+    );
+  }
+
+  /// Tag controls — add / remove a named tag on the selected atoms, or clear
+  /// all tags. Tags are inert per-atom metadata (hover an atom to see them).
+  /// See doc/design_atom_tags.md.
+  Widget _buildTagSectionContent() {
+    final hasSelected = _stagedData?.hasSelectedAtoms ?? false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _buildIconActionButton(
+              icon: Icons.label_outline,
+              tooltip: 'Tag selected…',
+              onPressed:
+                  hasSelected ? () => _showTagDialog(isUntag: false) : null,
+            ),
+            _buildIconActionButton(
+              icon: Icons.label_off_outlined,
+              tooltip: 'Untag selected…',
+              onPressed:
+                  hasSelected ? () => _showTagDialog(isUntag: true) : null,
+            ),
+            _buildIconActionButton(
+              icon: Icons.clear_all,
+              tooltip: 'Clear all tags on selection',
+              onPressed: hasSelected
+                  ? () {
+                      atom_edit_api.atomEditClearSelectionTags();
+                      widget.model.refreshFromKernel();
+                    }
+                  : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.small),
+        Text(
+          hasSelected
+              ? 'Add or remove a named tag on the selected atoms. Tags are '
+                  'inert metadata — hover an atom to see its tags.'
+              : 'Select one or more atoms to tag them.',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCollapsibleAddHydrogenSection() {
     return Card(
       elevation: 0,
@@ -1210,6 +1278,103 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
           ),
         ],
       ],
+    );
+  }
+
+  /// Opens a draggable dialog to enter/pick a tag name, then tags (or untags)
+  /// the current selection. The structure's existing tag names are offered as
+  /// one-click chips to reduce typo risk (§Existing-names suggestions).
+  void _showTagDialog({required bool isUntag}) {
+    final existing = atom_edit_api.atomEditTagNames();
+    final controller = TextEditingController();
+
+    void apply(String rawName) {
+      final name = rawName.trim();
+      if (name.isEmpty) return;
+      if (isUntag) {
+        atom_edit_api.atomEditRemoveTag(name: name);
+      } else {
+        final error = atom_edit_api.atomEditAddTag(name: name);
+        if (error != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error)),
+          );
+        }
+      }
+      widget.model.refreshFromKernel();
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => DraggableDialog(
+        width: 340,
+        dismissible: true,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(isUntag ? 'Untag selection' : 'Tag selection',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Tag name',
+                  border: const OutlineInputBorder(),
+                ),
+                onSubmitted: (text) {
+                  Navigator.of(dialogContext).pop();
+                  apply(text);
+                },
+              ),
+              if (existing.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Existing tags',
+                    style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 4),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final name in existing)
+                      ActionChip(
+                        label: Text(name),
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop();
+                          apply(name);
+                        },
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      final text = controller.text;
+                      Navigator.of(dialogContext).pop();
+                      apply(text);
+                    },
+                    child: Text(isUntag ? 'Untag' : 'Tag'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

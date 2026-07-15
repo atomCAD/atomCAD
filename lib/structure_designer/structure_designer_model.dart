@@ -25,6 +25,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
     as relax_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
+    as tag_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 
 /// Distinguishes the five kinds of pin slots a node can expose. Replaces the
@@ -2323,6 +2325,22 @@ class StructureDesignerModel extends ChangeNotifier {
 
   void setXrayData(BigInt nodeId, APIXrayData data) {
     xray_api.setXrayData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  void setTagData(BigInt nodeId, APITagData data) {
+    tag_api.setTagData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  void setUntagData(BigInt nodeId, APIUntagData data) {
+    tag_api.setUntagData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),
         nodeId: nodeId,
         data: data);

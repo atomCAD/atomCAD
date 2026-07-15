@@ -29,6 +29,10 @@ import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
 import 'package:flutter_cad/structure_designer/node_data/xray_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
+import 'package:flutter_cad/structure_designer/node_data/tag_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/untag_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
+    as tag_api;
 import 'package:flutter_cad/structure_designer/node_data/parameter_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/print_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
@@ -507,6 +511,27 @@ class NodeDataWidget extends StatelessWidget {
         return XrayEditor(
           nodeId: selectedNode.id,
           data: xrayData,
+          model: model,
+        );
+      case 'tag':
+        // Scope-aware fetch of the stored name + input's tag-name suggestions.
+        final tagData = tag_api.getTagData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        return TagEditor(
+          nodeId: selectedNode.id,
+          data: tagData,
+          model: model,
+        );
+      case 'untag':
+        final untagData = tag_api.getUntagData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        return UntagEditor(
+          nodeId: selectedNode.id,
+          data: untagData,
           model: model,
         );
       case 'parameter':

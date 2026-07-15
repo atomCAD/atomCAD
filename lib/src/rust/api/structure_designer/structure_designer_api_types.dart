@@ -1572,6 +1572,7 @@ class APIHoveredAtomInfo {
   final bool isFrozen;
   final int hybridizationOverride;
   final int inferredHybridization;
+  final List<String> tags;
   final String nodeName;
   final List<String> overlappingNodeNames;
 
@@ -1587,6 +1588,7 @@ class APIHoveredAtomInfo {
     required this.isFrozen,
     required this.hybridizationOverride,
     required this.inferredHybridization,
+    required this.tags,
     required this.nodeName,
     required this.overlappingNodeNames,
   });
@@ -1604,6 +1606,7 @@ class APIHoveredAtomInfo {
       isFrozen.hashCode ^
       hybridizationOverride.hashCode ^
       inferredHybridization.hashCode ^
+      tags.hashCode ^
       nodeName.hashCode ^
       overlappingNodeNames.hashCode;
 
@@ -1623,6 +1626,7 @@ class APIHoveredAtomInfo {
           isFrozen == other.isFrozen &&
           hybridizationOverride == other.hybridizationOverride &&
           inferredHybridization == other.inferredHybridization &&
+          tags == other.tags &&
           nodeName == other.nodeName &&
           overlappingNodeNames == other.overlappingNodeNames;
 }
@@ -3110,6 +3114,32 @@ class APISwitchData {
           caseValues == other.caseValues;
 }
 
+class APITagData {
+  /// Tag name added to in-region atoms. Overridden by a wired `name` pin.
+  final String name;
+
+  /// Input structure's existing tag names, captured at the last eval, offered
+  /// as suggestions in the editor. Empty until the node has evaluated with a
+  /// wired input (§Existing-names suggestions).
+  final List<String> availableTags;
+
+  const APITagData({
+    required this.name,
+    required this.availableTags,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ availableTags.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APITagData &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          availableTags == other.availableTags;
+}
+
 /// Result of applying text format edits to the active network.
 class APITextEditResult {
   final bool success;
@@ -3177,6 +3207,32 @@ class APITextError {
           message == other.message &&
           line == other.line &&
           column == other.column;
+}
+
+class APIUntagData {
+  /// Tag name removed from in-region atoms. Overridden by a wired `name` pin.
+  /// Empty removes **all** tags from in-region atoms.
+  final String name;
+
+  /// Input structure's existing tag names, captured at the last eval, offered
+  /// as suggestions in the editor.
+  final List<String> availableTags;
+
+  const APIUntagData({
+    required this.name,
+    required this.availableTags,
+  });
+
+  @override
+  int get hashCode => name.hashCode ^ availableTags.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIUntagData &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          availableTags == other.availableTags;
 }
 
 class APIVec2Data {

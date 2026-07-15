@@ -594,6 +594,24 @@ pub struct APIXrayData {
     pub alpha: f64,
 }
 
+pub struct APITagData {
+    /// Tag name added to in-region atoms. Overridden by a wired `name` pin.
+    pub name: String,
+    /// Input structure's existing tag names, captured at the last eval, offered
+    /// as suggestions in the editor. Empty until the node has evaluated with a
+    /// wired input (§Existing-names suggestions).
+    pub available_tags: Vec<String>,
+}
+
+pub struct APIUntagData {
+    /// Tag name removed from in-region atoms. Overridden by a wired `name` pin.
+    /// Empty removes **all** tags from in-region atoms.
+    pub name: String,
+    /// Input structure's existing tag names, captured at the last eval, offered
+    /// as suggestions in the editor.
+    pub available_tags: Vec<String>,
+}
+
 pub struct APIFreeSphereData {
     pub center: APIVec3,
     pub radius: f64,
@@ -886,6 +904,10 @@ pub struct APIHoveredAtomInfo {
 
     // Inferred hybridization from bond orders (1=Sp3, 2=Sp2, 3=Sp1, 0=unknown/terminal)
     pub inferred_hybridization: u8,
+
+    // Tags — names of the tags this atom carries, in bit order. Empty for
+    // untagged atoms; the popup omits the row entirely when empty.
+    pub tags: Vec<String>,
 
     // Node origin — name of the node that produced this atom
     pub node_name: String,

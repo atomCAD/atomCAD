@@ -101,6 +101,18 @@ class AtomTooltip extends StatelessWidget {
                 decoration: TextDecoration.none,
               ),
             ),
+          // Tags (only shown when the atom carries at least one) — the sole
+          // inspection surface for tags until a visual-rules consumer exists.
+          if (info.tags.isNotEmpty)
+            Text(
+              'Tags: ${info.tags.join(', ')}',
+              style: const TextStyle(
+                color: Color(0xFF81C784),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.none,
+              ),
+            ),
           // Node origin — which node produced this atom
           Text(
             info.nodeName,
