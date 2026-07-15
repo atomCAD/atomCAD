@@ -230,6 +230,17 @@ pub struct TagRemap { ... }
 /// and returned in the dropped list — never a panic, never silent. When
 /// the two tables are already identical the result is the identity remap
 /// (cheap common case: clone-mutate diffs, repeated merges of siblings).
+///
+/// Merging is **append-or-drop; it does NOT reclaim dead slots** (unlike the
+/// single-structure `intern_tag`). This is load-bearing for the multi-source
+/// builds below: `apply_diff` grows the result table across two calls
+/// (base→result, then diff→result) *before adding any atom*, and
+/// `compose_two_diffs` does the same (diff1→composed, diff2→composed). Every
+/// name a prior call committed is a real union member that no atom carries
+/// *yet*; if `build_tag_remap` reclaimed on a full table it would treat that
+/// name as a dead slot and silently overwrite it (corrupting the earlier
+/// remap and the 32-limit drop). So the budget counts every distinct name,
+/// including any the target already holds unused.
 pub fn build_tag_remap(&mut self, source: &AtomicStructure)
     -> (TagRemap, Vec<String> /* dropped */);
 

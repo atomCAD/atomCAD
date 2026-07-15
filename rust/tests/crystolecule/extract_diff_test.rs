@@ -596,3 +596,201 @@ fn mutate(rng: &mut Xorshift, before: &AtomicStructure) -> AtomicStructure {
 
     after
 }
+
+// ============================================================================
+// Tags — extraction (Phase 2, doc/design_atom_tags.md §Diff semantics)
+// ============================================================================
+
+/// Sorted tag names carried by atom `id` in `s`.
+fn sorted_tags(s: &AtomicStructure, id: u32) -> Vec<String> {
+    let mut t: Vec<String> = s.atom_tags(id).iter().map(|n| n.to_string()).collect();
+    t.sort();
+    t
+}
+
+/// A two-carbon bonded structure (ids 1, 2), the fixture for tag tests.
+fn c_c() -> AtomicStructure {
+    let mut s = AtomicStructure::new();
+    let c1 = s.add_atom(6, v(0.0, 0.0, 0.0));
+    let c2 = s.add_atom(6, v(1.54, 0.0, 0.0));
+    s.add_bond(c1, c2, BOND_SINGLE);
+    s
+}
+
+#[test]
+fn tag_added_is_modification() {
+    let before = c_c();
+    let mut after = before.clone();
+    after.add_atom_tag(1, "surface").unwrap();
+
+    let diff = extract_diff(&before, &after, 0.0);
+    // Only atom 1 changed → exactly one diff atom, carrying the new tag.
+    assert_eq!(diff.get_num_of_atoms(), 1);
+    let da = only_atom(&diff);
+    assert!(!da.is_special_marker(), "modified atom, not a marker");
+    assert_eq!(sorted_tags(&diff, da.id), vec!["surface".to_string()]);
+
+    assert_roundtrip(&before, &after);
+}
+
+#[test]
+fn tag_removed_is_modification() {
+    let mut before = c_c();
+    before.add_atom_tag(1, "surface").unwrap();
+    let mut after = before.clone();
+    after.remove_atom_tag(1, "surface");
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(diff.get_num_of_atoms(), 1);
+    let da = only_atom(&diff);
+    // The diff atom's replacement tag set is empty (the tag was removed).
+    assert!(sorted_tags(&diff, da.id).is_empty());
+
+    assert_roundtrip(&before, &after);
+}
+
+#[test]
+fn tag_unchanged_is_not_modification() {
+    let mut before = c_c();
+    before.add_atom_tag(1, "surface").unwrap();
+    before.add_atom_tag(2, "surface").unwrap();
+    let after = before.clone();
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(
+        diff.get_num_of_atoms(),
+        0,
+        "equal tag sets ⇒ no modification"
+    );
+    assert_eq!(diff.get_num_of_bonds(), 0);
+}
+
+#[test]
+fn position_change_carries_tags_onto_diff_atom() {
+    let mut before = c_c();
+    before.add_atom_tag(1, "a").unwrap();
+    before.add_atom_tag(1, "b").unwrap();
+    let mut after = before.clone();
+    after.set_atom_position(1, v(0.5, 0.0, 0.0));
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(diff.get_num_of_atoms(), 1);
+    let da = only_atom(&diff);
+    assert_eq!(
+        sorted_tags(&diff, da.id),
+        vec!["a".to_string(), "b".to_string()]
+    );
+
+    assert_roundtrip(&before, &after);
+}
+
+#[test]
+fn added_atom_carries_its_tags() {
+    let before = c_c();
+    let mut after = before.clone();
+    let n = after.add_atom(7, v(3.0, 0.0, 0.0));
+    after.add_atom_tag(n, "dopant").unwrap();
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(diff.get_num_of_atoms(), 1, "one pure addition");
+    let da = only_atom(&diff);
+    assert!(!da.is_special_marker());
+    assert_eq!(sorted_tags(&diff, da.id), vec!["dopant".to_string()]);
+
+    assert_roundtrip(&before, &after);
+}
+
+#[test]
+fn different_tables_equal_name_sets_is_not_modification() {
+    // before: bit 0 = "a", bit 1 = "b"; atom 1 carries both.
+    let mut before = c_c();
+    before.add_atom_tag(1, "a").unwrap();
+    before.add_atom_tag(1, "b").unwrap();
+
+    // after: SAME name set on atom 1, but built so the tables differ — intern
+    // "b" first (bit 0), then "a" (bit 1). Same names, opposite bit positions.
+    let mut after = c_c();
+    after.add_atom_tag(1, "b").unwrap();
+    after.add_atom_tag(1, "a").unwrap();
+    assert_ne!(
+        before.tag_names(),
+        after.tag_names(),
+        "tables must differ to exercise the name-canonical path"
+    );
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(
+        diff.get_num_of_atoms(),
+        0,
+        "equal name sets at different bits ⇒ not modified"
+    );
+}
+
+#[test]
+fn fast_path_trap_equal_bits_different_tables_is_modification() {
+    // The dangerous direction: identical raw `tag_bits` but different tables.
+    // before: bit 0 = "a"; after: bit 0 = "b". Atom 1 has tag_bits == 1 in both,
+    // yet the tag NAME differs. A naive bit-compare misses this.
+    let mut before = c_c();
+    before.add_atom_tag(1, "a").unwrap();
+    let mut after = c_c();
+    after.add_atom_tag(1, "b").unwrap();
+
+    assert_eq!(
+        before.get_atom(1).unwrap().tag_bits,
+        after.get_atom(1).unwrap().tag_bits,
+        "precondition: raw tag_bits are equal"
+    );
+    assert_ne!(before.tag_names(), after.tag_names());
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(diff.get_num_of_atoms(), 1, "different tag name ⇒ modified");
+    let da = only_atom(&diff);
+    assert_eq!(sorted_tags(&diff, da.id), vec!["b".to_string()]);
+
+    assert_roundtrip(&before, &after);
+}
+
+#[test]
+fn tag_only_change_survives_epsilon_pruning() {
+    // Atom moves less than ε (so position is treated as unchanged), but its tag
+    // set changed → still a modification.
+    let before = c_c();
+    let mut after = before.clone();
+    after.set_atom_position(1, v(0.001, 0.0, 0.0)); // 0.001 Å ≪ ε
+    after.add_atom_tag(1, "surface").unwrap();
+
+    let eps = 0.1;
+    let diff = extract_diff(&before, &after, eps);
+    assert_eq!(
+        diff.get_num_of_atoms(),
+        1,
+        "tag-only change is a modification regardless of sub-ε movement"
+    );
+    let da = only_atom(&diff);
+    assert_eq!(sorted_tags(&diff, da.id), vec!["surface".to_string()]);
+}
+
+#[test]
+fn no_tag_change_produces_no_tag_noise() {
+    // A relax-style position-only mutation on tagged atoms must not emit any tag
+    // change: the diff atoms carry the (unchanged) tags, but no *extra* diff atom
+    // appears for a tag reason.
+    let mut before = c_c();
+    before.add_atom_tag(1, "keep").unwrap();
+    before.add_atom_tag(2, "keep").unwrap();
+    let mut after = before.clone();
+    after.set_atom_position(1, v(0.3, 0.0, 0.0)); // only atom 1 moves
+
+    let diff = extract_diff(&before, &after, 0.0);
+    assert_eq!(
+        diff.get_num_of_atoms(),
+        1,
+        "only the moved atom is in the diff"
+    );
+    let da = only_atom(&diff);
+    // Its (unchanged) tag rides along so apply reproduces it.
+    assert_eq!(sorted_tags(&diff, da.id), vec!["keep".to_string()]);
+
+    assert_roundtrip(&before, &after);
+}

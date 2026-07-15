@@ -442,6 +442,7 @@ fn test_empty_diff_is_identity() {
             unmatched_delete_markers: 0,
             orphaned_bonds: 0,
             unchanged_references: 0,
+            dropped_tag_names: Vec::new(),
         }
     );
 }
@@ -1892,4 +1893,152 @@ fn all_metadata_combined_passthrough() {
         c_atom.in_crystal_depth
     );
     assert!(!c_atom.is_selected(), "selected should not propagate");
+}
+
+// ============================================================================
+// Tags — application (Phase 2, doc/design_atom_tags.md §Diff semantics)
+// ============================================================================
+
+/// Sorted tag names carried by atom `id` in `s`.
+fn sorted_tags(s: &AtomicStructure, id: u32) -> Vec<String> {
+    let mut t: Vec<String> = s.atom_tags(id).iter().map(|n| n.to_string()).collect();
+    t.sort();
+    t
+}
+
+/// Result-atom id nearest `pos` (apply_diff re-assigns ids, so match by position).
+fn id_at(s: &AtomicStructure, pos: DVec3) -> u32 {
+    s.atoms_values()
+        .find(|a| a.position.distance(pos) < 1e-6)
+        .expect("no atom at position")
+        .id
+}
+
+#[test]
+fn apply_diff_base_passthrough_remaps_tags_by_name() {
+    // Base atom b1 carries "surface" at bit 0. The diff assigns a DIFFERENT name
+    // ("other") to its own bit 0. A raw cross-table bit copy would put "other" on
+    // the passed-through b1; the base→result remap must translate by name.
+    let mut base = AtomicStructure::new();
+    let b1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let b2 = base.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    base.add_bond(b1, b2, 1);
+    base.add_atom_tag(b1, "surface").unwrap(); // base bit 0
+
+    // Diff replaces b2 (C→N) and tags the diff atom "other" (diff bit 0).
+    let mut diff = AtomicStructure::new_diff();
+    let d = diff.add_atom(7, DVec3::new(1.5, 0.0, 0.0));
+    diff.set_anchor_position(d, DVec3::new(1.5, 0.0, 0.0));
+    diff.add_atom_tag(d, "other").unwrap();
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+
+    // b1 passed through: keeps "surface", NOT "other".
+    let r1 = id_at(&result, DVec3::new(0.0, 0.0, 0.0));
+    assert_eq!(sorted_tags(&result, r1), vec!["surface".to_string()]);
+    // b2 replaced by the diff atom: carries "other".
+    let r2 = id_at(&result, DVec3::new(1.5, 0.0, 0.0));
+    assert_eq!(sorted_tags(&result, r2), vec!["other".to_string()]);
+}
+
+#[test]
+fn apply_diff_over_32_combined_names_drops_and_reports() {
+    // Base holds 20 distinct tag names, diff adds 20 more via pure additions.
+    // Combined 40 > 32 → 8 dropped and reported; base structure untouched; every
+    // name that fits still applies.
+    let mut base = AtomicStructure::new();
+    for i in 0..20 {
+        let a = base.add_atom(6, DVec3::new(i as f64 * 3.0, 0.0, 0.0));
+        base.add_atom_tag(a, &format!("base{i}")).unwrap();
+    }
+    let mut diff = AtomicStructure::new_diff();
+    for i in 0..20 {
+        let a = diff.add_atom(6, DVec3::new(1000.0 + i as f64 * 3.0, 0.0, 0.0));
+        diff.add_atom_tag(a, &format!("diff{i}")).unwrap();
+    }
+
+    let app = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    // 40 distinct names, cap 32 → 8 dropped (base interned first fills 20 slots,
+    // 12 diff names fit, the last 8 are dropped).
+    assert_eq!(
+        app.stats.dropped_tag_names.len(),
+        8,
+        "8 names over the 32 cap"
+    );
+    assert!(
+        app.stats
+            .dropped_tag_names
+            .iter()
+            .all(|n| n.starts_with("diff")),
+        "dropped names are the last-interned (diff) names: {:?}",
+        app.stats.dropped_tag_names
+    );
+    // No panic, base untouched.
+    assert_eq!(base.tag_names().len(), 20);
+    // A base tag that fit still applies.
+    let r0 = id_at(&app.result, DVec3::new(0.0, 0.0, 0.0));
+    assert_eq!(sorted_tags(&app.result, r0), vec!["base0".to_string()]);
+    // A diff tag that fit still applies (diff0 → slot 20).
+    let rd0 = id_at(&app.result, DVec3::new(1000.0, 0.0, 0.0));
+    assert_eq!(sorted_tags(&app.result, rd0), vec!["diff0".to_string()]);
+}
+
+#[test]
+fn apply_diff_ignores_tags_on_unchanged_marker() {
+    // An UNCHANGED marker (illegally) carrying a tag: apply_diff passes the BASE
+    // atom through with base metadata and ignores the marker's own tag_bits.
+    // Locks the "markers never carry tags" invariant from the apply side.
+    let mut base = AtomicStructure::new();
+    let b1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let b2 = base.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    base.add_bond(b1, b2, 1);
+
+    let mut diff = AtomicStructure::new_diff();
+    let m1 = diff.add_atom(UNCHANGED_ATOMIC_NUMBER, DVec3::new(0.0, 0.0, 0.0));
+    diff.set_anchor_position(m1, DVec3::new(0.0, 0.0, 0.0));
+    // Stamp a tag directly onto the marker's raw bits (a thing the accessors
+    // never produce, constructed here to prove apply ignores it).
+    let idx = diff.intern_tag("ghost-tag").unwrap();
+    diff.set_atom_tag_bits(m1, 1u32 << idx);
+
+    let result = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+    let r1 = id_at(&result, DVec3::new(0.0, 0.0, 0.0));
+    assert!(
+        result.atom_tags(r1).is_empty(),
+        "the marker's tag must not reach the result"
+    );
+}
+
+#[test]
+fn apply_extract_roundtrip_reproduces_tags_with_different_bits() {
+    // base bit 0 = "x". Edited moves the tags around so its table orders names
+    // differently, exercising base→result and diff→result remaps together.
+    let mut base = AtomicStructure::new();
+    let b1 = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let b2 = base.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+    base.add_bond(b1, b2, 1);
+    base.add_atom_tag(b1, "x").unwrap();
+
+    let mut edited = base.clone();
+    edited.remove_atom_tag(b1, "x");
+    edited.add_atom_tag(b2, "y").unwrap();
+    edited.add_atom_tag(b2, "x").unwrap();
+    edited.set_atom_position(b1, DVec3::new(0.4, 0.0, 0.0));
+
+    let diff = extract_diff_via(&base, &edited);
+    let applied = apply_diff(&base, &diff, DEFAULT_TOLERANCE).result;
+
+    let r1 = id_at(&applied, DVec3::new(0.4, 0.0, 0.0));
+    assert!(sorted_tags(&applied, r1).is_empty(), "b1 lost its tag");
+    let r2 = id_at(&applied, DVec3::new(1.5, 0.0, 0.0));
+    assert_eq!(
+        sorted_tags(&applied, r2),
+        vec!["x".to_string(), "y".to_string()]
+    );
+}
+
+/// Thin wrapper so this file needn't import `extract_diff` at the top.
+fn extract_diff_via(before: &AtomicStructure, after: &AtomicStructure) -> AtomicStructure {
+    rust_lib_flutter_cad::crystolecule::atomic_structure_diff::extract_diff(before, after, 0.0)
 }

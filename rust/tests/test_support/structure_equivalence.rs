@@ -7,9 +7,11 @@
 //!
 //! `≡` is the executable spec behind the diff-extraction roundtrip invariant in
 //! `doc/design_diff_outputs_for_atom_ops.md`: two structures are equivalent when
-//! they hold equal multisets of (position, element, durable flags) atoms and
-//! equal bond multisets — matched *positionally*, because `apply_diff` re-assigns
-//! ids so id equality is meaningless.
+//! they hold equal multisets of (position, element, durable flags, tag name set)
+//! atoms and equal bond multisets — matched *positionally*, because `apply_diff`
+//! re-assigns ids so id equality is meaningless. Tags are durable per-atom
+//! metadata compared by name (bit indices are per-structure — see
+//! `doc/design_atom_tags.md`).
 #![allow(dead_code)]
 
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
@@ -73,6 +75,17 @@ pub fn assert_structures_equivalent(a: &AtomicStructure, b: &AtomicStructure, to
             a_atom.position,
             a_atom.flags & DURABLE_FLAGS_MASK,
             b_atom.flags & DURABLE_FLAGS_MASK,
+        );
+        // Compare tag name sets (durable metadata; bit indices are per-structure,
+        // so compare by name, order-independent).
+        let mut a_tags = a.atom_tags(a_atom.id);
+        let mut b_tags = b.atom_tags(b_atom.id);
+        a_tags.sort_unstable();
+        b_tags.sort_unstable();
+        assert_eq!(
+            a_tags, b_tags,
+            "tag set mismatch at position {:?}: a={:?}, b={:?}",
+            a_atom.position, a_tags, b_tags,
         );
         a_to_b.push((a_atom.id, b_atom.id));
     }

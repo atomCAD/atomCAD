@@ -6,7 +6,7 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::{
-    apply_diff, compose_diffs, compose_two_diffs,
+    apply_diff, compose_diffs, compose_two_diffs, extract_diff,
 };
 
 use crate::structure_equivalence::assert_structures_equivalent;
@@ -1233,4 +1233,61 @@ fn compose_replace_then_move_then_modify() {
 fn compose_diffs_empty_slice_returns_none() {
     let result = compose_diffs(&[], TOL);
     assert!(result.is_none());
+}
+
+// ============================================================================
+// Tags — composition (Phase 2, doc/design_atom_tags.md §Diff semantics)
+// ============================================================================
+
+#[test]
+fn compose_last_writer_wins_on_tags() {
+    // diff1's entry for the atom carries tag "a"; diff2's entry for the same atom
+    // does not. Composition is last-writer-wins per atom, so the composed diff
+    // drops "a" — a name-set UNION would resurrect it and disagree with
+    // sequential application.
+    let mut base = AtomicStructure::new();
+    let a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    let mut s1 = base.clone();
+    s1.set_atom_position(a, DVec3::new(0.1, 0.0, 0.0));
+    s1.add_atom_tag(a, "a").unwrap();
+    let diff1 = extract_diff(&base, &s1, 0.0);
+
+    let mut s2 = s1.clone();
+    s2.set_atom_position(a, DVec3::new(0.2, 0.0, 0.0));
+    s2.remove_atom_tag(a, "a");
+    let diff2 = extract_diff(&s1, &s2, 0.0);
+
+    // Sequential ≡ composed (the equivalence helper compares tag sets by name).
+    assert_compose_equivalence(&base, &[&diff1, &diff2], TOL);
+
+    // Explicit: the applied composed diff carries NO tag on the atom.
+    let composed = compose_two_diffs(&diff1, &diff2, TOL).composed;
+    let applied = apply_diff(&base, &composed, TOL).result;
+    let rid = applied.atoms_values().next().unwrap().id;
+    assert!(
+        applied.atom_tags(rid).is_empty(),
+        "last writer removed the tag; a union would have kept it"
+    );
+}
+
+#[test]
+fn compose_tags_match_sequential_application() {
+    // diff1 tags atom `a` "a"; diff2 (applied on top) grows it to {a, b} and tags
+    // a second atom `b` "c". The composed diff must reproduce the sequential tag
+    // sets on every atom.
+    let mut base = AtomicStructure::new();
+    let a = base.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    let b = base.add_atom(6, DVec3::new(3.0, 0.0, 0.0));
+
+    let mut s1 = base.clone();
+    s1.add_atom_tag(a, "a").unwrap();
+    let diff1 = extract_diff(&base, &s1, 0.0);
+
+    let mut s2 = s1.clone();
+    s2.add_atom_tag(a, "b").unwrap();
+    s2.add_atom_tag(b, "c").unwrap();
+    let diff2 = extract_diff(&s1, &s2, 0.0);
+
+    assert_compose_equivalence(&base, &[&diff1, &diff2], TOL);
 }

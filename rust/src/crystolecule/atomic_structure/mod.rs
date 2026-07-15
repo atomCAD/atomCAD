@@ -413,6 +413,17 @@ impl AtomicStructure {
     /// silent drop. When the two tables are already identical the result is the
     /// identity remap (the cheap common case: clone-mutate diffs, repeated
     /// merges of siblings).
+    ///
+    /// Merging is **append-or-drop and never reclaims dead slots**, unlike the
+    /// single-structure [`Self::intern_tag`]. This matters when the target table
+    /// is grown across several `build_tag_remap` calls before any atom is added —
+    /// exactly what `apply_diff` (base→result then diff→result) and
+    /// `compose_two_diffs` (diff1→composed then diff2→composed) do. There, every
+    /// name committed by an earlier call is a real union member with no atom
+    /// carrying it *yet*; reclamation would see it as a "dead" slot and silently
+    /// overwrite it (corrupting the earlier remap) instead of dropping the
+    /// overflow name. So the 32-name budget here counts every distinct name,
+    /// including any the target already holds unused.
     pub fn build_tag_remap(&mut self, source: &AtomicStructure) -> (TagRemap, Vec<String>) {
         // Fast path: identical tables → identity remap, no interning.
         if self.tag_names == source.tag_names {
@@ -428,9 +439,14 @@ impl AtomicStructure {
             let Some(name) = source.tag_names.get(i) else {
                 continue;
             };
-            match self.intern_tag(name) {
-                Ok(target_idx) => *slot = Some(target_idx),
-                Err(_) => dropped.push(name.clone()),
+            if let Some(existing) = self.tag_names.iter().position(|n| n == name) {
+                *slot = Some(existing as u8); // already committed → reuse its slot
+            } else if self.tag_names.len() < MAX_TAGS {
+                let idx = self.tag_names.len() as u8;
+                self.tag_names.push(name.clone());
+                *slot = Some(idx);
+            } else {
+                dropped.push(name.clone()); // no room, no reclamation → drop
             }
         }
         (TagRemap { map }, dropped)
@@ -460,11 +476,24 @@ impl AtomicStructure {
     /// via `add_atom()` (which initializes all metadata to zero). Using this method
     /// instead of copying individual flags ensures that newly added metadata fields
     /// are automatically preserved without requiring updates at every call site.
-    pub(crate) fn copy_atom_metadata(&mut self, target_id: u32, source: &Atom) {
+    ///
+    /// Tags are **per-structure** bit indices, so `tag_bits` must be translated
+    /// through `tag_remap` (source structure → this structure) — the signature
+    /// forces every call site to say which translation applies, so a raw
+    /// cross-table bit copy cannot happen by omission (see `doc/design_atom_tags.md`).
+    /// Pass [`TagRemap::identity`] for same-structure copies.
+    pub(crate) fn copy_atom_metadata(
+        &mut self,
+        target_id: u32,
+        source: &Atom,
+        tag_remap: &TagRemap,
+    ) {
+        let remapped_tags = Self::remap_tag_bits(source.tag_bits, tag_remap);
         if let Some(target) = self.get_atom_mut(target_id) {
             // Copy all flags except selected (bit 0)
             target.flags = source.flags & !0x1;
             target.in_crystal_depth = source.in_crystal_depth;
+            target.tag_bits = remapped_tags;
         }
     }
 

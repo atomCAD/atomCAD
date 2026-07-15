@@ -10,6 +10,7 @@
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::DELETED_SITE_ATOMIC_NUMBER;
 use crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
+use crate::crystolecule::atomic_structure::atom::Atom;
 use crate::crystolecule::atomic_structure::atom::DURABLE_FLAGS_MASK;
 use crate::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use glam::f64::DVec3;
@@ -64,6 +65,11 @@ pub struct DiffStats {
     pub orphaned_bonds: u32,
     /// UNCHANGED markers that matched a base atom (bond endpoint references).
     pub unchanged_references: u32,
+    /// Tag names dropped because the combined base+diff table exceeded the 32-tag
+    /// limit (§Diff semantics in `doc/design_atom_tags.md`). `apply_diff` stays
+    /// infallible; a non-empty list is the surfacing hook for a localized error
+    /// at the consuming node (Phase 4). Every other tag applies correctly.
+    pub dropped_tag_names: Vec<String>,
 }
 
 /// Internal: a matched pair between a diff atom and a base atom.
@@ -104,12 +110,26 @@ pub fn apply_diff(
 
     // Step 2: Build the result structure and track provenance + stats
     let mut result = AtomicStructure::new();
+
+    // Build the two name-level tag remaps up front (§Diff semantics in
+    // `doc/design_atom_tags.md`). The result table starts empty; intern the
+    // base's live tag names, then the diff's. Base pass-throughs copy their
+    // masks through the base→result remap, diff atoms through the diff→result
+    // remap. The combined interning can exceed the 32-tag limit — un-internable
+    // names are dropped and reported (never a panic, never a silent drop).
+    let (base_tag_remap, mut dropped_tag_names) = result.build_tag_remap(base);
+    let (diff_tag_remap, diff_dropped) = result.build_tag_remap(diff);
+    dropped_tag_names.extend(diff_dropped);
+
     let mut provenance = DiffProvenance {
         sources: FxHashMap::default(),
         base_to_result: FxHashMap::default(),
         diff_to_result: FxHashMap::default(),
     };
-    let mut stats = DiffStats::default();
+    let mut stats = DiffStats {
+        dropped_tag_names,
+        ..DiffStats::default()
+    };
 
     // Track which base atoms are matched (to know pass-throughs)
     // Also track base atoms that are deleted (matched by a delete marker)
@@ -128,7 +148,10 @@ pub fn apply_diff(
             // Matched UNCHANGED marker → base atom passes through unchanged
             // but we still record the mapping so bond resolution works
             let result_id = result.add_atom(base_atom.atomic_number, base_atom.position);
-            result.copy_atom_metadata(result_id, base_atom);
+            // UNCHANGED marker → the *base* atom passes through with the base
+            // atom's metadata (markers never carry tags of their own), so its
+            // mask translates through the base→result remap.
+            result.copy_atom_metadata(result_id, base_atom, &base_tag_remap);
             provenance.sources.insert(
                 result_id,
                 AtomSource::DiffMatchedBase {
@@ -143,7 +166,7 @@ pub fn apply_diff(
             // Matched normal atom → replacement/move
             // Use the diff atom's position (which may differ from base for moves)
             let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
-            result.copy_atom_metadata(result_id, diff_atom);
+            result.copy_atom_metadata(result_id, diff_atom, &diff_tag_remap);
             provenance.sources.insert(
                 result_id,
                 AtomSource::DiffMatchedBase {
@@ -185,7 +208,7 @@ pub fn apply_diff(
         }
 
         let result_id = result.add_atom(diff_atom.atomic_number, diff_atom.position);
-        result.copy_atom_metadata(result_id, diff_atom);
+        result.copy_atom_metadata(result_id, diff_atom, &diff_tag_remap);
         provenance
             .sources
             .insert(result_id, AtomSource::DiffAdded(diff_id));
@@ -201,7 +224,7 @@ pub fn apply_diff(
         }
         // Not matched and not deleted → pass through
         let result_id = result.add_atom(base_atom.atomic_number, base_atom.position);
-        result.copy_atom_metadata(result_id, base_atom);
+        result.copy_atom_metadata(result_id, base_atom, &base_tag_remap);
         provenance
             .sources
             .insert(result_id, AtomSource::BasePassthrough(base_atom.id));
@@ -534,6 +557,11 @@ pub struct DiffCompositionStats {
     pub composed_pairs: u32,
     /// Cancellations (diff1 add + diff2 delete).
     pub cancellations: u32,
+    /// Tag names dropped because the combined diff1+diff2 table exceeded the
+    /// 32-tag limit (§Diff semantics in `doc/design_atom_tags.md`). Composition
+    /// stays infallible and last-writer-wins per atom; a non-empty list is the
+    /// surfacing hook for a localized error at the `atom_composediff` node.
+    pub dropped_tag_names: Vec<String>,
 }
 
 /// Composes two diffs into a single diff.
@@ -591,6 +619,16 @@ pub fn compose_two_diffs(
     // ID ordering invariant: diff1-origin atoms get lower IDs, diff2-origin atoms get higher IDs.
     let mut composed = AtomicStructure::new_diff();
 
+    // Name-level tag remaps into the (empty) composed table. Every composed atom
+    // takes its tags from exactly one source diff atom — the last writer for that
+    // atom (§Diff semantics in `doc/design_atom_tags.md`) — translated through
+    // the matching remap. Never a mask union. Un-internable names (combined table
+    // over the 32-tag limit) are dropped and reported.
+    let (diff1_tag_remap, mut dropped_tag_names) = composed.build_tag_remap(diff1);
+    let (diff2_tag_remap, diff2_dropped) = composed.build_tag_remap(diff2);
+    dropped_tag_names.extend(diff2_dropped);
+    stats.dropped_tag_names = dropped_tag_names;
+
     // Maps from original diff IDs to composed IDs (needed for bond resolution)
     let mut diff1_to_composed: FxHashMap<u32, u32> = FxHashMap::default();
     let mut diff2_to_composed: FxHashMap<u32, u32> = FxHashMap::default();
@@ -633,7 +671,7 @@ pub fn compose_two_diffs(
                 if diff2_is_modify {
                     // Unchanged + modify → atom at diff2 position, anchor = diff1 match_pos
                     let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
-                    composed.copy_atom_metadata(cid, diff2_atom);
+                    composed.copy_atom_metadata(cid, diff2_atom, &diff2_tag_remap);
                     composed.set_anchor_position(cid, match_pos);
                     diff1_to_composed.insert(diff1_atom.id, cid);
                     diff2_to_composed.insert(diff2_id, cid);
@@ -659,7 +697,7 @@ pub fn compose_two_diffs(
                 if diff2_is_modify {
                     // Pure addition + modify → pure addition at diff2 position, diff2 element/flags
                     let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
-                    composed.copy_atom_metadata(cid, diff2_atom);
+                    composed.copy_atom_metadata(cid, diff2_atom, &diff2_tag_remap);
                     // No anchor (still a pure addition)
                     diff1_to_composed.insert(diff1_atom.id, cid);
                     diff2_to_composed.insert(diff2_id, cid);
@@ -672,7 +710,7 @@ pub fn compose_two_diffs(
                 } else {
                     // Pure addition + unchanged → diff1 atom as-is
                     let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
-                    composed.copy_atom_metadata(cid, diff1_atom);
+                    composed.copy_atom_metadata(cid, diff1_atom, &diff1_tag_remap);
                     diff1_to_composed.insert(diff1_atom.id, cid);
                     diff2_to_composed.insert(diff2_id, cid);
                     stats.composed_pairs += 1;
@@ -684,7 +722,7 @@ pub fn compose_two_diffs(
                 if diff2_is_modify {
                     // Modified + modify → diff2 position, diff1 anchor, diff2 element/flags
                     let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
-                    composed.copy_atom_metadata(cid, diff2_atom);
+                    composed.copy_atom_metadata(cid, diff2_atom, &diff2_tag_remap);
                     composed.set_anchor_position(cid, diff1_anchor);
                     diff1_to_composed.insert(diff1_atom.id, cid);
                     diff2_to_composed.insert(diff2_id, cid);
@@ -702,7 +740,7 @@ pub fn compose_two_diffs(
                 } else {
                     // Modified + unchanged → diff1 atom as-is
                     let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
-                    composed.copy_atom_metadata(cid, diff1_atom);
+                    composed.copy_atom_metadata(cid, diff1_atom, &diff1_tag_remap);
                     composed.set_anchor_position(cid, diff1_anchor);
                     diff1_to_composed.insert(diff1_atom.id, cid);
                     diff2_to_composed.insert(diff2_id, cid);
@@ -712,7 +750,7 @@ pub fn compose_two_diffs(
         } else {
             // Unmatched diff1 atom → copy as-is
             let cid = composed.add_atom(diff1_atom.atomic_number, diff1_atom.position);
-            composed.copy_atom_metadata(cid, diff1_atom);
+            composed.copy_atom_metadata(cid, diff1_atom, &diff1_tag_remap);
             if let Some(&anchor) = diff1.anchor_position(diff1_atom.id) {
                 composed.set_anchor_position(cid, anchor);
             }
@@ -725,7 +763,7 @@ pub fn compose_two_diffs(
     for &diff2_id in &unmatched_diff2_ids {
         let diff2_atom = diff2.get_atom(diff2_id).unwrap();
         let cid = composed.add_atom(diff2_atom.atomic_number, diff2_atom.position);
-        composed.copy_atom_metadata(cid, diff2_atom);
+        composed.copy_atom_metadata(cid, diff2_atom, &diff2_tag_remap);
         if let Some(&anchor) = diff2.anchor_position(diff2_id) {
             composed.set_anchor_position(cid, anchor);
         }
@@ -909,6 +947,14 @@ pub fn extract_diff(
 
     let epsilon_sq = position_epsilon * position_epsilon;
 
+    // Tags participate in diff extraction like the durable flags, but bit
+    // indices are per-structure, so the comparison is by name (§Diff semantics
+    // in `doc/design_atom_tags.md`). Fast path: when the two tables are byte-for-
+    // byte identical — the overwhelmingly common clone-mutate case where the
+    // mutation interned nothing new — a raw `tag_bits` compare is exact and the
+    // per-atom name-set path is skipped. Computed once for the whole sweep.
+    let tag_tables_identical = before.tag_names() == after.tag_names();
+
     // --- Atom sweep, ascending id (ids are 1-based slot indices) ---
     let max_slots = before
         .get_num_of_atoms_including_deleted()
@@ -922,11 +968,13 @@ pub fn extract_diff(
                 let element_changed = b.atomic_number != a.atomic_number;
                 let flags_changed =
                     (b.flags & DURABLE_FLAGS_MASK) != (a.flags & DURABLE_FLAGS_MASK);
-                if moved || element_changed || flags_changed {
+                let tags_changed = atom_tags_differ(before, after, tag_tables_identical, id, b, a);
+                if moved || element_changed || flags_changed || tags_changed {
                     // Modified: after's element/position/metadata, anchored to before's position.
                     let diff_id = diff.add_atom(a.atomic_number, a.position);
                     diff.set_atom_flags(diff_id, a.flags & DURABLE_FLAGS_MASK);
                     diff.set_atom_in_crystal_depth(diff_id, a.in_crystal_depth);
+                    record_after_tags(&mut diff, diff_id, after, id);
                     diff.set_anchor_position(diff_id, b.position);
                     reps.insert(id, diff_id);
                 }
@@ -944,6 +992,7 @@ pub fn extract_diff(
                 let diff_id = diff.add_atom(a.atomic_number, a.position);
                 diff.set_atom_flags(diff_id, a.flags & DURABLE_FLAGS_MASK);
                 diff.set_atom_in_crystal_depth(diff_id, a.in_crystal_depth);
+                record_after_tags(&mut diff, diff_id, after, id);
                 reps.insert(id, diff_id);
             }
             (None, None) => {}
@@ -996,6 +1045,48 @@ pub fn extract_diff(
     }
 
     diff
+}
+
+/// Whether atom `id`'s tag **name set** differs between `before` and `after`.
+///
+/// `tables_identical` is `before.tag_names() == after.tag_names()`, computed once
+/// by the caller. When the tables are identical, a raw `tag_bits` compare is exact
+/// (same bit ⇒ same name). Otherwise the two name lists are compared as *sets*
+/// (sorted), not as bit-ordered vectors — two structures can carry the same names
+/// at different bit positions, and that is not a change (§Diff semantics).
+fn atom_tags_differ(
+    before: &AtomicStructure,
+    after: &AtomicStructure,
+    tables_identical: bool,
+    id: u32,
+    b: &Atom,
+    a: &Atom,
+) -> bool {
+    if tables_identical {
+        b.tag_bits != a.tag_bits
+    } else {
+        let mut before_names = before.atom_tags(id);
+        let mut after_names = after.atom_tags(id);
+        before_names.sort_unstable();
+        after_names.sort_unstable();
+        before_names != after_names
+    }
+}
+
+/// Records `after` atom `after_id`'s tag *names* onto diff atom `diff_id`,
+/// interning them into the diff's own table. Interning cannot overflow here: the
+/// diff table starts empty and one structure holds at most `MAX_TAGS` live names.
+fn record_after_tags(
+    diff: &mut AtomicStructure,
+    diff_id: u32,
+    after: &AtomicStructure,
+    after_id: u32,
+) {
+    for name in after.atom_tags(after_id) {
+        // `diff` and `after` are distinct structures, so the immutable borrow of
+        // `after` (the `name` slices) and the mutable borrow of `diff` coexist.
+        let _ = diff.add_atom_tag(diff_id, name);
+    }
 }
 
 /// Builds the canonical bond set `{(min_id, max_id) → order}` of a structure.
