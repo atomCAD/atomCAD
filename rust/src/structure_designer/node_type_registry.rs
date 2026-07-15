@@ -2,6 +2,7 @@ use super::node_type::{NodeType, Parameter, PinOutputType};
 use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply::get_node_type as apply_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
+use super::nodes::apply_style::get_node_type as apply_style_get_node_type;
 use super::nodes::array_append::get_node_type as array_append_get_node_type;
 use super::nodes::array_at::get_node_type as array_at_get_node_type;
 use super::nodes::array_concat::get_node_type as array_concat_get_node_type;
@@ -435,6 +436,39 @@ impl NodeTypeRegistry {
             ),
         );
 
+        // `StyleRule` — one per-atom visual styling rule consumed by
+        // `apply_style` from an `Array[Record(Named("StyleRule"))]` pin. The
+        // `element`/`tag` fields are selectors; `color`/`alpha` are the visual
+        // properties written onto matched atoms. Every field is `Optional` so a
+        // `record_construct` may leave any pin unset ("leave this alone" for a
+        // property; "don't constrain on this axis" for a selector). The
+        // `render_style` field is added in Phase 4. See
+        // `doc/design_style_rules.md` §"The StyleRule built-in record type def".
+        ret.built_in_record_type_defs.insert(
+            "StyleRule".to_string(),
+            RecordTypeDef::from_named_fields(
+                "StyleRule",
+                vec![
+                    (
+                        "element".to_string(),
+                        DataType::Optional(Box::new(DataType::Int)),
+                    ),
+                    (
+                        "tag".to_string(),
+                        DataType::Optional(Box::new(DataType::String)),
+                    ),
+                    (
+                        "color".to_string(),
+                        DataType::Optional(Box::new(DataType::Vec3)),
+                    ),
+                    (
+                        "alpha".to_string(),
+                        DataType::Optional(Box::new(DataType::Float)),
+                    ),
+                ],
+            ),
+        );
+
         // Annotation nodes
         ret.add_node_type(comment_get_node_type());
 
@@ -544,6 +578,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(tag_get_node_type());
         ret.add_node_type(untag_get_node_type());
         ret.add_node_type(xray_get_node_type());
+        ret.add_node_type(apply_style_get_node_type());
 
         ret
     }

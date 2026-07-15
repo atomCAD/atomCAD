@@ -267,6 +267,9 @@ mod xray_test;
 #[path = "structure_designer/tag_test.rs"]
 mod tag_test;
 
+#[path = "structure_designer/apply_style_test.rs"]
+mod apply_style_test;
+
 #[path = "structure_designer/network_result_test.rs"]
 mod network_result_test;
 

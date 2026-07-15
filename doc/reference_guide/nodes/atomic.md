@@ -310,7 +310,7 @@ Attaches a **named tag** to atoms — a piece of inert, durable metadata that ma
 - `name: String` (optional) — the tag name. A wired value overrides the stored `name` property (same pin-over-property precedence as `xray`'s `alpha`); while wired, the node subtitle hides.
 - `region: Blueprint` (optional, last pin) — restrict tagging to atoms inside this volume. Disconnected → **all** atoms are tagged. See *Restricting an atom operation to a region* above.
 
-**Tags are selectors, not property carriers.** A tag has **no visual effect on its own** and no behavior — it only records "these atoms belong to a group named X". Tags are invisible in the viewport; **hover an atom to see the tags it carries** (they show on their own `Tags:` line in the hover popup). This is the only way to inspect tags today — a future visual-rules system will let tags drive per-atom color and rendering.
+**Tags are selectors, not property carriers.** A tag has **no visual effect on its own** and no behavior — it only records "these atoms belong to a group named X". Tags are invisible in the viewport; **hover an atom to see the tags it carries** (they show on their own `Tags:` line in the hover popup). To make tags *visible*, feed the tagged structure into [`apply_style`](#apply_style), which colors and ghosts atoms by tag (and by element).
 
 **Editor.** The properties panel offers a free-text `name` field plus one-click chips listing the tag names already present on the input structure (a suggestion source populated after the node evaluates — empty while the input is unwired or the upstream errors). The field stays free text because `tag`'s usual job is introducing a *new* name.
 
@@ -327,6 +327,50 @@ The inverse of `tag`: removes a named tag from atoms. Takes a `Crystal` or `Mole
 - `region: Blueprint` (optional, last pin) — restrict the effect to atoms inside this volume. Disconnected → **all** atoms are affected. See *Restricting an atom operation to a region* above.
 
 Removing a tag an atom does not carry is a no-op. As with `tag`, the editor offers the input's existing tag names as one-click chips.
+
+## apply_style
+
+Applies **per-atom visual styling** — color and transparency — driven by a list of rules that select atoms by element and/or tag. This is the consumer that gives [`tag`](#tag) a visible payoff: tag a group of atoms upstream, then color or ghost that group here. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with the styling recorded on the matched atoms. Like `xray`, `apply_style` is a pure metadata pass-through: it changes only how atoms are *drawn*, never their positions, bonds, or count.
+
+**Input pins**
+
+- `molecule: HasAtoms` — the input structure.
+- `rules: Array[Record(StyleRule)]` (optional) — the ordered list of style rules. Disconnected → the node is a no-op and passes the input through unchanged (so the network stays wireable while you build the rules).
+
+The node has **no properties** — rules live entirely on the wire, so you can build a rule set once and feed it into several `apply_style` nodes, or compute it with `map`/`product`/`array_concat` like any other data. Selecting the node shows an empty properties panel; that is expected.
+
+### The `StyleRule` record
+
+`StyleRule` is a **built-in record type** (it appears in the schema dropdown of `record_construct`; you cannot rename, edit, or delete it). Every field is `Optional`, so any pin may stay unset:
+
+| Field | Role | Meaning |
+|---|---|---|
+| `element: Optional[Int]` | selector | Matches atoms whose atomic number equals this value. |
+| `tag: Optional[String]` | selector | Matches atoms carrying this tag (see [`tag`](#tag)). |
+| `color: Optional[Vec3]` | property | Albedo override, `0`–`1` RGB (components are clamped). |
+| `alpha: Optional[Float]` | property | Display alpha, `0`–`1` (same field and semantics as [`xray`](#xray)). |
+
+**Matching.** A rule matches an atom when **every present selector** matches: `element` alone matches every atom of that element; `tag` alone matches every atom with that tag; both present is an **AND** (only atoms that are both). **With no selectors at all, the rule matches every atom** — the whole-structure "make everything slightly transparent / recolor everything" case. A selector that nothing satisfies (an element no displayed atom carries, a tag name absent from the structure) simply matches nothing — that is **not** an error, because networks are parametric. An `element` value that doesn't fit a 16-bit integer, or an empty/whitespace `tag`, **is** an error (surfaced on the node, naming the offending rule).
+
+**Ordering — last writer wins, per property.** Rules apply in array order. A matching rule overrides only the properties it sets, so a later rule that sets just `color` leaves an earlier rule's `alpha` in place on the overlap. The same rule extends across chained `apply_style` nodes: the downstream node's writes win where they overlap. There is no CSS-style specificity — order is the whole story.
+
+**Alpha** is the exact same per-atom display alpha that `xray` writes, on the same field: `alpha = 1.0` **removes** the recording (restores full opacity), so a `StyleRule` with `alpha: 1.0` re-opaques atoms an upstream `xray` had ghosted, and the value composes by multiplication with the global *Make whole scene transparent* lens. As with `xray`, transparency renders in the **impostor** atomic method only — in `TriangleMesh` mode styled atoms show their color but stay opaque.
+
+**Color has no reset value.** `alpha` has a natural "back to default" (`1.0`); **`color` does not** — there is no identity color. To remove a color override, remove (or reorder past) the rule that set it rather than looking for a sentinel value.
+
+### Authoring rules
+
+Build one `record_construct` node per rule (schema `StyleRule`): because every field is `Optional`, the per-field inline editor shows the *stored / (unset) / wired* tri-state, and leaving a field unset means "leave this property alone" (for a property) or "don't constrain on this axis" (for a selector).
+
+- **One rule** → wire the `record_construct` straight into `apply_style` (a single value broadcasts to a one-element array).
+- **Several rules** → collect the `record_construct` outputs with a [`sequence`](./math_programming.md#sequence) node and wire that into `rules`.
+- **Generated rules** (from `map`/`product`) arrive as an `Iter[Record]`; insert a [`collect`](./math_programming.md#collect) node before `rules`, since `Iter[T] → Array[T]` is not an implicit conversion.
+
+The `expr` node is **not** an authoring path — its record literals cannot express an unset `Optional` field, which record-width subtyping requires here.
+
+### Placement
+
+**Place `apply_style` late in the chain — after any rebuilding node.** Styling is transient display state recorded on atoms; nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, lattice fill) create fresh atoms and silently drop the styling, with no error. Put `apply_style` after those nodes, the same rule as `xray`.
 
 ## add_hydrogen
 
