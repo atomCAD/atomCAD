@@ -261,6 +261,9 @@ mod freeze_test;
 #[path = "structure_designer/xray_test.rs"]
 mod xray_test;
 
+#[path = "structure_designer/tag_test.rs"]
+mod tag_test;
+
 #[path = "structure_designer/network_result_test.rs"]
 mod network_result_test;
 
