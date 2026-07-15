@@ -118,7 +118,9 @@ impl NodeData for AtomUnionData {
             _ => unreachable!(),
         };
         for other in &atomic_structures {
-            merged_ref.add_atomic_structure(other);
+            if let Err(e) = merged_ref.add_atomic_structure(other) {
+                return EvalOutput::single(NetworkResult::Error(e.to_string()));
+            }
         }
 
         EvalOutput::single(output)

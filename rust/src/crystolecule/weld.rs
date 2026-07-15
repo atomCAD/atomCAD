@@ -53,7 +53,7 @@ impl UnionFind {
 /// The surviving atom (the lowest id in each coincident cluster) unions the
 /// bond lists of every fused atom (dedup by partner; on a duplicate the bond
 /// orders must agree — a mismatch is a bug by construction and panics) and
-/// unions their flags. The survivor keeps the patch-ghost flag (bit 6) only if
+/// unions their flags and tag bits. The survivor keeps the patch-ghost flag (bit 6) only if
 /// *every* fused atom was a patch-ghost; any real atom in the cluster makes the
 /// survivor real (the flag is cleared).
 ///
@@ -124,19 +124,25 @@ pub fn weld_coincident_atoms(structure: &mut AtomicStructure, tolerance: f64) {
         }
     }
 
-    // --- 3. Compute the unioned flags for each multi-atom cluster's survivor. ---
-    // survivor -> flags. Singleton clusters keep their flags unchanged, so we
-    // only record the ones we actually merge.
+    // --- 3. Compute the unioned flags and tags for each multi-atom cluster's
+    //        survivor. Singleton clusters keep theirs unchanged, so we only
+    //        record the ones we actually merge. ---
+    // survivor -> flags
     let mut survivor_flags: FxHashMap<u32, u16> = FxHashMap::default();
+    // survivor -> tag_bits. Weld runs within one structure, so every member's
+    // mask shares one table and the OR is exact (name-level remap not needed).
+    let mut survivor_tag_bits: FxHashMap<u32, u32> = FxHashMap::default();
     for (root, members) in &clusters {
         if members.len() == 1 {
             continue;
         }
         let mut union_flags: u16 = 0;
+        let mut union_tag_bits: u32 = 0;
         let mut all_patch_ghost = true;
         for member in members {
             let atom = structure.get_atom(*member).expect("clustered atom exists");
             union_flags |= atom.flags;
+            union_tag_bits |= atom.tag_bits;
             all_patch_ghost &= atom.is_patch_ghost();
         }
         // The union already set bit 6 if *any* member was a patch-ghost; clear
@@ -145,6 +151,7 @@ pub fn weld_coincident_atoms(structure: &mut AtomicStructure, tolerance: f64) {
             union_flags &= !ATOM_FLAG_PATCH_GHOST;
         }
         survivor_flags.insert(*root, union_flags);
+        survivor_tag_bits.insert(*root, union_tag_bits);
     }
 
     // --- 4. Mutate: delete non-survivors, then rebuild bonds and flags. ---
@@ -169,5 +176,9 @@ pub fn weld_coincident_atoms(structure: &mut AtomicStructure, tolerance: f64) {
 
     for (survivor, flags) in &survivor_flags {
         structure.set_atom_flags(*survivor, *flags);
+    }
+
+    for (survivor, tag_bits) in &survivor_tag_bits {
+        structure.set_atom_tag_bits(*survivor, *tag_bits);
     }
 }

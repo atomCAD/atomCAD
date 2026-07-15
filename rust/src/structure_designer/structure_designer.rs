@@ -7658,7 +7658,9 @@ impl StructureDesigner {
         {
             for (_pin_index, pin_output, _pin_geo_tree) in node_data.displayed_outputs() {
                 if let NodeOutput::Atomic(atomic_structure, _) = pin_output {
-                    merged_structure.add_atomic_structure(atomic_structure);
+                    merged_structure
+                        .add_atomic_structure(atomic_structure)
+                        .map_err(|e| e.to_string())?;
                     has_structures = true;
                 }
             }

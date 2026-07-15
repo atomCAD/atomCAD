@@ -38,6 +38,7 @@ pub mod atomic_structure_decorator;
 pub mod bond_reference;
 pub mod fragment;
 pub mod inline_bond;
+pub mod tags;
 
 // Re-export types for convenience
 pub use atom::Atom;
@@ -47,6 +48,7 @@ pub use inline_bond::{
     BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
     BOND_SINGLE, BOND_TRIPLE, InlineBond,
 };
+pub use tags::{MAX_TAGS, TagError, TagRemap};
 
 /// Atomic number used as a delete marker in diff structures.
 /// An atom with this atomic number in a diff means "delete the matched base atom."
@@ -94,6 +96,12 @@ pub struct AtomicStructure {
     /// Used by motif_edit to let parameter elements (e.g. -100) behave as their
     /// default real element (e.g. 6 for Carbon) in all chemistry-aware subsystems.
     effective_atomic_numbers: FxHashMap<i16, i16>,
+    /// Interned tag names. Index = bit position in `Atom.tag_bits`; at most
+    /// [`MAX_TAGS`] entries. A slot's name is stable for the structure's
+    /// lifetime unless the slot is reclaimed (see `intern_tag`). May contain
+    /// *dead* names — interned but currently carried by no atom. See
+    /// `doc/design_atom_tags.md`.
+    tag_names: Vec<String>,
 }
 
 impl Default for AtomicStructure {
@@ -239,6 +247,209 @@ impl AtomicStructure {
         }
     }
 
+    // ========================================================================
+    // Tags (see `doc/design_atom_tags.md`)
+    //
+    // A tag is a user-chosen name attached to a set of atoms — inert, durable
+    // metadata. Storage is this interned `tag_names` table plus a per-atom
+    // `Atom.tag_bits` bitmask. Bit indices are **per-structure**: the same name
+    // can sit at different bit positions in two structures, so every
+    // cross-structure operation works at the *name* level and translates masks
+    // through a [`TagRemap`]. All tag access goes through these accessors — no
+    // direct `tag_bits` fiddling outside `atomic_structure/`.
+    // ========================================================================
+
+    /// The interned tag table (bit order), for serialization and UI. May
+    /// include *dead* names — interned but currently carried by no atom
+    /// (candidates for slot reclamation, see [`Self::intern_tag`]).
+    pub fn tag_names(&self) -> &[String] {
+        &self.tag_names
+    }
+
+    /// The mask of *live* tag bits — bits carried by at least one atom. One
+    /// O(atoms) OR-sweep; used to detect reclaimable slots and to intern only
+    /// the source's live names on merge.
+    fn live_tag_mask(&self) -> u32 {
+        let mut mask = 0u32;
+        for atom in self.atoms_values() {
+            mask |= atom.tag_bits;
+            if mask == u32::MAX {
+                break;
+            }
+        }
+        mask
+    }
+
+    /// Look up or create the bit index for `name` (trimmed).
+    ///
+    /// Interning is idempotent: an already-present name returns its existing
+    /// bit. When the table is full ([`MAX_TAGS`] entries) this first tries to
+    /// reclaim a **dead slot** — the lowest bit that no atom carries — reusing
+    /// it for `name` (the old name is simply forgotten; no atom referenced it).
+    /// Only when all [`MAX_TAGS`] bits are live does it fail.
+    ///
+    /// `Err(EmptyName)` when the name is empty/whitespace after trimming;
+    /// `Err(LimitReached)` when the table is full of live names.
+    pub fn intern_tag(&mut self, name: &str) -> Result<u8, TagError> {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            return Err(TagError::EmptyName);
+        }
+        // Already interned?
+        if let Some(idx) = self.tag_names.iter().position(|n| n == trimmed) {
+            return Ok(idx as u8);
+        }
+        // Room to grow the dense table?
+        if self.tag_names.len() < MAX_TAGS {
+            let idx = self.tag_names.len() as u8;
+            self.tag_names.push(trimmed.to_string());
+            return Ok(idx);
+        }
+        // Table full — reclaim the lowest dead slot (a bit no atom carries).
+        // Slot reuse never touches any `Atom.tag_bits`.
+        let live = self.live_tag_mask();
+        for i in 0..MAX_TAGS {
+            if live & (1u32 << i) == 0 {
+                self.tag_names[i] = trimmed.to_string();
+                return Ok(i as u8);
+            }
+        }
+        Err(TagError::LimitReached)
+    }
+
+    /// Bit index of `name` if interned; does not create.
+    pub fn tag_index(&self, name: &str) -> Option<u8> {
+        let trimmed = name.trim();
+        self.tag_names
+            .iter()
+            .position(|n| n == trimmed)
+            .map(|i| i as u8)
+    }
+
+    /// Add tag `name` to the atom (interning the name if needed). Missing atom
+    /// or full table surfaces as `Err`; re-tagging an already-tagged atom is a
+    /// no-op.
+    pub fn add_atom_tag(&mut self, atom_id: u32, name: &str) -> Result<(), TagError> {
+        let idx = self.intern_tag(name)?;
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.tag_bits |= 1u32 << idx;
+        }
+        Ok(())
+    }
+
+    /// Remove tag `name` from the atom. An absent name or an atom that does not
+    /// carry it is a no-op by design.
+    pub fn remove_atom_tag(&mut self, atom_id: u32, name: &str) {
+        if let Some(idx) = self.tag_index(name) {
+            if let Some(atom) = self.get_atom_mut(atom_id) {
+                atom.tag_bits &= !(1u32 << idx);
+            }
+        }
+    }
+
+    /// Remove *all* tags from the atom.
+    pub fn clear_atom_tags(&mut self, atom_id: u32) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.tag_bits = 0;
+        }
+    }
+
+    /// Whether the atom carries tag `name`.
+    pub fn atom_has_tag(&self, atom_id: u32, name: &str) -> bool {
+        match (self.tag_index(name), self.get_atom(atom_id)) {
+            (Some(idx), Some(atom)) => atom.tag_bits & (1u32 << idx) != 0,
+            _ => false,
+        }
+    }
+
+    /// Names of the tags this atom carries, in bit order.
+    pub fn atom_tags(&self, atom_id: u32) -> Vec<&str> {
+        let Some(atom) = self.get_atom(atom_id) else {
+            return Vec::new();
+        };
+        let mut names = Vec::new();
+        for i in 0..MAX_TAGS {
+            if atom.tag_bits & (1u32 << i) != 0 {
+                if let Some(name) = self.tag_names.get(i) {
+                    names.push(name.as_str());
+                }
+            }
+        }
+        names
+    }
+
+    /// Derived query: ids of all atoms carrying `name`. O(atoms).
+    pub fn atoms_with_tag(&self, name: &str) -> Vec<u32> {
+        let Some(idx) = self.tag_index(name) else {
+            return Vec::new();
+        };
+        let bit = 1u32 << idx;
+        self.atoms_values()
+            .filter(|a| a.tag_bits & bit != 0)
+            .map(|a| a.id)
+            .collect()
+    }
+
+    /// Overwrites an atom's raw tag bitmask. Low-level sibling of
+    /// [`Self::set_atom_flags`], used by `weld_coincident_atoms` to install the
+    /// OR of a fused cluster's masks onto its survivor. Weld runs within one
+    /// structure (one shared table), so a raw OR is exact — cross-structure
+    /// callers must go through [`Self::build_tag_remap`] instead.
+    pub fn set_atom_tag_bits(&mut self, atom_id: u32, tag_bits: u32) {
+        if let Some(atom) = self.get_atom_mut(atom_id) {
+            atom.tag_bits = tag_bits;
+        }
+    }
+
+    /// Raw tag bitmask of an atom (0 if the atom is absent). For welds and
+    /// other within-structure mask arithmetic.
+    pub fn atom_tag_bits(&self, atom_id: u32) -> u32 {
+        self.get_atom(atom_id).map(|a| a.tag_bits).unwrap_or(0)
+    }
+
+    /// Interns each of `source`'s **live** tag names into `self` and returns the
+    /// source-bit → target-bit translation. Names that no longer fit are left
+    /// unmapped and returned in the dropped list — never a panic, never a
+    /// silent drop. When the two tables are already identical the result is the
+    /// identity remap (the cheap common case: clone-mutate diffs, repeated
+    /// merges of siblings).
+    pub fn build_tag_remap(&mut self, source: &AtomicStructure) -> (TagRemap, Vec<String>) {
+        // Fast path: identical tables → identity remap, no interning.
+        if self.tag_names == source.tag_names {
+            return (TagRemap::identity(), Vec::new());
+        }
+        let live = source.live_tag_mask();
+        let mut map: [Option<u8>; MAX_TAGS] = [None; MAX_TAGS];
+        let mut dropped: Vec<String> = Vec::new();
+        for (i, slot) in map.iter_mut().enumerate() {
+            if live & (1u32 << i) == 0 {
+                continue; // dead (or nonexistent) source slot — nothing to move
+            }
+            let Some(name) = source.tag_names.get(i) else {
+                continue;
+            };
+            match self.intern_tag(name) {
+                Ok(target_idx) => *slot = Some(target_idx),
+                Err(_) => dropped.push(name.clone()),
+            }
+        }
+        (TagRemap { map }, dropped)
+    }
+
+    /// Translate a mask through a [`TagRemap`]; unmapped source bits are dropped
+    /// (their names are the ones reported by [`Self::build_tag_remap`]).
+    pub fn remap_tag_bits(bits: u32, remap: &TagRemap) -> u32 {
+        let mut out = 0u32;
+        for i in 0..MAX_TAGS {
+            if bits & (1u32 << i) != 0 {
+                if let Some(target) = remap.map[i] {
+                    out |= 1u32 << target;
+                }
+            }
+        }
+        out
+    }
+
     /// Copies all per-atom metadata (flags except selected, and in_crystal_depth)
     /// from a source atom to a target atom in this structure.
     ///
@@ -279,6 +490,7 @@ impl AtomicStructure {
             is_diff: false,
             anchor_positions: FxHashMap::default(),
             effective_atomic_numbers: FxHashMap::default(),
+            tag_names: Vec::new(),
         }
     }
 
@@ -293,6 +505,7 @@ impl AtomicStructure {
             is_diff: true,
             anchor_positions: FxHashMap::default(),
             effective_atomic_numbers: FxHashMap::default(),
+            tag_names: Vec::new(),
         }
     }
 
@@ -353,6 +566,7 @@ impl AtomicStructure {
             bonds: SmallVec::new(),
             flags: 0,
             in_crystal_depth: 0.0,
+            tag_bits: 0,
         };
         self.atoms[index] = Some(atom);
         self.num_atoms += 1;
@@ -372,6 +586,7 @@ impl AtomicStructure {
             bonds: SmallVec::new(),
             flags: 0, // All flags cleared (including selected)
             in_crystal_depth: 0.0,
+            tag_bits: 0, // No tags on a freshly created atom
         };
 
         // Always append to end (index = id - 1 = atoms.len())
@@ -875,8 +1090,25 @@ impl AtomicStructure {
         result
     }
 
-    /// Merges another structure into this one with remapped IDs
-    pub fn add_atomic_structure(&mut self, other: &AtomicStructure) -> FxHashMap<u32, u32> {
+    /// Merges another structure into this one with remapped IDs.
+    ///
+    /// Fallible because tags merge at the **name** level: `other`'s live tag
+    /// names are interned into `self` (see [`Self::build_tag_remap`]) and each
+    /// incoming atom's mask is translated through the resulting [`TagRemap`].
+    /// If the combined table would exceed [`MAX_TAGS`] live names the whole
+    /// merge fails with `TagError::LimitReached` rather than silently dropping
+    /// tags (§Maintenance in `doc/design_atom_tags.md`).
+    pub fn add_atomic_structure(
+        &mut self,
+        other: &AtomicStructure,
+    ) -> Result<FxHashMap<u32, u32>, TagError> {
+        // Name-level tag union, computed once for the whole merge. A non-empty
+        // dropped list means the combined table overflowed — fail the call.
+        let (tag_remap, dropped) = self.build_tag_remap(other);
+        if !dropped.is_empty() {
+            return Err(TagError::LimitReached);
+        }
+
         let mut atom_id_map: FxHashMap<u32, u32> = FxHashMap::default();
 
         for (old_atom_id, atom) in other.iter_atoms() {
@@ -885,9 +1117,13 @@ impl AtomicStructure {
 
             self.set_atom_depth(new_atom_id, atom.in_crystal_depth);
 
-            // Copy all flags at once (selected, hydrogen_passivation, and any future flags)
+            // Copy all flags at once (selected, hydrogen_passivation, and any
+            // future flags), and translate the tag mask through the name-level
+            // remap so bit positions follow `self`'s table, not `other`'s.
+            let remapped_tags = Self::remap_tag_bits(atom.tag_bits, &tag_remap);
             if let Some(new_atom) = self.get_atom_mut(new_atom_id) {
                 new_atom.flags = atom.flags;
+                new_atom.tag_bits = remapped_tags;
             }
         }
 
@@ -934,7 +1170,7 @@ impl AtomicStructure {
             }
         }
 
-        atom_id_map
+        Ok(atom_id_map)
     }
 }
 

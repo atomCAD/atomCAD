@@ -14,7 +14,7 @@
 //! compatibility badge.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::AtomicStructure;
+use crate::crystolecule::atomic_structure::{AtomicStructure, TagError};
 use crate::crystolecule::guided_placement::{Hybridization, covalent_max_neighbors};
 use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
 use crate::crystolecule::structure::Structure;
@@ -436,7 +436,7 @@ fn place_debug_tile(
     free_dirs: &[DVec3],
     center_depths: &[f64],
     frozen: bool,
-) {
+) -> Result<(), TagError> {
     let t = region_lattice.ivec3_lattice_to_real(o);
     let mut copy = tile.clone();
     copy.transform(&DQuat::IDENTITY, &t);
@@ -452,7 +452,8 @@ fn place_debug_tile(
             }
         }
     }
-    out.add_atomic_structure(&copy);
+    out.add_atomic_structure(&copy)?;
+    Ok(())
 }
 
 /// Applies a patch over a region (§5). `region_volume` is the containment SDF
@@ -481,7 +482,7 @@ pub fn apply_patch(
     test_height_at_origin: bool,
     debug_project: bool,
     debug_frontier: bool,
-) -> (AtomicStructure, CompatibilityReport) {
+) -> Result<(AtomicStructure, CompatibilityReport), TagError> {
     // Test-plane frame: the periodic subspace is spanned by the tiling vectors;
     // the free (non-periodic) directions are its complement. The centre depth
     // along each is either the lattice origin's height (0 — simple, default) or
@@ -541,7 +542,7 @@ pub fn apply_patch(
         let t = region_lattice.ivec3_lattice_to_real(o);
         let mut copy = tile.clone();
         copy.transform(&DQuat::IDENTITY, &t);
-        result.add_atomic_structure(&copy);
+        result.add_atomic_structure(&copy)?;
     }
 
     // Step 5 — Weld: fuse tile↔tile (periodic) and tile↔bulk (collar) at once.
@@ -575,7 +576,7 @@ pub fn apply_patch(
     };
 
     if !debug_project && !debug_frontier {
-        return (result, report);
+        return Ok((result, report));
     }
 
     // ---- Debug visualizations (output only; the report above is preserved) ----
@@ -600,7 +601,7 @@ pub fn apply_patch(
                 &free_dirs,
                 &center_depths,
                 false,
-            );
+            )?;
         }
         for o in &frontier_offsets {
             place_debug_tile(
@@ -612,7 +613,7 @@ pub fn apply_patch(
                 &free_dirs,
                 &center_depths,
                 true,
-            );
+            )?;
         }
         out
     } else {
@@ -629,12 +630,12 @@ pub fn apply_patch(
                 &free_dirs,
                 &center_depths,
                 true,
-            );
+            )?;
         }
         out
     };
 
-    (output, report)
+    Ok((output, report))
 }
 
 // ============================================================================
@@ -840,7 +841,7 @@ impl NodeData for PatchLatticeFillData {
             Err(error) => return EvalOutput::single(error),
         };
 
-        let (atoms, report) = apply_patch(
+        let (atoms, report) = match apply_patch(
             &target_atoms,
             &region_lattice,
             region_geo.as_ref(),
@@ -854,7 +855,10 @@ impl NodeData for PatchLatticeFillData {
             self.test_height_at_origin,
             self.debug_project_to_test_plane,
             self.debug_show_frontier_tiles,
-        );
+        ) {
+            Ok(v) => v,
+            Err(e) => return EvalOutput::single(NetworkResult::Error(e.to_string())),
+        };
 
         // Cache the compatibility stats for the property-panel badge (§6).
         *self.last_report.borrow_mut() = Some(report);

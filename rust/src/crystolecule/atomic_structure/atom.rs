@@ -10,6 +10,17 @@ pub struct Atom {
     pub in_crystal_depth: f32,
     pub atomic_number: i16,
     pub flags: u16, // Bit 0: selected, Bit 1: hydrogen passivation, Bit 2: frozen, Bits 3-4: hybridization override, Bit 5: ghost (display-only, motif_edit), Bit 6: patch-ghost (reserved, see doc/design_surface_patches.md)
+    /// Tag membership bitmask. Bit `i` set ⇔ this atom carries the tag
+    /// `structure.tag_names[i]` (indices are per-structure — see
+    /// `doc/design_atom_tags.md`). Durable state that survives diff extraction,
+    /// like the [`DURABLE_FLAGS_MASK`] bits of `flags`. All access goes through
+    /// the `AtomicStructure` tag accessors, never raw bit fiddling.
+    ///
+    /// Struct-size invariant: this `u32` occupies the 4 padding bytes an
+    /// align-8 `Atom` already carried, so `Atom` stays **64 bytes** (one cache
+    /// line) and a large structure pays zero extra memory for tags. There is a
+    /// `size_of::<Atom>() == 64` guard test locking this claim.
+    pub tag_bits: u32,
 }
 
 const ATOM_FLAG_SELECTED: u16 = 1 << 0;

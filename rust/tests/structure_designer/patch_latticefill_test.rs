@@ -52,6 +52,7 @@ fn apply_patch_t(
         false,
         false,
     )
+    .expect("apply_patch: tag tables fit within test fixtures")
 }
 
 /// A cubic lattice with edge `L` — keeps lattice/real arithmetic legible.
@@ -981,7 +982,8 @@ fn debug_project_flattens_atoms_to_test_plane() {
         true,  // test_height_at_origin
         true,  // debug_project
         false, // debug_frontier
-    );
+    )
+    .expect("apply_patch: tag tables fit within test fixtures");
 
     // The patch atom (z=5) is flattened onto the test plane (z=0); nothing left
     // at z=5; no hydrogens added (no passivation in project mode).
@@ -1032,7 +1034,8 @@ fn debug_frontier_overlays_excluded_neighbours_frozen() {
         true, // test_height_at_origin
         false,
         false,
-    );
+    )
+    .expect("apply_patch: tag tables fit within test fixtures");
     assert_eq!(
         plain.0.get_num_of_atoms(),
         1,
@@ -1053,7 +1056,8 @@ fn debug_frontier_overlays_excluded_neighbours_frozen() {
         true, // test_height_at_origin
         false,
         true, // debug_frontier
-    );
+    )
+    .expect("apply_patch: tag tables fit within test fixtures");
     // 3x3 box around the origin cell = 9 cells; 1 selected (real) + 8 frontier.
     assert_eq!(dbg.get_num_of_atoms(), 9, "selected + 8 frontier tiles");
     assert_eq!(
@@ -1100,7 +1104,8 @@ fn origin_vs_target_test_height_for_offset_slab() {
         true, // test_height_at_origin
         false,
         false,
-    );
+    )
+    .expect("apply_patch: tag tables fit within test fixtures");
     assert_eq!(
         origin_ver.get_num_of_atoms(),
         1,
@@ -1122,7 +1127,8 @@ fn origin_vs_target_test_height_for_offset_slab() {
         false, // derive height from the target
         false,
         false,
-    );
+    )
+    .expect("apply_patch: tag tables fit within test fixtures");
     assert!(
         target_ver.get_num_of_atoms() > 1,
         "target-derived height (z=10) lands on the slab → tile placed"
@@ -1160,7 +1166,8 @@ fn debug_frontier_shows_block_when_nothing_selected() {
         true,  // origin height → nothing selected for the offset target
         false, // debug_project
         true,  // debug_frontier
-    );
+    )
+    .expect("apply_patch: tag tables fit within test fixtures");
 
     assert_eq!(
         report.placed_cells, 0,

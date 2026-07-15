@@ -600,7 +600,7 @@ fn test_atom_alpha_remapped_on_merge() {
     other.set_atom_alpha(o1, 0.25);
     other.set_atom_alpha(o2, 0.75);
 
-    let id_map = target.add_atomic_structure(&other);
+    let id_map = target.add_atomic_structure(&other).expect("merge succeeds");
 
     let new_o1 = *id_map.get(&o1).unwrap();
     let new_o2 = *id_map.get(&o2).unwrap();

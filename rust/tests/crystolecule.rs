@@ -10,6 +10,9 @@ mod extract_diff_test;
 #[path = "crystolecule/atomic_structure_test.rs"]
 mod atomic_structure_test;
 
+#[path = "crystolecule/atom_tags_test.rs"]
+mod atom_tags_test;
+
 #[path = "crystolecule/auto_bonding_test.rs"]
 mod auto_bonding_test;
 

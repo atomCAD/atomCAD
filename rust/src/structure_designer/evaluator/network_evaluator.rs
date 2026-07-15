@@ -1103,7 +1103,12 @@ impl NetworkEvaluator {
                 }
                 let mut result = structures.remove(0);
                 for other in &structures {
-                    result.add_atomic_structure(other);
+                    if let Err(e) = result.add_atomic_structure(other) {
+                        context
+                            .node_errors
+                            .insert(context.node_ref(node_id), e.to_string());
+                        return (NodeOutput::None, None);
+                    }
                 }
                 result.decorator_mut().from_selected_node = from_selected_node;
                 (NodeOutput::Atomic(result, None), None)
