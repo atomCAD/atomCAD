@@ -8,3 +8,6 @@ mod csg_to_poly_mesh_test;
 
 #[path = "display/atomic_impostor_alpha_test.rs"]
 mod atomic_impostor_alpha_test;
+
+#[path = "display/atomic_color_test.rs"]
+mod atomic_color_test;

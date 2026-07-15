@@ -328,8 +328,11 @@ fn is_bond_overstretched(atom1: &Atom, atom2: &Atom) -> bool {
     distance > r1 + r2
 }
 
-/// Shared helper to get atom color and material properties based on selection state
-fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
+/// Shared helper to get atom color and material properties based on selection
+/// state. `color_override` (the `apply_style` albedo, `doc/design_style_rules.md`)
+/// replaces the element-derived color when present, but the marker and
+/// param-element colors win, and the selection albedo stays above the override.
+fn get_atom_color_and_material(atom: &Atom, color_override: Option<Vec3>) -> (Vec3, f32, f32) {
     // Delete markers render as red spheres
     if atom.is_delete_marker() {
         let color = if atom.is_selected() {
@@ -369,7 +372,8 @@ fn get_atom_color_and_material(atom: &Atom) -> (Vec3, f32, f32) {
             let atom_info = ATOM_INFO
                 .get(&(atom.atomic_number as i32))
                 .unwrap_or(&DEFAULT_ATOM_INFO);
-            (atom_info.color, 0.25)
+            // The style color replaces only the element-derived albedo.
+            (color_override.unwrap_or(atom_info.color), 0.25)
         };
 
     let atom_color = if atom.is_selected() {
@@ -506,7 +510,7 @@ fn calculate_occluder_spheres(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn tessellate_atom(
     output_mesh: &mut Mesh,
-    _model: &AtomicStructure,
+    model: &AtomicStructure,
     atom: &Atom,
     params: &AtomicTessellatorParams,
     display_state: AtomDisplayState,
@@ -523,7 +527,8 @@ pub(crate) fn tessellate_atom(
     //}
 
     // Use shared helper for color and material calculation
-    let (atom_color, roughness, metallic) = get_atom_color_and_material(atom);
+    let (atom_color, roughness, metallic) =
+        get_atom_color_and_material(atom, model.get_atom_color(atom.id));
 
     // Get appropriate tessellation parameters based on visualization mode
     let (horizontal_divisions, vertical_divisions) = match visualization {
@@ -538,7 +543,7 @@ pub(crate) fn tessellate_atom(
     };
 
     // Calculate occluder spheres for occlusion culling
-    calculate_occluder_spheres(atom, _model, visualization, reusable_occluder_array);
+    calculate_occluder_spheres(atom, model, visualization, reusable_occluder_array);
 
     // Render the atom sphere with occlusion culling if in space-filling mode
     if *visualization == AtomicStructureVisualization::SpaceFilling
@@ -863,6 +868,7 @@ pub fn tessellate_atomic_structure_impostors(
             display_state,
             &atomic_viz_prefs.visualization,
             global_alpha * atomic_structure.get_atom_alpha(*id),
+            atomic_structure.get_atom_color(*id),
         );
     }
 
@@ -963,13 +969,17 @@ pub fn tessellate_atomic_structure_impostors(
 
 /// Get atom appearance for impostor rendering.
 /// Returns (albedo, roughness, metallic, rim_color).
-/// Albedo is always element color (no selection color override).
+/// Albedo is the element color, or `color_override` (the `apply_style` albedo,
+/// `doc/design_style_rules.md`) when present — but the delete-marker,
+/// unchanged-marker, and param-element colors are semantic UI and win over the
+/// override. Ghost desaturation applies on top of the resolved albedo.
 /// Roughness and metallic are always element defaults (no state overrides).
 /// Rim color follows state priority:
 /// Selected > Marked/SecondaryMarked > Delete Marker > Frozen.
 fn get_atom_impostor_appearance(
     atom: &Atom,
     display_state: AtomDisplayState,
+    color_override: Option<Vec3>,
 ) -> (Vec3, f32, f32, [f32; 4]) {
     // Base element color and material (no state overrides for any property except rim)
     let (base_color, base_roughness, base_metallic) = if atom.is_delete_marker() {
@@ -983,7 +993,8 @@ fn get_atom_impostor_appearance(
         let atom_info = ATOM_INFO
             .get(&(atom.atomic_number as i32))
             .unwrap_or(&DEFAULT_ATOM_INFO);
-        (atom_info.color, 0.25, 0.0)
+        // The style color replaces only the element-derived albedo.
+        (color_override.unwrap_or(atom_info.color), 0.25, 0.0)
     };
 
     // State priority for rim color only: Marked/SecondaryMarked > Selected > Delete Marker > Frozen
@@ -1021,6 +1032,7 @@ fn get_atom_impostor_appearance(
 /// Routes to `transparent_impostor_mesh` when `alpha < 1.0`, else to the opaque
 /// `atom_impostor_mesh`. Appearance (color/roughness/metallic/rim) is computed
 /// identically for both paths.
+#[allow(clippy::too_many_arguments)]
 pub fn tessellate_atom_impostor(
     atom_impostor_mesh: &mut AtomImpostorMesh,
     transparent_impostor_mesh: &mut TransparentImpostorMesh,
@@ -1028,9 +1040,11 @@ pub fn tessellate_atom_impostor(
     display_state: AtomDisplayState,
     visualization: &AtomicStructureVisualization,
     alpha: f32,
+    color_override: Option<Vec3>,
 ) {
     let radius = get_displayed_atom_radius(atom, visualization) as f32;
-    let (color, roughness, metallic, rim_color) = get_atom_impostor_appearance(atom, display_state);
+    let (color, roughness, metallic, rim_color) =
+        get_atom_impostor_appearance(atom, display_state, color_override);
 
     if alpha < 1.0 {
         transparent_impostor_mesh.add_atom_quad(

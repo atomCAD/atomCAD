@@ -736,6 +736,10 @@ in Phase 5).
 
 ## Future work: tag-driven visual properties
 
+> **Now designed:** `doc/design_style_rules.md` specifies this system in
+> full (including per-atom render style, which that doc assesses rather
+> than deferring). This section is kept as the original sketch.
+
 Recorded here so the ideas survive until their own design doc. None of this
 is in scope for the phases above; the tag core is deliberately independent
 of it.

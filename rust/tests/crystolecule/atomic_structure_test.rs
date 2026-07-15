@@ -1,3 +1,4 @@
+use glam::Vec3;
 use glam::f64::{DQuat, DVec3};
 use rust_lib_flutter_cad::api::common_api_types::SelectModifier;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
@@ -608,6 +609,91 @@ fn test_atom_alpha_remapped_on_merge() {
     assert_eq!(target.get_atom_alpha(new_o1), 0.25);
     assert_eq!(target.get_atom_alpha(new_o2), 0.75);
     assert_eq!(target.decorator().atom_alpha.len(), 2);
+}
+
+// ============================================================================
+// Per-atom color override (doc/design_style_rules.md, Phase 1)
+// ============================================================================
+
+#[test]
+fn test_atom_color_set_get_clear() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Absent entry (and non-existent atom) reads as None = element color
+    assert_eq!(structure.get_atom_color(id), None);
+    assert_eq!(structure.get_atom_color(9999), None);
+
+    let c = Vec3::new(0.2, 0.4, 0.6);
+    structure.set_atom_color(id, c);
+    assert_eq!(structure.get_atom_color(id), Some(c));
+
+    structure.clear_atom_color(id);
+    assert_eq!(structure.get_atom_color(id), None);
+    assert!(structure.decorator().atom_color.is_empty());
+}
+
+#[test]
+fn test_atom_color_components_clamped() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Out-of-range components clamp to [0,1] per-component.
+    structure.set_atom_color(id, Vec3::new(-0.5, 2.0, 0.3));
+    assert_eq!(structure.get_atom_color(id), Some(Vec3::new(0.0, 1.0, 0.3)));
+}
+
+#[test]
+fn test_atom_color_cleared_on_delete() {
+    let mut structure = create_test_molecule();
+    let bonded_id = 1; // c1, has bonds
+    structure.set_atom_color(bonded_id, Vec3::new(0.1, 0.2, 0.3));
+    structure.delete_atom(bonded_id);
+    assert!(structure.decorator().atom_color.is_empty());
+
+    let mut structure = AtomicStructure::new();
+    let lone_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_color(lone_id, Vec3::new(0.1, 0.2, 0.3));
+    structure.delete_lone_atom(lone_id);
+    assert!(structure.decorator().atom_color.is_empty());
+}
+
+#[test]
+fn test_atom_color_remapped_on_merge() {
+    let mut target = AtomicStructure::new();
+    target.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    target.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+
+    let mut other = AtomicStructure::new();
+    let o1 = other.add_atom(8, DVec3::new(5.0, 0.0, 0.0));
+    let o2 = other.add_atom(8, DVec3::new(6.5, 0.0, 0.0));
+    other.set_atom_color(o1, Vec3::new(0.1, 0.2, 0.3));
+    other.set_atom_color(o2, Vec3::new(0.4, 0.5, 0.6));
+
+    let id_map = target.add_atomic_structure(&other).expect("merge succeeds");
+
+    let new_o1 = *id_map.get(&o1).unwrap();
+    let new_o2 = *id_map.get(&o2).unwrap();
+    assert_ne!(new_o1, o1); // ids actually remapped (target already had atoms)
+    assert_eq!(
+        target.get_atom_color(new_o1),
+        Some(Vec3::new(0.1, 0.2, 0.3))
+    );
+    assert_eq!(
+        target.get_atom_color(new_o2),
+        Some(Vec3::new(0.4, 0.5, 0.6))
+    );
+    assert_eq!(target.decorator().atom_color.len(), 2);
+}
+
+#[test]
+fn test_atom_color_preserved_on_clone() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_color(id, Vec3::new(0.7, 0.8, 0.9));
+
+    let cloned = structure.clone();
+    assert_eq!(cloned.get_atom_color(id), Some(Vec3::new(0.7, 0.8, 0.9)));
 }
 
 // ============================================================================

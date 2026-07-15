@@ -628,7 +628,11 @@ fn tag_set_data_is_undoable() {
     designer.connect_nodes(value_id, 0, tag_id, 0);
 
     let before = evaluate_to_atomic(&designer, net, tag_id);
-    assert_eq!(tags_at(&before, 0.0), vec!["surface"], "initial stored name");
+    assert_eq!(
+        tags_at(&before, 0.0),
+        vec!["surface"],
+        "initial stored name"
+    );
 
     // Set new node data through the StructureDesigner-level setter.
     designer.set_node_network_data_scoped(

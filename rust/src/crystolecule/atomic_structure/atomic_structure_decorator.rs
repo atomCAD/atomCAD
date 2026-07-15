@@ -2,6 +2,7 @@ use crate::crystolecule::atomic_structure::bond_reference::BondReference;
 use crate::crystolecule::guided_placement::GuideDot;
 use crate::util::transform::Transform;
 use glam::IVec3;
+use glam::Vec3;
 use glam::f64::DVec3;
 use rustc_hash::FxHashMap;
 
@@ -85,6 +86,10 @@ pub struct AtomicStructureDecorator {
     /// Per-atom display alpha in [0,1). Absent = fully opaque. Runtime-only
     /// display augmentation, like all decorator state (never serialized).
     pub atom_alpha: FxHashMap<u32, f32>,
+    /// Per-atom albedo override, 0–1 RGB. Absent = element-derived color.
+    /// Runtime-only display augmentation, like all decorator state (never
+    /// serialized). Written by `apply_style`; see `doc/design_style_rules.md`.
+    pub atom_color: FxHashMap<u32, Vec3>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -106,6 +111,7 @@ impl AtomicStructureDecorator {
             element_name_overrides: FxHashMap::default(),
             ghost_atom_metadata: FxHashMap::default(),
             atom_alpha: FxHashMap::default(),
+            atom_color: FxHashMap::default(),
         }
     }
 

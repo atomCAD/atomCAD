@@ -27,6 +27,7 @@ use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::util::hit_test_utils;
 use crate::util::memory_size_estimator::MemorySizeEstimator;
+use glam::Vec3;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use rustc_hash::FxHashMap;
@@ -655,6 +656,24 @@ impl AtomicStructure {
             .unwrap_or(1.0)
     }
 
+    /// Sets the albedo override for an atom. Components are clamped to `[0,1]`
+    /// (the `AtomInfo.color` convention). See `doc/design_style_rules.md`.
+    pub fn set_atom_color(&mut self, atom_id: u32, color: Vec3) {
+        self.decorator
+            .atom_color
+            .insert(atom_id, color.clamp(Vec3::ZERO, Vec3::ONE));
+    }
+
+    /// Removes an atom's albedo override, restoring the element-derived color.
+    pub fn clear_atom_color(&mut self, atom_id: u32) {
+        self.decorator.atom_color.remove(&atom_id);
+    }
+
+    /// Returns the albedo override for an atom; `None` = use the element color.
+    pub fn get_atom_color(&self, atom_id: u32) -> Option<Vec3> {
+        self.decorator.atom_color.get(&atom_id).copied()
+    }
+
     pub fn delete_atom(&mut self, id: u32) {
         if id == 0 {
             return;
@@ -693,6 +712,7 @@ impl AtomicStructure {
         // Clear from decorator
         self.decorator.atom_display_states.remove(&id);
         self.decorator.atom_alpha.remove(&id);
+        self.decorator.atom_color.remove(&id);
     }
 
     /// Fast deletion for lone atoms (no bonds, guaranteed to exist)
@@ -707,6 +727,7 @@ impl AtomicStructure {
         self.num_atoms -= 1;
         self.decorator.atom_display_states.remove(&id);
         self.decorator.atom_alpha.remove(&id);
+        self.decorator.atom_color.remove(&id);
     }
 
     /// Safe bond creation - validates atoms exist, updates or creates bond
@@ -1196,6 +1217,13 @@ impl AtomicStructure {
         for (&old_atom_id, &alpha) in &other.decorator.atom_alpha {
             if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
                 self.decorator.atom_alpha.insert(new_atom_id, alpha);
+            }
+        }
+
+        // Merge per-atom color overrides with remapped IDs
+        for (&old_atom_id, &color) in &other.decorator.atom_color {
+            if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
+                self.decorator.atom_color.insert(new_atom_id, color);
             }
         }
 
