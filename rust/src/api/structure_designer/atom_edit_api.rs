@@ -1288,6 +1288,11 @@ fn gather_frozen_base_atoms_promotion_info(sd: &StructureDesigner) -> Vec<BaseAt
                 position: atom.position,
                 existing_diff_id: None,
                 flags: atom.flags,
+                tags: result_structure
+                    .atom_tags(result_id)
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             });
         }
     }
@@ -1356,7 +1361,7 @@ pub fn atom_edit_selection_to_frozen() {
                             data.set_anchor_recorded(new_id, info.position);
                             new_id
                         };
-                        data.promote_base_atom_metadata(info.flags, diff_id);
+                        data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
                         data.selection.selected_base_atoms.remove(&info.base_id);
                         data.selection.selected_diff_atoms.insert(diff_id);
                         data.set_frozen_recorded(diff_id, true);
@@ -1395,7 +1400,7 @@ pub fn atom_edit_selection_to_unfrozen() {
                             data.set_anchor_recorded(new_id, info.position);
                             new_id
                         };
-                        data.promote_base_atom_metadata(info.flags, diff_id);
+                        data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
                         data.selection.selected_base_atoms.remove(&info.base_id);
                         data.selection.selected_diff_atoms.insert(diff_id);
                         data.set_frozen_recorded(diff_id, false);
@@ -1458,7 +1463,7 @@ pub fn atom_edit_clear_frozen() {
                             data.set_anchor_recorded(new_id, info.position);
                             new_id
                         };
-                        data.promote_base_atom_metadata(info.flags, diff_id);
+                        data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
                         data.set_frozen_recorded(diff_id, false);
                     }
                     // Clear frozen on existing diff atoms
@@ -1549,7 +1554,7 @@ pub fn atom_edit_set_hybridization_override(
                                 data.set_anchor_recorded(new_id, info.position);
                                 new_id
                             };
-                            data.promote_base_atom_metadata(info.flags, diff_id);
+                            data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
                             data.selection.selected_base_atoms.remove(&info.base_id);
                             data.selection.selected_diff_atoms.insert(diff_id);
                             data.set_hybridization_override_recorded(diff_id, value);

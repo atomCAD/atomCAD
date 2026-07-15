@@ -153,7 +153,17 @@ impl NodeData for AtomComposeDiffData {
 
         match atomic_structure_diff::compose_diffs(&diff_refs, tolerance) {
             Some(result) => {
-                // 8. Optionally check stats for stale entries
+                // 8. Surface dropped tags (combined diff tables exceeded the
+                //    32-tag limit). Composition stays infallible and reports the
+                //    loss; the node turns it into a localized error naming the
+                //    dropped tags (`doc/design_atom_tags.md` §Diff semantics).
+                if !result.stats.dropped_tag_names.is_empty() {
+                    return EvalOutput::single(NetworkResult::Error(format!(
+                        "atom_composediff: tag limit (32 names) reached — dropped tag(s): {}",
+                        result.stats.dropped_tag_names.join(", ")
+                    )));
+                }
+                // 8b. Optionally check stats for stale entries
                 if self.error_on_stale && result.stats.cancellations > 0 {
                     // Cancellations aren't errors per se, but stale entries could be flagged
                     // For now, error_on_stale is reserved for future use

@@ -19,6 +19,13 @@ pub struct SerializableAtom {
     /// Atom flags (frozen, hybridization, passivation). Absent in old files → defaults to 0.
     #[serde(default, skip_serializing_if = "is_zero_u16")]
     pub flags: u16,
+    /// Tag names carried by the atom, in bit order. Stored as *names* (not raw
+    /// `tag_bits`) so the file is self-describing and table-order-independent;
+    /// the diff structure's tag table is rebuilt by interning on load. Absent in
+    /// old files → no tags. A tagless save is byte-identical to the pre-feature
+    /// format (`doc/design_atom_tags.md` §Serialization).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
 }
 
 fn is_zero_u16(v: &u16) -> bool {
@@ -139,6 +146,11 @@ pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<Seriali
             atomic_number: atom.atomic_number,
             position: atom.position,
             flags: atom.flags & !0x1, // strip selection bit
+            tags: diff
+                .atom_tags(atom.id)
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         });
     }
     // Sort by ID for deterministic output
@@ -262,6 +274,11 @@ pub fn serializable_to_atom_edit_data(
             diff.set_atom_frozen(actual_id, (flags & (1 << 2)) != 0);
             diff.set_atom_hydrogen_passivation(actual_id, (flags & (1 << 1)) != 0);
             diff.set_atom_hybridization_override(actual_id, ((flags >> 3) & 0b11) as u8);
+        }
+        // Restore tags by re-interning each name into the diff's own table. The
+        // file stores names, so the table order need not match the saved order.
+        for name in &atom.tags {
+            let _ = diff.add_atom_tag(actual_id, name);
         }
     }
 

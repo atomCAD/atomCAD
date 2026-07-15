@@ -5,7 +5,7 @@ use super::types::*;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference, TagError};
 use crate::crystolecule::atomic_structure_diff::{
     AtomSource, DiffProvenance, apply_diff, enrich_diff_with_base_bonds,
 };
@@ -264,6 +264,25 @@ impl AtomEditData {
         // 2. Apply diff (identical to atom_edit)
         let diff_result = apply_diff(&input_structure, &self.diff, tolerance);
 
+        // Surface dropped tags (combined base+diff table exceeded the 32-tag
+        // limit). apply_diff stays infallible and reports the loss; atom_edit
+        // turns it into a localized error naming the dropped tags
+        // (`doc/design_atom_tags.md` §Diff semantics).
+        if !diff_result.stats.dropped_tag_names.is_empty() {
+            let error_msg = format!(
+                "Tag limit (32 names) reached — dropped tag(s): {}",
+                diff_result.stats.dropped_tag_names.join(", ")
+            );
+            if network_stack.len() == 1 {
+                let eval_cache = AtomEditEvalCache {
+                    provenance: diff_result.provenance,
+                    stats: diff_result.stats,
+                };
+                context.selected_node_eval_cache = Some(Box::new(eval_cache));
+            }
+            return EvalOutput::single(NetworkResult::Error(error_msg));
+        }
+
         // Error on stale entries check (same as atom_edit)
         if self.error_on_stale_entries {
             let s = &diff_result.stats;
@@ -467,8 +486,20 @@ impl AtomEditData {
     // Used by code paths that call self.diff.* directly (apply_replace, apply_transform,
     // operations.rs, minimization.rs, hydrogen_passivation.rs, modify_measurement.rs).
 
+    /// Owned copy of the tag names carried by a diff atom, in bit order. Used to
+    /// stamp every recorded `AtomState` with the atom's current tags so undo/redo
+    /// preserves tag membership across unrelated edits (`doc/design_atom_tags.md`).
+    fn diff_atom_tags(&self, atom_id: u32) -> Vec<String> {
+        self.diff
+            .atom_tags(atom_id)
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     /// Set an atom's atomic_number with recording.
     pub fn set_atomic_number_recorded(&mut self, atom_id: u32, atomic_number: i16) {
+        let tags = self.diff_atom_tags(atom_id);
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
         {
@@ -484,12 +515,14 @@ impl AtomEditData {
                         position: pos,
                         anchor,
                         flags,
+                        tags: tags.clone(),
                     }),
                     after: Some(AtomState {
                         atomic_number,
                         position: pos,
                         anchor,
                         flags,
+                        tags,
                     }),
                 });
             }
@@ -499,6 +532,7 @@ impl AtomEditData {
 
     /// Set an atom's anchor position with recording.
     pub fn set_anchor_recorded(&mut self, atom_id: u32, anchor: DVec3) {
+        let tags = self.diff_atom_tags(atom_id);
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
         {
@@ -511,12 +545,14 @@ impl AtomEditData {
                         position: atom.position,
                         anchor: old_anchor,
                         flags: atom.flags,
+                        tags: tags.clone(),
                     }),
                     after: Some(AtomState {
                         atomic_number: atom.atomic_number,
                         position: atom.position,
                         anchor: Some(anchor),
                         flags: atom.flags,
+                        tags,
                     }),
                 });
             }
@@ -537,6 +573,7 @@ impl AtomEditData {
                     position,
                     anchor: None,
                     flags: 0,
+                    tags: Vec::new(),
                 }),
             });
         }
@@ -595,6 +632,7 @@ impl AtomEditData {
 
     /// Set atom position with recording. For use by minimization etc.
     pub fn set_position_recorded(&mut self, atom_id: u32, new_position: DVec3) {
+        let tags = self.diff_atom_tags(atom_id);
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
         {
@@ -606,12 +644,14 @@ impl AtomEditData {
                     position: atom.position,
                     anchor,
                     flags: atom.flags,
+                    tags: tags.clone(),
                 }),
                 after: Some(AtomState {
                     atomic_number: atom.atomic_number,
                     position: new_position,
                     anchor,
                     flags: atom.flags,
+                    tags,
                 }),
             });
         }
@@ -622,6 +662,7 @@ impl AtomEditData {
     /// Used by `promote_base_atom_metadata` (future Phase 2) to copy base atom flags
     /// to the new diff atom within a recording session.
     pub fn set_flags_recorded(&mut self, atom_id: u32, flags: u16) {
+        let tags = self.diff_atom_tags(atom_id);
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
         {
@@ -636,12 +677,14 @@ impl AtomEditData {
                         position: atom.position,
                         anchor,
                         flags: old_flags,
+                        tags: tags.clone(),
                     }),
                     after: Some(AtomState {
                         atomic_number: atom.atomic_number,
                         position: atom.position,
                         anchor,
                         flags: (old_flags & 0x1) | (flags & !0x1),
+                        tags,
                     }),
                 });
             }
@@ -662,6 +705,7 @@ impl AtomEditData {
 
     /// Set the frozen flag on a diff atom with recording.
     pub fn set_frozen_recorded(&mut self, atom_id: u32, frozen: bool) {
+        let tags = self.diff_atom_tags(atom_id);
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
             && atom.is_frozen() != frozen
@@ -680,12 +724,14 @@ impl AtomEditData {
                     position: atom.position,
                     anchor,
                     flags: atom.flags,
+                    tags: tags.clone(),
                 }),
                 after: Some(AtomState {
                     atomic_number: atom.atomic_number,
                     position: atom.position,
                     anchor,
                     flags: new_flags,
+                    tags,
                 }),
             });
         }
@@ -694,6 +740,7 @@ impl AtomEditData {
 
     /// Set the hybridization override on a diff atom with recording.
     pub fn set_hybridization_override_recorded(&mut self, atom_id: u32, hybridization: u8) {
+        let tags = self.diff_atom_tags(atom_id);
         if let Some(ref mut rec) = self.recorder
             && let Some(atom) = self.diff.get_atom(atom_id)
             && atom.hybridization_override() != hybridization
@@ -709,17 +756,85 @@ impl AtomEditData {
                     position: atom.position,
                     anchor,
                     flags: atom.flags,
+                    tags: tags.clone(),
                 }),
                 after: Some(AtomState {
                     atomic_number: atom.atomic_number,
                     position: atom.position,
                     anchor,
                     flags: new_flags,
+                    tags,
                 }),
             });
         }
         self.diff
             .set_atom_hybridization_override(atom_id, hybridization);
+    }
+
+    /// Push a modified-atom delta capturing only a change of tag *name set*
+    /// (`doc/design_atom_tags.md` §atom_edit). No-op when the name set is
+    /// unchanged. The atomic_number/position/anchor/flags are identical on both
+    /// sides — only `tags` differs.
+    fn record_tag_change(
+        &mut self,
+        atom_id: u32,
+        before_tags: Vec<String>,
+        after_tags: Vec<String>,
+    ) {
+        if before_tags == after_tags {
+            return;
+        }
+        if let Some(ref mut rec) = self.recorder
+            && let Some(atom) = self.diff.get_atom(atom_id)
+        {
+            let anchor = self.diff.anchor_position(atom_id).copied();
+            rec.atom_deltas.push(AtomDelta {
+                atom_id,
+                before: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: atom.flags,
+                    tags: before_tags,
+                }),
+                after: Some(AtomState {
+                    atomic_number: atom.atomic_number,
+                    position: atom.position,
+                    anchor,
+                    flags: atom.flags,
+                    tags: after_tags,
+                }),
+            });
+        }
+    }
+
+    /// Add tag `name` to a diff atom, recording the tag-name change for undo.
+    /// Interns the name into the diff's own table. `Err(TagError)` on an
+    /// empty/whitespace name or a full (32 live names) table — the edit is not
+    /// applied. Re-tagging an already-tagged atom is a no-op.
+    pub fn add_tag_recorded(&mut self, atom_id: u32, name: &str) -> Result<(), TagError> {
+        let before = self.diff_atom_tags(atom_id);
+        self.diff.add_atom_tag(atom_id, name)?;
+        let after = self.diff_atom_tags(atom_id);
+        self.record_tag_change(atom_id, before, after);
+        Ok(())
+    }
+
+    /// Remove tag `name` from a diff atom, recording the change. An absent name
+    /// or an atom that does not carry it is a no-op by design.
+    pub fn remove_tag_recorded(&mut self, atom_id: u32, name: &str) {
+        let before = self.diff_atom_tags(atom_id);
+        self.diff.remove_atom_tag(atom_id, name);
+        let after = self.diff_atom_tags(atom_id);
+        self.record_tag_change(atom_id, before, after);
+    }
+
+    /// Remove *all* tags from a diff atom, recording the change.
+    pub fn clear_tags_recorded(&mut self, atom_id: u32) {
+        let before = self.diff_atom_tags(atom_id);
+        self.diff.clear_atom_tags(atom_id);
+        let after = self.diff_atom_tags(atom_id);
+        self.record_tag_change(atom_id, before, after);
     }
 
     // --- Cross-cell bond methods ---
@@ -797,14 +912,30 @@ impl AtomEditData {
 
     // --- Promotion helpers ---
 
-    /// Copy per-atom metadata (flags) from a base atom to its promoted diff atom.
-    /// Must be called at every promotion site alongside selection migration.
-    /// Uses set_flags_recorded so the flag copy is captured in the undo delta.
-    pub fn promote_base_atom_metadata(&mut self, base_atom_flags: u16, diff_id: u32) {
+    /// Copy per-atom metadata (flags + tags) from a base atom to its promoted
+    /// diff atom. Must be called at every promotion site alongside selection
+    /// migration. Uses `set_flags_recorded` / `add_tag_recorded` so the copy is
+    /// captured in the undo delta.
+    ///
+    /// Full promotion pins the base atom's tag set onto the diff atom
+    /// (`doc/design_atom_tags.md` §atom_edit) — the same accepted tradeoff as
+    /// element/position/flags. Tag interning into the diff's table is best-effort
+    /// here: a base tag that would overflow the diff's 32-name table is dropped
+    /// (the explicit Tag action surfaces the limit via `add_tag_recorded`'s
+    /// `Result`; a promotion carrying a pre-existing base tag does not).
+    pub fn promote_base_atom_metadata(
+        &mut self,
+        base_atom_flags: u16,
+        base_atom_tags: &[String],
+        diff_id: u32,
+    ) {
         // Copy all flags except selection (bit 0)
         let flags = base_atom_flags & !0x1;
         if flags != 0 {
             self.set_flags_recorded(diff_id, flags);
+        }
+        for name in base_atom_tags {
+            let _ = self.add_tag_recorded(diff_id, name);
         }
     }
 
@@ -824,6 +955,7 @@ impl AtomEditData {
                     position,
                     anchor: None,
                     flags: 0,
+                    tags: Vec::new(),
                 }),
             });
         }
@@ -845,6 +977,7 @@ impl AtomEditData {
                     position: match_position,
                     anchor: None,
                     flags: 0,
+                    tags: Vec::new(),
                 }),
             });
         }
@@ -868,6 +1001,7 @@ impl AtomEditData {
                     position: match_position,
                     anchor: Some(match_position),
                     flags: 0,
+                    tags: Vec::new(),
                 }),
             });
         }
@@ -885,11 +1019,13 @@ impl AtomEditData {
     pub fn move_in_diff(&mut self, atom_id: u32, new_position: DVec3) {
         // Capture old state for recording
         let old_state = if self.recorder.is_some() {
+            let tags = self.diff_atom_tags(atom_id);
             self.diff.get_atom(atom_id).map(|a| AtomState {
                 atomic_number: a.atomic_number,
                 position: a.position,
                 anchor: self.diff.anchor_position(atom_id).copied(),
                 flags: a.flags,
+                tags,
             })
         } else {
             None
@@ -995,6 +1131,7 @@ impl AtomEditData {
     pub fn remove_from_diff(&mut self, diff_atom_id: u32) {
         // Capture before-state for recording
         let before_state = if self.recorder.is_some() {
+            let tags = self.diff_atom_tags(diff_atom_id);
             self.diff.get_atom(diff_atom_id).map(|a| {
                 let anchor = self.diff.anchor_position(diff_atom_id).copied();
                 let bonds: Vec<(u32, u8)> = a
@@ -1008,6 +1145,7 @@ impl AtomEditData {
                         position: a.position,
                         anchor,
                         flags: a.flags,
+                        tags,
                     },
                     bonds,
                 )
@@ -1465,7 +1603,7 @@ impl AtomEditData {
                 SelectionProvenance::Diff,
                 diff_id,
             );
-            self.promote_base_atom_metadata(info.flags, diff_id);
+            self.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
         }
 
         self.selection.clear_bonds();
@@ -1519,7 +1657,7 @@ impl AtomEditData {
                 SelectionProvenance::Diff,
                 diff_id,
             );
-            self.promote_base_atom_metadata(info.flags, diff_id);
+            self.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
         }
 
         // Update selection transform algebraically (no need to re-eval)
@@ -1721,7 +1859,7 @@ impl AtomEditData {
                     self.set_anchor_recorded(new_diff_id, info.position);
                     new_diff_id
                 };
-                self.promote_base_atom_metadata(info.flags, diff_id);
+                self.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
                 self.set_guideline_tool_picked(Some(AtomRef::Diff(diff_id)));
             }
         }
@@ -1903,7 +2041,7 @@ impl NodeData for AtomEditData {
         }
 
         // Gather base atom info (needs eval cache for provenance → result positions).
-        let mut base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>, u16)> = Vec::new();
+        let mut base_atoms_info: Vec<super::atom_edit_gadget::GadgetBasePromotion> = Vec::new();
         if !self.selection.selected_base_atoms.is_empty()
             && !structure_designer.is_selected_node_in_diff_view()
             && let Some(eval_cache) = structure_designer.get_selected_node_eval_cache()
@@ -1938,6 +2076,11 @@ impl NodeData for AtomEditData {
                         atom.position,
                         existing_diff_id,
                         atom.flags,
+                        result
+                            .atom_tags(result_id)
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect(),
                     ));
                 }
             }
@@ -2034,6 +2177,25 @@ impl NodeData for AtomEditData {
 
         // Apply the diff to the input
         let diff_result = apply_diff(&input_structure, &self.diff, tolerance);
+
+        // Surface dropped tags (combined base+diff table exceeded the 32-tag
+        // limit). apply_diff stays infallible and reports the loss; atom_edit
+        // turns it into a localized error naming the dropped tags
+        // (`doc/design_atom_tags.md` §Diff semantics).
+        if !diff_result.stats.dropped_tag_names.is_empty() {
+            let error_msg = format!(
+                "Tag limit (32 names) reached — dropped tag(s): {}",
+                diff_result.stats.dropped_tag_names.join(", ")
+            );
+            if network_stack.len() == 1 {
+                let eval_cache = AtomEditEvalCache {
+                    provenance: diff_result.provenance,
+                    stats: diff_result.stats,
+                };
+                context.selected_node_eval_cache = Some(Box::new(eval_cache));
+            }
+            return EvalOutput::single(NetworkResult::Error(error_msg));
+        }
 
         // Error on stale entries: if enabled and any diagnostics are non-zero, return error
         if self.error_on_stale_entries {

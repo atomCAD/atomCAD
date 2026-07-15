@@ -111,6 +111,17 @@ impl NodeData for ApplyDiffData {
         // 6. Apply the diff
         let diff_result = atomic_structure_diff::apply_diff(&base, &diff, tolerance);
 
+        // 6b. Surface dropped tags (combined base+diff table exceeded the 32-tag
+        //     limit). apply_diff stays infallible and reports the loss; the node
+        //     turns it into a localized error naming the dropped tags
+        //     (`doc/design_atom_tags.md` §Diff semantics).
+        if !diff_result.stats.dropped_tag_names.is_empty() {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "apply_diff: tag limit (32 names) reached — dropped tag(s): {}",
+                diff_result.stats.dropped_tag_names.join(", ")
+            )));
+        }
+
         // 7. Check error_on_stale
         if self.error_on_stale {
             let stats = &diff_result.stats;

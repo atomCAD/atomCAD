@@ -179,6 +179,7 @@ fn patch_ghost_flag_survives_atom_serialization() {
         atomic_number: atom.atomic_number,
         position: atom.position,
         flags: atom.flags & !0x1,
+        tags: Vec::new(),
     };
 
     let json = serde_json::to_string(&serializable).expect("serialize");

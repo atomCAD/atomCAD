@@ -258,6 +258,7 @@ fn pick_base_atom_promotes_and_snaps_with_anchor() {
         position: DVec3::new(2.0, 5.0, 0.0),
         existing_diff_id: None,
         flags: 0,
+        tags: Vec::new(),
     };
     data.guideline_pick_atom(AtomRef::Base(42), Some(&info));
 

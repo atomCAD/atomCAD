@@ -9,7 +9,7 @@ use glam::f64::DVec3;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
-    atom_edit_data_to_serializable, serializable_to_atom_edit_data,
+    SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,
 };
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
 
@@ -211,4 +211,84 @@ fn atom_flags_persist_in_diff_structure() {
         !a4.is_hydrogen_passivation(),
         "Atom 4: should not have H passivation"
     );
+}
+
+// =============================================================================
+// Atom tags serialization (design_atom_tags.md Phase 4 / §Serialization)
+// =============================================================================
+
+/// Tags stored on diff atoms survive save → load with the correct name sets.
+#[test]
+fn tags_roundtrip_serialization() {
+    let mut data = AtomEditData::new();
+    let id1 = data.diff.add_atom(6, DVec3::ZERO);
+    let id2 = data.diff.add_atom(7, DVec3::X);
+    data.diff.add_atom_tag(id1, "surface").unwrap();
+    data.diff.add_atom_tag(id1, "active-site").unwrap();
+    // id2 left untagged.
+
+    let serializable = atom_edit_data_to_serializable(&data).expect("serialize");
+    let restored = serializable_to_atom_edit_data(&serializable).expect("deserialize");
+
+    let mut t1: Vec<String> = restored
+        .diff
+        .atom_tags(id1)
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    t1.sort();
+    assert_eq!(t1, vec!["active-site".to_string(), "surface".to_string()]);
+    assert!(
+        restored.diff.atom_tags(id2).is_empty(),
+        "Untagged atom stays untagged after roundtrip"
+    );
+}
+
+/// A tagless save emits no `tags` field, so it is byte-identical to the
+/// pre-feature format — and a file written without the field still loads.
+#[test]
+fn tagless_save_omits_field_and_still_loads() {
+    let mut data = AtomEditData::new();
+    let id = data.diff.add_atom(6, DVec3::new(1.0, 2.0, 3.0));
+
+    let serializable = atom_edit_data_to_serializable(&data).expect("serialize");
+    let json = serde_json::to_string(&serializable).expect("to_string");
+    assert!(
+        !json.contains("\"tags\""),
+        "A tagless save must not emit a tags field, got: {}",
+        json
+    );
+
+    // A file lacking the tags field (== an old-format file) deserializes with
+    // no tags via serde default.
+    let reloaded: SerializableAtomEditData = serde_json::from_str(&json).expect("from_str");
+    let restored = serializable_to_atom_edit_data(&reloaded).expect("deserialize");
+    assert!(restored.diff.atom_tags(id).is_empty());
+}
+
+/// Exotic tag names (spaces, quotes, non-ASCII) survive the JSON round-trip
+/// unchanged — tag names are the first free-form user text to reach this path.
+#[test]
+fn exotic_tag_names_roundtrip() {
+    let names = ["has space", "has\"quote", "ünïcödé", "emoji🔬"];
+    let mut data = AtomEditData::new();
+    let id = data.diff.add_atom(6, DVec3::ZERO);
+    for n in names {
+        data.diff.add_atom_tag(id, n).unwrap();
+    }
+
+    let serializable = atom_edit_data_to_serializable(&data).expect("serialize");
+    let json = serde_json::to_string(&serializable).expect("to_string");
+    let reloaded: SerializableAtomEditData = serde_json::from_str(&json).expect("from_str");
+    let restored = serializable_to_atom_edit_data(&reloaded).expect("deserialize");
+
+    let got: std::collections::HashSet<String> = restored
+        .diff
+        .atom_tags(id)
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    for n in names {
+        assert!(got.contains(n), "Tag {:?} should survive persistence", n);
+    }
 }

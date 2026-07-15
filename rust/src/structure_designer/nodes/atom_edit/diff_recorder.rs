@@ -9,6 +9,11 @@ pub struct AtomState {
     pub position: DVec3,
     pub anchor: Option<DVec3>,
     pub flags: u16,
+    /// Tag *names* carried by the atom, in bit order. Recorded as names (not raw
+    /// `tag_bits`) because slot reclamation can re-assign a bit's meaning between
+    /// recording and replay — a name-based delta is self-describing and correct
+    /// whichever bit it lands on (`doc/design_atom_tags.md` §atom_edit).
+    pub tags: Vec<String>,
 }
 
 /// A change to a single atom in the diff.

@@ -67,6 +67,7 @@ fn test_replace_promotes_unchanged_marker() {
             position: DVec3::new(1.0, 0.0, 0.0),
             existing_diff_id: Some(unchanged_id),
             flags: 0,
+            tags: Vec::new(),
         }],
     );
 
@@ -110,6 +111,7 @@ fn test_transform_promotes_unchanged_marker() {
             position: DVec3::new(0.0, 0.0, 0.0),
             existing_diff_id: Some(unch_a),
             flags: 0,
+            tags: Vec::new(),
         }],
     );
 
@@ -142,6 +144,7 @@ fn test_transform_no_existing_entry_still_works() {
             position: DVec3::new(1.0, 0.0, 0.0),
             existing_diff_id: None,
             flags: 0,
+            tags: Vec::new(),
         }],
     );
 
@@ -396,6 +399,7 @@ fn test_replace_preserves_bonds_on_unchanged_promotion() {
             position: DVec3::new(0.0, 0.0, 0.0),
             existing_diff_id: Some(unch_a),
             flags: 0,
+            tags: Vec::new(),
         }],
     );
 

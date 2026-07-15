@@ -463,6 +463,7 @@ fn test_replace_base_atoms() {
             position: pos,
             existing_diff_id: None,
             flags: 0,
+            tags: Vec::new(),
         }],
     );
 
@@ -525,6 +526,7 @@ fn test_transform_base_atoms_creates_anchors() {
             position: DVec3::new(1.0, 0.0, 0.0),
             existing_diff_id: None,
             flags: 0,
+            tags: Vec::new(),
         }],
     );
 

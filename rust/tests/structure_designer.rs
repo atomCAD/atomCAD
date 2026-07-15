@@ -180,6 +180,9 @@ mod undo_test;
 #[path = "structure_designer/reflow_test.rs"]
 mod reflow_test;
 
+#[path = "structure_designer/atom_edit_tags_test.rs"]
+mod atom_edit_tags_test;
+
 #[path = "structure_designer/atom_edit_undo_test.rs"]
 mod atom_edit_undo_test;
 

@@ -103,6 +103,7 @@ fn apply_undo(
                     data.diff.set_anchor_position(delta.atom_id, anchor);
                 }
                 restore_flags(&mut data.diff, delta.atom_id, state.flags);
+                restore_tags(&mut data.diff, delta.atom_id, &state.tags);
             }
             (Some(before), Some(_after)) => {
                 // Atom was modified → restore before state
@@ -114,6 +115,7 @@ fn apply_undo(
                     None => data.diff.remove_anchor_position(delta.atom_id),
                 }
                 restore_flags(&mut data.diff, delta.atom_id, before.flags);
+                restore_tags(&mut data.diff, delta.atom_id, &before.tags);
             }
             (None, None) => {}
         }
@@ -172,6 +174,7 @@ fn apply_redo(
                     data.diff.set_anchor_position(delta.atom_id, anchor);
                 }
                 restore_flags(&mut data.diff, delta.atom_id, state.flags);
+                restore_tags(&mut data.diff, delta.atom_id, &state.tags);
             }
             (Some(_), None) => {
                 // Atom was removed → delete it
@@ -188,6 +191,7 @@ fn apply_redo(
                     None => data.diff.remove_anchor_position(delta.atom_id),
                 }
                 restore_flags(&mut data.diff, delta.atom_id, after.flags);
+                restore_tags(&mut data.diff, delta.atom_id, &after.tags);
             }
             (None, None) => {}
         }
@@ -214,6 +218,18 @@ fn restore_flags(diff: &mut AtomicStructure, atom_id: u32, flags: u16) {
     diff.set_atom_frozen(atom_id, frozen);
     diff.set_atom_hydrogen_passivation(atom_id, h_passivation);
     diff.set_atom_hybridization_override(atom_id, hybridization);
+}
+
+/// Restore an atom's tag *name set* from a saved state (clear all, then re-add
+/// each by name). Deltas record tag names, not raw bits, so replay is correct
+/// whichever bit each name lands on — even if slot reclamation re-assigned a bit
+/// between recording and replay (`doc/design_atom_tags.md` §atom_edit).
+/// Interning is best-effort within the diff's 32-name table.
+fn restore_tags(diff: &mut AtomicStructure, atom_id: u32, tags: &[String]) {
+    diff.clear_atom_tags(atom_id);
+    for name in tags {
+        let _ = diff.add_atom_tag(atom_id, name);
+    }
 }
 
 /// Undo cross-cell bond metadata changes: restore old_value for each delta.

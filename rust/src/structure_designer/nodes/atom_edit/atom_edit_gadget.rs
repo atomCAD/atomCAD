@@ -10,6 +10,12 @@ use std::cell::{Cell, RefCell};
 
 use super::atom_edit::AtomEditData;
 
+/// A base atom queued for promotion by the selection gadget:
+/// `(base_id, atomic_number, position, existing_diff_id, flags, tags)`. Carries
+/// the base atom's flags and tag names so promotion copies them onto the new
+/// diff override (`doc/design_atom_tags.md` §atom_edit).
+pub type GadgetBasePromotion = (u32, i16, DVec3, Option<u32>, u16, Vec<String>);
+
 /// Gadget for the atom_edit Default tool that displays an XYZ translation gizmo
 /// at the selection centroid. Dragging an axis arrow moves all selected atoms
 /// along that axis.
@@ -33,8 +39,8 @@ pub struct AtomEditSelectionGadget {
     pub start_drag_center: DVec3,
     /// Snapshot of selected diff atom positions at gadget creation: (diff_id, position).
     diff_atom_positions: Vec<(u32, DVec3)>,
-    /// Base atoms to convert on first sync: (base_id, atomic_number, position, existing_diff_id, flags).
-    base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>, u16)>,
+    /// Base atoms to convert on first sync (see [`GadgetBasePromotion`]).
+    base_atoms_info: Vec<GadgetBasePromotion>,
     /// Whether base atoms have been converted to diff atoms.
     base_converted: Cell<bool>,
     /// Diff atom positions added after base conversion: (new_diff_id, original_position).
@@ -45,7 +51,7 @@ impl AtomEditSelectionGadget {
     pub fn new(
         center: DVec3,
         diff_atom_positions: Vec<(u32, DVec3)>,
-        base_atoms_info: Vec<(u32, i16, DVec3, Option<u32>, u16)>,
+        base_atoms_info: Vec<GadgetBasePromotion>,
     ) -> Self {
         Self {
             center,
@@ -161,9 +167,16 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
             && total_delta.length_squared() > 1e-15
         {
             let mut converted = self.converted_positions.borrow_mut();
-            for &(base_id, atomic_number, position, existing_diff_id, base_flags) in
+            for (base_id, atomic_number, position, existing_diff_id, base_flags, base_tags) in
                 &self.base_atoms_info
             {
+                let (base_id, atomic_number, position, existing_diff_id, base_flags) = (
+                    *base_id,
+                    *atomic_number,
+                    *position,
+                    *existing_diff_id,
+                    *base_flags,
+                );
                 let target = position + total_delta;
                 let diff_id = if let Some(existing_id) = existing_diff_id {
                     // Reuse existing diff entry (e.g., UNCHANGED marker from bond tool).
@@ -182,7 +195,7 @@ impl NodeNetworkGadget for AtomEditSelectionGadget {
                     .selected_base_atoms
                     .remove(&base_id);
                 atom_edit_data.selection.selected_diff_atoms.insert(diff_id);
-                atom_edit_data.promote_base_atom_metadata(base_flags, diff_id);
+                atom_edit_data.promote_base_atom_metadata(base_flags, base_tags, diff_id);
                 converted.push((diff_id, position));
             }
             self.base_converted.set(true);

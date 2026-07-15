@@ -334,6 +334,58 @@ fn apply_diff_node_error_on_stale() {
 }
 
 // ============================================================================
+// Test: apply_diff_node_errors_on_dropped_tags
+//
+// When the combined base + diff tag tables exceed the 32-tag limit, apply_diff
+// stays infallible and reports the dropped names; the node surfaces them as a
+// localized error (design_atom_tags.md §Diff semantics / Phase 4).
+// ============================================================================
+
+#[test]
+fn apply_diff_node_errors_on_dropped_tags() {
+    let network_name = "test_apply_diff_dropped_tags";
+    let mut designer = setup_designer_with_network(network_name);
+
+    // Base atom carrying 20 distinct tags.
+    let mut base = AtomicStructure::new();
+    let a = base.add_atom(6, DVec3::ZERO);
+    for i in 0..20 {
+        base.add_atom_tag(a, &format!("b{i}")).unwrap();
+    }
+
+    // Diff modifies that atom (anchored at its position) and adds 20 more
+    // distinct tags. Combined live names = 40 > 32 → 8 dropped.
+    let mut diff = AtomicStructure::new_diff();
+    let d = diff.add_atom(6, DVec3::ZERO);
+    diff.set_anchor_position(d, DVec3::ZERO);
+    for i in 0..20 {
+        diff.add_atom_tag(d, &format!("d{i}")).unwrap();
+    }
+
+    let base_node_id = add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, base);
+    let diff_node_id =
+        add_atomic_value_node(&mut designer, network_name, DVec2::new(0.0, 100.0), diff);
+
+    let apply_diff_id = designer.add_node("apply_diff", DVec2::new(200.0, 50.0));
+    designer.connect_nodes(base_node_id, 0, apply_diff_id, 0);
+    designer.connect_nodes(diff_node_id, 0, apply_diff_id, 1);
+
+    match evaluate_raw(&designer, network_name, apply_diff_id) {
+        NetworkResult::Error(msg) => {
+            assert!(
+                msg.contains("tag limit"),
+                "Error should mention the tag limit, got: {}",
+                msg
+            );
+        }
+        other => panic!(
+            "Expected NetworkResult::Error for dropped tags, got: {:?}",
+            other.infer_data_type()
+        ),
+    }
+}
+
+// ============================================================================
 // Test: apply_diff_node_modification (move atom via anchor)
 // ============================================================================
 

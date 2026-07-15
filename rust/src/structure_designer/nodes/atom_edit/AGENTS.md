@@ -53,6 +53,8 @@ atom_edit/
 
 Per-atom metadata (frozen flags, hybridization overrides) is stored **inline on `Atom.flags`** of diff atoms. When a base atom needs an override, it is promoted to a real diff atom and the flag is set directly. During evaluation, `apply_diff()` copies flags from diff atoms to result atoms via `copy_atom_metadata()`. No external maps needed. Downstream consumers (UFF typer, hydrogen passivation) read overrides from `Atom.flags`.
 
+**Atom tags** (`doc/design_atom_tags.md`) are the same shape: durable per-atom metadata stored **inline on `Atom.tag_bits`** (bitmask into the structure's interned `tag_names` table), copied through `copy_atom_metadata` on `apply_diff` like flags, and persisted as `SerializableAtom.tags` (**names**, not bits — no `.cnnd` version bump, serde-default). The Tag/Untag actions use `add_tag_recorded` / `remove_tag_recorded` / `clear_tags_recorded`; base-atom edits promote to a full override via `promote_base_atom_metadata`, which now carries the base atom's tag **names** alongside its flags. `AtomState` (undo delta) records tag **names** (old/new name set per touched atom), never raw `tag_bits` — slot reclamation can re-assign a bit's meaning between record and replay, so `restore_tags` re-interns by name. `apply_diff`/`compose_diffs` dropping tags over the 32-name limit surfaces as a localized `NetworkResult::Error` in atom_edit / `apply_diff` / `atom_composediff` eval (`DiffStats.dropped_tag_names`). UNCHANGED markers never carry tags.
+
 Key methods:
 - Diff mutations: `add_atom_to_diff`, `mark_for_deletion`, `move_in_diff`, etc.
 - Batch operations: `apply_delete_result_view`, `apply_replace`, `apply_transform`
@@ -122,7 +124,7 @@ atom_edit bypasses the generic `SetNodeData` command and uses incremental delta-
 ### Recorded Mutation Methods
 
 Two layers of mutation methods exist:
-- **Recording methods** (on `AtomEditData`): `add_atom_to_diff`, `remove_from_diff`, `move_in_diff`, `add_bond_in_diff`, `set_atomic_number_recorded`, `set_anchor_recorded`, `add_atom_recorded`, `add_bond_recorded`, `set_position_recorded`, `delete_bond_recorded`, `set_frozen_recorded`, `set_hybridization_override_recorded`, `set_flags_recorded`. Called during user actions.
+- **Recording methods** (on `AtomEditData`): `add_atom_to_diff`, `remove_from_diff`, `move_in_diff`, `add_bond_in_diff`, `set_atomic_number_recorded`, `set_anchor_recorded`, `add_atom_recorded`, `add_bond_recorded`, `set_position_recorded`, `delete_bond_recorded`, `set_frozen_recorded`, `set_hybridization_override_recorded`, `set_flags_recorded`, `add_tag_recorded` / `remove_tag_recorded` / `clear_tags_recorded`. Called during user actions.
 - **Non-recording methods** (on `AtomicStructure`/diff directly): `diff.add_atom_with_id`, `diff.delete_atom`, `diff.set_atom_position`, etc. Called by undo/redo execution only.
 
 When adding new diff mutations, use the recording variants. If mutating `self.diff` directly, add a `*_recorded` wrapper.

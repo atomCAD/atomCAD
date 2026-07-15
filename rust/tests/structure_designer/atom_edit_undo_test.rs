@@ -126,12 +126,14 @@ fn coalesce_modified_modified() {
             position: DVec3::ZERO,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -141,12 +143,14 @@ fn coalesce_modified_modified() {
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::Y,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.coalesce();
@@ -171,6 +175,7 @@ fn coalesce_added_modified() {
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -180,12 +185,14 @@ fn coalesce_added_modified() {
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::Y,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.coalesce();
@@ -209,12 +216,14 @@ fn coalesce_modified_removed() {
             position: DVec3::ZERO,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -224,6 +233,7 @@ fn coalesce_modified_removed() {
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: None,
     });
@@ -248,12 +258,14 @@ fn coalesce_different_atoms_not_merged() {
             position: DVec3::ZERO,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -263,12 +275,14 @@ fn coalesce_different_atoms_not_merged() {
             position: DVec3::Y,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 7,
             position: DVec3::Z,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.coalesce();
@@ -290,12 +304,14 @@ fn coalesce_non_consecutive_not_merged() {
             position: DVec3::ZERO,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -305,12 +321,14 @@ fn coalesce_non_consecutive_not_merged() {
             position: DVec3::Y,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 7,
             position: DVec3::Z,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -320,12 +338,14 @@ fn coalesce_non_consecutive_not_merged() {
             position: DVec3::X,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::Y,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.coalesce();
@@ -411,6 +431,7 @@ fn coalesce_added_then_flag_modified() {
             position: DVec3::ZERO,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
     });
     rec.atom_deltas.push(AtomDelta {
@@ -420,12 +441,14 @@ fn coalesce_added_then_flag_modified() {
             position: DVec3::ZERO,
             anchor: None,
             flags: 0,
+            tags: Vec::new(),
         }),
         after: Some(AtomState {
             atomic_number: 6,
             position: DVec3::ZERO,
             anchor: None,
             flags: 1 << 2, // frozen bit
+            tags: Vec::new(),
         }),
     });
     rec.coalesce();
@@ -2892,6 +2915,7 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
             atomic_number: 6,
             position: DVec3::ZERO,
             flags: (HYBRIDIZATION_SP2 as u16) << 3, // hybridization bits in atom flags
+            tags: Vec::new(),
             existing_diff_id: None,
         }];
         let transform = Transform::new(DVec3::new(0.5, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
@@ -2973,6 +2997,7 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
             atomic_number: 6,
             position: DVec3::ZERO,
             flags: 1 << 2, // ATOM_FLAG_FROZEN
+            tags: Vec::new(),
             existing_diff_id: None,
         }];
         let transform = Transform::new(DVec3::new(0.5, 0.0, 0.0), glam::f64::DQuat::IDENTITY);
@@ -3494,7 +3519,7 @@ fn unfreeze_frozen_base_atom_downstream() {
                 data.set_anchor_recorded(new_id, info.position);
                 new_id
             };
-            data.promote_base_atom_metadata(info.flags, diff_id);
+            data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
             data.selection.selected_base_atoms.remove(&info.base_id);
             data.selection.selected_diff_atoms.insert(diff_id);
             data.set_frozen_recorded(diff_id, false);

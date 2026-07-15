@@ -260,6 +260,9 @@ pub struct BaseAtomPromotionInfo {
     pub existing_diff_id: Option<u32>,
     /// Base atom flags (frozen, hybridization, passivation) to copy to the diff atom on promotion.
     pub flags: u16,
+    /// Base atom tag names (bit order) to copy to the diff atom on promotion
+    /// (`doc/design_atom_tags.md` §atom_edit).
+    pub tags: Vec<String>,
 }
 
 /// Gather promotion info for selected base atoms. Checks provenance to detect
@@ -325,6 +328,11 @@ fn gather_base_atom_promotion_info_impl(
                 position: atom.position,
                 existing_diff_id,
                 flags: atom.flags,
+                tags: result_structure
+                    .atom_tags(result_id)
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
             });
         }
     }
@@ -426,7 +434,7 @@ pub fn drag_selected_by_delta(
             SelectionProvenance::Diff,
             diff_id,
         );
-        atom_edit_data.promote_base_atom_metadata(info.flags, diff_id);
+        atom_edit_data.promote_base_atom_metadata(info.flags, &info.tags, diff_id);
     }
 
     // Update selection transform to reflect the displacement (only if something moved)
