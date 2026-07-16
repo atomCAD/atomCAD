@@ -3,6 +3,7 @@ use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply::get_node_type as apply_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
 use super::nodes::apply_style::get_node_type as apply_style_get_node_type;
+use super::nodes::array::get_node_type as array_get_node_type;
 use super::nodes::array_append::get_node_type as array_append_get_node_type;
 use super::nodes::array_at::get_node_type as array_at_get_node_type;
 use super::nodes::array_concat::get_node_type as array_concat_get_node_type;
@@ -763,6 +764,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(record_construct_get_node_type());
         ret.add_node_type(record_destructure_get_node_type());
         ret.add_node_type(product_get_node_type());
+        ret.add_node_type(array_get_node_type());
         ret.add_node_type(array_at_get_node_type());
         ret.add_node_type(if_else_get_node_type());
         ret.add_node_type(switch_get_node_type());
@@ -2001,19 +2003,32 @@ impl NodeTypeRegistry {
         Ok(renames)
     }
 
-    /// Re-key `record_construct` literal-default maps after a field rename, across
-    /// **every** network including HOF bodies (via `walk_all_nodes_mut` — the
-    /// same body-recursion lesson that the non-local wire drop teaches). `renames`
-    /// is the `(old_name, new_name)` list returned by
+    /// Re-key name-keyed field literals after a field rename, across **every**
+    /// network including HOF bodies (via `walk_all_nodes_mut` — the same
+    /// body-recursion lesson that the non-local wire drop teaches). `renames` is
+    /// the `(old_name, new_name)` list returned by
     /// [`update_record_type_def_with_edits`]; it is applied as a **simultaneous**
     /// remap (new map built from the old entries) so a name swap re-keys
     /// correctly. No-op when `renames` is empty. See
     /// `doc/design_record_field_identity.md` §4.5.
-    pub fn rekey_record_construct_literals(
-        &mut self,
-        def_name: &str,
-        renames: &[(String, String)],
-    ) {
+    ///
+    /// Two node kinds store literals keyed by field *name* while a def-field
+    /// rename does not change field *identity* (stable `FieldId`s), so both must
+    /// be re-keyed here or the rename would silently unset that field:
+    ///
+    /// - **`record_construct`** — its `literal_values` map.
+    /// - **`array`** — every `TextValue::Object` element of a node whose
+    ///   `element_type` is `Record(Named(def_name))`. Missing this arm loses the
+    ///   value in every element; for an `Optional` field not even as an eval
+    ///   error, just a quietly vanished value. See
+    ///   `doc/design_array_node_and_field_hints.md` (§Storage & eval, "Field
+    ///   renames must re-key element objects").
+    pub fn rekey_record_field_literals(&mut self, def_name: &str, renames: &[(String, String)]) {
+        use crate::structure_designer::data_type::RecordType;
+        use crate::structure_designer::nodes::array::ArrayData;
+        use crate::structure_designer::nodes::record_construct::RecordConstructData;
+        use crate::structure_designer::text_format::TextValue;
+
         if renames.is_empty() {
             return;
         }
@@ -2021,32 +2036,37 @@ impl NodeTypeRegistry {
             .iter()
             .map(|(o, n)| (o.as_str(), n.as_str()))
             .collect();
+        let rekey = |key: String| -> String {
+            rename_map
+                .get(key.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or(key)
+        };
         for network in self.node_networks.values_mut() {
             crate::structure_designer::node_network::walk_all_nodes_mut(network, &mut |node| {
-                if node.node_type_name != "record_construct" {
-                    return;
+                let data = node.data.as_any_mut();
+                if let Some(rc) = data.downcast_mut::<RecordConstructData>() {
+                    if rc.schema != def_name {
+                        return;
+                    }
+                    let old = std::mem::take(&mut rc.literal_values);
+                    rc.literal_values = old.into_iter().map(|(k, v)| (rekey(k), v)).collect();
+                } else if let Some(ad) = data.downcast_mut::<ArrayData>() {
+                    // Only elements of *this* def carry its field names.
+                    let DataType::Record(RecordType::Named(name)) = &ad.element_type else {
+                        return;
+                    };
+                    if name != def_name {
+                        return;
+                    }
+                    for element in ad.elements.iter_mut() {
+                        if let TextValue::Object(entries) = element {
+                            for (key, _) in entries.iter_mut() {
+                                *key = rekey(std::mem::take(key));
+                            }
+                        }
+                    }
                 }
-                let Some(rc) = node
-                    .data
-                    .as_any_mut()
-                    .downcast_mut::<crate::structure_designer::nodes::record_construct::RecordConstructData>()
-                else {
-                    return;
-                };
-                if rc.schema != def_name {
-                    return;
-                }
-                let old = std::mem::take(&mut rc.literal_values);
-                rc.literal_values = old
-                    .into_iter()
-                    .map(|(k, v)| {
-                        let new_key = rename_map
-                            .get(k.as_str())
-                            .map(|s| s.to_string())
-                            .unwrap_or(k);
-                        (new_key, v)
-                    })
-                    .collect();
             });
         }
     }
@@ -3481,6 +3501,7 @@ pub fn collect_record_refs_in_node(
     f: &mut impl FnMut(&str, RecordRefSite),
 ) {
     use crate::structure_designer::nodes::apply::ApplyData;
+    use crate::structure_designer::nodes::array::ArrayData;
     use crate::structure_designer::nodes::array_append::ArrayAppendData;
     use crate::structure_designer::nodes::array_at::ArrayAtData;
     use crate::structure_designer::nodes::array_concat::ArrayConcatData;
@@ -3535,6 +3556,8 @@ pub fn collect_record_refs_in_node(
         emit(&d.accumulator_type, f);
     } else if let Some(d) = data.as_any_ref().downcast_ref::<ForeachData>() {
         emit(&d.input_type, f);
+    } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayData>() {
+        emit(&d.element_type, f);
     } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAtData>() {
         emit(&d.element_type, f);
     } else if let Some(d) = data.as_any_ref().downcast_ref::<ArrayAppendData>() {
@@ -3647,6 +3670,7 @@ fn rewrite_record_name_in_registry(
     new_name: &str,
 ) {
     use crate::structure_designer::nodes::apply::ApplyData;
+    use crate::structure_designer::nodes::array::ArrayData;
     use crate::structure_designer::nodes::array_append::ArrayAppendData;
     use crate::structure_designer::nodes::array_at::ArrayAtData;
     use crate::structure_designer::nodes::array_concat::ArrayConcatData;
@@ -3753,6 +3777,8 @@ fn rewrite_record_name_in_registry(
                 walk_data_type_record_names_mut(&mut d.accumulator_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ForeachData>() {
                 walk_data_type_record_names_mut(&mut d.input_type, &mut rename);
+            } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayData>() {
+                walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAtData>() {
                 walk_data_type_record_names_mut(&mut d.element_type, &mut rename);
             } else if let Some(d) = data.as_any_mut().downcast_mut::<ArrayAppendData>() {

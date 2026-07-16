@@ -2473,10 +2473,11 @@ impl StructureDesigner {
             .node_type_registry
             .update_record_type_def_with_edits(name, edits)?;
 
-        // Re-key `record_construct` literal defaults for any surviving renamed
-        // field (top-level AND inside HOF bodies).
+        // Re-key `record_construct` literal defaults and `array` record-element
+        // entries for any surviving renamed field (top-level AND inside HOF
+        // bodies).
         self.node_type_registry
-            .rekey_record_construct_literals(name, &renames);
+            .rekey_record_field_literals(name, &renames);
 
         self.node_type_registry.repair_all_networks();
 

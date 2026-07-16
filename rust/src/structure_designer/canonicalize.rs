@@ -33,6 +33,7 @@ use crate::structure_designer::node_network::{NodeNetwork, walk_all_nodes_mut};
 use crate::structure_designer::node_type::{NodeType, PinOutputType};
 use crate::structure_designer::node_type_registry::RecordTypeDef;
 use crate::structure_designer::nodes::apply::ApplyData;
+use crate::structure_designer::nodes::array::ArrayData;
 use crate::structure_designer::nodes::array_append::ArrayAppendData;
 use crate::structure_designer::nodes::array_at::ArrayAtData;
 use crate::structure_designer::nodes::array_concat::ArrayConcatData;
@@ -173,6 +174,8 @@ fn canonicalize_node_data(data: &mut dyn NodeData) {
             canonicalize_data_type(out);
         }
     } else if let Some(d) = any.downcast_mut::<SequenceData>() {
+        canonicalize_data_type(&mut d.element_type);
+    } else if let Some(d) = any.downcast_mut::<ArrayData>() {
         canonicalize_data_type(&mut d.element_type);
     } else if let Some(d) = any.downcast_mut::<ArrayAtData>() {
         canonicalize_data_type(&mut d.element_type);

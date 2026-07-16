@@ -2,6 +2,7 @@ pub mod add_hydrogen;
 pub mod apply;
 pub mod apply_diff;
 pub mod apply_style;
+pub mod array;
 pub mod array_append;
 pub mod array_at;
 pub mod array_concat;

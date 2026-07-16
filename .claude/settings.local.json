@@ -326,7 +326,8 @@
       "PowerShell($j = Get-Content \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\issue\\\\SPM-tip-with-tool_2026-07-13_17-16-CET.cnnd\" -Raw | ConvertFrom-Json; foreach \\($n in $j.node_networks\\) { if \\($n[0] -eq \"geo.circle_free\"\\) { $net = $n[1]; foreach \\($b in $net.nodes\\) { $d=\\($b.data | ConvertTo-Json -Depth 6 -Compress\\); if \\($d.Length -gt 250\\) {$d=$d.Substring\\(0,250\\)+\"...\"}; $wires=@\\(\\); for \\($i=0;$i -lt $b.arguments.Count;$i++\\){foreach\\($w in $b.arguments[$i].incoming_wires\\){$wires+=\"arg$i<=n$\\($w.source_node_id\\)\"}}; \"[$\\($b.id\\)] $\\($b.node_type_name\\) \\($\\($b.custom_name\\)\\) data=$d wires={$\\($wires -join ' ; '\\)}\" } } })",
       "PowerShell(atomcad-cli *)",
       "PowerShell(& \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\atomcad-cli.ps1\" query)",
-      "PowerShell(Get-Content \"C:\\\\Users\\\\DMNAGY~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--machine-phase-systems-flutter-cad\\\\772ea6df-59c9-42ee-a4c7-195abc3adbe1\\\\scratchpad\\\\fix_edit.txt\" -Raw | & \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\atomcad-cli.ps1\" edit)"
+      "PowerShell(Get-Content \"C:\\\\Users\\\\DMNAGY~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--machine-phase-systems-flutter-cad\\\\772ea6df-59c9-42ee-a4c7-195abc3adbe1\\\\scratchpad\\\\fix_edit.txt\" -Raw | & \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\atomcad-cli.ps1\" edit)",
+      "Bash(TEMP_DISABLE_ARRAY_REKEY=1 cargo test -j 4 --test structure_designer array_record_elements_survive)"
     ]
   }
 }

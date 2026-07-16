@@ -86,7 +86,7 @@ impl UndoCommand for UpdateRecordTypeDefCommand {
             .update_record_type_def_with_edits(&self.name, self.new_edits.clone())
         {
             ctx.node_type_registry
-                .rekey_record_construct_literals(&self.name, &renames);
+                .rekey_record_field_literals(&self.name, &renames);
         }
         ctx.node_type_registry.repair_all_networks();
     }
