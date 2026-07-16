@@ -12,6 +12,8 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use glam::f64::{DVec2, DVec3};
+use glam::i32::{IVec2, IVec3};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -110,7 +112,176 @@ pub fn is_literal_capable(data_type: &DataType, registry: &NodeTypeRegistry) -> 
         .all(|field| is_simple_literal_type(&field.data_type.record_field_pin_type()))
 }
 
+/// The literal seeded into a freshly added (or reset) element of a simple
+/// type: the same type zeros the Flutter literal panel renders for an unset row
+/// (`literal_fields_editor.dart::_typeZero`) — numeric zeros, `false`, the empty
+/// string, zero vectors, **identity** matrices.
+///
+/// `None` for a non-simple type; every caller has already established
+/// literal-capability.
+pub fn default_simple_literal(data_type: &DataType) -> Option<TextValue> {
+    Some(match data_type {
+        DataType::Bool => TextValue::Bool(false),
+        DataType::Int => TextValue::Int(0),
+        DataType::Float => TextValue::Float(0.0),
+        DataType::String => TextValue::String(String::new()),
+        DataType::IVec2 => TextValue::IVec2(IVec2::ZERO),
+        DataType::IVec3 => TextValue::IVec3(IVec3::ZERO),
+        DataType::Vec2 => TextValue::Vec2(DVec2::ZERO),
+        DataType::Vec3 => TextValue::Vec3(DVec3::ZERO),
+        DataType::IMat3 => TextValue::IMat3([[1, 0, 0], [0, 1, 0], [0, 0, 1]]),
+        DataType::Mat3 => TextValue::Mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+        _ => return None,
+    })
+}
+
+/// The element seeded by `add_array_element` / a reset, so a new element
+/// **evaluates immediately** rather than erroring until first edited: a simple
+/// `element_type` gets that type's [`default_simple_literal`]; a record
+/// `element_type` gets its **required** fields seeded with those same defaults
+/// and its `Optional` fields left unset (an absent entry is "unset", which eval
+/// emits as an explicit `None`).
+///
+/// A non-literal-capable `element_type` — unreachable through the guarded
+/// setters — seeds an empty object, which eval localizes as a per-element
+/// mismatch like any other stale literal.
+pub fn seed_element(element_type: &DataType, registry: &NodeTypeRegistry) -> TextValue {
+    if let DataType::Record(RecordType::Named(schema)) = element_type {
+        let mut entries: Vec<(String, TextValue)> = Vec::new();
+        if let Some(def) = registry.lookup_record_type_def(schema) {
+            for field in &def.fields {
+                if field.data_type.is_optional() {
+                    continue;
+                }
+                if let Some(seed) = default_simple_literal(&field.data_type.record_field_pin_type())
+                {
+                    entries.push((field.name.clone(), seed));
+                }
+            }
+        }
+        return TextValue::Object(entries);
+    }
+    default_simple_literal(element_type).unwrap_or_else(|| TextValue::Object(Vec::new()))
+}
+
 impl ArrayData {
+    /// Bounds-check helper shared by the element mutators. Errors carry the
+    /// index and length so an out-of-range API call from a stale Flutter panel
+    /// is reported rather than silently ignored.
+    fn check_index(&self, index: usize) -> Result<(), String> {
+        if index >= self.elements.len() {
+            return Err(format!(
+                "element index {} out of range ({} elements)",
+                index,
+                self.elements.len()
+            ));
+        }
+        Ok(())
+    }
+
+    /// Insert a freshly seeded element at `index` (`index == len` appends).
+    pub fn insert_element(
+        &mut self,
+        index: usize,
+        registry: &NodeTypeRegistry,
+    ) -> Result<(), String> {
+        if index > self.elements.len() {
+            return Err(format!(
+                "element index {} out of range ({} elements)",
+                index,
+                self.elements.len()
+            ));
+        }
+        self.elements
+            .insert(index, seed_element(&self.element_type, registry));
+        Ok(())
+    }
+
+    pub fn remove_element(&mut self, index: usize) -> Result<(), String> {
+        self.check_index(index)?;
+        self.elements.remove(index);
+        Ok(())
+    }
+
+    /// Move the element at `from` to `to`, where `to` is its index in the
+    /// **resulting** list (so a move-down by one is `from + 1`).
+    pub fn move_element(&mut self, from: usize, to: usize) -> Result<(), String> {
+        self.check_index(from)?;
+        self.check_index(to)?;
+        if from == to {
+            return Ok(());
+        }
+        let element = self.elements.remove(from);
+        self.elements.insert(to, element);
+        Ok(())
+    }
+
+    /// Replace one element's whole literal. The value is stored **raw** — no
+    /// coercion check — per the stale-literal rule: eval reports per-element
+    /// problems, so nothing is silently dropped or rewritten here.
+    pub fn set_element_literal(&mut self, index: usize, value: TextValue) -> Result<(), String> {
+        self.check_index(index)?;
+        self.elements[index] = value;
+        Ok(())
+    }
+
+    /// Reset one element back to its seeded default — the "clear" action a
+    /// stale row offers. For a record element this re-seeds the required fields
+    /// and drops every `Optional` back to unset.
+    pub fn reset_element(
+        &mut self,
+        index: usize,
+        registry: &NodeTypeRegistry,
+    ) -> Result<(), String> {
+        self.check_index(index)?;
+        self.elements[index] = seed_element(&self.element_type, registry);
+        Ok(())
+    }
+
+    /// Set one field of a record element, keyed by field **name** (the storage
+    /// key — see the rename cascade in `node_type_registry.rs`). An element
+    /// that is not a record literal is rejected rather than being silently
+    /// replaced: the panel renders such an element as a stale row offering a
+    /// reset, so it never reaches this path.
+    pub fn set_element_field_literal(
+        &mut self,
+        index: usize,
+        field_name: &str,
+        value: TextValue,
+    ) -> Result<(), String> {
+        self.check_index(index)?;
+        let entries = Self::element_entries_mut(&mut self.elements[index], index)?;
+        match entries.iter_mut().find(|(key, _)| key == field_name) {
+            Some((_, slot)) => *slot = value,
+            None => entries.push((field_name.to_string(), value)),
+        }
+        Ok(())
+    }
+
+    /// Unset one field of a record element (removes the entry). For an
+    /// `Optional` field that means "inherit"; for a required field, eval
+    /// localizes it as `array[i].field is unset`.
+    pub fn clear_element_field_literal(
+        &mut self,
+        index: usize,
+        field_name: &str,
+    ) -> Result<(), String> {
+        self.check_index(index)?;
+        let entries = Self::element_entries_mut(&mut self.elements[index], index)?;
+        entries.retain(|(key, _)| key != field_name);
+        Ok(())
+    }
+
+    fn element_entries_mut(
+        element: &mut TextValue,
+        index: usize,
+    ) -> Result<&mut Vec<(String, TextValue)>, String> {
+        match element {
+            TextValue::Object(entries) => Ok(entries),
+            _ => Err(format!("array[{}] is not a record literal", index)),
+        }
+    }
+
     /// Convert one stored element to a `NetworkResult`, or produce a localized
     /// error naming the element index (and, for a record element, the field).
     fn element_to_result(

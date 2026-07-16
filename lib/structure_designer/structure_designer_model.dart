@@ -2162,6 +2162,103 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  // --- `array` node (doc/design_array_node_and_field_hints.md Part B) ---
+  //
+  // The `array` node has no input pins, so every element edit is a pure
+  // node-data mutation with standard undo. Only `setArrayElementType` retypes
+  // the output pin (and can drop outgoing wires), which the Rust op handles
+  // with a whole-network-snapshot undo. Each setter returns the kernel's
+  // `APIResult` so the panel can surface a rejection inline.
+
+  /// The `element_type`s an `array` node accepts, straight from the Rust
+  /// predicate — the picker never offers a type the setter would reject.
+  List<APIDataType> getArrayElementTypeOptions() =>
+      structure_designer_api.getArrayElementTypeOptions();
+
+  APIArrayNodeData? getArrayNodeData(BigInt nodeId) => structure_designer_api
+      .getArrayNodeData(scopePath: propertyEditorScopePath, nodeId: nodeId);
+
+  APIResult setArrayElementType(BigInt nodeId, APIDataType elementType) {
+    final result = structure_designer_api.setArrayElementType(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        elementType: elementType);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult addArrayElement(BigInt nodeId, int index) {
+    final result = structure_designer_api.addArrayElement(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult removeArrayElement(BigInt nodeId, int index) {
+    final result = structure_designer_api.removeArrayElement(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult moveArrayElement(BigInt nodeId, int from, int to) {
+    final result = structure_designer_api.moveArrayElement(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        from: from,
+        to: to);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult setArrayElementLiteral(
+      BigInt nodeId, int index, APILiteralValue value) {
+    final result = structure_designer_api.setArrayElementLiteral(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index,
+        value: value);
+    refreshFromKernel();
+    return result;
+  }
+
+  /// Resets the element to its seeded default — the stale-row "clear" action.
+  APIResult clearArrayElementLiteral(BigInt nodeId, int index) {
+    final result = structure_designer_api.clearArrayElementLiteral(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult setArrayElementFieldLiteral(
+      BigInt nodeId, int index, String fieldName, APILiteralValue value) {
+    final result = structure_designer_api.setArrayElementFieldLiteral(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index,
+        fieldName: fieldName,
+        value: value);
+    refreshFromKernel();
+    return result;
+  }
+
+  APIResult clearArrayElementFieldLiteral(
+      BigInt nodeId, int index, String fieldName) {
+    final result = structure_designer_api.clearArrayElementFieldLiteral(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        index: index,
+        fieldName: fieldName);
+    refreshFromKernel();
+    return result;
+  }
+
   void setIvec2Data(BigInt nodeId, APIIVec2Data data) {
     structure_designer_api.setIvec2Data(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

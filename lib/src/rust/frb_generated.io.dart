@@ -64,6 +64,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIArrayAtData dco_decode_api_array_at_data(dynamic raw);
 
   @protected
+  APIArrayElement dco_decode_api_array_element(dynamic raw);
+
+  @protected
+  APIArrayNodeData dco_decode_api_array_node_data(dynamic raw);
+
+  @protected
   APIAtomComposeDiffData dco_decode_api_atom_compose_diff_data(dynamic raw);
 
   @protected
@@ -478,6 +484,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIArrayAtData dco_decode_box_autoadd_api_array_at_data(dynamic raw);
 
   @protected
+  APIArrayNodeData dco_decode_box_autoadd_api_array_node_data(dynamic raw);
+
+  @protected
   APIAtomComposeDiffData dco_decode_box_autoadd_api_atom_compose_diff_data(
       dynamic raw);
 
@@ -868,6 +877,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<APIArrayElement> dco_decode_list_api_array_element(dynamic raw);
+
+  @protected
   List<APIAtomExportFormat> dco_decode_list_api_atom_export_format(dynamic raw);
 
   @protected
@@ -1000,6 +1012,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIArrayAtData? dco_decode_opt_box_autoadd_api_array_at_data(dynamic raw);
+
+  @protected
+  APIArrayNodeData? dco_decode_opt_box_autoadd_api_array_node_data(dynamic raw);
 
   @protected
   APIAtomComposeDiffData? dco_decode_opt_box_autoadd_api_atom_compose_diff_data(
@@ -1444,6 +1459,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIArrayAtData sse_decode_api_array_at_data(SseDeserializer deserializer);
+
+  @protected
+  APIArrayElement sse_decode_api_array_element(SseDeserializer deserializer);
+
+  @protected
+  APIArrayNodeData sse_decode_api_array_node_data(SseDeserializer deserializer);
 
   @protected
   APIAtomComposeDiffData sse_decode_api_atom_compose_diff_data(
@@ -1907,6 +1928,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIArrayAtData sse_decode_box_autoadd_api_array_at_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrayNodeData sse_decode_box_autoadd_api_array_node_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2382,6 +2407,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<APIArrayElement> sse_decode_list_api_array_element(
+      SseDeserializer deserializer);
+
+  @protected
   List<APIAtomExportFormat> sse_decode_list_api_atom_export_format(
       SseDeserializer deserializer);
 
@@ -2540,6 +2569,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIArrayAtData? sse_decode_opt_box_autoadd_api_array_at_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrayNodeData? sse_decode_opt_box_autoadd_api_array_node_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3063,6 +3096,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIArrayAtData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_array_element(
+      APIArrayElement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_array_node_data(
+      APIArrayNodeData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_atom_compose_diff_data(
       APIAtomComposeDiffData self, SseSerializer serializer);
 
@@ -3567,6 +3608,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIArrayAtData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_array_node_data(
+      APIArrayNodeData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_atom_compose_diff_data(
       APIAtomComposeDiffData self, SseSerializer serializer);
 
@@ -4050,6 +4095,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_array_element(
+      List<APIArrayElement> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_atom_export_format(
       List<APIAtomExportFormat> self, SseSerializer serializer);
 
@@ -4215,6 +4264,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_array_at_data(
       APIArrayAtData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_array_node_data(
+      APIArrayNodeData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_atom_compose_diff_data(

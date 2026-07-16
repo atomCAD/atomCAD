@@ -334,11 +334,26 @@ no-silent-loss stance above. (Generalizing the two downcasts into a
   standard `SetNodeDataCommand` via `set_node_network_data_scoped`
   ("persisted mutations must be undoable" — satisfied by the standard
   path).
-- **`element_type` change**: retypes the output pin, so downstream wires can
-  be dropped by the repair pass. Undo must restore those wires, so this one
-  setter pushes the whole-network-snapshot **`NodeStructureEditCommand`** —
-  the same command `switch` case edits and `zip_with` lane edits use for
-  exactly this reason.
+- **`element_type` change**: retypes the output pin, so this one setter pushes
+  the whole-network-snapshot **`NodeStructureEditCommand`** — the same command
+  `switch` case edits and `zip_with` lane edits use.
+
+  **Correction (Phase 4, verified against the implementation).** The reason
+  originally given here — "downstream wires can be dropped by the repair pass,
+  and undo must restore them" — is **not** what happens. `repair_node_network`
+  rebuilds a *node's own* `arguments`, and `array` has no input pins; a
+  downstream wire whose type no longer checks is **not** dropped. The validator
+  instead raises a blocking `Data type mismatch` and the whole network stops
+  evaluating until the user retypes or rewires (test:
+  `array_set_element_type_undo_restores_network_validity`).
+
+  The command choice stands, for a different reason: the retype changes
+  network-wide **validation state**, and only the `finish_node_structure_edit`
+  path re-validates and full-refreshes — `set_node_network_data_scoped`
+  deliberately does neither (see `project_refresh_does_not_validate`). Routing
+  the retype through the plain node-data path would restore `element_type` on
+  undo while leaving the network stuck invalid on a stale error. It is also the
+  future-proof choice if repair ever does start dropping such wires.
 
 ### Text format
 
@@ -365,10 +380,15 @@ refresh + undo per Decision 3:
 
 ```text
 get_array_node_data(scope_path, node_id) -> APIArrayNodeData
-  // element_type + per-element rows: simple -> Option<APILiteralValue>;
-  // record  -> Vec<APILiteralField>  (name, type, stored value, hint —
-  //            the SAME row type record_construct's editor consumes,
-  //            so the hint plumbing from Part A applies for free)
+  // element_type + is_record + per-element rows. As built, BOTH shapes use
+  // Vec<APILiteralField> (the SAME row type record_construct's editor
+  // consumes, so Part A's hints apply for free): a simple element_type
+  // yields exactly one row named "value", a record element_type one row per
+  // field. The originally-planned `simple -> Option<APILiteralValue>` split
+  // was dropped because it forced the Flutter editor to map a DataType to a
+  // widget itself, duplicating what APILiteralField already carries.
+  // An element whose stored literal does not fit element_type reports
+  // `stale: true` with no rows; the editor shows a warning + Reset.
 set_array_element_type(scope_path, node_id, ...)        // NodeStructureEditCommand
 add_array_element(scope_path, node_id, index)
 remove_array_element(scope_path, node_id, index)
@@ -394,7 +414,16 @@ the value layer. Run `flutter_rust_bridge_codegen generate`.
 
 `lib/structure_designer/node_data/array_editor.dart`:
 
-- header: element-type `DataTypeInput` filtered to literal-capable types;
+- header: element-type picker. **As built this is a plain dropdown over a new
+  `get_array_element_type_options()` API, not a filtered `DataTypeInput`**:
+  `DataTypeInput` has no filter hook, and the two filters needed here are not
+  expressible as one (hide the Array checkbox — nested arrays are excluded; and
+  offer only those record defs whose fields are all simple, which needs the
+  registry). Sourcing the list from `is_literal_capable` itself also means the
+  picker can never offer a type the setter rejects, and a newly literal-capable
+  type surfaces with no Flutter edit — the `get_atom_export_formats()`
+  convention. Follows the `switch` selector-type precedent (hand-rolled
+  dropdown rather than a `DataTypeInput`);
 - element list: one row (simple types — the hint-aware literal widget) or
   one expandable group of field rows (record types — visually the
   `record_construct` literal section, per element) each with remove and
@@ -548,7 +577,7 @@ round-trips a hand-written element list. No property editor yet (Phase 4)
 
 ---
 
-### Phase 4 — `array` node API, Flutter editor, reference guide
+### Phase 4 — `array` node API, Flutter editor, reference guide — **DONE**
 
 **Implementation**
 
@@ -557,20 +586,34 @@ round-trips a hand-written element list. No property editor yet (Phase 4)
   codegen.
 - `array_editor.dart` per §Flutter editor, registered in the
   property-panel dispatch.
-- Reference guide: new `doc/reference_guide/nodes/array.md` (element-type
-  domain and why structural types are excluded, literal-vs-`sequence`
-  guidance, stale-literal behavior, record-element editing) + node index
-  link; the record-types / user-types guide page gains a short "editor
-  hints" section (what each hint renders, that hints never affect wires or
-  values).
+- Reference guide: an `## array` section in
+  `doc/reference_guide/nodes/math_programming.md`, next to `sequence` (the
+  guide is organized as **category pages**, not per-node files — the planned
+  `nodes/array.md` + index link would not have matched its structure; the hub
+  links categories, not nodes). Covers the element-type domain and why
+  structural types are excluded, literal-vs-`sequence` guidance, stale-literal
+  behavior, and record-element editing. The "editor hints" section already
+  existed (Phase 2) and was updated to name `array` as a second consumer. The
+  `atom_replace.rules` and `apply_style` rule-authoring guidance in
+  `nodes/atomic.md`, which previously prescribed the N+1-node
+  `record_construct` + `sequence` workflow this node replaces, now leads with
+  `array`.
 
-**Automated tests**
+**Automated tests** (in `rust/tests/structure_designer/array_node_test.rs`)
 
-- API-level: each setter round-trips through the `StructureDesigner`-level
-  path; undo/redo restores element content edits (SetNodeDataCommand) and
-  an `element_type` change **including a dropped outgoing wire**
-  (NodeStructureEditCommand — the test that fails if Decision 3 regresses
-  to plain data undo).
+- The element mutators behind the granular setters: seeding (simple defaults,
+  identity matrices, required-vs-`Optional` record fields, and that a seeded
+  element evaluates immediately); insert / remove / move order; out-of-range
+  rejection mutating nothing; raw (uncoerced) literal storage; record field
+  set / clear; a field edit on a non-record element rejected; reset re-seeding
+  a stale element. The API wrappers themselves stay untested per
+  `rust/AGENTS.md` (thin wrappers — test the core they call).
+- `set_array_element_type`: non-literal-capable types rejected leaving the node
+  untouched; stale elements preserved across a retype; a same-type set pushes
+  no command; and the Decision 3 regression test
+  `array_set_element_type_undo_restores_network_validity` — undo restores the
+  element type **and re-validates**, which is what a plain node-data undo would
+  get wrong (see the Decision 3 correction above).
 - `flutter analyze` clean over baseline.
 
 **Manual verification** — `flutter run`, the headline walkthrough: create

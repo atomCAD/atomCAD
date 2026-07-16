@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `network_result_to_api_literal`, `param_element_color_u32`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `text_value_to_api_literal`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`
+// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `network_result_to_api_literal`, `param_element_color_u32`, `record_element_fields`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `simple_element_row`, `text_value_to_api_literal`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`, `with_array_data`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `api_data_type_to_data_type`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
@@ -1534,6 +1534,117 @@ void clearRecordConstructLiteral(
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiClearRecordConstructLiteral(
             scopePath: scopePath, nodeId: nodeId, fieldName: fieldName);
+
+/// The `element_type`s an `array` node accepts, as the editor's picker list —
+/// the simple literal types plus every named record def (user or built-in)
+/// whose fields are all simple. Rust is the single source of truth
+/// (`is_literal_capable`), so a new literal-capable type surfaces in the picker
+/// with no Flutter edit — the same convention as `get_atom_export_formats`.
+///
+/// Pure read; safe to call on every panel rebuild.
+List<APIDataType> getArrayElementTypeOptions() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetArrayElementTypeOptions();
+
+/// The `array` node's `element_type` plus one row per stored element. Returns
+/// `None` if `node_id` is not an `array` node.
+///
+/// Pure read — `&self`, no evaluation. Safe to call on every panel rebuild.
+APIArrayNodeData? getArrayNodeData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetArrayNodeData(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Retype the array's elements (and hence its `Array[T]` output pin). Delegates
+/// to `StructureDesigner::set_array_element_type`, which validates
+/// literal-capability, repairs the wires the retype invalidates, and pushes the
+/// whole-network-snapshot undo — the API layer adds no logic of its own.
+APIResult setArrayElementType(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIDataType elementType}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayElementType(
+            scopePath: scopePath, nodeId: nodeId, elementType: elementType);
+
+/// Insert a freshly seeded element at `index` (`index == len` appends), so it
+/// evaluates immediately instead of erroring until first edited.
+APIResult addArrayElement(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int index}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiAddArrayElement(
+            scopePath: scopePath, nodeId: nodeId, index: index);
+
+APIResult removeArrayElement(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int index}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRemoveArrayElement(
+            scopePath: scopePath, nodeId: nodeId, index: index);
+
+/// Move the element at `from` to `to`, where `to` is its index in the
+/// **resulting** list (the editor's move-up / move-down affordances).
+APIResult moveArrayElement(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int from,
+        required int to}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiMoveArrayElement(
+            scopePath: scopePath, nodeId: nodeId, from: from, to: to);
+
+/// Set one whole element's literal (a simple `element_type`).
+APIResult setArrayElementLiteral(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int index,
+        required APILiteralValue value}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayElementLiteral(
+            scopePath: scopePath, nodeId: nodeId, index: index, value: value);
+
+/// Reset one element to its seeded default — the action a stale row offers.
+/// For a record element this re-seeds the required fields and returns every
+/// `Optional` to unset.
+APIResult clearArrayElementLiteral(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int index}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiClearArrayElementLiteral(
+            scopePath: scopePath, nodeId: nodeId, index: index);
+
+/// Set one field of a record element.
+APIResult setArrayElementFieldLiteral(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int index,
+        required String fieldName,
+        required APILiteralValue value}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayElementFieldLiteral(
+            scopePath: scopePath,
+            nodeId: nodeId,
+            index: index,
+            fieldName: fieldName,
+            value: value);
+
+/// Unset one field of a record element. For an `Optional` field that means
+/// "inherit"; a required field then reports `array[i].field is unset` at eval.
+APIResult clearArrayElementFieldLiteral(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required int index,
+        required String fieldName}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiClearArrayElementFieldLiteral(
+            scopePath: scopePath,
+            nodeId: nodeId,
+            index: index,
+            fieldName: fieldName);
 
 void setMapData(
         {required Uint64List scopePath,

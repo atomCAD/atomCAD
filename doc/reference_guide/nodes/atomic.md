@@ -377,10 +377,12 @@ Styled atoms are hoverable and measurable at their displayed radius, exactly as 
 
 ### Authoring rules
 
-Build one `record_construct` node per rule (schema `StyleRule`): because every field is `Optional`, the per-field inline editor shows the *stored / (unset) / wired* tri-state, and leaving a field unset means "leave this property alone" (for a property) or "don't constrain on this axis" (for a selector).
+The quickest path is one [`array`](./math_programming.md#array) node with element type `StyleRule`: every rule is an element you fill in on the node itself, and the field hints give you a color swatch, an alpha slider, and a render-style dropdown per rule. Wire its output straight into `rules`.
+
+Otherwise, build one `record_construct` node per rule (schema `StyleRule`). Either way, because every field is `Optional`, the per-field inline editor shows the *stored / (unset) / wired* tri-state, and leaving a field unset means "leave this property alone" (for a property) or "don't constrain on this axis" (for a selector).
 
 - **One rule** → wire the `record_construct` straight into `apply_style` (a single value broadcasts to a one-element array).
-- **Several rules** → collect the `record_construct` outputs with a [`sequence`](./math_programming.md#sequence) node and wire that into `rules`.
+- **Several rules** → an `array` of `StyleRule`, or collect several `record_construct` outputs with a [`sequence`](./math_programming.md#sequence) node and wire that into `rules`. Reach for `record_construct` + `sequence` when a rule's field has to be *wired* from another node; `array` holds typed-in values only.
 - **Generated rules** (from `map`/`product`) arrive as an `Iter[Record]`; insert a [`collect`](./math_programming.md#collect) node before `rules`, since `Iter[T] → Array[T]` is not an implicit conversion.
 
 The `expr` node is **not** an authoring path — its record literals cannot express an unset `Optional` field, which record-width subtyping requires here.
@@ -429,7 +431,7 @@ Substitutes atoms of one element for another (or removes them) in bulk, accordin
 **Input pins**
 
 - `molecule` — the atomic structure to transform (`Crystal` or `Molecule`).
-- `rules: Array[Record(ElementMapping)]` (optional) — a programmatically-built list of replacement rules. `ElementMapping` is a built-in record def with two `Int` fields, `from` and `to` (atomic numbers; `0` on `to` means *Delete*).
+- `rules: Array[Record(ElementMapping)]` (optional) — a replacement rule list built elsewhere in the network. `ElementMapping` is a built-in record def with two `Int` fields, `from` and `to` (atomic numbers; `0` on `to` means *Delete*). The easiest source is an [`array`](./math_programming.md#array) node with element type `ElementMapping` — its `from` / `to` fields carry `Element` hints, so each rule gets a pair of element dropdowns. Use `record_construct` + `sequence` instead when a rule has to be computed from other nodes, or `map`/`product` + `collect` when the rules are generated.
 - `region: Blueprint` (optional) — apply the replacement rules only to atoms inside this volume; out-of-region atoms pass through unchanged. Disconnected → rules apply to all atoms. See *Restricting an atom operation to a region* above.
 
 **Properties**

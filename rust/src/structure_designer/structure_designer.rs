@@ -4520,6 +4520,94 @@ impl StructureDesigner {
         Ok(())
     }
 
+    /// Change an `array` node's `element_type`
+    /// (`doc/design_array_node_and_field_hints.md` Part B, Decision 3).
+    ///
+    /// This is the **one** `array` edit that is not pure node data: the node's
+    /// output pin is `Array[element_type]`, so a retype invalidates every
+    /// downstream wire's type check. It does not *drop* them — the repair pass
+    /// rebuilds a node's own `arguments`, and `array` has no input pins — the
+    /// validator instead raises a blocking "Data type mismatch" and the network
+    /// stops evaluating until the user retypes or rewires.
+    ///
+    /// That network-wide validation state is why this rides
+    /// [`NodeStructureEditCommand`] (shared with the `zip_with` / `switch` ops)
+    /// instead of the plain `set_node_network_data_scoped` path every *element*
+    /// edit uses: only this path re-validates and full-refreshes. A node-data
+    /// undo would restore `element_type` and leave the network stuck invalid on
+    /// a stale error. (The design doc's Decision 3 predicted dropped wires here;
+    /// the command choice is right, the stated reason is not.)
+    ///
+    /// Stored elements are left **verbatim** across the retype — mismatches
+    /// surface as localized per-element eval errors and the editor offers a
+    /// reset (the no-silent-data-loss stance).
+    ///
+    /// [`NodeStructureEditCommand`]: super::undo::commands::node_structure_edit::NodeStructureEditCommand
+    pub fn set_array_element_type(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        element_type: DataType,
+    ) -> Result<(), String> {
+        use crate::structure_designer::nodes::array::{ArrayData, is_literal_capable};
+
+        if !is_literal_capable(&element_type, &self.node_type_registry) {
+            return Err(format!(
+                "array element_type {} is not literal-capable: only the simple literal types \
+                 (Bool, Int, Float, String, IVec2, IVec3, Vec2, Vec3, IMat3, Mat3) and named \
+                 record types whose fields are all simple can be authored as array elements. \
+                 Use a `sequence` node to collect computed values instead.",
+                element_type
+            ));
+        }
+
+        let network_name = self
+            .active_node_network_name
+            .clone()
+            .ok_or_else(|| "No active network".to_string())?;
+
+        // Read-only pre-check: resolve and reject before any mutation or
+        // snapshot, so an error leaves the designer untouched.
+        let old_type = {
+            let node = self
+                .get_scope_network(scope_path)
+                .and_then(|net| net.nodes.get(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            node.data
+                .as_any_ref()
+                .downcast_ref::<ArrayData>()
+                .ok_or_else(|| "Node is not an array".to_string())?
+                .element_type
+                .clone()
+        };
+        if old_type == element_type {
+            return Ok(()); // no-op; don't push an empty command
+        }
+
+        let before = self.snapshot_network(&network_name);
+
+        {
+            let node = self
+                .get_scope_network_mut(scope_path)
+                .and_then(|net| net.nodes.get_mut(&node_id))
+                .ok_or_else(|| "Node not found".to_string())?;
+            node.data
+                .as_any_mut()
+                .downcast_mut::<ArrayData>()
+                .ok_or_else(|| "Node is not an array".to_string())?
+                .element_type = element_type;
+        }
+
+        self.finish_node_structure_edit(
+            scope_path,
+            node_id,
+            &network_name,
+            before,
+            "Change array element type",
+        );
+        Ok(())
+    }
+
     /// Shared tail of the variadic-pin structural edit ops (`zip_with` lane
     /// edits, `switch` case edits): repair (the node's external arguments
     /// rebuild by hidden stable id in `repair_node_network`'s populate pass,

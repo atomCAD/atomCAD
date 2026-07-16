@@ -512,9 +512,52 @@ Produces a lazily-evaluated stream of integers (`Iter[Int]`) starting from an in
 
 ![](../../atomCAD_images/range_node_props.png)
 
+## array
+
+An array literal: pick an element type, then type the elements directly into the node's property panel. A whole rule set — an `atom_replace` rules list, an `apply_style` rules list — is one node instead of one `record_construct` per element plus a `sequence` to collect them.
+
+**Properties**
+
+- `Element type` — the type of every element, and hence of the output `Array[ElementType]`.
+- `Elements` — the element list itself. Each element has a row (or, for a record element type, a group of field rows) with move-up / move-down / remove buttons, and an **Add element** button appends. A new element starts at its type's defaults, so it evaluates immediately rather than erroring until you edit it; for a record element type that means the required fields are filled in and the `Optional` ones are left unset.
+
+**Input pins**
+
+None — and that is the point. Every element is *stored data*, which is what keeps adding, removing, and reordering elements ordinary edits with ordinary undo.
+
+**Behavior**
+
+The output is `Array[ElementType]`. An empty element list is a perfectly good empty array, not an error.
+
+**`array` or `sequence`?**
+
+- **`array`** when you are *typing the values in*: a fixed list of rules, constants, or names.
+- **[`sequence`](#sequence)** when the elements are *computed by other nodes*: it collects wired values, one input pin per element.
+
+They are complements, and you can combine them with [`array_concat`](#array_concat) / [`array_append`](#array_append) — e.g. a literal `array` of default rules concatenated with a computed `sequence` of extra ones.
+
+**Which element types are allowed**
+
+The dropdown offers exactly what can be written down as a literal:
+
+- the simple types — `Bool`, `Int`, `Float`, `String`, `IVec2`, `IVec3`, `Vec2`, `Vec3`, `IMat3`, `Mat3`; and
+- named [record types](#record-types) whose fields are all simple — `ElementMapping` and `StyleRule`, for instance.
+
+Everything else is deliberately absent, because it has no literal form to type: structures and geometry (`Blueprint`, `Crystal`, `Molecule`, `Structure`, …) are *built* by nodes, not typed — use `sequence` to collect them; functions, iterators and `Unit` likewise. Arrays-of-arrays and records containing records are excluded too, to keep the element editor a flat list rather than a list inside a list. If the type you want is missing from the dropdown, that is the signal to reach for `sequence`.
+
+**Record elements and editor hints**
+
+When the element type is a record, each element is edited as a group of field rows — the same rows the [`record_construct`](#record_construct) panel shows, hints and all. So an `array` of `ElementMapping` gives you element dropdowns per element, and an `array` of `StyleRule` gives you a color swatch, an alpha slider, and a render-style dropdown. `Optional` fields keep their set / unset tri-state: clearing a field means "inherit", not "zero".
+
+**Stale values are kept, not thrown away**
+
+Changing the element type — or editing a record type out from under the node — leaves your typed-in values exactly where they are. Elements that no longer fit the new type are flagged in the panel with a **Reset** button, and the array reports an error naming the element that does not fit (`array[2].from is unset`). Nothing is silently discarded and nothing is silently repaired: you decide whether to retype the values or reset the row.
+
+Note the element type change is the one edit on this node that can invalidate wires: the output pin becomes `Array[NewType]`, so anything downstream expecting the old element type reports a type mismatch until you retype or rewire it. Undo restores both the type and the wiring.
+
 ## sequence
 
-Collects a fixed number of inputs into an ordered array. Use `sequence` when you want to build an array from inputs that come from different upstream nodes and you care about their order, or when you want each element to appear on its own labeled pin in the network — `range`, `map`, `filter`, and `product` produce iterator streams from rules, but `sequence` lets you wire up the elements explicitly one at a time, and the result is an `Array[T]` rather than an `Iter[T]`.
+Collects a fixed number of inputs into an ordered array. Use `sequence` when you want to build an array from inputs that come from different upstream nodes and you care about their order, or when you want each element to appear on its own labeled pin in the network — `range`, `map`, `filter`, and `product` produce iterator streams from rules, but `sequence` lets you wire up the elements explicitly one at a time, and the result is an `Array[T]` rather than an `Iter[T]`. When the elements are literals you are typing in rather than values other nodes compute, use [`array`](#array) instead.
 
 ## array_at
 
@@ -926,7 +969,7 @@ Built-in defs share one namespace with user defs and participate in the same bar
 
 ### Editor hints
 
-A field's type says what values are legal; it does not say how you would rather *pick* one. An atomic number is an `Int`, but choosing "Carbon" from a list beats typing `6`. An **editor hint** is an optional annotation on a field that tells the inline literal editors — the [`record_construct`](#record_construct) panel today — which widget to render for that field.
+A field's type says what values are legal; it does not say how you would rather *pick* one. An atomic number is an `Int`, but choosing "Carbon" from a list beats typing `6`. An **editor hint** is an optional annotation on a field that tells the inline literal editors — the [`record_construct`](#record_construct) panel, and the record elements of an [`array`](#array) node — which widget to render for that field.
 
 Set a hint from the **Editor hint** dropdown in the field's row in the schema editor. The dropdown offers only the hints that fit the field's type, and appears only on rows whose type can carry one:
 
@@ -943,7 +986,7 @@ Each hint is also valid on the `Optional[…]` form of its type — a hint descr
 
 Two consequences follow from hints living on the field rather than on the value. Retyping a field drops a hint the new type cannot carry (the retype is the real edit; the hint was decoration). And renaming a field keeps its hint, because hints ride on the field's identity, not its name.
 
-Several built-in defs ship with hints already declared — `ElementMapping`'s `from` and `to` are `Element` fields, so a `record_construct` on that schema gives you two element pickers with no setup.
+Several built-in defs ship with hints already declared — `ElementMapping`'s `from` and `to` are `Element` fields, so a `record_construct` on that schema, or an `array` of `ElementMapping`, gives you element pickers with no setup.
 
 ## record_construct
 

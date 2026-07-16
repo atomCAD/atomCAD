@@ -181,6 +181,83 @@ class APIArrayAtData {
           index == other.index;
 }
 
+/// One stored element of an `array` node, shaped for the element list in
+/// `array_editor.dart`.
+///
+/// Both element shapes surface as the **same** row type `record_construct`'s
+/// editor consumes ([`APILiteralField`]) — so Part A's hints, the tri-state
+/// unset handling, and every type widget apply for free, and the editor never
+/// maps a `DataType` itself. `is_wired` is always false (the `array` node has no
+/// input pins) and `default_value` always `None` (no default layer).
+///
+/// See `doc/design_array_node_and_field_hints.md` Part B.
+class APIArrayElement {
+  /// A **simple** `element_type` yields exactly one row, named
+  /// [`ARRAY_ELEMENT_VALUE_ROW`]; a **record** `element_type` yields one row
+  /// per simple-typed field of the def, in authored order. Which of the two
+  /// it is comes from [`APIArrayNodeData::is_record`] — it is a property of
+  /// the array, not of the element. Empty when `stale`.
+  final List<APILiteralField> fields;
+
+  /// True when the stored literal does not fit `element_type` — a leftover
+  /// from an `element_type` change or a record-def edit. Such an element
+  /// evaluates to a localized error; the editor flags the row and offers a
+  /// reset. Kept, never silently dropped (the stale-literal rule).
+  ///
+  /// Note this flags a **whole-element** shape mismatch. A record element
+  /// whose individual *field* literal is uncoercible reports that field's
+  /// `stored_value` as `None` — visually the same as unset — which is the
+  /// pre-existing `record_construct` behavior this row type shares.
+  final bool stale;
+
+  const APIArrayElement({
+    required this.fields,
+    required this.stale,
+  });
+
+  @override
+  int get hashCode => fields.hashCode ^ stale.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrayElement &&
+          runtimeType == other.runtimeType &&
+          fields == other.fields &&
+          stale == other.stale;
+}
+
+/// The `array` node's editable state: its `element_type` plus one row per
+/// stored element. See `doc/design_array_node_and_field_hints.md` Part B.
+class APIArrayNodeData {
+  final APIDataType elementType;
+
+  /// True when `element_type` is a named record def that resolves in the
+  /// registry — each element then renders from `APIArrayElement::fields`
+  /// rather than `value`.
+  final bool isRecord;
+  final List<APIArrayElement> elements;
+
+  const APIArrayNodeData({
+    required this.elementType,
+    required this.isRecord,
+    required this.elements,
+  });
+
+  @override
+  int get hashCode =>
+      elementType.hashCode ^ isRecord.hashCode ^ elements.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrayNodeData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType &&
+          isRecord == other.isRecord &&
+          elements == other.elements;
+}
+
 class APIAtomComposeDiffData {
   final double tolerance;
   final bool errorOnStale;

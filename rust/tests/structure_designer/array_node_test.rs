@@ -1206,3 +1206,459 @@ fn array_does_not_adapt_to_non_literal_capable_or_from_output_drags() {
         "array has no input pins, so FromOutput must never adapt"
     );
 }
+
+// ============================================================================
+// Phase 4 — element mutations (the node-data layer behind the granular API)
+//
+// The API wrappers themselves are thin (clone → mutate → set_node_network_data
+// _scoped), so per `rust/AGENTS.md` these test the underlying core: the
+// `ArrayData` mutators the wrappers call, the seeding they rely on, and the
+// `StructureDesigner`-level `set_array_element_type` op that carries the
+// structural undo.
+// ============================================================================
+
+fn registry_with_element_mapping() -> NodeTypeRegistry {
+    NodeTypeRegistry::new()
+}
+
+#[test]
+fn array_add_element_seeds_a_simple_type_default() {
+    let registry = registry_with_element_mapping();
+    let mut data = ArrayData {
+        element_type: DataType::Vec3,
+        elements: vec![],
+    };
+    data.insert_element(0, &registry).unwrap();
+
+    // A freshly added element must evaluate immediately, not error until
+    // first edited.
+    assert_eq!(data.elements.len(), 1);
+    let result = eval_array(DataType::Vec3, data.elements.clone());
+    assert_eq!(render_all(&expect_array(result)), vec!["Vec3(0, 0, 0)"]);
+}
+
+#[test]
+fn array_add_element_seeds_matrices_to_identity() {
+    let registry = registry_with_element_mapping();
+    let mut data = ArrayData {
+        element_type: DataType::Mat3,
+        elements: vec![],
+    };
+    data.insert_element(0, &registry).unwrap();
+
+    // Matches the literal panel's own default (`_typeZero`), which is identity
+    // rather than the all-zeros matrix.
+    assert_eq!(
+        data.elements[0],
+        TextValue::Mat3([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    );
+}
+
+#[test]
+fn array_add_element_seeds_required_record_fields_and_leaves_optionals_unset() {
+    let mut designer = setup_designer_with_network("Main");
+    // `Rule = {tag: Optional[String], from: Int}` — one required, one optional.
+    designer
+        .node_type_registry
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "Rule",
+            vec![
+                (
+                    "tag".to_string(),
+                    DataType::Optional(Box::new(DataType::String)),
+                ),
+                ("from".to_string(), DataType::Int),
+            ],
+        ))
+        .expect("add Rule def");
+
+    let rule_type = DataType::Record(RecordType::Named("Rule".to_string()));
+    let mut data = ArrayData {
+        element_type: rule_type.clone(),
+        elements: vec![],
+    };
+    data.insert_element(0, &designer.node_type_registry)
+        .unwrap();
+
+    // Required field seeded (so the element evaluates), optional left unset (so
+    // it emits an explicit None rather than a made-up value).
+    let entries = data.elements[0].as_object().expect("record literal");
+    assert_eq!(entries.len(), 1, "only the required field is seeded");
+    assert_eq!(entries[0], ("from".to_string(), TextValue::Int(0)));
+
+    let node_id = add_array_node(&mut designer, "Main", data, 0.0);
+    let result = evaluate(&designer, "Main", node_id);
+    assert_eq!(
+        render_all(&expect_array(result)),
+        vec!["Record{from: Int(0), tag: None}"],
+        "a seeded element evaluates immediately"
+    );
+}
+
+#[test]
+fn array_insert_remove_and_move_elements_keep_order() {
+    let registry = registry_with_element_mapping();
+    let mut data = ArrayData {
+        element_type: DataType::Int,
+        elements: vec![TextValue::Int(1), TextValue::Int(2), TextValue::Int(3)],
+    };
+
+    // Insert seeds at an interior index.
+    data.insert_element(1, &registry).unwrap();
+    assert_eq!(
+        data.elements,
+        vec![
+            TextValue::Int(1),
+            TextValue::Int(0),
+            TextValue::Int(2),
+            TextValue::Int(3)
+        ]
+    );
+
+    data.remove_element(1).unwrap();
+    assert_eq!(
+        data.elements,
+        vec![TextValue::Int(1), TextValue::Int(2), TextValue::Int(3)]
+    );
+
+    // `to` is the index in the resulting list: move-down of [0] lands at 1.
+    data.move_element(0, 1).unwrap();
+    assert_eq!(
+        data.elements,
+        vec![TextValue::Int(2), TextValue::Int(1), TextValue::Int(3)]
+    );
+
+    // Move to the end and back to the front.
+    data.move_element(0, 2).unwrap();
+    assert_eq!(
+        data.elements,
+        vec![TextValue::Int(1), TextValue::Int(3), TextValue::Int(2)]
+    );
+    data.move_element(2, 0).unwrap();
+    assert_eq!(
+        data.elements,
+        vec![TextValue::Int(2), TextValue::Int(1), TextValue::Int(3)]
+    );
+}
+
+#[test]
+fn array_element_mutators_reject_out_of_range_indices() {
+    let registry = registry_with_element_mapping();
+    let mut data = ArrayData {
+        element_type: DataType::Int,
+        elements: vec![TextValue::Int(1)],
+    };
+
+    // `insert` accepts `len` (append) but not beyond.
+    assert!(data.insert_element(1, &registry).is_ok());
+    assert!(
+        data.insert_element(3, &registry)
+            .unwrap_err()
+            .contains("out of range")
+    );
+    assert!(data.remove_element(2).unwrap_err().contains("out of range"));
+    assert!(
+        data.move_element(0, 5)
+            .unwrap_err()
+            .contains("out of range")
+    );
+    assert!(
+        data.set_element_literal(9, TextValue::Int(0))
+            .unwrap_err()
+            .contains("out of range")
+    );
+    // A rejection mutates nothing.
+    assert_eq!(data.elements, vec![TextValue::Int(1), TextValue::Int(0)]);
+}
+
+#[test]
+fn array_set_element_literal_stores_raw_without_coercing() {
+    let mut data = ArrayData {
+        element_type: DataType::Float,
+        elements: vec![TextValue::Float(1.0)],
+    };
+    // Stored verbatim — eval owns coercion, so nothing is rewritten here.
+    data.set_element_literal(0, TextValue::Int(3)).unwrap();
+    assert_eq!(data.elements[0], TextValue::Int(3));
+
+    let result = eval_array(DataType::Float, data.elements.clone());
+    assert_eq!(render_all(&expect_array(result)), vec!["Float(3)"]);
+}
+
+#[test]
+fn array_record_element_field_literals_set_and_clear() {
+    let mut designer = setup_designer_with_network("Main");
+    let mut data = ArrayData {
+        element_type: element_mapping_type(),
+        elements: vec![],
+    };
+    data.insert_element(0, &designer.node_type_registry)
+        .unwrap();
+
+    data.set_element_field_literal(0, "from", TextValue::Int(6))
+        .unwrap();
+    data.set_element_field_literal(0, "to", TextValue::Int(7))
+        .unwrap();
+    // Setting an existing field replaces rather than duplicating its entry.
+    data.set_element_field_literal(0, "from", TextValue::Int(14))
+        .unwrap();
+    assert_eq!(data.elements[0].as_object().unwrap().len(), 2);
+
+    let node_id = add_array_node(&mut designer, "Main", data.clone(), 0.0);
+    let result = evaluate(&designer, "Main", node_id);
+    assert_eq!(
+        render_all(&expect_array(result)),
+        vec!["Record{from: Int(14), to: Int(7)}"]
+    );
+
+    // Clearing a *required* field unsets it — surfaced as a localized error,
+    // never a silently substituted default.
+    data.clear_element_field_literal(0, "to").unwrap();
+    let error = expect_error(eval_array(element_mapping_type(), data.elements.clone()));
+    assert!(error.contains("array[0].to is unset"), "got: {}", error);
+}
+
+#[test]
+fn array_field_mutators_reject_a_non_record_element() {
+    let mut data = ArrayData {
+        element_type: element_mapping_type(),
+        // A scalar left behind by an element_type change.
+        elements: vec![TextValue::Int(5)],
+    };
+    // The panel renders such an element as a stale row offering a reset, so a
+    // field edit never reaches here — reject rather than silently discard the
+    // stored literal.
+    assert!(
+        data.set_element_field_literal(0, "from", TextValue::Int(6))
+            .unwrap_err()
+            .contains("not a record literal")
+    );
+    assert!(
+        data.clear_element_field_literal(0, "from")
+            .unwrap_err()
+            .contains("not a record literal")
+    );
+    assert_eq!(data.elements[0], TextValue::Int(5), "nothing was mutated");
+}
+
+#[test]
+fn array_reset_element_reseeds_a_stale_literal() {
+    let registry = registry_with_element_mapping();
+    let mut data = ArrayData {
+        element_type: element_mapping_type(),
+        // Stale: a scalar under a record element_type.
+        elements: vec![TextValue::Int(5)],
+    };
+    data.reset_element(0, &registry).unwrap();
+
+    // Back to a freshly-seeded record element: required fields present.
+    let entries = data.elements[0].as_object().expect("record literal");
+    assert_eq!(
+        entries,
+        &vec![
+            ("from".to_string(), TextValue::Int(0)),
+            ("to".to_string(), TextValue::Int(0)),
+        ]
+    );
+    let result = eval_array(element_mapping_type(), data.elements.clone());
+    assert_eq!(
+        render_all(&expect_array(result)),
+        vec!["Record{from: Int(0), to: Int(0)}"]
+    );
+}
+
+// ============================================================================
+// Phase 4 — `set_array_element_type` (Decision 3: structural undo)
+// ============================================================================
+
+/// Wire an `array` node's output into `array_at.array` (an `Array[Int]` pin),
+/// returning `(designer, array_id, array_at_id)`.
+fn designer_with_array_feeding_array_at() -> (StructureDesigner, u64, u64) {
+    let mut designer = setup_designer_with_network("Main");
+    // The default `ArrayData` is already `Array[Int]`, matching `array_at`'s
+    // own default element type, so the wire is accepted as-is.
+    let array_id = designer.add_node("array", DVec2::new(0.0, 0.0));
+    let array_at_id = designer.add_node("array_at", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(array_id, 0, array_at_id, 0);
+    assert!(
+        array_at_is_wired(&designer, array_at_id),
+        "Array[Int] should wire into array_at.array"
+    );
+    (designer, array_id, array_at_id)
+}
+
+fn array_at_is_wired(designer: &StructureDesigner, array_at_id: u64) -> bool {
+    !designer
+        .node_type_registry
+        .node_networks
+        .get("Main")
+        .unwrap()
+        .nodes
+        .get(&array_at_id)
+        .unwrap()
+        .arguments[0]
+        .incoming_wires
+        .is_empty()
+}
+
+/// The network's blocking-validity flag plus its error texts — the state a
+/// retype invalidates and undo must restore.
+fn validity(designer: &StructureDesigner) -> (bool, Vec<String>) {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get("Main")
+        .unwrap();
+    (
+        network.valid,
+        network
+            .validation_errors
+            .iter()
+            .map(|e| e.error_text.clone())
+            .collect(),
+    )
+}
+
+fn element_type_of(designer: &StructureDesigner, array_id: u64) -> DataType {
+    designer
+        .node_type_registry
+        .node_networks
+        .get("Main")
+        .unwrap()
+        .nodes
+        .get(&array_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ArrayData>()
+        .unwrap()
+        .element_type
+        .clone()
+}
+
+#[test]
+fn array_set_element_type_rejects_non_literal_capable_types() {
+    let (mut designer, array_id, _) = designer_with_array_feeding_array_at();
+
+    for rejected in [
+        DataType::Molecule,
+        DataType::Unit,
+        DataType::Array(Box::new(DataType::Int)),
+        DataType::Iterator(Box::new(DataType::Int)),
+        DataType::Record(RecordType::Anonymous(vec![(
+            "x".to_string(),
+            DataType::Int,
+        )])),
+    ] {
+        let error = designer
+            .set_array_element_type(&[], array_id, rejected.clone())
+            .unwrap_err();
+        assert!(
+            error.contains("not literal-capable"),
+            "{} should be rejected, got: {}",
+            rejected,
+            error
+        );
+    }
+    // Every rejection left the node untouched.
+    assert_eq!(element_type_of(&designer, array_id), DataType::Int);
+}
+
+#[test]
+fn array_set_element_type_preserves_stale_elements() {
+    let mut designer = setup_designer_with_network("Main");
+    let array_id = designer.add_node("array", DVec2::new(0.0, 0.0));
+    designer.set_node_network_data_scoped(
+        &[],
+        array_id,
+        Box::new(ArrayData {
+            element_type: DataType::Int,
+            elements: vec![TextValue::Int(1), TextValue::Int(2)],
+        }),
+    );
+
+    designer
+        .set_array_element_type(&[], array_id, DataType::Vec3)
+        .unwrap();
+
+    // No silent data loss: the literals survive the retype verbatim and the
+    // mismatch is left for eval to localize.
+    let data_elements = designer
+        .node_type_registry
+        .node_networks
+        .get("Main")
+        .unwrap()
+        .nodes
+        .get(&array_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ArrayData>()
+        .unwrap()
+        .elements
+        .clone();
+    assert_eq!(data_elements, vec![TextValue::Int(1), TextValue::Int(2)]);
+}
+
+#[test]
+fn array_set_element_type_is_a_no_op_for_the_same_type() {
+    let (mut designer, array_id, _) = designer_with_array_feeding_array_at();
+    designer
+        .set_array_element_type(&[], array_id, DataType::Int)
+        .unwrap();
+    // A no-op must push no command — an empty one would truncate the redo tail.
+    // (`undo()` itself still succeeds here: `add_node` / `connect_nodes` left
+    // their own commands on the stack, which is why this asserts on the
+    // description rather than on `undo()` returning false.)
+    assert_ne!(
+        designer.undo_stack.undo_description(),
+        Some("Change array element type"),
+        "a no-op element_type set must push no undo command"
+    );
+}
+
+/// The Decision 3 regression test.
+///
+/// A retype makes every downstream wire's type check fail. Note what actually
+/// happens: the repair pass does **not** drop those wires (it rebuilds a node's
+/// own `arguments`, and `array` has no input pins) — instead the validator
+/// flags a *blocking* "Data type mismatch" and the whole network stops
+/// evaluating. So the network-wide state a retype changes is the validation
+/// result, and only the structural-edit path re-validates and full-refreshes
+/// (`set_node_network_data_scoped` deliberately does neither). A plain
+/// node-data undo would restore `element_type` while leaving the network
+/// stuck invalid on a stale error.
+#[test]
+fn array_set_element_type_undo_restores_network_validity() {
+    let (mut designer, array_id, array_at_id) = designer_with_array_feeding_array_at();
+    assert_eq!(validity(&designer), (true, vec![]));
+
+    designer
+        .set_array_element_type(&[], array_id, DataType::String)
+        .unwrap();
+    assert_eq!(element_type_of(&designer, array_id), DataType::String);
+    let (valid, errors) = validity(&designer);
+    assert!(
+        !valid,
+        "Array[String] cannot feed array_at's Array[Int] pin"
+    );
+    assert_eq!(
+        errors,
+        vec!["Data type mismatch: input expects Array(Int), but source outputs Array(String)"]
+    );
+    // The wire itself survives — the user retypes or rewires to fix it; nothing
+    // is silently disconnected.
+    assert!(array_at_is_wired(&designer, array_at_id));
+
+    assert!(designer.undo(), "the retype must be undoable");
+    assert_eq!(element_type_of(&designer, array_id), DataType::Int);
+    assert_eq!(
+        validity(&designer),
+        (true, vec![]),
+        "undo must re-validate, not leave the stale mismatch error behind"
+    );
+
+    assert!(designer.redo(), "the retype must be redoable");
+    assert_eq!(element_type_of(&designer, array_id), DataType::String);
+    assert!(!validity(&designer).0);
+}

@@ -39,6 +39,7 @@ import 'package:flutter_cad/structure_designer/node_data/map_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/zip_with_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/switch_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/array_at_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/array_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/if_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
@@ -612,6 +613,13 @@ class NodeDataWidget extends StatelessWidget {
           data: collectData,
           model: model,
         );
+      case 'array':
+        return ArrayEditor(
+          nodeId: selectedNode.id,
+          data: model.getArrayNodeData(selectedNode.id),
+          model: model,
+        );
+
       case 'array_at':
         final arrayAtData = getArrayAtData(
           scopePath: scopePath,

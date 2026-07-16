@@ -2,6 +2,8 @@ use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::APIApplyData;
 use super::structure_designer_api_types::APIArgumentKind;
 use super::structure_designer_api_types::APIArrayAtData;
+use super::structure_designer_api_types::APIArrayElement;
+use super::structure_designer_api_types::APIArrayNodeData;
 use super::structure_designer_api_types::APIAtomExportFormat;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
@@ -57,6 +59,7 @@ use super::structure_designer_api_types::APITextEditResult;
 use super::structure_designer_api_types::APITextError;
 use super::structure_designer_api_types::APIViewportPickResult;
 use super::structure_designer_api_types::APIZipWithData;
+use super::structure_designer_api_types::ARRAY_ELEMENT_VALUE_ROW;
 use super::structure_designer_api_types::OutputPinView;
 use super::structure_designer_api_types::ZoneView;
 use super::structure_designer_preferences::StructureDesignerPreferences;
@@ -141,6 +144,7 @@ use crate::structure_designer::layout;
 use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::nodes::apply::ApplyData;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
+use crate::structure_designer::nodes::array::ArrayData;
 use crate::structure_designer::nodes::array_at::ArrayAtData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
@@ -6238,6 +6242,386 @@ pub fn clear_record_construct_literal(scope_path: Vec<u64>, node_id: u64, field_
                 .set_node_network_data_scoped(&scope_path, node_id, Box::new(data));
             refresh_structure_designer_auto(cad_instance);
         });
+    }
+}
+
+// ============================================================================
+// `array` node — literal element authoring
+// (`doc/design_array_node_and_field_hints.md` Part B, §Node-data API)
+//
+// The `array` node has **no input pins**, so every element edit below is a pure
+// node-data mutation: clone the data, mutate, hand it to
+// `set_node_network_data_scoped`, which supplies the `SetNodeDataCommand` undo
+// and the refresh for free — exactly the `record_construct` literal path. The
+// one exception is `set_array_element_type`, which retypes the *output* pin and
+// so delegates to the `StructureDesigner` op carrying the whole-network
+// snapshot undo (Decision 3).
+// ============================================================================
+
+/// Shared body of the element mutators: resolve `node_id` as an `array` node in
+/// `scope_path`, run `mutate` on a clone of its data, and commit through
+/// `set_node_network_data_scoped` (undo + refresh included). A rejection from
+/// `mutate` (an out-of-range index from a stale panel, a field edit on a
+/// non-record element) commits nothing and is returned to the caller.
+unsafe fn with_array_data<F>(scope_path: &[u64], node_id: u64, mutate: F) -> APIResult
+where
+    F: FnOnce(
+        &mut ArrayData,
+        &crate::structure_designer::node_type_registry::NodeTypeRegistry,
+    ) -> Result<(), String>,
+{
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let existing = cad_instance
+                    .structure_designer
+                    .get_scope_network(scope_path)
+                    .and_then(|network| network.nodes.get(&node_id))
+                    .and_then(|node| node.data.as_any_ref().downcast_ref::<ArrayData>())
+                    .cloned();
+                let Some(mut data) = existing else {
+                    return APIResult {
+                        success: false,
+                        error_message: "Node is not an array".to_string(),
+                    };
+                };
+                if let Err(error_message) = mutate(
+                    &mut data,
+                    &cad_instance.structure_designer.node_type_registry,
+                ) {
+                    return APIResult {
+                        success: false,
+                        error_message,
+                    };
+                }
+                cad_instance
+                    .structure_designer
+                    .set_node_network_data_scoped(scope_path, node_id, Box::new(data));
+                refresh_structure_designer_auto(cad_instance);
+                APIResult {
+                    success: true,
+                    error_message: String::new(),
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// The `element_type`s an `array` node accepts, as the editor's picker list —
+/// the simple literal types plus every named record def (user or built-in)
+/// whose fields are all simple. Rust is the single source of truth
+/// (`is_literal_capable`), so a new literal-capable type surfaces in the picker
+/// with no Flutter edit — the same convention as `get_atom_export_formats`.
+///
+/// Pure read; safe to call on every panel rebuild.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_array_element_type_options() -> Vec<APIDataType> {
+    use crate::structure_designer::nodes::array::is_literal_capable;
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let registry = &cad_instance.structure_designer.node_type_registry;
+                let mut options: Vec<DataType> = vec![
+                    DataType::Bool,
+                    DataType::Int,
+                    DataType::Float,
+                    DataType::String,
+                    DataType::IVec2,
+                    DataType::IVec3,
+                    DataType::Vec2,
+                    DataType::Vec3,
+                    DataType::IMat3,
+                    DataType::Mat3,
+                ];
+                // Named record defs, filtered by the same predicate the setters
+                // enforce, so the picker can never offer a rejected type.
+                let mut record_names: Vec<String> = registry
+                    .record_type_defs
+                    .keys()
+                    .chain(registry.built_in_record_type_defs.keys())
+                    .cloned()
+                    .collect();
+                record_names.sort();
+                for name in record_names {
+                    let data_type = DataType::Record(RecordType::Named(name));
+                    if is_literal_capable(&data_type, registry) {
+                        options.push(data_type);
+                    }
+                }
+                options.iter().map(data_type_to_api_data_type).collect()
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// The `array` node's `element_type` plus one row per stored element. Returns
+/// `None` if `node_id` is not an `array` node.
+///
+/// Pure read — `&self`, no evaluation. Safe to call on every panel rebuild.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_array_node_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayNodeData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let sd = &cad_instance.structure_designer;
+                let network = sd.get_scope_network(&scope_path)?;
+                let node = network.nodes.get(&node_id)?;
+                let data = node.data.as_any_ref().downcast_ref::<ArrayData>()?;
+
+                // A record `element_type` whose def is missing from the registry
+                // (a deleted def) renders as the simple branch, where every
+                // element reports stale — the honest state, and the reset action
+                // stays reachable.
+                let def = match &data.element_type {
+                    DataType::Record(RecordType::Named(schema)) => {
+                        sd.node_type_registry.lookup_record_type_def(schema)
+                    }
+                    _ => None,
+                };
+
+                let elements = data
+                    .elements
+                    .iter()
+                    .map(|element| match def {
+                        Some(def) => match element.as_object() {
+                            Some(entries) => APIArrayElement {
+                                fields: record_element_fields(def, entries),
+                                stale: false,
+                            },
+                            // Not a record literal at all — an element_type
+                            // change left a scalar behind.
+                            None => APIArrayElement {
+                                fields: Vec::new(),
+                                stale: true,
+                            },
+                        },
+                        None => simple_element_row(element, &data.element_type),
+                    })
+                    .collect();
+
+                Some(APIArrayNodeData {
+                    element_type: data_type_to_api_data_type(&data.element_type),
+                    is_record: def.is_some(),
+                    elements,
+                })
+            },
+            None,
+        )
+    }
+}
+
+/// Build the single row of a simple-typed element. A stored literal that no
+/// longer coerces to `element_type` (an `element_type` change left it behind)
+/// yields no row and flags the element stale, so the editor shows the warning +
+/// reset affordance instead of a misleading zero-valued widget.
+fn simple_element_row(element: &TextValue, element_type: &DataType) -> APIArrayElement {
+    let Some(simple_type) = data_type_to_simple_param_type(element_type) else {
+        // `element_type` is not simple and not a resolvable record def — e.g. a
+        // record def that was deleted out from under the node.
+        return APIArrayElement {
+            fields: Vec::new(),
+            stale: true,
+        };
+    };
+    let Some(stored_value) = text_value_to_api_literal(element, element_type) else {
+        return APIArrayElement {
+            fields: Vec::new(),
+            stale: true,
+        };
+    };
+    APIArrayElement {
+        fields: vec![APILiteralField {
+            name: ARRAY_ELEMENT_VALUE_ROW.to_string(),
+            data_type: simple_type,
+            stored_value: Some(stored_value),
+            // No default layer, and no input pins to wire.
+            default_value: None,
+            is_wired: false,
+            // Hints live on record-def fields; a bare element has no def.
+            hint: None,
+        }],
+        stale: false,
+    }
+}
+
+/// Build the per-field rows of one record element. Mirrors
+/// `get_record_construct_fields` field-for-field — same `Optional` peeling, same
+/// hint plumbing — differing only in reading the element's own entries instead
+/// of a `literal_values` map, and in `is_wired` being unconditionally false
+/// (the `array` node has no input pins).
+fn record_element_fields(
+    def: &crate::structure_designer::node_type_registry::RecordTypeDef,
+    entries: &[(String, TextValue)],
+) -> Vec<APILiteralField> {
+    let mut fields = Vec::new();
+    for field in &def.fields {
+        // An `Optional[T]` field is edited as a plain `T`; the tri-state
+        // "unset" is the absent entry. See `doc/design_optional_type.md` §5.
+        let value_type = field.data_type.record_field_pin_type();
+        let Some(simple_type) = data_type_to_simple_param_type(&value_type) else {
+            continue;
+        };
+        let stored_value = entries
+            .iter()
+            .find(|(key, _)| *key == field.name)
+            .and_then(|(_, value)| text_value_to_api_literal(value, &value_type));
+        fields.push(APILiteralField {
+            name: field.name.clone(),
+            data_type: simple_type,
+            stored_value,
+            // No default layer for array element fields (as record_construct).
+            default_value: None,
+            // The `array` node has no input pins — a field is never wired.
+            is_wired: false,
+            hint: field.hint.as_ref().map(field_editor_hint_to_api),
+        });
+    }
+    fields
+}
+
+/// Retype the array's elements (and hence its `Array[T]` output pin). Delegates
+/// to `StructureDesigner::set_array_element_type`, which validates
+/// literal-capability, repairs the wires the retype invalidates, and pushes the
+/// whole-network-snapshot undo — the API layer adds no logic of its own.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_element_type(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    element_type: APIDataType,
+) -> APIResult {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let parsed = match api_data_type_to_data_type(&element_type) {
+                    Ok(data_type) => data_type,
+                    Err(e) => {
+                        return APIResult {
+                            success: false,
+                            error_message: format!("Invalid element type: {}", e),
+                        };
+                    }
+                };
+                let result = cad_instance.structure_designer.set_array_element_type(
+                    &scope_path,
+                    node_id,
+                    parsed,
+                );
+                refresh_structure_designer_auto(cad_instance);
+                match result {
+                    Ok(()) => APIResult {
+                        success: true,
+                        error_message: String::new(),
+                    },
+                    Err(error_message) => APIResult {
+                        success: false,
+                        error_message,
+                    },
+                }
+            },
+            APIResult {
+                success: false,
+                error_message: "CAD instance not available".to_string(),
+            },
+        )
+    }
+}
+
+/// Insert a freshly seeded element at `index` (`index == len` appends), so it
+/// evaluates immediately instead of erroring until first edited.
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_array_element(scope_path: Vec<u64>, node_id: u64, index: u32) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, registry| {
+            data.insert_element(index as usize, registry)
+        })
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn remove_array_element(scope_path: Vec<u64>, node_id: u64, index: u32) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, _| {
+            data.remove_element(index as usize)
+        })
+    }
+}
+
+/// Move the element at `from` to `to`, where `to` is its index in the
+/// **resulting** list (the editor's move-up / move-down affordances).
+#[flutter_rust_bridge::frb(sync)]
+pub fn move_array_element(scope_path: Vec<u64>, node_id: u64, from: u32, to: u32) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, _| {
+            data.move_element(from as usize, to as usize)
+        })
+    }
+}
+
+/// Set one whole element's literal (a simple `element_type`).
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_element_literal(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    index: u32,
+    value: APILiteralValue,
+) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, _| {
+            data.set_element_literal(index as usize, api_literal_to_text_value(value))
+        })
+    }
+}
+
+/// Reset one element to its seeded default — the action a stale row offers.
+/// For a record element this re-seeds the required fields and returns every
+/// `Optional` to unset.
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_array_element_literal(scope_path: Vec<u64>, node_id: u64, index: u32) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, registry| {
+            data.reset_element(index as usize, registry)
+        })
+    }
+}
+
+/// Set one field of a record element.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_element_field_literal(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    index: u32,
+    field_name: String,
+    value: APILiteralValue,
+) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, _| {
+            data.set_element_field_literal(
+                index as usize,
+                &field_name,
+                api_literal_to_text_value(value),
+            )
+        })
+    }
+}
+
+/// Unset one field of a record element. For an `Optional` field that means
+/// "inherit"; a required field then reports `array[i].field is unset` at eval.
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_array_element_field_literal(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    index: u32,
+    field_name: String,
+) -> APIResult {
+    unsafe {
+        with_array_data(&scope_path, node_id, |data, _| {
+            data.clear_element_field_literal(index as usize, &field_name)
+        })
     }
 }
 
