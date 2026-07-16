@@ -152,6 +152,52 @@ fn alpha_subset_routes_only_those_atoms() {
     assert_eq!(atom_quads(&m.atom) + transparent_quads(&m.transparent), 3);
 }
 
+/// A fully transparent atom (alpha 0 — what `xray`'s `fade_depth` ramp produces
+/// below its fade depth) is skipped entirely rather than tessellated into an
+/// invisible quad that still costs a slot in every back-to-front re-sort.
+#[test]
+fn zero_alpha_atom_is_not_tessellated() {
+    let mut s = AtomicStructure::new();
+    let faded = s.add_atom(6, DVec3::new(-1.0, 0.0, 0.0));
+    s.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    s.set_atom_alpha(faded, 0.0);
+
+    let m = tessellate(&s, &ball_and_stick_prefs());
+
+    assert_eq!(atom_quads(&m.atom), 1, "only the opaque atom is drawn");
+    assert_eq!(
+        transparent_quads(&m.transparent),
+        0,
+        "the fully transparent atom contributes no geometry"
+    );
+}
+
+/// A bond is dropped as soon as its min-alpha endpoint is fully transparent —
+/// otherwise a faded-out atom would leave an invisible bond quad behind.
+#[test]
+fn zero_alpha_endpoint_drops_the_bond() {
+    let mut s = AtomicStructure::new();
+    let faded = s.add_atom(6, DVec3::new(-1.0, 0.0, 0.0));
+    let visible = s.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    s.add_bond(faded, visible, BOND_SINGLE);
+    s.set_atom_alpha(faded, 0.0);
+    s.set_atom_alpha(visible, 0.6);
+
+    let m = tessellate(&s, &ball_and_stick_prefs());
+
+    assert_eq!(
+        transparent_quads_of_kind(&m.transparent, 0),
+        1,
+        "only the visible atom survives"
+    );
+    assert_eq!(
+        transparent_quads_of_kind(&m.transparent, 1),
+        0,
+        "bond to a fully faded atom is dropped"
+    );
+    assert_eq!(bond_quads(&m.bond), 0, "and it is not opaque either");
+}
+
 // ============================================================================
 // Bond routing — min-alpha rule
 // ============================================================================

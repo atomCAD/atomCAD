@@ -17,7 +17,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     BlueprintData, CrystalData, MoleculeData, NetworkResult,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
-use rust_lib_flutter_cad::structure_designer::nodes::xray::{XrayData, depth_ramped_alpha};
+use rust_lib_flutter_cad::structure_designer::nodes::xray::{XrayData, depth_faded_alpha};
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
 use std::collections::HashMap;
@@ -88,14 +88,14 @@ fn set_alpha_property(
     set_float_property(designer, network_name, node_id, "alpha", value);
 }
 
-/// Sets the stored `opaque_depth` property (Å) on an xray node.
-fn set_opaque_depth_property(
+/// Sets the stored `fade_depth` property (Å) on an xray node.
+fn set_fade_depth_property(
     designer: &mut StructureDesigner,
     network_name: &str,
     node_id: u64,
     value: f64,
 ) {
-    set_float_property(designer, network_name, node_id, "opaque_depth", value);
+    set_float_property(designer, network_name, node_id, "fade_depth", value);
 }
 
 fn set_float_property(
@@ -464,7 +464,7 @@ fn xray_set_data_is_undoable() {
         xray_id,
         Box::new(XrayData {
             alpha: 0.25,
-            opaque_depth: 0.0,
+            fade_depth: 0.0,
         }),
     );
     let result = evaluate_to_atomic(&designer, net, xray_id);
@@ -482,7 +482,7 @@ fn xray_set_data_is_undoable() {
 }
 
 // ============================================================================
-// Depth falloff (`opaque_depth`) — see `doc/design_xray_node.md`
+// Depth falloff (`fade_depth`) — see `doc/design_xray_node.md`
 // ============================================================================
 
 /// A line of carbons along +x, each stamped with an `in_crystal_depth` (Å) —
@@ -496,49 +496,50 @@ fn carbons_with_depths(entries: &[(f64, f32)]) -> AtomicStructure {
     s
 }
 
-/// The pure ramp: non-positive `opaque_depth` is the "off" switch, and the
-/// ramp both starts exactly at `surface_alpha` and *reaches* 1.0 (the property
-/// the opaque-core occlusion relies on).
+/// The pure ramp: non-positive `fade_depth` is the "off" switch, and the ramp
+/// starts exactly at `surface_alpha` and *reaches* 0 — the property that lets
+/// atoms go fully invisible before the depth cull would drop them.
 #[test]
-fn depth_ramped_alpha_endpoints_and_disabled() {
+fn depth_faded_alpha_endpoints_and_disabled() {
     // Disabled (0 and negative) → uniform surface alpha at any depth.
-    assert_eq!(depth_ramped_alpha(0.2, 0.0, 0.0), 0.2);
-    assert_eq!(depth_ramped_alpha(0.2, 0.0, 99.0), 0.2);
-    assert_eq!(depth_ramped_alpha(0.2, -1.0, 99.0), 0.2);
+    assert_eq!(depth_faded_alpha(0.8, 0.0, 0.0), 0.8);
+    assert_eq!(depth_faded_alpha(0.8, 0.0, 99.0), 0.8);
+    assert_eq!(depth_faded_alpha(0.8, -1.0, 99.0), 0.8);
 
     // Non-finite depths fold into "off" rather than poisoning the alpha — a
-    // NaN would otherwise flow through the lerp into the stored value.
-    assert_eq!(depth_ramped_alpha(0.2, f64::NAN, 99.0), 0.2);
-    assert_eq!(depth_ramped_alpha(0.2, f64::INFINITY, 99.0), 0.2);
+    // NaN would otherwise flow through the ramp into the stored value.
+    assert_eq!(depth_faded_alpha(0.8, f64::NAN, 99.0), 0.8);
+    assert_eq!(depth_faded_alpha(0.8, f64::INFINITY, 99.0), 0.8);
 
-    // Enabled: surface → surface_alpha, at//beyond opaque_depth → 1.0.
-    assert!((depth_ramped_alpha(0.2, 4.0, 0.0) - 0.2).abs() < 1e-6);
-    assert!((depth_ramped_alpha(0.2, 4.0, 4.0) - 1.0).abs() < 1e-6);
-    assert!((depth_ramped_alpha(0.2, 4.0, 40.0) - 1.0).abs() < 1e-6);
+    // Enabled: surface → surface_alpha, at//beyond fade_depth → 0.
+    assert!((depth_faded_alpha(0.8, 4.0, 0.0) - 0.8).abs() < 1e-6);
+    assert_eq!(depth_faded_alpha(0.8, 4.0, 4.0), 0.0);
+    assert_eq!(depth_faded_alpha(0.8, 4.0, 40.0), 0.0);
 }
 
-/// The ramp is monotonically non-decreasing in depth and stays within
-/// `[surface_alpha, 1.0]` — no overshoot from the smoothstep.
+/// The ramp is monotonically non-increasing in depth and stays within
+/// `[0, surface_alpha]` — no overshoot from the smoothstep, and never more
+/// opaque than the surface.
 #[test]
-fn depth_ramped_alpha_is_monotonic() {
-    let mut prev = depth_ramped_alpha(0.1, 5.0, 0.0);
+fn depth_faded_alpha_is_monotonic() {
+    let mut prev = depth_faded_alpha(0.9, 5.0, 0.0);
     for step in 1..=50 {
         let depth = step as f32 * 0.2;
-        let a = depth_ramped_alpha(0.1, 5.0, depth);
-        assert!(a >= prev - 1e-6, "alpha decreased at depth {depth}");
+        let a = depth_faded_alpha(0.9, 5.0, depth);
+        assert!(a <= prev + 1e-6, "alpha increased at depth {depth}");
         assert!(
-            (0.1 - 1e-6..=1.0 + 1e-6).contains(&a),
+            (-1e-6..=0.9 + 1e-6).contains(&a),
             "alpha {a} out of range at depth {depth}"
         );
         prev = a;
     }
 }
 
-/// End-to-end: with `opaque_depth` set, surface atoms keep the surface alpha
-/// and deep atoms come out fully opaque — the artifact fix. Atoms at/past the
-/// depth have their alpha entry removed, so `get_atom_alpha` reports 1.0.
+/// End-to-end: with `fade_depth` set, surface atoms keep the surface alpha and
+/// deep atoms fade out to fully transparent — so they stop stacking up into the
+/// fog that blocks the view into a thick block.
 #[test]
-fn xray_opaque_depth_ramps_alpha_with_depth() {
+fn xray_fade_depth_ramps_alpha_with_depth() {
     let net = "test";
     let mut designer = setup_designer_with_network(net);
     let value_id = add_value_node(
@@ -548,38 +549,42 @@ fn xray_opaque_depth_ramps_alpha_with_depth() {
         molecule_value(carbons_with_depths(&[
             (0.0, 0.0),  // surface
             (1.0, 2.0),  // halfway
-            (2.0, 4.0),  // at opaque_depth
+            (2.0, 4.0),  // at fade_depth
             (3.0, 10.0), // deep bulk
         ])),
     );
     let xray_id = add_xray(&mut designer, DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, xray_id, 0);
-    set_alpha_property(&mut designer, net, xray_id, 0.2);
-    set_opaque_depth_property(&mut designer, net, xray_id, 4.0);
+    set_alpha_property(&mut designer, net, xray_id, 0.8);
+    set_fade_depth_property(&mut designer, net, xray_id, 4.0);
 
     let result = evaluate_to_atomic(&designer, net, xray_id);
     assert!(
-        (alpha_at(&result, 0.0) - 0.2).abs() < 1e-6,
-        "surface atom keeps the surface alpha"
+        (alpha_at(&result, 0.0) - 0.8).abs() < 1e-6,
+        "surface atom keeps the surface alpha (most opaque)"
     );
     let mid = alpha_at(&result, 1.0);
     assert!(
-        mid > 0.2 && mid < 1.0,
-        "halfway atom is partially opaque, got {mid}"
+        mid > 0.0 && mid < 0.8,
+        "halfway atom is partially faded, got {mid}"
     );
     assert_eq!(
         alpha_at(&result, 2.0),
-        1.0,
-        "atom at opaque_depth is opaque"
+        0.0,
+        "atom at fade_depth is fully transparent"
     );
-    assert_eq!(alpha_at(&result, 3.0), 1.0, "bulk atom is opaque");
+    assert_eq!(
+        alpha_at(&result, 3.0),
+        0.0,
+        "bulk atom is fully transparent"
+    );
 }
 
-/// The stored `opaque_depth` defaults to 0, so an xray node that never touches
-/// it behaves exactly as before the ramp existed (uniform alpha regardless of
+/// The stored `fade_depth` defaults to 0, so an xray node that never touches it
+/// behaves exactly as before the ramp existed (uniform alpha regardless of
 /// depth). This is what makes pre-ramp `.cnnd` files render unchanged.
 #[test]
-fn xray_default_opaque_depth_is_uniform() {
+fn xray_default_fade_depth_is_uniform() {
     let net = "test";
     let mut designer = setup_designer_with_network(net);
     let value_id = add_value_node(
@@ -597,10 +602,10 @@ fn xray_default_opaque_depth_is_uniform() {
     assert_eq!(alpha_at(&result, 1.0), 0.3, "deep atom gets the same alpha");
 }
 
-/// A wired `opaque_depth` pin (pin 3 — appended after `region`) overrides the
+/// A wired `fade_depth` pin (pin 3 — appended after `region`) overrides the
 /// stored property.
 #[test]
-fn xray_wired_opaque_depth_overrides_property() {
+fn xray_wired_fade_depth_overrides_property() {
     let net = "test";
     let mut designer = setup_designer_with_network(net);
     let value_id = add_value_node(
@@ -611,9 +616,9 @@ fn xray_wired_opaque_depth_overrides_property() {
     );
     let xray_id = add_xray(&mut designer, DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, xray_id, 0);
-    set_alpha_property(&mut designer, net, xray_id, 0.2);
-    // Stored ramp would leave this atom opaque (depth 3 ≥ 1.0)...
-    set_opaque_depth_property(&mut designer, net, xray_id, 1.0);
+    set_alpha_property(&mut designer, net, xray_id, 0.8);
+    // Stored ramp would leave this atom fully faded out (depth 3 ≥ 1.0)...
+    set_fade_depth_property(&mut designer, net, xray_id, 1.0);
     // ...but the wired 100 Å ramp barely moves it off the surface alpha.
     let depth_id = add_value_node(
         &mut designer,
@@ -626,34 +631,35 @@ fn xray_wired_opaque_depth_overrides_property() {
     let result = evaluate_to_atomic(&designer, net, xray_id);
     let a = alpha_at(&result, 0.0);
     assert!(
-        a > 0.2 && a < 0.3,
+        a > 0.7 && a < 0.8,
         "wired 100 Å ramp wins over stored 1 Å, got {a}"
     );
 }
 
 /// The ramp composes with region gating: out-of-region atoms stay fully opaque
-/// no matter how shallow they are.
+/// no matter how deep they are.
 #[test]
-fn xray_opaque_depth_respects_region() {
+fn xray_fade_depth_respects_region() {
     let net = "test";
     let mut designer = setup_designer_with_network(net);
     let value_id = add_value_node(
         &mut designer,
         net,
         DVec2::ZERO,
-        molecule_value(carbons_with_depths(&[(-1.0, 0.0), (1.0, 0.0)])),
+        molecule_value(carbons_with_depths(&[(-1.0, 9.0), (1.0, 9.0)])),
     );
     let xray_id = add_xray(&mut designer, DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, xray_id, 0);
-    set_alpha_property(&mut designer, net, xray_id, 0.25);
-    set_opaque_depth_property(&mut designer, net, xray_id, 4.0);
+    set_alpha_property(&mut designer, net, xray_id, 0.8);
+    set_fade_depth_property(&mut designer, net, xray_id, 4.0);
     let region_id = add_value_node(&mut designer, net, DVec2::new(0.0, 200.0), region_x_le_0());
     designer.connect_nodes(region_id, 0, xray_id, 2);
 
     let result = evaluate_to_atomic(&designer, net, xray_id);
-    assert!(
-        (alpha_at(&result, -1.0) - 0.25).abs() < 1e-6,
-        "in-region surface atom ghosted"
+    assert_eq!(
+        alpha_at(&result, -1.0),
+        0.0,
+        "in-region deep atom faded out"
     );
     assert_eq!(alpha_at(&result, 1.0), 1.0, "out-of-region atom untouched");
 }
@@ -663,7 +669,7 @@ fn xray_opaque_depth_respects_region() {
 /// them as surface atoms and they keep the surface alpha. This documents the
 /// feature's main limitation rather than asserting a desirable behavior.
 #[test]
-fn xray_opaque_depth_leaves_depthless_atoms_at_surface_alpha() {
+fn xray_fade_depth_leaves_depthless_atoms_at_surface_alpha() {
     let net = "test";
     let mut designer = setup_designer_with_network(net);
     // `carbons_at` never calls `set_atom_depth` — depth stays at its 0.0 default.
@@ -676,7 +682,7 @@ fn xray_opaque_depth_leaves_depthless_atoms_at_surface_alpha() {
     let xray_id = add_xray(&mut designer, DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, xray_id, 0);
     set_alpha_property(&mut designer, net, xray_id, 0.4);
-    set_opaque_depth_property(&mut designer, net, xray_id, 4.0);
+    set_fade_depth_property(&mut designer, net, xray_id, 4.0);
 
     let result = evaluate_to_atomic(&designer, net, xray_id);
     assert_eq!(alpha_at(&result, 0.0), 0.4, "depthless atom stays ghosted");

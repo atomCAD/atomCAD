@@ -87,7 +87,7 @@ fn add_xray_node(designer: &mut StructureDesigner, network_name: &str, alpha: f6
         xray_id,
         Box::new(XrayData {
             alpha,
-            opaque_depth: 0.0,
+            fade_depth: 0.0,
         }),
     );
     xray_id

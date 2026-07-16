@@ -4,7 +4,7 @@ use crate::api::api_common::{
 use crate::api::structure_designer::structure_designer_api_types::APIXrayData;
 use crate::structure_designer::nodes::xray::XrayData;
 
-/// Reads the stored data of an `xray` node (`alpha` + `opaque_depth`).
+/// Reads the stored data of an `xray` node (`alpha` + `fade_depth`).
 /// Takes a `scope_path` like every sibling node-data accessor.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_xray_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIXrayData> {
@@ -17,7 +17,7 @@ pub fn get_xray_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIXrayData> 
                 let xray_data = node_data.as_any_ref().downcast_ref::<XrayData>()?;
                 Some(APIXrayData {
                     alpha: xray_data.alpha,
-                    opaque_depth: xray_data.opaque_depth,
+                    fade_depth: xray_data.fade_depth,
                 })
             },
             None,
@@ -33,7 +33,7 @@ pub fn set_xray_data(scope_path: Vec<u64>, node_id: u64, data: APIXrayData) {
         with_mut_cad_instance(|cad_instance| {
             let xray_data = Box::new(XrayData {
                 alpha: data.alpha,
-                opaque_depth: data.opaque_depth,
+                fade_depth: data.fade_depth,
             });
             cad_instance
                 .structure_designer

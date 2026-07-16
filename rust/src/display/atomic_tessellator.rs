@@ -925,6 +925,17 @@ pub fn tessellate_atomic_structure_impostors(
             continue;
         }
 
+        // A fully transparent atom composites to a no-op, so tessellating it
+        // would cost 4 vertices plus a slot in every back-to-front re-sort to
+        // change nothing on screen. Skipping is invisible and keeps `xray`'s
+        // depth fade as cheap as the depth culling it softens (which otherwise
+        // has to be turned down to let the fade run — see `fade_depth` in
+        // `doc/design_xray_node.md`).
+        let atom_alpha = global_alpha * atomic_structure.get_atom_alpha(*id);
+        if atom_alpha <= 0.0 {
+            continue;
+        }
+
         tessellated_count += 1;
         // Per-atom effective visualization drives the impostor radius.
         let effective_viz =
@@ -935,7 +946,7 @@ pub fn tessellate_atomic_structure_impostors(
             atom,
             display_state,
             &effective_viz,
-            global_alpha * atomic_structure.get_atom_alpha(*id),
+            atom_alpha,
             atomic_structure.get_atom_color(*id),
         );
     }
@@ -980,6 +991,13 @@ pub fn tessellate_atomic_structure_impostors(
                         * atomic_structure
                             .get_atom_alpha(atom.id)
                             .min(atomic_structure.get_atom_alpha(other_atom_id));
+
+                    // Fully transparent bonds are skipped for the same reason
+                    // as fully transparent atoms above. Min-alpha means this
+                    // also drops every bond hanging off a faded-out atom.
+                    if bond_alpha <= 0.0 {
+                        continue;
+                    }
 
                     // Bond delete markers in diff structures render as red
                     if bond.is_delete_marker() && atomic_structure.is_diff() {

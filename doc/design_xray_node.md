@@ -486,67 +486,88 @@ run`, impostor mode; xray a sphere region inside a diamond block:
 
 ---
 
-## Depth falloff (`opaque_depth`) — follow-up, 2026-07-16
+## Depth falloff (`fade_depth`) — follow-up, 2026-07-16
 
-Added after user feedback (mechadense) on the shipped feature: with a uniform
-alpha, the interior-atom **depth culling** optimization
-(`space_filling_cull_depth`, `display/atomic_tessellator.rs::should_cull_atom`)
-becomes *visible* through the ghosted shell — you see a hollow block. Raising
-the cull depth fills the void but replaces it with a volumetric fog that is
-harder to see into, and forces alpha to an extreme.
+Added after user feedback (mechadense) on the shipped feature. Two coupled
+complaints: with a uniform alpha the interior-atom **depth culling**
+optimization (`space_filling_cull_depth`,
+`display/atomic_tessellator.rs::should_cull_atom`) becomes *visible* through
+the ghosted shell — a hollow block; raising the cull depth fills the void but
+replaces it with a volumetric fog that is even harder to peer into.
 
-**Semantics.** `opaque_depth: Float` (Å), stored property + optional pin
+**Semantics.** `fade_depth: Float` (Å), stored property + optional pin
 (wired > stored, same precedence as `alpha`). Non-positive = ramp off, `alpha`
 applied uniformly = pre-ramp behavior exactly. Positive:
 
 ```
-alpha_eff = lerp(alpha, 1.0, smoothstep(0, opaque_depth, atom.in_crystal_depth))
+alpha_eff = alpha * (1 - smoothstep(0, fade_depth, atom.in_crystal_depth))
 ```
 
-`alpha` is reinterpreted as the alpha *at the surface* (depth 0); it keeps its
-old meaning whenever the ramp is off. Pure helper `xray::depth_ramped_alpha`,
-unit-tested independently of the node.
+i.e. `alpha` at the surface (the **most opaque** end, and its old meaning
+whenever the ramp is off) easing **down to 0** — fully transparent — at
+`fade_depth`. Pure helper `xray::depth_faded_alpha`, unit-tested independently
+of the node.
+
+**Direction — read this before "fixing" it.** The first implementation had this
+ramp backwards (surface-transparent → deep-opaque) because the user's phrase
+"exponentially **increasing alpha** with depth" reads, in atomCAD terms
+(alpha = opacity), as *more opaque with depth*. He meant increasing
+**transparency**. The unambiguous tell is in the same message: *"Sharp heaviside
+cutoff (= same as the depth cutoff we have)"* — the existing depth cull makes
+deep atoms **invisible**, so the smooth member of that family must fade toward
+invisible too. The purpose is stated there as well: avoid the view "getting
+blocked for deeper volumes", i.e. kill the fog. Deep atoms must contribute
+*less*, not more.
 
 **Why this shape.**
 
 - **`in_crystal_depth` already exists** on every `Atom` (f32, Å, set at
   lattice-fill time as `-sdf`). The user assumed depth wasn't carried per atom
   and that adding it would hit the "32 limit" — that limit is the *tag* system
-  (`tag_bits: u32`), which is unrelated. No new metadata, no renderer change,
-  no shader change: the node just writes different values into the existing
-  `atom_alpha` decorator.
-- **The ramp reaches 1.0 at a stated depth** rather than decaying
-  asymptotically (the user suggested exponential). This is load-bearing, not
-  cosmetic: `set_atom_alpha` *removes* entries at ≥ 1.0, so ramped-to-opaque
-  atoms route to the **opaque** mesh, write depth, and occlude the culled
-  hollow behind them. That is what makes the artifact disappear at the default
-  cull threshold instead of merely making it less obvious. An exponential never
-  reaches 1.0 (needs an epsilon cutoff) and its decay constant is a less
-  intuitive knob than "opaque at N Å". Smoothstep over linear only to avoid a
+  (`tag_bits: u32`), which is unrelated. No new metadata and no shader change:
+  the node writes different values into the existing `atom_alpha` decorator.
+- **The ramp reaches exactly 0 at a stated depth** rather than decaying
+  asymptotically (the user floated exponential). Load-bearing: atoms must be
+  *fully* invisible before the cull threshold drops them, or the cull's hard
+  edge is still visible — which was the original complaint. An exponential
+  never reaches 0 (needs an epsilon cutoff) and its decay constant is a less
+  intuitive knob than "gone by N Å". Smoothstep over linear only to avoid a
   visible kink at the surface.
+- **`fade_depth` is a soft depth cull, and composes with the hard one.** The
+  guidance (guide + editor) is to raise `space_filling_cull_depth` *past*
+  `fade_depth`, so every culled atom has already faded out. Deliberately **not**
+  a per-node cull override: culling is a viewport preference, not node state,
+  and the user correctly predicted coupling them would be a messy hack.
+- **Zero-alpha atoms/bonds are skipped in the tessellator** (`atom_alpha <= 0.0`
+  → `continue`, at both alpha seams in
+  `tessellate_atomic_structure_impostors`). A fully transparent atom composites
+  to a no-op, so this is visually identical while restoring exactly the
+  efficiency the cull was providing — which matters because the ramp's whole
+  workflow is "raise the cull depth and let the fade do the hiding", otherwise
+  the deep interior would be tessellated *and* re-sorted every camera move to
+  draw nothing. This is what makes the "raising the cull depth costs nothing"
+  claim in the guide true.
 - **Pin appended after `region`**, bending the "region is the last pin"
   convention. `Node.arguments` is a positional `Vec<Argument>` with no pin
   names in the `.cnnd`, and `repair_network_arguments` only grows/truncates at
   the tail — inserting at index 2 would silently reinterpret every existing
-  `region` wire as an `opaque_depth` wire. Appending keeps 0..=2 stable and
-  needs no migration; a reorder would have cost a file-version bump purely for
+  `region` wire as a `fade_depth` wire. Appending keeps 0..=2 stable and needs
+  no migration; a reorder would have cost a file-version bump purely for
   cosmetics.
 - **Serde-default `0.0`** ⇒ pre-ramp `.cnnd` files load and render identically.
 
 **Deliberately not exposed:** a falloff-curve picker or exponent (the user
 called a general function overkill; one shape + one length parameter covers the
-use case); a per-node cull-depth override (the ramp subsumes it, and culling is
-a viewport preference, not node state — the user correctly predicted that
-coupling them would be a messy hack); a Heaviside mode (it is just a small
-`opaque_depth`).
+use case); a Heaviside mode (it is just a small `fade_depth`).
 
 **Known limitation (documented in the reference guide, not a bug):**
 `in_crystal_depth` is only meaningful for lattice-filled atoms — imported and
 hand-placed atoms default to `0.0` and stay at the surface alpha. It is frozen
 at fill time (relax/move don't update it), and `atom_cut` deletes atoms without
-re-deriving it, so atoms exposed on a cut face keep their original deep value
-and render opaque at the cut. Verified by reading `atom_cut::cut_atomic_structure`
-(delete-only) — this is arguably the desired look (solid face behind a cut).
+re-deriving it (verified: `atom_cut::cut_atomic_structure` is delete-only), so
+atoms exposed on a cut face keep their original deep value and stay faded out
+rather than reading as a fresh surface. Workaround in the guide: cut the
+blueprint before materializing.
 
 ---
 

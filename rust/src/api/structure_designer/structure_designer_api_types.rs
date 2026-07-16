@@ -597,11 +597,11 @@ pub struct APIRelaxData {
 pub struct APIXrayData {
     /// Display alpha applied to in-region atoms, in `[0.0, 1.0]`. `1.0`
     /// restores full opacity. Overridden by a wired `alpha` pin. With
-    /// `opaque_depth > 0` this is the alpha at the crystal surface.
+    /// `fade_depth > 0` this is the alpha at the crystal surface.
     pub alpha: f64,
-    /// Depth (Å) at which atoms ramp to fully opaque. `0` disables the ramp
-    /// (uniform `alpha`). Overridden by a wired `opaque_depth` pin.
-    pub opaque_depth: f64,
+    /// Depth (Å) at which atoms have faded to fully transparent. `0` disables
+    /// the ramp (uniform `alpha`). Overridden by a wired `fade_depth` pin.
+    pub fade_depth: f64,
 }
 
 pub struct APITagData {

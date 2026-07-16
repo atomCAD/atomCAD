@@ -16396,7 +16396,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIXrayData(
       alpha: dco_decode_f_64(arr[0]),
-      opaqueDepth: dco_decode_f_64(arr[1]),
+      fadeDepth: dco_decode_f_64(arr[1]),
     );
   }
 
@@ -20431,8 +20431,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIXrayData sse_decode_api_xray_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_alpha = sse_decode_f_64(deserializer);
-    var var_opaqueDepth = sse_decode_f_64(deserializer);
-    return APIXrayData(alpha: var_alpha, opaqueDepth: var_opaqueDepth);
+    var var_fadeDepth = sse_decode_f_64(deserializer);
+    return APIXrayData(alpha: var_alpha, fadeDepth: var_fadeDepth);
   }
 
   @protected
@@ -24926,7 +24926,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_xray_data(APIXrayData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self.alpha, serializer);
-    sse_encode_f_64(self.opaqueDepth, serializer);
+    sse_encode_f_64(self.fadeDepth, serializer);
   }
 
   @protected
