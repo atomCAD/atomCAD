@@ -87,13 +87,9 @@ class XrayEditor extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              fadeDepth > 0.0
-                  ? '0 = fully transparent, 1 = fully opaque. With the fade '
-                      'depth set below, this is the alpha at the crystal '
-                      'surface — the most opaque the shell ever gets. '
-                      'Wiring the `alpha` input pin overrides this value.'
-                  : '0 = fully transparent, 1 = fully opaque (restores the atoms). '
-                      'Wiring the `alpha` input pin overrides this value.',
+              '0 = fully transparent, 1 = fully opaque (restores the atoms). '
+              'With a fade depth set, this is the alpha at the surface. '
+              'Wiring the `alpha` input pin overrides this value.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
@@ -124,35 +120,9 @@ class XrayEditor extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              fadeDepth > 0.0
-                  ? 'Atoms fade out to fully transparent '
-                      '${fadeDepth.toStringAsFixed(2)} Å below the crystal '
-                      'surface, leaving a thin visible shell. Deeper atoms stop '
-                      'adding up into a fog, so the view into the interior stays '
-                      'clear. Set 0 to apply the alpha uniformly instead.'
-                  : 'Off: the alpha is applied uniformly at every depth, so a thick '
-                      'block builds up into a fog that is hard to see into. Set a '
-                      'depth (Å) to fade deeper atoms out to invisible instead.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            if (fadeDepth > 0.0) ...[
-              const SizedBox(height: 4),
-              Text(
-                'This is a soft version of the display\'s depth culling. For the '
-                'fade to be what hides the interior, raise the cull depth in '
-                'Display Preferences past the fade depth — otherwise culling '
-                'still cuts atoms off at a hard edge while they are visible. '
-                'Faded-out atoms cost nothing to draw, so raising it is cheap.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-            const SizedBox(height: 4),
-            Text(
-              'The ramp only affects atoms that carry a crystal depth (those '
-              'built by a lattice fill). Imported or hand-placed atoms count as '
-              'surface atoms and keep the surface alpha. The slider caps at '
-              '${_MAX_FADE_DEPTH_SLIDER.toStringAsFixed(0)} Å; type a larger '
-              'value in the field if you need one.',
+              'Atoms fade out to fully transparent this far below the crystal '
+              'surface, leaving a thin shell instead of a deep fog. 0 = apply '
+              'the alpha at every depth. Only lattice-filled atoms carry a depth.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 8),
