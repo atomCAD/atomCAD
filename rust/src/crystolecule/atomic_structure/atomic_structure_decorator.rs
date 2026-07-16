@@ -105,6 +105,10 @@ pub struct AtomicStructureDecorator {
     /// Runtime-only display augmentation, like all decorator state (never
     /// serialized). Written by `apply_style`; see `doc/design_style_rules.md`.
     pub atom_render_style: FxHashMap<u32, AtomRenderStyle>,
+    /// Per-atom label text, already token-expanded. Absent = no label.
+    /// Runtime-only display augmentation, like all decorator state (never
+    /// serialized). Written by `apply_style`; see `doc/design_atom_labels.md`.
+    pub atom_label: FxHashMap<u32, String>,
 }
 
 impl Default for AtomicStructureDecorator {
@@ -128,6 +132,7 @@ impl AtomicStructureDecorator {
             atom_alpha: FxHashMap::default(),
             atom_color: FxHashMap::default(),
             atom_render_style: FxHashMap::default(),
+            atom_label: FxHashMap::default(),
         }
     }
 

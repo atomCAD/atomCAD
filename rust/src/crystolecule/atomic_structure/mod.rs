@@ -690,6 +690,27 @@ impl AtomicStructure {
         self.decorator.atom_render_style.get(&atom_id).copied()
     }
 
+    /// Sets an atom's label text. Empty text removes the entry (no label) —
+    /// "write the identity value" and "clear" are the same operation across the
+    /// style-rule family. See `doc/design_atom_labels.md`.
+    pub fn set_atom_label(&mut self, atom_id: u32, text: String) {
+        if text.is_empty() {
+            self.decorator.atom_label.remove(&atom_id);
+        } else {
+            self.decorator.atom_label.insert(atom_id, text);
+        }
+    }
+
+    /// Removes an atom's label.
+    pub fn clear_atom_label(&mut self, atom_id: u32) {
+        self.decorator.atom_label.remove(&atom_id);
+    }
+
+    /// Returns an atom's label text; `None` = no label.
+    pub fn get_atom_label(&self, atom_id: u32) -> Option<&str> {
+        self.decorator.atom_label.get(&atom_id).map(|s| s.as_str())
+    }
+
     pub fn delete_atom(&mut self, id: u32) {
         if id == 0 {
             return;
@@ -730,6 +751,7 @@ impl AtomicStructure {
         self.decorator.atom_alpha.remove(&id);
         self.decorator.atom_color.remove(&id);
         self.decorator.atom_render_style.remove(&id);
+        self.decorator.atom_label.remove(&id);
     }
 
     /// Fast deletion for lone atoms (no bonds, guaranteed to exist)
@@ -746,6 +768,7 @@ impl AtomicStructure {
         self.decorator.atom_alpha.remove(&id);
         self.decorator.atom_color.remove(&id);
         self.decorator.atom_render_style.remove(&id);
+        self.decorator.atom_label.remove(&id);
     }
 
     /// Safe bond creation - validates atoms exist, updates or creates bond
@@ -1272,6 +1295,13 @@ impl AtomicStructure {
         for (&old_atom_id, &style) in &other.decorator.atom_render_style {
             if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
                 self.decorator.atom_render_style.insert(new_atom_id, style);
+            }
+        }
+
+        // Merge per-atom labels with remapped IDs
+        for (&old_atom_id, label) in &other.decorator.atom_label {
+            if let Some(&new_atom_id) = atom_id_map.get(&old_atom_id) {
+                self.decorator.atom_label.insert(new_atom_id, label.clone());
             }
         }
 

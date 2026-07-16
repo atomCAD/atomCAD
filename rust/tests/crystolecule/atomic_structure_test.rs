@@ -786,6 +786,95 @@ fn test_atom_render_style_preserved_on_clone() {
 }
 
 // ============================================================================
+// Per-atom label (doc/design_atom_labels.md, Phase 1)
+// ============================================================================
+
+#[test]
+fn test_atom_label_set_get_clear() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Absent entry (and non-existent atom) reads as None = no label.
+    assert_eq!(structure.get_atom_label(id), None);
+    assert_eq!(structure.get_atom_label(9999), None);
+
+    structure.set_atom_label(id, "surface".to_string());
+    assert_eq!(structure.get_atom_label(id), Some("surface"));
+
+    // Overwrite replaces.
+    structure.set_atom_label(id, "C".to_string());
+    assert_eq!(structure.get_atom_label(id), Some("C"));
+
+    structure.clear_atom_label(id);
+    assert_eq!(structure.get_atom_label(id), None);
+    assert!(structure.decorator().atom_label.is_empty());
+}
+
+#[test]
+fn test_atom_label_empty_string_clears() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+
+    // Setting "" removes an existing entry — the reset value, mirroring
+    // `set_atom_alpha(1.0)`.
+    structure.set_atom_label(id, "C".to_string());
+    structure.set_atom_label(id, String::new());
+    assert_eq!(structure.get_atom_label(id), None);
+    assert!(structure.decorator().atom_label.is_empty());
+
+    // Setting "" on an atom that never had a label is a no-op, not an insert.
+    structure.set_atom_label(id, String::new());
+    assert!(structure.decorator().atom_label.is_empty());
+}
+
+#[test]
+fn test_atom_label_cleared_on_delete() {
+    let mut structure = create_test_molecule();
+    let bonded_id = 1; // c1, has bonds
+    structure.set_atom_label(bonded_id, "C".to_string());
+    structure.delete_atom(bonded_id);
+    assert!(structure.decorator().atom_label.is_empty());
+
+    let mut structure = AtomicStructure::new();
+    let lone_id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_label(lone_id, "C".to_string());
+    structure.delete_lone_atom(lone_id);
+    assert!(structure.decorator().atom_label.is_empty());
+}
+
+#[test]
+fn test_atom_label_remapped_on_merge() {
+    let mut target = AtomicStructure::new();
+    target.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    target.add_atom(6, DVec3::new(1.5, 0.0, 0.0));
+
+    let mut other = AtomicStructure::new();
+    let o1 = other.add_atom(8, DVec3::new(5.0, 0.0, 0.0));
+    let o2 = other.add_atom(8, DVec3::new(6.5, 0.0, 0.0));
+    other.set_atom_label(o1, "left".to_string());
+    other.set_atom_label(o2, "right".to_string());
+
+    let id_map = target.add_atomic_structure(&other).expect("merge succeeds");
+
+    let new_o1 = *id_map.get(&o1).unwrap();
+    let new_o2 = *id_map.get(&o2).unwrap();
+    assert_ne!(new_o1, o1); // ids actually remapped (target already had atoms)
+    assert_eq!(target.get_atom_label(new_o1), Some("left"));
+    assert_eq!(target.get_atom_label(new_o2), Some("right"));
+    assert_eq!(target.decorator().atom_label.len(), 2);
+}
+
+#[test]
+fn test_atom_label_preserved_on_clone() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(0.0, 0.0, 0.0));
+    structure.set_atom_label(id, "Si".to_string());
+
+    let cloned = structure.clone();
+    assert_eq!(cloned.get_atom_label(id), Some("Si"));
+}
+
+// ============================================================================
 // Group 5: Atom Field Setters
 // ============================================================================
 
