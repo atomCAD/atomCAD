@@ -12,6 +12,7 @@ use crate::display::unit_cell_wireframe_tessellator;
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
 use crate::renderer::camera::Camera;
+use crate::renderer::label_mesh::LabelMesh;
 use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::tessellator::tessellator::{TessellationOutput, tessellate_cuboid};
@@ -35,6 +36,7 @@ pub fn tessellate_scene_content(
     AtomImpostorMesh,
     BondImpostorMesh,
     TransparentImpostorMesh,
+    LabelMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
 ) {
@@ -49,18 +51,21 @@ pub fn tessellate_scene_content(
         atom_impostor_mesh,
         bond_impostor_mesh,
         transparent_impostor_mesh,
+        label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     ) = if !lightweight {
         tessellate_non_lightweight_content(scene, preferences)
     } else {
-        // Return empty meshes for non-lightweight content
+        // Return empty meshes for non-lightweight content — which is what makes
+        // "no labels in lightweight mode" true by construction.
         (
             Mesh::new(),
             LineMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
             TransparentImpostorMesh::new(),
+            LabelMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
         )
@@ -74,6 +79,7 @@ pub fn tessellate_scene_content(
         atom_impostor_mesh,
         bond_impostor_mesh,
         transparent_impostor_mesh,
+        label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     )
@@ -126,6 +132,7 @@ fn tessellate_non_lightweight_content(
     AtomImpostorMesh,
     BondImpostorMesh,
     TransparentImpostorMesh,
+    LabelMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
 ) {
@@ -136,6 +143,8 @@ fn tessellate_non_lightweight_content(
     // Merged transparent impostor mesh for x-rayed (alpha < 1.0) atoms/bonds.
     // Stays empty in TriangleMesh mode (atoms tessellate opaque there).
     let mut transparent_impostor_mesh = TransparentImpostorMesh::new();
+    // Atom-label glyph quads. Populated in BOTH rendering methods.
+    let mut label_mesh = LabelMesh::new();
     // Gadget impostor meshes (kept for API compatibility, currently empty)
     let gadget_atom_impostor_mesh = AtomImpostorMesh::new();
     let gadget_bond_impostor_mesh = BondImpostorMesh::new();
@@ -260,6 +269,17 @@ fn tessellate_non_lightweight_content(
                         }
                     }
 
+                    // Atom labels are their own mesh and their own pipeline, so
+                    // they are tessellated OUTSIDE the rendering-method match —
+                    // put this call inside the `Impostors` arm and labels
+                    // silently vanish in `TriangleMesh` mode (guiding decision 5
+                    // of `doc/design_atom_labels.md`).
+                    atomic_tessellator::tessellate_atom_labels(
+                        &mut label_mesh,
+                        atomic_structure,
+                        &preferences.atomic_structure_visualization,
+                    );
+
                     // Render wireframe visuals for free placement (shared between rendering methods)
                     if let Some(visuals) = &atomic_structure.decorator().guide_placement_visuals {
                         if let Some(sphere_visuals) = &visuals.wireframe_sphere {
@@ -371,6 +391,7 @@ fn tessellate_non_lightweight_content(
         atom_impostor_mesh,
         bond_impostor_mesh,
         transparent_impostor_mesh,
+        label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     )

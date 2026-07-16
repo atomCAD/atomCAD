@@ -34,6 +34,7 @@ fn ball_and_stick_prefs() -> AtomicStructureVisualizationPreferences {
         space_filling_cull_depth: None,
         scene_transparency_enabled: false,
         scene_alpha: 1.0,
+        label_scale: 0.7,
     }
 }
 

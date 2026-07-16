@@ -14,3 +14,6 @@ mod atomic_color_test;
 
 #[path = "display/atomic_render_style_test.rs"]
 mod atomic_render_style_test;
+
+#[path = "display/atom_label_test.rs"]
+mod atom_label_test;

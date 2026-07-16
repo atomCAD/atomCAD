@@ -30,6 +30,10 @@ pub struct AtomicStructureVisualizationPreferences {
     pub scene_transparency_enabled: bool,
     /// Global scene alpha in `[0, 1]` applied when `scene_transparency_enabled`.
     pub scene_alpha: f32,
+    /// World-space em height of atom labels, in Å — labels scale with zoom, as
+    /// the atoms they annotate do (see `doc/design_atom_labels.md` §Label size).
+    /// Clamped at the use site, mirroring `scene_alpha`.
+    pub label_scale: f32,
 }
 
 #[derive(Clone, Debug)]

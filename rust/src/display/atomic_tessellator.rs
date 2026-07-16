@@ -10,6 +10,8 @@ use crate::display::preferences::{
 };
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
+use crate::renderer::label_atlas::layout_label;
+use crate::renderer::label_mesh::LabelMesh;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::util::timer::Timer;
@@ -316,6 +318,96 @@ pub fn tessellate_atomic_structure(
         "Atomic tessellation: {:?} visualization, {} atoms tessellated, {} atoms culled",
         atomic_viz_prefs.visualization, tessellated_count, culled_count
     );
+}
+
+/// Clearance between an atom's displayed surface and its label, Å. Only has to
+/// beat depth quantization — the label is pushed `radius + eps` toward the eye,
+/// which lands it just in front of the sphere's nearest extent.
+const LABEL_DEPTH_EPSILON: f32 = 0.01;
+
+/// Bounds on the label em height, Å (`doc/design_atom_labels.md` §Label size).
+/// The lower bound keeps a zero or negative preference from collapsing every
+/// quad to a degenerate point — which would read as "the feature is broken"
+/// rather than "the preference is misconfigured". Duplicated in the preferences
+/// UI, the way `scene_alpha`'s clamp is.
+const LABEL_SCALE_MIN: f32 = 0.05;
+const LABEL_SCALE_MAX: f32 = 10.0;
+
+/// Emit one billboarded glyph quad per character of every labeled atom.
+///
+/// Method-independent by construction, which is why the caller invokes it
+/// *outside* the `rendering_method` match: labels are their own mesh and their
+/// own pipeline, so they work in both `Impostors` and `TriangleMesh` mode
+/// (guiding decision 5 of `doc/design_atom_labels.md`). This lives in this file
+/// rather than a module of its own because it needs the private
+/// `should_cull_atom`.
+///
+/// The only method-dependent input is the atom's displayed radius, which
+/// `effective_visualization` + `get_displayed_atom_radius` resolve in both
+/// paths — so a `render_style: "space_filling"` atom pushes its label out to the
+/// vdW surface automatically, with neither `StyleRule` field knowing about the
+/// other.
+pub fn tessellate_atom_labels(
+    label_mesh: &mut LabelMesh,
+    atomic_structure: &AtomicStructure,
+    atomic_viz_prefs: &AtomicStructureVisualizationPreferences,
+) {
+    // Same global scene-transparency lens the impostor path applies.
+    let global_alpha: f32 = if atomic_viz_prefs.scene_transparency_enabled {
+        atomic_viz_prefs.scene_alpha.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+
+    // em → Å.
+    let scale = atomic_viz_prefs
+        .label_scale
+        .clamp(LABEL_SCALE_MIN, LABEL_SCALE_MAX);
+
+    for (id, atom) in atomic_structure.iter_atoms() {
+        let Some(text) = atomic_structure.get_atom_label(*id) else {
+            continue;
+        };
+        // `set_atom_label("")` clears, so an empty label should not be reachable
+        // — but laying one out would emit nothing anyway.
+        if text.is_empty() {
+            continue;
+        }
+
+        // A label can never outlive its atom: reuse the impostor path's culling.
+        if should_cull_atom(atomic_structure, atom, atomic_viz_prefs) {
+            continue;
+        }
+
+        // A fully invisible atom gets no label. Without this, `label` +
+        // `alpha: 0.0` would draw a label anchored to nothing — and its depth
+        // writes would invisibly occlude ghost atoms behind it. The skip follows
+        // the user's stated intent (this atom should be invisible), not the
+        // rendering method's ability to honor it, which is what keeps this
+        // function method-independent. A ghosted atom (0 < alpha < 1) keeps its
+        // label, drawn fully opaque — that is precisely how a deliberately-faded
+        // atom stays identifiable.
+        if global_alpha * atomic_structure.get_atom_alpha(*id) <= 0.0 {
+            continue;
+        }
+
+        let effective_viz =
+            effective_visualization(atomic_structure, *id, &atomic_viz_prefs.visualization);
+        let depth_offset =
+            get_displayed_atom_radius(atom, &effective_viz) as f32 + LABEL_DEPTH_EPSILON;
+        let anchor = atom.position.as_vec3();
+
+        for glyph in &layout_label(text).glyphs {
+            label_mesh.add_glyph_quad(
+                &anchor,
+                [glyph.min[0] * scale, glyph.min[1] * scale],
+                [glyph.max[0] * scale, glyph.max[1] * scale],
+                glyph.uv_min,
+                glyph.uv_max,
+                depth_offset,
+            );
+        }
+    }
 }
 
 pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVisualization) -> f64 {

@@ -44,6 +44,7 @@ fn prefs(
         space_filling_cull_depth: sf_cull,
         scene_transparency_enabled: false,
         scene_alpha: 1.0,
+        label_scale: 0.7,
     }
 }
 

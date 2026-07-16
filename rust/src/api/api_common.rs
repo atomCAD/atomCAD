@@ -12,6 +12,16 @@ use glam::f64::DVec3;
 use glam::i32::IVec2;
 use glam::i32::IVec3;
 
+/// World-space em height of atom labels, Å — roughly a ball-and-stick carbon's
+/// diameter: big enough to read against its own atom, small enough that two
+/// labelled neighbours do not collide at default zoom.
+///
+/// Phase 3 of `doc/design_atom_labels.md` fills the display-side preference from
+/// this const because the tessellator cannot lay out a quad without a scale.
+/// Phase 4 adds the user-facing API-side field and switches the mapping below to
+/// read it.
+const DEFAULT_LABEL_SCALE: f32 = 0.7;
+
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     APIVec3 {
         x: v.x,
@@ -133,6 +143,7 @@ pub fn to_display_preferences(
             scene_alpha: preferences
                 .atomic_structure_visualization_preferences
                 .scene_alpha as f32,
+            label_scale: DEFAULT_LABEL_SCALE,
         },
         background: display_prefs::BackgroundPreferences {
             show_axes: preferences.background_preferences.show_axes,
@@ -449,6 +460,9 @@ pub fn refresh_structure_designer(
         // Merged transparent impostor mesh (x-ray), consumed by the renderer's
         // transparent pipeline (Phase 4 of design_xray_node.md).
         transparent_impostor_mesh,
+        // Atom-label glyph quads, consumed by the renderer's textured label
+        // pipeline (Phase 3 of design_atom_labels.md).
+        label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
     ) = crate::display::scene_tessellator::tessellate_scene_content(
@@ -468,6 +482,7 @@ pub fn refresh_structure_designer(
         &atom_impostor_mesh,
         &bond_impostor_mesh,
         &transparent_impostor_mesh,
+        &label_mesh,
         &gadget_atom_impostor_mesh,
         &gadget_bond_impostor_mesh,
         !renderer_lightweight,

@@ -4,6 +4,9 @@ use super::mesh::Mesh;
 use super::mesh::Vertex;
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
+use crate::renderer::label_atlas::decode_font_atlas;
+use crate::renderer::label_mesh::LabelMesh;
+use crate::renderer::label_mesh::LabelVertex;
 use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::line_mesh::LineVertex;
 use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
@@ -85,6 +88,10 @@ pub struct Renderer {
     atom_impostor_pipeline: RenderPipeline,
     bond_impostor_pipeline: RenderPipeline,
     transparent_impostor_pipeline: RenderPipeline,
+    /// Atom labels. The only pipeline with a texture, so the only one built on
+    /// its own three-group layout (camera, model, atlas) — see
+    /// `doc/design_atom_labels.md` §Pipeline changes.
+    label_pipeline: RenderPipeline,
     main_mesh: GPUMesh,
     wireframe_mesh: GPUMesh,
     lightweight_mesh: GPUMesh,
@@ -107,6 +114,13 @@ pub struct Renderer {
     /// The view matrix the current sorted index buffer was built for
     /// (`None` = never sorted). A change forces a re-sort.
     transparent_sorted_view: Option<Mat4>,
+    label_mesh: GPUMesh,
+    /// The SDF font atlas' bind group (group 2). It lives on the `Renderer`
+    /// rather than on the `GPUMesh`: `GPUMesh` knows only its model bind group
+    /// (group 1) and has no notion of a texture, and the atlas is one shared
+    /// resource, so it is bound once per pass before the label draw — the way
+    /// `camera_bind_group` already is.
+    label_atlas_bind_group: wgpu::BindGroup,
     gadget_atom_impostor_mesh: GPUMesh,
     gadget_bond_impostor_mesh: GPUMesh,
     texture: Texture,
@@ -208,6 +222,9 @@ impl Renderer {
         let transparent_impostor_mesh =
             GPUMesh::new_empty_transparent_impostor_mesh(&device, &model_bind_group_layout);
 
+        // Atom-label glyph quads
+        let label_mesh = GPUMesh::new_empty_label_mesh(&device, &model_bind_group_layout);
+
         // Gadget impostor meshes (rendered in gadget pass, always on top)
         let gadget_atom_impostor_mesh =
             GPUMesh::new_empty_atom_impostor_mesh(&device, &model_bind_group_layout);
@@ -265,6 +282,11 @@ impl Renderer {
             source: ShaderSource::Wgsl(include_str!("transparent_impostor.wgsl").into()),
         });
 
+        let label_shader = device.create_shader_module(ShaderModuleDescriptor {
+            label: Some("Label Shader"),
+            source: ShaderSource::Wgsl(include_str!("label.wgsl").into()),
+        });
+
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -314,6 +336,23 @@ impl Renderer {
             push_constant_ranges: &[],
         });
 
+        // ===== Atom label atlas (the only texture in the renderer) =====
+        // Additive: the atlas gets its own group-2 layout and its own pipeline
+        // layout, so the shared two-group layout above and the six pipelines
+        // built on it are untouched.
+        let (label_atlas_bind_group_layout, label_atlas_bind_group) =
+            Self::create_label_atlas_binding(&device, &queue);
+
+        let label_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: Some("Label Pipeline Layout"),
+            bind_group_layouts: &[
+                &camera_bind_group_layout,
+                &model_bind_group_layout,
+                &label_atlas_bind_group_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
         // Triangle pipeline (normal depth testing)
         let triangle_pipeline = Self::create_triangle_pipeline(
             &device,
@@ -354,6 +393,9 @@ impl Renderer {
             &transparent_impostor_shader,
         );
 
+        let label_pipeline =
+            Self::create_label_pipeline(&device, &label_pipeline_layout, &label_shader);
+
         Self {
             device,
             queue,
@@ -363,6 +405,7 @@ impl Renderer {
             atom_impostor_pipeline,
             bond_impostor_pipeline,
             transparent_impostor_pipeline,
+            label_pipeline,
             main_mesh,
             wireframe_mesh,
             lightweight_mesh,
@@ -375,6 +418,8 @@ impl Renderer {
             transparent_mesh_generation: 0,
             transparent_sorted_generation: None,
             transparent_sorted_view: None,
+            label_mesh,
+            label_atlas_bind_group,
             gadget_atom_impostor_mesh,
             gadget_bond_impostor_mesh,
             texture,
@@ -692,6 +737,171 @@ impl Renderer {
         })
     }
 
+    /// Decode the committed SDF font atlas, upload it as an R8 texture, and
+    /// build its group-2 bind group (texture + sampler).
+    ///
+    /// Unlike the render-target texture, this one needs `TEXTURE_BINDING` — it
+    /// is sampled rather than drawn into. Linear filtering is what lets one
+    /// small atlas stay smooth as a label is zoomed into; the SDF's
+    /// `smoothstep` then recovers a crisp edge from the interpolated distance.
+    fn create_label_atlas_binding(
+        device: &Device,
+        queue: &Queue,
+    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
+        let atlas = decode_font_atlas();
+        let size = Extent3d {
+            width: atlas.width,
+            height: atlas.height,
+            depth_or_array_layers: 1,
+        };
+
+        let texture = device.create_texture(&TextureDescriptor {
+            label: Some("Label Font Atlas"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R8Unorm,
+            usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        queue.write_texture(
+            ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            &atlas.data,
+            ImageDataLayout {
+                offset: 0,
+                // R8: one byte per texel, so a row is exactly `width` bytes.
+                bytes_per_row: Some(atlas.width),
+                rows_per_image: Some(atlas.height),
+            },
+            size,
+        );
+
+        let view = texture.create_view(&TextureViewDescriptor::default());
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            label: Some("Label Font Atlas Sampler"),
+            // Clamp: glyph cells are interior to the atlas, so wrapping could
+            // only ever bleed a neighbouring glyph in at a quad edge.
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
+
+        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("label_atlas_bind_group_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("label_atlas_bind_group"),
+        });
+
+        (layout, bind_group)
+    }
+
+    /// Blended, depth-**writing** label pipeline.
+    ///
+    /// The renderer has no MSAA, so an alpha-tested label would throw away the
+    /// antialiasing that is the main reason to use an SDF at all. Blending gives
+    /// smooth edges; keeping depth writes on preserves correct occlusion of and
+    /// by other scene content, and the shader's `discard` on near-zero coverage
+    /// stops empty texels from polluting the depth buffer. Two labels
+    /// overlapping each other therefore blend in draw order rather than depth
+    /// order — an accepted artifact, and no sort is needed.
+    fn create_label_pipeline(
+        device: &Device,
+        label_pipeline_layout: &wgpu::PipelineLayout,
+        label_shader: &wgpu::ShaderModule,
+    ) -> RenderPipeline {
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some("Label Render Pipeline"),
+            layout: Some(label_pipeline_layout),
+            vertex: VertexState {
+                module: label_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[LabelVertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: label_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                // A billboard's facing is meaningless, so culling could only
+                // wrongly drop a quad.
+                cull_mode: None,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
+
     pub fn move_camera(&mut self, eye: &DVec3, target: &DVec3, up: &DVec3) {
         self.camera.eye = *eye;
         self.camera.target = *target;
@@ -748,6 +958,7 @@ impl Renderer {
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
         transparent_impostor_mesh: &TransparentImpostorMesh,
+        label_mesh: &LabelMesh,
         gadget_atom_impostor_mesh: &AtomImpostorMesh,
         gadget_bond_impostor_mesh: &BondImpostorMesh,
         update_non_lightweight: bool,
@@ -791,6 +1002,9 @@ impl Renderer {
                 .clone_from(&transparent_impostor_mesh.quad_centers);
             self.transparent_mesh_generation = self.transparent_mesh_generation.wrapping_add(1);
 
+            self.label_mesh
+                .update_from_label_mesh(&self.device, label_mesh, "Atom Labels");
+
             self.gadget_atom_impostor_mesh
                 .update_from_atom_impostor_mesh(
                     &self.device,
@@ -811,6 +1025,7 @@ impl Renderer {
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
             self.transparent_impostor_mesh
                 .set_identity_transform(&self.queue);
+            self.label_mesh.set_identity_transform(&self.queue);
             self.gadget_atom_impostor_mesh
                 .set_identity_transform(&self.queue);
             self.gadget_bond_impostor_mesh
@@ -925,6 +1140,22 @@ impl Renderer {
             self.background_mesh.set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.background_line_pipeline);
             self.render_mesh(&mut render_pass, &self.background_mesh);
+
+            // Atom labels: after everything opaque (they blend over it) and,
+            // critically, BEFORE the transparent pass. The order is forced by
+            // the depth-write asymmetry — labels write depth, ghosts do not.
+            // Labels-then-ghosts is correct both ways round (a ghost behind a
+            // label is depth-rejected at the glyph; a ghost in front passes
+            // `Less` and tints the label). Ghosts-then-labels would be wrong: a
+            // ghost in front wrote no depth, so the label would pass the test
+            // and paint over a ghost that is actually nearer.
+            //
+            // Group 2 (the font atlas) is bound once here, after the pipeline
+            // that declares it — `render_mesh` only knows about group 1.
+            self.label_mesh.set_identity_transform(&self.queue);
+            render_pass.set_pipeline(&self.label_pipeline);
+            render_pass.set_bind_group(2, &self.label_atlas_bind_group, &[]);
+            self.render_mesh(&mut render_pass, &self.label_mesh);
 
             // Transparent impostors (x-ray) draw last in the main pass — after
             // ALL opaque content, including the background lines — with alpha

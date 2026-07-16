@@ -1,6 +1,7 @@
 use super::mesh::Mesh;
 use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
 use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
+use crate::renderer::label_mesh::LabelMesh;
 use crate::renderer::line_mesh::LineMesh;
 use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use bytemuck;
@@ -57,6 +58,9 @@ pub enum MeshType {
     /// Merged transparent impostor mesh (x-ray): ghost atoms + bonds in one
     /// mesh, rendered with alpha blending and depth writes off.
     TransparentImpostors,
+    /// Atom-label glyph quads, rendered as SDF-textured billboards with alpha
+    /// blending and depth writes ON (see `doc/design_atom_labels.md`).
+    Labels,
 }
 
 /// Represents a mesh on the GPU with vertex and index buffers and its own transform
@@ -126,6 +130,16 @@ impl GPUMesh {
                     usage: BufferUsages::VERTEX,
                 });
                 (vertex_buffer, "Empty Transparent Impostor Vertex Buffer")
+            }
+            MeshType::Labels => {
+                let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Empty Label Vertex Buffer"),
+                    contents: bytemuck::cast_slice(
+                        &[] as &[crate::renderer::label_mesh::LabelVertex]
+                    ),
+                    usage: BufferUsages::VERTEX,
+                });
+                (vertex_buffer, "Empty Label Vertex Buffer")
             }
         };
 
@@ -205,6 +219,14 @@ impl GPUMesh {
             MeshType::TransparentImpostors,
             model_bind_group_layout,
         )
+    }
+
+    /// Creates a new empty label mesh
+    pub fn new_empty_label_mesh(
+        device: &Device,
+        model_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> Self {
+        Self::new_empty(device, MeshType::Labels, model_bind_group_layout)
     }
 
     /// Updates the GPUMesh from a CPU Triangle Mesh
@@ -373,6 +395,38 @@ impl GPUMesh {
         });
 
         self.num_indices = transparent_impostor_mesh.indices.len() as u32;
+
+        // Note: The model buffer and bind group remain unchanged
+    }
+
+    /// Updates the GPUMesh from a CPU Label Mesh
+    pub fn update_from_label_mesh(
+        &mut self,
+        device: &Device,
+        label_mesh: &LabelMesh,
+        label_prefix: &str,
+    ) {
+        assert!(
+            self.mesh_type == MeshType::Labels,
+            "Cannot update a non-label GPUMesh with a LabelMesh"
+        );
+
+        let vertex_label = format!("{} Label Vertex Buffer", label_prefix);
+        let index_label = format!("{} Label Index Buffer", label_prefix);
+
+        self.vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&vertex_label),
+            contents: bytemuck::cast_slice(label_mesh.vertices.as_slice()),
+            usage: BufferUsages::VERTEX,
+        });
+
+        self.index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&index_label),
+            contents: bytemuck::cast_slice(label_mesh.indices.as_slice()),
+            usage: BufferUsages::INDEX,
+        });
+
+        self.num_indices = label_mesh.indices.len() as u32;
 
         // Note: The model buffer and bind group remain unchanged
     }
