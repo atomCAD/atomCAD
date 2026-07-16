@@ -143,8 +143,12 @@ file). Built-in defs are never serialized, as before.
   `get_record_construct_fields` from the resolved def. The *other* consumer
   of `APILiteralField` — `CustomNodeEditor`'s parameter rows — has no record
   def behind it, so its hint is always `None` and nothing changes there.
-- `APIRecordSchemaData`'s field rows gain the hint (so the schema editor can
-  display and edit it — Phase 2).
+- `APIRecordTypeField`'s rows gain the hint (so the schema editor can display
+  and edit it — Phase 2). (This doc originally named `APIRecordSchemaData`
+  here and in Phase 2 below; that type is only the `record_construct` /
+  `record_destructure` / `product` node's `schema: String` property and has no
+  field rows at all. The schema editor's row type is `APIRecordTypeField`,
+  reached via `get_record_type_def` / `update_record_type_def`.)
 - `lib/structure_designer/node_data/literal_fields_editor.dart`: the widget
   dispatch (currently a `switch (field.dataType)` at ~line 160) gains a
   pre-check — if `field.hint` is present, render the hint widget; otherwise
@@ -479,7 +483,7 @@ entry round-trips unquantized), alpha slider clamped to [0, 1], and a
 
 **Implementation**
 
-- `APIRecordSchemaData` field rows carry the hint; the user-types panel's
+- `APIRecordTypeField` rows carry the hint; the user-types panel's
   `SchemaEditor` gains a per-field hint control — a dropdown filtered to
   the hints valid for the field's type (per §Applicability), with an
   entry-list sub-editor for `Enum` and min/max fields for `Range`.

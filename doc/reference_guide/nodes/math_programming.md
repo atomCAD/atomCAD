@@ -908,7 +908,7 @@ The Console panel shows entries chronologically with a `[HH:MM:SS]` timestamp, t
 
 A **record type** bundles a fixed set of named, heterogeneously-typed fields into a single value that travels along one wire. Records are the CAD equivalent of a struct: rather than fan a small payload out into N parallel pins (or N parallel arrays), you declare the shape once and the network passes records through unchanged.
 
-Define record types from the **User Types** panel on the left. Each project keeps its named record defs alongside its custom node networks; both kinds share one namespace and show up in the same list. A new def starts with zero fields — empty record types are valid (`{}` is the top of the record subtype lattice). Use the **+ Add field** button to append a field; each field row has a name, a type, a drag-handle for reorder, and a delete button. The order you author fields in is the order pins appear on `record_construct`, `record_destructure`, and `product` nodes that reference the def.
+Define record types from the **User Types** panel on the left. Each project keeps its named record defs alongside its custom node networks; both kinds share one namespace and show up in the same list. A new def starts with zero fields — empty record types are valid (`{}` is the top of the record subtype lattice). Use the **+ Add field** button to append a field; each field row has a name, a type, an optional [editor hint](#editor-hints), a drag-handle for reorder, and a delete button. The order you author fields in is the order pins appear on `record_construct`, `record_destructure`, and `product` nodes that reference the def.
 
 Records are **structurally subtyped** — compatibility between two record types is decided by their field shape, not by their names. A `Record(Foo)` whose schema is `{x: Int, y: Int}` is interchangeable with an inline anonymous `{x: Int, y: Int}` everywhere. They are also **width-subtyped**: a value with fields `{x, y, z}` flows freely into any pin that only declares `{x, y}`, and the extra `z` rides along at runtime untouched. Field-level subtyping accepts only *tag-only widenings* — exact equality plus the concrete-to-abstract phase upcasts (`Crystal → HasAtoms`, `Molecule → HasFreeLinOps`, …). Value-converting widenings such as `Int → Float` or `IVec3 → Vec3` are **not** applied inside record fields; insert an explicit conversion node before `record_construct` if you need one.
 
@@ -923,6 +923,27 @@ Some node types ship with **built-in record defs** — schemas baked into the ap
 - `MaterializeRegion = {volume: Blueprint, margin: Optional[Float], passivate: Optional[Bool], rm_single: Optional[Bool], surf_recon: Optional[Bool], invert_phase: Optional[Bool], rm_unbonded: Optional[Bool]}` — the element type of [`materialize`](./atomic.md#materialize)'s optional `regions` input, pairing a volume with per-field setting overrides. The `Optional` fields are *inherit-when-unset*: only `volume` is required. See [*Per-region settings*](./atomic.md#per-region-settings-regions).
 
 Built-in defs share one namespace with user defs and participate in the same bare-identifier lookup (so `ElementMapping` and `Patch` work as type expressions in `expr` parameters and in the schema dropdowns), but they cannot be edited or deleted from the User Types panel, and the User Types panel will reject attempts to create, rename, or delete a user def with the same name.
+
+### Editor hints
+
+A field's type says what values are legal; it does not say how you would rather *pick* one. An atomic number is an `Int`, but choosing "Carbon" from a list beats typing `6`. An **editor hint** is an optional annotation on a field that tells the inline literal editors — the [`record_construct`](#record_construct) panel today — which widget to render for that field.
+
+Set a hint from the **Editor hint** dropdown in the field's row in the schema editor. The dropdown offers only the hints that fit the field's type, and appears only on rows whose type can carry one:
+
+| Hint | Valid on | Renders as |
+|---|---|---|
+| `Element` | `Int` | The element picker, listing elements by name and symbol. |
+| `Color` | `Vec3` | A color swatch that opens a picker, next to three 0–1 R/G/B number fields. |
+| `Enum` | `String` | A dropdown over the choices you list. Add and remove choices under the dropdown; each must be non-empty, free of surrounding spaces, and distinct. |
+| `Range` | `Float`, `Int` | A slider between the min and max you enter (`min` must be below `max`), paired with a number field. |
+
+Each hint is also valid on the `Optional[…]` form of its type — a hint describes the field's inner value, so `Optional[Int]` takes `Element` just as `Int` does. Nothing else can carry a hint: `Array[Int]` cannot (the hint would describe the array, not the element), nor can records or the structural types.
+
+**Hints are cosmetic, and only cosmetic.** A hint never affects which wires connect, what a record value contains, or what any node computes — it only chooses a widget. A value wired into a hinted field's pin flows through untouched even if it falls outside an `Enum` list or `Range` bounds; only the consuming node's own rules judge it. So adding, changing, or clearing a hint can never break a working network.
+
+Two consequences follow from hints living on the field rather than on the value. Retyping a field drops a hint the new type cannot carry (the retype is the real edit; the hint was decoration). And renaming a field keeps its hint, because hints ride on the field's identity, not its name.
+
+Several built-in defs ship with hints already declared — `ElementMapping`'s `from` and `to` are `Element` fields, so a `record_construct` on that schema gives you two element pickers with no setup.
 
 ## record_construct
 

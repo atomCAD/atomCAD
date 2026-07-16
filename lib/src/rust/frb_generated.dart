@@ -15663,12 +15663,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRecordTypeField dco_decode_api_record_type_field(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return APIRecordTypeField(
       id: dco_decode_opt_box_autoadd_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
       dataType: dco_decode_api_data_type(arr[2]),
+      hint: dco_decode_opt_box_autoadd_api_field_editor_hint(arr[3]),
     );
   }
 
@@ -19720,8 +19721,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_id = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_dataType = sse_decode_api_data_type(deserializer);
+    var var_hint =
+        sse_decode_opt_box_autoadd_api_field_editor_hint(deserializer);
     return APIRecordTypeField(
-        id: var_id, name: var_name, dataType: var_dataType);
+        id: var_id, name: var_name, dataType: var_dataType, hint: var_hint);
   }
 
   @protected
@@ -24211,6 +24214,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_u_64(self.id, serializer);
     sse_encode_String(self.name, serializer);
     sse_encode_api_data_type(self.dataType, serializer);
+    sse_encode_opt_box_autoadd_api_field_editor_hint(self.hint, serializer);
   }
 
   @protected

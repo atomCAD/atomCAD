@@ -1,6 +1,6 @@
-//! Phase 1 of `doc/design_array_node_and_field_hints.md` (Part A) — record-def
-//! field **editor hints**: a purely presentational annotation telling a generic
-//! literal editor which widget to render.
+//! Phases 1–2 of `doc/design_array_node_and_field_hints.md` (Part A) —
+//! record-def field **editor hints**: a purely presentational annotation telling
+//! a generic literal editor which widget to render.
 //!
 //! The load-bearing property under test is the invariant that hints are
 //! **cosmetic**: they must be rejected at every def-mutation site when
@@ -12,8 +12,9 @@
 
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::{
-    FieldEditorHint, NodeTypeRegistry, RecordFieldEdit, RecordTypeDef, RecordTypeDefError,
+    FieldEditorHint, FieldId, NodeTypeRegistry, RecordFieldEdit, RecordTypeDef, RecordTypeDefError,
 };
+use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
 fn hinted(
     name: &str,
@@ -440,4 +441,190 @@ fn hints_do_not_affect_record_conversion() {
         DataType::can_be_converted_to(&plain_ty, &hinted_ty, &registry),
         "a hint must not gate conversion in either direction"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — the schema-editor path (`StructureDesigner::update_record_type_def_with_ids`)
+//
+// Phase 1's API row could not carry a hint, so the FRB shim re-attached each
+// surviving field's hint by `FieldId` behind the caller's back. Phase 2 gives
+// the row a `hint`, which makes the caller's list **authoritative** in both
+// directions: a hint it names is written, and a hint it omits is *cleared*
+// rather than resurrected. These tests pin that authority — and the fact that
+// a rejected update commits nothing — at the level the shim delegates to.
+// (The shim itself is thin plumbing; `rust/AGENTS.md` exempts it from tests.)
+// ---------------------------------------------------------------------------
+
+/// Fresh designer holding a one-field user def named `R`, plus that field's id.
+fn designer_with_field(ty: DataType) -> (StructureDesigner, FieldId) {
+    let mut designer = StructureDesigner::new();
+    designer
+        .node_type_registry
+        .add_record_type_def(RecordTypeDef::from_named_fields(
+            "R",
+            vec![("f".to_string(), ty)],
+        ))
+        .unwrap();
+    let id = designer
+        .node_type_registry
+        .lookup_record_type_def("R")
+        .unwrap()
+        .fields[0]
+        .id;
+    (designer, id)
+}
+
+fn hint_of(designer: &StructureDesigner) -> Option<FieldEditorHint> {
+    designer
+        .node_type_registry
+        .lookup_record_type_def("R")
+        .unwrap()
+        .fields[0]
+        .hint
+        .clone()
+}
+
+#[test]
+fn schema_update_round_trips_every_hint_kind() {
+    for (ty, hint) in [
+        (DataType::Int, FieldEditorHint::Element),
+        (DataType::Vec3, FieldEditorHint::Color),
+        (DataType::String, enum_hint()),
+        (DataType::Float, range_hint()),
+        // Through an Optional wrapper — the hint describes the inner value.
+        (opt(DataType::Int), FieldEditorHint::Element),
+    ] {
+        let (mut designer, id) = designer_with_field(ty.clone());
+        designer
+            .update_record_type_def_with_ids(
+                "R",
+                vec![RecordFieldEdit {
+                    id: Some(id),
+                    name: "f".to_string(),
+                    data_type: ty.clone(),
+                    hint: Some(hint.clone()),
+                }],
+            )
+            .unwrap_or_else(|e| panic!("{:?} on {} must be accepted: {}", hint, ty, e));
+        assert_eq!(hint_of(&designer), Some(hint.clone()), "on a {} field", ty);
+    }
+}
+
+#[test]
+fn schema_update_clears_a_hint_the_row_omits() {
+    let (mut designer, id) = designer_with_field(DataType::Int);
+    designer
+        .update_record_type_def_with_ids(
+            "R",
+            vec![RecordFieldEdit {
+                id: Some(id),
+                name: "f".to_string(),
+                data_type: DataType::Int,
+                hint: Some(FieldEditorHint::Element),
+            }],
+        )
+        .unwrap();
+
+    // The row still names the same field (same id, same type) but no longer
+    // names a hint — that is the user picking "None" in the hint dropdown, and
+    // it must stick. Phase 1's carry-across would have re-attached Element here.
+    designer
+        .update_record_type_def_with_ids(
+            "R",
+            vec![RecordFieldEdit {
+                id: Some(id),
+                name: "f".to_string(),
+                data_type: DataType::Int,
+                hint: None,
+            }],
+        )
+        .unwrap();
+    assert_eq!(
+        hint_of(&designer),
+        None,
+        "an omitted hint is a cleared hint"
+    );
+}
+
+#[test]
+fn schema_update_rejects_a_mismatched_hint_and_commits_nothing() {
+    let (mut designer, id) = designer_with_field(DataType::Int);
+
+    // Retyping Int -> String while keeping the stale Element hint. Reachable
+    // only from a direct API caller (the SchemaEditor clears the hint in the
+    // same update it sends), so it is a hard reject, not a silent drop.
+    let err = designer
+        .update_record_type_def_with_ids(
+            "R",
+            vec![RecordFieldEdit {
+                id: Some(id),
+                name: "f".to_string(),
+                data_type: DataType::String,
+                hint: Some(FieldEditorHint::Element),
+            }],
+        )
+        .expect_err("Element on String must be rejected");
+    assert!(
+        matches!(err, RecordTypeDefError::IllFormedHint(..)),
+        "got {:?}",
+        err
+    );
+    assert!(
+        err.to_string().contains("Element"),
+        "the error must name the offending hint: {}",
+        err
+    );
+
+    let def = designer
+        .node_type_registry
+        .lookup_record_type_def("R")
+        .unwrap();
+    assert_eq!(def.fields[0].data_type, DataType::Int, "no partial commit");
+    assert_eq!(def.fields[0].hint, None);
+}
+
+#[test]
+fn schema_update_rejects_an_ill_formed_enum_list() {
+    let (mut designer, id) = designer_with_field(DataType::String);
+    let err = designer
+        .update_record_type_def_with_ids(
+            "R",
+            vec![RecordFieldEdit {
+                id: Some(id),
+                name: "f".to_string(),
+                data_type: DataType::String,
+                hint: Some(FieldEditorHint::Enum(vec![
+                    "a".to_string(),
+                    "a".to_string(),
+                ])),
+            }],
+        )
+        .expect_err("a duplicate Enum entry must be rejected");
+    assert!(matches!(err, RecordTypeDefError::IllFormedHint(..)));
+    assert_eq!(hint_of(&designer), None, "no partial commit");
+}
+
+/// Hints ride on `FieldId`, so a rename — the one edit that changes a field's
+/// *name* identity — must carry them across untouched.
+#[test]
+fn schema_update_keeps_the_hint_across_a_field_rename() {
+    let (mut designer, id) = designer_with_field(DataType::Int);
+    designer
+        .update_record_type_def_with_ids(
+            "R",
+            vec![RecordFieldEdit {
+                id: Some(id),
+                name: "renamed".to_string(),
+                data_type: DataType::Int,
+                hint: Some(FieldEditorHint::Element),
+            }],
+        )
+        .unwrap();
+    let def = designer
+        .node_type_registry
+        .lookup_record_type_def("R")
+        .unwrap();
+    assert_eq!(def.fields[0].name, "renamed");
+    assert_eq!(def.fields[0].id, id, "rename keeps the editing identity");
+    assert_eq!(def.fields[0].hint, Some(FieldEditorHint::Element));
 }

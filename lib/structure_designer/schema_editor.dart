@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/data_type_input.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
+import 'package:flutter_cad/structure_designer/schema_field_hint_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
@@ -113,8 +114,15 @@ class _SchemaEditorState extends State<SchemaEditor> {
   }
 
   /// Validates that field names within the in-flight list are non-empty,
-  /// valid identifiers, and distinct. Returns the offending field name
-  /// (highlighted with a red ring in the UI) or null if everything is fine.
+  /// valid identifiers, and distinct, and that every editor hint is
+  /// well-formed. Returns the offending field name (highlighted with a red ring
+  /// in the UI) or null if everything is fine.
+  ///
+  /// Hints are gated here rather than left to the backend because their
+  /// sub-editors are *typed into*: an entry cleared on the way to a new name, or
+  /// a `Range` min raised above the old max, is a transient state, not an error
+  /// worth a snackbar and a revert. The offending row parks in local state and
+  /// says so inline until it is well-formed again.
   String? _findDuplicateOrInvalid() {
     final seen = <String>{};
     for (final f in _fields) {
@@ -122,6 +130,9 @@ class _SchemaEditorState extends State<SchemaEditor> {
         return f.name;
       }
       if (!seen.add(f.name)) {
+        return f.name;
+      }
+      if (validateHintWellFormed(f.hint) != null) {
         return f.name;
       }
     }
@@ -152,6 +163,7 @@ class _SchemaEditorState extends State<SchemaEditor> {
         array: false,
         children: [],
       ),
+      hint: null,
     );
     setState(() {
       _fields = [..._fields, newField];
@@ -207,6 +219,7 @@ class _SchemaEditorState extends State<SchemaEditor> {
               id: _fields[i].id,
               name: newName,
               dataType: _fields[i].dataType,
+              hint: _fields[i].hint,
             )
           else
             _fields[i],
@@ -218,6 +231,13 @@ class _SchemaEditorState extends State<SchemaEditor> {
   }
 
   void _commitTypeChange(int index, APIDataType newType) {
+    // A hint the new type does not admit is dropped in the *same* update that
+    // carries the retype — the backend rejects the pair outright, and bouncing
+    // the user's retype off a hint they can no longer even see would be
+    // baffling. Hints are cosmetic; a retype is the real edit.
+    final hint = _fields[index].hint;
+    final keptHint =
+        (hint != null && isHintApplicable(hint, newType)) ? hint : null;
     setState(() {
       _fields = [
         for (int i = 0; i < _fields.length; i++)
@@ -227,6 +247,27 @@ class _SchemaEditorState extends State<SchemaEditor> {
               id: _fields[i].id,
               name: _fields[i].name,
               dataType: newType,
+              hint: keptHint,
+            )
+          else
+            _fields[i],
+      ];
+    });
+    if (_findDuplicateOrInvalid() == null) {
+      _commit();
+    }
+  }
+
+  void _commitHintChange(int index, APIFieldEditorHint? newHint) {
+    setState(() {
+      _fields = [
+        for (int i = 0; i < _fields.length; i++)
+          if (i == index)
+            APIRecordTypeField(
+              id: _fields[i].id,
+              name: _fields[i].name,
+              dataType: _fields[i].dataType,
+              hint: newHint,
             )
           else
             _fields[i],
@@ -369,6 +410,17 @@ class _SchemaEditorState extends State<SchemaEditor> {
               allowOptional: true,
               value: f.dataType,
               onChanged: (newType) => _commitTypeChange(index, newType),
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Editor-hint cell. Collapses to nothing for the many field types no
+          // hint applies to, so only the rows that can carry one show a control.
+          SizedBox(
+            width: 200,
+            child: SchemaFieldHintEditor(
+              fieldType: f.dataType,
+              hint: f.hint,
+              onChanged: (newHint) => _commitHintChange(index, newHint),
             ),
           ),
           // Delete button

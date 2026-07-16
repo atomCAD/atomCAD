@@ -13784,10 +13784,14 @@ impl SseDecode
             <crate::api::structure_designer::structure_designer_api_types::APIDataType>::sse_decode(
                 deserializer,
             );
+        let mut var_hint = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIRecordTypeField {
             id: var_id,
             name: var_name,
             data_type: var_dataType,
+            hint: var_hint,
         };
     }
 }
@@ -20110,6 +20114,7 @@ impl flutter_rust_bridge::IntoDart
             self.id.into_into_dart().into_dart(),
             self.name.into_into_dart().into_dart(),
             self.data_type.into_into_dart().into_dart(),
+            self.hint.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -23339,6 +23344,7 @@ impl SseEncode
             self.data_type,
             serializer,
         );
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint>>::sse_encode(self.hint, serializer);
     }
 }
 

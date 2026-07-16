@@ -359,6 +359,12 @@ pub struct APIRecordTypeField {
     pub id: Option<u64>,
     pub name: String,
     pub data_type: APIDataType,
+    /// Cosmetic widget annotation for generic literal editors — see
+    /// `APIFieldEditorHint` and `doc/design_array_node_and_field_hints.md`
+    /// Part A. Round-trips through the schema editor: the getter fills it from
+    /// the def, and `update_record_type_def` writes back exactly what the UI
+    /// sends (a hint the row's type does not admit is rejected, not dropped).
+    pub hint: Option<APIFieldEditorHint>,
 }
 
 /// Full record type def (name plus authored field list). Used by the

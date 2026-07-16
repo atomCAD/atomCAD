@@ -1424,6 +1424,7 @@ pub fn get_record_type_def(name: String) -> Option<APIRecordTypeDef> {
                                 id: Some(field.id.0),
                                 name: field.name.clone(),
                                 data_type: data_type_to_api_data_type(&field.data_type),
+                                hint: field.hint.as_ref().map(field_editor_hint_to_api),
                             })
                             .collect(),
                     })
@@ -1537,38 +1538,21 @@ pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> 
                 // existing field (preserves wires by `FieldId`); `id == None` is
                 // a newly added row. Bail with a clear error if any field's
                 // APIDataType cannot be parsed (e.g. a malformed Custom string).
-                use crate::structure_designer::node_type_registry::{
-                    FieldEditorHint, FieldId, RecordFieldEdit,
-                };
-                // `APIRecordTypeField` carries no hint yet (that is Phase 2 of
-                // `doc/design_array_node_and_field_hints.md`), so carry each
-                // surviving field's existing hint across by `FieldId` — dropping
-                // it only if the row's new type makes it inapplicable. Without
-                // this, one schema-editor save would wipe the hints of a def
-                // that declared them in its `.cnnd`.
-                let existing_hints: std::collections::HashMap<FieldId, FieldEditorHint> = instance
-                    .structure_designer
-                    .node_type_registry
-                    .lookup_record_type_def(&name)
-                    .map(|def| {
-                        def.fields
-                            .iter()
-                            .filter_map(|f| f.hint.clone().map(|h| (f.id, h)))
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                use crate::structure_designer::node_type_registry::{FieldId, RecordFieldEdit};
+                // The rows carry their own hints (Phase 2 of
+                // `doc/design_array_node_and_field_hints.md`), so the UI's list is
+                // authoritative — what it omits is genuinely a cleared hint, not a
+                // hint the API shape couldn't express. An inapplicable hint fails
+                // the whole update rather than being silently dropped; the schema
+                // editor clears a hint its retype invalidates in the same update,
+                // so this gate only fires for direct API callers.
                 let mut converted: Vec<RecordFieldEdit> = Vec::with_capacity(fields.len());
                 for f in &fields {
                     match api_data_type_to_data_type(&f.data_type) {
                         Ok(dt) => converted.push(RecordFieldEdit {
                             id: f.id.map(FieldId),
                             name: f.name.clone(),
-                            hint: f
-                                .id
-                                .map(FieldId)
-                                .and_then(|id| existing_hints.get(&id))
-                                .filter(|h| h.validate_for(&dt).is_ok())
-                                .cloned(),
+                            hint: f.hint.as_ref().map(api_field_editor_hint_to_core),
                             data_type: dt,
                         }),
                         Err(e) => {
@@ -6109,6 +6093,26 @@ fn field_editor_hint_to_api(
         FieldEditorHint::Color => APIFieldEditorHint::Color,
         FieldEditorHint::Enum(entries) => APIFieldEditorHint::Enum(entries.clone()),
         FieldEditorHint::Range { min, max } => APIFieldEditorHint::Range {
+            min: *min,
+            max: *max,
+        },
+    }
+}
+
+/// Converts an FRB `APIFieldEditorHint` back into the core `FieldEditorHint`.
+/// Pure shape translation, like its inverse above — well-formedness and
+/// applicability are the def-mutation entry point's job (the registry validates
+/// every candidate field and rejects the whole edit on a bad hint), so nothing
+/// here can commit an ill-formed hint.
+fn api_field_editor_hint_to_core(
+    hint: &APIFieldEditorHint,
+) -> crate::structure_designer::node_type_registry::FieldEditorHint {
+    use crate::structure_designer::node_type_registry::FieldEditorHint;
+    match hint {
+        APIFieldEditorHint::Element => FieldEditorHint::Element,
+        APIFieldEditorHint::Color => FieldEditorHint::Color,
+        APIFieldEditorHint::Enum(entries) => FieldEditorHint::Enum(entries.clone()),
+        APIFieldEditorHint::Range { min, max } => FieldEditorHint::Range {
             min: *min,
             max: *max,
         },

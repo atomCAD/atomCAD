@@ -2830,14 +2830,23 @@ class APIRecordTypeField {
   final String name;
   final APIDataType dataType;
 
+  /// Cosmetic widget annotation for generic literal editors — see
+  /// `APIFieldEditorHint` and `doc/design_array_node_and_field_hints.md`
+  /// Part A. Round-trips through the schema editor: the getter fills it from
+  /// the def, and `update_record_type_def` writes back exactly what the UI
+  /// sends (a hint the row's type does not admit is rejected, not dropped).
+  final APIFieldEditorHint? hint;
+
   const APIRecordTypeField({
     this.id,
     required this.name,
     required this.dataType,
+    this.hint,
   });
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ dataType.hashCode;
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ dataType.hashCode ^ hint.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2846,7 +2855,8 @@ class APIRecordTypeField {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
-          dataType == other.dataType;
+          dataType == other.dataType &&
+          hint == other.hint;
 }
 
 class APIRectData {
