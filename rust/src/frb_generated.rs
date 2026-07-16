@@ -14445,8 +14445,10 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_alpha = <f64>::sse_decode(deserializer);
+        let mut var_opaqueDepth = <f64>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APIXrayData {
             alpha: var_alpha,
+            opaque_depth: var_opaqueDepth,
         };
     }
 }
@@ -21162,7 +21164,11 @@ impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIXrayData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [self.alpha.into_into_dart().into_dart()].into_dart()
+        [
+            self.alpha.into_into_dart().into_dart(),
+            self.opaque_depth.into_into_dart().into_dart(),
+        ]
+        .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
@@ -23988,6 +23994,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <f64>::sse_encode(self.alpha, serializer);
+        <f64>::sse_encode(self.opaque_depth, serializer);
     }
 }
 

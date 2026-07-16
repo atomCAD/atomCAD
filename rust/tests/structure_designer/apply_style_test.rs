@@ -83,7 +83,13 @@ fn add_xray_node(designer: &mut StructureDesigner, network_name: &str, alpha: f6
         .node_networks
         .get_mut(network_name)
         .unwrap();
-    network.set_node_network_data(xray_id, Box::new(XrayData { alpha }));
+    network.set_node_network_data(
+        xray_id,
+        Box::new(XrayData {
+            alpha,
+            opaque_depth: 0.0,
+        }),
+    );
     xray_id
 }
 

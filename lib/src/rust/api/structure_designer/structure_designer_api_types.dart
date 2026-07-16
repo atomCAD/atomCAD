@@ -3413,22 +3413,29 @@ sealed class APIViewportPickResult with _$APIViewportPickResult {
 
 class APIXrayData {
   /// Display alpha applied to in-region atoms, in `[0.0, 1.0]`. `1.0`
-  /// restores full opacity. Overridden by a wired `alpha` pin.
+  /// restores full opacity. Overridden by a wired `alpha` pin. With
+  /// `opaque_depth > 0` this is the alpha at the crystal surface.
   final double alpha;
+
+  /// Depth (Å) at which atoms ramp to fully opaque. `0` disables the ramp
+  /// (uniform `alpha`). Overridden by a wired `opaque_depth` pin.
+  final double opaqueDepth;
 
   const APIXrayData({
     required this.alpha,
+    required this.opaqueDepth,
   });
 
   @override
-  int get hashCode => alpha.hashCode;
+  int get hashCode => alpha.hashCode ^ opaqueDepth.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is APIXrayData &&
           runtimeType == other.runtimeType &&
-          alpha == other.alpha;
+          alpha == other.alpha &&
+          opaqueDepth == other.opaqueDepth;
 }
 
 /// Editable state of a `zip_with` node (n-ary element-wise map, issue #382).

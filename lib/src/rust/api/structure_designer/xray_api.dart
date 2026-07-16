@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 
-/// Reads the stored data of an `xray` node (currently just `alpha`).
+/// Reads the stored data of an `xray` node (`alpha` + `opaque_depth`).
 /// Takes a `scope_path` like every sibling node-data accessor.
 APIXrayData? getXrayData(
         {required Uint64List scopePath, required BigInt nodeId}) =>

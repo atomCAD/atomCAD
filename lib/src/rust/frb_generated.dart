@@ -16392,10 +16392,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIXrayData dco_decode_api_xray_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 1)
-      throw Exception('unexpected arr length: expect 1 but see ${arr.length}');
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIXrayData(
       alpha: dco_decode_f_64(arr[0]),
+      opaqueDepth: dco_decode_f_64(arr[1]),
     );
   }
 
@@ -20430,7 +20431,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIXrayData sse_decode_api_xray_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_alpha = sse_decode_f_64(deserializer);
-    return APIXrayData(alpha: var_alpha);
+    var var_opaqueDepth = sse_decode_f_64(deserializer);
+    return APIXrayData(alpha: var_alpha, opaqueDepth: var_opaqueDepth);
   }
 
   @protected
@@ -24924,6 +24926,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_api_xray_data(APIXrayData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_f_64(self.alpha, serializer);
+    sse_encode_f_64(self.opaqueDepth, serializer);
   }
 
   @protected
