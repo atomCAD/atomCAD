@@ -330,7 +330,7 @@ Removing a tag an atom does not carry is a no-op. As with `tag`, the editor offe
 
 ## apply_style
 
-Applies **per-atom visual styling** — color and transparency — driven by a list of rules that select atoms by element and/or tag. This is the consumer that gives [`tag`](#tag) a visible payoff: tag a group of atoms upstream, then color or ghost that group here. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with the styling recorded on the matched atoms. Like `xray`, `apply_style` is a pure metadata pass-through: it changes only how atoms are *drawn*, never their positions, bonds, or count.
+Applies **per-atom visual styling** — color, transparency, and render style — driven by a list of rules that select atoms by element and/or tag. This is the consumer that gives [`tag`](#tag) a visible payoff: tag a group of atoms upstream, then color or ghost that group here. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with the styling recorded on the matched atoms. Like `xray`, `apply_style` is a pure metadata pass-through: it changes only how atoms are *drawn*, never their positions, bonds, or count.
 
 **Input pins**
 
@@ -349,6 +349,7 @@ The node has **no properties** — rules live entirely on the wire, so you can b
 | `tag: Optional[String]` | selector | Matches atoms carrying this tag (see [`tag`](#tag)). |
 | `color: Optional[Vec3]` | property | Albedo override, `0`–`1` RGB (components are clamped). |
 | `alpha: Optional[Float]` | property | Display alpha, `0`–`1` (same field and semantics as [`xray`](#xray)). |
+| `render_style: Optional[String]` | property | Per-atom render style: `"ball_and_stick"`, `"space_filling"`, or `"default"` (restores the global mode). |
 
 **Matching.** A rule matches an atom when **every present selector** matches: `element` alone matches every atom of that element; `tag` alone matches every atom with that tag; both present is an **AND** (only atoms that are both). **With no selectors at all, the rule matches every atom** — the whole-structure "make everything slightly transparent / recolor everything" case. A selector that nothing satisfies (an element no displayed atom carries, a tag name absent from the structure) simply matches nothing — that is **not** an error, because networks are parametric. An `element` value that doesn't fit a 16-bit integer, or an empty/whitespace `tag`, **is** an error (surfaced on the node, naming the offending rule).
 
@@ -357,6 +358,22 @@ The node has **no properties** — rules live entirely on the wire, so you can b
 **Alpha** is the exact same per-atom display alpha that `xray` writes, on the same field: `alpha = 1.0` **removes** the recording (restores full opacity), so a `StyleRule` with `alpha: 1.0` re-opaques atoms an upstream `xray` had ghosted, and the value composes by multiplication with the global *Make whole scene transparent* lens. As with `xray`, transparency renders in the **impostor** atomic method only — in `TriangleMesh` mode styled atoms show their color but stay opaque.
 
 **Color has no reset value.** `alpha` has a natural "back to default" (`1.0`); **`color` does not** — there is no identity color. To remove a color override, remove (or reorder past) the rule that set it rather than looking for a sentinel value.
+
+### Render style
+
+`render_style` overrides the drawing method for the matched atoms individually, so you can mix ball-and-stick and space-filling in one structure — for example, space-fill a buried dopant to make it pop out of a ball-and-stick crystal. It takes exactly one of three strings:
+
+- `"ball_and_stick"` — draw the atom as a small sphere with stick bonds.
+- `"space_filling"` — draw the atom at its full van der Waals radius.
+- `"default"` — remove any override and follow the global atomic visualization mode (this is `render_style`'s "back to default", the analogue of `alpha: 1.0`). Any other string is an error, surfaced on the node.
+
+A few consequences worth knowing:
+
+- **Mixed bonds — any ball-and-stick endpoint wins.** A bond is drawn as a ball-and-stick stick whenever *at least one* of its two atoms is ball-and-stick; the stick simply disappears into the neighbor's opaque van der Waals sphere. A bond between two space-filling atoms follows the usual space-filling rule (drawn only when overstretched). **Accepted artifact:** if that space-filling neighbor is *also* transparent (a `StyleRule` or `xray` gave it `alpha < 1`), the swallowed stick segment shows through the ghost sphere — inherent to sorted transparency, the same class of artifact as `xray`.
+- **A styled atom stays visible.** Depth culling shows an atom if *either* its own style or the global mode would show it, so space-filling a deep dopant never hides it behind the shallower space-filling cull depth — and a whole-structure `"space_filling"` restyle still respects the global mode's culling budget rather than disabling culling.
+- **Cull-depth preferences stay global.** The two cull-depth *sliders* (ball-and-stick vs space-filling) remain global application preferences; `render_style` only changes which mode each atom draws in, not those thresholds.
+
+Styled atoms are hoverable and measurable at their displayed radius, exactly as if the whole scene were in that mode.
 
 ### Authoring rules
 

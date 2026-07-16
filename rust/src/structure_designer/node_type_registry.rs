@@ -438,11 +438,12 @@ impl NodeTypeRegistry {
 
         // `StyleRule` — one per-atom visual styling rule consumed by
         // `apply_style` from an `Array[Record(Named("StyleRule"))]` pin. The
-        // `element`/`tag` fields are selectors; `color`/`alpha` are the visual
-        // properties written onto matched atoms. Every field is `Optional` so a
-        // `record_construct` may leave any pin unset ("leave this alone" for a
-        // property; "don't constrain on this axis" for a selector). The
-        // `render_style` field is added in Phase 4. See
+        // `element`/`tag` fields are selectors; `color`/`alpha`/`render_style`
+        // are the visual properties written onto matched atoms. Every field is
+        // `Optional` so a `record_construct` may leave any pin unset ("leave
+        // this alone" for a property; "don't constrain on this axis" for a
+        // selector). `render_style` selects `"ball_and_stick"` /
+        // `"space_filling"` / `"default"` per atom (a string enum). See
         // `doc/design_style_rules.md` §"The StyleRule built-in record type def".
         ret.built_in_record_type_defs.insert(
             "StyleRule".to_string(),
@@ -464,6 +465,10 @@ impl NodeTypeRegistry {
                     (
                         "alpha".to_string(),
                         DataType::Optional(Box::new(DataType::Float)),
+                    ),
+                    (
+                        "render_style".to_string(),
+                        DataType::Optional(Box::new(DataType::String)),
                     ),
                 ],
             ),

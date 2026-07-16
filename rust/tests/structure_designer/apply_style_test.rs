@@ -21,11 +21,16 @@
 //! - Errors: non-array pin, element outside `i16`, empty/whitespace tag — each
 //!   names the rule index. Unknown tag name and unmatched element match nothing
 //!   without error.
+//!
+//! Phase 4 (`doc/design_style_rules.md` §Phase 4) adds the `render_style`
+//! field: setting `"ball_and_stick"` / `"space_filling"` writes the per-atom
+//! override, `"default"` clears one, an invalid string errors naming it, and
+//! the non-serialized def growth exposes the new `record_construct` pin.
 
 use glam::Vec3;
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
@@ -165,6 +170,37 @@ fn style_rule(
     NetworkResult::record(fields)
 }
 
+/// Like `style_rule`, but also carries the Phase-4 `render_style` field when
+/// `render_style` is `Some` (absent = leave the atom's render style alone).
+fn style_rule_rs(
+    element: Option<i32>,
+    tag: Option<&str>,
+    color: Option<DVec3>,
+    alpha: Option<f64>,
+    render_style: Option<&str>,
+) -> NetworkResult {
+    let mut fields = Vec::new();
+    if let Some(e) = element {
+        fields.push(("element".to_string(), NetworkResult::Int(e)));
+    }
+    if let Some(t) = tag {
+        fields.push(("tag".to_string(), NetworkResult::String(t.to_string())));
+    }
+    if let Some(c) = color {
+        fields.push(("color".to_string(), NetworkResult::Vec3(c)));
+    }
+    if let Some(a) = alpha {
+        fields.push(("alpha".to_string(), NetworkResult::Float(a)));
+    }
+    if let Some(rs) = render_style {
+        fields.push((
+            "render_style".to_string(),
+            NetworkResult::String(rs.to_string()),
+        ));
+    }
+    NetworkResult::record(fields)
+}
+
 fn rules_array(rules: Vec<NetworkResult>) -> NetworkResult {
     NetworkResult::Array(rules)
 }
@@ -218,6 +254,10 @@ fn style_rule_resolves_via_lookup() {
             (
                 "alpha".to_string(),
                 DataType::Optional(Box::new(DataType::Float))
+            ),
+            (
+                "render_style".to_string(),
+                DataType::Optional(Box::new(DataType::String))
             ),
         ]
     );
@@ -673,4 +713,209 @@ fn apply_style_unknown_tag_and_unmatched_element_no_error() {
     for id in [1, 2, 3] {
         assert_eq!(result.get_atom_color(id), None);
     }
+}
+
+// ============================================================================
+// Phase 4: render_style
+// ============================================================================
+
+#[test]
+fn apply_style_render_style_sets_override() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    // Space-fill the oxygen (element 8); carbons keep the global default.
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![style_rule_rs(
+            Some(8),
+            None,
+            None,
+            None,
+            Some("space_filling"),
+        )]),
+    );
+    assert_eq!(result.get_atom_render_style(1), None); // carbon
+    assert_eq!(result.get_atom_render_style(2), None); // carbon
+    assert_eq!(
+        result.get_atom_render_style(3),
+        Some(AtomRenderStyle::SpaceFilling)
+    );
+}
+
+#[test]
+fn apply_style_render_style_ball_and_stick_variant() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![style_rule_rs(
+            Some(6),
+            None,
+            None,
+            None,
+            Some("ball_and_stick"),
+        )]),
+    );
+    assert_eq!(
+        result.get_atom_render_style(1),
+        Some(AtomRenderStyle::BallAndStick)
+    );
+    assert_eq!(
+        result.get_atom_render_style(2),
+        Some(AtomRenderStyle::BallAndStick)
+    );
+    assert_eq!(result.get_atom_render_style(3), None); // oxygen
+}
+
+#[test]
+fn apply_style_render_style_default_clears_earlier_override() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    // Rule 1 space-fills all atoms; rule 2 resets the carbons to "default".
+    // Overlap ⇒ carbons cleared, oxygen keeps space-filling.
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![
+            style_rule_rs(None, None, None, None, Some("space_filling")),
+            style_rule_rs(Some(6), None, None, None, Some("default")),
+        ]),
+    );
+    assert_eq!(result.get_atom_render_style(1), None); // carbon, cleared
+    assert_eq!(result.get_atom_render_style(2), None); // carbon, cleared
+    assert_eq!(
+        result.get_atom_render_style(3), // oxygen, still space-filling
+        Some(AtomRenderStyle::SpaceFilling)
+    );
+}
+
+#[test]
+fn apply_style_render_style_invalid_string_errors() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mol_id = add_value_node(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+    );
+    let rules_id = add_value_node(
+        &mut designer,
+        net,
+        rules_array(vec![style_rule_rs(
+            None,
+            None,
+            None,
+            None,
+            Some("wireframe"),
+        )]),
+    );
+    let style_id = add_apply_style_node(&mut designer);
+    designer.connect_nodes(mol_id, 0, style_id, 0);
+    designer.connect_nodes(rules_id, 0, style_id, 1);
+
+    let NetworkResult::Error(msg) = evaluate(&designer, net, style_id) else {
+        panic!("expected Error");
+    };
+    assert!(
+        msg.contains("rules[0]") && msg.contains("render_style") && msg.contains("wireframe"),
+        "got: {}",
+        msg
+    );
+}
+
+#[test]
+fn apply_style_render_style_end_to_end_dopant() {
+    // The headline scenario: tag an interior atom, then style that tag
+    // space-filling + colored. Verify the render-style override lands (the
+    // display-seam tessellation coverage lives in the display crate; here we
+    // confirm the node writes the decorator through the tag pipeline).
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mut structure = carbon_oxygen_structure();
+    structure.add_atom_tag(2, "dopant").unwrap();
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(structure),
+        rules_array(vec![style_rule_rs(
+            None,
+            Some("dopant"),
+            Some(DVec3::new(1.0, 0.0, 1.0)),
+            None,
+            Some("space_filling"),
+        )]),
+    );
+    // Only the tagged atom is restyled and recolored.
+    assert_eq!(result.get_atom_render_style(1), None);
+    assert_eq!(
+        result.get_atom_render_style(2),
+        Some(AtomRenderStyle::SpaceFilling)
+    );
+    assert_eq!(result.get_atom_color(2), Some(Vec3::new(1.0, 0.0, 1.0)));
+    assert_eq!(result.get_atom_render_style(3), None);
+}
+
+#[test]
+fn apply_style_render_style_wrong_type_errors() {
+    // A non-String value on `render_style` (e.g. an Int) → localized error.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mol_id = add_value_node(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+    );
+    let rules_id = add_value_node(
+        &mut designer,
+        net,
+        rules_array(vec![NetworkResult::record(vec![(
+            "render_style".to_string(),
+            NetworkResult::Int(3),
+        )])]),
+    );
+    let style_id = add_apply_style_node(&mut designer);
+    designer.connect_nodes(mol_id, 0, style_id, 0);
+    designer.connect_nodes(rules_id, 0, style_id, 1);
+
+    let NetworkResult::Error(msg) = evaluate(&designer, net, style_id) else {
+        panic!("expected Error");
+    };
+    assert!(
+        msg.contains("rules[0]") && msg.contains("render_style"),
+        "got: {}",
+        msg
+    );
+}
+
+#[test]
+fn record_construct_style_rule_exposes_render_style_pin() {
+    // Adding `render_style` to the non-serialized `StyleRule` def is
+    // non-breaking: a `record_construct` with schema `StyleRule` re-derives its
+    // pins from the current def, so it exposes the new field's pin through the
+    // ordinary layout-derivation path (the same mechanism `repair_node_network`
+    // runs on a def change) — no migration, wires keyed by stable FieldId.
+    use rust_lib_flutter_cad::structure_designer::nodes::record_construct::build_node_type_for_schema;
+    let registry = NodeTypeRegistry::new();
+    let base = registry
+        .get_node_type("record_construct")
+        .expect("record_construct registered");
+    let nt = build_node_type_for_schema(base, "StyleRule", &registry);
+    let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["element", "tag", "color", "alpha", "render_style"]
+    );
+    // `Optional[String]` is exposed as a plain `String` pin (the wire layer
+    // never sees `Optional`).
+    let rs = nt
+        .parameters
+        .iter()
+        .find(|p| p.name == "render_style")
+        .unwrap();
+    assert_eq!(rs.data_type, DataType::String);
 }

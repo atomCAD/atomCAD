@@ -1,11 +1,11 @@
 //! `apply_style` — per-atom visual styling driven by tag/element rules.
 //!
-//! Phase 2 of `doc/design_style_rules.md`. A `HasAtoms`-polymorphic,
+//! Phases 2 + 4 of `doc/design_style_rules.md`. A `HasAtoms`-polymorphic,
 //! metadata-only pass-through in the `freeze`/`xray`/`tag` family. It takes a
-//! `rules: Array[Record(Named("StyleRule"))]` value and writes per-atom color
-//! and alpha overrides onto the decorator (runtime-only display state, never
-//! serialized, dropped by structure-rebuilding nodes — so place `apply_style`
-//! late in the chain).
+//! `rules: Array[Record(Named("StyleRule"))]` value and writes per-atom color,
+//! alpha, and render-style overrides onto the decorator (runtime-only display
+//! state, never serialized, dropped by structure-rebuilding nodes — so place
+//! `apply_style` late in the chain).
 //!
 //! The node has **no stored properties** (decision 1: rules are wire-only), so
 //! there is no property editor, no node-data API, and no text-format surface.
@@ -18,6 +18,7 @@
 //! absent ⇒ the rule matches every atom.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::atomic_structure::AtomRenderStyle;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -54,6 +55,13 @@ struct StyleRule {
     /// Property: 0–1 display alpha. `None` ⇒ leave alpha alone. `1.0` restores
     /// full opacity (removes the entry) — see `set_atom_alpha`.
     alpha: Option<f32>,
+    /// Property: per-atom render-style override (Phase 4). The outer `Option`
+    /// distinguishes "field absent ⇒ leave the atom's render style alone"
+    /// (`None`) from "field present" (`Some`); the inner `Option` then chooses
+    /// **set** the override (`Some(style)`, from `"ball_and_stick"` /
+    /// `"space_filling"`) vs. **clear** it (`None`, from `"default"` — restores
+    /// the global preference).
+    render_style: Option<Option<AtomRenderStyle>>,
 }
 
 impl NodeData for ApplyStyleData {
@@ -142,6 +150,14 @@ impl NodeData for ApplyStyleData {
                     }
                     if let Some(alpha) = rule.alpha {
                         structure.set_atom_alpha(id, alpha);
+                    }
+                    // `render_style`: `Some(style)` sets the override,
+                    // `None` ("default") clears it back to the global mode.
+                    if let Some(render_style) = rule.render_style {
+                        match render_style {
+                            Some(style) => structure.set_atom_render_style(id, style),
+                            None => structure.clear_atom_render_style(id),
+                        }
                     }
                 }
             }
@@ -261,11 +277,40 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
             }
         };
 
+        // `render_style` is `Optional[String]`, a three-value enum:
+        // `"ball_and_stick"` / `"space_filling"` set the per-atom override;
+        // `"default"` clears it (restores the global preference). Any other
+        // string → localized error naming the value. A string enum because the
+        // type system has no enum `DataType`.
+        let render_style = match item.extract_record_field("render_style") {
+            None | Some(NetworkResult::None) => None,
+            Some(NetworkResult::String(s)) => match s.trim() {
+                "ball_and_stick" => Some(Some(AtomRenderStyle::BallAndStick)),
+                "space_filling" => Some(Some(AtomRenderStyle::SpaceFilling)),
+                "default" => Some(None),
+                other => {
+                    return Err(format!(
+                        "apply_style.rules[{}].render_style: expected \"ball_and_stick\", \
+                         \"space_filling\", or \"default\", got \"{}\"",
+                        i, other
+                    ));
+                }
+            },
+            Some(other) => {
+                return Err(format!(
+                    "apply_style.rules[{}].render_style: expected String, got {:?}",
+                    i,
+                    other.infer_data_type()
+                ));
+            }
+        };
+
         out.push(StyleRule {
             element,
             tag,
             color,
             alpha,
+            render_style,
         });
     }
     Ok(out)
@@ -274,7 +319,8 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "apply_style".to_string(),
-        description: "Applies per-atom visual styling (color, transparency) driven by a list of \
+        description: "Applies per-atom visual styling (color, transparency, render style) driven \
+                      by a list of \
                       style rules. Each rule selects atoms by element and/or tag and sets the \
                       properties it specifies; rules apply in order, last writer wins per \
                       property. Build rules with record_construct (schema StyleRule) and collect \
