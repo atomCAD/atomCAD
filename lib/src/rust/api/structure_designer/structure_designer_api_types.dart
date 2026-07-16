@@ -1252,6 +1252,28 @@ class APIFacetShellData {
           selectedFacetIndex == other.selectedFacetIndex;
 }
 
+@freezed
+sealed class APIFieldEditorHint with _$APIFieldEditorHint {
+  const APIFieldEditorHint._();
+
+  /// `Int` rows: atomic-number element dropdown.
+  const factory APIFieldEditorHint.element() = APIFieldEditorHint_Element;
+
+  /// `Vec3` rows: 0–1 RGB color editor.
+  const factory APIFieldEditorHint.color() = APIFieldEditorHint_Color;
+
+  /// `Str` rows: fixed-choice dropdown over these entries.
+  const factory APIFieldEditorHint.enum_(
+    List<String> field0,
+  ) = APIFieldEditorHint_Enum;
+
+  /// `Float` / `Int` rows: slider between the bounds. UI-only clamping.
+  const factory APIFieldEditorHint.range({
+    required double min,
+    required double max,
+  }) = APIFieldEditorHint_Range;
+}
+
 class APIFilterData {
   final APIDataType elementType;
 
@@ -1869,12 +1891,18 @@ class APILiteralField {
   /// disabled.
   final bool isWired;
 
+  /// Cosmetic widget annotation from the record def behind this row, if any.
+  /// Always `None` for `CustomNodeEditor`'s parameter rows — there is no
+  /// record def behind them.
+  final APIFieldEditorHint? hint;
+
   const APILiteralField({
     required this.name,
     required this.dataType,
     this.storedValue,
     this.defaultValue,
     required this.isWired,
+    this.hint,
   });
 
   @override
@@ -1883,7 +1911,8 @@ class APILiteralField {
       dataType.hashCode ^
       storedValue.hashCode ^
       defaultValue.hashCode ^
-      isWired.hashCode;
+      isWired.hashCode ^
+      hint.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1894,7 +1923,8 @@ class APILiteralField {
           dataType == other.dataType &&
           storedValue == other.storedValue &&
           defaultValue == other.defaultValue &&
-          isWired == other.isWired;
+          isWired == other.isWired &&
+          hint == other.hint;
 }
 
 @freezed

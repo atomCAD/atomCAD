@@ -1663,6 +1663,23 @@ pub enum APISimpleParamType {
     Mat3,
 }
 
+/// FRB mirror of `FieldEditorHint` — which widget a generic literal editor
+/// should render for a record-def field. **Purely cosmetic**: a hint never
+/// gates a wire, converts a value, or changes what a node emits; the row's
+/// `data_type` alone governs the value that crosses the FFI back. A hint whose
+/// widget is not implemented is ignored and the row falls back to the plain
+/// type widget. See `doc/design_array_node_and_field_hints.md` Part A.
+pub enum APIFieldEditorHint {
+    /// `Int` rows: atomic-number element dropdown.
+    Element,
+    /// `Vec3` rows: 0–1 RGB color editor.
+    Color,
+    /// `Str` rows: fixed-choice dropdown over these entries.
+    Enum(Vec<String>),
+    /// `Float` / `Int` rows: slider between the bounds. UI-only clamping.
+    Range { min: f64, max: f64 },
+}
+
 /// One editable input pin of a node that supports inline literal editing,
 /// surfaced for the auto-generated property panel. Used by both
 /// `CustomNodeEditor` (custom-node parameters) and `RecordConstructEditor`
@@ -1687,4 +1704,8 @@ pub struct APILiteralField {
     /// True when the parent pin has a wire connected. When true the row renders
     /// disabled.
     pub is_wired: bool,
+    /// Cosmetic widget annotation from the record def behind this row, if any.
+    /// Always `None` for `CustomNodeEditor`'s parameter rows — there is no
+    /// record def behind them.
+    pub hint: Option<APIFieldEditorHint>,
 }

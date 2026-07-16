@@ -14901,6 +14901,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIFieldEditorHint dco_decode_api_field_editor_hint(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    switch (raw[0]) {
+      case 0:
+        return APIFieldEditorHint_Element();
+      case 1:
+        return APIFieldEditorHint_Color();
+      case 2:
+        return APIFieldEditorHint_Enum(
+          dco_decode_list_String(raw[1]),
+        );
+      case 3:
+        return APIFieldEditorHint_Range(
+          min: dco_decode_f_64(raw[1]),
+          max: dco_decode_f_64(raw[2]),
+        );
+      default:
+        throw Exception("unreachable");
+    }
+  }
+
+  @protected
   APIFilterData dco_decode_api_filter_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -15181,14 +15203,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APILiteralField dco_decode_api_literal_field(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return APILiteralField(
       name: dco_decode_String(arr[0]),
       dataType: dco_decode_api_simple_param_type(arr[1]),
       storedValue: dco_decode_opt_box_autoadd_api_literal_value(arr[2]),
       defaultValue: dco_decode_opt_box_autoadd_api_literal_value(arr[3]),
       isWired: dco_decode_bool(arr[4]),
+      hint: dco_decode_opt_box_autoadd_api_field_editor_hint(arr[5]),
     );
   }
 
@@ -16351,6 +16374,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIFacetShellData dco_decode_box_autoadd_api_facet_shell_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_api_facet_shell_data(raw);
+  }
+
+  @protected
+  APIFieldEditorHint dco_decode_box_autoadd_api_field_editor_hint(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_api_field_editor_hint(raw);
   }
 
   @protected
@@ -17545,6 +17574,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_api_facet_shell_data(raw);
+  }
+
+  @protected
+  APIFieldEditorHint? dco_decode_opt_box_autoadd_api_field_editor_hint(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_api_field_editor_hint(raw);
   }
 
   @protected
@@ -18932,6 +18970,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIFieldEditorHint sse_decode_api_field_editor_hint(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var tag_ = sse_decode_i_32(deserializer);
+    switch (tag_) {
+      case 0:
+        return APIFieldEditorHint_Element();
+      case 1:
+        return APIFieldEditorHint_Color();
+      case 2:
+        var var_field0 = sse_decode_list_String(deserializer);
+        return APIFieldEditorHint_Enum(var_field0);
+      case 3:
+        var var_min = sse_decode_f_64(deserializer);
+        var var_max = sse_decode_f_64(deserializer);
+        return APIFieldEditorHint_Range(min: var_min, max: var_max);
+      default:
+        throw UnimplementedError('');
+    }
+  }
+
+  @protected
   APIFilterData sse_decode_api_filter_data(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_elementType = sse_decode_api_data_type(deserializer);
@@ -19203,12 +19264,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_defaultValue =
         sse_decode_opt_box_autoadd_api_literal_value(deserializer);
     var var_isWired = sse_decode_bool(deserializer);
+    var var_hint =
+        sse_decode_opt_box_autoadd_api_field_editor_hint(deserializer);
     return APILiteralField(
         name: var_name,
         dataType: var_dataType,
         storedValue: var_storedValue,
         defaultValue: var_defaultValue,
-        isWired: var_isWired);
+        isWired: var_isWired,
+        hint: var_hint);
   }
 
   @protected
@@ -20301,6 +20365,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_api_facet_shell_data(deserializer));
+  }
+
+  @protected
+  APIFieldEditorHint sse_decode_box_autoadd_api_field_editor_hint(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_api_field_editor_hint(deserializer));
   }
 
   @protected
@@ -21887,6 +21958,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_api_facet_shell_data(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  APIFieldEditorHint? sse_decode_opt_box_autoadd_api_field_editor_hint(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_api_field_editor_hint(deserializer));
     } else {
       return null;
     }
@@ -23537,6 +23620,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_field_editor_hint(
+      APIFieldEditorHint self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    switch (self) {
+      case APIFieldEditorHint_Element():
+        sse_encode_i_32(0, serializer);
+      case APIFieldEditorHint_Color():
+        sse_encode_i_32(1, serializer);
+      case APIFieldEditorHint_Enum(field0: final field0):
+        sse_encode_i_32(2, serializer);
+        sse_encode_list_String(field0, serializer);
+      case APIFieldEditorHint_Range(min: final min, max: final max):
+        sse_encode_i_32(3, serializer);
+        sse_encode_f_64(min, serializer);
+        sse_encode_f_64(max, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_api_filter_data(
       APIFilterData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -23741,6 +23843,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_api_literal_value(self.storedValue, serializer);
     sse_encode_opt_box_autoadd_api_literal_value(self.defaultValue, serializer);
     sse_encode_bool(self.isWired, serializer);
+    sse_encode_opt_box_autoadd_api_field_editor_hint(self.hint, serializer);
   }
 
   @protected
@@ -24670,6 +24773,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIFacetShellData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_api_facet_shell_data(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_api_field_editor_hint(
+      APIFieldEditorHint self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_api_field_editor_hint(self, serializer);
   }
 
   @protected
@@ -26085,6 +26195,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_api_facet_shell_data(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_field_editor_hint(
+      APIFieldEditorHint? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_api_field_editor_hint(self, serializer);
     }
   }
 

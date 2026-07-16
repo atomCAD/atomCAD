@@ -10,11 +10,17 @@ editing is currently both verbose and visually poor:
    `atom_replace` rule set, a `StyleRule` list) costs one `record_construct`
    node **per element** plus a `sequence` collector — N+1 nodes, with the
    schema re-picked on every `record_construct`. The `expr` node closes the
-   gap only for primitives (`[1, 2, 3]`): record width subtyping requires
-   every destination field present in the source
-   (`data_type.rs::can_be_converted_to_impl`, record arm), and expr record
-   literals cannot express an unset `Optional` field — so expr can never
-   feed a pin typed against an all-`Optional`-fields def like `StyleRule`.
+   gap cleanly only for primitives (`[1, 2, 3]`). Expr *can* reach a
+   record-typed pin — record width subtyping requires every destination
+   field present in the source (`data_type.rs::can_be_converted_to_impl`,
+   record arm), and `S → Optional[S]` is accepted at field positions
+   (`can_be_structurally_converted_to`), so an expr record literal that
+   sets **every** field converts even into an all-`Optional`-fields def
+   like `StyleRule`. But expr record literals cannot express an *unset*
+   `Optional` field, so the per-field-override use case `StyleRule` exists
+   for ("set only `alpha`, leave the rest inherited") is inexpressible from
+   expr — and an every-field-set expr literal is exactly the verbose,
+   hint-less authoring this design replaces.
 2. **Generic editors render an atomic number as a bare int box.** A
    dedicated per-schema node could show an element dropdown (atom_replace's
    inline rules editor does exactly that, hard-coded to `ElementMapping`),
@@ -31,9 +37,9 @@ This document adds the two complementary pieces:
   type, then add/remove/reorder/edit elements inline, with record elements
   edited through the same hint-aware field rows `record_construct` uses.
 
-Part A is independently useful (it upgrades `record_construct` today, for
-`ElementMapping` immediately and `StyleRule` when it lands) and Part B
-consumes it, so A lands first. Neither part changes the type system, the
+Part A is independently useful (it upgrades `record_construct` today —
+`ElementMapping` and `StyleRule` are both already-registered built-in defs)
+and Part B consumes it, so A lands first. Neither part changes the type system, the
 evaluator's value model, or any existing node's behavior.
 
 ## Part A — Field editor hints
@@ -58,9 +64,13 @@ pub enum FieldEditorHint {
     Range { min: f64, max: f64 },
 }
 
-// RecordField gains:
-#[serde(default, skip_serializing_if = "Option::is_none")]
+// RecordField gains (and RecordFieldEdit — the update_record_type_def
+// edit-row struct — gains the same field):
 pub hint: Option<FieldEditorHint>,
+// NOTE: deliberately no serde attribute — RecordTypeDef serializes through
+// hand-written Serialize/Deserialize impls, not derives, so an attribute
+// here would never reach disk. The wire-format change lives in those impls;
+// see §Persistence.
 ```
 
 **The invariant, stated once and firmly: hints are cosmetic.** A hint never
@@ -91,19 +101,39 @@ Ill-formed hints are rejected at every def construction site, exactly like
 the `Optional[Optional[…]]` restrictions: `add_record_type_def` /
 `update_record_type_def` (and the `with_edits` variant) error with a clear
 message; registry validation guards `.cnnd` files that smuggle in a
-mismatched hint (the hint is **dropped with a load warning**, not a load
-failure — cosmetic data must never brick a project file); built-in defs are
-constructed in code through the same checked constructor. `Enum` lists must
+mismatched hint (the hint is **dropped**, never a load failure — cosmetic
+data must never brick a project file; the drop is `println!`-logged to the
+console, since no user-facing load-warning channel exists today and building
+one is out of scope); built-in defs are constructed in code through the same
+checked constructor. `Enum` lists must
 be non-empty with trimmed, non-empty, duplicate-free entries; `Range`
 requires `min < max`.
 
 ### Persistence
 
-User defs serialize the hint with the field (serde default `None`,
-`skip_serializing_if` keeps hint-free saves byte-identical to today's
-output). **No `.cnnd` version bump, no migration** — old files load with no
-hints; new hint-free files are unchanged. Built-in defs are never
-serialized, as before.
+`RecordTypeDef` does **not** serialize through serde derives: it has
+hand-written `Serialize`/`Deserialize` impls (`node_type_registry.rs`) whose
+on-disk shape is `{ "name": ..., "fields": [[name, type], ...] }` — each
+field a `(String, DataType)` tuple, with load going through
+`from_named_fields` (field ids reassigned in authored order; see
+`doc/design_record_field_identity.md`). The hint therefore rides in those
+impls, not in a `RecordField` attribute:
+
+- **Serialize:** a hinted field is written as a 3-element entry
+  `[name, type, hint]`; a hint-free field stays the 2-element
+  `[name, type]`. Hint-free saves remain byte-identical to today's output.
+- **Deserialize:** the `Wire.fields` element type becomes a
+  `#[serde(untagged)]` enum with three variants tried in order —
+  `(String, DataType, FieldEditorHint)`, `(String, DataType)`, and a
+  last-resort `(String, DataType, serde::de::IgnoredAny)` that swallows an
+  unparseable third element (a hint kind from a future version) by dropping
+  the hint. Load constructs through a hint-aware `from_named_fields`
+  variant. Old files (all 2-element entries) load with `hint: None`.
+
+**No `.cnnd` version bump, no migration** — old files load with no hints;
+new hint-free files are unchanged; a file with unknown hint data loads
+hint-free rather than failing (cosmetic data must never brick a project
+file). Built-in defs are never serialized, as before.
 
 ### FRB / Flutter surface
 
@@ -118,9 +148,9 @@ serialized, as before.
 - `lib/structure_designer/node_data/literal_fields_editor.dart`: the widget
   dispatch (currently a `switch (field.dataType)` at ~line 160) gains a
   pre-check — if `field.hint` is present, render the hint widget; otherwise
-  fall through to the existing type switch. Unknown/future hint values fall
-  through too (graceful degradation is free because the type switch remains
-  complete).
+  fall through to the existing type switch. A hint whose widget is not (yet)
+  implemented falls through the same way (graceful degradation is free
+  because the type switch remains complete).
 
 Hint widgets:
 
@@ -133,22 +163,48 @@ Hint widgets:
   entry replaces it.
 - `Range` → slider + numeric field pair (the `xray_editor` composition),
   clamped to the hint bounds *in the UI only*.
-- `Color` → **no color widget exists in `lib/` today**; add a minimal
-  `lib/common/color_field_widget.dart` (swatch preview + three 0–1 float
-  fields, composed from existing input widgets). A richer picker is a
-  drop-in upgrade later — the hint seam doesn't change.
+- `Color` → **no color widget exists in `lib/` today**; add
+  `lib/common/color_field_widget.dart`, a two-tier editor:
+  - **Inline row** (always visible, composed from in-house widgets): a
+    rounded swatch button rendering the current color next to three compact
+    0–1 `FloatInput`s labeled R/G/B. The float fields are the
+    **authoritative** editing surface — the wire value is an exact `Vec3`,
+    so precise numeric entry must never require the picker. UI-entered
+    values clamp to [0, 1]; an out-of-range stored/wired value still renders
+    (clamped for the swatch preview only) per the cosmetic-hint invariant.
+  - **Picker dialog** (clicking the swatch): a `DraggableDialog` (project
+    rule — all dialogs draggable) hosting the `ColorPicker` widget from the
+    **`flex_color_picker`** package — new dependency, chosen over the
+    better-known `flutter_colorpicker` because it is actively maintained,
+    pure Dart with no transitive baggage, and desktop-oriented (hex
+    entry, copy/paste, keyboard support). Embed the bare widget, not the
+    package's own dialog helper (which wouldn't be draggable). Wheel +
+    sliders + hex input enabled; **opacity disabled** (the hint targets
+    `Vec3` RGB — alpha is a separate field with its own `Range` hint, as in
+    `StyleRule`). Live-commit, no Apply/Cancel — same convention as
+    `showTypeEditorDialog`; Ctrl+Z handles regret.
+  - **Quantization caveat:** pickers operate in 8-bit color, so a picked
+    value lands on n/255 grid points. That is fine for its purpose
+    (visual choice); exact floats are entered in the R/G/B fields, which
+    the dialog never overwrites unless the user actually picks.
+  - If taking a dependency is unwanted, the fallback is shipping the inline
+    row alone (dialog-less) — the seam doesn't change and the dialog is a
+    drop-in upgrade.
 
 ### Annotations shipped with this design
 
 - **`ElementMapping.from` / `.to` → `Element`** — the immediate payoff:
   `record_construct(schema: ElementMapping)` literals get element dropdowns,
   matching the convenience of atom_replace's bespoke inline editor.
-- **`StyleRule`** (when `doc/design_style_rules.md` lands) declares four:
-  `element → Element`, `color → Color`, `alpha → Range{0,1}`,
+- **`StyleRule`** (already landed — `doc/design_style_rules.md`; consumed
+  by `apply_style.rules`) declares four: `element → Element`,
+  `color → Color`, `alpha → Range{0,1}`,
   `render_style → Enum(["ball_and_stick", "space_filling", "default"])` —
-  the Enum hint turns that free-typed string into a dropdown, making the
-  eval-time string validation a backstop instead of the first line of
-  defense.
+  exactly the strings `apply_style` accepts
+  (`nodes/apply_style.rs::parse_style_rules`); the Enum hint turns that
+  free-typed string into a dropdown, making the eval-time string validation
+  a backstop instead of the first line of defense. `tag` stays unhinted —
+  see the Limitation below.
 - `MaterializeRegion` needs none (its `Optional[Bool]`/`Optional[Float]`
   fields already render sensibly).
 
@@ -252,6 +308,21 @@ literals verbatim; mismatches surface as the localized eval errors above,
 and the editor flags the offending rows and offers clearing. This is the
 same no-silent-data-loss stance as switch-case healing.
 
+**Field renames must re-key element objects.** Record-element entries are
+keyed by field *name*, but a def-field rename does not change field identity
+(stable `FieldId`s — `doc/design_record_field_identity.md`, issue #377).
+The registry already handles exactly this for `record_construct`: the
+rename cascade in `update_record_type_def` walks all nodes (via
+`walk_all_nodes_mut`) and re-keys `literal_values` through the rename map,
+downcasting to `RecordConstructData` (`node_type_registry.rs`). That cascade
+gains a sibling arm that downcasts to `ArrayData`, matches nodes whose
+`element_type` references the renamed def, and re-keys every
+`TextValue::Object` element's entries. Without it, a field rename would
+silently unset that field in every array element — for an `Optional` field
+not even an eval error, just a quietly vanished value — violating the
+no-silent-loss stance above. (Generalizing the two downcasts into a
+`NodeData` hook is a fine later cleanup, not required here.)
+
 ### Decision 3 — undo classes
 
 - **Element content edits** (set/clear a literal, set/clear a record
@@ -304,6 +375,13 @@ set_array_element_field_literal(scope_path, node_id, index, field, APILiteralVal
 clear_array_element_field_literal(scope_path, node_id, index, field)
 ```
 
+`add_array_element` seeds the new element so it evaluates immediately
+rather than erroring until first edited: a simple `element_type` gets that
+type's standard default literal (0, 0.0, false, `""`, zero vectors,
+identity matrices — the literal panel's defaults); a record `element_type`
+gets its **required** fields seeded with those same defaults and its
+`Optional` fields left unset.
+
 Existing converters `text_value_to_api_literal` / `api_literal_to_text_value`
 (`structure_designer_api.rs`) handle every value crossing; nothing new at
 the value layer. Run `flutter_rust_bridge_codegen generate`.
@@ -328,8 +406,7 @@ the value layer. Run `flutter_rust_bridge_codegen generate`.
 expecting `Array[T]`) → strict-peel the element type and accept iff
 literal-capable, else `None`; `FromOutput` → `None` (the node has no input
 pins). This makes `array` surface in the drag-add popup for exactly the pins
-it can feed — including `atom_replace.rules` and the future
-`apply_style.rules`.
+it can feed — including `atom_replace.rules` and `apply_style.rules`.
 
 ### What does not change
 
@@ -351,15 +428,22 @@ if built-in-only hints are acceptable for a while.
 
 **Implementation**
 
-- `FieldEditorHint` + `RecordField.hint` (serde default) + the checked
-  constructor / applicability validation at every def mutation site +
-  load-time drop-with-warning for ill-formed hints.
-- Annotate `ElementMapping.from`/`.to` with `Element`.
+- `FieldEditorHint` + `RecordField.hint` / `RecordFieldEdit.hint` + the
+  extended hand-written `Serialize`/`Deserialize` impls and hint-aware
+  `from_named_fields` variant per §Persistence + the checked constructor /
+  applicability validation at every def mutation site + load-time drop
+  (logged, never failing) for ill-formed or unparseable hints.
+- Annotate the built-in defs: `ElementMapping.from`/`.to` → `Element`;
+  `StyleRule` per §Annotations (`element → Element`, `color → Color`,
+  `alpha → Range{0,1}`, `render_style → Enum`; `tag` unhinted).
 - FRB: `APIFieldEditorHint`; `APILiteralField.hint` populated in
   `get_record_construct_fields`; codegen.
 - Flutter: hint pre-check in `literal_fields_editor.dart`; widgets —
   `SelectElementWidget` reuse (Element), dropdown (Enum), slider+field
-  (Range), new `lib/common/color_field_widget.dart` (Color).
+  (Range), new `lib/common/color_field_widget.dart` (Color: inline
+  swatch + R/G/B float row, plus a `DraggableDialog`-hosted
+  `flex_color_picker` picker — adds the `flex_color_picker` dependency to
+  `pubspec.yaml`; see §Hint widgets).
 
 **Automated tests** (`rust/tests/structure_designer/`, extending the
 record-def test files)
@@ -368,18 +452,26 @@ record-def test files)
   `Optional[…]`; each mismatch rejected by `add_record_type_def` /
   `update_record_type_def` with a clear error; `Enum` list rules and
   `Range{min<max}` enforced.
-- Serde: a user def with hints round-trips through `.cnnd`; a hint-free
-  save is byte-identical to the pre-feature format; an old file (no `hint`
-  keys) loads; a hand-corrupted file with an ill-formed hint loads with the
-  hint dropped.
-- `lookup_record_type_def("ElementMapping")` exposes the `Element` hints;
-  `get_record_construct_fields` carries them into `APILiteralField`.
+- Serde: a user def with hints round-trips through `.cnnd` (3-element
+  `[name, type, hint]` field entries); a hint-free save is byte-identical
+  to the pre-feature format (2-element entries); an old file (all 2-element
+  entries) loads with no hints; a hand-corrupted file with a mismatched
+  hint loads with the hint dropped; an entry whose third element is
+  unparseable (a future hint kind) loads with the hint dropped via the
+  `IgnoredAny` fallback — never a load failure.
+- `lookup_record_type_def` exposes the hints on `ElementMapping` (Element)
+  and `StyleRule` (all four hint kinds); `get_record_construct_fields`
+  carries them into `APILiteralField`.
 - `flutter analyze` clean over baseline.
 
 **Manual verification** — `flutter run`: a `record_construct` with schema
 `ElementMapping` renders element dropdowns for the `from`/`to` literals;
 wiring a pin disables the row exactly as today; a schema without hints is
-pixel-identical to before.
+pixel-identical to before. A `record_construct` with schema `StyleRule`
+exercises the other three widgets in one panel: color swatch + R/G/B row
+(picker dialog opens draggable, picking updates the floats, exact float
+entry round-trips unquantized), alpha slider clamped to [0, 1], and a
+`render_style` dropdown offering the three valid strings.
 
 ---
 
@@ -393,12 +485,17 @@ pixel-identical to before.
   entry-list sub-editor for `Enum` and min/max fields for `Range`.
 - Setter path revalidates applicability Rust-side (the UI filter is
   convenience, not the gate) and returns the error into the panel.
+- When a type edit makes the field's current hint inapplicable, the
+  `SchemaEditor` clears the hint in the **same** update it sends (so the
+  strict Rust-side rejection below is never hit in normal UI flow; it
+  remains the gate for direct API callers and the text format).
 
 **Automated tests** — API-level: update a user def adding each hint kind →
 round-trips through get; an invalid combination returns a clear error and
 leaves the def unchanged; def edits that retype a hinted field re-run
-applicability (retyping `Int`→`String` under an `Element` hint is rejected
-until the hint is cleared or changed).
+applicability (retyping `Int`→`String` while keeping a stale `Element` hint
+in the same update is rejected — reachable only from direct API use, since
+the SchemaEditor clears the hint on retype).
 
 **Manual verification** — `flutter run`: declare a user def with an `Enum`
 hint; its `record_construct` literal shows the dropdown; renaming/editing
@@ -414,6 +511,9 @@ the def keeps hints attached to their fields (stable `FieldId`s).
   `calculate_custom_node_type` (output `Array[element_type]`), `eval` per
   §Storage & eval, subtitle, text properties, `adapt_for_drag_source`.
   Register in `nodes/mod.rs` + `node_type_registry.rs`.
+- Extend the def-field rename cascade in `update_record_type_def` with the
+  `ArrayData` re-keying arm (per §Storage & eval, "Field renames must
+  re-key element objects").
 
 **Automated tests** — new `rust/tests/structure_designer/array_node_test.rs`:
 
@@ -429,6 +529,10 @@ the def keeps hints attached to their fields (stable `FieldId`s).
   rejected by `set_text_properties`.
 - Stale literals: retype `Int → Vec3` with elements present → data
   preserved, eval errors localize per element.
+- Def-field rename: an `array` of a user def with set fields survives
+  `update_record_type_def` renaming a field — element entries re-keyed,
+  values intact, eval unchanged (the test that fails if the rename cascade
+  misses `ArrayData`).
 - Text-format round-trip: primitives, record objects, exotic strings
   (quotes, non-ASCII), unset-vs-set `Optional` fields distinguished.
 - Node-type snapshots (`cargo test node_snapshots` + `cargo insta review`).

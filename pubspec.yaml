@@ -48,6 +48,10 @@ dependencies:
   flutter_highlight: ^0.7.0
   flutter_window_close: ^1.0.0
   flutter_fancy_tree_view: ^1.5.0
+  # Color picker hosted inside `lib/common/color_field_widget.dart`'s dialog
+  # (the `Color` field editor hint). Chosen over flutter_colorpicker: actively
+  # maintained, pure Dart, desktop-oriented (hex entry, copy/paste, keyboard).
+  flex_color_picker: ^3.7.1
 
   # CLI dependencies (also used by bin/atomcad_cli.dart)
   args: ^2.4.0

@@ -10,6 +10,8 @@ import 'package:flutter_cad/inputs/ivec2_input.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';
 import 'package:flutter_cad/inputs/vec2_input.dart';
 import 'package:flutter_cad/inputs/vec3_input.dart';
+import 'package:flutter_cad/common/color_field_widget.dart';
+import 'package:flutter_cad/common/select_element_widget.dart';
 import 'package:flutter_cad/structure_designer/node_data/matrix_cell.dart';
 
 /// Auto-generated property panel for a list of typed literal-valued fields.
@@ -157,6 +159,13 @@ class LiteralFieldsEditor extends StatelessWidget {
     APILiteralValue effective,
   ) {
     final inputKey = Key('${keyPrefix}_input_${field.name}');
+    // A hint is purely a widget choice — the value written back is the same
+    // plain literal the type switch below would write. An unimplemented hint,
+    // or one whose value does not match the row's type, falls through to the
+    // type switch (which stays complete, so degradation is free). See
+    // `doc/design_array_node_and_field_hints.md` Part A.
+    final hintWidget = _buildHintInput(context, field, effective, inputKey);
+    if (hintWidget != null) return hintWidget;
     switch (field.dataType) {
       case APISimpleParamType.bool:
         return CheckboxListTile(
@@ -222,6 +231,181 @@ class LiteralFieldsEditor extends StatelessWidget {
     }
   }
 
+  /// Renders the widget a [APIFieldEditorHint] asks for, or `null` to fall
+  /// through to the plain type switch — which happens when the row has no hint,
+  /// or when the hint does not match the row's actual type (a def edited out
+  /// from under a stale hint; hints are cosmetic, so this must never be an
+  /// error).
+  Widget? _buildHintInput(
+    BuildContext context,
+    APILiteralField field,
+    APILiteralValue effective,
+    Key inputKey,
+  ) {
+    final hint = field.hint;
+    switch (hint) {
+      case null:
+        return null;
+
+      case APIFieldEditorHint_Element():
+        if (field.dataType != APISimpleParamType.int) return null;
+        final atomicNumber = _asInt(effective);
+        return SelectElementWidget(
+          key: inputKey,
+          // 0 is not an element — show the "None" entry rather than a bogus
+          // pick. Choosing None writes 0 back, the row's own type zero.
+          value: atomicNumber > 0 ? atomicNumber : null,
+          onChanged: (v) => _set(field, APILiteralValue.int(v ?? 0)),
+        );
+
+      case APIFieldEditorHint_Color():
+        if (field.dataType != APISimpleParamType.vec3) return null;
+        return ColorFieldWidget(
+          key: inputKey,
+          keyPrefix: '${keyPrefix}_${field.name}',
+          value: _asVec3(effective),
+          onChanged: (v) => _set(field, APILiteralValue.vec3(v)),
+        );
+
+      case APIFieldEditorHint_Enum(field0: final entries):
+        if (field.dataType != APISimpleParamType.str) return null;
+        return _buildEnumInput(field, _asStr(effective), entries, inputKey);
+
+      case APIFieldEditorHint_Range(min: final min, max: final max):
+        switch (field.dataType) {
+          case APISimpleParamType.float:
+            return _buildFloatRangeInput(
+                field, _asFloat(effective), min, max, inputKey);
+          case APISimpleParamType.int:
+            return _buildIntRangeInput(
+                field, _asInt(effective), min, max, inputKey);
+          default:
+            return null;
+        }
+    }
+  }
+
+  /// Fixed-choice dropdown. A *stored* value outside [entries] (a wire-era
+  /// leftover, or an entry list edited after the fact) is shown as an extra,
+  /// visually-flagged item rather than silently discarded — picking any real
+  /// entry replaces it. An unset row shows nothing selected instead: the empty
+  /// string is this row's type zero, not a value the user chose, and the
+  /// `(unset)` label above already says so.
+  Widget _buildEnumInput(
+    APILiteralField field,
+    String current,
+    List<String> entries,
+    Key inputKey,
+  ) {
+    final isUnset = field.storedValue == null && current.isEmpty;
+    final isForeign = !isUnset && !entries.contains(current);
+    return DropdownButtonFormField<String>(
+      key: inputKey,
+      decoration: const InputDecoration(
+        isDense: true,
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(),
+      ),
+      isExpanded: true,
+      value: isUnset ? null : current,
+      hint: const Text('Select a value'),
+      items: [
+        if (isForeign)
+          DropdownMenuItem<String>(
+            value: current,
+            child: Text(
+              current.isEmpty ? '(empty)' : '$current  — not a valid choice',
+              style: const TextStyle(
+                fontStyle: FontStyle.italic,
+                color: Colors.redAccent,
+              ),
+            ),
+          ),
+        for (final entry in entries)
+          DropdownMenuItem<String>(value: entry, child: Text(entry)),
+      ],
+      onChanged: (v) {
+        if (v != null) _set(field, APILiteralValue.str(v));
+      },
+    );
+  }
+
+  /// Slider + numeric field pair (the `xray_editor` composition). Clamping is
+  /// **UI-only** — an out-of-range stored or wired value flows through
+  /// untouched, per the cosmetic-hint invariant; the slider just pins its thumb
+  /// to the nearest bound while the field keeps showing the real number.
+  Widget _buildFloatRangeInput(
+    APILiteralField field,
+    double current,
+    double min,
+    double max,
+    Key inputKey,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: Slider(
+            value: current.clamp(min, max),
+            min: min,
+            max: max,
+            divisions: 100,
+            label: current.toStringAsFixed(2),
+            onChanged: (v) =>
+                _set(field, APILiteralValue.float(v.clamp(min, max))),
+          ),
+        ),
+        SizedBox(
+          width: 80,
+          child: FloatInput(
+            label: '',
+            inputKey: inputKey,
+            value: current,
+            onChanged: (v) =>
+                _set(field, APILiteralValue.float(v.clamp(min, max))),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget? _buildIntRangeInput(
+    APILiteralField field,
+    int current,
+    double min,
+    double max,
+    Key inputKey,
+  ) {
+    final lo = min.ceil();
+    final hi = max.floor();
+    // A range narrower than one integer step has no slider to offer; the plain
+    // int box below still edits the value.
+    if (hi <= lo) return null;
+    return Row(
+      children: [
+        Expanded(
+          child: Slider(
+            value: current.clamp(lo, hi).toDouble(),
+            min: lo.toDouble(),
+            max: hi.toDouble(),
+            divisions: hi - lo,
+            label: '$current',
+            onChanged: (v) =>
+                _set(field, APILiteralValue.int(v.round().clamp(lo, hi))),
+          ),
+        ),
+        SizedBox(
+          width: 80,
+          child: IntInput(
+            label: '',
+            inputKey: inputKey,
+            value: current,
+            onChanged: (v) => _set(field, APILiteralValue.int(v.clamp(lo, hi))),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildIMat3(APILiteralField field, List<Int32List> m) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,8 +462,7 @@ class LiteralFieldsEditor extends StatelessWidget {
                         final next = <Float64List>[
                           for (var rr = 0; rr < 3; rr++)
                             Float64List.fromList([
-                              for (var cc = 0; cc < 3; cc++)
-                                _mat3At(m, rr, cc),
+                              for (var cc = 0; cc < 3; cc++) _mat3At(m, rr, cc),
                             ]),
                         ];
                         next[r][c] = v;

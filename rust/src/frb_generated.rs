@@ -12872,6 +12872,35 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut tag_ = <i32>::sse_decode(deserializer);
+        match tag_ {
+            0 => {
+                return crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Element;
+            }
+            1 => {
+                return crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Color;
+            }
+            2 => {
+                let mut var_field0 = <Vec<String>>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Enum(var_field0);
+            }
+            3 => {
+                let mut var_min = <f64>::sse_decode(deserializer);
+                let mut var_max = <f64>::sse_decode(deserializer);
+                return crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Range{min: var_min, max: var_max};
+            }
+            _ => {
+                unimplemented!("");
+            }
+        }
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIFilterData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -13232,12 +13261,16 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             crate::api::structure_designer::structure_designer_api_types::APILiteralValue,
         >>::sse_decode(deserializer);
         let mut var_isWired = <bool>::sse_decode(deserializer);
+        let mut var_hint = <Option<
+            crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint,
+        >>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::APILiteralField {
             name: var_name,
             data_type: var_dataType,
             stored_value: var_storedValue,
             default_value: var_defaultValue,
             is_wired: var_isWired,
+            hint: var_hint,
         };
     }
 }
@@ -15526,6 +15559,19 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::structure_designer::structure_designer_api_types::APIFacetShellData>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -18564,6 +18610,36 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Element => { [0.into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Color => { [1.into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Enum(field0) => { [2.into_dart(),
+field0.into_into_dart().into_dart()].into_dart() }
+crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Range{min,max} => { [3.into_dart(),
+min.into_into_dart().into_dart(),
+max.into_into_dart().into_dart()].into_dart() }
+ _ => { unimplemented!(""); }}
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint,
+    > for crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIFilterData
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -19174,6 +19250,7 @@ impl flutter_rust_bridge::IntoDart
             self.stored_value.into_into_dart().into_dart(),
             self.default_value.into_into_dart().into_dart(),
             self.is_wired.into_into_dart().into_dart(),
+            self.hint.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -22645,6 +22722,22 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        match self {crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Element => { <i32>::sse_encode(0, serializer);  }
+crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Color => { <i32>::sse_encode(1, serializer);  }
+crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Enum(field0) => { <i32>::sse_encode(2, serializer); <Vec<String>>::sse_encode(field0, serializer);
+ }
+crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint::Range{min,max} => { <i32>::sse_encode(3, serializer); <f64>::sse_encode(min, serializer);
+<f64>::sse_encode(max, serializer);
+ }
+ _ => { unimplemented!(""); }}
+    }
+}
+
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIFilterData {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -22882,6 +22975,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <Option<crate::api::structure_designer::structure_designer_api_types::APILiteralValue>>::sse_encode(self.stored_value, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::APILiteralValue>>::sse_encode(self.default_value, serializer);
         <bool>::sse_encode(self.is_wired, serializer);
+        <Option<crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint>>::sse_encode(self.hint, serializer);
     }
 }
 
@@ -24650,6 +24744,18 @@ impl SseEncode
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::structure_designer::structure_designer_api_types::APIFacetShellData>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode
+    for Option<crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint>
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::structure_designer::structure_designer_api_types::APIFieldEditorHint>::sse_encode(value, serializer);
         }
     }
 }

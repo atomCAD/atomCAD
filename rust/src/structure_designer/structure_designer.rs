@@ -2396,16 +2396,28 @@ impl StructureDesigner {
     ) -> Result<(), super::node_type_registry::RecordTypeDefError> {
         // Resolve per-row ids by name against the current def, then delegate to
         // the identity-aware core. A name present before keeps its id; a new name
-        // sends `None`.
+        // sends `None`. Editor hints are inexpressible here, so a surviving field
+        // keeps its existing hint — dropped silently if the new type makes it
+        // inapplicable, since the caller never mentioned it
+        // (`doc/design_array_node_and_field_hints.md` §Applicability).
         let edits = match self.node_type_registry.record_type_defs.get(name) {
             Some(def) => {
                 let ids: HashMap<&str, super::node_type_registry::FieldId> =
                     def.fields.iter().map(|f| (f.name.as_str(), f.id)).collect();
+                let hints: HashMap<&str, &super::node_type_registry::FieldEditorHint> = def
+                    .fields
+                    .iter()
+                    .filter_map(|f| f.hint.as_ref().map(|h| (f.name.as_str(), h)))
+                    .collect();
                 new_fields
                     .into_iter()
                     .map(
                         |(field_name, data_type)| super::node_type_registry::RecordFieldEdit {
                             id: ids.get(field_name.as_str()).copied(),
+                            hint: hints
+                                .get(field_name.as_str())
+                                .filter(|h| h.validate_for(&data_type).is_ok())
+                                .map(|h| (*h).clone()),
                             name: field_name,
                             data_type,
                         },

@@ -127,6 +127,112 @@ use thiserror::Error;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct FieldId(pub u64);
 
+/// A purely presentational annotation on a record-def field: which widget a
+/// generic literal editor (`record_construct`, and later the `array` node)
+/// should render for it.
+///
+/// **Hints are cosmetic — the invariant.** A hint is NEVER consulted by
+/// subtyping, conversion, validation, or eval. It never gates a wire, never
+/// converts a value, never changes what `record_construct` emits, and never
+/// appears in `can_be_converted_to` / `can_be_structurally_converted_to`. The
+/// wire value is a plain `Int`/`Vec3`/`String`/`Float`; a value outside an
+/// `Enum` list or `Range` bounds flows through exactly as an unhinted one would
+/// and is judged only by the consuming node's own eval-time validation. The
+/// moment a hint changes behavior it becomes a shadow type system — that is the
+/// line this design draws. See `doc/design_array_node_and_field_hints.md`
+/// Part A.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum FieldEditorHint {
+    /// `Int` fields: atomic-number element dropdown (`SelectElementWidget`).
+    Element,
+    /// `Vec3` fields: 0–1 RGB color editor.
+    Color,
+    /// `String` fields: fixed-choice dropdown. Entries are trimmed, non-empty,
+    /// duplicate-free; the list is non-empty.
+    Enum(Vec<String>),
+    /// `Float` or `Int` fields: slider between `min` and `max` (`min < max`).
+    Range { min: f64, max: f64 },
+}
+
+impl FieldEditorHint {
+    /// Short name used in error messages.
+    pub fn kind_name(&self) -> &'static str {
+        match self {
+            FieldEditorHint::Element => "Element",
+            FieldEditorHint::Color => "Color",
+            FieldEditorHint::Enum(_) => "Enum",
+            FieldEditorHint::Range { .. } => "Range",
+        }
+    }
+
+    /// Well-formedness (`Enum` list rules, `Range { min < max }`) **and**
+    /// applicability to `data_type`, checked *through* an `Optional[..]` wrapper
+    /// — the hint describes the inner value. Returns a user-facing message on
+    /// the first problem found.
+    ///
+    /// | Hint | Valid on |
+    /// |---|---|
+    /// | `Element` | `Int` / `Optional[Int]` |
+    /// | `Color` | `Vec3` / `Optional[Vec3]` |
+    /// | `Enum(..)` | `String` / `Optional[String]` |
+    /// | `Range{..}` | `Float`, `Int`, or their `Optional`s |
+    pub fn validate_for(&self, data_type: &DataType) -> Result<(), String> {
+        // 1. Is the hint itself well-formed?
+        match self {
+            FieldEditorHint::Enum(entries) => {
+                if entries.is_empty() {
+                    return Err("Enum hint needs at least one entry".to_string());
+                }
+                let mut seen: HashSet<&str> = HashSet::new();
+                for entry in entries {
+                    if entry.is_empty() {
+                        return Err("Enum hint entries must not be empty".to_string());
+                    }
+                    if entry.trim() != entry.as_str() {
+                        return Err(format!(
+                            "Enum hint entry '{}' has leading or trailing whitespace",
+                            entry
+                        ));
+                    }
+                    if !seen.insert(entry.as_str()) {
+                        return Err(format!("duplicate Enum hint entry '{}'", entry));
+                    }
+                }
+            }
+            FieldEditorHint::Range { min, max } => {
+                if !min.is_finite() || !max.is_finite() {
+                    return Err("Range hint bounds must be finite".to_string());
+                }
+                if min >= max {
+                    return Err(format!(
+                        "Range hint requires min < max (got min = {}, max = {})",
+                        min, max
+                    ));
+                }
+            }
+            FieldEditorHint::Element | FieldEditorHint::Color => {}
+        }
+
+        // 2. Does it apply to this field type? An `Optional[T]` field is edited
+        // as a plain `T`, so the hint describes `T`.
+        let inner = data_type.record_field_pin_type();
+        let applicable = match self {
+            FieldEditorHint::Element => matches!(inner, DataType::Int),
+            FieldEditorHint::Color => matches!(inner, DataType::Vec3),
+            FieldEditorHint::Enum(_) => matches!(inner, DataType::String),
+            FieldEditorHint::Range { .. } => matches!(inner, DataType::Float | DataType::Int),
+        };
+        if !applicable {
+            return Err(format!(
+                "editor hint {} does not apply to a field of type {}",
+                self.kind_name(),
+                data_type
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// One field of a [`RecordTypeDef`]. The `name` is the structural-type identity
 /// (records stay structurally typed by name); the `id` is the editing identity
 /// used to preserve wires on `record_construct` / `record_destructure` /
@@ -138,6 +244,10 @@ pub struct RecordField {
     /// Structural-type identity — gates `can_be_converted_to` compatibility.
     pub name: String,
     pub data_type: DataType,
+    /// Cosmetic widget annotation — see [`FieldEditorHint`]. NOTE: deliberately
+    /// no serde attribute; `RecordTypeDef` serializes through the hand-written
+    /// impls below, so the wire-format change lives there.
+    pub hint: Option<FieldEditorHint>,
 }
 
 /// Top-level definition of a named record type. Lives in
@@ -180,18 +290,59 @@ impl RecordTypeDef {
     /// ids `0..len` and setting `next_field_id = len`. Used for built-in defs,
     /// on load, and as the ergonomic constructor for programmatic/test code.
     pub fn from_named_fields(name: impl Into<String>, fields: Vec<(String, DataType)>) -> Self {
+        Self::from_hinted_fields(
+            name,
+            fields
+                .into_iter()
+                .map(|(n, t)| (n, t, None))
+                .collect::<Vec<_>>(),
+        )
+    }
+
+    /// Like [`from_named_fields`](Self::from_named_fields) but each field may
+    /// carry a [`FieldEditorHint`]. **This is the checked constructor**: a hint
+    /// that is ill-formed or inapplicable to its field type is **dropped** (the
+    /// field keeps its type and loads hint-free) and the drop is logged to the
+    /// console. Cosmetic data must never brick a project file, so this is never
+    /// an error — this constructor is also the `.cnnd` load path for
+    /// hand-corrupted or future-version hints. The built-in defs go through it
+    /// too, and `node_type_registry_test.rs` asserts they keep every hint they
+    /// declare, so a typo there fails a test rather than degrading silently.
+    ///
+    /// See `doc/design_array_node_and_field_hints.md` §Applicability.
+    pub fn from_hinted_fields(
+        name: impl Into<String>,
+        fields: Vec<(String, DataType, Option<FieldEditorHint>)>,
+    ) -> Self {
+        let def_name = name.into();
         let record_fields: Vec<RecordField> = fields
             .into_iter()
             .enumerate()
-            .map(|(i, (name, data_type))| RecordField {
-                id: FieldId(i as u64),
-                name,
-                data_type,
+            .map(|(i, (name, data_type, hint))| {
+                let hint = match hint {
+                    Some(h) => match h.validate_for(&data_type) {
+                        Ok(()) => Some(h),
+                        Err(message) => {
+                            println!(
+                                "Dropping ill-formed editor hint on record type def '{}' field '{}': {}",
+                                def_name, name, message
+                            );
+                            None
+                        }
+                    },
+                    None => None,
+                };
+                RecordField {
+                    id: FieldId(i as u64),
+                    name,
+                    data_type,
+                    hint,
+                }
             })
             .collect();
         let next_field_id = record_fields.len() as u64;
         RecordTypeDef {
-            name: name.into(),
+            name: def_name,
             fields: record_fields,
             next_field_id,
         }
@@ -233,24 +384,84 @@ pub struct RecordFieldEdit {
     pub id: Option<FieldId>,
     pub name: String,
     pub data_type: DataType,
+    /// Cosmetic widget annotation — see [`FieldEditorHint`]. Validated for
+    /// applicability at commit time; an ill-formed hint fails the whole edit
+    /// (unlike the load path, which drops it).
+    pub hint: Option<FieldEditorHint>,
 }
 
-// On-disk shape: `{ "name": ..., "fields": [[name, type], ...] }` — exactly the
-// pre-identity format (`fields` was `Vec<(String, DataType)>`). Field ids and
-// `next_field_id` are NOT persisted; they are reassigned deterministically in
-// authored order on load. No `.cnnd` format change, no version bump. See
-// `doc/design_record_field_identity.md` §6.
+/// On-disk shape of one `fields` entry. A hint-free field is the 2-element
+/// `[name, type]` — byte-identical to the pre-hint format — and a hinted field
+/// is the 3-element `[name, type, hint]`. The `Unknown` last-resort variant
+/// swallows a third element this version cannot parse (a hint kind from a
+/// future version) by dropping the hint, so an unknown hint is never a load
+/// failure. Variant order is significant: serde tries them top to bottom.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum WireField {
+    Hinted(String, DataType, FieldEditorHint),
+    Plain(String, DataType),
+    Unknown(String, DataType, serde::de::IgnoredAny),
+}
+
+impl WireField {
+    fn into_parts(self) -> (String, DataType, Option<FieldEditorHint>) {
+        match self {
+            WireField::Hinted(name, data_type, hint) => (name, data_type, Some(hint)),
+            WireField::Plain(name, data_type) => (name, data_type, None),
+            WireField::Unknown(name, data_type, _) => {
+                println!(
+                    "Dropping unrecognized editor hint on record field '{}' (written by a newer version?)",
+                    name
+                );
+                (name, data_type, None)
+            }
+        }
+    }
+}
+
+// On-disk shape: `{ "name": ..., "fields": [[name, type], ...] }` — the
+// pre-identity format (`fields` was `Vec<(String, DataType)>`), extended by the
+// optional third `hint` element (`doc/design_array_node_and_field_hints.md`
+// §Persistence). Field ids and `next_field_id` are NOT persisted; they are
+// reassigned deterministically in authored order on load. No `.cnnd` format
+// change, no version bump — old files load hint-free and hint-free saves stay
+// byte-identical. See `doc/design_record_field_identity.md` §6.
 impl Serialize for RecordTypeDef {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        use serde::ser::SerializeStruct;
-        let fields: Vec<(&str, &DataType)> = self
-            .fields
-            .iter()
-            .map(|f| (f.name.as_str(), &f.data_type))
-            .collect();
+        use serde::ser::{SerializeSeq, SerializeStruct};
+
+        // A `Vec<&RecordField>` cannot be serialized directly (the entry arity
+        // varies per field), so wrap each field in a shim whose `Serialize`
+        // picks the 2- or 3-element form.
+        struct FieldEntry<'a>(&'a RecordField);
+        impl Serialize for FieldEntry<'_> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: serde::Serializer,
+            {
+                match &self.0.hint {
+                    Some(hint) => {
+                        let mut s = serializer.serialize_seq(Some(3))?;
+                        s.serialize_element(&self.0.name)?;
+                        s.serialize_element(&self.0.data_type)?;
+                        s.serialize_element(hint)?;
+                        s.end()
+                    }
+                    None => {
+                        let mut s = serializer.serialize_seq(Some(2))?;
+                        s.serialize_element(&self.0.name)?;
+                        s.serialize_element(&self.0.data_type)?;
+                        s.end()
+                    }
+                }
+            }
+        }
+
+        let fields: Vec<FieldEntry> = self.fields.iter().map(FieldEntry).collect();
         let mut s = serializer.serialize_struct("RecordTypeDef", 2)?;
         s.serialize_field("name", &self.name)?;
         s.serialize_field("fields", &fields)?;
@@ -267,10 +478,15 @@ impl<'de> Deserialize<'de> for RecordTypeDef {
         struct Wire {
             name: String,
             #[serde(default)]
-            fields: Vec<(String, DataType)>,
+            fields: Vec<WireField>,
         }
         let wire = Wire::deserialize(deserializer)?;
-        Ok(RecordTypeDef::from_named_fields(wire.name, wire.fields))
+        // `from_hinted_fields` drops (and logs) any hint that does not apply to
+        // its field type — a hand-corrupted file loads, it just loses the hint.
+        Ok(RecordTypeDef::from_hinted_fields(
+            wire.name,
+            wire.fields.into_iter().map(WireField::into_parts).collect(),
+        ))
     }
 }
 
@@ -293,6 +509,8 @@ pub enum RecordTypeDefError {
     InvalidName(String, String),
     #[error("record type def '{0}' has an ill-formed type in field '{1}': {2}")]
     IllFormedType(String, String, String),
+    #[error("record type def '{0}' has an ill-formed editor hint on field '{1}': {2}")]
+    IllFormedHint(String, String, String),
     #[error("cannot delete record type '{0}' because it is still referenced: {1}")]
     Referenced(String, String),
 }
@@ -366,13 +584,25 @@ impl NodeTypeRegistry {
         // node types referencing them (e.g. `atom_replace.rules` →
         // `Array[Record(Named("ElementMapping"))]`) resolve consistently.
         // See `doc/design_atom_replace_rules_input.md` Phase A.
+        // The `Element` hints turn `record_construct(schema: ElementMapping)`'s
+        // bare int boxes into element dropdowns, matching the convenience of
+        // atom_replace's bespoke inline rules editor. See
+        // `doc/design_array_node_and_field_hints.md` §Annotations.
         ret.built_in_record_type_defs.insert(
             "ElementMapping".to_string(),
-            RecordTypeDef::from_named_fields(
+            RecordTypeDef::from_hinted_fields(
                 "ElementMapping",
                 vec![
-                    ("from".to_string(), DataType::Int),
-                    ("to".to_string(), DataType::Int),
+                    (
+                        "from".to_string(),
+                        DataType::Int,
+                        Some(FieldEditorHint::Element),
+                    ),
+                    (
+                        "to".to_string(),
+                        DataType::Int,
+                        Some(FieldEditorHint::Element),
+                    ),
                 ],
             ),
         );
@@ -445,30 +675,48 @@ impl NodeTypeRegistry {
         // selector). `render_style` selects `"ball_and_stick"` /
         // `"space_filling"` / `"default"` per atom (a string enum). See
         // `doc/design_style_rules.md` §"The StyleRule built-in record type def".
+        //
+        // Four of the five fields carry editor hints
+        // (`doc/design_array_node_and_field_hints.md` §Annotations). The
+        // `render_style` Enum lists exactly the strings `apply_style` accepts
+        // (`nodes/apply_style.rs::parse_style_rules`), which makes that
+        // eval-time string validation a backstop instead of the first line of
+        // defense. `tag` stays unhinted: the useful choices are the *upstream
+        // structure's* tag names — runtime context a `record_construct` sitting
+        // anywhere in the graph does not have.
         ret.built_in_record_type_defs.insert(
             "StyleRule".to_string(),
-            RecordTypeDef::from_named_fields(
+            RecordTypeDef::from_hinted_fields(
                 "StyleRule",
                 vec![
                     (
                         "element".to_string(),
                         DataType::Optional(Box::new(DataType::Int)),
+                        Some(FieldEditorHint::Element),
                     ),
                     (
                         "tag".to_string(),
                         DataType::Optional(Box::new(DataType::String)),
+                        None,
                     ),
                     (
                         "color".to_string(),
                         DataType::Optional(Box::new(DataType::Vec3)),
+                        Some(FieldEditorHint::Color),
                     ),
                     (
                         "alpha".to_string(),
                         DataType::Optional(Box::new(DataType::Float)),
+                        Some(FieldEditorHint::Range { min: 0.0, max: 1.0 }),
                     ),
                     (
                         "render_style".to_string(),
                         DataType::Optional(Box::new(DataType::String)),
+                        Some(FieldEditorHint::Enum(vec![
+                            "ball_and_stick".to_string(),
+                            "space_filling".to_string(),
+                            "default".to_string(),
+                        ])),
                     ),
                 ],
             ),
@@ -1539,6 +1787,7 @@ impl NodeTypeRegistry {
         }
         validate_distinct_fields(&def.name, &def.fields)?;
         validate_field_optionals(&def.name, &def.fields)?;
+        validate_field_hints(&def.name, &def.fields)?;
         self.check_no_cycle(&def.name, &def.fields)?;
         // A new entity gives its ancestor folders content (doc/design_empty_folders.md).
         self.prune_ancestor_folders(&def.name);
@@ -1611,6 +1860,14 @@ impl NodeTypeRegistry {
     /// run `repair_node_network` on every affected network so
     /// `record_construct` / `record_destructure` / `product` pin layouts
     /// re-derive and now-incompatible wires are disconnected.
+    ///
+    /// **Editor hints** (`doc/design_array_node_and_field_hints.md`): this entry
+    /// point cannot express them, so a surviving field (same name) *keeps* its
+    /// existing hint — unless the new type makes it inapplicable, in which case
+    /// the hint is dropped rather than erroring (the caller never mentioned it).
+    /// The hint-carrying entry point is
+    /// [`update_record_type_def_with_edits`](Self::update_record_type_def_with_edits),
+    /// which rejects an inapplicable hint outright.
     pub fn update_record_type_def(
         &mut self,
         name: &str,
@@ -1629,6 +1886,11 @@ impl NodeTypeRegistry {
         // `doc/design_record_field_identity.md` §4.2.
         let old_ids: HashMap<String, FieldId> =
             def.fields.iter().map(|f| (f.name.clone(), f.id)).collect();
+        let old_hints: HashMap<String, FieldEditorHint> = def
+            .fields
+            .iter()
+            .filter_map(|f| f.hint.clone().map(|h| (f.name.clone(), h)))
+            .collect();
         let mut next_field_id = def.next_field_id;
         let candidate: Vec<RecordField> = new_fields
             .into_iter()
@@ -1638,15 +1900,21 @@ impl NodeTypeRegistry {
                     next_field_id += 1;
                     id
                 });
+                let hint = old_hints
+                    .get(&name)
+                    .filter(|h| h.validate_for(&data_type).is_ok())
+                    .cloned();
                 RecordField {
                     id,
                     name,
                     data_type,
+                    hint,
                 }
             })
             .collect();
         validate_distinct_fields(name, &candidate)?;
         validate_field_optionals(name, &candidate)?;
+        validate_field_hints(name, &candidate)?;
         self.check_no_cycle(name, &candidate)?;
         if let Some(def) = self.record_type_defs.get_mut(name) {
             def.fields = candidate;
@@ -1716,12 +1984,14 @@ impl NodeTypeRegistry {
                     id,
                     name: edit.name,
                     data_type: edit.data_type,
+                    hint: edit.hint,
                 }
             })
             .collect();
 
         validate_distinct_fields(name, &candidate)?;
         validate_field_optionals(name, &candidate)?;
+        validate_field_hints(name, &candidate)?;
         self.check_no_cycle(name, &candidate)?;
 
         if let Some(def) = self.record_type_defs.get_mut(name) {
@@ -3070,6 +3340,27 @@ fn validate_field_optionals(
     for field in fields {
         if let Err(message) = validate_optionals_in_type(&field.data_type) {
             return Err(RecordTypeDefError::IllFormedType(
+                def_name.to_string(),
+                field.name.clone(),
+                message,
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Validates that every field's [`FieldEditorHint`] is well-formed and applies
+/// to that field's type (`doc/design_array_node_and_field_hints.md`
+/// §Applicability). This is the **strict** gate used by the def mutation
+/// entry points — the `.cnnd` load path instead drops the offending hint (see
+/// [`RecordTypeDef::from_hinted_fields`]), because cosmetic data must never
+/// brick a project file.
+fn validate_field_hints(def_name: &str, fields: &[RecordField]) -> Result<(), RecordTypeDefError> {
+    for field in fields {
+        if let Some(hint) = &field.hint
+            && let Err(message) = hint.validate_for(&field.data_type)
+        {
+            return Err(RecordTypeDefError::IllFormedHint(
                 def_name.to_string(),
                 field.name.clone(),
                 message,

@@ -70,6 +70,7 @@ fn existing(id: FieldId, name: &str, ty: DataType) -> RecordFieldEdit {
         id: Some(id),
         name: name.to_string(),
         data_type: ty,
+        hint: None,
     }
 }
 

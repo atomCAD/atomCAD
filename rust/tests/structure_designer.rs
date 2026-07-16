@@ -444,6 +444,9 @@ mod patch_latticefill_test;
 #[path = "structure_designer/invariants_test.rs"]
 mod invariants_test;
 
+#[path = "structure_designer/field_editor_hints_test.rs"]
+mod field_editor_hints_test;
+
 #[path = "structure_designer/record_field_identity_test.rs"]
 mod record_field_identity_test;
 

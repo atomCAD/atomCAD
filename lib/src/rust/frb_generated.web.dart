@@ -174,6 +174,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFacetShellData dco_decode_api_facet_shell_data(dynamic raw);
 
   @protected
+  APIFieldEditorHint dco_decode_api_field_editor_hint(dynamic raw);
+
+  @protected
   APIFilterData dco_decode_api_filter_data(dynamic raw);
 
   @protected
@@ -551,6 +554,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFacetShellData dco_decode_box_autoadd_api_facet_shell_data(dynamic raw);
+
+  @protected
+  APIFieldEditorHint dco_decode_box_autoadd_api_field_editor_hint(dynamic raw);
 
   @protected
   APIFilterData dco_decode_box_autoadd_api_filter_data(dynamic raw);
@@ -1074,6 +1080,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  APIFieldEditorHint? dco_decode_opt_box_autoadd_api_field_editor_hint(
+      dynamic raw);
+
+  @protected
   APIFilterData? dco_decode_opt_box_autoadd_api_filter_data(dynamic raw);
 
   @protected
@@ -1557,6 +1567,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFieldEditorHint sse_decode_api_field_editor_hint(
+      SseDeserializer deserializer);
+
+  @protected
   APIFilterData sse_decode_api_filter_data(SseDeserializer deserializer);
 
   @protected
@@ -1989,6 +2003,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFacetShellData sse_decode_box_autoadd_api_facet_shell_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFieldEditorHint sse_decode_box_autoadd_api_field_editor_hint(
       SseDeserializer deserializer);
 
   @protected
@@ -2619,6 +2637,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIFieldEditorHint? sse_decode_opt_box_autoadd_api_field_editor_hint(
+      SseDeserializer deserializer);
+
+  @protected
   APIFilterData? sse_decode_opt_box_autoadd_api_filter_data(
       SseDeserializer deserializer);
 
@@ -3177,6 +3199,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIFacetShellData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_field_editor_hint(
+      APIFieldEditorHint self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_filter_data(APIFilterData self, SseSerializer serializer);
 
   @protected
@@ -3637,6 +3663,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_facet_shell_data(
       APIFacetShellData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_field_editor_hint(
+      APIFieldEditorHint self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_filter_data(
@@ -4279,6 +4309,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_facet_shell_data(
       APIFacetShellData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_field_editor_hint(
+      APIFieldEditorHint? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_filter_data(

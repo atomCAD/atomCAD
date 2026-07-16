@@ -14,6 +14,216 @@ part of 'structure_designer_api_types.dart';
 T _$identity<T>(T value) => value;
 
 /// @nodoc
+mixin _$APIFieldEditorHint {
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APIFieldEditorHint);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIFieldEditorHint()';
+  }
+}
+
+/// @nodoc
+class $APIFieldEditorHintCopyWith<$Res> {
+  $APIFieldEditorHintCopyWith(
+      APIFieldEditorHint _, $Res Function(APIFieldEditorHint) __);
+}
+
+/// @nodoc
+
+class APIFieldEditorHint_Element extends APIFieldEditorHint {
+  const APIFieldEditorHint_Element() : super._();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIFieldEditorHint_Element);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIFieldEditorHint.element()';
+  }
+}
+
+/// @nodoc
+
+class APIFieldEditorHint_Color extends APIFieldEditorHint {
+  const APIFieldEditorHint_Color() : super._();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APIFieldEditorHint_Color);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APIFieldEditorHint.color()';
+  }
+}
+
+/// @nodoc
+
+class APIFieldEditorHint_Enum extends APIFieldEditorHint {
+  const APIFieldEditorHint_Enum(final List<String> field0)
+      : _field0 = field0,
+        super._();
+
+  final List<String> _field0;
+  List<String> get field0 {
+    if (_field0 is EqualUnmodifiableListView) return _field0;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_field0);
+  }
+
+  /// Create a copy of APIFieldEditorHint
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIFieldEditorHint_EnumCopyWith<APIFieldEditorHint_Enum> get copyWith =>
+      _$APIFieldEditorHint_EnumCopyWithImpl<APIFieldEditorHint_Enum>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIFieldEditorHint_Enum &&
+            const DeepCollectionEquality().equals(other._field0, _field0));
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(runtimeType, const DeepCollectionEquality().hash(_field0));
+
+  @override
+  String toString() {
+    return 'APIFieldEditorHint.enum_(field0: $field0)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIFieldEditorHint_EnumCopyWith<$Res>
+    implements $APIFieldEditorHintCopyWith<$Res> {
+  factory $APIFieldEditorHint_EnumCopyWith(APIFieldEditorHint_Enum value,
+          $Res Function(APIFieldEditorHint_Enum) _then) =
+      _$APIFieldEditorHint_EnumCopyWithImpl;
+  @useResult
+  $Res call({List<String> field0});
+}
+
+/// @nodoc
+class _$APIFieldEditorHint_EnumCopyWithImpl<$Res>
+    implements $APIFieldEditorHint_EnumCopyWith<$Res> {
+  _$APIFieldEditorHint_EnumCopyWithImpl(this._self, this._then);
+
+  final APIFieldEditorHint_Enum _self;
+  final $Res Function(APIFieldEditorHint_Enum) _then;
+
+  /// Create a copy of APIFieldEditorHint
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? field0 = null,
+  }) {
+    return _then(APIFieldEditorHint_Enum(
+      null == field0
+          ? _self._field0
+          : field0 // ignore: cast_nullable_to_non_nullable
+              as List<String>,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APIFieldEditorHint_Range extends APIFieldEditorHint {
+  const APIFieldEditorHint_Range({required this.min, required this.max})
+      : super._();
+
+  final double min;
+  final double max;
+
+  /// Create a copy of APIFieldEditorHint
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APIFieldEditorHint_RangeCopyWith<APIFieldEditorHint_Range> get copyWith =>
+      _$APIFieldEditorHint_RangeCopyWithImpl<APIFieldEditorHint_Range>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APIFieldEditorHint_Range &&
+            (identical(other.min, min) || other.min == min) &&
+            (identical(other.max, max) || other.max == max));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, min, max);
+
+  @override
+  String toString() {
+    return 'APIFieldEditorHint.range(min: $min, max: $max)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APIFieldEditorHint_RangeCopyWith<$Res>
+    implements $APIFieldEditorHintCopyWith<$Res> {
+  factory $APIFieldEditorHint_RangeCopyWith(APIFieldEditorHint_Range value,
+          $Res Function(APIFieldEditorHint_Range) _then) =
+      _$APIFieldEditorHint_RangeCopyWithImpl;
+  @useResult
+  $Res call({double min, double max});
+}
+
+/// @nodoc
+class _$APIFieldEditorHint_RangeCopyWithImpl<$Res>
+    implements $APIFieldEditorHint_RangeCopyWith<$Res> {
+  _$APIFieldEditorHint_RangeCopyWithImpl(this._self, this._then);
+
+  final APIFieldEditorHint_Range _self;
+  final $Res Function(APIFieldEditorHint_Range) _then;
+
+  /// Create a copy of APIFieldEditorHint
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? min = null,
+    Object? max = null,
+  }) {
+    return _then(APIFieldEditorHint_Range(
+      min: null == min
+          ? _self.min
+          : min // ignore: cast_nullable_to_non_nullable
+              as double,
+      max: null == max
+          ? _self.max
+          : max // ignore: cast_nullable_to_non_nullable
+              as double,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APILiteralValue {
   Object get field0;
 

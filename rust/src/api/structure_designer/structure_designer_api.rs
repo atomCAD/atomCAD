@@ -21,6 +21,7 @@ use super::structure_designer_api_types::APIExportAtomsData;
 use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
+use super::structure_designer_api_types::APIFieldEditorHint;
 use super::structure_designer_api_types::APIFilterData;
 use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIForeachData;
@@ -1536,13 +1537,38 @@ pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> 
                 // existing field (preserves wires by `FieldId`); `id == None` is
                 // a newly added row. Bail with a clear error if any field's
                 // APIDataType cannot be parsed (e.g. a malformed Custom string).
-                use crate::structure_designer::node_type_registry::{FieldId, RecordFieldEdit};
+                use crate::structure_designer::node_type_registry::{
+                    FieldEditorHint, FieldId, RecordFieldEdit,
+                };
+                // `APIRecordTypeField` carries no hint yet (that is Phase 2 of
+                // `doc/design_array_node_and_field_hints.md`), so carry each
+                // surviving field's existing hint across by `FieldId` — dropping
+                // it only if the row's new type makes it inapplicable. Without
+                // this, one schema-editor save would wipe the hints of a def
+                // that declared them in its `.cnnd`.
+                let existing_hints: std::collections::HashMap<FieldId, FieldEditorHint> = instance
+                    .structure_designer
+                    .node_type_registry
+                    .lookup_record_type_def(&name)
+                    .map(|def| {
+                        def.fields
+                            .iter()
+                            .filter_map(|f| f.hint.clone().map(|h| (f.id, h)))
+                            .collect()
+                    })
+                    .unwrap_or_default();
                 let mut converted: Vec<RecordFieldEdit> = Vec::with_capacity(fields.len());
                 for f in &fields {
                     match api_data_type_to_data_type(&f.data_type) {
                         Ok(dt) => converted.push(RecordFieldEdit {
                             id: f.id.map(FieldId),
                             name: f.name.clone(),
+                            hint: f
+                                .id
+                                .map(FieldId)
+                                .and_then(|id| existing_hints.get(&id))
+                                .filter(|h| h.validate_for(&dt).is_ok())
+                                .cloned(),
                             data_type: dt,
                         }),
                         Err(e) => {
@@ -6002,6 +6028,9 @@ pub fn get_custom_node_params(scope_path: Vec<u64>, node_id: u64) -> Option<Vec<
                         stored_value,
                         default_value,
                         is_wired,
+                        // Custom-node parameter rows have no record def behind
+                        // them, so there is nothing to carry a hint.
+                        hint: None,
                     });
                 }
                 Some(result)
@@ -6066,6 +6095,26 @@ pub fn clear_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name:
     }
 }
 
+/// Converts a core `FieldEditorHint` into its FRB mirror. A hint is cosmetic
+/// on both sides of the bridge — this is a pure shape translation, no
+/// validation (the def-mutation entry points already rejected inapplicable
+/// hints, and the load path dropped them). See
+/// `doc/design_array_node_and_field_hints.md` Part A.
+fn field_editor_hint_to_api(
+    hint: &crate::structure_designer::node_type_registry::FieldEditorHint,
+) -> APIFieldEditorHint {
+    use crate::structure_designer::node_type_registry::FieldEditorHint;
+    match hint {
+        FieldEditorHint::Element => APIFieldEditorHint::Element,
+        FieldEditorHint::Color => APIFieldEditorHint::Color,
+        FieldEditorHint::Enum(entries) => APIFieldEditorHint::Enum(entries.clone()),
+        FieldEditorHint::Range { min, max } => APIFieldEditorHint::Range {
+            min: *min,
+            max: *max,
+        },
+    }
+}
+
 /// Returns `None` if `node_id` is not a `record_construct` node, or if its
 /// chosen `schema` is empty / not in the registry. Returns `Some(vec)` —
 /// possibly empty — listing only the def's simple-typed fields, in authored
@@ -6123,6 +6172,7 @@ pub fn get_record_construct_fields(
                         // No default layer for record_construct fields.
                         default_value: None,
                         is_wired,
+                        hint: field.hint.as_ref().map(field_editor_hint_to_api),
                     });
                 }
                 Some(result)
