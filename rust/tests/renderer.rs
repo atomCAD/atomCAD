@@ -4,6 +4,9 @@
 #[path = "renderer/camera_test.rs"]
 mod camera_test;
 
+#[path = "renderer/label_atlas_test.rs"]
+mod label_atlas_test;
+
 #[path = "renderer/transparent_impostor_mesh_test.rs"]
 mod transparent_impostor_mesh_test;
 

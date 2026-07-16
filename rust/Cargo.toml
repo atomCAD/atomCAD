@@ -46,6 +46,7 @@ flutter_rust_bridge_codegen = "2.10.0"
 serde_with = "3.5.1"
 
 [dev-dependencies]
+ab_glyph = "0.2.32"
 insta = { version = "1.41", features = ["json"] }
 tempfile = "3.14"
 

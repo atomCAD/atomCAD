@@ -329,7 +329,8 @@
       "PowerShell(Get-Content \"C:\\\\Users\\\\DMNAGY~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--machine-phase-systems-flutter-cad\\\\772ea6df-59c9-42ee-a4c7-195abc3adbe1\\\\scratchpad\\\\fix_edit.txt\" -Raw | & \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\atomcad-cli.ps1\" edit)",
       "Bash(TEMP_DISABLE_ARRAY_REKEY=1 cargo test -j 4 --test structure_designer array_record_elements_survive)",
       "Bash(head -1617 tests/structure_designer/array_node_test.rs)",
-      "Bash(mv /tmp/trimmed.rs tests/structure_designer/array_node_test.rs)"
+      "Bash(mv /tmp/trimmed.rs tests/structure_designer/array_node_test.rs)",
+      "Bash(cargo add *)"
     ]
   }
 }
