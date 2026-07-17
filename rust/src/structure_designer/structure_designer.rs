@@ -27,6 +27,7 @@ use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
 use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::gadget::GadgetPickContext;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::implicit_eval::ray_tracing::{
@@ -123,6 +124,11 @@ pub struct StructureDesigner {
     pub node_type_registry: NodeTypeRegistry,
     pub network_evaluator: NetworkEvaluator,
     pub gadget: Option<Box<dyn NodeNetworkGadget>>,
+    /// Camera-derived picking info for gadget hit tests (minimum grab size in
+    /// screen pixels). Updated by the API layer whenever the camera or the
+    /// viewport size changes; a disabled context falls back to pure
+    /// world-space hit testing.
+    pub gadget_pick_context: GadgetPickContext,
     pub active_node_network_name: Option<String>,
     /// The user record type def currently open in the schema editor, if any.
     /// Backend-owned (mirrors `active_node_network_name`) so it survives
@@ -197,6 +203,7 @@ impl StructureDesigner {
             node_type_registry,
             network_evaluator,
             gadget: None,
+            gadget_pick_context: GadgetPickContext::disabled(),
             active_node_network_name: None,
             active_record_def_name: None,
             last_generated_structure_designer_scene: StructureDesignerScene::new(),
@@ -6770,7 +6777,7 @@ impl StructureDesigner {
 
     pub fn gadget_hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
         if let Some(gadget) = &self.gadget {
-            return gadget.hit_test(ray_origin, ray_direction);
+            return gadget.hit_test(ray_origin, ray_direction, &self.gadget_pick_context);
         }
         None
     }

@@ -4,7 +4,7 @@ use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::crystolecule::motif_symmetry::rotation_preserves_motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::{RotationalSymmetry, analyze_unit_cell_symmetries};
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
@@ -372,7 +372,12 @@ impl Tessellatable for StructureRotGadget {
 }
 
 impl Gadget for StructureRotGadget {
-    fn hit_test(&self, _ray_origin: DVec3, _ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        _ray_origin: DVec3,
+        _ray_direction: DVec3,
+        _pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         None
     }
 

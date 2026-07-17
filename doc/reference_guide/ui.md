@@ -164,6 +164,8 @@ A [`closure`](./nodes/math_programming.md#closure) and a custom node instance us
 **Click-to-activate from viewport**
 When multiple nodes have their output visible in the 3D viewport, you can click on a rendered output to activate the node that produced it. The first click activates the node and scrolls the node network panel to reveal it; subsequent clicks on the same node’s output perform the normal action (e.g., atom selection). If outputs from multiple nodes overlap at the click position, a disambiguation popup appears letting you choose which node to activate. The active node’s geometry is rendered with a distinct color to help distinguish it from other visible outputs.
 
+Clicks on the active node's interactive gadget (e.g. the XYZ translation gizmo's arrows) always go to the gadget — they are never treated as click-to-activate, even when another node's rendered output lies behind the gizmo. Gizmo handles also have a minimum grab size in screen pixels, so they stay easy to hit when zoomed out.
+
 ### Execute action (side-effect nodes)
 
 Some nodes exist to *do something* rather than to produce a value: `export_atoms` writes an atomic-structure file (`.xyz` or `.mol`) to disk; `foreach` runs a body once per element of an upstream stream; future effect nodes will follow the same pattern. These nodes return the [`Unit` data type](./node_networks.md#data-types) (a value that carries no information) so the node graph can wire them around without misrepresenting them as data sources.

@@ -1,7 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_diff::extract_diff;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::tessellator::tessellator::{
@@ -399,7 +399,12 @@ impl Tessellatable for FreeRotGadget {
 }
 
 impl Gadget for FreeRotGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        _pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         if cylinder_ray_intersection(
             ray_origin,
             ray_direction,

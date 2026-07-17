@@ -71,6 +71,7 @@ pub fn set_viewport_size(width: u32, height: u32) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             cad_instance.renderer.set_viewport_size(width, height);
+            crate::api::api_common::update_gadget_pick_context(cad_instance);
         });
     }
 }

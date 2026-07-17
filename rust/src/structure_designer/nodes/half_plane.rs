@@ -1,6 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::drawing_plane::DrawingPlane;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Material;
 use crate::renderer::mesh::Mesh;
@@ -406,7 +406,12 @@ impl Tessellatable for HalfPlaneGadget {
 }
 
 impl Gadget for HalfPlaneGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        _pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         let plane_to_world = self.drawing_plane.to_world_transform();
         let plane_normal = (plane_to_world.rotation * DVec3::new(0.0, 0.0, 1.0)).normalize();
 

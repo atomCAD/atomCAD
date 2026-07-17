@@ -2,7 +2,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
@@ -318,7 +318,12 @@ impl Tessellatable for StructureMoveGadget {
 }
 
 impl Gadget for StructureMoveGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         xyz_gadget_utils::xyz_gadget_hit_test(
             &self.unit_cell,
             DQuat::IDENTITY,
@@ -326,6 +331,7 @@ impl Gadget for StructureMoveGadget {
             &ray_origin,
             &ray_direction,
             false,
+            pick_ctx,
         )
     }
 

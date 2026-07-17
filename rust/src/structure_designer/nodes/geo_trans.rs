@@ -1,7 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
@@ -263,7 +263,12 @@ impl Tessellatable for GeoTransGadget {
 }
 
 impl Gadget for GeoTransGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         xyz_gadget_utils::xyz_gadget_hit_test(
             &self.unit_cell,
             self.frame_transform.rotation,
@@ -271,6 +276,7 @@ impl Gadget for GeoTransGadget {
             &ray_origin,
             &ray_direction,
             false, // Don't include rotation handles for now
+            pick_ctx,
         )
     }
 

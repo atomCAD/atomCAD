@@ -1,4 +1,5 @@
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use crate::display::gadget::GadgetPickContext;
 use crate::renderer::mesh::Material;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator;
@@ -12,6 +13,10 @@ use glam::f64::DVec3;
 pub const AXIS_CYLINDER_LENGTH: f64 = 10.0;
 pub const AXIS_CYLINDER_RADIUS: f64 = 0.2;
 pub const AXIS_CYLINDER_HIT_TEST_RADIUS_FACTOR: f64 = 1.3;
+/// Minimum pick radius for gizmo handles, in screen pixels. The world-space
+/// hit radius is enlarged to at least this many pixels at the gizmo's
+/// distance, so the handles stay grabbable at any zoom level.
+pub const MIN_HIT_RADIUS_PX: f64 = 8.0;
 pub const AXIS_CONE_RADIUS: f64 = 0.3;
 pub const AXIS_DIVISIONS: u32 = 16;
 pub const AXIS_CONE_LENGTH: f64 = 0.5;
@@ -166,6 +171,7 @@ pub fn rotation_handle_hit_test(
     axis_dir: &DVec3,
     ray_origin: &DVec3,
     ray_direction: &DVec3,
+    min_hit_radius: f64,
 ) -> Option<f64> {
     let handle_center = *start_pos - *axis_dir * ROTATION_HANDLE_OFFSET;
     let handle_top = handle_center + *axis_dir * (ROTATION_HANDLE_LENGTH * 0.5);
@@ -174,12 +180,13 @@ pub fn rotation_handle_hit_test(
     cylinder_hit_test(
         &handle_top,
         &handle_bottom,
-        ROTATION_HANDLE_RADIUS,
+        ROTATION_HANDLE_RADIUS.max(min_hit_radius),
         ray_origin,
         ray_direction,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn axis_arrow_hit_test(
     start_pos: &DVec3,
     axis_dir: &DVec3,
@@ -187,13 +194,14 @@ pub fn axis_arrow_hit_test(
     ray_direction: &DVec3,
     start_offset: f64,
     cylinder_length: f64,
+    min_hit_radius: f64,
 ) -> Option<f64> {
     let offset_start_pos = *start_pos + *axis_dir * start_offset;
     arrow_hit_test(
         &offset_start_pos,
         axis_dir,
-        AXIS_CYLINDER_RADIUS * AXIS_CYLINDER_HIT_TEST_RADIUS_FACTOR,
-        AXIS_CONE_RADIUS,
+        (AXIS_CYLINDER_RADIUS * AXIS_CYLINDER_HIT_TEST_RADIUS_FACTOR).max(min_hit_radius),
+        AXIS_CONE_RADIUS.max(min_hit_radius),
         cylinder_length,
         AXIS_CONE_LENGTH,
         AXIS_CONE_OFFSET,
@@ -209,7 +217,11 @@ pub fn xyz_gadget_hit_test(
     ray_origin: &DVec3,
     ray_direction: &DVec3,
     include_rotation_handles: bool,
+    pick_ctx: &GadgetPickContext,
 ) -> Option<i32> {
+    // Enforce a minimum grab size in screen pixels so the thin axis arrows
+    // stay clickable regardless of zoom level.
+    let min_hit_radius = pick_ctx.world_per_pixel_at(pos) * MIN_HIT_RADIUS_PX;
     let x_axis_dir = rotation_quat.mul_vec3(unit_cell.a.normalize());
     let y_axis_dir = rotation_quat.mul_vec3(unit_cell.b.normalize());
     let z_axis_dir = rotation_quat.mul_vec3(unit_cell.c.normalize());
@@ -231,6 +243,7 @@ pub fn xyz_gadget_hit_test(
         ray_direction,
         axis_start_offset,
         axis_cylinder_length,
+        min_hit_radius,
     );
 
     let y_hit = axis_arrow_hit_test(
@@ -240,6 +253,7 @@ pub fn xyz_gadget_hit_test(
         ray_direction,
         axis_start_offset,
         axis_cylinder_length,
+        min_hit_radius,
     );
 
     let z_hit = axis_arrow_hit_test(
@@ -249,14 +263,18 @@ pub fn xyz_gadget_hit_test(
         ray_direction,
         axis_start_offset,
         axis_cylinder_length,
+        min_hit_radius,
     );
 
     // Test rotation handles if enabled
     let mut rotation_hits = [None, None, None];
     if include_rotation_handles {
-        rotation_hits[0] = rotation_handle_hit_test(pos, &x_axis_dir, ray_origin, ray_direction);
-        rotation_hits[1] = rotation_handle_hit_test(pos, &y_axis_dir, ray_origin, ray_direction);
-        rotation_hits[2] = rotation_handle_hit_test(pos, &z_axis_dir, ray_origin, ray_direction);
+        rotation_hits[0] =
+            rotation_handle_hit_test(pos, &x_axis_dir, ray_origin, ray_direction, min_hit_radius);
+        rotation_hits[1] =
+            rotation_handle_hit_test(pos, &y_axis_dir, ray_origin, ray_direction, min_hit_radius);
+        rotation_hits[2] =
+            rotation_handle_hit_test(pos, &z_axis_dir, ray_origin, ray_direction, min_hit_radius);
     }
 
     // Find the closest hit and return its axis index

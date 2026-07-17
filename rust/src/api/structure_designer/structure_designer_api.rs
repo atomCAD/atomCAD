@@ -8851,6 +8851,18 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
+                // A click on the active node's gadget (e.g. a translation-gizmo
+                // handle) must never be stolen by click-to-activate, even when
+                // another displayed node's atoms lie behind the gadget along
+                // the ray — pass it through to normal handling.
+                if cad_instance
+                    .structure_designer
+                    .gadget_hit_test(ray_origin, ray_direction)
+                    .is_some()
+                {
+                    return APIViewportPickResult::ActiveNodeHit;
+                }
+
                 let visualization = &cad_instance
                     .structure_designer
                     .preferences

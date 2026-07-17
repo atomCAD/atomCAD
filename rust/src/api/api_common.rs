@@ -430,11 +430,31 @@ where
     }
 }
 
+/// Recomputes the camera-derived gadget pick context (used to enforce a
+/// minimum gadget grab size in screen pixels). Must be called whenever the
+/// camera or the viewport size changes; `refresh_structure_designer` covers
+/// the camera paths (every camera mutation triggers a refresh) and
+/// `set_viewport_size` covers resizes.
+pub fn update_gadget_pick_context(cad_instance: &mut CADInstance) {
+    let camera = &cad_instance.renderer.camera;
+    let (_, viewport_height) = cad_instance.renderer.get_viewport_size();
+    let viewport_height = viewport_height.max(1) as f64;
+    cad_instance.structure_designer.gadget_pick_context =
+        crate::display::gadget::GadgetPickContext {
+            eye: camera.eye,
+            perspective_world_per_pixel: 2.0 * (camera.fovy * 0.5).tan() / viewport_height,
+            ortho_world_per_pixel: 2.0 * camera.ortho_half_height / viewport_height,
+            orthographic: camera.orthographic,
+        };
+}
+
 pub fn refresh_structure_designer(
     cad_instance: &mut CADInstance,
     changes: &StructureDesignerChanges,
 ) {
     //let _timer = Timer::new(&format!("refresh_structure_designer changes: {:?}", changes.mode));
+
+    update_gadget_pick_context(cad_instance);
 
     cad_instance.structure_designer.refresh(changes);
 

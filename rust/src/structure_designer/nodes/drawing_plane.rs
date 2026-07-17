@@ -3,7 +3,7 @@ use crate::api::structure_designer::structure_designer_preferences::BackgroundPr
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
@@ -414,7 +414,12 @@ impl Gadget for DrawingPlaneGadget {
     // Returns the index of the handle that was hit, or None if no handle was hit
     // handle 0: miller index handle (central red sphere)
     // handle 1: shift drag handle (blue cylinder)
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        _pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         // Test central sphere
         if let Some(_t) = half_space_utils::hit_test_center_sphere(
             &self.unit_cell,

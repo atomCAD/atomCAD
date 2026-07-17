@@ -2,7 +2,7 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
@@ -407,7 +407,12 @@ impl Tessellatable for LatticeSymopGadget {
 }
 
 impl Gadget for LatticeSymopGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         xyz_gadget_utils::xyz_gadget_hit_test(
             &self.unit_cell,
             DQuat::IDENTITY,
@@ -415,6 +420,7 @@ impl Gadget for LatticeSymopGadget {
             &ray_origin,
             &ray_direction,
             false, // Don't include rotation handles for now
+            pick_ctx,
         )
     }
 

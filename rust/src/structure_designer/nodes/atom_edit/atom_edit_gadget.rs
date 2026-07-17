@@ -1,5 +1,5 @@
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::node_data::NodeData;
@@ -106,7 +106,12 @@ impl Tessellatable for AtomEditSelectionGadget {
 }
 
 impl Gadget for AtomEditSelectionGadget {
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         xyz_gadget_utils::xyz_gadget_hit_test(
             &UnitCellStruct::cubic_diamond(),
             DQuat::IDENTITY,
@@ -114,6 +119,7 @@ impl Gadget for AtomEditSelectionGadget {
             &ray_origin,
             &ray_direction,
             false, // No rotation handles
+            pick_ctx,
         )
     }
 

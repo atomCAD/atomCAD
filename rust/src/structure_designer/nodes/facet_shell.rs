@@ -1,7 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::display::gadget::Gadget;
+use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::display::poly_mesh::PolyMesh;
 use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
@@ -746,7 +746,12 @@ impl Gadget for FacetShellGadget {
     // Returns the index of the handle that was hit, or None if no handle was hit
     // handle 0: miller index handle (central red sphere)
     // handle from index 1: corresponds to the variant that is dragged
-    fn hit_test(&self, ray_origin: DVec3, ray_direction: DVec3) -> Option<i32> {
+    fn hit_test(
+        &self,
+        ray_origin: DVec3,
+        ray_direction: DVec3,
+        _pick_ctx: &GadgetPickContext,
+    ) -> Option<i32> {
         // Test central sphere
         if let Some(_t) = half_space_utils::hit_test_center_sphere(
             &self.unit_cell,
