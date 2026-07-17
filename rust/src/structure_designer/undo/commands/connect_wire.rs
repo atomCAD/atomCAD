@@ -1,3 +1,4 @@
+use crate::structure_designer::node_network::FUNCTION_PIN_INDEX;
 use crate::structure_designer::undo::snapshot::WireSnapshot;
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
@@ -54,7 +55,23 @@ impl UndoCommand for ConnectWireCommand {
         }
     }
 
+    /// Ordinarily just the dest node's data changed (it gained/lost an input).
+    ///
+    /// A **function pin** (`-1`) wire is the exception: connecting/disconnecting
+    /// it *toggles the source node's `function_pin_consumed` state*, which is
+    /// type-visible (the consumer's derived `apply`/`map` layouts) and
+    /// validation-visible (the role rules in
+    /// `doc/design_function_pin_roles.md`, which are gated on consumption). The
+    /// `NodeDataChanged` arm's conditional revalidation cannot cover this: it
+    /// asks whether the listed nodes are consumed **after** the undo, so the
+    /// leg that *removes* consumption always reads as "not consumed" and skips
+    /// the very revalidation it needs — listing the source node alongside the
+    /// dest does not help. `Full` re-validates unconditionally, matching what
+    /// the forward connect/delete paths do on this same condition.
     fn refresh_mode(&self) -> UndoRefreshMode {
+        if self.wire.source_output_pin_index == FUNCTION_PIN_INDEX {
+            return UndoRefreshMode::Full;
+        }
         UndoRefreshMode::NodeDataChanged(vec![self.wire.dest_node_id])
     }
 }

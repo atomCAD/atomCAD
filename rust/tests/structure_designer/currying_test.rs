@@ -344,6 +344,7 @@ fn canonicalize_network_flattens_closure_data_type_args() {
         body_width: DEFAULT_BODY_WIDTH,
         body_height: DEFAULT_BODY_HEIGHT,
         collapse_mode: CollapseMode::Auto,
+        function_pin_roles: std::collections::BTreeMap::new(),
     };
     network.nodes.insert(7, node);
     network.next_node_id = 8;
@@ -405,6 +406,7 @@ fn canonicalize_network_flattens_map_data_output_type() {
         body_width: DEFAULT_BODY_WIDTH,
         body_height: DEFAULT_BODY_HEIGHT,
         collapse_mode: CollapseMode::Auto,
+        function_pin_roles: std::collections::BTreeMap::new(),
     };
     network.nodes.insert(3, node);
     network.next_node_id = 4;

@@ -751,6 +751,7 @@ fn splice_new_id_collision_with_old_param_id() {
             body_height: 180.0,
             collapse_mode:
                 rust_lib_flutter_cad::structure_designer::node_network::CollapseMode::Auto,
+            function_pin_roles: std::collections::BTreeMap::new(),
         },
     );
     let inst = 100u64;
@@ -772,6 +773,7 @@ fn splice_new_id_collision_with_old_param_id() {
             body_height: 180.0,
             collapse_mode:
                 rust_lib_flutter_cad::structure_designer::node_network::CollapseMode::Auto,
+            function_pin_roles: std::collections::BTreeMap::new(),
         },
     );
     target.next_node_id = 1; // force the collision

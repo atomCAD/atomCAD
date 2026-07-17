@@ -169,6 +169,7 @@ pub fn copy_content_into(
             body_width: old_node.body_width,
             body_height: old_node.body_height,
             collapse_mode: old_node.collapse_mode,
+            function_pin_roles: old_node.function_pin_roles.clone(),
         };
         target.nodes.insert(new_id, new_node);
 

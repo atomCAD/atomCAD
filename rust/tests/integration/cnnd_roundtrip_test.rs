@@ -524,3 +524,150 @@ fn free_geometry_nodes_cnnd_roundtrip() {
         "free_sphere.radius ← float pin 0"
     );
 }
+
+/// Function pin roles (`doc/design_function_pin_roles.md`) survive a `.cnnd`
+/// round-trip on a top-level node and on a node inside a zone body, and
+/// `duplicate_node` carries them along. A network with **no** overrides must
+/// serialize byte-identically to before the field existed (the empty map is
+/// skipped), which is what keeps the existing fixtures and node snapshots green.
+#[test]
+fn function_pin_roles_cnnd_roundtrip() {
+    use glam::f64::DVec2;
+    use rust_lib_flutter_cad::structure_designer::node_network::FunctionPinRole;
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+
+    let outer = designer.add_node("map", DVec2::new(0.0, 0.0));
+    let mv = designer.add_node("structure_move", DVec2::new(300.0, 0.0));
+    let body_mv = designer.add_node_scoped(&[outer], "structure_move", DVec2::ZERO, None);
+    designer.validate_active_network();
+
+    let save_to = |designer: &mut StructureDesigner, name: &str| -> (tempfile::TempDir, String) {
+        let dir = tempdir().expect("temp dir");
+        let path = dir.path().join(name);
+        save_node_networks_to_file(
+            &mut designer.node_type_registry,
+            &path,
+            false,
+            &std::collections::HashMap::new(),
+        )
+        .expect("save");
+        let text = std::fs::read_to_string(&path).expect("read back");
+        (dir, text)
+    };
+
+    // No overrides ⇒ the field is absent from the JSON entirely.
+    let (_dir, text) = save_to(&mut designer, "no_roles.cnnd");
+    assert!(
+        !text.contains("function_pin_roles"),
+        "a network with no role overrides must serialize byte-identically"
+    );
+
+    designer.set_function_pin_role(&[], mv, 1, FunctionPinRole::Supplied);
+    designer.set_function_pin_role(&[outer], body_mv, 0, FunctionPinRole::Delayed);
+
+    // `duplicate_node` inherits the roles.
+    let dup = designer.duplicate_node(mv);
+    assert_ne!(dup, 0, "duplicate_node should succeed");
+
+    let temp_dir = tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("roles.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save");
+
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("reload");
+    let network = registry2.node_networks.get("Main").unwrap();
+
+    assert_eq!(
+        network.nodes.get(&mv).unwrap().function_pin_roles.get(&1),
+        Some(&FunctionPinRole::Supplied),
+        "a top-level node's roles round-trip"
+    );
+    assert_eq!(
+        network.nodes.get(&dup).unwrap().function_pin_roles.get(&1),
+        Some(&FunctionPinRole::Supplied),
+        "duplicate_node preserves roles through the round-trip"
+    );
+    let body = network.nodes.get(&outer).unwrap().zone.as_ref().unwrap();
+    assert_eq!(
+        body.nodes.get(&body_mv).unwrap().function_pin_roles.get(&0),
+        Some(&FunctionPinRole::Delayed),
+        "a body node's roles round-trip"
+    );
+}
+
+/// Loader healing: a hand-authored `.cnnd` carrying an explicit `Auto` entry
+/// loads with the entry **pruned**, restoring the sparse map's "absence == Auto"
+/// invariant (which is what makes the undo command's `Option` mirror entry
+/// presence).
+#[test]
+fn function_pin_roles_loader_prunes_explicit_auto() {
+    use glam::f64::DVec2;
+    use rust_lib_flutter_cad::structure_designer::node_network::FunctionPinRole;
+    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("Main");
+    designer.set_active_node_network_name(Some("Main".to_string()));
+    let mv = designer.add_node("structure_move", DVec2::new(0.0, 0.0));
+    designer.set_function_pin_role(&[], mv, 2, FunctionPinRole::Supplied);
+    designer.validate_active_network();
+
+    let temp_dir = tempdir().expect("temp dir");
+    let temp_file = temp_dir.path().join("auto_entry.cnnd");
+    save_node_networks_to_file(
+        &mut designer.node_type_registry,
+        &temp_file,
+        false,
+        &std::collections::HashMap::new(),
+    )
+    .expect("save");
+
+    // Hand-author an explicit `Auto` entry alongside the legitimate one.
+    let text = std::fs::read_to_string(&temp_file).expect("read");
+    let mut root: serde_json::Value = serde_json::from_str(&text).expect("parse");
+    let roles = root["node_networks"][0][1]["nodes"][0]["function_pin_roles"]
+        .as_object_mut()
+        .expect("the saved node carries a role map");
+    assert!(
+        roles.contains_key("2"),
+        "precondition: the real override is there"
+    );
+    roles.insert(
+        "1".to_string(),
+        serde_json::Value::String("Auto".to_string()),
+    );
+    std::fs::write(&temp_file, serde_json::to_string_pretty(&root).unwrap()).expect("write");
+
+    let mut registry2 = NodeTypeRegistry::new();
+    load_node_networks_from_file(&mut registry2, temp_file.to_str().unwrap()).expect("reload");
+    let roles = &registry2
+        .node_networks
+        .get("Main")
+        .unwrap()
+        .nodes
+        .get(&mv)
+        .unwrap()
+        .function_pin_roles;
+
+    assert_eq!(
+        roles.get(&2),
+        Some(&FunctionPinRole::Supplied),
+        "the real override survives"
+    );
+    assert!(
+        !roles.contains_key(&1),
+        "an explicit Auto entry is pruned on load: {roles:?}"
+    );
+}

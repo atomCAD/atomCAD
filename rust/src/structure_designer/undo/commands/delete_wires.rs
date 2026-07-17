@@ -1,3 +1,4 @@
+use crate::structure_designer::node_network::FUNCTION_PIN_INDEX;
 use crate::structure_designer::undo::snapshot::WireSnapshot;
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 
@@ -39,7 +40,19 @@ impl UndoCommand for DeleteWiresCommand {
         }
     }
 
+    /// Each dest node's data changed — except when a **function pin** (`-1`)
+    /// wire is among the deleted ones, which toggles its source node's
+    /// consumption and needs an unconditional revalidate. See
+    /// `ConnectWireCommand::refresh_mode` for why the `NodeDataChanged` arm's
+    /// conditional revalidation cannot cover that case.
     fn refresh_mode(&self) -> UndoRefreshMode {
+        if self
+            .deleted_wires
+            .iter()
+            .any(|w| w.source_output_pin_index == FUNCTION_PIN_INDEX)
+        {
+            return UndoRefreshMode::Full;
+        }
         let node_ids: Vec<u64> = self.deleted_wires.iter().map(|w| w.dest_node_id).collect();
         UndoRefreshMode::NodeDataChanged(node_ids)
     }

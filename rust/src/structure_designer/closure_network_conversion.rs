@@ -320,6 +320,7 @@ pub fn build_closure_from_instance(
         body_width: DEFAULT_BODY_WIDTH,
         body_height: DEFAULT_BODY_HEIGHT,
         collapse_mode: CollapseMode::default(),
+        function_pin_roles: std::collections::BTreeMap::new(),
     };
 
     // Derive C's `custom_node_type` (named zone-input pins + the single
@@ -921,6 +922,7 @@ fn add_parameter_node(
         body_width: DEFAULT_BODY_WIDTH,
         body_height: DEFAULT_BODY_HEIGHT,
         collapse_mode: CollapseMode::Auto,
+        function_pin_roles: std::collections::BTreeMap::new(),
     };
     network.nodes.insert(param_id, node);
     param_id

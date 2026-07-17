@@ -1264,3 +1264,853 @@ fn function_pin_capture_propagation_survives_undo_redo() {
         "redo of the capture must re-derive map's output back to Iter[Int]"
     );
 }
+
+// ============================================================================
+// Function pin roles — Phase 1 backend core
+// (doc/design_function_pin_roles.md, issue #408)
+// ============================================================================
+
+use glam::i32::IVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::structure_designer::node_network::{
+    FunctionPinDisposition, FunctionPinRole, function_pin_dispositions,
+};
+use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatData;
+use rust_lib_flutter_cad::structure_designer::nodes::cuboid::CuboidData;
+use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
+
+use crate::structure_equivalence::assert_structures_equivalent;
+
+/// Set `pin_index`'s role directly on the node (bypasses the designer's
+/// setter/undo path, for tests that only care about the resulting partition).
+fn set_role_raw(
+    designer: &mut StructureDesigner,
+    network: &str,
+    node_id: u64,
+    pin_index: usize,
+    role: FunctionPinRole,
+) {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap();
+    let node = net.nodes.get_mut(&node_id).unwrap();
+    node.function_pin_roles.insert(pin_index, role);
+}
+
+fn clear_role_raw(designer: &mut StructureDesigner, network: &str, node_id: u64, pin_index: usize) {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap();
+    net.nodes
+        .get_mut(&node_id)
+        .unwrap()
+        .function_pin_roles
+        .remove(&pin_index);
+}
+
+/// Clear every incoming wire on one input pin (used to re-point a preview wire).
+fn clear_pin_wires(designer: &mut StructureDesigner, network: &str, node_id: u64, pin: usize) {
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network)
+        .unwrap()
+        .nodes
+        .get_mut(&node_id)
+        .unwrap()
+        .arguments[pin]
+        .clear();
+}
+
+fn roles_of(
+    designer: &StructureDesigner,
+    network: &str,
+    node_id: u64,
+) -> std::collections::BTreeMap<usize, FunctionPinRole> {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .function_pin_roles
+        .clone()
+}
+
+fn dispositions_of(
+    designer: &StructureDesigner,
+    network: &str,
+    node_id: u64,
+) -> Vec<FunctionPinDisposition> {
+    let registry = &designer.node_type_registry;
+    let net = registry.node_networks.get(network).unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    let node_type = registry.get_node_type_for_node(node).unwrap();
+    function_pin_dispositions(node, node_type)
+}
+
+/// The `-1` pin's resolved `DataType` for a top-level node.
+fn function_pin_type(
+    designer: &StructureDesigner,
+    network: &str,
+    node_id: u64,
+) -> Option<DataType> {
+    let registry = &designer.node_type_registry;
+    let net = registry.node_networks.get(network).unwrap();
+    let node = net.nodes.get(&node_id).unwrap();
+    registry.resolve_output_type(node, net, -1)
+}
+
+/// A `cuboid` node with the given extent (a Blueprint source with real content).
+fn add_cuboid(designer: &mut StructureDesigner, network: &str, extent: i32, y: f64) -> u64 {
+    let id = designer.add_node("cuboid", DVec2::new(0.0, y));
+    set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(CuboidData {
+            min_corner: IVec3::ZERO,
+            extent: IVec3::splat(extent),
+            subdivision: 1,
+        }),
+    );
+    id
+}
+
+/// `materialize(cuboid(extent))` — a self-contained `Crystal` source. Its output
+/// pin is `Fixed(Crystal)`, so it also serves as a static type witness.
+fn add_crystal_source(designer: &mut StructureDesigner, network: &str, extent: i32, y: f64) -> u64 {
+    let cuboid_id = add_cuboid(designer, network, extent, y);
+    let mat_id = designer.add_node("materialize", DVec2::new(150.0, y));
+    designer.connect_nodes(cuboid_id, 0, mat_id, 0); // shape
+    mat_id
+}
+
+/// A `structure_move` node with the given stored translation. Pins: 0 `input`
+/// (HasStructure, required), 1 `translation` (IVec3), 2 `subdivision` (Int).
+fn add_structure_move(
+    designer: &mut StructureDesigner,
+    network: &str,
+    translation: IVec3,
+    y: f64,
+) -> u64 {
+    let id = designer.add_node("structure_move", DVec2::new(300.0, y));
+    set_node_data(
+        designer,
+        network,
+        id,
+        Box::new(StructureMoveData {
+            translation,
+            lattice_subdivision: 1,
+        }),
+    );
+    id
+}
+
+/// Mark `structure_move`'s `input` Delayed and its two property pins Supplied —
+/// the issue's configuration.
+fn configure_move_as_delayed_input(designer: &mut StructureDesigner, network: &str, mv_id: u64) {
+    set_role_raw(designer, network, mv_id, 0, FunctionPinRole::Delayed);
+    set_role_raw(designer, network, mv_id, 1, FunctionPinRole::Supplied);
+    set_role_raw(designer, network, mv_id, 2, FunctionPinRole::Supplied);
+}
+
+/// An `apply` node whose `f` is wired to `source_id`'s function pin, with
+/// `arg_id`'s pin 0 as its single argument. Goes through `connect_nodes` so the
+/// arg-pin layout post-pass runs (see `apply_function_pin_expr_double`).
+fn add_apply_of_function_pin(
+    designer: &mut StructureDesigner,
+    network: &str,
+    source_id: u64,
+    arg_id: u64,
+    y: f64,
+) -> u64 {
+    let apply_id = designer.add_node("apply", DVec2::new(500.0, y));
+    set_node_data(
+        designer,
+        network,
+        apply_id,
+        Box::new(ApplyData {
+            kind: ClosureKind::Map,
+            type_args: vec![],
+            param_names: vec![],
+        }),
+    );
+    designer.connect_nodes(source_id, -1, apply_id, 0); // f
+    designer.connect_nodes(arg_id, 0, apply_id, 1); // arg0
+    apply_id
+}
+
+fn extract_atoms(result: NetworkResult) -> AtomicStructure {
+    match result {
+        NetworkResult::Crystal(c) => c.atoms,
+        NetworkResult::Molecule(m) => m.atoms,
+        NetworkResult::Error(msg) => panic!("expected atoms, got Error: {msg}"),
+        other => panic!("expected atoms, got {}", other.to_display_string()),
+    }
+}
+
+// --- Partition ---------------------------------------------------------------
+
+/// Every role × wired/unwired combination maps onto the disposition table in
+/// `doc/design_function_pin_roles.md` §"Semantics".
+#[test]
+fn roles_partition_table_covers_every_combination() {
+    let mut designer = setup_designer_with_network("main");
+    let crystal_id = add_crystal_source(&mut designer, "main", 2, 0.0);
+    let int_id = add_int(&mut designer, "main", 3, 200.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -120.0);
+
+    // All unwired, all Auto → every pin is a parameter.
+    assert_eq!(
+        dispositions_of(&designer, "main", mv_id),
+        vec![FunctionPinDisposition::Parameter; 3]
+    );
+
+    // Auto + wired → capture-wire.
+    designer.connect_nodes(crystal_id, 0, mv_id, 0);
+    designer.connect_nodes(int_id, 0, mv_id, 2);
+    assert_eq!(
+        dispositions_of(&designer, "main", mv_id),
+        vec![
+            FunctionPinDisposition::CaptureWire,
+            FunctionPinDisposition::Parameter,
+            FunctionPinDisposition::CaptureWire,
+        ]
+    );
+
+    // Delayed + wired → still a parameter (the wire is preview-only).
+    // Supplied + unwired → capture-stored.
+    // Supplied + wired → capture-wire (identical to Auto + wired).
+    set_role_raw(&mut designer, "main", mv_id, 0, FunctionPinRole::Delayed);
+    set_role_raw(&mut designer, "main", mv_id, 1, FunctionPinRole::Supplied);
+    set_role_raw(&mut designer, "main", mv_id, 2, FunctionPinRole::Supplied);
+    assert_eq!(
+        dispositions_of(&designer, "main", mv_id),
+        vec![
+            FunctionPinDisposition::Parameter,
+            FunctionPinDisposition::CaptureStored,
+            FunctionPinDisposition::CaptureWire,
+        ]
+    );
+
+    // Delayed + unwired → parameter (same as Auto + unwired).
+    set_role_raw(&mut designer, "main", mv_id, 1, FunctionPinRole::Delayed);
+    assert_eq!(
+        dispositions_of(&designer, "main", mv_id)[1],
+        FunctionPinDisposition::Parameter
+    );
+}
+
+/// A node with no parameters left is a legal `() -> R` thunk, and the Supplied
+/// pins' stored data is baked into it.
+#[test]
+fn roles_all_supplied_is_thunk() {
+    let mut designer = setup_designer_with_network("main");
+    let crystal_id = add_crystal_source(&mut designer, "main", 2, 0.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -120.0);
+    // `input` is required, so capture it by wire; the two property-backed pins
+    // are Supplied from stored data.
+    designer.connect_nodes(crystal_id, 0, mv_id, 0);
+    set_role_raw(&mut designer, "main", mv_id, 1, FunctionPinRole::Supplied);
+    set_role_raw(&mut designer, "main", mv_id, 2, FunctionPinRole::Supplied);
+
+    let zc = match evaluate_node_pin(&designer, "main", mv_id, -1) {
+        NetworkResult::Function(zc) => zc,
+        other => panic!("expected a thunk, got {}", other.to_display_string()),
+    };
+    assert!(
+        zc.param_types.is_empty(),
+        "a fully captured/supplied node's function pin is a nullary thunk"
+    );
+    assert_eq!(zc.return_type, DataType::Crystal);
+}
+
+/// A **multi-wire** (array) pin: the role applies to the whole pin, never per
+/// wire. Auto/Supplied capture all wires; Delayed drops all of them and takes
+/// the declared `Array[T]` pin type (no witness for a multi-wire pin).
+#[test]
+fn roles_multi_wire_pin_applies_to_whole_pin() {
+    let mut designer = setup_designer_with_network("main");
+
+    // `array_concat(arrays: Array[Array[Int]])` — a genuine multi-wire pin.
+    let a1 = add_expr(&mut designer, "main", "[1, 2]", vec![], 0.0);
+    let a2 = add_expr(&mut designer, "main", "[3]", vec![], 80.0);
+    let cat_id = designer.add_node("array_concat", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        cat_id,
+        Box::new(ArrayConcatData {
+            element_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(a1, 0, cat_id, 0);
+    designer.connect_nodes(a2, 0, cat_id, 0);
+
+    let wire_count = |d: &StructureDesigner| {
+        d.node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .nodes
+            .get(&cat_id)
+            .unwrap()
+            .arguments[0]
+            .len()
+    };
+    assert_eq!(
+        wire_count(&designer),
+        2,
+        "precondition: two wires on the `a` pin"
+    );
+
+    let body_arg_of = |d: &StructureDesigner| {
+        let zc = match evaluate_node_pin(d, "main", cat_id, -1) {
+            NetworkResult::Function(zc) => zc,
+            other => panic!("expected Function, got {}", other.to_display_string()),
+        };
+        let arg = zc.body.nodes.values().next().unwrap().arguments[0].clone();
+        (zc.param_types.clone(), arg)
+    };
+
+    // `b` is left unwired throughout, so it stays a plain parameter and every
+    // assertion below is about the multi-wired `a` pin (index 0).
+    //
+    // Auto + wired → one capture-wire disposition for the pin as a whole; both
+    // of its wires are captured, so `a` contributes no parameter.
+    assert_eq!(
+        dispositions_of(&designer, "main", cat_id),
+        vec![
+            FunctionPinDisposition::CaptureWire,
+            FunctionPinDisposition::Parameter,
+        ]
+    );
+    let (params, body_arg) = body_arg_of(&designer);
+    assert_eq!(
+        params,
+        vec![DataType::Array(Box::new(DataType::Int))],
+        "only `b` remains a parameter"
+    );
+    assert_eq!(
+        body_arg.len(),
+        2,
+        "Auto+wired captures ALL of the pin's wires"
+    );
+
+    // Supplied + wired → identical to Auto + wired.
+    set_role_raw(&mut designer, "main", cat_id, 0, FunctionPinRole::Supplied);
+    assert_eq!(
+        dispositions_of(&designer, "main", cat_id)[0],
+        FunctionPinDisposition::CaptureWire
+    );
+    let (_, body_arg) = body_arg_of(&designer);
+    assert_eq!(body_arg.len(), 2, "Supplied+wired captures ALL wires too");
+
+    // Delayed + wired → a parameter, all wires dropped from the body, and the
+    // parameter type is the *declared* `Array[Int]` pin type (no witness).
+    set_role_raw(&mut designer, "main", cat_id, 0, FunctionPinRole::Delayed);
+    assert_eq!(
+        dispositions_of(&designer, "main", cat_id)[0],
+        FunctionPinDisposition::Parameter
+    );
+    let (params, body_arg) = body_arg_of(&designer);
+    assert_eq!(
+        params,
+        vec![
+            DataType::Array(Box::new(DataType::Int)),
+            DataType::Array(Box::new(DataType::Int)),
+        ],
+        "the Delayed `a` pin takes its DECLARED Array[Int] type (no witness)"
+    );
+    assert_eq!(
+        body_arg.len(),
+        1,
+        "a Delayed pin's preview wires are all replaced by the parameter"
+    );
+    assert!(
+        matches!(
+            body_arg.incoming_wires[0].source_pin,
+            SourcePin::ZoneInput { pin_index: 0 }
+        ),
+        "a Delayed multi-wire pin reads from the parameter frame, not its wires"
+    );
+}
+
+// --- Typing (the preview-wire witness) --------------------------------------
+
+/// The issue's exact case: `structure_move` with `input` Delayed + previewed
+/// from a `Crystal` source and the other pins Supplied types as
+/// `(Crystal) -> Crystal`.
+#[test]
+fn roles_witness_types_structure_move_as_crystal_to_crystal() {
+    let mut designer = setup_designer_with_network("main");
+    let preview_id = add_crystal_source(&mut designer, "main", 2, 0.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -120.0);
+
+    // Before roles: all pins unwired ⇒ arity 3 and an unresolvable
+    // `same_as_input` return ⇒ the `-1` pin has no type at all.
+    assert_eq!(
+        function_pin_type(&designer, "main", mv_id),
+        None,
+        "an unwitnessed structure_move has no resolvable function type"
+    );
+
+    designer.connect_nodes(preview_id, 0, mv_id, 0); // preview wire
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+
+    assert_eq!(
+        function_pin_type(&designer, "main", mv_id),
+        Some(DataType::Function(FunctionType::new(
+            vec![DataType::Crystal],
+            DataType::Crystal
+        ))),
+        "the preview wire witnesses both the parameter and the same_as_input return"
+    );
+}
+
+/// The witness falls back to the **declared** pin type when the preview
+/// source's own type doesn't resolve.
+#[test]
+fn roles_witness_falls_back_to_declared_pin_type() {
+    let mut designer = setup_designer_with_network("main");
+
+    // `free_move`'s output is `same_as_input` with its input unwired, so its
+    // pin 0 does not resolve — an unresolvable preview source.
+    let unresolved_id = designer.add_node("free_move", DVec2::new(0.0, 0.0));
+
+    // `materialize`'s pin 0 is `Fixed(Crystal)`, so its return resolves
+    // regardless of what feeds `shape`; that isolates the *parameter*
+    // resolution, which must fall back to the declared pin type.
+    let mat_id = designer.add_node("materialize", DVec2::new(300.0, 200.0));
+    let mat_pins = designer
+        .node_type_registry
+        .get_node_type("materialize")
+        .unwrap()
+        .parameters
+        .len();
+    designer.connect_nodes(unresolved_id, 0, mat_id, 0);
+    set_role_raw(&mut designer, "main", mat_id, 0, FunctionPinRole::Delayed);
+    for pin in 1..mat_pins {
+        set_role_raw(
+            &mut designer,
+            "main",
+            mat_id,
+            pin,
+            FunctionPinRole::Supplied,
+        );
+    }
+
+    assert_eq!(
+        function_pin_type(&designer, "main", mat_id),
+        Some(DataType::Function(FunctionType::new(
+            vec![DataType::Blueprint], // the declared `shape` pin type
+            DataType::Crystal
+        ))),
+        "an unresolvable preview source falls back to the declared pin type"
+    );
+}
+
+/// The witness is **transitive**: retyping the preview wire's *upstream*
+/// re-derives the `-1` type on the next resolve.
+#[test]
+fn roles_witness_updates_transitively() {
+    let mut designer = setup_designer_with_network("main");
+
+    // `free_move(input: HasFreeLinOps)` previewed through `exit_structure`
+    // (`Crystal -> Molecule`).
+    let crystal_id = add_crystal_source(&mut designer, "main", 2, 0.0);
+    let exit_id = designer.add_node("exit_structure", DVec2::new(300.0, 60.0));
+    designer.connect_nodes(crystal_id, 0, exit_id, 0);
+
+    let mv_id = designer.add_node("free_move", DVec2::new(450.0, -120.0));
+    let mv_pins = designer
+        .node_type_registry
+        .get_node_type("free_move")
+        .unwrap()
+        .parameters
+        .len();
+    designer.connect_nodes(exit_id, 0, mv_id, 0);
+    set_role_raw(&mut designer, "main", mv_id, 0, FunctionPinRole::Delayed);
+    for pin in 1..mv_pins {
+        set_role_raw(&mut designer, "main", mv_id, pin, FunctionPinRole::Supplied);
+    }
+
+    assert_eq!(
+        function_pin_type(&designer, "main", mv_id),
+        Some(DataType::Function(FunctionType::new(
+            vec![DataType::Molecule],
+            DataType::Molecule
+        ))),
+        "witnessed through exit_structure → Molecule"
+    );
+
+    // Swap the *upstream* of the previewed pin: route the same crystal through
+    // `dematerialize` (`Crystal -> Blueprint`) instead.
+    let demat_id = designer.add_node("dematerialize", DVec2::new(300.0, 300.0));
+    designer.connect_nodes(crystal_id, 0, demat_id, 0);
+    clear_pin_wires(&mut designer, "main", mv_id, 0);
+    designer.connect_nodes(demat_id, 0, mv_id, 0);
+
+    assert_eq!(
+        function_pin_type(&designer, "main", mv_id),
+        Some(DataType::Function(FunctionType::new(
+            vec![DataType::Blueprint],
+            DataType::Blueprint
+        ))),
+        "the -1 type follows the preview wire's upstream chain"
+    );
+}
+
+// --- End-to-end: the issue's workflow ---------------------------------------
+
+/// The full issue #408 case: a `structure_move` marked `Delayed` on `input`
+/// (with a preview wire) and `Supplied` on the rest is invoked via `apply` — the
+/// output is moved by the node's **stored** translation, and the preview wire is
+/// ignored in favour of the caller's argument.
+#[test]
+fn roles_end_to_end_structure_move_applies_stored_translation() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Two *different* crystals so "which one came out" is observable: the
+    // preview source (extent 3) and the actual argument (extent 1).
+    let preview_id = add_crystal_source(&mut designer, "main", 3, 0.0);
+    let arg_id = add_crystal_source(&mut designer, "main", 1, 300.0);
+
+    let translation = IVec3::new(2, 0, 0);
+    let mv_id = add_structure_move(&mut designer, "main", translation, -160.0);
+    designer.connect_nodes(preview_id, 0, mv_id, 0); // preview wire
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+
+    let apply_id = add_apply_of_function_pin(&mut designer, "main", mv_id, arg_id, 400.0);
+    let applied = extract_atoms(evaluate_node(&designer, "main", apply_id));
+
+    // Reference: the same stored translation applied to the argument crystal
+    // directly by an ordinary (non-function) structure_move.
+    let ref_mv = add_structure_move(&mut designer, "main", translation, 600.0);
+    designer.connect_nodes(arg_id, 0, ref_mv, 0);
+    let expected = extract_atoms(evaluate_node(&designer, "main", ref_mv));
+    assert_structures_equivalent(&applied, &expected, 1e-9);
+
+    // And it is *not* the preview crystal: the two differ in size, so a leaked
+    // preview wire would show up as a different atom count.
+    let preview_atoms = extract_atoms(evaluate_node(&designer, "main", preview_id));
+    assert_ne!(
+        applied.atoms_values().count(),
+        preview_atoms.atoms_values().count(),
+        "the preview wire must be ignored at invocation"
+    );
+}
+
+/// Editing the stored data of a `Supplied` pin (what a gizmo drag does) is
+/// reflected by the `-1` consumer on the next evaluation — the closure is
+/// rebuilt per consumer eval, never cached across the edit.
+#[test]
+fn roles_supplied_stored_value_is_fresh_after_edit() {
+    let mut designer = setup_designer_with_network("main");
+    let preview_id = add_crystal_source(&mut designer, "main", 2, 0.0);
+    let arg_id = add_crystal_source(&mut designer, "main", 1, 300.0);
+
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -160.0);
+    designer.connect_nodes(preview_id, 0, mv_id, 0);
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+    let apply_id = add_apply_of_function_pin(&mut designer, "main", mv_id, arg_id, 400.0);
+
+    let before = extract_atoms(evaluate_node(&designer, "main", apply_id));
+
+    // Simulate a gizmo drag: rewrite the stored translation.
+    set_node_data(
+        &mut designer,
+        "main",
+        mv_id,
+        Box::new(StructureMoveData {
+            translation: IVec3::new(5, 0, 0),
+            lattice_subdivision: 1,
+        }),
+    );
+
+    let after = extract_atoms(evaluate_node(&designer, "main", apply_id));
+    let ref_mv = add_structure_move(&mut designer, "main", IVec3::new(5, 0, 0), 600.0);
+    designer.connect_nodes(arg_id, 0, ref_mv, 0);
+    let expected = extract_atoms(evaluate_node(&designer, "main", ref_mv));
+
+    assert_structures_equivalent(&after, &expected, 1e-9);
+    let first_x = |s: &AtomicStructure| s.atoms_values().next().unwrap().position.x;
+    assert_ne!(
+        first_x(&before),
+        first_x(&after),
+        "the new stored translation must reach the consumer"
+    );
+}
+
+/// An **erroring preview source** does not poison the function: the wire is
+/// dropped from the body, so the `-1` closure still builds and invokes, while
+/// pin 0 shows the error normally.
+#[test]
+fn roles_erroring_preview_source_does_not_poison_the_function() {
+    let mut designer = setup_designer_with_network("main");
+
+    // An `enter_structure` with both inputs unwired evaluates to an Error at
+    // pin 0, but its output pin is statically `Fixed(Crystal)` — a valid type
+    // witness whose *value* is broken.
+    let broken_id = designer.add_node("enter_structure", DVec2::new(0.0, 0.0));
+    match evaluate_node(&designer, "main", broken_id) {
+        NetworkResult::Error(_) => {}
+        other => panic!(
+            "precondition: the preview source must error at pin 0, got {}",
+            other.to_display_string()
+        ),
+    }
+
+    let arg_id = add_crystal_source(&mut designer, "main", 1, 300.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(2, 0, 0), -160.0);
+    designer.connect_nodes(broken_id, 0, mv_id, 0);
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+
+    // Pin 0 of the function node itself errors (it evaluates the broken wire)…
+    match evaluate_node(&designer, "main", mv_id) {
+        NetworkResult::Error(_) => {}
+        other => panic!(
+            "expected the previewed node's pin 0 to error, got {}",
+            other.to_display_string()
+        ),
+    }
+
+    // …but the function value builds and invokes fine.
+    let apply_id = add_apply_of_function_pin(&mut designer, "main", mv_id, arg_id, 400.0);
+    let applied = extract_atoms(evaluate_node(&designer, "main", apply_id));
+    let ref_mv = add_structure_move(&mut designer, "main", IVec3::new(2, 0, 0), 600.0);
+    designer.connect_nodes(arg_id, 0, ref_mv, 0);
+    assert_structures_equivalent(
+        &applied,
+        &extract_atoms(evaluate_node(&designer, "main", ref_mv)),
+        1e-9,
+    );
+}
+
+// --- Connection gating ------------------------------------------------------
+
+/// Before roles, a `structure_move.-1` is rejected by a `(Crystal) -> Crystal`
+/// consumer (no resolvable type); after the Supplied/Delayed+preview setup it is
+/// accepted. Reverting the role re-flags the existing wire on revalidate.
+#[test]
+fn roles_connection_gating_and_revert() {
+    let mut designer = setup_designer_with_network("main");
+    let preview_id = add_crystal_source(&mut designer, "main", 2, 0.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -160.0);
+
+    // A `map` over `Iter[Crystal]` wants `(Crystal) -> Crystal` at `f`.
+    let map_id = add_map(
+        &mut designer,
+        "main",
+        DataType::Crystal,
+        DataType::Crystal,
+        400.0,
+    );
+
+    assert!(
+        !designer.can_connect_nodes(mv_id, -1, map_id, 1),
+        "an unwitnessed structure_move.-1 has no type and must be rejected"
+    );
+
+    designer.connect_nodes(preview_id, 0, mv_id, 0);
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+
+    assert!(
+        designer.can_connect_nodes(mv_id, -1, map_id, 1),
+        "Delayed+preview + Supplied makes structure_move a (Crystal) -> Crystal function"
+    );
+    designer.connect_nodes(mv_id, -1, map_id, 1);
+    designer.connect_nodes(preview_id, 0, map_id, 0); // xs (broadcasts)
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(valid, "the wired-up network validates clean: {errors:?}");
+
+    // Revert `input` to Auto: the wired pin becomes a capture, so the exposed
+    // type collapses to a `() -> Crystal` thunk, which no longer fits `map.f`.
+    clear_role_raw(&mut designer, "main", mv_id, 0);
+    let (_, errors) = validate_and_errors(&mut designer, "main");
+    assert!(
+        errors.iter().any(|e| e.contains("Data type mismatch")),
+        "reverting the role must re-flag the existing -1 wire, got {errors:?}"
+    );
+}
+
+// --- Validation -------------------------------------------------------------
+
+/// `Supplied` + unwired + **required** pin → a **non-blocking** warning, and the
+/// invocation yields a localized error rather than a panic.
+///
+/// Uses `materialize` rather than the design's `structure_move` example because
+/// `structure_move`'s pin 0 is `same_as_input`: leaving its required `input`
+/// unwired *also* trips the pre-existing **blocking** "polymorphic output pin
+/// could not be resolved" rule, which would mask the blast radius this test is
+/// about. `materialize` has the same shape (a required `shape` pin) but a
+/// `Fixed(Crystal)` output, so the only thing under test is the new warning.
+#[test]
+fn roles_supplied_required_unwired_warns_non_blocking() {
+    let mut designer = setup_designer_with_network("main");
+    let arg_id = add_cuboid(&mut designer, "main", 1, 300.0);
+    let preview_id = add_cuboid(&mut designer, "main", 2, 0.0);
+
+    let mat_id = designer.add_node("materialize", DVec2::new(300.0, -160.0));
+    let mat_pins = designer
+        .node_type_registry
+        .get_node_type("materialize")
+        .unwrap()
+        .parameters
+        .len();
+    designer.connect_nodes(preview_id, 0, mat_id, 0); // preview wire on `shape`
+    set_role_raw(&mut designer, "main", mat_id, 0, FunctionPinRole::Delayed);
+    for pin in 1..mat_pins {
+        set_role_raw(
+            &mut designer,
+            "main",
+            mat_id,
+            pin,
+            FunctionPinRole::Supplied,
+        );
+    }
+    let apply_id = add_apply_of_function_pin(&mut designer, "main", mat_id, arg_id, 400.0);
+
+    // Precondition: the property-backed pins are Supplied but *not* required
+    // (they have stored values to bake in), so no warning yet.
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(valid, "{errors:?}");
+    assert!(
+        !errors.iter().any(|e| e.contains("marked Supplied")),
+        "property-backed pins have a stored value; no warning expected: {errors:?}"
+    );
+
+    // Now mark the **required** `shape` pin Supplied while unwired.
+    clear_pin_wires(&mut designer, "main", mat_id, 0);
+    set_role_raw(&mut designer, "main", mat_id, 0, FunctionPinRole::Supplied);
+    let (valid, errors) = validate_and_errors(&mut designer, "main");
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.contains("'shape'") && e.contains("marked Supplied")),
+        "expected the Supplied-required warning, got {errors:?}"
+    );
+    assert!(
+        valid,
+        "the warning is non-blocking — the rest of the network keeps evaluating: {errors:?}"
+    );
+
+    // An unrelated node still evaluates, and invoking yields a localized Error
+    // (not a panic).
+    match evaluate_node(&designer, "main", arg_id) {
+        NetworkResult::Blueprint(_) => {}
+        other => panic!(
+            "an unrelated node must keep evaluating, got {}",
+            other.to_display_string()
+        ),
+    }
+    match evaluate_node(&designer, "main", apply_id) {
+        NetworkResult::Error(_) => {}
+        other => panic!(
+            "expected a localized Error at invocation, got {}",
+            other.to_display_string()
+        ),
+    }
+}
+
+/// The warning is gated on the `-1` pin actually being consumed: inert roles on
+/// an unconsumed node must not produce noise.
+#[test]
+fn roles_supplied_required_warning_is_gated_on_consumption() {
+    let mut designer = setup_designer_with_network("main");
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -160.0);
+    set_role_raw(&mut designer, "main", mv_id, 0, FunctionPinRole::Supplied);
+
+    let (_, errors) = validate_and_errors(&mut designer, "main");
+    assert!(
+        !errors.iter().any(|e| e.contains("marked Supplied")),
+        "an unconsumed node's roles are inert — no warning: {errors:?}"
+    );
+
+    // Connect a consumer of the `-1` pin → the warning appears.
+    let map_id = add_map(
+        &mut designer,
+        "main",
+        DataType::Crystal,
+        DataType::Crystal,
+        400.0,
+    );
+    wire_function_pin(&mut designer, "main", mv_id, map_id, 1);
+    let (_, errors) = validate_and_errors(&mut designer, "main");
+    assert!(
+        errors.iter().any(|e| e.contains("marked Supplied")),
+        "a consumed node's Supplied+required+unwired pin warns: {errors:?}"
+    );
+
+    // Delete the consumer → the warning goes away.
+    remove_node(&mut designer, "main", map_id);
+    let (_, errors) = validate_and_errors(&mut designer, "main");
+    assert!(
+        !errors.iter().any(|e| e.contains("marked Supplied")),
+        "removing the consumer clears the warning: {errors:?}"
+    );
+}
+
+// --- Repair ------------------------------------------------------------------
+
+/// Out-of-range role entries (a stale index after a pin-layout change) are
+/// ignored by the partition and pruned by the repair pass.
+#[test]
+fn roles_out_of_range_entries_are_pruned_and_ignored() {
+    let mut designer = setup_designer_with_network("main");
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::ZERO, 0.0);
+
+    // Plant an entry past the last pin (structure_move has 3 input pins).
+    set_role_raw(&mut designer, "main", mv_id, 7, FunctionPinRole::Supplied);
+
+    // The partition ignores it — one disposition per *declared* pin.
+    assert_eq!(dispositions_of(&designer, "main", mv_id).len(), 3);
+
+    // And the repair pass prunes it.
+    designer.validate_active_network();
+    assert!(
+        roles_of(&designer, "main", mv_id).is_empty(),
+        "repair prunes role entries that no longer name a pin"
+    );
+}
+
+// --- Setter + map invariant --------------------------------------------------
+
+/// The setter normalizes `Auto` to **entry removal** (the map never stores an
+/// explicit `Auto`), and a no-op change pushes no undo command.
+#[test]
+fn roles_setter_normalizes_auto_to_absence() {
+    let mut designer = setup_designer_with_network("main");
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::ZERO, 0.0);
+    designer.undo_stack.clear();
+
+    // Auto → Auto is a no-op: no entry, no command.
+    designer.set_function_pin_role(&[], mv_id, 1, FunctionPinRole::Auto);
+    assert!(roles_of(&designer, "main", mv_id).is_empty());
+    assert!(!designer.undo_stack.can_undo(), "a no-op pushes no command");
+
+    designer.set_function_pin_role(&[], mv_id, 1, FunctionPinRole::Supplied);
+    assert_eq!(
+        roles_of(&designer, "main", mv_id).get(&1),
+        Some(&FunctionPinRole::Supplied)
+    );
+    assert!(designer.undo_stack.can_undo());
+
+    // Setting it back to Auto removes the entry rather than storing `Auto`.
+    designer.set_function_pin_role(&[], mv_id, 1, FunctionPinRole::Auto);
+    assert!(
+        roles_of(&designer, "main", mv_id).is_empty(),
+        "Auto is represented by absence"
+    );
+
+    // An out-of-range pin index is rejected outright.
+    designer.set_function_pin_role(&[], mv_id, 9, FunctionPinRole::Delayed);
+    assert!(roles_of(&designer, "main", mv_id).is_empty());
+}

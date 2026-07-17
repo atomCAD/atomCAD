@@ -49,6 +49,7 @@ fn make_node(id: u64, node_type_name: &str, arg_count: usize) -> Node {
         body_width: rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_WIDTH,
         body_height: rust_lib_flutter_cad::structure_designer::node_network::DEFAULT_BODY_HEIGHT,
         collapse_mode: rust_lib_flutter_cad::structure_designer::node_network::CollapseMode::Auto,
+        function_pin_roles: std::collections::BTreeMap::new(),
     }
 }
 

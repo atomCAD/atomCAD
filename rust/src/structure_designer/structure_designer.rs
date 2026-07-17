@@ -7,7 +7,8 @@ use super::navigation_history::NavigationHistory;
 use super::network_validator::{NetworkValidationResult, validate_network};
 use super::node_display_policy_resolver::NodeDisplayPolicyResolver;
 use super::node_network::{
-    CollapseMode, NodeNetwork, NodeRef, Wire, collapsable_type_name, resolve_body_collapsed,
+    CollapseMode, FunctionPinRole, NodeNetwork, NodeRef, Wire, collapsable_type_name,
+    resolve_body_collapsed,
 };
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
@@ -714,6 +715,98 @@ impl StructureDesigner {
                 description: "Set HOF collapse mode".to_string(),
             });
         }
+    }
+
+    /// Override one input pin's role in a node's `-1` function-pin view,
+    /// capturing the before-state and pushing an undoable command.
+    ///
+    /// `FunctionPinRole::Auto` is normalized to **entry removal**, keeping the
+    /// map's "absence == Auto" invariant so "no overrides" stays a single
+    /// canonical state (and `.cnnd` files without overrides stay byte-stable).
+    /// A no-op change pushes nothing. `scope_path` resolves the (possibly
+    /// nested) body the node lives in. See `doc/design_function_pin_roles.md`.
+    pub fn set_function_pin_role(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        pin_index: usize,
+        role: FunctionPinRole,
+    ) {
+        let network_name = match &self.active_node_network_name {
+            Some(n) => n.clone(),
+            None => return,
+        };
+        // `Auto` is represented by absence, so the stored form of the new role
+        // is an `Option` — which also makes the undo command's `old`/`new`
+        // fields mirror entry presence exactly.
+        let new_role = match role {
+            FunctionPinRole::Auto => None,
+            other => Some(other),
+        };
+
+        let old_role = {
+            let Some(network) = self.get_scope_network(scope_path) else {
+                return;
+            };
+            let Some(node) = network.nodes.get(&node_id) else {
+                return;
+            };
+            // Guard against an out-of-range pin index (a stale UI/API call
+            // against a node whose layout has since shrunk).
+            let Some(node_type) = self.node_type_registry.get_node_type_for_node(node) else {
+                return;
+            };
+            if pin_index >= node_type.parameters.len() {
+                return;
+            }
+            node.function_pin_roles.get(&pin_index).copied()
+        };
+        if old_role == new_role {
+            return; // no-op; don't push an empty command
+        }
+
+        {
+            let Some(network) = self.get_scope_network_mut(scope_path) else {
+                return;
+            };
+            let Some(node) = network.nodes.get_mut(&node_id) else {
+                return;
+            };
+            match new_role {
+                Some(r) => {
+                    node.function_pin_roles.insert(pin_index, r);
+                }
+                None => {
+                    node.function_pin_roles.remove(&pin_index);
+                }
+            }
+        }
+
+        // A role toggle is type-visible to `-1` consumers (`apply` derived
+        // arg-pin layouts, `map` output types, wire validity), and refresh paths
+        // do not validate. Mirrors the connect/delete-wire triggers keyed on
+        // `function_pin_consumed` from function-pin captures Phase 1 — the
+        // apply/map/zip layout post-passes run on every revalidate. Validating
+        // the active network walks its whole body tree, so a body-scoped node is
+        // covered too.
+        self.validate_active_network();
+        // Scoped: `mark_node_data_changed` would mark `NodeRef::top(node_id)`
+        // and dirty the wrong node on an id collision (per-body `next_node_id`
+        // counters make those routine).
+        self.pending_changes
+            .mark_node_data_changed_scoped(scope_path, node_id);
+
+        self.push_command(
+            super::undo::commands::set_function_pin_role::SetFunctionPinRoleCommand {
+                network_name,
+                scope_path: scope_path.to_vec(),
+                node_id,
+                pin_index,
+                old_role,
+                new_role,
+                description: "Set function pin role".to_string(),
+            },
+        );
     }
 
     /// Apply the appropriate refresh after an undo/redo operation.
@@ -8679,6 +8772,10 @@ impl StructureDesigner {
                 body_width,
                 body_height,
                 collapse_mode,
+                // `I`'s pin layout is entirely different from `C`'s (closure
+                // params + captures vs. the instance's parameter pins), so any
+                // role overrides on `C` are meaningless here — start clean.
+                function_pin_roles: std::collections::BTreeMap::new(),
             };
 
             let target = self

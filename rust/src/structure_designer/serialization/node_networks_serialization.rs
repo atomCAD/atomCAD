@@ -2,7 +2,7 @@ use super::super::camera_settings::CameraSettings;
 use super::super::node_data::CustomNodeData;
 use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
-use super::super::node_network::{Argument, CollapseMode, Node, NodeNetwork};
+use super::super::node_network::{Argument, CollapseMode, FunctionPinRole, Node, NodeNetwork};
 use super::super::node_network::{NodeDisplayState, NodeDisplayType};
 use super::super::node_type::{NodeType, OutputPinDefinition, Parameter};
 use super::super::node_type::{generic_node_data_loader, generic_node_data_saver};
@@ -196,6 +196,14 @@ pub struct SerializableNode {
     /// `doc/design_hof_node_collapse.md`.
     #[serde(default)]
     pub collapse_mode: CollapseMode,
+    /// Per-input-pin `-1` function-pin role overrides, keyed by pin index.
+    /// Additive + `#[serde(default)]` + skipped when empty, so old files load
+    /// unchanged and files without overrides serialize byte-identically (no
+    /// migration, no version bump). The map's "never store `Auto`" invariant is
+    /// re-established on load by `prune_auto_function_pin_roles` (hand-authored
+    /// `Auto` entries are healed away). See `doc/design_function_pin_roles.md`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub function_pin_roles: std::collections::BTreeMap<usize, FunctionPinRole>,
 }
 
 fn default_body_width() -> f64 {
@@ -497,7 +505,20 @@ pub fn node_to_serializable(
         body_width: node.body_width,
         body_height: node.body_height,
         collapse_mode: node.collapse_mode,
+        function_pin_roles: node.function_pin_roles.clone(),
     })
+}
+
+/// Drop every explicit `Auto` entry from a deserialized role map, restoring the
+/// `Node::function_pin_roles` invariant that `Auto` is represented by absence.
+fn prune_auto_function_pin_roles(
+    roles: &std::collections::BTreeMap<usize, FunctionPinRole>,
+) -> std::collections::BTreeMap<usize, FunctionPinRole> {
+    roles
+        .iter()
+        .filter(|(_, r)| **r != FunctionPinRole::Auto)
+        .map(|(i, r)| (*i, *r))
+        .collect()
 }
 
 /// Creates a Node instance from a SerializableNode
@@ -564,6 +585,11 @@ pub fn serializable_to_node(
         body_width: serializable.body_width,
         body_height: serializable.body_height,
         collapse_mode: serializable.collapse_mode,
+        // Loader healing: an explicitly-authored `Auto` entry violates the
+        // sparse-map invariant (absence == `Auto`), so prune it here — the same
+        // "heal on load" treatment the other map invariants get. Keeps the
+        // undo command's `Option<FunctionPinRole>` mirroring entry presence.
+        function_pin_roles: prune_auto_function_pin_roles(&serializable.function_pin_roles),
     })
 }
 

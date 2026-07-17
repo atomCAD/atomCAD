@@ -6,6 +6,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::DVec2;
 use serde::{Deserialize, Serialize};
 use std::cmp::max;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -493,6 +494,82 @@ pub enum CollapseMode {
     Expanded,
 }
 
+/// The output-pin index of a node's **function pin** — the title-bar pin that
+/// exposes "the whole node viewed as a function of its inputs" as a
+/// `NetworkResult::Function`. Regular result pins are `0` (primary) and `1+`.
+/// See `doc/design_function_pins.md`.
+pub const FUNCTION_PIN_INDEX: i32 = -1;
+
+/// How one input pin participates in the node's `-1` function-pin view.
+/// Stored sparsely on [`Node::function_pin_roles`]; an absent entry means
+/// `Auto`. See `doc/design_function_pin_roles.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum FunctionPinRole {
+    /// Wiring decides (the pre-roles behavior): unwired = parameter, wired =
+    /// capture.
+    #[default]
+    Auto,
+    /// Always a parameter. A wire on the pin, if any, is a *preview / type
+    /// witness*: it participates in pin-0 evaluation and type resolution but is
+    /// ignored when the synthesized function is invoked.
+    Delayed,
+    /// Always pre-supplied (never a parameter). Wired: the wire is a frozen
+    /// capture (same as `Auto`-wired). Unwired: the node's stored property value
+    /// applies at invocation (the body-node argument is left empty, so
+    /// `NodeData::eval`'s stored-data fallback fires — the gizmo case).
+    Supplied,
+}
+
+/// The effective participation of one input pin in the `-1` function view,
+/// derived from its [`FunctionPinRole`] and its wiring by
+/// [`function_pin_dispositions`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FunctionPinDisposition {
+    /// A parameter of the synthesized function (`Delayed`, or `Auto`+unwired).
+    Parameter,
+    /// A capture frozen from the pin's incoming wire(s) (`Supplied`+wired, or
+    /// `Auto`+wired).
+    CaptureWire,
+    /// A capture taken from the node's stored property data (`Supplied`+unwired).
+    CaptureStored,
+}
+
+/// The single source of truth for the `-1` function pin's parameter/capture
+/// partition — one entry per input pin of `node_type`, in pin order.
+///
+/// Both consumers (`NodeTypeRegistry::resolve_output_type_detailed_scoped`'s
+/// `-1` arm and `evaluator::zone_closure::build_node_function_closure`) call
+/// this. Divergence between the resolver and the synthesizer would be a
+/// type-unsoundness bug, so the split lives in exactly one place. See
+/// `doc/design_function_pin_roles.md` §"Semantics".
+///
+/// "Wired" means **≥ 1** incoming wire (array pins accept several); a role
+/// applies to the whole pin, never per wire. Out-of-range entries in
+/// `function_pin_roles` (a stale index after a pin-layout change) are ignored.
+pub fn function_pin_dispositions(node: &Node, node_type: &NodeType) -> Vec<FunctionPinDisposition> {
+    (0..node_type.parameters.len())
+        .map(|i| {
+            let wired = node
+                .arguments
+                .get(i)
+                .map(|a| !a.is_empty())
+                .unwrap_or(false);
+            let role = node
+                .function_pin_roles
+                .get(&i)
+                .copied()
+                .unwrap_or(FunctionPinRole::Auto);
+            match (role, wired) {
+                (FunctionPinRole::Delayed, _) => FunctionPinDisposition::Parameter,
+                (FunctionPinRole::Auto, false) => FunctionPinDisposition::Parameter,
+                (FunctionPinRole::Auto, true) => FunctionPinDisposition::CaptureWire,
+                (FunctionPinRole::Supplied, true) => FunctionPinDisposition::CaptureWire,
+                (FunctionPinRole::Supplied, false) => FunctionPinDisposition::CaptureStored,
+            }
+        })
+        .collect()
+}
+
 #[derive(Clone)]
 pub struct Node {
     pub id: u64,
@@ -526,6 +603,18 @@ pub struct Node {
     /// on every other node and inert there. See
     /// `doc/design_hof_node_collapse.md`.
     pub collapse_mode: CollapseMode,
+    /// Per-input-pin overrides of the `-1` function pin's parameter/capture
+    /// partition, keyed by input-pin index. **Sparse: an absent entry means
+    /// [`FunctionPinRole::Auto`], and the map never stores an explicit `Auto`**
+    /// — the setter normalizes `Auto` to entry-removal and the `.cnnd` loader
+    /// prunes hand-authored `Auto` entries, so "no overrides" is the single
+    /// canonical empty-map state. `BTreeMap` for deterministic serialization
+    /// order. Inert on a node whose `-1` pin is not consumed. Index-keyed like
+    /// `arguments`, so it shares their pin-identity hazard when a custom node
+    /// type's pin layout changes: `repair_node_network` prunes out-of-range
+    /// entries and [`function_pin_dispositions`] ignores any that remain. See
+    /// `doc/design_function_pin_roles.md`.
+    pub function_pin_roles: BTreeMap<usize, FunctionPinRole>,
 }
 
 /// Default stored body width for newly created HOF nodes (logical pixels).
@@ -1123,6 +1212,7 @@ impl NodeNetwork {
                 body_width: source_node.body_width,
                 body_height: source_node.body_height,
                 collapse_mode: source_node.collapse_mode,
+                function_pin_roles: source_node.function_pin_roles.clone(),
             };
 
             self.nodes.insert(new_id, new_node);
@@ -1225,6 +1315,7 @@ impl NodeNetwork {
             body_width: DEFAULT_BODY_WIDTH,
             body_height: DEFAULT_BODY_HEIGHT,
             collapse_mode: CollapseMode::Auto,
+            function_pin_roles: BTreeMap::new(),
         };
 
         self.next_node_id += 1;
@@ -1262,6 +1353,7 @@ impl NodeNetwork {
             body_width: DEFAULT_BODY_WIDTH,
             body_height: DEFAULT_BODY_HEIGHT,
             collapse_mode: CollapseMode::Auto,
+            function_pin_roles: BTreeMap::new(),
         };
 
         // Ensure next_node_id stays ahead of any manually assigned ID
@@ -1296,7 +1388,12 @@ impl NodeNetwork {
                 arg.incoming_wires.iter().any(|w| {
                     w.source_scope_depth == 0
                         && w.source_node_id == node_id
-                        && matches!(w.source_pin, SourcePin::NodeOutput { pin_index: -1 })
+                        && matches!(
+                            w.source_pin,
+                            SourcePin::NodeOutput {
+                                pin_index: FUNCTION_PIN_INDEX
+                            }
+                        )
                 })
             })
         })
@@ -2168,6 +2265,7 @@ impl NodeNetwork {
             body_width: original_node.body_width,
             body_height: original_node.body_height,
             collapse_mode: original_node.collapse_mode,
+            function_pin_roles: original_node.function_pin_roles.clone(),
         };
 
         // Insert the duplicated node into the network

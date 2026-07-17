@@ -115,6 +115,7 @@ use crate::structure_designer::node_network::IncomingWire;
 use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::SourcePin;
+use crate::structure_designer::node_network::{FunctionPinDisposition, function_pin_dispositions};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
@@ -1382,25 +1383,29 @@ impl NodeTypeRegistry {
         let node_type = self.get_node_type_for_node(node)?;
         if output_pin_index == -1 {
             // Wiring-aware function pin type
-            // (`doc/design_node_function_pin_captures.md`): the parameters are
-            // the node's *unconnected* input pins (the connected ones are frozen
-            // as captures), in pin order; the return is pin 0's resolved type.
-            // Built from the specific node instance's wiring, not just its
-            // declaration — so wiring/unwiring an input changes the exposed
-            // function arity. Both `can_connect_nodes` and `validate_wires`
-            // route through here, so the wiring-aware type is consistent
-            // everywhere. Returns `None` if pin 0's type can't resolve
-            // (polymorphic / unresolved), which rejects the `-1` connection
-            // until resolvable (design Open Question 1).
-            let return_type =
-                self.resolve_output_type_scoped(node, network, 0, ancestors, ancestor_hof_ids)?;
-            let params: Vec<DataType> = node_type
-                .parameters
-                .iter()
-                .enumerate()
-                .filter(|(i, _)| node.arguments.get(*i).map(|a| a.is_empty()).unwrap_or(true))
-                .map(|(_, p)| p.data_type.clone())
-                .collect();
+            // (`doc/design_node_function_pin_captures.md`), refined by the
+            // per-pin role overrides (`doc/design_function_pin_roles.md`): the
+            // parameters are the pins whose effective disposition is
+            // `Parameter` (by default the *unconnected* ones — the connected
+            // ones are frozen as captures), in pin order; the return is pin 0's
+            // resolved type. Built from the specific node instance's wiring +
+            // roles, not just its declaration — so wiring/unwiring an input or
+            // flipping a role changes the exposed function arity. Both
+            // `can_connect_nodes` and `validate_wires` route through here, so
+            // the type is consistent everywhere. Returns `None` if pin 0's type
+            // can't resolve (polymorphic / unresolved), which rejects the `-1`
+            // connection until resolvable (design Open Question 1).
+            //
+            // The partition MUST come from the shared helper: the synthesizer
+            // (`build_node_function_closure`) reads the same one, and a
+            // divergence between what we type here and what it builds there is
+            // a type-unsoundness bug.
+            let (params, return_type) = self.resolve_function_pin_signature_scoped(
+                node,
+                network,
+                ancestors,
+                ancestor_hof_ids,
+            )?;
             return Some(ResolvedOutputType {
                 data_type: DataType::Function(FunctionType::new(params, return_type)),
                 via_fallback: false,
@@ -1415,6 +1420,77 @@ impl NodeTypeRegistry {
             ancestors,
             ancestor_hof_ids,
         )
+    }
+
+    /// The `-1` function pin's **un-canonicalized** signature: the parameter
+    /// types (in pin order) and the return type, or `None` when pin 0's type
+    /// can't be resolved.
+    ///
+    /// This is the one place the function-pin *types* are computed. The `-1`
+    /// resolver arm wraps the result in `FunctionType::new` (which canonicalizes
+    /// / flattens a `Function` return into the parameter list) for the wire-level
+    /// `DataType`; the synthesizer
+    /// (`evaluator::zone_closure::build_node_function_closure`) uses the raw pair
+    /// as the closure's `param_types` / `return_type`, because `param_types` must
+    /// stay the **body's actual frame size** — the flattened arity would be wrong
+    /// for a node whose pin 0 returns a `Function` (see `evaluator/AGENTS.md`,
+    /// `NetworkResult::Function`). Sharing this helper is what keeps the
+    /// resolver's advertised type and the synthesized closure in lock-step.
+    ///
+    /// The partition comes from [`function_pin_dispositions`]; parameter types
+    /// are witness-resolved per `doc/design_function_pin_roles.md`.
+    pub fn resolve_function_pin_signature_scoped(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+        ancestors: &[&NodeNetwork],
+        ancestor_hof_ids: &[u64],
+    ) -> Option<(Vec<DataType>, DataType)> {
+        let node_type = self.get_node_type_for_node(node)?;
+        let return_type =
+            self.resolve_output_type_scoped(node, network, 0, ancestors, ancestor_hof_ids)?;
+        let dispositions = function_pin_dispositions(node, node_type);
+        let params: Vec<DataType> = node_type
+            .parameters
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| dispositions[*i] == FunctionPinDisposition::Parameter)
+            .map(|(i, p)| {
+                // Preview-wire type witness: a `Delayed` pin that *is* wired
+                // stays a parameter, but its wire resolves the parameter's
+                // concrete type (and, via pin 0's `same_as_input` resolution
+                // above, the return type too). Falls back to the declared pin
+                // type when the source doesn't resolve. Only single-wire pins
+                // are witnessed — a multi-wire (array) pin is declared as a
+                // concrete `Array[T]`, so there is nothing for a witness to
+                // refine.
+                node.arguments
+                    .get(i)
+                    .filter(|arg| arg.incoming_wires.len() == 1)
+                    .and_then(|arg| arg.incoming_wires.first())
+                    .and_then(|wire| {
+                        self.resolve_wire_source_type_scoped(
+                            wire,
+                            network,
+                            ancestors,
+                            ancestor_hof_ids,
+                        )
+                    })
+                    .map(|r| r.data_type)
+                    .unwrap_or_else(|| p.data_type.clone())
+            })
+            .collect();
+        Some((params, return_type))
+    }
+
+    /// Unscoped variant of [`Self::resolve_function_pin_signature_scoped`], for
+    /// a `node` in a top-level `network`.
+    pub fn resolve_function_pin_signature(
+        &self,
+        node: &Node,
+        network: &NodeNetwork,
+    ) -> Option<(Vec<DataType>, DataType)> {
+        self.resolve_function_pin_signature_scoped(node, network, &[], &[])
     }
 
     fn resolve_pin_output_type_scoped(

@@ -1,6 +1,7 @@
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::{
-    Argument, IncomingWire, NodeNetwork, SourcePin, ValidationError, function_input_pin_connected,
+    Argument, FunctionPinDisposition, IncomingWire, Node, NodeNetwork, SourcePin, ValidationError,
+    function_input_pin_connected, function_pin_dispositions,
 };
 use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -375,6 +376,14 @@ fn repair_network_arguments(network: &mut NodeNetwork, node_type_registry: &Node
             }
             Ordering::Equal => {}
         }
+        // `function_pin_roles` is pin-index-keyed like `arguments`, so it has
+        // the same exposure when a custom node type's pin layout shrinks: prune
+        // entries that no longer name a pin. (`function_pin_dispositions`
+        // ignores out-of-range entries anyway, so this is hygiene, not
+        // correctness — it keeps the map from silently re-attaching a stale
+        // role if the layout later grows back.) See
+        // `doc/design_function_pin_roles.md`.
+        node.function_pin_roles.retain(|&i, _| i < expected_count);
     });
 }
 
@@ -816,6 +825,35 @@ pub fn validate_network(
 /// length; at the top-level call from `validate_network` both are empty.
 ///
 /// Returns `true` iff `network` and every nested body passed validation.
+/// Whether the input pin named `param_name` on `node` must be supplied — i.e.
+/// whether the node's `eval` has no value to fall back on when the pin is
+/// unwired.
+///
+/// Mirrors the resolution order documented in
+/// `text_format/node_type_introspection.rs` (the other consumer of this
+/// information), against the node's **own** data rather than a default
+/// instance:
+///
+/// 1. a matching stored text property ⇒ not required (`evaluate_or_default`
+///    reads it),
+/// 2. otherwise `get_parameter_metadata()`'s `(is_required, _)` flag,
+/// 3. otherwise required — the safe default, matching the introspection
+///    fallback.
+fn parameter_is_required(node: &Node, param_name: &str) -> bool {
+    if node
+        .data
+        .get_text_properties()
+        .iter()
+        .any(|(name, _)| name == param_name)
+    {
+        return false;
+    }
+    match node.data.get_parameter_metadata().get(param_name) {
+        Some((is_required, _)) => *is_required,
+        None => true,
+    }
+}
+
 fn validate_zones_recursive(
     network: &mut NodeNetwork,
     ancestors: &[&NodeNetwork],
@@ -915,6 +953,44 @@ fn validate_zones_recursive(
                         "apply: arg pins must be wired as a contiguous prefix \
                          (arg{} is wired while an earlier pin is unwired)",
                         j
+                    ),
+                    Some(node_id),
+                ));
+            }
+        }
+
+        // Function pin roles (`doc/design_function_pin_roles.md`, §"Validation"):
+        // a pin marked `Supplied` while unwired takes its value from the node's
+        // stored property data — but a **required** pin has no stored-data
+        // fallback, so invoking the synthesized function would yield a
+        // localized error from deep inside whatever HOF consumed it. Surface it
+        // at the node instead.
+        //
+        // Non-blocking (does NOT set `ok = false`) per the blast-radius litmus
+        // test in `structure_designer/AGENTS.md`: the runtime already localizes
+        // this into a `NetworkResult::Error` (`evaluate_arg_required` on an
+        // empty body argument), so it must not blank the whole network.
+        //
+        // Gated on the `-1` pin actually being consumed: on an unconsumed node
+        // the roles are inert, so warning there would be pure noise — and the
+        // gate is what confines every validation-visible effect of a role
+        // toggle to consumed nodes, which is exactly the condition the undo
+        // path's conditional revalidation keys on.
+        if network.function_pin_consumed(node_id) {
+            let dispositions = function_pin_dispositions(node, node_type);
+            for (i, disposition) in dispositions.iter().enumerate() {
+                if *disposition != FunctionPinDisposition::CaptureStored {
+                    continue;
+                }
+                let param_name = &node_type.parameters[i].name;
+                if !parameter_is_required(node, param_name) {
+                    continue;
+                }
+                network.validation_errors.push(ValidationError::warning(
+                    format!(
+                        "Input pin '{}' is marked Supplied but is unwired and required \
+                         (it has no stored value to bake into the function)",
+                        param_name
                     ),
                     Some(node_id),
                 ));

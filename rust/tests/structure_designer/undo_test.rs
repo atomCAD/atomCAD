@@ -1,7 +1,10 @@
 use glam::{DVec2, DVec3, IVec3};
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::node_network::{CollapseMode, SourcePin};
+use rust_lib_flutter_cad::structure_designer::node_network::{
+    CollapseMode, FunctionPinRole, SourcePin,
+};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
 use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
 use rust_lib_flutter_cad::structure_designer::nodes::switch::SwitchCaseValue;
@@ -2804,4 +2807,229 @@ fn set_zone_size_without_change_creates_no_command() {
     // no set_zone_size call between begin and end
     designer.end_zone_resize();
     assert!(!designer.undo(), "no-op resize should create no command");
+}
+
+// --- Function pin roles (doc/design_function_pin_roles.md) ---
+
+/// Read one node's role map at a scope.
+fn roles_at(
+    designer: &StructureDesigner,
+    scope: &[u64],
+    node_id: u64,
+) -> std::collections::BTreeMap<usize, FunctionPinRole> {
+    designer
+        .get_scope_network(scope)
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .function_pin_roles
+        .clone()
+}
+
+#[test]
+fn undo_redo_set_function_pin_role_top_level() {
+    let mut designer = setup_designer_with_network("main");
+    let mv_id = designer.add_node("structure_move", DVec2::ZERO);
+    designer.undo_stack.clear();
+
+    designer.set_function_pin_role(&[], mv_id, 1, FunctionPinRole::Supplied);
+    assert_eq!(
+        roles_at(&designer, &[], mv_id).get(&1),
+        Some(&FunctionPinRole::Supplied)
+    );
+
+    assert!(designer.undo());
+    assert!(
+        roles_at(&designer, &[], mv_id).is_empty(),
+        "undo restores entry *absence*, not an explicit Auto"
+    );
+
+    assert!(designer.redo());
+    assert_eq!(
+        roles_at(&designer, &[], mv_id).get(&1),
+        Some(&FunctionPinRole::Supplied)
+    );
+}
+
+/// A role set on a node **inside a zone body** round-trips through undo via
+/// `network_in_scope_mut`, and — because body-scoped role commands use the
+/// `Full` refresh mode — a **body-internal `-1` consumer's** derived type is
+/// re-derived after undo/redo.
+///
+/// The consumer's type is what is asserted, not just the role value: the
+/// top-level `NodeDataChanged` legs don't reach body scopes, so a role-only
+/// assertion would pass even with the wrong refresh mode.
+#[test]
+fn undo_redo_set_function_pin_role_in_body_re_derives_consumer() {
+    let mut designer = setup_designer_with_network("main");
+    let outer = designer.add_node("map", DVec2::ZERO);
+    let scope = [outer];
+
+    // Inside the body: an `expr` with two Int params feeding an `apply`'s `f`.
+    // Auto+unwired ⇒ `(Int, Int) -> Int` ⇒ `apply` derives two arg pins.
+    let expr_id = designer.add_node_scoped(&scope, "expr", DVec2::new(0.0, 0.0), None);
+    {
+        let mut expr_data = ExprData {
+            parameters: vec![
+                ExprParameter {
+                    id: None,
+                    name: "a".to_string(),
+                    data_type: DataType::Int,
+                    data_type_str: None,
+                },
+                ExprParameter {
+                    id: None,
+                    name: "b".to_string(),
+                    data_type: DataType::Int,
+                    data_type_str: None,
+                },
+            ],
+            expression: "a + b".to_string(),
+            expr: None,
+            error: None,
+            output_type: None,
+        };
+        let _ = expr_data.parse_and_validate(0);
+        // Replacing `data` must also refresh the node's `custom_node_type`
+        // cache, or its pin layout (and hence its `-1` type) stays at the
+        // default single-`x` shape.
+        let registry = &mut designer.node_type_registry;
+        let body = registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&outer)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        let node = body.nodes.get_mut(&expr_id).unwrap();
+        node.data = Box::new(expr_data);
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    let apply_id = designer.add_node_scoped(&scope, "apply", DVec2::new(200.0, 0.0), None);
+    designer.connect_nodes_scoped(&scope, expr_id, -1, apply_id, 0);
+    designer.validate_active_network();
+    designer.undo_stack.clear();
+
+    let apply_pin_count = |d: &StructureDesigner| {
+        let body = d.get_scope_network(&scope).unwrap();
+        let node = body.nodes.get(&apply_id).unwrap();
+        d.node_type_registry
+            .get_node_type_for_node(node)
+            .unwrap()
+            .parameters
+            .len()
+    };
+    assert_eq!(apply_pin_count(&designer), 3, "f + arg0 + arg1");
+
+    // Mark `b` Supplied: it drops out of the parameter list, so the consumer
+    // re-derives down to `f + arg0`.
+    designer.set_function_pin_role(&scope, expr_id, 1, FunctionPinRole::Supplied);
+    assert_eq!(
+        roles_at(&designer, &scope, expr_id).get(&1),
+        Some(&FunctionPinRole::Supplied)
+    );
+    assert_eq!(
+        apply_pin_count(&designer),
+        2,
+        "the body-internal consumer re-derives on the forward edit"
+    );
+
+    assert!(designer.undo());
+    assert!(roles_at(&designer, &scope, expr_id).is_empty());
+    assert_eq!(
+        apply_pin_count(&designer),
+        3,
+        "undo must re-derive the body-internal consumer (Full refresh)"
+    );
+
+    assert!(designer.redo());
+    assert_eq!(
+        roles_at(&designer, &scope, expr_id).get(&1),
+        Some(&FunctionPinRole::Supplied)
+    );
+    assert_eq!(
+        apply_pin_count(&designer),
+        2,
+        "redo must re-derive the body-internal consumer too"
+    );
+}
+
+/// The `Supplied`-required warning round-trips through **undo of the consumer
+/// connect**: connecting a `-1` consumer makes the roles live (warning appears),
+/// undoing it makes them inert again (warning gone), redoing brings it back.
+///
+/// This exercises the `NodeDataChanged` arm's conditional revalidation across a
+/// `-1` wire edit. The node whose consumption changes is the wire's **source**,
+/// while the wire commands naturally think in terms of their **dest**, so both
+/// ends must reach the arm's `function_pin_consumed` check.
+#[test]
+fn undo_redo_consumer_connect_round_trips_supplied_required_warning() {
+    let mut designer = setup_designer_with_network("main");
+
+    // `materialize` has a required `shape` pin and a `Fixed(Crystal)` output,
+    // so marking `shape` Supplied+unwired is exactly the warned-about state
+    // without tripping any other rule.
+    let mat = designer.add_node("materialize", DVec2::ZERO);
+    let mat_pins = designer
+        .node_type_registry
+        .get_node_type("materialize")
+        .unwrap()
+        .parameters
+        .len();
+    for pin in 0..mat_pins {
+        designer.set_function_pin_role(&[], mat, pin, FunctionPinRole::Supplied);
+    }
+    let apply_id = designer.add_node("apply", DVec2::new(300.0, 0.0));
+    designer.undo_stack.clear();
+
+    let has_warning = |d: &StructureDesigner| {
+        d.node_type_registry
+            .node_networks
+            .get("main")
+            .unwrap()
+            .validation_errors
+            .iter()
+            .any(|e| e.error_text.contains("marked Supplied"))
+    };
+    assert!(
+        !has_warning(&designer),
+        "precondition: roles are inert while the -1 pin is unconsumed"
+    );
+
+    designer.connect_nodes(mat, -1, apply_id, 0); // f ← materialize.fn
+    assert!(
+        has_warning(&designer),
+        "connecting the consumer makes the roles live"
+    );
+
+    assert!(designer.undo());
+    assert!(
+        !has_warning(&designer),
+        "undoing the consumer connect must clear the now-inert warning"
+    );
+
+    assert!(designer.redo());
+    assert!(
+        has_warning(&designer),
+        "redoing the consumer connect must bring the warning back"
+    );
+
+    // And deleting the wire outright clears it again, through undo/redo too.
+    designer.select_wire(mat, -1, apply_id, 0);
+    designer.delete_selected();
+    assert!(!has_warning(&designer), "deleting the -1 wire clears it");
+    assert!(designer.undo());
+    assert!(
+        has_warning(&designer),
+        "undoing the wire deletion restores consumption, and the warning"
+    );
 }

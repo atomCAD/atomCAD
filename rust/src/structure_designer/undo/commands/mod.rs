@@ -29,6 +29,7 @@ pub mod rename_namespace;
 pub mod rename_network;
 pub mod rename_record_type_def;
 pub mod set_collapse_mode;
+pub mod set_function_pin_role;
 pub mod set_node_data;
 pub mod set_node_display;
 pub mod set_output_pin_display;

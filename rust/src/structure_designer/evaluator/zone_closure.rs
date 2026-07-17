@@ -20,6 +20,7 @@
 //! every existing closure / HOF path continues to behave byte-identically. See
 //! `doc/design_currying.md` (Phase 2).
 
+use crate::structure_designer::node_network::{FunctionPinDisposition, function_pin_dispositions};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -192,41 +193,51 @@ pub fn build_inline_closure<'a>(
     })
 }
 
-/// Build a [`ZoneClosure`] from a node viewed as a function of its
-/// **unconnected** inputs — the "function pin" producer (`output_pin_index ==
-/// -1`).
+/// Build a [`ZoneClosure`] from a node viewed as a function of its inputs — the
+/// "function pin" producer (`output_pin_index == -1`).
 ///
-/// Per `doc/design_node_function_pin_captures.md`, the `-1` pin reflects the
-/// node's *actual wiring*: each input pin is partitioned into
+/// The parameter/capture partition comes from
+/// [`function_pin_dispositions`](crate::structure_designer::node_network::function_pin_dispositions),
+/// the shared helper the `-1` type resolver also uses. By default it reflects
+/// the node's *actual wiring* (`doc/design_node_function_pin_captures.md`) —
+/// unwired = parameter, wired = capture — and the per-pin
+/// [`FunctionPinRole`](crate::structure_designer::node_network::FunctionPinRole)
+/// overrides refine it (`doc/design_function_pin_roles.md`). The three
+/// dispositions map onto the synthesized body as:
 ///
-/// - **unwired** → a **parameter** of the synthesized function, in pin order
-///   (densely renumbered), and
-/// - **wired** → a **capture**, pre-evaluated once here and frozen.
+/// - `Parameter` → the pin reads from a `ZoneInput` parameter (`pin_index` = the
+///   *dense parameter index*, not the original pin index). Any wire on the pin
+///   (only possible for a `Delayed` pin, where it is a preview / type witness)
+///   is **dropped from the body**, which is what makes it invocation-inert.
+/// - `CaptureWire` → the pin forwards `N`'s original incoming wire(s) rebased
+///   `+1` in scope depth (parent-relative from inside the synthesized body), so
+///   they resolve as ordinary captures via [`build_captures`].
+/// - `CaptureStored` → the pin's body argument is left **empty**, so the body
+///   node's cloned `NodeData` supplies the value through the node's own
+///   stored-data fallback at invocation.
 ///
 /// The synthesized closure's body is a one-node synthetic network holding a
-/// clone of `N`. Each unwired pin reads from a `ZoneInput` parameter
-/// (`pin_index` = the *dense parameter index*, not the original pin index);
-/// each wired pin forwards `N`'s original incoming wire(s) rebased `+1` in scope
-/// depth (parent-relative from inside the synthesized body), so they resolve as
-/// ordinary captures via [`build_captures`]. Per element the consumer pushes the
-/// parameter frame and resolves the result wire — exactly the existing
-/// [`run_closure_once`] step, so a function-pin wire drops into an HOF's `f`
-/// pin / `apply` identically to a `closure` node's output.
+/// clone of `N`. Per element the consumer pushes the parameter frame and
+/// resolves the result wire — exactly the existing [`run_closure_once`] step, so
+/// a function-pin wire drops into an HOF's `f` pin / `apply` identically to a
+/// `closure` node's output.
 ///
 /// This generalizes main's old `FunctionEvaluator` semantics (captures may sit
 /// at *any* pin position, not just the trailing ones) and subsumes the
 /// `migrate_v4_to_v5` closure-synthesis pass — it does at runtime what the
 /// migration did at load time.
 ///
-/// The synthesized function type is `(unwired input pins) -> output pin 0`,
-/// matching the wiring-aware `resolve_output_type(node, _, -1)` arm so the body
-/// wiring and the carried `param_types` / `return_type` stay in lock-step. A
-/// fully-captured node (all inputs wired) is a legal `() -> R` thunk.
+/// The carried `param_types` / `return_type` come from the same
+/// `NodeTypeRegistry::resolve_function_pin_signature` the `-1` resolver arm
+/// uses, so the body wiring and the advertised wire type stay in lock-step. A
+/// node with no parameters (all inputs captured/supplied) is a legal `() -> R`
+/// thunk.
 ///
-/// Rejects (`Err(NetworkResult::Error(_))`) only a node with an **unresolved /
-/// polymorphic** pin-0 output type (`SameAsInput` / `SameAsArrayElements` read
-/// as `DataType::None` here): its function-type return is unknowable. See design
-/// Open Question 1.
+/// Rejects (`Err(NetworkResult::Error(_))`) a node whose pin-0 output type does
+/// not **resolve** — its function-type return would be unknowable. Note this is
+/// resolution, not declaration: a `SameAsInput` pin-0 resolves fine once a
+/// capture or a `Delayed` pin's preview wire witnesses it. See design Open
+/// Question 1.
 ///
 /// `evaluator` / `context` are needed to pre-evaluate captures (mirrors
 /// [`build_inline_closure`]); the no-capture case leaves them effectively
@@ -256,27 +267,31 @@ pub fn build_node_function_closure<'a>(
         }
     };
 
-    let return_type = node_type.output_type().clone();
-    if return_type == DataType::None {
+    let num_pins = node_type.parameters.len();
+
+    // Partition the pins and type the signature via the two shared helpers, so
+    // the synthesized closure cannot drift from the `-1` type the resolver
+    // advertised on the wire (`doc/design_function_pin_roles.md`).
+    // `param_pins[j]` is the original pin index of dense parameter `j`.
+    let dispositions = function_pin_dispositions(node, node_type);
+    let param_pins: Vec<usize> = (0..num_pins)
+        .filter(|&i| dispositions[i] == FunctionPinDisposition::Parameter)
+        .collect();
+
+    // The return type is *resolved*, not declared: a `same_as_input` pin-0 type
+    // reads as `DataType::None` on the declaration, and resolving it (against a
+    // capture or a `Delayed` pin's preview wire) is exactly what makes a node
+    // like `structure_move` usable as a function value. An unresolvable return
+    // is still rejected — its function type would be unknowable.
+    let network = network_stack.last().unwrap().node_network;
+    let Some((param_types, return_type)) = registry.resolve_function_pin_signature(node, network)
+    else {
         return Err(NetworkResult::Error(format!(
             "function pin: '{}' has an unresolved (polymorphic) output type",
             node.node_type_name
         )));
-    }
-
-    let num_pins = node_type.parameters.len();
-
-    // Partition pins: unwired pins become parameters (in ascending pin order),
-    // wired pins become captures. `unwired_pins[j]` is the original pin index
-    // of dense parameter `j`.
-    let unwired_pins: Vec<usize> = (0..num_pins)
-        .filter(|&i| node.arguments.get(i).map(|a| a.is_empty()).unwrap_or(true))
-        .collect();
-
-    let param_types: Vec<DataType> = unwired_pins
-        .iter()
-        .map(|&i| node_type.parameters[i].data_type.clone())
-        .collect();
+    };
+    debug_assert_eq!(param_types.len(), param_pins.len());
 
     // The body node: a clone of N with a fresh body-local id. N is non-HOF, so
     // its `zone` / `zone_output_arguments` come along inert.
@@ -295,24 +310,44 @@ pub fn build_node_function_closure<'a>(
     // parameter index* `j` (0..unwired_pins.len()). The zone-input `pin_index`
     // is the parameter index, not the pin index.
     let mut dense_param_of_pin: HashMap<usize, usize> = HashMap::new();
-    for (j, &i) in unwired_pins.iter().enumerate() {
+    for (j, &i) in param_pins.iter().enumerate() {
         dense_param_of_pin.insert(i, j);
     }
 
     body_node.arguments = (0..num_pins)
         .map(|i| {
             let mut arg = Argument::new();
-            if let Some(&j) = dense_param_of_pin.get(&i) {
-                // Unwired → parameter j.
-                arg.set_source_full(owner_key, SourcePin::ZoneInput { pin_index: j }, 1);
-            } else if let Some(orig) = node.arguments.get(i) {
-                // Wired → capture: forward original wire(s), rebased +1 in depth.
-                for w in &orig.incoming_wires {
-                    arg.incoming_wires.push(IncomingWire {
-                        source_node_id: w.source_node_id,
-                        source_pin: w.source_pin,
-                        source_scope_depth: w.source_scope_depth + 1,
-                    });
+            match dispositions[i] {
+                FunctionPinDisposition::Parameter => {
+                    // Reads from the parameter frame. Note the pin's original
+                    // wire, if any (a `Delayed` pin's preview wire), is
+                    // deliberately **dropped** from the body — that is what
+                    // makes a preview wire invocation-inert: it feeds pin-0
+                    // display and type resolution outside, never the function.
+                    let j = dense_param_of_pin[&i];
+                    arg.set_source_full(owner_key, SourcePin::ZoneInput { pin_index: j }, 1);
+                }
+                FunctionPinDisposition::CaptureWire => {
+                    // Forward the original wire(s), rebased +1 in depth so they
+                    // resolve as ordinary captures against the parent scope.
+                    if let Some(orig) = node.arguments.get(i) {
+                        for w in &orig.incoming_wires {
+                            arg.incoming_wires.push(IncomingWire {
+                                source_node_id: w.source_node_id,
+                                source_pin: w.source_pin,
+                                source_scope_depth: w.source_scope_depth + 1,
+                            });
+                        }
+                    }
+                }
+                FunctionPinDisposition::CaptureStored => {
+                    // Left empty on purpose. The body node is a clone of `N`
+                    // *including its `NodeData`*, and node `eval`s already fall
+                    // back to stored data on an unwired pin (e.g.
+                    // `evaluate_or_default(pin, self.translation, ..)`), so the
+                    // gizmo-edited stored value applies at invocation with no
+                    // new evaluation machinery. The data is frozen into the body
+                    // here, at `-1` eval — the same timing as wire captures.
                 }
             }
             arg
