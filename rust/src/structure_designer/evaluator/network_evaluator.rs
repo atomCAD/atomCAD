@@ -555,18 +555,6 @@ impl NetworkEvaluator {
             None => return NodeSceneData::new(NodeOutput::None),
         };
 
-        // Function mode (doc/design_function_pins.md §"Display in function
-        // mode"): a node whose function pin is consumed (wired into an HOF `f`
-        // or `apply.f`) is a function definition, not a value source — it emits
-        // no viewport output. This overrides the display policy, so a
-        // function-mode node selected under the Selected/Frontier policy (or
-        // with its pin-0 eye on) still renders nothing. Derived from the wire
-        // graph — no stored mutation, so disconnecting `f` restores its prior
-        // display for free.
-        if network.function_pin_consumed(node_id) {
-            return NodeSceneData::new(NodeOutput::None);
-        }
-
         let from_selected_node = network_stack
             .last()
             .unwrap()

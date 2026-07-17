@@ -141,38 +141,30 @@ meaningful input.
 
 ### Display in function mode
 
-A node whose function pin is **consumed** (wired into an HOF `f` or `apply.f`) is
-a function definition, not a value source — so it produces no displayable scene
-and its pin-0 eye is **disabled**, rather than showing a stand-in value. This is
-the output-side dual of the existing HOF affordance: when an HOF's `f` *input* is
-wired its inline body is hidden behind the "driven by `f`" placeholder; when a
-node's `f` *output* is consumed its own value/eye is hidden.
+**Superseded by `doc/design_function_pin_roles.md` §"Display relaxation".**
 
-"Function mode" is the derived predicate "this node's `-1` output pin has a
-consumer" — the same reverse lookup the destination-side connection gate uses
-(§"Validation & connection gating"). In that state:
+This design originally suppressed display for a node whose function pin is
+**consumed** (wired into an HOF `f` or `apply.f`): the scene builder skipped it
+unconditionally and the Flutter pin-0 eye was greyed out with a "wire into
+`apply` to preview it" tooltip. The rationale was that such a node is a function
+definition, not a value source.
 
-- **No scene output.** The scene builder skips the node: it is not evaluated as a
-  top-level displayed node and emits nothing to the viewport. (It is still
-  evaluated *indirectly* and cheaply when the consuming HOF resolves its `f`
-  arg — that only builds the closure bundle; the body runs per element.) The skip
-  must override the **display policy**, not just the manual eye, so a
-  function-mode node selected under the Selected/Frontier policy still renders
-  nothing.
-- **Eye disabled.** The pin-0 eye becomes non-interactive, with the tooltip
-  "Used as a function — wire into `apply` to preview it." The tooltip is the
-  redirect: it turns "why won't this display?" into a signpost to the node that
-  previews a function correctly.
+That suppression is **gone**. Function pin roles let a node be simultaneously a
+function value *and* a locally editable value source: with `Delayed` preview
+wires and `Supplied` stored-data pins, a consumed `structure_move` still needs
+its own pin-0 output visible so its **drag gizmo** is reachable. A function-mode
+node now follows the ordinary display policy and per-pin eyes like any other
+node. Under **Frontier** it stays auto-hidden anyway — the consumer's `-1` wire
+makes it non-frontier — so default visual noise did not increase.
 
-**This is derived, not a stored mutation.** Connecting the function pin does not
-remove the node from `displayed_nodes`; the scene builder and the eye widget both
-consult the predicate at render time. So there is no persisted change and no undo
-command to add (cf. `feedback_persisted_mutations_must_be_undoable`), and
-disconnecting `f` restores the node's prior eye/display state for free — exactly
-as `resolve_body_collapsed` is a derived decision rather than stored state.
+"Function mode" remains a live derived predicate
+(`NodeNetwork::function_pin_consumed`, surfaced as
+`NodeView.function_pin_consumed`): it still gates connection rules, the
+`Supplied`-required validation warning, and the `-1`-wire undo refresh mode. It
+no longer gates *display*.
 
-For a *sampled* preview on a chosen argument, the principled path is the existing
-`apply` node: wire the function pin into `apply(<arg>)` and display that.
+For a *sampled* preview on a chosen argument, the `apply` node remains the
+principled path: wire the function pin into `apply(<arg>)` and display that.
 `f(defaults)` is deliberately not offered — it is an error for an `expr` free
 variable and trivial otherwise.
 

@@ -456,7 +456,24 @@ Tests (`tests/structure_designer/function_pin_test.rs` + `undo_test.rs` +
   files without overrides serialize **byte-identically** (fixture diff);
   copy/paste and `duplicate_node` preserve roles.
 
-### Phase 2 — Display relaxation
+### Phase 2 — Display relaxation ✅ DONE
+
+Implementation notes / deviations from the plan as written:
+
+- Landed exactly as designed — both suppressions were self-contained deletions
+  with no fallout. The `generate_scene` early-return and the Flutter greyed-eye
+  branch (plus its now-dead `functionConsumed` binding and "wire into `apply`"
+  tooltip) are gone; `NodeView.function_pin_consumed` stays (it still gates
+  connection rules, the `Supplied`-required warning, and the `-1`-wire undo
+  refresh mode).
+- The existing `scene_skip_function_mode_node` test asserted the **old**
+  behavior, so it was inverted rather than added to (now
+  `scene_function_mode_node_displays_when_shown`). It is the only test that
+  encoded the suppression.
+- `design_function_pins.md` §"Display in function mode" rewritten as a
+  superseded-by pointer; the matching claim in
+  `rust/src/structure_designer/AGENTS.md` (§function pins) was stale too and is
+  corrected.
 
 Remove the `generate_scene` skip and the Flutter grey-eye branch; update
 `design_function_pins.md`.

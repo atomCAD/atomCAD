@@ -1383,14 +1383,6 @@ class NodeWidget extends StatelessWidget {
     // pin for hit testing either. See `doc/design_node_execution.md`
     // ("Display semantics" of the Unit type).
     final bool isUnitPin = pin.effectiveDataType == 'Unit';
-    // Function-mode display suppression. When this node's function pin is
-    // consumed (wired into an HOF `f` or `apply.f`) the node is a function
-    // value, not a value source: the Rust scene builder skips it entirely
-    // (`function_pin_consumed`), so its output pins can never render. Disable
-    // the eye toggle (non-interactive, greyed) and redirect the user to `apply`
-    // for a sampled preview. Derived — disconnecting `f` restores the eye for
-    // free. See `doc/design_function_pins.md` §"Display in function mode".
-    final bool functionConsumed = node.functionPinConsumed;
     // Zone-body display suppression. Nodes inside an HOF/closure body (non-empty
     // scope chain) can never contribute to the 3D scene — scene generation only
     // iterates the top-level network's `displayed_nodes`, and the Rust
@@ -1403,17 +1395,7 @@ class NodeWidget extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (showEyeArea && functionConsumed)
-          Tooltip(
-            message: 'Used as a function — wire into `apply` to preview it.',
-            preferBelow: false,
-            child: const Icon(
-              Icons.visibility_off,
-              color: Colors.white24,
-              size: 16,
-            ),
-          )
-        else if (showEyeArea)
+        if (showEyeArea)
           GestureDetector(
             key: NodeWidgetKeys.outputPinVisibility(node.id, pin.index),
             onTap: () {

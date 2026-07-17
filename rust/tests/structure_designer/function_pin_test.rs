@@ -836,11 +836,12 @@ fn validation_apply_requires_f_still_reported() {
     );
 }
 
-/// A node whose function pin is consumed emits no scene output even though it
-/// has a displayable (Blueprint) pin 0 — the scene-skip overrides the display
-/// path. Removing the consuming wire restores its output.
+/// A node whose function pin is consumed still emits scene output when its
+/// pin-0 eye is on: function mode no longer suppresses display
+/// (`doc/design_function_pin_roles.md` §"Display relaxation"). Removing the
+/// consuming wire changes nothing — it was already rendering.
 #[test]
-fn scene_skip_function_mode_node() {
+fn scene_function_mode_node_displays_when_shown() {
     // const_sphere(unused: Int) -> Blueprint: an arity-1 custom network whose
     // body ignores its parameter, so it both fits `map.f` and renders standalone.
     let mut designer = setup_designer_with_network("const_sphere");
@@ -872,23 +873,23 @@ fn scene_skip_function_mode_node() {
     wire_function_pin(&mut designer, "main", maker_id, map_id, 1);
     designer.validate_active_network();
 
-    // Display the maker's pin 0 explicitly, then confirm it still renders
-    // nothing because its function pin is consumed (skip overrides display).
+    // Display the maker's pin 0 explicitly: it renders its Blueprint even
+    // though its function pin is consumed.
     designer.set_node_display(maker_id, true);
     let out = scene_output(&designer, "main", maker_id);
     assert!(
-        matches!(out, NodeOutput::None),
-        "a function-mode node must emit no scene output"
+        !matches!(out, NodeOutput::None),
+        "a displayed function-mode node must emit its pin-0 scene output"
     );
 
-    // Remove the consumer; the maker is no longer in function mode and renders
-    // its Blueprint again.
+    // Removing the consumer leaves it rendering — display never depended on
+    // function mode.
     remove_node(&mut designer, "main", map_id);
     designer.validate_active_network();
     let out = scene_output(&designer, "main", maker_id);
     assert!(
         !matches!(out, NodeOutput::None),
-        "removing the consumer must restore the node's scene output"
+        "the node keeps rendering once the consumer is gone"
     );
 }
 
@@ -1271,13 +1272,18 @@ fn function_pin_capture_propagation_survives_undo_redo() {
 // ============================================================================
 
 use glam::i32::IVec3;
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
+    NodeDisplayPolicy, NodeDisplayPreferences, StructureDesignerPreferences,
+};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::structure_designer::node_network::{
     FunctionPinDisposition, FunctionPinRole, function_pin_dispositions,
 };
 use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatData;
 use rust_lib_flutter_cad::structure_designer::nodes::cuboid::CuboidData;
-use rust_lib_flutter_cad::structure_designer::nodes::structure_move::StructureMoveData;
+use rust_lib_flutter_cad::structure_designer::nodes::structure_move::{
+    StructureMoveData, StructureMoveEvalCache,
+};
 
 use crate::structure_equivalence::assert_structures_equivalent;
 
@@ -2113,4 +2119,79 @@ fn roles_setter_normalizes_auto_to_absence() {
     // An out-of-range pin index is rejected outright.
     designer.set_function_pin_role(&[], mv_id, 9, FunctionPinRole::Delayed);
     assert!(roles_of(&designer, "main", mv_id).is_empty());
+}
+
+// --- Display relaxation (Phase 2) --------------------------------------------
+
+/// Under the **Frontier** policy a function-mode node stays auto-hidden without
+/// any special-casing: `build_reverse_dependency_map` registers the consumer's
+/// `-1` wire like any other, so the node has a dependent and is not on the
+/// frontier. This is what keeps the display relaxation from adding visual noise
+/// by default.
+#[test]
+fn frontier_policy_auto_hides_function_mode_node() {
+    let mut designer = setup_designer_with_network("main");
+    designer.set_preferences(StructureDesignerPreferences {
+        node_display_preferences: NodeDisplayPreferences {
+            display_policy: NodeDisplayPolicy::PreferFrontier,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
+
+    // materialize(cuboid) → structure_move.input, structure_move.-1 → apply.f.
+    let src_id = add_crystal_source(&mut designer, "main", 4, 0.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(2, 0, 0), 0.0);
+    designer.connect_nodes(src_id, 0, mv_id, 0);
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+    let arg_id = add_crystal_source(&mut designer, "main", 2, 200.0);
+    let apply_id = add_apply_of_function_pin(&mut designer, "main", mv_id, arg_id, 200.0);
+    designer.validate_active_network();
+    designer.apply_node_display_policy(None);
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap();
+    assert!(
+        !net.is_node_displayed(mv_id),
+        "the `-1` wire gives the function node a dependent, so Frontier hides it"
+    );
+    assert!(
+        net.is_node_displayed(apply_id),
+        "the consumer is the frontier node and stays displayed"
+    );
+}
+
+/// The gadget precondition, headless: a **selected** function-mode
+/// `structure_move` with a preview wire must populate
+/// `selected_node_eval_cache` during scene generation — that cache is what
+/// `provide_gadget` downcasts to build the drag gizmo. Before the display
+/// relaxation the scene skip returned early and the cache stayed `None`, so the
+/// gizmo was unreachable.
+#[test]
+fn function_mode_node_populates_selected_node_eval_cache() {
+    let mut designer = setup_designer_with_network("main");
+
+    let src_id = add_crystal_source(&mut designer, "main", 4, 0.0);
+    let mv_id = add_structure_move(&mut designer, "main", IVec3::new(2, 0, 0), 0.0);
+    designer.connect_nodes(src_id, 0, mv_id, 0); // Delayed => preview wire
+    configure_move_as_delayed_input(&mut designer, "main", mv_id);
+    let arg_id = add_crystal_source(&mut designer, "main", 2, 200.0);
+    add_apply_of_function_pin(&mut designer, "main", mv_id, arg_id, 200.0);
+
+    designer.select_node(mv_id);
+    designer.set_node_display(mv_id, true);
+    designer.mark_full_refresh();
+    let changes = designer.get_pending_changes();
+    designer.refresh(&changes);
+
+    let cache = designer
+        .get_selected_node_eval_cache()
+        .expect("a selected function-mode node must still populate its eval cache");
+    assert!(
+        cache.downcast_ref::<StructureMoveEvalCache>().is_some(),
+        "the cache must be the structure_move gadget's cache type"
+    );
 }
