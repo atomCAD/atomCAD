@@ -207,6 +207,31 @@ fn style_rule_rs(
     NetworkResult::record(fields)
 }
 
+/// A `StyleRule` carrying the atom-labels `label` field (plus optional
+/// selectors and `color`, for the composition tests). `label: None` = the field
+/// is absent, i.e. "leave the atom's label alone".
+fn style_rule_label(
+    element: Option<i32>,
+    tag: Option<&str>,
+    color: Option<DVec3>,
+    label: Option<&str>,
+) -> NetworkResult {
+    let mut fields = Vec::new();
+    if let Some(e) = element {
+        fields.push(("element".to_string(), NetworkResult::Int(e)));
+    }
+    if let Some(t) = tag {
+        fields.push(("tag".to_string(), NetworkResult::String(t.to_string())));
+    }
+    if let Some(c) = color {
+        fields.push(("color".to_string(), NetworkResult::Vec3(c)));
+    }
+    if let Some(l) = label {
+        fields.push(("label".to_string(), NetworkResult::String(l.to_string())));
+    }
+    NetworkResult::record(fields)
+}
+
 fn rules_array(rules: Vec<NetworkResult>) -> NetworkResult {
     NetworkResult::Array(rules)
 }
@@ -263,6 +288,10 @@ fn style_rule_resolves_via_lookup() {
             ),
             (
                 "render_style".to_string(),
+                DataType::Optional(Box::new(DataType::String))
+            ),
+            (
+                "label".to_string(),
                 DataType::Optional(Box::new(DataType::String))
             ),
         ]
@@ -914,7 +943,7 @@ fn record_construct_style_rule_exposes_render_style_pin() {
     let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
         names,
-        vec!["element", "tag", "color", "alpha", "render_style"]
+        vec!["element", "tag", "color", "alpha", "render_style", "label"]
     );
     // `Optional[String]` is exposed as a plain `String` pin (the wire layer
     // never sees `Optional`).
@@ -924,4 +953,375 @@ fn record_construct_style_rule_exposes_render_style_pin() {
         .find(|p| p.name == "render_style")
         .unwrap();
     assert_eq!(rs.data_type, DataType::String);
+}
+
+// ============================================================================
+// Labels (`doc/design_atom_labels.md` Phase 4)
+// ============================================================================
+
+/// Wire up an `apply_style` and evaluate it *without* the `evaluate_to_atomic`
+/// panic-on-Error, for the label error-path tests.
+fn eval_apply_style_raw(
+    designer: &mut StructureDesigner,
+    net: &str,
+    molecule: NetworkResult,
+    rules: NetworkResult,
+) -> NetworkResult {
+    let mol_id = add_value_node(designer, net, molecule);
+    let rules_id = add_value_node(designer, net, rules);
+    let style_id = add_apply_style_node(designer);
+    designer.connect_nodes(mol_id, 0, style_id, 0);
+    designer.connect_nodes(rules_id, 0, style_id, 1);
+    evaluate(designer, net, style_id)
+}
+
+#[test]
+fn apply_style_label_sets_literal_text() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    // Label the oxygen (element 8) only; the carbons keep no label.
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![style_rule_label(Some(8), None, None, Some("here"))]),
+    );
+    assert_eq!(result.get_atom_label(1), None); // carbon
+    assert_eq!(result.get_atom_label(2), None); // carbon
+    assert_eq!(result.get_atom_label(3), Some("here"));
+}
+
+#[test]
+fn apply_style_label_empty_string_clears_earlier_label() {
+    // `label: ""` is the reset value, mirroring `alpha: 1.0` and
+    // `render_style: "default"` — per-property last-writer-wins.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![
+            style_rule_label(None, None, None, Some("everything")),
+            style_rule_label(Some(6), None, None, Some("")),
+        ]),
+    );
+    assert_eq!(result.get_atom_label(1), None); // carbon: cleared
+    assert_eq!(result.get_atom_label(2), None); // carbon: cleared
+    assert_eq!(result.get_atom_label(3), Some("everything")); // oxygen: untouched
+}
+
+#[test]
+fn apply_style_label_element_token_expands_per_atom() {
+    // The point of tokens: ONE match-all rule labels a whole structure, with
+    // different text per atom. Without expansion this would need one rule per
+    // element.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![style_rule_label(None, None, None, Some("{element}"))]),
+    );
+    assert_eq!(result.get_atom_label(1), Some("C"));
+    assert_eq!(result.get_atom_label(2), Some("C"));
+    assert_eq!(result.get_atom_label(3), Some("O"));
+}
+
+#[test]
+fn apply_style_label_element_token_honors_name_overrides() {
+    // A motif parameter element must label `P1` — the same symbol the hover
+    // popup shows for it. The override map is a membership test; its mapped
+    // String is the parameter's display name, which a label does not use.
+    use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::param_index_to_atomic_number;
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+
+    let mut s = AtomicStructure::new();
+    let p1 = s.add_atom(param_index_to_atomic_number(0), DVec3::ZERO);
+    let p2 = s.add_atom(param_index_to_atomic_number(1), DVec3::new(1.5, 0.0, 0.0));
+    s.decorator_mut()
+        .element_name_overrides
+        .insert(param_index_to_atomic_number(0), "Anything".to_string());
+    s.decorator_mut()
+        .element_name_overrides
+        .insert(param_index_to_atomic_number(1), "Else".to_string());
+
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(s),
+        rules_array(vec![style_rule_label(None, None, None, Some("{element}"))]),
+    );
+    assert_eq!(result.get_atom_label(p1), Some("P1"));
+    assert_eq!(result.get_atom_label(p2), Some("P2"));
+}
+
+#[test]
+fn apply_style_label_element_token_unknown_number_falls_back_to_x() {
+    // `DEFAULT_ATOM_INFO`'s symbol, exactly as the popup falls back.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mut s = AtomicStructure::new();
+    let unknown = s.add_atom(999, DVec3::ZERO);
+
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(s),
+        rules_array(vec![style_rule_label(None, None, None, Some("{element}"))]),
+    );
+    assert_eq!(result.get_atom_label(unknown), Some("X"));
+}
+
+#[test]
+fn apply_style_label_tag_token_takes_rule_selector() {
+    // When the rule HAS a tag selector, `{tag}` is unambiguous by construction:
+    // the rule only matched atoms carrying it.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mut s = carbon_oxygen_structure();
+    s.add_atom_tag(1, "surface").unwrap();
+    s.add_atom_tag(1, "dopant").unwrap();
+
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(s),
+        rules_array(vec![style_rule_label(
+            None,
+            Some("dopant"),
+            None,
+            Some("{tag}"),
+        )]),
+    );
+    // The selector wins over "first tag" — atom 1 carries both.
+    assert_eq!(result.get_atom_label(1), Some("dopant"));
+    assert_eq!(result.get_atom_label(2), None);
+}
+
+#[test]
+fn apply_style_label_tag_token_falls_back_to_first_tag() {
+    // Selector-less rule: `{tag}` documents itself as the atom's FIRST tag
+    // (`atom_tags` returns names in bit order), and an untagged atom yields
+    // empty — which clears rather than drawing an empty label.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mut s = carbon_oxygen_structure();
+    s.add_atom_tag(1, "surface").unwrap();
+    s.add_atom_tag(1, "dopant").unwrap();
+    s.add_atom_tag(2, "dopant").unwrap();
+
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(s),
+        rules_array(vec![style_rule_label(None, None, None, Some("{tag}"))]),
+    );
+    assert_eq!(result.get_atom_label(1), Some("surface")); // first by bit order
+    assert_eq!(result.get_atom_label(2), Some("dopant"));
+    assert_eq!(result.get_atom_label(3), None); // untagged => empty => cleared
+}
+
+#[test]
+fn apply_style_label_brace_escapes_and_mixed_literals() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![style_rule_label(
+            Some(8),
+            None,
+            None,
+            Some("{{{element}}} is it"),
+        )]),
+    );
+    assert_eq!(result.get_atom_label(3), Some("{O} is it"));
+}
+
+#[test]
+fn apply_style_label_unknown_token_errors_naming_rule_and_token() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style_raw(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![
+            style_rule_label(None, None, None, Some("fine")),
+            style_rule_label(None, None, None, Some("{elemental}")),
+        ]),
+    );
+    match result {
+        NetworkResult::Error(e) => {
+            assert!(e.contains("rules[1]"), "error should name the rule: {}", e);
+            assert!(e.contains("label"), "error should name the field: {}", e);
+            assert!(
+                e.contains("{elemental}"),
+                "error should name the offending token: {}",
+                e
+            );
+        }
+        other => panic!("Expected Error, got {:?}", other.infer_data_type()),
+    }
+}
+
+#[test]
+fn apply_style_label_unterminated_and_unescaped_braces_error() {
+    let net = "test";
+    for template in ["{element", "50% }"] {
+        let mut designer = setup_designer_with_network(net);
+        let result = eval_apply_style_raw(
+            &mut designer,
+            net,
+            molecule_value(carbon_oxygen_structure()),
+            rules_array(vec![style_rule_label(None, None, None, Some(template))]),
+        );
+        match result {
+            NetworkResult::Error(e) => assert!(
+                e.contains("rules[0].label"),
+                "error should be localized for {:?}: {}",
+                template,
+                e
+            ),
+            other => panic!(
+                "Expected Error for {:?}, got {:?}",
+                template,
+                other.infer_data_type()
+            ),
+        }
+    }
+}
+
+#[test]
+fn apply_style_label_bad_token_applies_nothing() {
+    // Templates are parsed before ANY rule is applied, so a bad token in a
+    // later rule fails the whole pin rather than leaving the earlier rule's
+    // color half-written onto the structure. Same contract as every other
+    // field's error — and the reason the error is worth surfacing at all.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style_raw(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![
+            style_rule_label(None, None, Some(DVec3::new(1.0, 0.0, 0.0)), Some("ok")),
+            style_rule_label(None, None, None, Some("{nope}")),
+        ]),
+    );
+    // An Error, not a structure carrying the first rule's color/label.
+    assert!(
+        matches!(result, NetworkResult::Error(_)),
+        "expected Error, got {:?}",
+        result.infer_data_type()
+    );
+}
+
+#[test]
+fn apply_style_label_wrong_type_errors() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style_raw(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![NetworkResult::record(vec![(
+            "label".to_string(),
+            NetworkResult::Int(7),
+        )])]),
+    );
+    match result {
+        NetworkResult::Error(e) => {
+            assert!(e.contains("rules[0].label"), "{}", e);
+            assert!(e.contains("expected String"), "{}", e);
+        }
+        other => panic!("Expected Error, got {:?}", other.infer_data_type()),
+    }
+}
+
+#[test]
+fn apply_style_label_composes_with_other_properties() {
+    // A later rule setting only `color` must leave the label intact —
+    // last-writer-wins is PER PROPERTY, not per rule.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![
+            style_rule_label(
+                Some(8),
+                None,
+                Some(DVec3::new(1.0, 0.0, 0.0)),
+                Some("{element}"),
+            ),
+            style_rule(Some(8), None, Some(DVec3::new(0.0, 1.0, 0.0)), None),
+        ]),
+    );
+    assert_eq!(result.get_atom_label(3), Some("O"));
+    assert_eq!(result.get_atom_color(3), Some(Vec3::new(0.0, 1.0, 0.0)));
+}
+
+#[test]
+fn record_construct_style_rule_label_pin_preserves_wires() {
+    // Adding `label` to the non-serialized `StyleRule` def is non-breaking: a
+    // `record_construct` with schema `StyleRule` re-derives its pins from the
+    // current def, so it gains the new field's pin — and a wire into a field
+    // that already existed survives the repair pass that does it.
+    use rust_lib_flutter_cad::structure_designer::nodes::record_construct::RecordConstructData;
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+
+    let color_id = add_value_node(
+        &mut designer,
+        net,
+        NetworkResult::Vec3(DVec3::new(1.0, 0.0, 0.0)),
+    );
+    let rc_id = designer.add_node("record_construct", DVec2::new(100.0, 0.0));
+    {
+        let registry = &mut designer.node_type_registry;
+        let network = registry.node_networks.get_mut(net).unwrap();
+        let node = network.nodes.get_mut(&rc_id).unwrap();
+        node.data = Box::new(RecordConstructData {
+            schema: "StyleRule".to_string(),
+            ..Default::default()
+        });
+        NodeTypeRegistry::populate_custom_node_type_cache_with_types(
+            &registry.built_in_node_types,
+            &registry.record_type_defs,
+            &registry.built_in_record_type_defs,
+            node,
+            true,
+        );
+    }
+    // `color` is pin index 2 in the def's authored field order.
+    designer.connect_nodes(color_id, 0, rc_id, 2);
+
+    // Re-run the repair pass — the same mechanism a def change triggers.
+    {
+        let registry = &mut designer.node_type_registry;
+        let mut network = registry.node_networks.get(net).unwrap().clone();
+        registry.repair_node_network(&mut network);
+        registry.node_networks.insert(net.to_string(), network);
+    }
+
+    let registry = &designer.node_type_registry;
+    let network = registry.node_networks.get(net).unwrap();
+    let node = network.nodes.get(&rc_id).unwrap();
+    let nt = registry.get_node_type_for_node(node).unwrap();
+    let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["element", "tag", "color", "alpha", "render_style", "label"]
+    );
+    // The pre-existing wire survived the def growth.
+    assert!(
+        !node.arguments[2].incoming_wires.is_empty(),
+        "the color wire must survive the def gaining a `label` field"
+    );
 }

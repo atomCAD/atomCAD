@@ -12,16 +12,6 @@ use glam::f64::DVec3;
 use glam::i32::IVec2;
 use glam::i32::IVec3;
 
-/// World-space em height of atom labels, Å — roughly a ball-and-stick carbon's
-/// diameter: big enough to read against its own atom, small enough that two
-/// labelled neighbours do not collide at default zoom.
-///
-/// Phase 3 of `doc/design_atom_labels.md` fills the display-side preference from
-/// this const because the tessellator cannot lay out a quad without a scale.
-/// Phase 4 adds the user-facing API-side field and switches the mapping below to
-/// read it.
-const DEFAULT_LABEL_SCALE: f32 = 0.7;
-
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     APIVec3 {
         x: v.x,
@@ -143,7 +133,9 @@ pub fn to_display_preferences(
             scene_alpha: preferences
                 .atomic_structure_visualization_preferences
                 .scene_alpha as f32,
-            label_scale: DEFAULT_LABEL_SCALE,
+            label_scale: preferences
+                .atomic_structure_visualization_preferences
+                .label_scale as f32,
         },
         background: display_prefs::BackgroundPreferences {
             show_axes: preferences.background_preferences.show_axes,

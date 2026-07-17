@@ -180,6 +180,48 @@ fn test_preferences_empty_json_uses_defaults() {
     );
 }
 
+/// A settings file written before `label_scale` existed must still load, with
+/// the new field defaulting — this is what makes the atom-labels preference a
+/// no-migration change (`doc/design_atom_labels.md` §Label size). The section is
+/// otherwise fully populated, so only the missing field can be under test.
+#[test]
+fn test_preferences_without_label_scale_defaults_it() {
+    let pre_label_json = r#"{
+        "atomic_structure_visualization_preferences": {
+            "visualization": "SpaceFilling",
+            "rendering_method": "TriangleMesh",
+            "ball_and_stick_cull_depth": 9.0,
+            "space_filling_cull_depth": 4.0,
+            "scene_transparency_enabled": true,
+            "scene_alpha": 0.25
+        }
+    }"#;
+
+    let loaded: StructureDesignerPreferences = serde_json::from_str(pre_label_json)
+        .expect("A settings file predating label_scale must still load");
+
+    // The new field defaults...
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .label_scale,
+        0.7
+    );
+    // ...and its absence does not disturb its neighbours.
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .scene_alpha,
+        0.25
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .visualization,
+        AtomicStructureVisualization::SpaceFilling
+    );
+}
+
 /// Test that Default trait implementations are consistent with documentation.
 #[test]
 fn test_default_values_match_documentation() {
@@ -245,6 +287,20 @@ fn test_default_values_match_documentation() {
             .atomic_structure_visualization_preferences
             .space_filling_cull_depth,
         Some(3.0)
+    );
+    assert!(
+        !prefs
+            .atomic_structure_visualization_preferences
+            .scene_transparency_enabled
+    );
+    assert_eq!(
+        prefs.atomic_structure_visualization_preferences.scene_alpha,
+        0.5
+    );
+    // Atom label em height, Å (`doc/design_atom_labels.md` §Label size).
+    assert_eq!(
+        prefs.atomic_structure_visualization_preferences.label_scale,
+        0.7
     );
 
     // Background defaults
@@ -314,6 +370,7 @@ fn test_non_default_values_roundtrip() {
             space_filling_cull_depth: None,
             scene_transparency_enabled: true,
             scene_alpha: 0.35,
+            label_scale: 1.25,
         },
         background_preferences: BackgroundPreferences {
             background_color: APIIVec3 {
@@ -473,6 +530,12 @@ fn test_non_default_values_roundtrip() {
             .atomic_structure_visualization_preferences
             .scene_alpha,
         0.35
+    );
+    assert_eq!(
+        loaded
+            .atomic_structure_visualization_preferences
+            .label_scale,
+        1.25
     );
 
     assert_eq!(

@@ -1,11 +1,12 @@
 //! `apply_style` — per-atom visual styling driven by tag/element rules.
 //!
-//! Phases 2 + 4 of `doc/design_style_rules.md`. A `HasAtoms`-polymorphic,
+//! Phases 2 + 4 of `doc/design_style_rules.md`, plus Phase 4 of
+//! `doc/design_atom_labels.md` (the `label` field). A `HasAtoms`-polymorphic,
 //! metadata-only pass-through in the `freeze`/`xray`/`tag` family. It takes a
 //! `rules: Array[Record(Named("StyleRule"))]` value and writes per-atom color,
-//! alpha, and render-style overrides onto the decorator (runtime-only display
-//! state, never serialized, dropped by structure-rebuilding nodes — so place
-//! `apply_style` late in the chain).
+//! alpha, render-style, and label overrides onto the decorator (runtime-only
+//! display state, never serialized, dropped by structure-rebuilding nodes — so
+//! place `apply_style` late in the chain).
 //!
 //! The node has **no stored properties** (decision 1: rules are wire-only), so
 //! there is no property editor, no node-data API, and no text-format surface.
@@ -18,7 +19,7 @@
 //! absent ⇒ the rule matches every atom.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::AtomRenderStyle;
+use crate::crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -62,6 +63,27 @@ struct StyleRule {
     /// `"space_filling"`) vs. **clear** it (`None`, from `"default"` — restores
     /// the global preference).
     render_style: Option<Option<AtomRenderStyle>>,
+    /// Property: the **unexpanded** label template, pre-parsed into pieces at
+    /// parse time so token errors surface once per rule rather than once per
+    /// matched atom (`doc/design_atom_labels.md` §Token expansion). `None` ⇒
+    /// leave the atom's label alone; an empty piece list (from `label: ""`)
+    /// expands to `""`, which `set_atom_label` treats as "remove the label".
+    /// Expansion is per matched atom — that is what makes one `{element}` rule
+    /// label a whole structure.
+    label: Option<Vec<LabelPiece>>,
+}
+
+/// One parsed span of a `label` template: literal text or a substitution token.
+#[derive(Debug, Clone)]
+enum LabelPiece {
+    /// Verbatim text (with `{{` / `}}` already unescaped to `{` / `}`).
+    Literal(String),
+    /// `{element}` — the atom's chemical symbol, resolved exactly as the hover
+    /// popup resolves it.
+    Element,
+    /// `{tag}` — the rule's own `tag` selector if it has one, else the atom's
+    /// first tag, else empty.
+    Tag,
 }
 
 impl NodeData for ApplyStyleData {
@@ -159,6 +181,15 @@ impl NodeData for ApplyStyleData {
                             None => structure.clear_atom_render_style(id),
                         }
                     }
+                    // `label`: expand the template against *this* atom, then
+                    // write. Expansion reads the structure (tags, element
+                    // overrides), so it must finish before the `&mut` write.
+                    // `set_atom_label("")` clears, so a template that expands to
+                    // nothing removes the label.
+                    if let Some(pieces) = &rule.label {
+                        let text = expand_label(pieces, &structure, id, atomic_number, &rule.tag);
+                        structure.set_atom_label(id, text);
+                    }
                 }
             }
             structure
@@ -185,6 +216,140 @@ impl NodeData for ApplyStyleData {
         m.insert("rules".to_string(), (false, None)); // optional
         m
     }
+}
+
+/// Parse a `label` template into literal/token pieces, rejecting anything
+/// unrecognized inside braces. A silently-ignored typo is worse than a message,
+/// so this is strict — the same reasoning `render_style` applies to unknown
+/// strings (`doc/design_atom_labels.md` §Token expansion).
+///
+/// The returned error is *unlocalized* (no rule index): the caller prefixes it,
+/// keeping the `apply_style.rules[i].label: …` shape of every other field's
+/// error in one place.
+fn parse_label_template(template: &str) -> Result<Vec<LabelPiece>, String> {
+    let mut pieces = Vec::new();
+    let mut literal = String::new();
+    let mut chars = template.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '{' => {
+                // `{{` is a literal `{`.
+                if chars.peek() == Some(&'{') {
+                    chars.next();
+                    literal.push('{');
+                    continue;
+                }
+                let mut name = String::new();
+                let mut closed = false;
+                for c2 in chars.by_ref() {
+                    if c2 == '}' {
+                        closed = true;
+                        break;
+                    }
+                    name.push(c2);
+                }
+                if !closed {
+                    return Err(format!(
+                        "unterminated token \"{{{}\" (missing '}}'; write \"{{{{\" for a \
+                         literal brace)",
+                        name
+                    ));
+                }
+                if !literal.is_empty() {
+                    pieces.push(LabelPiece::Literal(std::mem::take(&mut literal)));
+                }
+                match name.as_str() {
+                    "element" => pieces.push(LabelPiece::Element),
+                    "tag" => pieces.push(LabelPiece::Tag),
+                    other => {
+                        return Err(format!(
+                            "unknown token \"{{{}}}\" (expected \"{{element}}\" or \"{{tag}}\"; \
+                             write \"{{{{\" for a literal brace)",
+                            other
+                        ));
+                    }
+                }
+            }
+            '}' => {
+                // `}}` is a literal `}`; a lone `}` is a typo, not text.
+                if chars.peek() == Some(&'}') {
+                    chars.next();
+                    literal.push('}');
+                    continue;
+                }
+                return Err("unescaped '}' (write \"}}\" for a literal brace)".to_string());
+            }
+            other => literal.push(other),
+        }
+    }
+
+    if !literal.is_empty() {
+        pieces.push(LabelPiece::Literal(literal));
+    }
+    Ok(pieces)
+}
+
+/// Expand a parsed template against one matched atom.
+///
+/// `rule_tag` is the rule's own `tag` selector, which `{tag}` prefers: when the
+/// rule *has* one, the answer is unambiguous by construction (the rule only
+/// matched atoms carrying it). Only the selector-less case falls back to the
+/// atom's first tag (`atom_tags` returns names in bit order).
+fn expand_label(
+    pieces: &[LabelPiece],
+    structure: &AtomicStructure,
+    atom_id: u32,
+    atomic_number: i16,
+    rule_tag: &Option<String>,
+) -> String {
+    let mut out = String::new();
+    for piece in pieces {
+        match piece {
+            LabelPiece::Literal(s) => out.push_str(s),
+            LabelPiece::Element => out.push_str(&element_symbol(structure, atomic_number)),
+            LabelPiece::Tag => match rule_tag {
+                Some(name) => out.push_str(name),
+                None => {
+                    if let Some(first) = structure.atom_tags(atom_id).first() {
+                        out.push_str(first);
+                    }
+                }
+            },
+        }
+    }
+    out
+}
+
+/// Resolve `{element}` exactly the way the hover popup does
+/// (`structure_designer_api.rs`) — the two surfaces must never disagree about
+/// the same atom.
+///
+/// The override map is a **membership test** here: its mapped `String` is the
+/// motif parameter's display *name*, which the popup shows on a separate line
+/// and a label does not use. What a param element renders as is `P1` / `P2`,
+/// matching the popup's symbol.
+fn element_symbol(structure: &AtomicStructure, atomic_number: i16) -> String {
+    use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
+    use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+
+    if structure
+        .decorator()
+        .element_name_overrides
+        .contains_key(&atomic_number)
+    {
+        return param_atomic_number_to_index(atomic_number)
+            .map(|idx| format!("P{}", idx + 1))
+            .unwrap_or_else(|| "?".to_string());
+    }
+
+    // `ATOM_INFO` is keyed by `i32` while atomic numbers are `i16`; unknown
+    // numbers fall back to `DEFAULT_ATOM_INFO` ("X").
+    ATOM_INFO
+        .get(&(atomic_number as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .symbol
+        .clone()
 }
 
 /// The tag-axis outcome precomputed once per rule against the styled structure.
@@ -305,12 +470,35 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
             }
         };
 
+        // `label` is `Optional[String]`, a template with `{element}` / `{tag}`
+        // substitution tokens expanded per matched atom. Validated (and
+        // pre-parsed) here so a typo'd token names its rule once instead of
+        // failing invisibly per atom. Unlike `tag`, the empty string is *not* an
+        // error: `label: ""` is the reset value, mirroring `alpha: 1.0` and
+        // `render_style: "default"`. Not trimmed, either — leading/trailing
+        // spaces in label text are the user's business.
+        let label = match item.extract_record_field("label") {
+            None | Some(NetworkResult::None) => None,
+            Some(NetworkResult::String(s)) => Some(
+                parse_label_template(s)
+                    .map_err(|e| format!("apply_style.rules[{}].label: {}", i, e))?,
+            ),
+            Some(other) => {
+                return Err(format!(
+                    "apply_style.rules[{}].label: expected String, got {:?}",
+                    i,
+                    other.infer_data_type()
+                ));
+            }
+        };
+
         out.push(StyleRule {
             element,
             tag,
             color,
             alpha,
             render_style,
+            label,
         });
     }
     Ok(out)
@@ -319,11 +507,13 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
 pub fn get_node_type() -> NodeType {
     NodeType {
         name: "apply_style".to_string(),
-        description: "Applies per-atom visual styling (color, transparency, render style) driven \
-                      by a list of \
+        description: "Applies per-atom visual styling (color, transparency, render style, label) \
+                      driven by a list of \
                       style rules. Each rule selects atoms by element and/or tag and sets the \
                       properties it specifies; rules apply in order, last writer wins per \
-                      property. Build rules with record_construct (schema StyleRule) and collect \
+                      property. `label` draws text on the atom and expands the {element} and \
+                      {tag} tokens per atom (\"\" removes a label). Build rules with \
+                      record_construct (schema StyleRule) and collect \
                       them with a sequence node into the `rules` pin. Like xray, styling is a \
                       metadata-only pass-through — place apply_style late in the chain, after any \
                       structure-rebuilding node (materialize, lattice fill), which drops it."

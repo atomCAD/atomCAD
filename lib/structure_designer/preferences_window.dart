@@ -8,6 +8,15 @@ import 'package:flutter_cad/src/rust/api/common_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
+/// Bounds on the atom-label em height, Å. The lower bound keeps a zero or
+/// negative value from collapsing every glyph quad to a degenerate point, which
+/// would read as "the feature is broken" rather than "the preference is
+/// misconfigured"; the upper is simply past any useful size. Duplicated at the
+/// Rust use site (`display/atomic_tessellator.rs`), the way scene_alpha's clamp
+/// is.
+const double LABEL_SCALE_MIN = 0.05;
+const double LABEL_SCALE_MAX = 10.0;
+
 /// Keys for preferences window widgets, used for integration testing.
 class PreferencesKeys {
   static const Key preferencesDialog = Key('preferences_dialog');
@@ -42,6 +51,7 @@ class PreferencesKeys {
   static const Key sceneTransparencyCheckbox =
       Key('pref_scene_transparency_checkbox');
   static const Key sceneAlphaInput = Key('pref_scene_alpha_input');
+  static const Key labelScaleInput = Key('pref_label_scale_input');
 
   // Other settings
   static const Key displayCameraPivotCheckbox =
@@ -735,8 +745,7 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                           setState(() {
                                             _preferences
                                                 .atomicStructureVisualizationPreferences
-                                                .sceneAlpha =
-                                                value.clamp(0.0, 1.0);
+                                                .sceneAlpha = value.clamp(0.0, 1.0);
                                           });
                                           _applyPreferences();
                                         },
@@ -752,6 +761,77 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             'Ghosts every atom (impostor rendering only). '
                             'xray nodes multiply on top, so ghosted regions '
                             'stay more transparent than their surroundings.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.medium),
+                          const Divider(),
+                          const SizedBox(height: AppSpacing.small),
+
+                          // Atom label size — a world-space em height in Å, so
+                          // labels scale with zoom the way their atoms do. The
+                          // clamp is duplicated at the Rust use site, the way
+                          // scene_alpha's is.
+                          const Text('Atom label size (Å)'),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Slider(
+                                  value: _preferences
+                                      .atomicStructureVisualizationPreferences
+                                      .labelScale
+                                      .clamp(
+                                    LABEL_SCALE_MIN,
+                                    LABEL_SCALE_MAX,
+                                  ),
+                                  min: LABEL_SCALE_MIN,
+                                  max: LABEL_SCALE_MAX,
+                                  divisions: 199,
+                                  label: _preferences
+                                      .atomicStructureVisualizationPreferences
+                                      .labelScale
+                                      .toStringAsFixed(2),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _preferences
+                                          .atomicStructureVisualizationPreferences
+                                          .labelScale = value;
+                                    });
+                                    _applyPreferences();
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 90,
+                                child: FloatInput(
+                                  key: PreferencesKeys.labelScaleInput,
+                                  label: '',
+                                  value: _preferences
+                                      .atomicStructureVisualizationPreferences
+                                      .labelScale,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _preferences
+                                          .atomicStructureVisualizationPreferences
+                                          .labelScale = value.clamp(
+                                        LABEL_SCALE_MIN,
+                                        LABEL_SCALE_MAX,
+                                      );
+                                    });
+                                    _applyPreferences();
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'World-space height of the text drawn by an '
+                            'apply_style rule\'s label field — labels scale '
+                            'with zoom, like the atoms they name.',
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[600],

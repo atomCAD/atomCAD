@@ -319,7 +319,7 @@ Attaches a **named tag** to atoms — a piece of inert, durable metadata that ma
 - `name: String` (optional) — the tag name. A wired value overrides the stored `name` property (same pin-over-property precedence as `xray`'s `alpha`); while wired, the node subtitle hides.
 - `region: Blueprint` (optional, last pin) — restrict tagging to atoms inside this volume. Disconnected → **all** atoms are tagged. See *Restricting an atom operation to a region* above.
 
-**Tags are selectors, not property carriers.** A tag has **no visual effect on its own** and no behavior — it only records "these atoms belong to a group named X". Tags are invisible in the viewport; **hover an atom to see the tags it carries** (they show on their own `Tags:` line in the hover popup). To make tags *visible*, feed the tagged structure into [`apply_style`](#apply_style), which colors and ghosts atoms by tag (and by element).
+**Tags are selectors, not property carriers.** A tag has **no visual effect on its own** and no behavior — it only records "these atoms belong to a group named X". Tags are invisible in the viewport; **hover an atom to see the tags it carries** (they show on their own `Tags:` line in the hover popup). To make tags *visible*, feed the tagged structure into [`apply_style`](#apply_style), which colors, ghosts, and labels atoms by tag (and by element) — `apply_style`'s `label: "{tag}"` draws the tag name right on the atoms carrying it.
 
 **Editor.** The properties panel offers a free-text `name` field plus one-click chips listing the tag names already present on the input structure (a suggestion source populated after the node evaluates — empty while the input is unwired or the upstream errors). The field stays free text because `tag`'s usual job is introducing a *new* name.
 
@@ -339,7 +339,7 @@ Removing a tag an atom does not carry is a no-op. As with `tag`, the editor offe
 
 ## apply_style
 
-Applies **per-atom visual styling** — color, transparency, and render style — driven by a list of rules that select atoms by element and/or tag. This is the consumer that gives [`tag`](#tag) a visible payoff: tag a group of atoms upstream, then color or ghost that group here. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with the styling recorded on the matched atoms. Like `xray`, `apply_style` is a pure metadata pass-through: it changes only how atoms are *drawn*, never their positions, bonds, or count.
+Applies **per-atom visual styling** — color, transparency, render style, and text labels — driven by a list of rules that select atoms by element and/or tag. This is the consumer that gives [`tag`](#tag) a visible payoff: tag a group of atoms upstream, then color, ghost, or *name* that group here. Takes a `Crystal` or `Molecule` and outputs the same structure (concrete input type preserved) with the styling recorded on the matched atoms. Like `xray`, `apply_style` is a pure metadata pass-through: it changes only how atoms are *drawn*, never their positions, bonds, or count.
 
 **Input pins**
 
@@ -359,6 +359,7 @@ The node has **no properties** — rules live entirely on the wire, so you can b
 | `color: Optional[Vec3]` | property | Albedo override, `0`–`1` RGB (components are clamped). |
 | `alpha: Optional[Float]` | property | Display alpha, `0`–`1` (same field and semantics as [`xray`](#xray)). |
 | `render_style: Optional[String]` | property | Per-atom render style: `"ball_and_stick"`, `"space_filling"`, or `"default"` (restores the global mode). |
+| `label: Optional[String]` | property | Text drawn on the atom, with `{element}` / `{tag}` substitution tokens. `""` removes a label. |
 
 **Matching.** A rule matches an atom when **every present selector** matches: `element` alone matches every atom of that element; `tag` alone matches every atom with that tag; both present is an **AND** (only atoms that are both). **With no selectors at all, the rule matches every atom** — the whole-structure "make everything slightly transparent / recolor everything" case. A selector that nothing satisfies (an element no displayed atom carries, a tag name absent from the structure) simply matches nothing — that is **not** an error, because networks are parametric. An `element` value that doesn't fit a 16-bit integer, or an empty/whitespace `tag`, **is** an error (surfaced on the node, naming the offending rule).
 
@@ -384,9 +385,32 @@ A few consequences worth knowing:
 
 Styled atoms are hoverable and measurable at their displayed radius, exactly as if the whole scene were in that mode.
 
+### Labels
+
+`label` draws **text on the atom** — the one styling channel that says *which atoms are these?* directly, instead of asking you to remember that green means surface. The text is drawn in the 3D scene as camera-facing 3D text, so it stays upright as you orbit, is **hidden by atoms in front of it**, and scales with zoom the way its atom does.
+
+The field is a template, expanded **per matched atom**:
+
+| Token | Expands to |
+|---|---|
+| `{element}` | The atom's chemical symbol (`C`, `Si`, …) — the same symbol the hover popup shows, including `P1` / `P2` for motif parameter elements. |
+| `{tag}` | The rule's own `tag` selector if it has one; otherwise the atom's **first** tag; otherwise nothing. |
+| `{{` / `}}` | A literal `{` / `}`. |
+
+Because expansion is per atom, **one** match-all rule with `label: "{element}"` labels every atom with its own symbol — you do not write 118 rules. Anything else inside braces is an error naming the rule and the offending token, so a typo like `{elemental}` tells you rather than silently drawing nothing.
+
+- **`""` is the reset.** An empty label removes the label, the way `alpha: 1.0` restores opacity and `render_style: "default"` restores the global mode. (Unlike the `tag` *selector*, where an empty string is an error — an empty tag name can never exist, but "draw no text" is meaningful.)
+- **Labels work in both atomic rendering methods**, unlike `alpha` — they are drawn independently of how atoms themselves are drawn.
+- **Labels ride the atom's displayed radius**, so a `render_style: "space_filling"` atom's label sits out on its van der Waals surface automatically. The two fields compose without either knowing about the other.
+- **An invisible atom gets no label.** An atom with `alpha: 0` (or any labeled atom under a `scene_alpha` of 0) is skipped along with its label. A **ghosted** atom (`0 < alpha < 1`) *keeps* its label, drawn fully opaque — that is precisely how a deliberately faded atom stays identifiable.
+- **Size** is one global preference: *Atom label size (Å)* in **Preferences → atomic visualization**, defaulting to `0.7` Å (roughly a ball-and-stick carbon's diameter). It is a world-space height, so labels scale with zoom; there is no per-rule size.
+- Non-ASCII characters (in a tag name, say) draw as `?`.
+
+**Label a handful of atoms.** There is deliberately no cap: a match-all `label: "{element}"` on a 100k-atom crystal will happily draw 100k labels and give you an illegible screen. Labels are for the few atoms worth naming — use selectors to pick them out, exactly as you already do for color. If the screen fills with text, narrow the selector.
+
 ### Authoring rules
 
-The quickest path is one [`array`](./math_programming.md#array) node with element type `StyleRule`: every rule is an element you fill in on the node itself, and the field hints give you a color swatch, an alpha slider, and a render-style dropdown per rule. Wire its output straight into `rules`.
+The quickest path is one [`array`](./math_programming.md#array) node with element type `StyleRule`: every rule is an element you fill in on the node itself, and the field hints give you a color swatch, an alpha slider, a render-style dropdown, and a plain text box for the label per rule. Wire its output straight into `rules`.
 
 Otherwise, build one `record_construct` node per rule (schema `StyleRule`). Either way, because every field is `Optional`, the per-field inline editor shows the *stored / (unset) / wired* tri-state, and leaving a field unset means "leave this property alone" (for a property) or "don't constrain on this axis" (for a selector).
 

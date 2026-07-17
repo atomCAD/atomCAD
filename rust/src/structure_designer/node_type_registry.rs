@@ -669,22 +669,26 @@ impl NodeTypeRegistry {
 
         // `StyleRule` — one per-atom visual styling rule consumed by
         // `apply_style` from an `Array[Record(Named("StyleRule"))]` pin. The
-        // `element`/`tag` fields are selectors; `color`/`alpha`/`render_style`
-        // are the visual properties written onto matched atoms. Every field is
-        // `Optional` so a `record_construct` may leave any pin unset ("leave
-        // this alone" for a property; "don't constrain on this axis" for a
-        // selector). `render_style` selects `"ball_and_stick"` /
-        // `"space_filling"` / `"default"` per atom (a string enum). See
-        // `doc/design_style_rules.md` §"The StyleRule built-in record type def".
+        // `element`/`tag` fields are selectors; `color`/`alpha`/`render_style`/
+        // `label` are the visual properties written onto matched atoms. Every
+        // field is `Optional` so a `record_construct` may leave any pin unset
+        // ("leave this alone" for a property; "don't constrain on this axis" for
+        // a selector). `render_style` selects `"ball_and_stick"` /
+        // `"space_filling"` / `"default"` per atom (a string enum). `label` is
+        // the text drawn on matched atoms, a template with `{element}` / `{tag}`
+        // substitution tokens (`doc/design_atom_labels.md`); `""` removes a
+        // label. See `doc/design_style_rules.md` §"The StyleRule built-in record
+        // type def".
         //
-        // Four of the five fields carry editor hints
+        // Four of the six fields carry editor hints
         // (`doc/design_array_node_and_field_hints.md` §Annotations). The
         // `render_style` Enum lists exactly the strings `apply_style` accepts
         // (`nodes/apply_style.rs::parse_style_rules`), which makes that
         // eval-time string validation a backstop instead of the first line of
-        // defense. `tag` stays unhinted: the useful choices are the *upstream
-        // structure's* tag names — runtime context a `record_construct` sitting
-        // anywhere in the graph does not have.
+        // defense. `tag` and `label` stay unhinted: both are free text. For
+        // `tag` the useful choices are the *upstream structure's* tag names —
+        // runtime context a `record_construct` sitting anywhere in the graph
+        // does not have.
         ret.built_in_record_type_defs.insert(
             "StyleRule".to_string(),
             RecordTypeDef::from_hinted_fields(
@@ -718,6 +722,11 @@ impl NodeTypeRegistry {
                             "space_filling".to_string(),
                             "default".to_string(),
                         ])),
+                    ),
+                    (
+                        "label".to_string(),
+                        DataType::Optional(Box::new(DataType::String)),
+                        None,
                     ),
                 ],
             ),

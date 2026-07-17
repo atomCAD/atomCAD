@@ -179,6 +179,13 @@ pub struct AtomicStructureVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_scene_alpha")]
     pub scene_alpha: f64,
+    /// World-space em height of atom labels, in Å — labels scale with zoom, the
+    /// way their atoms do. Clamped to `[0.05, 10.0]` in the UI and again at the
+    /// Rust use site, mirroring `scene_alpha`. See `doc/design_atom_labels.md`
+    /// §Label size.
+    #[frb(non_final)]
+    #[serde(default = "default_label_scale")]
+    pub label_scale: f64,
 }
 
 fn default_ball_and_stick_cull_depth() -> Option<f64> {
@@ -190,6 +197,12 @@ fn default_space_filling_cull_depth() -> Option<f64> {
 fn default_scene_alpha() -> f64 {
     0.5
 }
+/// Roughly a ball-and-stick carbon's diameter: big enough to read against its
+/// own atom, small enough that two labelled neighbours do not collide at
+/// default zoom.
+fn default_label_scale() -> f64 {
+    0.7
+}
 
 impl Default for AtomicStructureVisualizationPreferences {
     fn default() -> Self {
@@ -200,6 +213,7 @@ impl Default for AtomicStructureVisualizationPreferences {
             space_filling_cull_depth: Some(3.0),
             scene_transparency_enabled: false,
             scene_alpha: 0.5,
+            label_scale: 0.7,
         }
     }
 }

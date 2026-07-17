@@ -14621,7 +14621,8 @@ let mut var_ballAndStickCullDepth = <Option<f64>>::sse_decode(deserializer);
 let mut var_spaceFillingCullDepth = <Option<f64>>::sse_decode(deserializer);
 let mut var_sceneTransparencyEnabled = <bool>::sse_decode(deserializer);
 let mut var_sceneAlpha = <f64>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, rendering_method: var_renderingMethod, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth, scene_transparency_enabled: var_sceneTransparencyEnabled, scene_alpha: var_sceneAlpha};}
+let mut var_labelScale = <f64>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualizationPreferences{visualization: var_visualization, rendering_method: var_renderingMethod, ball_and_stick_cull_depth: var_ballAndStickCullDepth, space_filling_cull_depth: var_spaceFillingCullDepth, scene_transparency_enabled: var_sceneTransparencyEnabled, scene_alpha: var_sceneAlpha, label_scale: var_labelScale};}
                 }
 
 impl SseDecode
@@ -21515,7 +21516,8 @@ self.rendering_method.into_into_dart().into_dart(),
 self.ball_and_stick_cull_depth.into_into_dart().into_dart(),
 self.space_filling_cull_depth.into_into_dart().into_dart(),
 self.scene_transparency_enabled.into_into_dart().into_dart(),
-self.scene_alpha.into_into_dart().into_dart()
+self.scene_alpha.into_into_dart().into_dart(),
+self.label_scale.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -24117,7 +24119,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <Option<f64>>::sse_encode(self.ball_and_stick_cull_depth, serializer);
 <Option<f64>>::sse_encode(self.space_filling_cull_depth, serializer);
 <bool>::sse_encode(self.scene_transparency_enabled, serializer);
-<f64>::sse_encode(self.scene_alpha, serializer);}
+<f64>::sse_encode(self.scene_alpha, serializer);
+<f64>::sse_encode(self.label_scale, serializer);}
                 }
 
 impl SseEncode

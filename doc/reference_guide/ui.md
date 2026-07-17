@@ -306,6 +306,7 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Space Filling Cull Depth | Distance (in Ångströms) beyond which atoms are hidden in Space Filling mode. Set to 0 to disable culling. |
 | Make whole scene transparent | Global "see through everything" viewing lens: when enabled, **every** atom and bond renders semi-transparent at the alpha below, without any [`xray`](nodes/atomic.md#xray) nodes. Impostor rendering only (no effect in *Triangle Mesh* mode). It composes with `xray` by **multiplication** — an atom an `xray` node ghosted to α = 0.3 becomes 0.3 × the scene alpha, so ghosted regions stay more transparent than their surroundings. The same toggle is available as a one-click button in the [Display Preferences panel](#atomic-visualization). |
 | Scene transparency alpha | The global alpha (0 = fully transparent, 1 = fully opaque) used when *Make whole scene transparent* is on. Default 0.5. Editable with the slider or the numeric field; the value is kept even while the toggle is off. |
+| Atom label size (Å) | Height of the text drawn by an [`apply_style`](nodes/atomic.md#apply_style) rule's `label` field. Default 0.7 Å — roughly a ball-and-stick carbon's diameter. This is a **world-space** size, so labels scale with zoom like the atoms they name; range 0.05–10. Applies to every label in the scene (there is no per-rule size). |
 
 ### Other Settings
 

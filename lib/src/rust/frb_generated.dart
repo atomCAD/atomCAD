@@ -16549,8 +16549,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_atomic_structure_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return AtomicStructureVisualizationPreferences(
       visualization: dco_decode_atomic_structure_visualization(arr[0]),
       renderingMethod: dco_decode_atomic_rendering_method(arr[1]),
@@ -16558,6 +16558,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       spaceFillingCullDepth: dco_decode_opt_box_autoadd_f_64(arr[3]),
       sceneTransparencyEnabled: dco_decode_bool(arr[4]),
       sceneAlpha: dco_decode_f_64(arr[5]),
+      labelScale: dco_decode_f_64(arr[6]),
     );
   }
 
@@ -20558,13 +20559,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_sceneTransparencyEnabled = sse_decode_bool(deserializer);
     var var_sceneAlpha = sse_decode_f_64(deserializer);
+    var var_labelScale = sse_decode_f_64(deserializer);
     return AtomicStructureVisualizationPreferences(
         visualization: var_visualization,
         renderingMethod: var_renderingMethod,
         ballAndStickCullDepth: var_ballAndStickCullDepth,
         spaceFillingCullDepth: var_spaceFillingCullDepth,
         sceneTransparencyEnabled: var_sceneTransparencyEnabled,
-        sceneAlpha: var_sceneAlpha);
+        sceneAlpha: var_sceneAlpha,
+        labelScale: var_labelScale);
   }
 
   @protected
@@ -25036,6 +25039,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_f_64(self.spaceFillingCullDepth, serializer);
     sse_encode_bool(self.sceneTransparencyEnabled, serializer);
     sse_encode_f_64(self.sceneAlpha, serializer);
+    sse_encode_f_64(self.labelScale, serializer);
   }
 
   @protected
