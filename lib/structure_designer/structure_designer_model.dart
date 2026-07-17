@@ -2702,6 +2702,20 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Override one input pin's role in the node's `-1` function-pin view
+  /// (Auto / Delayed / Supplied). The Rust setter normalizes `Auto` to entry
+  /// removal, revalidates, and pushes the undo command. See
+  /// `doc/design_function_pin_roles.md`.
+  void setFunctionPinRole(
+      BigInt nodeId, int pinIndex, APIFunctionPinRole role) {
+    structure_designer_api.setFunctionPinRole(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        pinIndex: BigInt.from(pinIndex),
+        role: role);
+    refreshFromKernel();
+  }
+
   APISequenceData? getSequenceData(BigInt nodeId) {
     return structure_designer_api.getSequenceData(
         scopePath: propertyEditorScopePath, nodeId: nodeId);

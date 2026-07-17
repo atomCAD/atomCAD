@@ -335,7 +335,8 @@
       "Bash(ps -W)",
       "PowerShell(Get-Process *)",
       "PowerShell(Get-CimInstance *)",
-      "PowerShell($c = Get-NetTCPConnection -LocalPort 19847 -State Listen -ErrorAction SilentlyContinue; foreach \\($x in $c\\) { $p = Get-Process -Id $x.OwningProcess; \"PID $\\($p.Id\\)  $\\($p.ProcessName\\)  started $\\($p.StartTime\\)\"; \"  Path: $\\($p.Path\\)\" })"
+      "PowerShell($c = Get-NetTCPConnection -LocalPort 19847 -State Listen -ErrorAction SilentlyContinue; foreach \\($x in $c\\) { $p = Get-Process -Id $x.OwningProcess; \"PID $\\($p.Id\\)  $\\($p.ProcessName\\)  started $\\($p.StartTime\\)\"; \"  Path: $\\($p.Path\\)\" })",
+      "Bash(perl -0pi -e 's/\\(#\\\\[derive\\\\\\(Clone, Copy, PartialEq, Eq\\\\\\)\\\\]\\\\npub enum APIFunctionPin\\(Role|Disposition\\)\\)/#[derive\\(Debug, Clone, Copy, PartialEq, Eq\\)]\\\\npub enum APIFunctionPin$2/g' rust/src/api/structure_designer/structure_designer_api_types.rs)"
     ]
   }
 }

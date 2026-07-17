@@ -27,6 +27,8 @@ use super::structure_designer_api_types::APIFieldEditorHint;
 use super::structure_designer_api_types::APIFilterData;
 use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIForeachData;
+use super::structure_designer_api_types::APIFunctionPinRole;
+use super::structure_designer_api_types::APIFunctionPinRoleView;
 use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIIfData;
@@ -7841,6 +7843,98 @@ pub fn end_zone_resize() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             cad_instance.structure_designer.end_zone_resize();
+        });
+    }
+}
+
+/// Build the per-input-pin rows of the sidebar's "Function output" section.
+///
+/// Split out of [`get_function_pin_roles`] so it can be unit-tested without the
+/// global `CAD_INSTANCE`: the `effective` field must agree with
+/// `function_pin_dispositions` for every role × wiring combination, since the
+/// UI renders it verbatim.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn build_function_pin_role_views(
+    node: &crate::structure_designer::node_network::Node,
+    node_type: &crate::structure_designer::node_type::NodeType,
+) -> Vec<APIFunctionPinRoleView> {
+    use crate::structure_designer::node_network::{FunctionPinRole, function_pin_dispositions};
+
+    node_type
+        .parameters
+        .iter()
+        .zip(function_pin_dispositions(node, node_type))
+        .enumerate()
+        .map(|(i, (param, disposition))| APIFunctionPinRoleView {
+            pin_name: param.name.clone(),
+            role: node
+                .function_pin_roles
+                .get(&i)
+                .copied()
+                .unwrap_or(FunctionPinRole::Auto)
+                .into(),
+            wired: node
+                .arguments
+                .get(i)
+                .map(|a| !a.is_empty())
+                .unwrap_or(false),
+            effective: disposition.into(),
+        })
+        .collect()
+}
+
+/// One row per input pin of `node_id`, describing how that pin participates in
+/// the node's `-1` function-pin view: its stored role, whether it is wired, and
+/// the **effective** disposition the two combine into.
+///
+/// `effective` is computed by the shared `function_pin_dispositions` helper —
+/// the same one the resolver and the closure synthesizer use — so the sidebar
+/// renders the partition rather than re-deriving it. Returns an empty list for
+/// an unknown node/scope or a node whose type won't resolve. See
+/// `doc/design_function_pin_roles.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_function_pin_roles(scope_path: Vec<u64>, node_id: u64) -> Vec<APIFunctionPinRoleView> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let sd = &cad_instance.structure_designer;
+                let Some(network) = sd.get_scope_network(&scope_path) else {
+                    return Vec::new();
+                };
+                let Some(node) = network.nodes.get(&node_id) else {
+                    return Vec::new();
+                };
+                let Some(node_type) = sd.node_type_registry.get_node_type_for_node(node) else {
+                    return Vec::new();
+                };
+                build_function_pin_role_views(node, node_type)
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Override one input pin's role in a node's `-1` function-pin view. Thin
+/// wrapper; the mutation, the revalidation, and the undo command live on
+/// `StructureDesigner::set_function_pin_role`. `Auto` is normalized there to
+/// entry removal. No-op for an out-of-range `pin_index` or an unresolvable
+/// node. See `doc/design_function_pin_roles.md`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_function_pin_role(
+    scope_path: Vec<u64>,
+    node_id: u64,
+    pin_index: usize,
+    role: APIFunctionPinRole,
+) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.set_function_pin_role(
+                &scope_path,
+                node_id,
+                pin_index,
+                role.into(),
+            );
+            refresh_structure_designer_auto(cad_instance);
         });
     }
 }

@@ -205,6 +205,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFreeSphereData dco_decode_api_free_sphere_data(dynamic raw);
 
   @protected
+  APIFunctionPinDisposition dco_decode_api_function_pin_disposition(
+      dynamic raw);
+
+  @protected
+  APIFunctionPinRole dco_decode_api_function_pin_role(dynamic raw);
+
+  @protected
+  APIFunctionPinRoleView dco_decode_api_function_pin_role_view(dynamic raw);
+
+  @protected
   APIGeoTransData dco_decode_api_geo_trans_data(dynamic raw);
 
   @protected
@@ -896,6 +906,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIFacet> dco_decode_list_api_facet(dynamic raw);
+
+  @protected
+  List<APIFunctionPinRoleView> dco_decode_list_api_function_pin_role_view(
+      dynamic raw);
 
   @protected
   List<APILiteralField> dco_decode_list_api_literal_field(dynamic raw);
@@ -1613,6 +1627,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFreeSphereData sse_decode_api_free_sphere_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFunctionPinDisposition sse_decode_api_function_pin_disposition(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFunctionPinRole sse_decode_api_function_pin_role(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFunctionPinRoleView sse_decode_api_function_pin_role_view(
       SseDeserializer deserializer);
 
   @protected
@@ -2431,6 +2457,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIFacet> sse_decode_list_api_facet(SseDeserializer deserializer);
+
+  @protected
+  List<APIFunctionPinRoleView> sse_decode_list_api_function_pin_role_view(
+      SseDeserializer deserializer);
 
   @protected
   List<APILiteralField> sse_decode_list_api_literal_field(
@@ -3269,6 +3299,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_free_sphere_data(
       APIFreeSphereData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_function_pin_disposition(
+      APIFunctionPinDisposition self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_function_pin_role(
+      APIFunctionPinRole self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_function_pin_role_view(
+      APIFunctionPinRoleView self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_geo_trans_data(
@@ -4120,6 +4162,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_api_facet(List<APIFacet> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_function_pin_role_view(
+      List<APIFunctionPinRoleView> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_literal_field(

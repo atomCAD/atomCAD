@@ -162,6 +162,14 @@ The `closure` and `apply` nodes (plus the four HOFs' optional `f` input pin) exp
 - **Add Node popup** is registry-driven, so `closure` and `apply` appear automatically once registered in Rust; no Flutter list edit was needed.
 - **Closure ⇄ network conversion** (`doc/design_closure_network_conversion.md`): the node context menu (`node_network/node_widget.dart` `_handleContextMenu`) offers **"Convert to Closure"** on a custom-network instance used as a function, and **"Extract to Network..."** on a `closure` node — gated by the model's `canConvertInstanceToClosure` / `canExtractClosureToNetwork` (computed before `showMenu`). Convert is one-click (snackbar on error); Extract opens `extract_closure_to_network_dialog.dart` (name-only). Model methods `convertInstanceToClosure` / `extractClosureToNetwork` forward `scopeChain` and return a `ConversionResult { success, error }`.
 
+## Function pin roles (the "Function output" sidebar section)
+
+Any node can be used as a function value through its title-bar `-1` pin; which of its inputs stay parameters and which are baked in is overridable per pin (`doc/design_function_pin_roles.md`, issue #408). The UI is one generic section — `node_data/function_output_editor.dart`, rendered by `node_data_widget.dart` for **every** selected node rather than switched on a node type; see `node_data/AGENTS.md` for its contents and the two filtered-out pin sets.
+
+- **API:** `getFunctionPinRoles(scopePath, nodeId)` → `List<APIFunctionPinRoleView { pinName, role, wired, effective }>` (a direct generated-API call) and `model.setFunctionPinRole(nodeId, pinIndex, role)` (forwards `propertyEditorScopeChain`). `APIFunctionPinRole` is Auto/Delayed/Supplied; `APIFunctionPinDisposition` is the *effective* Parameter/CaptureWire/CaptureStored. The getter reports `Auto` explicitly even though Rust stores it as absence — Flutter never needs the absence-is-Auto convention.
+- **`effective` is rendered verbatim, never re-derived.** It comes from the one shared Rust `function_pin_dispositions` helper that also feeds the type resolver and the closure synthesizer.
+- **A function-mode node is an ordinary node for display purposes** — `NodeView.function_pin_consumed` does *not* gate the eye icon or the scene (the suppression was removed so a consumed node's gizmo stays reachable). Flutter only uses the flag to expand this section by default.
+
 ## Structural Function / Iter types
 
 `APIDataTypeBase` carries first-class `Iter` and `Function` variants alongside `Custom`, with one shared `children: List<APIDataType>` field on `APIDataType` whose meaning is interpreted locally to the base (`Iter` ⇒ 1 child: the element type; `Function` ⇒ N+1 children: params then return). Phase-1 commit migrated every existing literal site to `children: const []`; flat bases never use the field.

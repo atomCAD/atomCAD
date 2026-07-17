@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -1509,6 +1509,70 @@ class APIFreeSphereData {
           runtimeType == other.runtimeType &&
           center == other.center &&
           radius == other.radius;
+}
+
+/// Flutter-facing mirror of [`FunctionPinDisposition`] — the *effective*
+/// participation of one input pin in the `-1` function view, after the stored
+/// role and the pin's wiring are combined.
+///
+/// This is computed Rust-side by the shared `function_pin_dispositions` helper
+/// and rendered verbatim by the sidebar, so the UI never re-derives (or
+/// silently disagrees with) the partition table. See
+/// `doc/design_function_pin_roles.md` §"Semantics".
+enum APIFunctionPinDisposition {
+  parameter,
+  captureWire,
+  captureStored,
+  ;
+}
+
+/// Flutter-facing mirror of [`FunctionPinRole`]. The user's per-pin override of
+/// the `-1` function pin's parameter/capture partition. `Auto` is the default
+/// and is stored as *absence* Rust-side; the API always reports a role for
+/// every pin, so `Auto` travels explicitly here. See
+/// `doc/design_function_pin_roles.md`.
+enum APIFunctionPinRole {
+  auto,
+  delayed,
+  supplied,
+  ;
+}
+
+/// One input pin's row in the sidebar's "Function output" section.
+class APIFunctionPinRoleView {
+  /// The input pin's name, as declared by the node type.
+  final String pinName;
+
+  /// The pin's stored role (`Auto` when no override is stored).
+  final APIFunctionPinRole role;
+
+  /// True iff the pin carries ≥ 1 incoming wire (array pins accept several;
+  /// a role applies to the whole pin, never per wire).
+  final bool wired;
+
+  /// The resulting disposition — the resolved role × wiring combination.
+  final APIFunctionPinDisposition effective;
+
+  const APIFunctionPinRoleView({
+    required this.pinName,
+    required this.role,
+    required this.wired,
+    required this.effective,
+  });
+
+  @override
+  int get hashCode =>
+      pinName.hashCode ^ role.hashCode ^ wired.hashCode ^ effective.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIFunctionPinRoleView &&
+          runtimeType == other.runtimeType &&
+          pinName == other.pinName &&
+          role == other.role &&
+          wired == other.wired &&
+          effective == other.effective;
 }
 
 class APIGeoTransData {
@@ -3982,12 +4046,12 @@ class NodeView {
   final String functionType;
 
   /// Derived "function mode" flag: some node in the same network consumes this
-  /// node's function pin (`-1` output) via an HOF `f` pin or `apply.f`. When
-  /// `true` the node acts purely as a function value — the scene builder skips
-  /// it and the Flutter editor disables its output-pin eye(s) (the redirect is
-  /// the `apply` node). Mirrors `NodeNetwork::function_pin_consumed`; derived
-  /// per refresh, never stored. See `doc/design_function_pins.md`
-  /// §"Display in function mode".
+  /// node's function pin (`-1` output) via an HOF `f` pin or `apply.f`.
+  /// Mirrors `NodeNetwork::function_pin_consumed`; derived per refresh, never
+  /// stored. It does **not** gate display — a consumed node follows the normal
+  /// display policy and per-pin eyes, so its gizmo stays reachable (see
+  /// `doc/design_function_pin_roles.md` §"Display relaxation"). Flutter uses it
+  /// to expand the sidebar's "Function output" section by default.
   final bool functionPinConsumed;
   final bool selected;
   final bool active;

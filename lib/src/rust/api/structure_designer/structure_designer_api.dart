@@ -10,7 +10,7 @@ import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
 // These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `network_result_to_api_literal`, `param_element_color_u32`, `record_element_fields`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `simple_element_row`, `text_value_to_api_literal`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`, `with_array_data`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `api_data_type_to_data_type`, `data_type_to_api_data_type`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `api_data_type_to_data_type`, `build_function_pin_role_views`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworkView();
@@ -1991,6 +1991,38 @@ void beginZoneResize(
 /// `SetZoneSizeCommand` if the body changed size.
 void endZoneResize() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiEndZoneResize();
+
+/// One row per input pin of `node_id`, describing how that pin participates in
+/// the node's `-1` function-pin view: its stored role, whether it is wired, and
+/// the **effective** disposition the two combine into.
+///
+/// `effective` is computed by the shared `function_pin_dispositions` helper —
+/// the same one the resolver and the closure synthesizer use — so the sidebar
+/// renders the partition rather than re-deriving it. Returns an empty list for
+/// an unknown node/scope or a node whose type won't resolve. See
+/// `doc/design_function_pin_roles.md`.
+List<APIFunctionPinRoleView> getFunctionPinRoles(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetFunctionPinRoles(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Override one input pin's role in a node's `-1` function-pin view. Thin
+/// wrapper; the mutation, the revalidation, and the undo command live on
+/// `StructureDesigner::set_function_pin_role`. `Auto` is normalized there to
+/// entry removal. No-op for an out-of-range `pin_index` or an unresolvable
+/// node. See `doc/design_function_pin_roles.md`.
+void setFunctionPinRole(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required BigInt pinIndex,
+        required APIFunctionPinRole role}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetFunctionPinRole(
+            scopePath: scopePath,
+            nodeId: nodeId,
+            pinIndex: pinIndex,
+            role: role);
 
 /// Set an HOF node's collapse mode (Auto / Collapsed / Expanded). Thin wrapper;
 /// the mutation + undo command live on `StructureDesigner::set_collapse_mode`.

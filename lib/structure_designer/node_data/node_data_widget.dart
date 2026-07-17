@@ -89,6 +89,7 @@ import 'package:flutter_cad/structure_designer/node_data/mat3_diag_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/network_description_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/comment_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/custom_node_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/function_output_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
 /// Keys for property editor widgets used in integration testing.
@@ -184,7 +185,16 @@ class NodeDataWidget extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.all(2.0),
             child: BlockingAwareSingleChildScrollView(
-              child: _buildNodeEditor(selected.node, model),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildNodeEditor(selected.node, model),
+                  // Generic, node-type-agnostic: every node with input pins can
+                  // expose itself as a function on its `-1` pin, so the role
+                  // section sits below whatever per-type editor rendered above.
+                  FunctionOutputEditor(node: selected.node, model: model),
+                ],
+              ),
             ),
           );
         },

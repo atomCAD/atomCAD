@@ -495,7 +495,33 @@ Manual walkthrough (`flutter run`): gizmo drag on a displayed function-mode
 `structure_move` with preview wire; verify consumers re-evaluate with the new
 translation, and that Frontier keeps the graph visually quiet.
 
-### Phase 3 — API + sidebar UI + guide
+### Phase 3 — API + sidebar UI + guide ✅ DONE
+
+Implementation notes / deviations from the plan as written:
+
+- **`effective` is an enum, not a string.** The plan spelled it
+  `"parameter" | "capture-wire" | "capture-stored"`; it ships as
+  `APIFunctionPinDisposition` (mirroring `FunctionPinDisposition` the way
+  `APICollapseMode` mirrors `CollapseMode`). Magic strings buy nothing here and
+  an enum makes the Dart `switch` exhaustive — and the "UI never re-derives the
+  table" invariant the string was there to serve is unaffected. `role` is
+  likewise `APIFunctionPinRole`; note it reports `Auto` **explicitly** even
+  though `Auto` is stored as absence, so the UI never has to know the
+  absence-is-Auto convention.
+- **The row builder is split out as `build_function_pin_role_views(node,
+  node_type)`** (`#[frb(ignore)]`, so codegen skips its non-API signature).
+  `get_function_pin_roles` is then a pure `CAD_INSTANCE` lookup around it, and
+  the required test can assert against `function_pin_dispositions` directly
+  without standing up the global instance.
+- **Open question 1 is answered "yes, hide them", Flutter-side**: the section
+  does not render for `apply` (its pins are derived, not authored), and an HOF's
+  `f` pin is filtered out of the row list (it selects the body to run rather
+  than feeding a value). The Rust getter stays faithful and reports every pin —
+  which of them are worth showing is a UI judgement, and keeping it out of the
+  API leaves the door open for a different front-end.
+- The `NodeView.function_pin_consumed` doc comment still described the Phase-2
+  display suppression as live. Corrected; the field now documents its real
+  remaining uses (including driving this section's default expansion).
 
 API getter/setter, FRB regen, `node_data_widget.dart` generic section, manual
 walkthrough (thin editor UI → manual verification per project convention),

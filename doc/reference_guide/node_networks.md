@@ -10,7 +10,7 @@ A **node network** is a collection of nodes. A node may be either a built-in nod
 
 A **node** may have zero or more *named input pins* (also called the node’s *parameters*) on the left side, and one or more *named output pins* on the right side. Most nodes have exactly one output pin (the "result"); a few nodes are **multi-output** — they expose more than one named output pin, each independently connectable and displayable. The clearest example is `atom_edit`, which exposes both a `result` pin (the applied edit) and a `diff` pin (the raw diff structure).
 
-Most nodes also have one *function pin* in the upper-right corner — a legacy artifact that lets a node be used as a first-class function value. It is suppressed on the higher-order-function nodes themselves (`map`, `filter`, `fold`, `foreach`), which author their per-element computation as an *inline body region* by default and accept a reusable function value through an ordinary `f` *input* pin (see [Function values: closures and the `f` pin](#function-values-closures-and-the-f-pin)) rather than through this legacy corner pin. See the [Higher-order functions](#higher-order-functions-and-inline-bodies) section.
+Most nodes also have one *function pin* in the upper-right corner, which lets the node itself be used as a first-class function value — "this node, viewed as a function of its inputs". See [The function pin](#the-function-pin). It is suppressed on the higher-order-function nodes themselves (`map`, `filter`, `fold`, `foreach`), which author their per-element computation as an *inline body region* by default and accept a reusable function value through an ordinary `f` *input* pin (see [Function values: closures and the `f` pin](#function-values-closures-and-the-f-pin)) rather than through this corner pin. See the [Higher-order functions](#higher-order-functions-and-inline-bodies) section.
 
 Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
 
@@ -258,3 +258,40 @@ Because a `closure` and a custom node instance used as a function value are two 
 See the [`closure`](./nodes/math_programming.md#closure), [`apply`](./nodes/math_programming.md#apply), and [Function values and closures](./nodes/math_programming.md#function-values-and-closures) sections of the nodes reference for the full details.
 
 To see higher-order functions in atomCAD in action please check out the *Pattern* demo [in the demos document](../../samples/demo_description.md).
+
+### The function pin
+
+Besides building a function with a `closure` node, you can take a function value straight off an ordinary node: the **function pin** in a node's upper-right corner is "this node, viewed as a function of its inputs". Wire it into an HOF's `f` pin or into `apply` and the node becomes the function that gets called there. The pin's tooltip shows the resulting function type.
+
+Which inputs become *parameters* of that function, and which are baked in, is decided per pin. By default it follows the wiring — an unwired pin is a parameter the caller must supply, and a wired pin is **captured**: its value is computed once, frozen into the function, and dropped from the parameter list. So a `structure_move` with nothing wired exposes `(input, translation, subdivision)`, and wiring its `translation` from a `vec3` node cuts that down to `(input, subdivision)`.
+
+#### Choosing roles per pin
+
+The **Function output** section of the Node Properties panel overrides that default, one input pin at a time:
+
+| Role | Pin unwired | Pin wired |
+|---|---|---|
+| **Auto** (default) | parameter | captures the wire |
+| **Delayed** | parameter | parameter — the wire becomes a **preview** (see below) |
+| **Supplied** | uses the node's **stored property value** | captures the wire |
+
+Under each selector the panel tells you what the pin currently *is* — "parameter", "captures wire", or "uses stored value" — so you can read the function's shape off the panel without re-deriving it in your head.
+
+**Supplied + unwired** is the interesting one: it bakes in the value you typed (or dragged) into the node's own properties, rather than asking the caller for it. Note this only works for inputs the node has a property for. Marking a *required* input Supplied while it is unwired leaves nothing to supply it, and the node shows a warning; the rest of the network keeps working, but calling the function produces an error.
+
+The section is collapsed until something actually consumes the node's function pin (or you have already set a role), since roles do nothing until then.
+
+#### Preview wires
+
+A **Delayed** pin keeps its wire, but the wire changes meaning: it becomes a *preview*. It still feeds the node's own output — so the node displays, and its drag gizmo works — and it still tells atomCAD what type flows in. But it is ignored when the function is called; the caller supplies that argument instead.
+
+This is what makes a node like `structure_move` usable as a function at all. Its output type mirrors its `input`, so with nothing wired there is no way to know what it returns and the function pin refuses to connect. Preview-wire a crystal into `input`, mark `input` **Delayed**, and the type resolves to `(Crystal) → Crystal`.
+
+Putting the two together gives the intended workflow: mark `input` **Delayed** and preview-wire a crystal into it; mark `translation` and `subdivision` **Supplied**. You now have a `(Crystal) → Crystal` function that moves by whatever translation you dial in — and because the node still displays, you can dial it in **by dragging its gizmo in the 3D viewport** while the function is applied somewhere else entirely. Build a list of such nodes and you have a list of moves, each interactively positioned, applied wherever you like.
+
+#### Display of function-mode nodes
+
+A node whose function pin is consumed is an ordinary node: it follows the display policy and its per-pin eye icons like any other, which is what keeps that gizmo reachable. Two consequences worth knowing:
+
+- Under the **Frontier** policy such nodes stay hidden automatically — the wire into `apply` (or `f`) counts as a downstream dependent, so they are not on the frontier.
+- If you display one whose *required* parameter is Delayed with no preview wire, you get a normal "missing input" error on the node. Wire a preview or turn off that pin's eye.

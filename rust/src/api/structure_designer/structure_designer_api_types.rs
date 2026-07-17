@@ -5,6 +5,8 @@ use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use crate::structure_designer::evaluator::network_evaluator::PrintLogEntry;
 use crate::structure_designer::node_network::CollapseMode;
+use crate::structure_designer::node_network::FunctionPinDisposition;
+use crate::structure_designer::node_network::FunctionPinRole;
 use flutter_rust_bridge::frb;
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
@@ -145,12 +147,12 @@ pub struct NodeView {
     pub displayed_pins: Vec<i32>,
     pub function_type: String,
     /// Derived "function mode" flag: some node in the same network consumes this
-    /// node's function pin (`-1` output) via an HOF `f` pin or `apply.f`. When
-    /// `true` the node acts purely as a function value — the scene builder skips
-    /// it and the Flutter editor disables its output-pin eye(s) (the redirect is
-    /// the `apply` node). Mirrors `NodeNetwork::function_pin_consumed`; derived
-    /// per refresh, never stored. See `doc/design_function_pins.md`
-    /// §"Display in function mode".
+    /// node's function pin (`-1` output) via an HOF `f` pin or `apply.f`.
+    /// Mirrors `NodeNetwork::function_pin_consumed`; derived per refresh, never
+    /// stored. It does **not** gate display — a consumed node follows the normal
+    /// display policy and per-pin eyes, so its gizmo stays reachable (see
+    /// `doc/design_function_pin_roles.md` §"Display relaxation"). Flutter uses it
+    /// to expand the sidebar's "Function output" section by default.
     pub function_pin_consumed: bool,
     pub selected: bool,
     pub active: bool, // True if this is the active node (for properties panel/gadget)
@@ -263,6 +265,77 @@ impl From<APICollapseMode> for CollapseMode {
             APICollapseMode::Expanded => CollapseMode::Expanded,
         }
     }
+}
+
+/// Flutter-facing mirror of [`FunctionPinRole`]. The user's per-pin override of
+/// the `-1` function pin's parameter/capture partition. `Auto` is the default
+/// and is stored as *absence* Rust-side; the API always reports a role for
+/// every pin, so `Auto` travels explicitly here. See
+/// `doc/design_function_pin_roles.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIFunctionPinRole {
+    Auto,
+    Delayed,
+    Supplied,
+}
+
+impl From<FunctionPinRole> for APIFunctionPinRole {
+    fn from(role: FunctionPinRole) -> Self {
+        match role {
+            FunctionPinRole::Auto => APIFunctionPinRole::Auto,
+            FunctionPinRole::Delayed => APIFunctionPinRole::Delayed,
+            FunctionPinRole::Supplied => APIFunctionPinRole::Supplied,
+        }
+    }
+}
+
+impl From<APIFunctionPinRole> for FunctionPinRole {
+    fn from(role: APIFunctionPinRole) -> Self {
+        match role {
+            APIFunctionPinRole::Auto => FunctionPinRole::Auto,
+            APIFunctionPinRole::Delayed => FunctionPinRole::Delayed,
+            APIFunctionPinRole::Supplied => FunctionPinRole::Supplied,
+        }
+    }
+}
+
+/// Flutter-facing mirror of [`FunctionPinDisposition`] — the *effective*
+/// participation of one input pin in the `-1` function view, after the stored
+/// role and the pin's wiring are combined.
+///
+/// This is computed Rust-side by the shared `function_pin_dispositions` helper
+/// and rendered verbatim by the sidebar, so the UI never re-derives (or
+/// silently disagrees with) the partition table. See
+/// `doc/design_function_pin_roles.md` §"Semantics".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIFunctionPinDisposition {
+    Parameter,
+    CaptureWire,
+    CaptureStored,
+}
+
+impl From<FunctionPinDisposition> for APIFunctionPinDisposition {
+    fn from(d: FunctionPinDisposition) -> Self {
+        match d {
+            FunctionPinDisposition::Parameter => APIFunctionPinDisposition::Parameter,
+            FunctionPinDisposition::CaptureWire => APIFunctionPinDisposition::CaptureWire,
+            FunctionPinDisposition::CaptureStored => APIFunctionPinDisposition::CaptureStored,
+        }
+    }
+}
+
+/// One input pin's row in the sidebar's "Function output" section.
+#[derive(Clone)]
+pub struct APIFunctionPinRoleView {
+    /// The input pin's name, as declared by the node type.
+    pub pin_name: String,
+    /// The pin's stored role (`Auto` when no override is stored).
+    pub role: APIFunctionPinRole,
+    /// True iff the pin carries ≥ 1 incoming wire (array pins accept several;
+    /// a role applies to the whole pin, never per wire).
+    pub wired: bool,
+    /// The resulting disposition — the resolved role × wiring combination.
+    pub effective: APIFunctionPinDisposition,
 }
 
 pub struct WireView {
