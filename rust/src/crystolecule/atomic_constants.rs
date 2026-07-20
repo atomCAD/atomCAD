@@ -73,6 +73,77 @@ pub fn create_atom_info(
     }
 }
 
+// ============================================================================
+// Passivation (see doc/design_halogen_passivation.md)
+// ============================================================================
+
+/// Atomic numbers permitted as passivation terminators: hydrogen plus the four
+/// common halogens F, Cl, Br, I. This is the D1 **validation** set and
+/// deliberately **includes H**. Contrast [`halogen_bond_length`], which covers
+/// the halogens only — call sites branch on `passivant == 1` first and never
+/// pass H to it.
+pub const ALLOWED_PASSIVANTS: [i16; 5] = [1, 9, 17, 35, 53];
+
+/// Returns `true` if `z` is an allowed passivation element (H or a halogen).
+pub fn is_allowed_passivant(z: i16) -> bool {
+    ALLOWED_PASSIVANTS.contains(&z)
+}
+
+/// Equilibrium single-bond length host–halogen in Å (molecular values).
+/// `halogen` ∈ {F (9), Cl (17), Br (35), I (53)}; hydrogen is handled by each
+/// call site's existing per-context path (see doc/design_halogen_passivation.md,
+/// D2), so H must never reach this function.
+///
+/// Falls back to the covalent-radii sum for host/halogen pairs not in the table
+/// (the `—` cells of the D2 table, and any non-halogen `halogen` argument).
+///
+/// Values are rounded molecular experimental bond lengths, same provenance style
+/// as `XH_BOND_LENGTHS` (Calculla / Wikipedia / NIST CCCBDB).
+pub fn halogen_bond_length(host: i16, halogen: i16) -> f64 {
+    // Columns are [F, Cl, Br, I]; `None` = no tabulated value → radii-sum fallback.
+    const TABLE: &[(i16, [Option<f64>; 4])] = &[
+        //                 F           Cl          Br          I
+        (6, [Some(1.35), Some(1.77), Some(1.94), Some(2.14)]), // C
+        (14, [Some(1.60), Some(2.02), Some(2.16), Some(2.44)]), // Si
+        (32, [Some(1.70), Some(2.10), Some(2.30), Some(2.51)]), // Ge
+        (5, [Some(1.31), Some(1.75), Some(1.87), Some(2.10)]), // B
+        (7, [Some(1.36), Some(1.75), None, None]),             // N
+        (8, [Some(1.42), Some(1.70), None, None]),             // O
+        (15, [Some(1.57), Some(2.03), Some(2.20), None]),      // P
+        (16, [Some(1.56), Some(2.05), None, None]),            // S
+    ];
+
+    let col = match halogen {
+        9 => Some(0),
+        17 => Some(1),
+        35 => Some(2),
+        53 => Some(3),
+        _ => None, // not a halogen — fall through to radii sum
+    };
+
+    if let Some(col) = col {
+        for &(z, cols) in TABLE {
+            if z == host {
+                if let Some(len) = cols[col] {
+                    return len;
+                }
+                break; // host is tabulated but this column is `—`; use fallback
+            }
+        }
+    }
+
+    // Fallback: sum of covalent radii.
+    let r_host = ATOM_INFO
+        .get(&(host as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .covalent_radius;
+    let r_halogen = ATOM_INFO
+        .get(&(halogen as i32))
+        .unwrap_or(&DEFAULT_ATOM_INFO)
+        .covalent_radius;
+    r_host + r_halogen
+}
+
 /// Contains the registry of all chemical elements in the system
 fn get_all_elements() -> Vec<AtomInfo> {
     vec![

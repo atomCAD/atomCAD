@@ -78,12 +78,13 @@ impl NodeData for HydrogenPassivateData {
                 let options = AddHydrogensOptions {
                     selected_only: false,
                     skip_already_passivated: true,
+                    passivant_element: 1,
                 };
                 let result = add_hydrogens_filtered(&mut structure, &options, in_region);
 
                 if at_root {
                     context.selected_node_eval_cache = Some(Box::new(HydrogenPassivateEvalCache {
-                        message: format!("Added {} hydrogens", result.hydrogens_added),
+                        message: format!("Added {} hydrogens", result.atoms_added),
                     }));
                 }
                 structure

@@ -64,7 +64,7 @@ fn default_options() -> AddHydrogensOptions {
 fn bare_carbon_gets_4_hydrogens() {
     let (mut s, _) = make_structure(6, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 4);
+    assert_eq!(result.atoms_added, 4);
     assert_eq!(count_hydrogens(&s), 4);
     assert_eq!(count_bonds(&s), 4);
 }
@@ -98,7 +98,7 @@ fn carbon_with_3_bonds_gets_1_hydrogen() {
 fn nitrogen_sp3_with_0_bonds_gets_3_hydrogens() {
     let (mut s, _) = make_structure(7, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 3);
+    assert_eq!(result.atoms_added, 3);
 }
 
 #[test]
@@ -119,7 +119,7 @@ fn nitrogen_with_2_bonds_gets_1_hydrogen() {
 fn oxygen_sp3_with_0_bonds_gets_2_hydrogens() {
     let (mut s, _) = make_structure(8, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 2);
+    assert_eq!(result.atoms_added, 2);
 }
 
 #[test]
@@ -133,14 +133,14 @@ fn oxygen_with_1_bond_gets_1_hydrogen() {
 fn fluorine_with_0_bonds_gets_1_hydrogen() {
     let (mut s, _) = make_structure(9, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 1);
+    assert_eq!(result.atoms_added, 1);
 }
 
 #[test]
 fn hydrogen_atom_not_passivated() {
     let (mut s, _) = make_structure(1, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 #[test]
@@ -157,7 +157,7 @@ fn saturated_carbon_gets_no_hydrogens() {
 fn silicon_with_0_bonds_gets_4_hydrogens() {
     let (mut s, _) = make_structure(14, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 4);
+    assert_eq!(result.atoms_added, 4);
 }
 
 // ============================================================================
@@ -467,9 +467,10 @@ fn selected_only_passivates_selected_atoms() {
     let options = AddHydrogensOptions {
         selected_only: true,
         skip_already_passivated: true,
+        passivant_element: 1,
     };
     let result = add_hydrogens(&mut s, &options);
-    assert_eq!(result.hydrogens_added, 4, "Only c1 should get H's");
+    assert_eq!(result.atoms_added, 4, "Only c1 should get H's");
 
     // c2 should have no H's bonded
     let c2_atom = s.get_atom(c2).unwrap();
@@ -490,9 +491,10 @@ fn skip_already_passivated_atoms() {
     let options = AddHydrogensOptions {
         selected_only: false,
         skip_already_passivated: true,
+        passivant_element: 1,
     };
     let result = add_hydrogens(&mut s, &options);
-    assert_eq!(result.hydrogens_added, 0, "Flagged atom should be skipped");
+    assert_eq!(result.atoms_added, 0, "Flagged atom should be skipped");
 }
 
 #[test]
@@ -504,9 +506,10 @@ fn do_not_skip_passivated_when_flag_false() {
     let options = AddHydrogensOptions {
         selected_only: false,
         skip_already_passivated: false,
+        passivant_element: 1,
     };
     let result = add_hydrogens(&mut s, &options);
-    assert_eq!(result.hydrogens_added, 4, "Should passivate despite flag");
+    assert_eq!(result.atoms_added, 4, "Should passivate despite flag");
 }
 
 // ============================================================================
@@ -517,7 +520,7 @@ fn do_not_skip_passivated_when_flag_false() {
 fn empty_structure_adds_nothing() {
     let mut s = AtomicStructure::new();
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 #[test]
@@ -526,7 +529,7 @@ fn structure_with_only_hydrogens_adds_nothing() {
     s.add_atom(1, DVec3::ZERO);
     s.add_atom(1, DVec3::new(1.0, 0.0, 0.0));
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 #[test]
@@ -535,28 +538,28 @@ fn delete_markers_are_skipped() {
     s.add_atom(0, DVec3::ZERO); // delete marker
     s.add_atom(6, DVec3::new(3.0, 0.0, 0.0)); // real carbon
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 4, "Only the carbon gets H's");
+    assert_eq!(result.atoms_added, 4, "Only the carbon gets H's");
 }
 
 #[test]
 fn noble_gas_gets_no_hydrogens() {
     let (mut s, _) = make_structure(10, &[]); // Neon
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 #[test]
 fn helium_gets_no_hydrogens() {
     let (mut s, _) = make_structure(2, &[]); // Helium
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 #[test]
 fn argon_gets_no_hydrogens() {
     let (mut s, _) = make_structure(18, &[]); // Argon
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 // ============================================================================
@@ -622,7 +625,7 @@ fn water_saturated_gets_no_more_h() {
 
     let (mut s, _) = make_structure(8, &[(1, h1), (1, h2)]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0, "Water is saturated");
+    assert_eq!(result.atoms_added, 0, "Water is saturated");
 }
 
 #[test]
@@ -643,7 +646,7 @@ fn ethylene_gets_2_more_h() {
     assert_eq!(initial_h_count, 2);
 
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 2, "Each C needs 1 more H");
+    assert_eq!(result.atoms_added, 2, "Each C needs 1 more H");
     assert_eq!(count_hydrogens(&s), 4);
 }
 
@@ -679,7 +682,7 @@ fn ethane_like_two_carbons_bonded() {
     s.add_bond(c1, c2, 1);
 
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 6, "3 H per carbon");
+    assert_eq!(result.atoms_added, 6, "3 H per carbon");
 
     // Verify each carbon has 4 total bonds (1 C-C + 3 C-H)
     let c1_atom = s.get_atom(c1).unwrap();
@@ -704,7 +707,7 @@ fn phosphorus_with_0_bonds_gets_3_hydrogens() {
     // P sp3 max = 3
     let (mut s, _) = make_structure(15, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 3);
+    assert_eq!(result.atoms_added, 3);
 }
 
 #[test]
@@ -712,7 +715,7 @@ fn sulfur_with_0_bonds_gets_2_hydrogens() {
     // S sp3 max = 2
     let (mut s, _) = make_structure(16, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 2);
+    assert_eq!(result.atoms_added, 2);
 }
 
 #[test]
@@ -720,7 +723,7 @@ fn chlorine_with_0_bonds_gets_1_hydrogen() {
     // Cl max = 1
     let (mut s, _) = make_structure(17, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 1);
+    assert_eq!(result.atoms_added, 1);
 }
 
 #[test]
@@ -728,7 +731,7 @@ fn boron_with_0_bonds_gets_3_hydrogens() {
     // B sp2 max = 3
     let (mut s, _) = make_structure(5, &[]);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 3);
+    assert_eq!(result.atoms_added, 3);
 }
 
 #[test]
@@ -755,7 +758,7 @@ fn negative_atomic_number_skipped() {
     let mut s = AtomicStructure::new();
     s.add_atom(-1, DVec3::ZERO);
     let result = add_hydrogens(&mut s, &default_options());
-    assert_eq!(result.hydrogens_added, 0);
+    assert_eq!(result.atoms_added, 0);
 }
 
 // ============================================================================
@@ -1035,6 +1038,7 @@ fn round_trip_ethane_strip_then_repassivate() {
     let opts = AddHydrogensOptions {
         selected_only: false,
         skip_already_passivated: false,
+        passivant_element: 1,
     };
     add_hydrogens(&mut s, &opts);
     assert_eq!(count_hydrogens(&s), 6);
@@ -1053,6 +1057,7 @@ fn round_trip_ethylene_strip_and_repassivate() {
     let opts_no_skip = AddHydrogensOptions {
         selected_only: false,
         skip_already_passivated: false,
+        passivant_element: 1,
     };
     add_hydrogens(&mut s, &opts_no_skip);
     let h_count_original = count_hydrogens(&s);
@@ -1069,4 +1074,137 @@ fn round_trip_ethylene_strip_and_repassivate() {
     // Re-passivate
     add_hydrogens(&mut s, &opts_no_skip);
     assert_eq!(count_hydrogens(&s), 4, "Should get 4 H back");
+}
+
+// ============================================================================
+// Halogen passivation (doc/design_halogen_passivation.md Phase 1, general path)
+// ============================================================================
+
+fn passivant_options(element: i16) -> AddHydrogensOptions {
+    AddHydrogensOptions {
+        selected_only: false,
+        skip_already_passivated: true,
+        passivant_element: element,
+    }
+}
+
+/// Sorted positions for order-independent comparison.
+fn sorted_positions(s: &AtomicStructure) -> Vec<DVec3> {
+    let mut v: Vec<DVec3> = s.atoms_values().map(|a| a.position).collect();
+    v.sort_by(|p, q| {
+        p.x.total_cmp(&q.x)
+            .then(p.y.total_cmp(&q.y))
+            .then(p.z.total_cmp(&q.z))
+    });
+    v
+}
+
+/// A bare carbon fluorinates to CF₄-like geometry: 4 F at the C–F bond length,
+/// and the general path flags each terminator (D5).
+#[test]
+fn fluorine_passivation_bond_length_and_flag() {
+    let (mut s, c) = make_structure(6, &[]);
+    let result = add_hydrogens(&mut s, &passivant_options(9));
+    assert_eq!(result.atoms_added, 4, "bare carbon gets 4 F");
+    assert_eq!(count_hydrogens(&s), 0, "no hydrogens when passivant is F");
+
+    let c_pos = s.get_atom(c).unwrap().position;
+    let f_atoms: Vec<_> = s.atoms_values().filter(|a| a.atomic_number == 9).collect();
+    assert_eq!(f_atoms.len(), 4);
+    for f in &f_atoms {
+        let d = (f.position - c_pos).length();
+        assert!(
+            (d - 1.35).abs() < 1e-6,
+            "C–F bond length must be 1.35, got {d}"
+        );
+        assert!(
+            f.is_hydrogen_passivation(),
+            "the general path flags its terminators (D5)"
+        );
+    }
+}
+
+/// Chlorine passivation puts terminators at the C–Cl length, and two runs
+/// produce byte-identical positions (determinism — the whole point of the issue).
+#[test]
+fn chlorine_passivation_bond_length_and_determinism() {
+    let build = || {
+        let (mut s, c) = make_structure(6, &[(6, DVec3::new(1.5, 0.0, 0.0))]);
+        add_hydrogens(&mut s, &passivant_options(17));
+        (s, c)
+    };
+
+    let (s1, c) = build();
+    // The neighbor carbon is also passivated, so count only the Cl bonded to `c`.
+    let c_atom = s1.get_atom(c).unwrap();
+    let cl_on_c: Vec<u32> = c_atom
+        .bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .map(|b| b.other_atom_id())
+        .filter(|&id| s1.get_atom(id).is_some_and(|a| a.atomic_number == 17))
+        .collect();
+    assert_eq!(cl_on_c.len(), 3, "a C with one C–C bond needs 3 more Cl");
+    let c_pos = c_atom.position;
+    for &id in &cl_on_c {
+        let d = (s1.get_atom(id).unwrap().position - c_pos).length();
+        assert!(
+            (d - 1.77).abs() < 1e-6,
+            "C–Cl bond length must be 1.77, got {d}"
+        );
+    }
+
+    let (s2, _) = build();
+    assert_eq!(
+        sorted_positions(&s1),
+        sorted_positions(&s2),
+        "passivation must be deterministic"
+    );
+}
+
+/// Host-skip rule: `host == 1 || host == passivant` (design decision log #6).
+#[test]
+fn host_skip_rule_lone_atoms() {
+    // A lone F is not capped with another F (no F₂ "passivation").
+    {
+        let mut s = AtomicStructure::new();
+        s.add_atom(9, DVec3::ZERO);
+        let r = add_hydrogens(&mut s, &passivant_options(9));
+        assert_eq!(r.atoms_added, 0, "a lone F must not be self-capped with F");
+        assert_eq!(s.atoms_values().count(), 1);
+    }
+    // A lone F under H passivation is still H-capped — today's behavior.
+    {
+        let mut s = AtomicStructure::new();
+        s.add_atom(9, DVec3::ZERO);
+        let r = add_hydrogens(&mut s, &default_options());
+        assert_eq!(r.atoms_added, 1, "a lone F is still capped with one H");
+        assert_eq!(count_hydrogens(&s), 1);
+    }
+    // A lone H is never passivated, for any passivant (H is a terminator, never a host).
+    {
+        let mut s = AtomicStructure::new();
+        s.add_atom(1, DVec3::ZERO);
+        let r = add_hydrogens(&mut s, &passivant_options(9));
+        assert_eq!(r.atoms_added, 0, "a lone H must never be passivated");
+    }
+}
+
+/// D2 per-site H guard on **silicon** (the element where the three sites
+/// differ): the general path uses the molecular `XH_BOND_LENGTHS` value 1.48,
+/// distinct from lattice-fill (1.42) and surf_recon (1.50).
+#[test]
+fn per_site_h_pinning_silicon_general_path() {
+    let (mut s, si) = make_structure(14, &[]);
+    add_hydrogens(&mut s, &default_options());
+    let si_pos = s.get_atom(si).unwrap().position;
+    let hs: Vec<_> = s.atoms_values().filter(|a| a.atomic_number == 1).collect();
+    assert!(!hs.is_empty(), "silicon must be passivated with H");
+    for h in &hs {
+        let d = (h.position - si_pos).length();
+        assert!(
+            (d - 1.48).abs() < 1e-6,
+            "general-path Si–H bond length must be 1.48, got {d}"
+        );
+    }
 }

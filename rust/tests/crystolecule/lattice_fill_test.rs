@@ -1,5 +1,6 @@
 use glam::f64::DVec3;
 use glam::i32::IVec3;
+use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use rust_lib_flutter_cad::crystolecule::lattice_fill::{
     CrystallographicAddress, LatticeFillConfig, LatticeFillOptions, LatticeFillStatistics,
@@ -196,6 +197,7 @@ site 1 C 0.0 0.0 0.0
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        passivation_element: 1,
     };
 
     // Fill region doesn't overlap with sphere
@@ -244,6 +246,7 @@ bond 1 ..-2
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        passivation_element: 1,
     };
 
     let fill_region = DAABox::new(
@@ -300,6 +303,7 @@ site 1 C 0.0 0.0 0.0
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        passivation_element: 1,
     };
     let result_remove = fill_lattice(&config, &options_remove, &fill_region);
     assert_eq!(
@@ -315,6 +319,7 @@ site 1 C 0.0 0.0 0.0
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        passivation_element: 1,
     };
     let result_keep = fill_lattice(&config, &options_keep, &fill_region);
     assert!(
@@ -375,6 +380,7 @@ fn box_atom_count(motif: &Motif, cell: &UnitCellStruct, cells: f64, reconstruct:
         remove_single_bond_atoms: false,
         reconstruct_surface: reconstruct,
         invert_phase: false,
+        passivation_element: 1,
     };
     let margin = 5.0;
     let fill_region = DAABox::new(DVec3::splat(-margin), DVec3::splat(cells * a + margin));
@@ -412,5 +418,215 @@ fn silicon_100_reconstruction_changes_atom_count() {
     assert_ne!(
         on, off,
         "silicon (100) reconstruction should change the atom count (off={off}, on={on})"
+    );
+}
+
+// =============================================================================
+// Halogen passivation (doc/design_halogen_passivation.md Phase 1)
+// =============================================================================
+
+/// Materializes a box of the given motif/cell with hydrogen passivation on and
+/// the configured passivation element, returning the whole structure.
+fn fill_box(
+    motif: &Motif,
+    cell: &UnitCellStruct,
+    cells: f64,
+    reconstruct: bool,
+    passivant: i16,
+) -> AtomicStructure {
+    let a = cell.a.length();
+    let config = LatticeFillConfig {
+        unit_cell: cell.clone(),
+        motif: motif.clone(),
+        parameter_element_values: HashMap::new(),
+        geometry: axis_aligned_box(DVec3::ZERO, DVec3::splat(cells * a)),
+        motif_offset: DVec3::ZERO,
+        regions: Vec::new(),
+    };
+    let options = LatticeFillOptions {
+        hydrogen_passivation: true,
+        remove_unbonded_atoms: true,
+        remove_single_bond_atoms: false,
+        reconstruct_surface: reconstruct,
+        invert_phase: false,
+        passivation_element: passivant,
+    };
+    let margin = 5.0;
+    let fill_region = DAABox::new(DVec3::splat(-margin), DVec3::splat(cells * a + margin));
+    fill_lattice(&config, &options, &fill_region).atomic_structure
+}
+
+fn silicon_motif() -> Motif {
+    let mut motif = DEFAULT_ZINCBLENDE_MOTIF.clone();
+    for p in &mut motif.parameters {
+        p.default_atomic_number = 14; // Si
+    }
+    motif
+}
+
+/// The single heavy-atom host of a monovalent terminator.
+fn terminator_host(term: &rust_lib_flutter_cad::crystolecule::atomic_structure::Atom) -> u32 {
+    term.bonds
+        .iter()
+        .filter(|b| !b.is_delete_marker())
+        .map(|b| b.other_atom_id())
+        .next()
+        .expect("a terminator must have exactly one host bond")
+}
+
+/// A diamond box filled with `passivation_element = 9` has fluorine at every
+/// terminator, the same terminator count as the H run, and the terminators are
+/// unflagged (lattice-fill flags nothing, D5).
+#[test]
+fn lattice_fill_fluorine_terminators() {
+    let motif = DEFAULT_ZINCBLENDE_MOTIF.clone();
+    let cell = cubic_cell(3.567);
+    let s_h = fill_box(&motif, &cell, 3.0, false, 1);
+    let s_f = fill_box(&motif, &cell, 3.0, false, 9);
+
+    let h_terms = s_h.atoms_values().filter(|a| a.atomic_number == 1).count();
+    let f_terms = s_f.atoms_values().filter(|a| a.atomic_number == 9).count();
+    assert!(f_terms > 0, "expected fluorine terminators");
+    assert_eq!(
+        f_terms, h_terms,
+        "F count must match the H run (both monovalent)"
+    );
+    assert_eq!(
+        s_f.atoms_values().filter(|a| a.atomic_number == 1).count(),
+        0,
+        "no hydrogens in the fluorine run"
+    );
+
+    for f in s_f.atoms_values().filter(|a| a.atomic_number == 9) {
+        assert!(
+            !f.is_hydrogen_passivation(),
+            "lattice-fill terminators are unflagged (D5)"
+        );
+        let host = s_f.get_atom(terminator_host(f)).unwrap();
+        assert_eq!(host.atomic_number, 6, "diamond terminators bond to carbon");
+        let d = (f.position - host.position).length();
+        assert!(
+            (d - 1.35).abs() < 1e-6,
+            "C–F bond length must be 1.35, got {d}"
+        );
+    }
+}
+
+/// D2 per-site H guard, lattice-fill path on silicon: Si–H = 1.42 (the
+/// covalent-radii-sum fallback), distinct from the general (1.48) and surf_recon
+/// (1.50) paths.
+#[test]
+fn per_site_h_pinning_silicon_lattice_fill() {
+    let s = fill_box(&silicon_motif(), &cubic_cell(5.431), 3.0, false, 1);
+    let mut checked = 0;
+    for h in s.atoms_values().filter(|a| a.atomic_number == 1) {
+        let host = s.get_atom(terminator_host(h)).unwrap();
+        assert_eq!(host.atomic_number, 14);
+        let d = (h.position - host.position).length();
+        assert!(
+            (d - 1.42).abs() < 1e-6,
+            "lattice-fill Si–H must be 1.42, got {d}"
+        );
+        checked += 1;
+    }
+    assert!(checked > 0, "expected Si–H terminators");
+}
+
+/// Surf-recon halogen: a silicon slab with reconstruction and
+/// `passivation_element = 17` terminates dimers with Cl at the Si–Cl length,
+/// leaves those terminators unflagged while flagging the dimer host atoms (D5),
+/// and produces Si (host) positions identical to the H run — the dimer geometry
+/// constants are untouched (D6).
+#[test]
+fn surf_recon_chlorine_terminators_and_geometry() {
+    let motif = silicon_motif();
+    let cell = cubic_cell(5.431);
+    let s_h = fill_box(&motif, &cell, 6.0, true, 1);
+    let s_cl = fill_box(&motif, &cell, 6.0, true, 17);
+
+    let mut cl_count = 0;
+    for cl in s_cl.atoms_values().filter(|a| a.atomic_number == 17) {
+        assert!(
+            !cl.is_hydrogen_passivation(),
+            "surf_recon terminators stay unflagged (D5)"
+        );
+        let host = s_cl.get_atom(terminator_host(cl)).unwrap();
+        assert_eq!(host.atomic_number, 14);
+        let d = (cl.position - host.position).length();
+        assert!(
+            (d - 2.02).abs() < 1e-6,
+            "Si–Cl bond length must be 2.02, got {d}"
+        );
+        cl_count += 1;
+    }
+    assert!(cl_count > 0, "expected Cl terminators");
+
+    let flagged_si = s_cl
+        .atoms_values()
+        .filter(|a| a.atomic_number == 14 && a.is_hydrogen_passivation())
+        .count();
+    assert!(
+        flagged_si > 0,
+        "surf_recon must flag the dimer host atoms (D5)"
+    );
+
+    // Dimer geometry is element-independent (D6): sorted Si positions match.
+    let si_positions = |s: &AtomicStructure| {
+        let mut v: Vec<DVec3> = s
+            .atoms_values()
+            .filter(|a| a.atomic_number == 14)
+            .map(|a| a.position)
+            .collect();
+        v.sort_by(|p, q| {
+            p.x.total_cmp(&q.x)
+                .then(p.y.total_cmp(&q.y))
+                .then(p.z.total_cmp(&q.z))
+        });
+        v
+    };
+    let sh = si_positions(&s_h);
+    let scl = si_positions(&s_cl);
+    assert_eq!(
+        sh.len(),
+        scl.len(),
+        "Si counts must match between the H and Cl runs"
+    );
+    for (p, q) in sh.iter().zip(scl.iter()) {
+        assert!(
+            p.distance(*q) < 1e-9,
+            "dimer geometry must be terminator-independent ({p} vs {q})"
+        );
+    }
+}
+
+/// D2 per-site H guard, surf_recon path on silicon: the H run contains **both**
+/// the surface-specific dimer Si–H (1.50) and the lattice-fill fallback Si–H
+/// (1.42) — proving the two sites keep their distinct constants after the
+/// refactor (a "helpful" unification would collapse them).
+#[test]
+fn per_site_h_pinning_silicon_surf_recon() {
+    let s = fill_box(&silicon_motif(), &cubic_cell(5.431), 6.0, true, 1);
+    let mut has_1_42 = false;
+    let mut has_1_50 = false;
+    for h in s.atoms_values().filter(|a| a.atomic_number == 1) {
+        let host = s.get_atom(terminator_host(h)).unwrap();
+        if host.atomic_number != 14 {
+            continue;
+        }
+        let d = (h.position - host.position).length();
+        if (d - 1.42).abs() < 1e-6 {
+            has_1_42 = true;
+        }
+        if (d - 1.50).abs() < 1e-6 {
+            has_1_50 = true;
+        }
+    }
+    assert!(
+        has_1_50,
+        "surf_recon dimer Si–H must use the surface-specific 1.50 constant"
+    );
+    assert!(
+        has_1_42,
+        "non-dimer Si–H must use the lattice-fill 1.42 fallback"
     );
 }

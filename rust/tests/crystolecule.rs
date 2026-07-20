@@ -1,6 +1,9 @@
 #[path = "test_support/structure_equivalence.rs"]
 mod structure_equivalence;
 
+#[path = "crystolecule/atomic_constants_test.rs"]
+mod atomic_constants_test;
+
 #[path = "crystolecule/atomic_structure_diff_test.rs"]
 mod atomic_structure_diff_test;
 

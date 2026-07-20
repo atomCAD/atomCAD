@@ -53,6 +53,7 @@ fn opts(
         remove_single_bond_atoms: rm_single,
         reconstruct_surface: surf_recon,
         invert_phase: invert,
+        passivation_element: 1,
     }
 }
 
@@ -66,6 +67,7 @@ fn region(geometry: GeoNode) -> RegionSpec {
         surf_recon: None,
         invert_phase: None,
         rm_unbonded: None,
+        passiv_elem: None,
     }
 }
 
@@ -547,6 +549,67 @@ fn surf_recon_regional_between_baseline_and_global() {
         no_recon.get_num_of_bonds(),
         regional.get_num_of_bonds(),
         global.get_num_of_bonds()
+    );
+}
+
+// ---------------------------------------------------------------------------
+// passiv_elem — per-region terminator element override (D8)
+// ---------------------------------------------------------------------------
+
+/// A region overriding only `passiv_elem` (inheriting the booleans) fluorinates
+/// its volume while the rest of the surface stays hydrogen-terminated. The total
+/// terminator count is conserved (both elements are monovalent).
+#[test]
+fn passiv_elem_regional_override() {
+    let cell = UnitCellStruct::cubic_diamond();
+    let motif = || DEFAULT_ZINCBLENDE_MOTIF.clone();
+    let geo = || axis_box(DVec3::ZERO, DVec3::splat(4.0 * A));
+    let lo = -10.0;
+    let hi = 5.0 * A;
+    let f_count = |s: &AtomicStructure| s.atoms_values().filter(|a| a.atomic_number == 9).count();
+
+    // All-hydrogen baseline (no region).
+    let global_h = fill(
+        &cell,
+        motif(),
+        geo(),
+        &opts(true, true, false, false, false),
+        vec![],
+        lo,
+        hi,
+    );
+    assert!(h_count(&global_h) > 0, "baseline must add hydrogens");
+    assert_eq!(
+        f_count(&global_h),
+        0,
+        "no fluorine without a region override"
+    );
+
+    // Top half (z > 2a): passiv_elem = F only; passivate inherited (stays on).
+    let mut top = region(GeoNode::half_space(
+        DVec3::new(0.0, 0.0, 1.0),
+        DVec3::new(0.0, 0.0, 2.0 * A),
+    ));
+    top.passiv_elem = Some(9);
+    let mixed = fill(
+        &cell,
+        motif(),
+        geo(),
+        &opts(true, true, false, false, false),
+        vec![top],
+        lo,
+        hi,
+    );
+
+    assert!(f_count(&mixed) > 0, "the top region must place fluorine");
+    assert!(
+        h_count(&mixed) > 0,
+        "the bottom must still be hydrogen-terminated"
+    );
+    assert_eq!(
+        h_count(&mixed) + f_count(&mixed),
+        h_count(&global_h),
+        "swapping the element must not change the terminator count"
     );
 }
 

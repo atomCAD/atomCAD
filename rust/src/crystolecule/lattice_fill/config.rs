@@ -55,6 +55,10 @@ pub struct RegionSpec {
     pub invert_phase: Option<bool>,
     /// Remove zero-bond (lone) atoms; mirrors materialize's `rm_unbonded` (#363).
     pub rm_unbonded: Option<bool>,
+    /// Per-region passivation element override (`None` = inherit). The atomic
+    /// number of the terminator placed in this region's volume. See
+    /// `doc/design_halogen_passivation.md` D8.
+    pub passiv_elem: Option<i16>,
 }
 
 /// Resolves effective lattice-fill settings at a point by layering an ordered
@@ -81,6 +85,7 @@ impl SettingsResolver<'_> {
             remove_single_bond_atoms: self.root.remove_single_bond_atoms,
             reconstruct_surface: self.root.reconstruct_surface,
             invert_phase: self.root.invert_phase,
+            passivation_element: self.root.passivation_element,
         };
 
         if self.regions.is_empty() {
@@ -93,6 +98,7 @@ impl SettingsResolver<'_> {
         let mut have_rm_single = false;
         let mut have_surf_recon = false;
         let mut have_invert = false;
+        let mut have_passiv_elem = false;
 
         // Walk regions last → first; first containing region with a field set wins.
         for region in self.regions.iter().rev() {
@@ -101,6 +107,7 @@ impl SettingsResolver<'_> {
                 && have_rm_single
                 && have_surf_recon
                 && have_invert
+                && have_passiv_elem
             {
                 break; // all fields resolved — no need to test further regions
             }
@@ -140,6 +147,12 @@ impl SettingsResolver<'_> {
                     have_invert = true;
                 }
             }
+            if !have_passiv_elem {
+                if let Some(v) = region.passiv_elem {
+                    opts.passivation_element = v;
+                    have_passiv_elem = true;
+                }
+            }
         }
 
         opts
@@ -172,6 +185,13 @@ pub struct LatticeFillOptions {
     pub reconstruct_surface: bool,
 
     pub invert_phase: bool,
+
+    /// Atomic number of the passivation terminator (root/global value). `1`
+    /// (hydrogen) reproduces legacy behavior; a halogen (9/17/35/53) terminates
+    /// dangling bonds with that element at the correct bond length. Regions may
+    /// override this per-position via [`RegionSpec::passiv_elem`]. See
+    /// `doc/design_halogen_passivation.md`.
+    pub passivation_element: i16,
 }
 
 /// Results from lattice filling operation

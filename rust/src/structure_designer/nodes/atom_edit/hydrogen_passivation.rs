@@ -183,10 +183,11 @@ pub fn add_hydrogen_atom_edit(
         let options = AddHydrogensOptions {
             selected_only,
             skip_already_passivated: true,
+            passivant_element: 1,
         };
         let result = add_hydrogens(&mut cloned, &options);
 
-        if result.hydrogens_added == 0 {
+        if result.atoms_added == 0 {
             return Ok("No hydrogen atoms needed".to_string());
         }
 

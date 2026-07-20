@@ -300,6 +300,9 @@ impl NodeData for MaterializeData {
             remove_single_bond_atoms,
             reconstruct_surface: surface_reconstruction,
             invert_phase,
+            // Phase 1: default to hydrogen. Phase 2 wires the node's
+            // passivation_element property / passiv_elem pin here.
+            passivation_element: 1,
         };
 
         // Define fill region
@@ -469,6 +472,8 @@ fn parse_regions_from_records(items: Vec<NetworkResult>) -> Result<Vec<RegionSpe
             surf_recon: parse_optional_bool_field(&item, "surf_recon", i)?,
             invert_phase: parse_optional_bool_field(&item, "invert_phase", i)?,
             rm_unbonded: parse_optional_bool_field(&item, "rm_unbonded", i)?,
+            // Phase 2 wires the MaterializeRegion.passiv_elem record field here.
+            passiv_elem: None,
         });
     }
     Ok(out)

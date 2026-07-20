@@ -1,6 +1,7 @@
 use crate::crystolecule::atomic_constants::{
     DEBUG_CARBON_BLUE, DEBUG_CARBON_CYAN, DEBUG_CARBON_GRAY, DEBUG_CARBON_GREEN,
     DEBUG_CARBON_MAGENTA, DEBUG_CARBON_ORANGE, DEBUG_CARBON_RED, DEBUG_CARBON_YELLOW,
+    halogen_bond_length,
 };
 use crate::crystolecule::atomic_structure::{Atom, AtomicStructure, BondReference};
 use crate::crystolecule::atomic_structure_utils::remove_single_bond_atoms;
@@ -890,6 +891,7 @@ fn apply_dimer_reconstruction(
     structure: &mut AtomicStructure,
     dimer_pair: &DimerPair,
     hydrogen_passivation: bool,
+    passivant_element: i16,
     params: SurfaceReconstructionParams,
 ) {
     // Select geometry parameters based on passivation setting
@@ -915,6 +917,9 @@ fn apply_dimer_reconstruction(
 
     let pos1 = atom1.unwrap().position;
     let pos2 = atom2.unwrap().position;
+    // Host element for the terminator bond length (both dimer atoms share it —
+    // reconstruction is only enabled when PRIMARY == SECONDARY).
+    let host_element = atom1.unwrap().atomic_number;
 
     // Calculate current distance
     let current_vec = pos2 - pos1;
@@ -962,7 +967,7 @@ fn apply_dimer_reconstruction(
         structure.select_bond(&bond_ref);
     }
 
-    // Add hydrogen passivation if enabled
+    // Add passivation if enabled
     if hydrogen_passivation {
         add_hydrogen_passivation(
             structure,
@@ -971,6 +976,8 @@ fn apply_dimer_reconstruction(
             &new_pos2,
             &in_plane_direction,
             &surface_normal,
+            passivant_element,
+            host_element,
             params,
         );
     }
@@ -1010,6 +1017,7 @@ fn get_surface_normal_direction(orientation: SurfaceOrientation) -> glam::DVec3 
 /// * `pos2` - Position of second carbon atom
 /// * `in_plane_direction` - Unit vector from atom1 to atom2 (in-plane)
 /// * `surface_normal` - Unit vector pointing outward from surface
+#[allow(clippy::too_many_arguments)]
 fn add_hydrogen_passivation(
     structure: &mut AtomicStructure,
     dimer_pair: &DimerPair,
@@ -1017,33 +1025,45 @@ fn add_hydrogen_passivation(
     pos2: &glam::DVec3,
     in_plane_direction: &glam::DVec3,
     surface_normal: &glam::DVec3,
+    passivant_element: i16,
+    host_element: i16,
     params: SurfaceReconstructionParams,
 ) {
     use std::f64::consts::PI;
+
+    // Bond length: H keeps the surface-specific constant (D2); halogens use the
+    // shared molecular primitive (D6, a documented approximation). The angle
+    // from the surface normal stays H-calibrated for every element (D6).
+    let bond_length = if passivant_element == 1 {
+        params.h_bond_length
+    } else {
+        halogen_bond_length(host_element, passivant_element)
+    };
 
     let angle_rad = params.h_angle_from_normal_degrees * PI / 180.0;
     let cos_angle = angle_rad.cos();
     let sin_angle = angle_rad.sin();
 
-    // For atom 1: hydrogen points away from atom 2
+    // For atom 1: terminator points away from atom 2
     // Direction: tilt from surface normal toward -in_plane_direction
-    let h1_direction = (*surface_normal * cos_angle - *in_plane_direction * sin_angle).normalize();
-    let h1_pos = pos1 + h1_direction * params.h_bond_length;
+    let t1_direction = (*surface_normal * cos_angle - *in_plane_direction * sin_angle).normalize();
+    let t1_pos = pos1 + t1_direction * bond_length;
 
-    // For atom 2: hydrogen points away from atom 1
+    // For atom 2: terminator points away from atom 1
     // Direction: tilt from surface normal toward +in_plane_direction
-    let h2_direction = (*surface_normal * cos_angle + *in_plane_direction * sin_angle).normalize();
-    let h2_pos = pos2 + h2_direction * params.h_bond_length;
+    let t2_direction = (*surface_normal * cos_angle + *in_plane_direction * sin_angle).normalize();
+    let t2_pos = pos2 + t2_direction * bond_length;
 
-    // Add hydrogen atoms (atomic number 1) using add_atom to update internal data structures
-    let h1_id = structure.add_atom(1, h1_pos);
-    let h2_id = structure.add_atom(1, h2_pos);
+    // Add terminator atoms using add_atom to update internal data structures
+    let t1_id = structure.add_atom(passivant_element, t1_pos);
+    let t2_id = structure.add_atom(passivant_element, t2_pos);
 
-    // Create C-H bonds
-    structure.add_bond(dimer_pair.primary_atom_id, h1_id, 1);
-    structure.add_bond(dimer_pair.partner_atom_id, h2_id, 1);
+    // Create host–terminator bonds
+    structure.add_bond(dimer_pair.primary_atom_id, t1_id, 1);
+    structure.add_bond(dimer_pair.partner_atom_id, t2_id, 1);
 
-    // Flag the carbon atoms as hydrogen passivated
+    // Flag the dimer HOST atoms as passivated (D5, surf_recon flags hosts, not
+    // its own terminators).
     structure.set_atom_hydrogen_passivation(dimer_pair.primary_atom_id, true);
     structure.set_atom_hydrogen_passivation(dimer_pair.partner_atom_id, true);
 }
@@ -1092,11 +1112,13 @@ fn reconstruct_surface_100_diamond_cubic(
                     continue;
                 }
 
-                // The same lookup supplies passivation for the dimer's H atoms.
+                // The same lookup supplies passivation on/off and the terminator
+                // element for the dimer's terminators.
                 apply_dimer_reconstruction(
                     structure,
                     dimer_pair,
                     opts.hydrogen_passivation,
+                    opts.passivation_element,
                     params,
                 );
                 dimer_count += 1;

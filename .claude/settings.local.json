@@ -336,7 +336,14 @@
       "PowerShell(Get-Process *)",
       "PowerShell(Get-CimInstance *)",
       "PowerShell($c = Get-NetTCPConnection -LocalPort 19847 -State Listen -ErrorAction SilentlyContinue; foreach \\($x in $c\\) { $p = Get-Process -Id $x.OwningProcess; \"PID $\\($p.Id\\)  $\\($p.ProcessName\\)  started $\\($p.StartTime\\)\"; \"  Path: $\\($p.Path\\)\" })",
-      "Bash(perl -0pi -e 's/\\(#\\\\[derive\\\\\\(Clone, Copy, PartialEq, Eq\\\\\\)\\\\]\\\\npub enum APIFunctionPin\\(Role|Disposition\\)\\)/#[derive\\(Debug, Clone, Copy, PartialEq, Eq\\)]\\\\npub enum APIFunctionPin$2/g' rust/src/api/structure_designer/structure_designer_api_types.rs)"
+      "Bash(perl -0pi -e 's/\\(#\\\\[derive\\\\\\(Clone, Copy, PartialEq, Eq\\\\\\)\\\\]\\\\npub enum APIFunctionPin\\(Role|Disposition\\)\\)/#[derive\\(Debug, Clone, Copy, PartialEq, Eq\\)]\\\\npub enum APIFunctionPin$2/g' rust/src/api/structure_designer/structure_designer_api_types.rs)",
+      "Bash(sed -i 's/, visible: true//g' /tmp/main_net.txt)",
+      "Bash(sed -i 's/^styled = apply_style { molecule: xr, rules: \\\\[rule_si, rule_tc\\\\] }/styled = apply_style { molecule: xr, rules: [rule_si, rule_tc], visible: true }/' /tmp/main_net.txt)",
+      "Read(//c/machine_phase_systems/**)",
+      "Read(//c/Users/Ádám Nagy/**)",
+      "Bash(gh auth *)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=\"C:\\\\machine_phase_systems\\\\t_center_showcase\\\\t_center_showcase.pdf\" \"file:///C:/machine_phase_systems/t_center_showcase/index.html\")",
+      "Bash(pip install *)"
     ]
   }
 }

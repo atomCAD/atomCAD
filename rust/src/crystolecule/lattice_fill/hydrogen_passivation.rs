@@ -1,6 +1,6 @@
 use super::config::{LatticeFillConfig, LatticeFillStatistics, SettingsResolver};
 use super::placed_atom_tracker::PlacedAtomTracker;
-use crate::crystolecule::atomic_constants::ATOM_INFO;
+use crate::crystolecule::atomic_constants::{ATOM_INFO, halogen_bond_length};
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::motif::SiteSpecifier;
 use glam::f64::DVec3;
@@ -40,9 +40,11 @@ pub fn hydrogen_passivate(
 
         // Region-aware gate: skip this atom's dangling-bond scan where
         // passivation is disabled at the (existing, stable) atom's position.
-        if !resolver.resolve_at(atom_position).hydrogen_passivation {
+        let resolved = resolver.resolve_at(atom_position);
+        if !resolved.hydrogen_passivation {
             continue;
         }
+        let passivant_element = resolved.passivation_element;
 
         // Optimization: Check if atom has all expected bonds from motif
         // If so, skip expensive dangling bond checking
@@ -77,6 +79,7 @@ pub fn hydrogen_passivate(
                     atom_id,
                     atom_position,
                     atom_atomic_number,
+                    passivant_element,
                     atomic_structure,
                     statistics,
                 );
@@ -112,6 +115,7 @@ pub fn hydrogen_passivate(
                     atom_id,
                     atom_position,
                     atom_atomic_number,
+                    passivant_element,
                     atomic_structure,
                     statistics,
                 );
@@ -134,6 +138,7 @@ fn hydrogen_passivate_dangling_bond(
     found_atom_id: u32,
     found_atom_position: DVec3,
     found_atom_atomic_number: i16,
+    passivant_element: i16,
     atomic_structure: &mut AtomicStructure,
     statistics: &mut LatticeFillStatistics,
 ) {
@@ -148,36 +153,43 @@ fn hydrogen_passivate_dangling_bond(
     // Convert the relative position from motif space to real space direction
     let real_space_direction = config.unit_cell.dvec3_lattice_to_real(&relative_motif_pos);
 
-    // Calculate proper bond length based on atomic radii
-    let bond_length = if found_atom_atomic_number == 6 {
-        // Special case for C-H bonds
-        C_H_BOND_LENGTH
+    // Calculate proper bond length. Hydrogen keeps the existing per-context
+    // path (C-H special case + covalent-radii-sum fallback) byte-for-byte;
+    // halogens use the shared molecular primitive (D2).
+    let bond_length = if passivant_element == 1 {
+        if found_atom_atomic_number == 6 {
+            // Special case for C-H bonds
+            C_H_BOND_LENGTH
+        } else {
+            // General case: sum of covalent radii
+            let atom_1_radius = ATOM_INFO
+                .get(&(found_atom_atomic_number as i32))
+                .map(|info| info.covalent_radius)
+                .unwrap_or(0.7); // Default radius if not found
+            let hydrogen_radius = ATOM_INFO
+                .get(&1)
+                .map(|info| info.covalent_radius)
+                .unwrap_or(0.31); // Default hydrogen radius
+            atom_1_radius + hydrogen_radius
+        }
     } else {
-        // General case: sum of covalent radii
-        let atom_1_radius = ATOM_INFO
-            .get(&(found_atom_atomic_number as i32))
-            .map(|info| info.covalent_radius)
-            .unwrap_or(0.7); // Default radius if not found
-        let hydrogen_radius = ATOM_INFO
-            .get(&1)
-            .map(|info| info.covalent_radius)
-            .unwrap_or(0.31); // Default hydrogen radius
-        atom_1_radius + hydrogen_radius
+        halogen_bond_length(found_atom_atomic_number, passivant_element)
     };
 
-    // Normalize the direction and place hydrogen at proper bond length
+    // Normalize the direction and place the terminator at proper bond length
     let normalized_direction = real_space_direction.normalize();
-    let hydrogen_pos = found_atom_position + normalized_direction * bond_length;
+    let terminator_pos = found_atom_position + normalized_direction * bond_length;
 
-    // Add hydrogen atom (atomic number 1) - depth remains 0.0 by default
-    let hydrogen_id = atomic_structure.add_atom(1, hydrogen_pos);
+    // Add the terminating atom - depth remains 0.0 by default. Lattice-fill
+    // flags nothing (D5), so no passivation flag is set here.
+    let terminator_id = atomic_structure.add_atom(passivant_element, terminator_pos);
 
-    // Update depth statistics for hydrogen (depth = 0.0)
+    // Update depth statistics for the terminator (depth = 0.0)
     statistics.total_depth += 0.0;
-    // Note: max_depth doesn''t need updating since hydrogen depth is 0.0
+    // Note: max_depth doesn''t need updating since terminator depth is 0.0
 
-    // Create bond between original atom and hydrogen
-    atomic_structure.add_bond(found_atom_id, hydrogen_id, 1); // Single bond
+    // Create bond between original atom and terminator
+    atomic_structure.add_bond(found_atom_id, terminator_id, 1); // Single bond
 
     statistics.bonds += 1;
     statistics.atoms += 1; // Count the hydrogen atom

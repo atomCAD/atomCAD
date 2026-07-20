@@ -1,4 +1,4 @@
-use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
+use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO, halogen_bond_length};
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure::atom::{
     HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
@@ -118,6 +118,12 @@ pub struct AddHydrogensOptions {
     /// Skip atoms already flagged as hydrogen-passivated.
     /// Default: true.
     pub skip_already_passivated: bool,
+    /// The terminating element placed at each open valence slot. Hydrogen (1)
+    /// by default; may be a halogen (9/17/35/53). See
+    /// `doc/design_halogen_passivation.md` D1/D2. Callers are responsible for
+    /// validating the value against `is_allowed_passivant`; this module treats
+    /// any non-hydrogen number as "use `halogen_bond_length`".
+    pub passivant_element: i16,
 }
 
 impl Default for AddHydrogensOptions {
@@ -125,13 +131,14 @@ impl Default for AddHydrogensOptions {
         Self {
             selected_only: false,
             skip_already_passivated: true,
+            passivant_element: 1,
         }
     }
 }
 
 pub struct AddHydrogensResult {
-    /// Number of hydrogen atoms added.
-    pub hydrogens_added: usize,
+    /// Number of terminating atoms added (hydrogens or halogens).
+    pub atoms_added: usize,
 }
 
 // ============================================================================
@@ -388,8 +395,13 @@ pub fn add_hydrogens_filtered(
         if atomic_number <= 0 {
             continue; // delete markers, unresolved parameters
         }
-        if atomic_number == 1 {
-            continue; // don't passivate H itself
+        // Host-skip rule (doc/design_halogen_passivation.md, "Host-skip rule"):
+        // never cap an atom with its own element. `host == 1` keeps the
+        // longstanding "H is a terminator, never a host" invariant for every
+        // passivant; `host == passivant` prevents self-capping (e.g. no F₂).
+        // For H passivation this is byte-identical to the old `== 1` check.
+        if atomic_number == 1 || atomic_number == options.passivant_element {
+            continue;
         }
         if options.selected_only && !atom.is_selected() {
             continue;
@@ -416,13 +428,16 @@ pub fn add_hydrogens_filtered(
         let needed = max_bonds - current;
 
         let existing_dirs = gather_bond_directions(structure, atom);
-        let h_bond_len = lookup_xh_bond_length(atomic_number);
+        // Bond length: H keeps the per-context molecular table (unchanged);
+        // halogens use the shared molecular primitive (D2).
+        let bond_len = if options.passivant_element == 1 {
+            lookup_xh_bond_length(atomic_number)
+        } else {
+            halogen_bond_length(atomic_number, options.passivant_element)
+        };
         let open_dirs =
             compute_open_directions(structure, atom_id, hybridization, &existing_dirs, needed);
-        let positions: Vec<DVec3> = open_dirs
-            .iter()
-            .map(|d| position + *d * h_bond_len)
-            .collect();
+        let positions: Vec<DVec3> = open_dirs.iter().map(|d| position + *d * bond_len).collect();
 
         if !positions.is_empty() {
             placements.push((atom_id, positions));
@@ -430,17 +445,17 @@ pub fn add_hydrogens_filtered(
     }
 
     // Step 2: Mutation (add atoms and bonds)
-    let mut h_count = 0;
+    let mut atoms_added = 0;
     for (parent_id, positions) in placements {
         for pos in positions {
-            let h_id = structure.add_atom(1, pos);
-            structure.set_atom_hydrogen_passivation(h_id, true);
-            structure.add_bond(parent_id, h_id, BOND_SINGLE);
-            h_count += 1;
+            let term_id = structure.add_atom(options.passivant_element, pos);
+            // General path flags its terminators (D5); the flag is inert on a
+            // saturated halogen terminator, same as on H.
+            structure.set_atom_hydrogen_passivation(term_id, true);
+            structure.add_bond(parent_id, term_id, BOND_SINGLE);
+            atoms_added += 1;
         }
     }
 
-    AddHydrogensResult {
-        hydrogens_added: h_count,
-    }
+    AddHydrogensResult { atoms_added }
 }
