@@ -2202,6 +2202,11 @@ class APIMaterializeData {
   final bool removeSingleBondAtomsBeforePassivation;
   final bool surfaceReconstruction;
   final bool invertPhase;
+
+  /// Atomic number of the passivation terminator (root/global value). `1`
+  /// (hydrogen) by default; halogens F/Cl/Br/I place at the correct
+  /// host–halogen bond length. See doc/design_halogen_passivation.md D4.
+  final int passivationElement;
   final String? error;
   final List<APIMotifParameterInfo> availableParameters;
 
@@ -2212,6 +2217,7 @@ class APIMaterializeData {
     required this.removeSingleBondAtomsBeforePassivation,
     required this.surfaceReconstruction,
     required this.invertPhase,
+    required this.passivationElement,
     this.error,
     required this.availableParameters,
   });
@@ -2224,6 +2230,7 @@ class APIMaterializeData {
       removeSingleBondAtomsBeforePassivation.hashCode ^
       surfaceReconstruction.hashCode ^
       invertPhase.hashCode ^
+      passivationElement.hashCode ^
       error.hashCode ^
       availableParameters.hashCode;
 
@@ -2240,6 +2247,7 @@ class APIMaterializeData {
               other.removeSingleBondAtomsBeforePassivation &&
           surfaceReconstruction == other.surfaceReconstruction &&
           invertPhase == other.invertPhase &&
+          passivationElement == other.passivationElement &&
           error == other.error &&
           availableParameters == other.availableParameters;
 }
@@ -2695,6 +2703,27 @@ class APIParameterElement {
           defaultAtomicNumber == other.defaultAtomicNumber &&
           reservedAtomicNumber == other.reservedAtomicNumber &&
           color == other.color;
+}
+
+/// Stored data of a `passivate` node (né `add_hydrogen`, issue #405). Just the
+/// terminator element; the optional `element` input pin overrides it at eval.
+class APIPassivateData {
+  /// Atomic number of the terminating element (`1`/`9`/`17`/`35`/`53`).
+  final int element;
+
+  const APIPassivateData({
+    required this.element,
+  });
+
+  @override
+  int get hashCode => element.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIPassivateData &&
+          runtimeType == other.runtimeType &&
+          element == other.element;
 }
 
 /// Editable state of a `patch_build` node (surface-reconstruction patch

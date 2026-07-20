@@ -321,6 +321,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIParameterElement dco_decode_api_parameter_element(dynamic raw);
 
   @protected
+  APIPassivateData dco_decode_api_passivate_data(dynamic raw);
+
+  @protected
   APIPatchBuildData dco_decode_api_patch_build_data(dynamic raw);
 
   @protected
@@ -668,6 +671,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData dco_decode_box_autoadd_api_parameter_data(dynamic raw);
+
+  @protected
+  APIPassivateData dco_decode_box_autoadd_api_passivate_data(dynamic raw);
 
   @protected
   APIPatchBuildData dco_decode_box_autoadd_api_patch_build_data(dynamic raw);
@@ -1209,6 +1215,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData? dco_decode_opt_box_autoadd_api_parameter_data(dynamic raw);
+
+  @protected
+  APIPassivateData? dco_decode_opt_box_autoadd_api_passivate_data(dynamic raw);
 
   @protected
   APIPatchBuildData? dco_decode_opt_box_autoadd_api_patch_build_data(
@@ -1761,6 +1770,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIPassivateData sse_decode_api_passivate_data(SseDeserializer deserializer);
+
+  @protected
   APIPatchBuildData sse_decode_api_patch_build_data(
       SseDeserializer deserializer);
 
@@ -2175,6 +2187,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIParameterData sse_decode_box_autoadd_api_parameter_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIPassivateData sse_decode_box_autoadd_api_passivate_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2824,6 +2840,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIPassivateData? sse_decode_opt_box_autoadd_api_passivate_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIPatchBuildData? sse_decode_opt_box_autoadd_api_patch_build_data(
       SseDeserializer deserializer);
 
@@ -3447,6 +3467,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIParameterElement self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_passivate_data(
+      APIPassivateData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_patch_build_data(
       APIPatchBuildData self, SseSerializer serializer);
 
@@ -3874,6 +3898,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_parameter_data(
       APIParameterData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_passivate_data(
+      APIPassivateData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_patch_build_data(
@@ -4532,6 +4560,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_parameter_data(
       APIParameterData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_passivate_data(
+      APIPassivateData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_patch_build_data(

@@ -39,6 +39,7 @@ use super::structure_designer_api_types::APILiteralField;
 use super::structure_designer_api_types::APILiteralValue;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMaterializeData;
+use super::structure_designer_api_types::APIPassivateData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
@@ -199,6 +200,7 @@ use crate::structure_designer::nodes::mat3_cols::Mat3ColsData;
 use crate::structure_designer::nodes::mat3_diag::Mat3DiagData;
 use crate::structure_designer::nodes::mat3_rows::Mat3RowsData;
 use crate::structure_designer::nodes::materialize::MaterializeData;
+use crate::structure_designer::nodes::passivate::PassivateData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
@@ -7215,6 +7217,7 @@ pub fn get_materialize_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMat
                         .remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: materialize_data.surface_reconstruction,
                     invert_phase: materialize_data.invert_phase,
+                    passivation_element: materialize_data.passivation_element,
                     error: materialize_data.error.clone(),
                     available_parameters,
                 })
@@ -7233,18 +7236,6 @@ pub fn set_materialize_data(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
-                // Preserve the stored passivation element: the Flutter
-                // `APIMaterializeData` does not carry it until Phase 3
-                // (doc/design_halogen_passivation.md §6), so a UI-driven set
-                // (e.g. toggling the passivate checkbox) must not clobber a
-                // value authored via the text format or loaded from file.
-                let passivation_element = cad_instance
-                    .structure_designer
-                    .get_node_network_data_scoped(&scope_path, node_id)
-                    .and_then(|nd| nd.as_any_ref().downcast_ref::<MaterializeData>())
-                    .map(|md| md.passivation_element)
-                    .unwrap_or(1);
-
                 let mut materialize_data = Box::new(MaterializeData {
                     parameter_element_value_definition: data.parameter_element_value_definition,
                     hydrogen_passivation: data.hydrogen_passivation,
@@ -7253,7 +7244,7 @@ pub fn set_materialize_data(
                         .remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: data.surface_reconstruction,
                     invert_phase: data.invert_phase,
-                    passivation_element,
+                    passivation_element: data.passivation_element,
                     error: None,
                     parameter_element_values: HashMap::new(),
                     available_parameters: std::cell::RefCell::new(Vec::new()),
@@ -7274,6 +7265,44 @@ pub fn set_materialize_data(
                 error_message: "CAD instance not available".to_string(),
             },
         )
+    }
+}
+
+/// Reads the stored data of a `passivate` node (currently just `element`).
+/// Takes a `scope_path` like every sibling node-data accessor.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_passivate_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIPassivateData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let passivate_data = node_data.as_any_ref().downcast_ref::<PassivateData>()?;
+                Some(APIPassivateData {
+                    element: passivate_data.element,
+                })
+            },
+            None,
+        )
+    }
+}
+
+/// Writes the stored data of a `passivate` node. Undoable via the shared
+/// `SetNodeDataCommand` pushed by `set_node_network_data_scoped`; re-validates
+/// through `refresh_structure_designer_auto`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_passivate_data(scope_path: Vec<u64>, node_id: u64, data: APIPassivateData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let passivate_data = Box::new(PassivateData {
+                element: data.element,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, passivate_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
     }
 }
 

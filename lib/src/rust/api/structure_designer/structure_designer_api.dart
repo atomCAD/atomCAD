@@ -1816,6 +1816,25 @@ APIResult setMaterializeData(
         .crateApiStructureDesignerStructureDesignerApiSetMaterializeData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
+/// Reads the stored data of a `passivate` node (currently just `element`).
+/// Takes a `scope_path` like every sibling node-data accessor.
+APIPassivateData? getPassivateData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetPassivateData(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Writes the stored data of a `passivate` node. Undoable via the shared
+/// `SetNodeDataCommand` pushed by `set_node_network_data_scoped`; re-validates
+/// through `refresh_structure_designer_auto`.
+void setPassivateData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIPassivateData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetPassivateData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
 APIMotifSubData? getMotifSubData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api

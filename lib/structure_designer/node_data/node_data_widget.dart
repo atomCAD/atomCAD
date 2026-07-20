@@ -24,6 +24,7 @@ import 'package:flutter_cad/structure_designer/node_data/rect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/reg_poly_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/facet_shell_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/relax_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/passivate_editor.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/relax_api.dart'
     as relax_api;
 import 'package:flutter_cad/structure_designer/node_data/xray_editor.dart';
@@ -868,6 +869,14 @@ class NodeDataWidget extends StatelessWidget {
         return MotifSubEditor(
           nodeId: selectedNode.id,
           data: motifSubData,
+          model: model,
+        );
+      case 'passivate':
+        final passivateData = model.getPassivateData(selectedNode.id);
+
+        return PassivateEditor(
+          nodeId: selectedNode.id,
+          data: passivateData,
           model: model,
         );
       case 'materialize':

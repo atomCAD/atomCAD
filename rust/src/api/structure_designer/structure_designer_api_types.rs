@@ -1458,8 +1458,19 @@ pub struct APIMaterializeData {
     pub remove_single_bond_atoms_before_passivation: bool, // Whether to remove atoms with exactly one bond before passivation
     pub surface_reconstruction: bool, // Whether to apply surface reconstruction
     pub invert_phase: bool,
+    /// Atomic number of the passivation terminator (root/global value). `1`
+    /// (hydrogen) by default; halogens F/Cl/Br/I place at the correct
+    /// host–halogen bond length. See doc/design_halogen_passivation.md D4.
+    pub passivation_element: i16,
     pub error: Option<String>, // Optional error message from parsing
     pub available_parameters: Vec<APIMotifParameterInfo>, // Parameters from the connected motif (populated after eval)
+}
+
+/// Stored data of a `passivate` node (né `add_hydrogen`, issue #405). Just the
+/// terminator element; the optional `element` input pin overrides it at eval.
+pub struct APIPassivateData {
+    /// Atomic number of the terminating element (`1`/`9`/`17`/`35`/`53`).
+    pub element: i16,
 }
 
 /// Configuration for single CLI run

@@ -76,6 +76,7 @@ The motif and motif offset used for filling come from the input Blueprint's `Str
 - `invert_phase: Bool` (optional) — see *Invert phase* below.
 - `rm_unbonded: Bool` (optional) — see *Remove unbonded atoms* below.
 - `regions: Array[Record(MaterializeRegion)]` (optional) — per-region setting overrides; see *Per-region settings* below.
+- `passiv_elem: Int` (optional, last pin) — the passivant element (atomic number) placed on dangling bonds when *Passivation* is on; overrides the *Passivant element* property. Restricted to the monovalent set H/F/Cl/Br/I (see [`passivate`](#passivate)).
 
 The boolean inputs default to the values set on the node properties; wiring an input overrides the property.
 
@@ -95,9 +96,9 @@ You can switch on or off the following checkboxes:
 - *Remove single-bond atoms:* If turned on, atoms which only have one bond after the cut are removed. This is done recursively until there is no such atom in the atomic structure. Note that this recursive cleanup **also removes unbonded (zero-bond) atoms** — both atoms that are already unbonded and atoms that become unbonded as the recursion peels away their neighbors. In other words, *Remove single-bond atoms* implies *Remove unbonded atoms*: enabling it removes lone atoms regardless of the *Remove unbonded atoms* setting.
 - *Surface reconstruction:* Real crystalline surfaces are rarely ideal bulk terminations; instead, they typically undergo *surface reconstructions* that lower their surface energy. atomCAD will support several reconstruction types depending on the crystal structure. At present, reconstruction is implemented only for **cubic diamond** crystals (carbon and silicon) and only for the most important one: the **(100) 2×1 dimer reconstruction**.
   If reconstruction is enabled for any other crystal type, the setting has no effect.
-  The (100) 2×1 reconstruction automatically removes single-bond (dangling) atoms even if the *Remove single-bond atoms* option is not enabled. Surface reconstruction can be used together with hydrogen passivation or on its own.
+  The (100) 2×1 reconstruction automatically removes single-bond (dangling) atoms even if the *Remove single-bond atoms* option is not enabled. Surface reconstruction can be used together with passivation or on its own. When both are on, the dimer terminators use the chosen *Passivant element* too — the symmetric mono-X 2×1 phase (e.g. Si(100)-2×1:Cl) is a real, experimentally known termination for halogens. The terminator **bond length** is element-dependent (molecular equilibrium values), while the dimer geometry and terminator angle keep their hydrogen-calibrated constants — a documented approximation that a subsequent `relax` refines. Steric note: heavy halogens (Br/I) at full coverage on diamond are unrealistically crowded; that judgement is left to you, as with the strained dihydride case.
 - *Invert phase*: Determines whether the phase of the dimer pattern should be inverted. 
-- *Hydrogen passivation:* Hydrogen atoms are added to passivate dangling bonds created by the cut.
+- *Passivation:* Terminating atoms are added to passivate dangling bonds created by the cut. A *Passivant element* dropdown next to the checkbox chooses the terminator — hydrogen by default, or a halogen F/Cl/Br/I placed directly at the correct host–halogen bond length (see [`passivate`](#passivate) for why this beats passivating with H and running `atom_replace` afterward). Wiring the `passiv_elem` input pin overrides the dropdown. Per-region overrides are possible via the `MaterializeRegion.passiv_elem` field (see *Per-region settings*), so you can, for example, fluorinate only one face.
 
 ### Per-region settings (`regions`)
 
@@ -108,6 +109,7 @@ The five booleans above (`passivate`, `rm_single`, `surf_recon`, `invert_phase`,
 - `volume: Blueprint` (required) — the region's shape. Build it from the same geometry nodes you already use (`half_space`, `cuboid`, `sphere`, CSG combinations), in the **same real space** as the Blueprint being materialized. Only the volume's geometry is used; any `Structure` it carries is ignored. The typical region is a single `half_space` whose plane cuts through the surface you want to treat differently.
 - `margin: Float` (optional) — membership tolerance in Å (see *Margin* below). Leave unset to use the default of 0.1 Å.
 - `passivate`, `rm_single`, `surf_recon`, `invert_phase`, `rm_unbonded` (all optional `Bool`) — the per-region overrides. Each field has three states: **force on** (set to `true`), **force off** (set to `false`), and **inherit** (leave unset). An unset field is transparently inherited — a region that sets only `surf_recon: true` changes nothing else.
+- `passiv_elem: Optional[Int]` — the per-region passivant element (atomic number), restricted to H/F/Cl/Br/I. Unset → inherit the node's *Passivant element* (or the `passiv_elem` pin). The `record_construct` / `array` editors render this field as an element dropdown. This is the strong use case for surface functionalization: e.g. a `half_space` region with `passiv_elem: 9` fluorinates only the top face while the rest of the slab keeps hydrogen.
 
 Wire one or more region records into an `array` node and feed that into `materialize.regions`. A typical chain is: `half_space` → `record_construct(MaterializeRegion)` (with `surf_recon: true`) → `array` → `materialize.regions`.
 
@@ -241,11 +243,11 @@ Feeding a structure that is *itself* a diff (e.g. an `atom_edit` `diff` pin) int
 
 ## Restricting an atom operation to a region
 
-Several atom operations — `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, and `xray` — accept an optional **`region: Blueprint`** input pin (always the last pin) that confines their effect to a volume you draw. With `region` disconnected, the operation applies to **all** atoms (its original behavior). With `region` connected, the operation only touches atoms **inside** the region volume; atoms outside pass through untouched.
+Several atom operations — `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, and `xray` — accept an optional **`region: Blueprint`** input pin (the last pin, except on `passivate`, where the `element` pin follows it) that confines their effect to a volume you draw. With `region` disconnected, the operation applies to **all** atoms (its original behavior). With `region` connected, the operation only touches atoms **inside** the region volume; atoms outside pass through untouched.
 
 - **Membership.** An atom is in-region when the region geometry's signed distance at the atom's position is ≤ a small margin (default 0.1 Å — the same default `materialize`'s per-region margin uses). The margin reliably captures surface atoms that sit numerically *on* a boundary you built by reusing the cutting geometry, without grabbing the layer below.
 - **Build the region** from the same geometry nodes you already use (`half_space`, `cuboid`, `sphere`, CSG combinations), in the same real space as the atoms. Only the region Blueprint's geometry is used; any `Structure` it carries is ignored. The typical region is a single `half_space` whose plane cuts through the surface you want to treat. A region disjoint from the structure is a well-defined no-op.
-- **Which atom counts.** Each operation tests the position of the **existing (host) atom** it acts on: `add_hydrogen` tests the dangling-bond atom (the new H is placed wherever the bond template puts it, even if that lands just outside the region); `remove_hydrogen` tests the heavy atom an H is bonded to (an H sitting just outside the boundary is still stripped if its host is in-region); `infer_bonds` (re)infers a bond when **at least one** endpoint is in-region; `atom_replace` / `freeze` / `unfreeze` / `xray` test the atom being edited. Newly created atoms are never themselves membership-tested.
+- **Which atom counts.** Each operation tests the position of the **existing (host) atom** it acts on: `passivate` tests the dangling-bond atom (the new terminator is placed wherever the bond template puts it, even if that lands just outside the region); `remove_hydrogen` tests the heavy atom an H is bonded to (an H sitting just outside the boundary is still stripped if its host is in-region); `infer_bonds` (re)infers a bond when **at least one** endpoint is in-region; `atom_replace` / `freeze` / `unfreeze` / `xray` test the atom being edited. Newly created atoms are never themselves membership-tested.
 - **Multiple regions = chained nodes.** Because each of these operations returns the same kind of structure it received, you apply several regional treatments by placing several nodes in sequence, each with its own region — there is no multi-region pin on these nodes. (That painter's-algorithm pattern is unique to `materialize`, whose settings are consumed together in a single fill pass; see its *Per-region settings*.)
 
 ## relax
@@ -424,19 +426,31 @@ The `expr` node is **not** an authoring path — its record literals cannot expr
 
 **Place `apply_style` late in the chain — after any rebuilding node.** Styling is transient display state recorded on atoms; nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, lattice fill) create fresh atoms and silently drop the styling, with no error. Put `apply_style` after those nodes, the same rule as `xray`.
 
-## add_hydrogen
+## passivate
 
-Adds hydrogen atoms to satisfy valence requirements of undersaturated atoms. Takes a `Crystal` or `Molecule` input and outputs a hydrogen-passivated structure, preserving the concrete input type.
+Caps undersaturated atoms by placing a terminating atom at each open valence slot. Takes a `Crystal` or `Molecule` input and outputs a passivated structure, preserving the concrete input type. This is the node-network counterpart of the one-click passivation in the `atom_edit` node.
 
-The algorithm detects hybridization (sp3, sp2, sp1) automatically and places hydrogen atoms at the correct bond lengths and angles. This is the node-network counterpart of the one-click hydrogen passivation in the `atom_edit` node.
+The algorithm detects hybridization (sp3, sp2, sp1) automatically and places the terminator at the correct bond length and angle for each open bond.
 
-An optional **`region: Blueprint`** input pin (last pin) restricts passivation to dangling bonds on in-region atoms; a passivating H whose host atom is in-region is still placed even if it lands just outside the region. Disconnected → all atoms are passivated. See *Restricting an atom operation to a region* above.
+> **Note on the rename:** `passivate` was previously called `add_hydrogen` (hydrogen only). It was renamed and generalized to place any of the monovalent terminators below; old `.cnnd` projects are migrated automatically on load.
+
+**Input pins**
+
+- `molecule: HasAtoms` — the `Crystal` or `Molecule` to passivate.
+- `region: Blueprint` (optional) — restricts passivation to dangling bonds on in-region atoms; a terminator whose host atom is in-region is still placed even if it lands just outside the region. Disconnected → all atoms are passivated. See *Restricting an atom operation to a region* above.
+- `element: Int` (optional, last pin) — the terminator element as an atomic number; overrides the stored *Passivant element* property. Wiring it makes the passivant network-computable — e.g. `map` over `[9, 17, 35]` to generate a halogenation series.
+
+**Passivant element.** The property panel offers a dropdown restricted to the five monovalent passivants: **H** (1, the default), **F** (9), **Cl** (17), **Br** (35), and **I** (53). Any other atomic number (whether typed into the text format or wired in) is rejected with an error naming the allowed set — passivation places exactly one single-bonded terminator per open slot, which only makes sense for a monovalent element. When the `element` pin is wired, the dropdown is disabled (the wired value wins) but keeps its stored value for when you disconnect.
+
+**Why not just replace H with a halogen?** You *can* passivate with hydrogen and then run `atom_replace` H→F, but that leaves every fluorine sitting at the **hydrogen** bond length (≈1.09 Å for C–H instead of ≈1.35 Å for C–F), so a `relax` pass becomes mandatory and the relaxed positions depend on the optimizer trajectory — not a reproducible canonical geometry. `passivate` instead places each terminator **directly at the correct host–terminator equilibrium bond length** along the ideal bond direction, so a halogen-terminated surface is deterministic and needs no relax pass to be sensible. (The bond lengths are molecular equilibrium values; a subsequent `relax` still refines them if you want the fully minimized geometry.)
+
+**Removing halogens.** There is no `remove_halogen` node — strip a halogen with `atom_replace` using target **Delete** (the `to = 0` sentinel) for that element, the same way you would remove any element in bulk.
 
 ## remove_hydrogen
 
-Removes all hydrogen atoms from an atomic structure. Takes a `Crystal` or `Molecule` input and outputs the bare framework without hydrogens, preserving the concrete input type.
+Removes all hydrogen atoms from an atomic structure. Takes a `Crystal` or `Molecule` input and outputs the bare framework without hydrogens, preserving the concrete input type. (It removes hydrogen specifically — to strip a *halogen* terminator, use `atom_replace` → Delete for that element.)
 
-Useful in workflows like: `remove_hydrogen` → transform/edit → `add_hydrogen`, allowing you to work with the bare framework and re-passivate afterward.
+Useful in workflows like: `remove_hydrogen` → transform/edit → `passivate`, allowing you to work with the bare framework and re-passivate afterward.
 
 An optional **`region: Blueprint`** input pin (last pin) restricts removal to hydrogens whose heavy (host) atom is in-region — including an H whose own position is just outside the region. Disconnected → all hydrogens are removed. See *Restricting an atom operation to a region* above.
 

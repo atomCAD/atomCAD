@@ -78,17 +78,17 @@ Input pins can be array-typed. An array input pin is visually indicated with a s
 
 ### Abstract types
 
-Some operations are naturally polymorphic over multiple phase types — e.g. `add_hydrogen` works on any atomic structure (`Crystal` or `Molecule`), while `structure_move` works on anything carrying a structure (`Blueprint` or `Crystal`). To express this without duplicating nodes, atomCAD has three **abstract types**, each naming a "two-out-of-three" combination of the concrete phases:
+Some operations are naturally polymorphic over multiple phase types — e.g. `passivate` works on any atomic structure (`Crystal` or `Molecule`), while `structure_move` works on anything carrying a structure (`Blueprint` or `Crystal`). To express this without duplicating nodes, atomCAD has three **abstract types**, each naming a "two-out-of-three" combination of the concrete phases:
 
 | Abstract type | Members | Used by |
 |---|---|---|
-| `HasAtoms` | `Crystal`, `Molecule` | atom operations: `atom_edit`, `apply_diff`, `relax`, `add_hydrogen`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, `atom_union`, `atom_composediff` |
+| `HasAtoms` | `Crystal`, `Molecule` | atom operations: `atom_edit`, `apply_diff`, `relax`, `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, `atom_union`, `atom_composediff` |
 | `HasStructure` | `Blueprint`, `Crystal` | structure-aligned operations: `structure_move`, `structure_rot`, `get_structure` |
 | `HasFreeLinOps` | `Blueprint`, `Molecule` | free movement: `free_move`, `free_rot` |
 
 Abstract types appear **only** as input-pin types on built-in polymorphic nodes. Every actual value flowing through a wire is concrete — a `Crystal`, a `Molecule`, a `Blueprint` — never an abstract type. Each concrete type implicitly converts to any abstract type that contains it; there is no implicit conversion in the other direction.
 
-**Type preservation.** When a value flows through a polymorphic node, the *concrete* type is preserved on the output. A `Crystal` fed into `add_hydrogen` comes out as a `Crystal`; a `Molecule` comes out as a `Molecule`. A chain like `Crystal → add_hydrogen → structure_move` therefore stays well-typed end to end — the `structure_move` (which needs `HasStructure`) still accepts the post-`add_hydrogen` result.
+**Type preservation.** When a value flows through a polymorphic node, the *concrete* type is preserved on the output. A `Crystal` fed into `passivate` comes out as a `Crystal`; a `Molecule` comes out as a `Molecule`. A chain like `Crystal → passivate → structure_move` therefore stays well-typed end to end — the `structure_move` (which needs `HasStructure`) still accepts the post-`passivate` result.
 
 Internally, polymorphic output pins are declared with a *same as input* rule that points back at one of the node's input pins (visible in pin tooltips as e.g. `SameAsInput(molecule)`). The editor resolves that rule against the actually-wired source: the output pin then renders with the resolved concrete type's color, and any wire leaving it picks up the same color. If the input is unwired, the output falls back to its declared (possibly abstract) type for coloring purposes.
 
@@ -140,7 +140,7 @@ Alignment is a *derived* property — every node computes it from its inputs and
 | `materialize`, `dematerialize` | pass-through |
 | `exit_structure` | dropped (Molecules have no alignment) |
 | `enter_structure` | always `lattice-unaligned` (atoms may not lie on motif sites) |
-| `atom_edit` and other atomic ops (`relax`, `add_hydrogen`, `atom_replace`, …) | pass-through |
+| `atom_edit` and other atomic ops (`relax`, `passivate`, `atom_replace`, …) | pass-through |
 
 The `subdivision` parameter on geometry primitives (`half_space`, `extrude`, `drawing_plane`, `half_plane`, `facet_shell`) does **not** affect alignment — it controls where the cut sits, not where atoms end up. Only `structure_move`'s `subdivision` can break lattice alignment, because there it subdivides a translation.
 

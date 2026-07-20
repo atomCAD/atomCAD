@@ -3,11 +3,15 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/common/parameter_element_override_editor.dart';
+import 'package:flutter_cad/common/passivant_dropdown.dart';
 
 /// Index of the `regions` input pin on `materialize`.
 /// 0 = shape, 1 = passivate, 2 = rm_single, 3 = surf_recon,
-/// 4 = invert_phase, 5 = rm_unbonded, 6 = regions.
+/// 4 = invert_phase, 5 = rm_unbonded, 6 = regions, 7 = passiv_elem.
 const int _REGIONS_PIN_INDEX = 6;
+
+/// Index of the `passiv_elem` input pin on `materialize` (appended last, D4).
+const int _PASSIV_ELEM_PIN_INDEX = 7;
 
 /// Editor widget for materialize nodes
 class MaterializeEditor extends StatefulWidget {
@@ -33,6 +37,23 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
   late bool _invertPhase;
+  late int _passivationElement;
+
+  /// True when the optional `passiv_elem` input pin is wired. When connected,
+  /// the wired value replaces the stored element at eval, so the dropdown
+  /// renders disabled (standard "disable on wired input" pattern) — unlike the
+  /// annotate-only `regions` pin which augments rather than replaces.
+  bool _isPassivElemPinConnected() {
+    final view = widget.model.nodeNetworkView;
+    if (view == null) return false;
+    for (final wire in view.wires) {
+      if (wire.destNodeId == widget.nodeId &&
+          wire.destParamIndex == BigInt.from(_PASSIV_ELEM_PIN_INDEX)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// True when the optional `regions` input pin is wired. When connected, the
   /// per-region records layer *on top of* these node settings (the "root"),
@@ -64,6 +85,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
             _removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: _surfaceReconstruction,
         invertPhase: _invertPhase,
+        passivationElement: _passivationElement,
         error: null,
         availableParameters: const [],
       ),
@@ -81,6 +103,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
     _invertPhase = widget.data?.invertPhase ?? false;
+    _passivationElement = widget.data?.passivationElement ?? 1;
   }
 
   @override
@@ -110,6 +133,10 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
     }
     if (oldWidget.data?.invertPhase != widget.data?.invertPhase) {
       _invertPhase = widget.data?.invertPhase ?? false;
+    }
+    if (oldWidget.data?.passivationElement !=
+        widget.data?.passivationElement) {
+      _passivationElement = widget.data?.passivationElement ?? 1;
     }
   }
 
@@ -243,11 +270,11 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
 
           const SizedBox(height: 8),
 
-          // Hydrogen Passivation checkbox
+          // Passivation checkbox
           CheckboxListTile(
-            title: const Text('Hydrogen Passivation'),
-            subtitle:
-                const Text('Add hydrogen atoms to passivate dangling bonds'),
+            title: const Text('Passivation'),
+            subtitle: const Text(
+                'Add terminating atoms to passivate dangling bonds'),
             value: _hydrogenPassivation,
             onChanged: (value) {
               final newValue = value ?? true;
@@ -258,6 +285,50 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
               _commitChanges();
             },
             controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
+          // Passivant element dropdown. A wired `passiv_elem` pin replaces the
+          // stored element at eval, so disable inline editing while connected
+          // (but keep the stored value for re-activation on disconnect).
+          Builder(
+            builder: (context) {
+              final connected = _isPassivElemPinConnected();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (connected)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4.0),
+                      child: Text(
+                        'Passivant element supplied by `passiv_elem` input. '
+                        'Disconnect to edit inline.',
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  Opacity(
+                    opacity: connected ? 0.5 : 1.0,
+                    child: IgnorePointer(
+                      ignoring: connected,
+                      child: PassivantDropdown(
+                        value: _passivationElement,
+                        onChanged: (newValue) {
+                          setState(() {
+                            _passivationElement = newValue;
+                          });
+                          _commitChanges();
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
 
           const SizedBox(height: 8),

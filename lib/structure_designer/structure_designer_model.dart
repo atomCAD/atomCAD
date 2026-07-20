@@ -2764,6 +2764,19 @@ class StructureDesignerModel extends ChangeNotifier {
         scopePath: propertyEditorScopePath, nodeId: nodeId);
   }
 
+  void setPassivateData(BigInt nodeId, APIPassivateData data) {
+    structure_designer_api.setPassivateData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  APIPassivateData? getPassivateData(BigInt nodeId) {
+    return structure_designer_api.getPassivateData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
   void setMotifSubData(BigInt nodeId, APIMotifSubData data) {
     structure_designer_api.setMotifSubData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),
