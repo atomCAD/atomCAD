@@ -141,21 +141,27 @@ fn materialize_region_resolves_via_lookup() {
             "rm_single",
             "surf_recon",
             "invert_phase",
-            "rm_unbonded"
+            "rm_unbonded",
+            "passiv_elem"
         ]
     );
-    // volume is a plain Blueprint; the six settings are Optional[..].
+    // volume is a plain Blueprint; `margin` is Optional[Float]; the five
+    // settings booleans are Optional[Bool]; `passiv_elem` is Optional[Int].
     assert_eq!(def.fields[0].data_type, DataType::Blueprint);
     assert_eq!(
         def.fields[1].data_type,
         DataType::Optional(Box::new(DataType::Float))
     );
-    for field in &def.fields[2..] {
+    for field in &def.fields[2..7] {
         assert_eq!(
             field.data_type,
             DataType::Optional(Box::new(DataType::Bool))
         );
     }
+    assert_eq!(
+        def.fields[7].data_type,
+        DataType::Optional(Box::new(DataType::Int))
+    );
 }
 
 #[test]
@@ -232,6 +238,7 @@ fn materialize_regions_pin_signature() {
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,
+        passivation_element: 1,
         error: None,
         parameter_element_values: Default::default(),
         available_parameters: Default::default(),
@@ -379,5 +386,180 @@ fn materialize_region_wrong_typed_volume_errors() {
         msg.contains("regions[0]") && msg.contains("volume"),
         "error should name the item index and the volume field: {}",
         msg
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Passivation element (halogen passivation, issue #405 Phase 2)
+// ---------------------------------------------------------------------------
+
+/// Set the stored root passivation element on the materialize node in-place.
+fn set_materialize_passiv_elem(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    mat_id: u64,
+    element: i16,
+) {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    let node = network.nodes.get_mut(&mat_id).unwrap();
+    node.data
+        .as_any_mut()
+        .downcast_mut::<MaterializeData>()
+        .expect("materialize node data")
+        .passivation_element = element;
+}
+
+fn count_element(result: &NetworkResult, element: i16) -> usize {
+    match result {
+        NetworkResult::Crystal(c) => c
+            .atoms
+            .iter_atoms()
+            .filter(|(_, a)| a.atomic_number == element)
+            .count(),
+        NetworkResult::Error(e) => panic!("materialize returned error: {}", e),
+        other => panic!("expected Crystal, got {:?}", other.infer_data_type()),
+    }
+}
+
+/// A `MaterializeRegion` record with a `passiv_elem` override (and optional
+/// `passivate`); all other settings unset.
+fn region_record_with_passiv_elem(volume: GeoNode, passiv_elem: NetworkResult) -> NetworkResult {
+    NetworkResult::record(vec![
+        (
+            "volume".to_string(),
+            NetworkResult::Blueprint(BlueprintData {
+                structure: Structure::diamond(),
+                geo_tree_root: volume,
+                alignment: Default::default(),
+                alignment_reason: None,
+            }),
+        ),
+        ("margin".to_string(), NetworkResult::None),
+        ("passivate".to_string(), NetworkResult::None),
+        ("rm_single".to_string(), NetworkResult::None),
+        ("surf_recon".to_string(), NetworkResult::None),
+        ("invert_phase".to_string(), NetworkResult::None),
+        ("rm_unbonded".to_string(), NetworkResult::None),
+        ("passiv_elem".to_string(), passiv_elem),
+    ])
+}
+
+/// Stored `passivation_element = 9` (fluorine): the whole surface is terminated
+/// with F instead of H.
+#[test]
+fn materialize_stored_passiv_elem_fluorine() {
+    let (mut designer, net, mat_id) = cuboid_materialize();
+    set_materialize_passiv_elem(&mut designer, &net, mat_id, 9);
+
+    let result = evaluate(&designer, &net, mat_id);
+    assert_eq!(
+        count_element(&result, 1),
+        0,
+        "no hydrogens under F passivation"
+    );
+    assert!(
+        count_element(&result, 9) > 0,
+        "expected fluorine terminators"
+    );
+}
+
+/// A wired `passiv_elem` pin (index 7) overrides the stored default (H).
+#[test]
+fn materialize_wired_passiv_elem_override() {
+    let (mut designer, net, mat_id) = cuboid_materialize();
+    // Stored stays hydrogen; the wired pin should win.
+    let elem_id = add_value_node(&mut designer, &net, NetworkResult::Int(9));
+    designer.connect_nodes(elem_id, 0, mat_id, 7);
+
+    let result = evaluate(&designer, &net, mat_id);
+    assert_eq!(
+        count_element(&result, 1),
+        0,
+        "wired F pin overrides stored H"
+    );
+    assert!(
+        count_element(&result, 9) > 0,
+        "expected fluorine terminators"
+    );
+}
+
+/// D1 at the materialize stored-property surface: a non-monovalent stored
+/// element surfaces a localized eval error.
+#[test]
+fn materialize_stored_passiv_elem_invalid_errors() {
+    let (mut designer, net, mat_id) = cuboid_materialize();
+    set_materialize_passiv_elem(&mut designer, &net, mat_id, 8); // oxygen
+
+    let result = evaluate(&designer, &net, mat_id);
+    let NetworkResult::Error(msg) = result else {
+        panic!("expected Error, got {:?}", result.infer_data_type());
+    };
+    assert!(
+        msg.contains("allowed passivant"),
+        "error should name the allowed-passivant rule: {}",
+        msg
+    );
+}
+
+/// D1 at the materialize pin surface.
+#[test]
+fn materialize_wired_passiv_elem_invalid_errors() {
+    let (mut designer, net, mat_id) = cuboid_materialize();
+    let elem_id = add_value_node(&mut designer, &net, NetworkResult::Int(8));
+    designer.connect_nodes(elem_id, 0, mat_id, 7);
+
+    let result = evaluate(&designer, &net, mat_id);
+    assert!(
+        matches!(result, NetworkResult::Error(_)),
+        "invalid element via pin should surface an Error"
+    );
+}
+
+/// D1 at the third surface: the `MaterializeRegion.passiv_elem` record field.
+/// The regions parser has its own per-item check, separate from the pin/stored
+/// checks.
+#[test]
+fn materialize_region_passiv_elem_invalid_errors() {
+    let (mut designer, net, mat_id) = cuboid_materialize();
+    let region = region_record_with_passiv_elem(z_below(1000.0), NetworkResult::Int(8));
+    let regions_id = add_value_node(&mut designer, &net, NetworkResult::Array(vec![region]));
+    designer.connect_nodes(regions_id, 0, mat_id, 6);
+
+    let result = evaluate(&designer, &net, mat_id);
+    let NetworkResult::Error(msg) = result else {
+        panic!("expected Error, got {:?}", result.infer_data_type());
+    };
+    assert!(
+        msg.contains("regions[0]")
+            && msg.contains("passiv_elem")
+            && msg.contains("allowed passivant"),
+        "error should name the item, field, and rule: {}",
+        msg
+    );
+}
+
+/// A region overriding only `passiv_elem` (inheriting all booleans) fluorinates
+/// just its volume — the rest of the surface stays hydrogen.
+#[test]
+fn materialize_region_passiv_elem_only_override() {
+    let (mut designer, net, mat_id) = cuboid_materialize();
+    // Region covers the whole structure, sets F, inherits passivate=on.
+    let region = region_record_with_passiv_elem(z_below(1000.0), NetworkResult::Int(9));
+    let regions_id = add_value_node(&mut designer, &net, NetworkResult::Array(vec![region]));
+    designer.connect_nodes(regions_id, 0, mat_id, 6);
+
+    let result = evaluate(&designer, &net, mat_id);
+    assert!(
+        count_element(&result, 9) > 0,
+        "region should place fluorine terminators"
+    );
+    assert_eq!(
+        count_element(&result, 1),
+        0,
+        "whole-structure F region leaves no hydrogens"
     );
 }

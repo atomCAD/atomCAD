@@ -37,6 +37,7 @@ use rust_lib_flutter_cad::structure_designer::nodes::drawing_plane::DrawingPlane
 use rust_lib_flutter_cad::structure_designer::nodes::lattice_vecs::LatticeVecsData;
 use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 use rust_lib_flutter_cad::structure_designer::nodes::motif::MotifData;
+use rust_lib_flutter_cad::structure_designer::nodes::passivate::PassivateData;
 // I/O nodes
 use rust_lib_flutter_cad::structure_designer::nodes::export_atoms::ExportAtomsData;
 use rust_lib_flutter_cad::structure_designer::nodes::import_cif::ImportCifData;
@@ -1029,6 +1030,26 @@ fn test_drawing_plane_roundtrip() {
 }
 
 #[test]
+fn test_passivate_roundtrip() {
+    // Hydrogen default and a halogen both round-trip through the `element`
+    // Int text property.
+    test_roundtrip(&PassivateData { element: 1 });
+    test_roundtrip(&PassivateData { element: 9 });
+
+    // Explicit value check on the property.
+    let props = PassivateData { element: 17 }.get_text_properties();
+    assert_eq!(props.len(), 1);
+    assert_eq!(props[0].0, "element");
+    assert_eq!(props[0].1, TextValue::Int(17));
+
+    let mut data = PassivateData { element: 1 };
+    let mut map = HashMap::new();
+    map.insert("element".to_string(), TextValue::Int(35));
+    data.set_text_properties(&map).unwrap();
+    assert_eq!(data.element, 35);
+}
+
+#[test]
 fn test_materialize_roundtrip() {
     test_roundtrip(&MaterializeData {
         parameter_element_value_definition: "C=6".to_string(),
@@ -1037,6 +1058,7 @@ fn test_materialize_roundtrip() {
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,
+        passivation_element: 1,
         error: None,
         parameter_element_values: HashMap::new(),
         available_parameters: std::cell::RefCell::new(Vec::new()),
@@ -1048,6 +1070,7 @@ fn test_materialize_roundtrip() {
         remove_single_bond_atoms_before_passivation: true,
         surface_reconstruction: true,
         invert_phase: true,
+        passivation_element: 9,
         error: None,
         parameter_element_values: HashMap::new(),
         available_parameters: std::cell::RefCell::new(Vec::new()),

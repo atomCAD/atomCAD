@@ -318,7 +318,7 @@ fn resave_after_v6_load_emits_version_7() {
 
     let raw = std::fs::read_to_string(&out).unwrap();
     let root: Value = serde_json::from_str(&raw).unwrap();
-    assert_eq!(root["version"], json!(7), "re-save must emit version 7");
+    assert_eq!(root["version"], json!(8), "re-save must emit version 8");
 }
 
 #[test]

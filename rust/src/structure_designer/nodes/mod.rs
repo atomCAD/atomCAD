@@ -1,4 +1,3 @@
-pub mod add_hydrogen;
 pub mod apply;
 pub mod apply_diff;
 pub mod apply_style;
@@ -69,6 +68,7 @@ pub mod materialize;
 pub mod motif;
 pub mod motif_sub;
 pub mod parameter;
+pub mod passivate;
 pub mod patch_build;
 pub mod patch_latticefill;
 pub mod plane_tiling_vectors;

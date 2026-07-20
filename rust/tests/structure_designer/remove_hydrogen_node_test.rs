@@ -266,7 +266,7 @@ fn test_remove_hydrogen_node_roundtrip() {
     structure.add_atom(6, DVec3::ZERO); // Bare carbon
 
     let value_id = add_atomic_value_node(&mut designer, network_name, DVec2::ZERO, structure);
-    let add_h_id = designer.add_node("add_hydrogen", DVec2::new(200.0, 0.0));
+    let add_h_id = designer.add_node("passivate", DVec2::new(200.0, 0.0));
     designer.connect_nodes(value_id, 0, add_h_id, 0);
 
     let remove_h_id = designer.add_node("remove_hydrogen", DVec2::new(400.0, 0.0));

@@ -37,7 +37,7 @@ BOND Ti0 ..+O4
 """, name: "rutile" }
 structure2 = structure { structure: get_structure1, motif: motif1 }
 with_structure1 = with_structure { shape: cuboid1, structure: structure2 }
-materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: false, rm_unbonded: true, rm_single: false, surf_recon: false, invert_phase: false, visible: true }
+materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: false, rm_unbonded: true, rm_single: false, surf_recon: false, invert_phase: false, passiv_elem: 1, visible: true }
 output motif1
 
 # 8 nodes

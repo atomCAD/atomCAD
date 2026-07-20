@@ -166,7 +166,7 @@ fn add_hydrogen_region_disconnected_matches_global() {
         DVec2::ZERO,
         molecule_value(carbons_at(&[-1.0, 1.0])),
     );
-    let node_id = add_simple_node(&mut designer, "add_hydrogen");
+    let node_id = add_simple_node(&mut designer, "passivate");
     designer.connect_nodes(value_id, 0, node_id, 0);
 
     let result = evaluate_to_atomic(&designer, net, node_id);
@@ -189,7 +189,7 @@ fn add_hydrogen_region_passivates_only_in_region() {
         DVec2::ZERO,
         molecule_value(carbons_at(&[-1.0, 1.0])),
     );
-    let node_id = add_simple_node(&mut designer, "add_hydrogen");
+    let node_id = add_simple_node(&mut designer, "passivate");
     designer.connect_nodes(value_id, 0, node_id, 0);
     let region_id = add_value_node(&mut designer, net, DVec2::new(0.0, 200.0), region_x_le_0());
     designer.connect_nodes(region_id, 0, node_id, 1);
@@ -227,7 +227,7 @@ fn add_hydrogen_h_across_boundary_still_placed() {
         DVec2::ZERO,
         molecule_value(carbons_at(&[-0.05])),
     );
-    let node_id = add_simple_node(&mut designer, "add_hydrogen");
+    let node_id = add_simple_node(&mut designer, "passivate");
     designer.connect_nodes(value_id, 0, node_id, 0);
     let region_id = add_value_node(&mut designer, net, DVec2::new(0.0, 200.0), region_x_le_0());
     designer.connect_nodes(region_id, 0, node_id, 1);
@@ -492,7 +492,7 @@ fn composition_two_chained_region_ops_accumulate() {
     );
 
     // Node A: region = half-space, in-region x ≤ -0.9 (captures x = -2).
-    let node_a = add_simple_node(&mut designer, "add_hydrogen");
+    let node_a = add_simple_node(&mut designer, "passivate");
     designer.connect_nodes(value_id, 0, node_a, 0);
     let region_a = add_value_node(
         &mut designer,
@@ -503,7 +503,7 @@ fn composition_two_chained_region_ops_accumulate() {
     designer.connect_nodes(region_a, 0, node_a, 1);
 
     // Node B: region = half-space, in-region x ≥ 0.9 (captures x = +2).
-    let node_b = add_simple_node(&mut designer, "add_hydrogen");
+    let node_b = add_simple_node(&mut designer, "passivate");
     designer.connect_nodes(node_a, 0, node_b, 0);
     let region_b = add_value_node(
         &mut designer,

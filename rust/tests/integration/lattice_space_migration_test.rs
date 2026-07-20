@@ -211,8 +211,8 @@ fn test_roundtrip_pure_rename() {
     // Re-save is v3: second load goes through the v3 no-op path.
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 7"),
-        "saved file should be tagged version: 7"
+        saved.contains("\"version\": 8"),
+        "saved file should be tagged version: 8"
     );
     assert!(
         !saved.contains("\"unit_cell\""),
@@ -594,8 +594,8 @@ fn test_roundtrip_atom_trans_and_lattice_symop_dropped() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 7"),
-        "saved file should be tagged version: 7"
+        saved.contains("\"version\": 8"),
+        "saved file should be tagged version: 8"
     );
     assert!(
         !saved.contains("\"atom_trans\""),
@@ -775,8 +775,8 @@ fn test_roundtrip_primitive_with_lattice() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 7"),
-        "saved file should be tagged version: 7"
+        saved.contains("\"version\": 8"),
+        "saved file should be tagged version: 8"
     );
     assert!(
         !saved.contains("\"unit_cell\""),
@@ -971,9 +971,10 @@ fn test_load_atom_fill_split() {
 
     // Materialize args, in v3 order: shape (now W, not cuboid directly),
     // passivate (id 5), rm_single (id 6), surf_recon (id 7), invert_phase (id 8).
-    // The 6th (rm_unbonded) and 7th (regions) slots are appended unwired by the
-    // argument-repair pass — newer optional pins the v2 fixture predates.
-    assert_eq!(materialize.arguments.len(), 7);
+    // The 6th (rm_unbonded), 7th (regions), and 8th (passiv_elem) slots are
+    // appended unwired by the argument-repair pass — newer optional pins the
+    // v2 fixture predates.
+    assert_eq!(materialize.arguments.len(), 8);
     assert_eq!(
         materialize.arguments[0]
             .argument_output_pins()
@@ -1054,8 +1055,8 @@ fn test_roundtrip_atom_fill_split() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 7"),
-        "saved file should be tagged version: 7"
+        saved.contains("\"version\": 8"),
+        "saved file should be tagged version: 8"
     );
     assert!(
         !saved.contains("\"atom_fill\""),
@@ -1209,7 +1210,7 @@ fn test_load_shared_unit_cell_composes_passes() {
         .find(|n| n.node_type_name == "materialize")
         .expect("materialize node missing");
     assert_eq!(materialize.id, 4);
-    assert_eq!(materialize.arguments.len(), 7);
+    assert_eq!(materialize.arguments.len(), 8);
     assert_eq!(
         materialize.arguments[0].argument_output_pins().get(&2),
         Some(&0),
@@ -1284,8 +1285,8 @@ fn test_roundtrip_shared_unit_cell() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 7"),
-        "saved file should be tagged version: 7"
+        saved.contains("\"version\": 8"),
+        "saved file should be tagged version: 8"
     );
     assert!(
         !saved.contains("\"atom_fill\""),
@@ -1377,8 +1378,8 @@ fn test_roundtrip_frame_transform_dropped() {
 
     let saved = std::fs::read_to_string(&temp_path).expect("read saved file");
     assert!(
-        saved.contains("\"version\": 7"),
-        "saved file should be tagged version: 7"
+        saved.contains("\"version\": 8"),
+        "saved file should be tagged version: 8"
     );
     assert!(
         !saved.contains("frame_transform"),
@@ -1529,8 +1530,8 @@ fn real_sample_roundtrip_smoke(fixture_name: &str) {
 
     let first_bytes = std::fs::read_to_string(&first_save).expect("read first save");
     assert!(
-        first_bytes.contains("\"version\": 7"),
-        "{}: saved file should be tagged version: 7",
+        first_bytes.contains("\"version\": 8"),
+        "{}: saved file should be tagged version: 8",
         fixture_name
     );
     // Every migration change class should have erased its v2 tokens. The
@@ -1861,13 +1862,14 @@ fn test_load_motif_offset_only_unchained_case_c() {
 
     // Materialize.shape stays empty in case C, and the five Bool flag args
     // are also empty (this fixture wires nothing besides motif_offset). The
-    // rm_unbonded and regions slots are newer optional pins appended unwired.
+    // rm_unbonded, regions, and passiv_elem slots are newer optional pins
+    // appended unwired.
     let materialize = network
         .nodes
         .values()
         .find(|n| n.node_type_name == "materialize")
         .unwrap();
-    assert_eq!(materialize.arguments.len(), 7);
+    assert_eq!(materialize.arguments.len(), 8);
     for (i, a) in materialize.arguments.iter().enumerate() {
         assert!(
             a.argument_output_pins().is_empty(),

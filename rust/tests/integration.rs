@@ -21,3 +21,6 @@ mod patch_roundtrip_test;
 
 #[path = "integration/export_atoms_migration_test.rs"]
 mod export_atoms_migration_test;
+
+#[path = "integration/passivate_migration_test.rs"]
+mod passivate_migration_test;

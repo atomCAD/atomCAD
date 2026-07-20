@@ -1,5 +1,4 @@
 use super::node_type::{NodeType, Parameter, PinOutputType};
-use super::nodes::add_hydrogen::get_node_type as add_hydrogen_get_node_type;
 use super::nodes::apply::get_node_type as apply_get_node_type;
 use super::nodes::apply_diff::get_node_type as apply_diff_get_node_type;
 use super::nodes::apply_style::get_node_type as apply_style_get_node_type;
@@ -71,6 +70,7 @@ use super::nodes::materialize::get_node_type as materialize_get_node_type;
 use super::nodes::motif::get_node_type as motif_get_node_type;
 use super::nodes::motif_sub::get_node_type as motif_sub_get_node_type;
 use super::nodes::parameter::get_node_type as parameter_get_node_type;
+use super::nodes::passivate::get_node_type as passivate_get_node_type;
 use super::nodes::patch_build::get_node_type as patch_build_get_node_type;
 use super::nodes::patch_latticefill::get_node_type as patch_latticefill_get_node_type;
 use super::nodes::plane_tiling_vectors::get_node_type as plane_tiling_vectors_get_node_type;
@@ -634,35 +634,53 @@ impl NodeTypeRegistry {
         // field inherits from earlier matching regions and ultimately the root
         // settings). `volume` is the one required field. See
         // `doc/design_blueprint_region_atom_edits.md` §B1.
+        // Uses `from_hinted_fields` so the `passiv_elem` field renders an element
+        // dropdown in `record_construct(schema: MaterializeRegion)` — the same
+        // convenience `ElementMapping` provides for atom_replace rules. The hint
+        // is valid on `Optional[Int]` (it describes the inner `Int` through the
+        // `Optional` wrapper). It is cosmetic only: the dropdown offers every
+        // element, and an invalid pick is judged solely by the eval-time D1
+        // check. See `doc/design_halogen_passivation.md` D8.
         ret.built_in_record_type_defs.insert(
             "MaterializeRegion".to_string(),
-            RecordTypeDef::from_named_fields(
+            RecordTypeDef::from_hinted_fields(
                 "MaterializeRegion",
                 vec![
-                    ("volume".to_string(), DataType::Blueprint),
+                    ("volume".to_string(), DataType::Blueprint, None),
                     (
                         "margin".to_string(),
                         DataType::Optional(Box::new(DataType::Float)),
+                        None,
                     ),
                     (
                         "passivate".to_string(),
                         DataType::Optional(Box::new(DataType::Bool)),
+                        None,
                     ),
                     (
                         "rm_single".to_string(),
                         DataType::Optional(Box::new(DataType::Bool)),
+                        None,
                     ),
                     (
                         "surf_recon".to_string(),
                         DataType::Optional(Box::new(DataType::Bool)),
+                        None,
                     ),
                     (
                         "invert_phase".to_string(),
                         DataType::Optional(Box::new(DataType::Bool)),
+                        None,
                     ),
                     (
                         "rm_unbonded".to_string(),
                         DataType::Optional(Box::new(DataType::Bool)),
+                        None,
+                    ),
+                    (
+                        "passiv_elem".to_string(),
+                        DataType::Optional(Box::new(DataType::Int)),
+                        Some(FieldEditorHint::Element),
                     ),
                 ],
             ),
@@ -834,7 +852,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(export_atoms_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(relax_get_node_type());
-        ret.add_node_type(add_hydrogen_get_node_type());
+        ret.add_node_type(passivate_get_node_type());
         ret.add_node_type(remove_hydrogen_get_node_type());
         ret.add_node_type(infer_bonds_get_node_type());
         ret.add_node_type(atom_replace_get_node_type());

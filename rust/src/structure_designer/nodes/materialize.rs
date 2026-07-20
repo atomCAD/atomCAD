@@ -1,5 +1,6 @@
 // Materialize: carves atoms out of a Blueprint's structure using the blueprint's geometry.
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::crystolecule::atomic_constants::{ALLOWED_PASSIVANTS, is_allowed_passivant};
 use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
@@ -33,6 +34,13 @@ fn default_true() -> bool {
     true
 }
 
+/// Default passivation element: hydrogen. Old files (no `passivation_element`
+/// key) and freshly-added nodes both resolve to H. See
+/// `doc/design_halogen_passivation.md` D4.
+fn default_passiv_elem() -> i16 {
+    1
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct MaterializeData {
     pub parameter_element_value_definition: String,
@@ -47,6 +55,12 @@ pub struct MaterializeData {
     pub surface_reconstruction: bool,
     #[serde(default)]
     pub invert_phase: bool,
+    /// Atomic number of the passivation terminator (root/global value). serde
+    /// default `1` (hydrogen) so old files load unchanged. Restricted to the
+    /// monovalent passivant set (validated at eval time, D1). Regions may
+    /// override this per-position via `MaterializeRegion.passiv_elem`.
+    #[serde(default = "default_passiv_elem")]
+    pub passivation_element: i16,
     #[serde(skip)]
     pub error: Option<String>,
     #[serde(skip)]
@@ -68,6 +82,8 @@ struct MaterializeDataDeserialized {
     pub surface_reconstruction: bool,
     #[serde(default)]
     pub invert_phase: bool,
+    #[serde(default = "default_passiv_elem")]
+    pub passivation_element: i16,
 }
 
 impl<'de> Deserialize<'de> for MaterializeData {
@@ -85,6 +101,7 @@ impl<'de> Deserialize<'de> for MaterializeData {
                 .remove_single_bond_atoms_before_passivation,
             surface_reconstruction: de.surface_reconstruction,
             invert_phase: de.invert_phase,
+            passivation_element: de.passivation_element,
             error: None,
             parameter_element_values: HashMap::new(),
             available_parameters: RefCell::new(Vec::new()),
@@ -278,6 +295,32 @@ impl NodeData for MaterializeData {
             }
         };
 
+        // Evaluate optional `passiv_elem` input (param index 7). Wired overrides
+        // the stored property (evaluate_or_default precedence, D4).
+        let passivation_element = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            7,
+            self.passivation_element as i32,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value as i16,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        // D1: reject any non-monovalent root passivant with a localized error
+        // (no validator rule — the eval error is the surfacing). Per-region
+        // `passiv_elem` values are checked separately in
+        // `parse_regions_from_records`.
+        if !is_allowed_passivant(passivation_element) {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "materialize.passiv_elem: {} is not an allowed passivant; expected one of {:?} (H/F/Cl/Br/I)",
+                passivation_element, ALLOWED_PASSIVANTS
+            )));
+        }
+
         // Calculate effective parameter element values (fill in defaults for missing values)
         let effective_parameter_values =
             motif.get_effective_parameter_element_values(&self.parameter_element_values);
@@ -300,9 +343,7 @@ impl NodeData for MaterializeData {
             remove_single_bond_atoms,
             reconstruct_surface: surface_reconstruction,
             invert_phase,
-            // Phase 1: default to hydrogen. Phase 2 wires the node's
-            // passivation_element property / passiv_elem pin here.
-            passivation_element: 1,
+            passivation_element,
         };
 
         // Define fill region
@@ -361,6 +402,10 @@ impl NodeData for MaterializeData {
                 "invert_phase".to_string(),
                 TextValue::Bool(self.invert_phase),
             ),
+            (
+                "passiv_elem".to_string(),
+                TextValue::Int(self.passivation_element as i32),
+            ),
         ]
     }
 
@@ -409,6 +454,12 @@ impl NodeData for MaterializeData {
                 .as_bool()
                 .ok_or_else(|| "invert_phase must be a boolean".to_string())?;
         }
+        if let Some(v) = props.get("passiv_elem") {
+            self.passivation_element = v
+                .as_int()
+                .ok_or_else(|| "passiv_elem must be an integer".to_string())?
+                as i16;
+        }
         Ok(())
     }
 
@@ -416,6 +467,7 @@ impl NodeData for MaterializeData {
         let mut m = HashMap::new();
         m.insert("shape".to_string(), (true, None)); // required
         m.insert("regions".to_string(), (false, None)); // optional
+        m.insert("passiv_elem".to_string(), (false, None)); // optional
         m
     }
 }
@@ -472,11 +524,38 @@ fn parse_regions_from_records(items: Vec<NetworkResult>) -> Result<Vec<RegionSpe
             surf_recon: parse_optional_bool_field(&item, "surf_recon", i)?,
             invert_phase: parse_optional_bool_field(&item, "invert_phase", i)?,
             rm_unbonded: parse_optional_bool_field(&item, "rm_unbonded", i)?,
-            // Phase 2 wires the MaterializeRegion.passiv_elem record field here.
-            passiv_elem: None,
+            passiv_elem: parse_optional_passiv_elem_field(&item, i)?,
         });
     }
     Ok(out)
+}
+
+/// Read the `Optional[Int]` `passiv_elem` field from a region record. Missing or
+/// an explicit `None` → `None` ("inherit"); an `Int` → `Some(z)` after the D1
+/// check (halogen/H only). This per-item check is separate code from the pin/
+/// stored-property check in `eval` — see `doc/design_halogen_passivation.md` D8.
+fn parse_optional_passiv_elem_field(
+    item: &NetworkResult,
+    index: usize,
+) -> Result<Option<i16>, String> {
+    match item.extract_record_field("passiv_elem") {
+        None | Some(NetworkResult::None) => Ok(None),
+        Some(NetworkResult::Int(z)) => {
+            let z = *z as i16;
+            if !is_allowed_passivant(z) {
+                return Err(format!(
+                    "materialize.regions[{}].passiv_elem: {} is not an allowed passivant; expected one of {:?} (H/F/Cl/Br/I)",
+                    index, z, ALLOWED_PASSIVANTS
+                ));
+            }
+            Ok(Some(z))
+        }
+        Some(other) => Err(format!(
+            "materialize.regions[{}].passiv_elem: expected Int, got {:?}",
+            index,
+            other.infer_data_type()
+        )),
+    }
 }
 
 /// Read one `Optional[Bool]` settings field from a region record. Missing or an
@@ -543,6 +622,13 @@ pub fn get_node_type() -> NodeType {
                   "MaterializeRegion".to_string(),
               )))),
           },
+          // Appended last (index 7): positional arguments, so appending keeps
+          // existing wires valid. See doc/design_halogen_passivation.md D4.
+          Parameter {
+              id: None,
+              name: "passiv_elem".to_string(),
+              data_type: DataType::Int,
+          },
       ],
       output_pins: OutputPinDefinition::single_fixed(DataType::Crystal),
       zone_input_pins: vec![],
@@ -555,6 +641,7 @@ pub fn get_node_type() -> NodeType {
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,
+        passivation_element: 1,
         error: None,
         parameter_element_values: HashMap::new(),
         available_parameters: RefCell::new(Vec::new()),

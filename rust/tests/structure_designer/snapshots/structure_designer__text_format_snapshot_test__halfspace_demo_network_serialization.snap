@@ -31,7 +31,7 @@ cuboid1 = cuboid { structure: structure1, min_corner: (0, 0, 0), extent: (4, 4, 
 get_structure1 = get_structure { input: cuboid1 }
 structure2 = structure { structure: get_structure1, motif: motif1 }
 with_structure1 = with_structure { shape: cuboid1, structure: structure2 }
-materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: false, rm_unbonded: true, rm_single: false, surf_recon: false, invert_phase: false }
+materialize1 = materialize { shape: with_structure1, parameter_element_value_definition: "", passivate: false, rm_unbonded: true, rm_single: false, surf_recon: false, invert_phase: false, passiv_elem: 1 }
 output motif1
 
 # 8 nodes

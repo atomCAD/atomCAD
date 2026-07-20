@@ -7233,6 +7233,18 @@ pub fn set_materialize_data(
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
+                // Preserve the stored passivation element: the Flutter
+                // `APIMaterializeData` does not carry it until Phase 3
+                // (doc/design_halogen_passivation.md §6), so a UI-driven set
+                // (e.g. toggling the passivate checkbox) must not clobber a
+                // value authored via the text format or loaded from file.
+                let passivation_element = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)
+                    .and_then(|nd| nd.as_any_ref().downcast_ref::<MaterializeData>())
+                    .map(|md| md.passivation_element)
+                    .unwrap_or(1);
+
                 let mut materialize_data = Box::new(MaterializeData {
                     parameter_element_value_definition: data.parameter_element_value_definition,
                     hydrogen_passivation: data.hydrogen_passivation,
@@ -7241,6 +7253,7 @@ pub fn set_materialize_data(
                         .remove_single_bond_atoms_before_passivation,
                     surface_reconstruction: data.surface_reconstruction,
                     invert_phase: data.invert_phase,
+                    passivation_element,
                     error: None,
                     parameter_element_values: HashMap::new(),
                     available_parameters: std::cell::RefCell::new(Vec::new()),

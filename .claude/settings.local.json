@@ -343,7 +343,8 @@
       "Read(//c/Users/Ádám Nagy/**)",
       "Bash(gh auth *)",
       "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=\"C:\\\\machine_phase_systems\\\\t_center_showcase\\\\t_center_showcase.pdf\" \"file:///C:/machine_phase_systems/t_center_showcase/index.html\")",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(perl -i -pe 's/`add_hydrogen`/`passivate`/g' src/structure_designer/nodes/AGENTS.md)"
     ]
   }
 }

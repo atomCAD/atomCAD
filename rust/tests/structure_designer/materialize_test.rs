@@ -88,8 +88,10 @@ fn materialize_node_type_output_is_crystal() {
 }
 
 /// `materialize` exposes `shape`, `passivate`, `rm_single`, `surf_recon`,
-/// `invert_phase`, `rm_unbonded`, `regions` — no `motif` or `m_offset` pins.
-/// (`regions` added by `doc/design_blueprint_region_atom_edits.md` Phase B2.)
+/// `invert_phase`, `rm_unbonded`, `regions`, `passiv_elem` — no `motif` or
+/// `m_offset` pins. (`regions` added by
+/// `doc/design_blueprint_region_atom_edits.md` Phase B2; `passiv_elem` by
+/// `doc/design_halogen_passivation.md` Phase 2.)
 #[test]
 fn materialize_has_no_motif_or_offset_pins() {
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -110,7 +112,8 @@ fn materialize_has_no_motif_or_offset_pins() {
             "surf_recon",
             "invert_phase",
             "rm_unbonded",
-            "regions"
+            "regions",
+            "passiv_elem"
         ],
         "materialize parameter pins"
     );
