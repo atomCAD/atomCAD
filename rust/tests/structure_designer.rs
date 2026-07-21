@@ -476,3 +476,6 @@ mod structure_move_gadget_test;
 
 #[path = "structure_designer/refresh_pipeline_test.rs"]
 mod refresh_pipeline_test;
+
+#[path = "structure_designer/scene_noderef_keying_test.rs"]
+mod scene_noderef_keying_test;

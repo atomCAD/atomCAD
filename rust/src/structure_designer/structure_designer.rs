@@ -50,9 +50,14 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Returned by `StructureDesigner::raytrace_per_node()` to identify which
 /// node's output was intersected and at what distance along the ray.
+///
+/// The hit carries the scope-aware [`NodeRef`] because the scene is keyed by
+/// one. Every ref is top-level today; when body nodes become displayable
+/// (Phase 2 of `doc/design_zero_ary_closure_body_display.md`) the
+/// click-to-activate candidate set filters back down to top-level refs.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PerNodeRayHit {
-    pub node_id: u64,
+    pub node_ref: NodeRef,
     pub distance: f64,
 }
 
@@ -451,7 +456,7 @@ impl StructureDesigner {
         let active_node_id = network.active_node_id?;
         self.last_generated_structure_designer_scene
             .node_data
-            .get(&active_node_id)
+            .get(&NodeRef::top(active_node_id))
             .and_then(|data| data.interactive_pin_index())
     }
 
@@ -468,7 +473,7 @@ impl StructureDesigner {
         let network = self.node_type_registry.node_networks.get(network_name)?;
         let active_node_id = network.active_node_id?;
         self.last_generated_structure_designer_scene
-            .get_node_eval_cache(active_node_id)
+            .get_node_eval_cache(&NodeRef::top(active_node_id))
     }
 
     /// Helper method to get the active node ID of a node of a specific type
@@ -1244,7 +1249,7 @@ impl StructureDesigner {
 
     // Full refresh implementation - re-evaluates all displayed nodes
     fn refresh_full(&mut self, node_network_name: &str) {
-        let (active_node_id, displayed_node_ids) = {
+        let (active_node_ref, displayed_node_refs) = {
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
                 None => return,
@@ -1261,46 +1266,48 @@ impl StructureDesigner {
                 }
             }
 
-            // Snapshot the (id, display_type) pairs so the closure below can
+            // Snapshot the (ref, display_type) pairs so the closure below can
             // iterate without re-borrowing `self` while `with_eval_context`
-            // owns the mutable borrow on it.
-            let displayed: Vec<(u64, super::node_network::NodeDisplayType)> = network
+            // owns the mutable borrow on it. Every ref is top-level today;
+            // Phase 2 replaces this with the eligibility-gated collection over
+            // body networks too.
+            let displayed: Vec<(NodeRef, super::node_network::NodeDisplayType)> = network
                 .displayed_nodes
                 .iter()
-                .map(|(id, state)| (*id, state.display_type))
+                .map(|(id, state)| (NodeRef::top(*id), state.display_type))
                 .collect();
-            (network.active_node_id, displayed)
+            (network.active_node_id.map(NodeRef::top), displayed)
         };
 
         // Track selected node's unit cell
         let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
         let mut new_scenes: Vec<(
-            u64,
+            NodeRef,
             crate::structure_designer::structure_designer_scene::NodeSceneData,
-        )> = Vec::with_capacity(displayed_node_ids.len());
+        )> = Vec::with_capacity(displayed_node_refs.len());
 
         self.with_eval_context(false, |evaluator, registry, prefs, context| {
-            for (node_id, display_type) in &displayed_node_ids {
+            for (node_ref, display_type) in &displayed_node_refs {
                 let node_data = evaluator.generate_scene(
                     node_network_name,
-                    *node_id,
+                    node_ref.node_id,
                     *display_type,
                     registry,
                     &prefs.geometry_visualization_preferences,
                     context,
                 );
 
-                if Some(*node_id) == active_node_id {
+                if Some(node_ref) == active_node_ref.as_ref() {
                     selected_node_unit_cell = node_data.unit_cell.clone();
                 }
-                new_scenes.push((*node_id, node_data));
+                new_scenes.push((node_ref.clone(), node_data));
             }
         });
 
-        for (node_id, node_data) in new_scenes {
+        for (node_ref, node_data) in new_scenes {
             self.last_generated_structure_designer_scene
                 .node_data
-                .insert(node_id, node_data);
+                .insert(node_ref, node_data);
         }
 
         // Set the selected node's unit cell as global scene property
@@ -1330,14 +1337,19 @@ impl StructureDesigner {
 
         // Clone necessary data before mutable borrows to avoid borrow checker issues
         let active_node_id = network.active_node_id;
+        let active_node_ref = active_node_id.map(NodeRef::top);
         self.last_generated_structure_designer_scene.active_node_id = active_node_id;
 
-        // Step 1: Cache nodes that became invisible
-        for &node_id in &changes.visibility_changed {
-            if !network.displayed_nodes.contains_key(&node_id) {
+        // Step 1: Cache nodes that became invisible.
+        // NOTE: the "is this ref currently displayed?" test reads the TOP-LEVEL
+        // `displayed_nodes` by bare id — correct today because every tracked
+        // ref is top-level. Phase 2 must resolve `node_ref.scope_path` to its
+        // own body network and read *that* map (same for Step 3 below).
+        for node_ref in &changes.visibility_changed {
+            if !network.displayed_nodes.contains_key(&node_ref.node_id) {
                 // Node became invisible - move to cache for potential future restoration
                 self.last_generated_structure_designer_scene
-                    .move_to_cache(node_id);
+                    .move_to_cache(node_ref);
             }
         }
 
@@ -1353,13 +1365,16 @@ impl StructureDesigner {
                 // During interactive drag: only re-evaluate the directly changed nodes,
                 // skip computing downstream dependents for better performance.
                 let directly_changed = changes.data_changed.clone();
-                let top_level_ids: HashSet<u64> = directly_changed
+                // Only top-level refs can have a cache entry today (the scene
+                // holds top-level refs only). Phase 2 drops this filter so a
+                // hidden body node's cache entry is invalidated too.
+                let top_level_refs: HashSet<NodeRef> = directly_changed
                     .iter()
                     .filter(|nr| nr.is_top_level())
-                    .map(|nr| nr.node_id)
+                    .cloned()
                     .collect();
                 self.last_generated_structure_designer_scene
-                    .invalidate_cached_nodes(&top_level_ids);
+                    .invalidate_cached_nodes(&top_level_refs);
                 directly_changed
             } else {
                 let affected = compute_downstream_dependents(network, &changes.data_changed);
@@ -1371,13 +1386,13 @@ impl StructureDesigner {
                         data.clear_input_cache();
                     }
                 }
-                let top_level_ids: HashSet<u64> = affected
+                let top_level_refs: HashSet<NodeRef> = affected
                     .iter()
                     .filter(|nr| nr.is_top_level())
-                    .map(|nr| nr.node_id)
+                    .cloned()
                     .collect();
                 self.last_generated_structure_designer_scene
-                    .invalidate_cached_nodes(&top_level_ids);
+                    .invalidate_cached_nodes(&top_level_refs);
                 affected
             }
         } else {
@@ -1386,18 +1401,18 @@ impl StructureDesigner {
 
         // Step 3: Restore nodes that became visible from cache (if possible)
         // (At this point we have data in the cache that actually can be restored.)
-        let mut nodes_needing_evaluation = HashSet::new();
+        let mut nodes_needing_evaluation: HashSet<NodeRef> = HashSet::new();
 
-        for &node_id in &changes.visibility_changed {
-            if network.displayed_nodes.contains_key(&node_id) {
+        for node_ref in &changes.visibility_changed {
+            if network.displayed_nodes.contains_key(&node_ref.node_id) {
                 // Node became visible - try to restore from cache (ultra-fast path)
                 let restored = self
                     .last_generated_structure_designer_scene
-                    .restore_from_cache(node_id);
+                    .restore_from_cache(node_ref);
 
                 if !restored {
                     // Not in cache (or was invalidated) - needs re-evaluation
-                    nodes_needing_evaluation.insert(node_id);
+                    nodes_needing_evaluation.insert(node_ref.clone());
                 }
                 // Note: If restored successfully, eval_cache is preserved in node_data
                 // and accessible via get_selected_node_eval_cache() for gadget creation
@@ -1411,23 +1426,25 @@ impl StructureDesigner {
         // `build_scope_reverse_dependency_map`.
         for node_ref in &affected_by_data_changes {
             if node_ref.is_top_level() && network.displayed_nodes.contains_key(&node_ref.node_id) {
-                nodes_needing_evaluation.insert(node_ref.node_id);
+                nodes_needing_evaluation.insert(node_ref.clone());
             }
         }
 
         // Step 4.5: Handle selection changes - re-evaluate affected nodes to update from_selected_node flag
+        // (selection is a top-level concern: the gadget/active-node machinery
+        // keys off the top-level `active_node_id`.)
         if changes.selection_changed {
             // Add previous selected node (needs from_selected_node set to false)
             if let Some(prev_node_id) = changes.previous_selection
                 && network.displayed_nodes.contains_key(&prev_node_id)
             {
-                nodes_needing_evaluation.insert(prev_node_id);
+                nodes_needing_evaluation.insert(NodeRef::top(prev_node_id));
             }
             // Add current selected node (needs from_selected_node set to true)
             if let Some(curr_node_id) = changes.current_selection
                 && network.displayed_nodes.contains_key(&curr_node_id)
             {
-                nodes_needing_evaluation.insert(curr_node_id);
+                nodes_needing_evaluation.insert(NodeRef::top(curr_node_id));
             }
         }
 
@@ -1438,49 +1455,49 @@ impl StructureDesigner {
         if !nodes_needing_evaluation.is_empty() {
             // Snapshot (id, display_type) pairs upfront so the closure body
             // does not need to re-borrow `self.node_type_registry`.
-            let to_evaluate: Vec<(u64, super::node_network::NodeDisplayType)> = {
+            let to_evaluate: Vec<(NodeRef, super::node_network::NodeDisplayType)> = {
                 let network = match self.node_type_registry.node_networks.get(node_network_name) {
                     Some(network) => network,
                     None => return,
                 };
                 nodes_needing_evaluation
                     .iter()
-                    .filter_map(|&node_id| {
+                    .filter_map(|node_ref| {
                         network
                             .displayed_nodes
-                            .get(&node_id)
-                            .map(|state| (node_id, state.display_type))
+                            .get(&node_ref.node_id)
+                            .map(|state| (node_ref.clone(), state.display_type))
                     })
                     .collect()
             };
 
             let mut new_scenes: Vec<(
-                u64,
+                NodeRef,
                 crate::structure_designer::structure_designer_scene::NodeSceneData,
             )> = Vec::with_capacity(to_evaluate.len());
 
             self.with_eval_context(false, |evaluator, registry, prefs, context| {
-                for (node_id, display_type) in &to_evaluate {
+                for (node_ref, display_type) in &to_evaluate {
                     let node_data = evaluator.generate_scene(
                         node_network_name,
-                        *node_id,
+                        node_ref.node_id,
                         *display_type,
                         registry,
                         &prefs.geometry_visualization_preferences,
                         context,
                     );
 
-                    if Some(*node_id) == active_node_id {
+                    if Some(node_ref) == active_node_ref.as_ref() {
                         selected_node_unit_cell = node_data.unit_cell.clone();
                     }
-                    new_scenes.push((*node_id, node_data));
+                    new_scenes.push((node_ref.clone(), node_data));
                 }
             });
 
-            for (node_id, node_data) in new_scenes {
+            for (node_ref, node_data) in new_scenes {
                 self.last_generated_structure_designer_scene
                     .node_data
-                    .insert(node_id, node_data);
+                    .insert(node_ref, node_data);
             }
 
             // Update the selected node's unit cell if it was re-evaluated
@@ -2847,7 +2864,7 @@ impl StructureDesigner {
             // Track visibility change for the new node (it was set to visible in add_node)
             // This is needed because the node was made visible directly on node_network,
             // bypassing StructureDesigner.set_node_display which normally tracks this
-            self.pending_changes.visibility_changed.insert(node_id);
+            self.pending_changes.mark_node_visibility_changed(node_id);
 
             // Apply display policy considering only this node as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
@@ -5246,7 +5263,7 @@ impl StructureDesigner {
         if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
             network.set_node_display(node_id, is_displayed);
             // Track that this node's visibility changed
-            self.pending_changes.visibility_changed.insert(node_id);
+            self.pending_changes.mark_node_visibility_changed(node_id);
         }
 
         // Capture new display state after mutation
@@ -5302,7 +5319,7 @@ impl StructureDesigner {
                     .get_displayed_pins(node_id)
                     .is_some_and(|pins| pins.contains(&pin_index)),
             );
-            self.pending_changes.visibility_changed.insert(node_id);
+            self.pending_changes.mark_node_visibility_changed(node_id);
 
             // Update displayed_pins on cached NodeSceneData so it renders the
             // correct pins when restored from cache without re-evaluation.
@@ -5310,17 +5327,18 @@ impl StructureDesigner {
                 .get_displayed_pins(node_id)
                 .cloned()
                 .unwrap_or_default();
+            let node_ref = NodeRef::top(node_id);
             // Update in live node_data
             if let Some(scene_data) = self
                 .last_generated_structure_designer_scene
                 .node_data
-                .get_mut(&node_id)
+                .get_mut(&node_ref)
             {
                 scene_data.displayed_pins = new_pins.clone();
             }
             // Update in invisible cache
             self.last_generated_structure_designer_scene
-                .update_cached_displayed_pins(node_id, new_pins);
+                .update_cached_displayed_pins(&node_ref, new_pins);
         }
 
         // Capture new display state after mutation
@@ -6657,7 +6675,7 @@ impl StructureDesigner {
         &self,
         ray_origin: &DVec3,
         ray_direction: &DVec3,
-    ) -> Option<(u32, &AtomicStructure, u64, f64)> {
+    ) -> Option<(u32, &AtomicStructure, NodeRef, f64)> {
         use crate::crystolecule::atomic_structure::HitTestResult;
         use crate::display::preferences as display_prefs;
         use crate::structure_designer::structure_designer_scene::NodeOutput;
@@ -6675,9 +6693,9 @@ impl StructureDesigner {
             }
         };
 
-        let mut closest: Option<(u32, &AtomicStructure, u64, f64)> = None;
+        let mut closest: Option<(u32, &AtomicStructure, NodeRef, f64)> = None;
 
-        for (&node_id, node_data) in self
+        for (node_ref, node_data) in self
             .last_generated_structure_designer_scene
             .node_data
             .iter()
@@ -6693,7 +6711,7 @@ impl StructureDesigner {
                     )
                     && closest.as_ref().is_none_or(|c| distance < c.3)
                 {
-                    closest = Some((atom_id, atomic_structure, node_id, distance));
+                    closest = Some((atom_id, atomic_structure, node_ref.clone(), distance));
                 }
             }
         }
@@ -6729,7 +6747,7 @@ impl StructureDesigner {
 
         let mut hits = Vec::new();
 
-        for (&node_id, node_data) in self
+        for (node_ref, node_data) in self
             .last_generated_structure_designer_scene
             .node_data
             .iter()
@@ -6773,7 +6791,10 @@ impl StructureDesigner {
             }
 
             if let Some(distance) = min_distance {
-                hits.push(PerNodeRayHit { node_id, distance });
+                hits.push(PerNodeRayHit {
+                    node_ref: node_ref.clone(),
+                    distance,
+                });
             }
         }
 
@@ -6830,7 +6851,7 @@ impl StructureDesigner {
 
             // Track visibility changes
             for node_id in changes.keys() {
-                self.pending_changes.visibility_changed.insert(*node_id);
+                self.pending_changes.mark_node_visibility_changed(*node_id);
             }
 
             // Apply the changes to the node network
@@ -8902,7 +8923,7 @@ impl StructureDesigner {
         // Mark the new parameter as displayed so the user can see it.
         if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
             network.set_node_display(new_id, true);
-            self.pending_changes.visibility_changed.insert(new_id);
+            self.pending_changes.mark_node_visibility_changed(new_id);
         }
 
         self.validate_active_network();

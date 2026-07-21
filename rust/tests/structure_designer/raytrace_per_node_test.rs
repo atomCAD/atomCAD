@@ -1,6 +1,7 @@
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use rust_lib_flutter_cad::structure_designer::node_network::NodeRef;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
     NodeOutput, NodeSceneData,
@@ -24,7 +25,7 @@ fn setup_designer_with_scene_atoms(
         designer
             .last_generated_structure_designer_scene
             .node_data
-            .insert(node_id, scene_data);
+            .insert(NodeRef::top(node_id), scene_data);
     }
 
     designer
@@ -48,7 +49,7 @@ fn test_single_node_hit() {
     );
 
     assert_eq!(hits.len(), 1, "Should hit exactly one node");
-    assert_eq!(hits[0].node_id, 1);
+    assert_eq!(hits[0].node_ref.node_id, 1);
     assert!(hits[0].distance > 0.0, "Distance should be positive");
 }
 
@@ -93,8 +94,8 @@ fn test_multiple_nodes_different_distances() {
 
     assert_eq!(hits.len(), 2, "Should hit both nodes");
     // Results are sorted by distance, so node 1 (z=0) should be first
-    assert_eq!(hits[0].node_id, 1, "Closer node should be first");
-    assert_eq!(hits[1].node_id, 2, "Farther node should be second");
+    assert_eq!(hits[0].node_ref.node_id, 1, "Closer node should be first");
+    assert_eq!(hits[1].node_ref.node_id, 2, "Farther node should be second");
     assert!(
         hits[0].distance < hits[1].distance,
         "Hits should be sorted by ascending distance"

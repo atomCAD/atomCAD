@@ -20,9 +20,12 @@ pub enum RefreshMode {
 pub struct StructureDesignerChanges {
     /// The refresh mode - defaults to Partial
     pub mode: RefreshMode,
-    /// Node IDs whose visibility changed (top-level only — body-internal
-    /// nodes are not separately displayed, see `doc/design_zones_ui.md`).
-    pub visibility_changed: HashSet<u64>,
+    /// Nodes whose visibility changed. Carries scope for the same reason
+    /// [`Self::data_changed`] does — per-body `next_node_id` counters let a
+    /// body-internal id collide with a top-level one. Production code only
+    /// marks top-level refs today; scoped refs arrive with Phase 2 of
+    /// `doc/design_zero_ary_closure_body_display.md`.
+    pub visibility_changed: HashSet<NodeRef>,
     /// Nodes whose data changed. Carries scope so a body-internal edit doesn't
     /// collide with a top-level id that happens to match numerically (each
     /// body has its own `next_node_id` counter — see `node_network.rs`).
@@ -88,9 +91,19 @@ impl StructureDesignerChanges {
             .insert(NodeRef::scoped(scope_path, node_id));
     }
 
-    /// Marks a node's visibility as changed
+    /// Marks a top-level node's visibility as changed. Convenience for the
+    /// common case; body-scope toggles use
+    /// [`Self::mark_node_visibility_changed_scoped`].
     pub fn mark_node_visibility_changed(&mut self, node_id: u64) {
-        self.visibility_changed.insert(node_id);
+        self.visibility_changed.insert(NodeRef::top(node_id));
+    }
+
+    /// Marks a node's visibility as changed at a specific scope. `scope_path`
+    /// is the chain of HOF/closure ids identifying the body the node lives in;
+    /// empty means the top-level network.
+    pub fn mark_node_visibility_changed_scoped(&mut self, scope_path: &[u64], node_id: u64) {
+        self.visibility_changed
+            .insert(NodeRef::scoped(scope_path, node_id));
     }
 
     /// Marks that selection changed

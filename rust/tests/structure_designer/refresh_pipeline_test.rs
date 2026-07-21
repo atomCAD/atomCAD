@@ -28,9 +28,14 @@
 //!
 //! **During Phase 1 these tests must be updated mechanically — key type only.**
 //! Any other edit needed to keep them green is a red flag that behavior drifted.
+//!
+//! Phase 1 status: updated exactly as prescribed — the four scene-lookup helpers
+//! below now build a `NodeRef::top(node_id)` key instead of passing the bare
+//! `u64`. Nothing else changed; every assertion is byte-identical.
 
 use glam::IVec3;
 use glam::f64::DVec2;
+use rust_lib_flutter_cad::structure_designer::node_network::NodeRef;
 use rust_lib_flutter_cad::structure_designer::nodes::cuboid::CuboidData;
 use rust_lib_flutter_cad::structure_designer::nodes::string::StringData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
@@ -184,7 +189,7 @@ fn scene_has(designer: &StructureDesigner, node_id: u64) -> bool {
     designer
         .last_generated_structure_designer_scene
         .node_data
-        .contains_key(&node_id)
+        .contains_key(&NodeRef::top(node_id))
 }
 
 /// Atom count of a displayed node's pin-0 output. Panics unless the entry
@@ -193,7 +198,7 @@ fn scene_atom_count(designer: &StructureDesigner, node_id: u64) -> usize {
     let entry = designer
         .last_generated_structure_designer_scene
         .node_data
-        .get(&node_id)
+        .get(&NodeRef::top(node_id))
         .expect("node should have a scene entry");
     match &entry.output {
         NodeOutput::Atomic(structure, _) => structure.get_num_of_atoms(),
@@ -217,7 +222,7 @@ fn scene_from_selected_node(designer: &StructureDesigner, node_id: u64) -> bool 
     let entry = designer
         .last_generated_structure_designer_scene
         .node_data
-        .get(&node_id)
+        .get(&NodeRef::top(node_id))
         .expect("node should have a scene entry");
     match &entry.output {
         NodeOutput::Atomic(structure, _) => structure.decorator().from_selected_node,
@@ -229,7 +234,7 @@ fn scene_displayed_pins(designer: &StructureDesigner, node_id: u64) -> Vec<i32> 
     let mut pins: Vec<i32> = designer
         .last_generated_structure_designer_scene
         .node_data
-        .get(&node_id)
+        .get(&NodeRef::top(node_id))
         .expect("node should have a scene entry")
         .displayed_pins
         .iter()

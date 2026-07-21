@@ -123,9 +123,10 @@ fn test_camera() -> Camera {
 fn scene_with_labeled_atom() -> StructureDesignerScene {
     let (s, _) = labeled_carbon("C");
     let mut scene = StructureDesignerScene::new();
-    scene
-        .node_data
-        .insert(0, NodeSceneData::new(NodeOutput::Atomic(s, None)));
+    scene.node_data.insert(
+        rust_lib_flutter_cad::structure_designer::node_network::NodeRef::top(0),
+        NodeSceneData::new(NodeOutput::Atomic(s, None)),
+    );
     scene
 }
 

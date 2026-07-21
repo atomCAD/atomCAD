@@ -655,7 +655,8 @@ pub fn set_view_up_from_active_drawing_plane() -> Option<String> {
                     Some(id) => id,
                     None => return Some("No active node to read a drawing plane from".to_string()),
                 };
-                let node_data = match scene.node_data.get(&active_id) {
+                let active_ref = crate::structure_designer::node_network::NodeRef::top(active_id);
+                let node_data = match scene.node_data.get(&active_ref) {
                     Some(nd) => nd,
                     None => return Some("The active node has no displayed output".to_string()),
                 };

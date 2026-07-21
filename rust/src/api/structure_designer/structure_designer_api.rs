@@ -39,7 +39,6 @@ use super::structure_designer_api_types::APILiteralField;
 use super::structure_designer_api_types::APILiteralValue;
 use super::structure_designer_api_types::APIMapData;
 use super::structure_designer_api_types::APIMaterializeData;
-use super::structure_designer_api_types::APIPassivateData;
 use super::structure_designer_api_types::APIMeasurement;
 use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
@@ -47,6 +46,7 @@ use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINamespaceRenamePreview;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
+use super::structure_designer_api_types::APIPassivateData;
 use super::structure_designer_api_types::APIPatchBuildData;
 use super::structure_designer_api_types::APIPatchLatticeFillData;
 use super::structure_designer_api_types::APIPlaneTilingVectorsData;
@@ -200,10 +200,10 @@ use crate::structure_designer::nodes::mat3_cols::Mat3ColsData;
 use crate::structure_designer::nodes::mat3_diag::Mat3DiagData;
 use crate::structure_designer::nodes::mat3_rows::Mat3RowsData;
 use crate::structure_designer::nodes::materialize::MaterializeData;
-use crate::structure_designer::nodes::passivate::PassivateData;
 use crate::structure_designer::nodes::motif::MotifData;
 use crate::structure_designer::nodes::motif_sub::MotifSubData;
 use crate::structure_designer::nodes::parameter::ParameterData;
+use crate::structure_designer::nodes::passivate::PassivateData;
 use crate::structure_designer::nodes::patch_build::PatchBuildData;
 use crate::structure_designer::nodes::patch_latticefill::{
     CompatibilityReport, PatchLatticeFillData,
@@ -700,11 +700,17 @@ fn build_node_view(
         .resolve_output_type_scoped(node, node_network, -1, &scope_ancestors, &scope_hof_ids)
         .unwrap_or_else(|| node_type.get_function_type());
 
+    // Scope-aware scene lookup: the scene is keyed by `NodeRef`, so a body node
+    // whose numeric id collides with a top-level one no longer picks up the
+    // top-level node's alignment badges. Identical to the old bare-id lookup
+    // for top-level nodes (empty `scope_path`).
     let scene_node_data = cad_instance
         .structure_designer
         .last_generated_structure_designer_scene
         .node_data
-        .get(&node.id);
+        .get(&crate::structure_designer::node_network::NodeRef::scoped(
+            scope_path, node.id,
+        ));
 
     let output_pins: Vec<OutputPinView> = node_type
         .output_pins
@@ -8856,9 +8862,13 @@ pub fn query_hovered_atom_info(
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                let (atom_id, structure, closest_node_id, closest_distance) = cad_instance
+                let (atom_id, structure, closest_node_ref, closest_distance) = cad_instance
                     .structure_designer
                     .hit_test_all_atomic_structures_with_node_id(&ray_origin, &ray_direction)?;
+                // The tooltip is a top-level-node surface; the scene only ever
+                // holds top-level refs today, so projecting to the bare id is
+                // lossless (see `doc/design_zero_ary_closure_body_display.md` §1).
+                let closest_node_id = closest_node_ref.node_id;
 
                 let atom = structure.get_atom(atom_id)?;
 
@@ -8922,13 +8932,13 @@ pub fn query_hovered_atom_info(
                 let overlapping_node_names: Vec<String> = per_node_hits
                     .iter()
                     .filter(|hit| {
-                        hit.node_id != closest_node_id
+                        hit.node_ref.node_id != closest_node_id
                             && (hit.distance - closest_distance).abs() < OVERLAP_EPSILON
                     })
                     .map(|hit| {
                         cad_instance
                             .structure_designer
-                            .get_node_display_name(hit.node_id)
+                            .get_node_display_name(hit.node_ref.node_id)
                     })
                     .collect();
 
@@ -9023,8 +9033,13 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
 
                 let closest = &hits[0];
 
-                // If the closest hit belongs to the active node, pass through.
-                if active_node_id == Some(closest.node_id) {
+                // Click-to-activate is a top-level-node surface (the Flutter
+                // disambiguation overlay / scroll-to-node are keyed by bare
+                // node id), and the scene only ever holds top-level refs
+                // today, so projecting to the bare id is lossless. Phase 2 of
+                // `doc/design_zero_ary_closure_body_display.md` filters the
+                // candidate set explicitly once body nodes can be displayed.
+                if active_node_id == Some(closest.node_ref.node_id) {
                     return APIViewportPickResult::ActiveNodeHit;
                 }
 
@@ -9039,7 +9054,7 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                 // If the active node is among the overlapping hits, treat as active node hit.
                 if overlapping
                     .iter()
-                    .any(|hit| active_node_id == Some(hit.node_id))
+                    .any(|hit| active_node_id == Some(hit.node_ref.node_id))
                 {
                     return APIViewportPickResult::ActiveNodeHit;
                 }
@@ -9048,9 +9063,9 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                 if overlapping.len() == 1 {
                     let node_name = cad_instance
                         .structure_designer
-                        .get_node_display_name(closest.node_id);
+                        .get_node_display_name(closest.node_ref.node_id);
                     return APIViewportPickResult::ActivateNode {
-                        node_id: closest.node_id,
+                        node_id: closest.node_ref.node_id,
                         node_name,
                     };
                 }
@@ -9059,10 +9074,10 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                 let candidates = overlapping
                     .iter()
                     .map(|hit| APICandidateNode {
-                        node_id: hit.node_id,
+                        node_id: hit.node_ref.node_id,
                         node_name: cad_instance
                             .structure_designer
-                            .get_node_display_name(hit.node_id),
+                            .get_node_display_name(hit.node_ref.node_id),
                     })
                     .collect();
 

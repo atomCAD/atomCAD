@@ -167,8 +167,11 @@ fn tessellate_non_lightweight_content(
     let highlighted_material = Material::new(&Vec3::new(0.0, 0.0, 1.0), 1.0, 0.0);
 
     // Iterate over all node data and tessellate based on output type
-    for (&node_id, node_data) in &scene.node_data {
-        let is_active = scene.active_node_id == Some(node_id);
+    for (node_ref, node_data) in &scene.node_data {
+        // The active node is a top-level concept (`active_node_id` on the
+        // top-level network), so a body node's entry is never "active" even
+        // when its numeric id matches — hence the `is_top_level()` guard.
+        let is_active = node_ref.is_top_level() && scene.active_node_id == Some(node_ref.node_id);
         let outside_material = if is_active {
             &active_outside_material
         } else {

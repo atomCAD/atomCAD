@@ -431,9 +431,10 @@ fn scene_with_ghost_atoms() -> StructureDesignerScene {
     s.set_atom_alpha(b, 0.3);
 
     let mut scene = StructureDesignerScene::new();
-    scene
-        .node_data
-        .insert(0, NodeSceneData::new(NodeOutput::Atomic(s, None)));
+    scene.node_data.insert(
+        rust_lib_flutter_cad::structure_designer::node_network::NodeRef::top(0),
+        NodeSceneData::new(NodeOutput::Atomic(s, None)),
+    );
     scene
 }
 

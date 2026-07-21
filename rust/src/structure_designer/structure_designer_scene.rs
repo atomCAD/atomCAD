@@ -160,14 +160,22 @@ impl NodeSceneData {
 
 // StructureDesignerScene is a struct that holds the scene to be rendered in the structure designer.
 pub struct StructureDesignerScene {
-    /// Per-node scene data, keyed by node ID (for visible nodes)
-    /// Each entry contains the node's output, geo_tree (if applicable), and evaluation metadata
-    pub node_data: HashMap<u64, NodeSceneData>,
+    /// Per-node scene data, keyed by the scope-aware [`NodeRef`] (for visible
+    /// nodes). Each entry contains the node's output, geo_tree (if applicable),
+    /// and evaluation metadata.
+    ///
+    /// The key is a `NodeRef` rather than a bare `u64` because per-body
+    /// `next_node_id` counters let a node inside a zone body and a top-level
+    /// node share the same numeric id — see
+    /// `doc/design_zero_ary_closure_body_display.md` §1. Production code only
+    /// ever creates `NodeRef::top(..)` keys today; scoped keys arrive with
+    /// Phase 2 (displayed nodes inside 0-ary closure bodies).
+    pub node_data: HashMap<NodeRef, NodeSceneData>,
 
     /// LRU cache for invisible node scene data
     /// Retains recently invisible nodes to enable ultra-fast visibility restoration
     /// Memory-bounded to prevent excessive memory usage
-    invisible_node_cache: MemoryBoundedLruCache<u64, NodeSceneData>,
+    invisible_node_cache: MemoryBoundedLruCache<NodeRef, NodeSceneData>,
 
     /// Gadget for the currently selected node (if any)
     /// Created after evaluation, not part of node evaluation output
@@ -262,9 +270,10 @@ impl StructureDesignerScene {
 
     /// Moves a node from visible (node_data) to invisible (cache)
     /// Returns true if the node was found and moved, false otherwise
-    pub fn move_to_cache(&mut self, node_id: u64) -> bool {
-        if let Some(node_data) = self.node_data.remove(&node_id) {
-            self.invisible_node_cache.insert(node_id, node_data);
+    pub fn move_to_cache(&mut self, node_ref: &NodeRef) -> bool {
+        if let Some(node_data) = self.node_data.remove(node_ref) {
+            self.invisible_node_cache
+                .insert(node_ref.clone(), node_data);
             true
         } else {
             false
@@ -273,9 +282,9 @@ impl StructureDesignerScene {
 
     /// Restores a node from invisible cache to visible node_data
     /// Returns true if the node was found in cache and restored, false otherwise
-    pub fn restore_from_cache(&mut self, node_id: u64) -> bool {
-        if let Some(node_data) = self.invisible_node_cache.pop(&node_id) {
-            self.node_data.insert(node_id, node_data);
+    pub fn restore_from_cache(&mut self, node_ref: &NodeRef) -> bool {
+        if let Some(node_data) = self.invisible_node_cache.pop(node_ref) {
+            self.node_data.insert(node_ref.clone(), node_data);
             true
         } else {
             false
@@ -283,8 +292,12 @@ impl StructureDesignerScene {
     }
 
     /// Updates the `displayed_pins` on a node in the invisible cache (if present).
-    pub fn update_cached_displayed_pins(&mut self, node_id: u64, displayed_pins: HashSet<i32>) {
-        if let Some(node_data) = self.invisible_node_cache.get_mut(&node_id) {
+    pub fn update_cached_displayed_pins(
+        &mut self,
+        node_ref: &NodeRef,
+        displayed_pins: HashSet<i32>,
+    ) {
+        if let Some(node_data) = self.invisible_node_cache.get_mut(node_ref) {
             node_data.displayed_pins = displayed_pins;
         }
     }
@@ -293,10 +306,10 @@ impl StructureDesignerScene {
     /// This ensures stale cached data is not restored when nodes become visible again
     ///
     /// # Arguments
-    /// * `node_ids` - Set of node IDs to invalidate from the cache
-    pub fn invalidate_cached_nodes(&mut self, node_ids: &HashSet<u64>) {
-        for &node_id in node_ids {
-            self.invisible_node_cache.pop(&node_id);
+    /// * `node_refs` - Set of scope-aware node refs to invalidate from the cache
+    pub fn invalidate_cached_nodes(&mut self, node_refs: &HashSet<NodeRef>) {
+        for node_ref in node_refs {
+            self.invisible_node_cache.pop(node_ref);
         }
     }
 
@@ -312,9 +325,9 @@ impl StructureDesignerScene {
 
     /// Gets the eval cache for a specific node (typically the selected node)
     /// Returns None if the node doesn't exist or has no eval cache
-    pub fn get_node_eval_cache(&self, node_id: u64) -> Option<&Box<dyn Any>> {
+    pub fn get_node_eval_cache(&self, node_ref: &NodeRef) -> Option<&Box<dyn Any>> {
         self.node_data
-            .get(&node_id)?
+            .get(node_ref)?
             .selected_node_eval_cache
             .as_ref()
     }
