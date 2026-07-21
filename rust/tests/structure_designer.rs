@@ -473,3 +473,6 @@ mod camera_settings_serialization_test;
 
 #[path = "structure_designer/structure_move_gadget_test.rs"]
 mod structure_move_gadget_test;
+
+#[path = "structure_designer/refresh_pipeline_test.rs"]
+mod refresh_pipeline_test;

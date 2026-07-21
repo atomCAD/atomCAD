@@ -347,7 +347,8 @@
       "Bash(perl -i -pe 's/`add_hydrogen`/`passivate`/g' src/structure_designer/nodes/AGENTS.md)",
       "PowerShell($out = gh issue view 411 --repo atomCAD/atomCAD --comments 2>&1 | Out-String; Write-Output \"EXIT=$LASTEXITCODE\"; Write-Output $out)",
       "PowerShell(gh *)",
-      "PowerShell(gh api *)"
+      "PowerShell(gh api *)",
+      "Bash(rustfmt --edition 2024 --check tests/structure_designer/refresh_pipeline_test.rs tests/structure_designer.rs)"
     ]
   }
 }
