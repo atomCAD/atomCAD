@@ -4523,6 +4523,20 @@ class ZoneView {
   /// HOFs, false for `closure`). Gates the context-menu group.
   final bool collapsable;
 
+  /// True when nodes **inside this body** can contribute to the 3D scene —
+  /// i.e. the body's whole enclosing chain (this HOF included) consists of
+  /// `closure` nodes with zero parameters. Computed top-down by
+  /// `build_zone_view` (`parent chain eligible && this node is a 0-ary
+  /// closure`), so the flag on the deepest hop is already cumulative.
+  ///
+  /// Flutter gates the per-pin eye toggles of body nodes on this and never
+  /// re-derives the arity rule — Rust is the single source of truth. Adding a
+  /// parameter to any closure in the chain clears it, and the body's stored
+  /// display flags go dormant (they are not cleared, so removing the
+  /// parameter brings the previous state back). See
+  /// `doc/design_zero_ary_closure_body_display.md` (issue #409).
+  final bool bodySceneEvaluable;
+
   const ZoneView({
     required this.zoneInputPins,
     required this.zoneOutputPins,
@@ -4533,6 +4547,7 @@ class ZoneView {
     required this.collapseMode,
     required this.collapsed,
     required this.collapsable,
+    required this.bodySceneEvaluable,
   });
 
   @override
@@ -4545,7 +4560,8 @@ class ZoneView {
       storedHeight.hashCode ^
       collapseMode.hashCode ^
       collapsed.hashCode ^
-      collapsable.hashCode;
+      collapsable.hashCode ^
+      bodySceneEvaluable.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -4560,5 +4576,6 @@ class ZoneView {
           storedHeight == other.storedHeight &&
           collapseMode == other.collapseMode &&
           collapsed == other.collapsed &&
-          collapsable == other.collapsable;
+          collapsable == other.collapsable &&
+          bodySceneEvaluable == other.bodySceneEvaluable;
 }

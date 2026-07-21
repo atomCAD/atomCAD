@@ -19003,8 +19003,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ZoneView dco_decode_zone_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ZoneView(
       zoneInputPins: dco_decode_list_output_pin_view(arr[0]),
       zoneOutputPins: dco_decode_list_input_pin_view(arr[1]),
@@ -19015,6 +19015,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       collapseMode: dco_decode_api_collapse_mode(arr[6]),
       collapsed: dco_decode_bool(arr[7]),
       collapsable: dco_decode_bool(arr[8]),
+      bodySceneEvaluable: dco_decode_bool(arr[9]),
     );
   }
 
@@ -23931,6 +23932,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_collapseMode = sse_decode_api_collapse_mode(deserializer);
     var var_collapsed = sse_decode_bool(deserializer);
     var var_collapsable = sse_decode_bool(deserializer);
+    var var_bodySceneEvaluable = sse_decode_bool(deserializer);
     return ZoneView(
         zoneInputPins: var_zoneInputPins,
         zoneOutputPins: var_zoneOutputPins,
@@ -23940,7 +23942,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         storedHeight: var_storedHeight,
         collapseMode: var_collapseMode,
         collapsed: var_collapsed,
-        collapsable: var_collapsable);
+        collapsable: var_collapsable,
+        bodySceneEvaluable: var_bodySceneEvaluable);
   }
 
   @protected
@@ -28133,5 +28136,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_api_collapse_mode(self.collapseMode, serializer);
     sse_encode_bool(self.collapsed, serializer);
     sse_encode_bool(self.collapsable, serializer);
+    sse_encode_bool(self.bodySceneEvaluable, serializer);
   }
 }

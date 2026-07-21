@@ -18,6 +18,8 @@ Each pin has a data type. Hovering over a pin shows its type; the pin color also
 
 Every output pin has its own **eye icon** next to it that toggles whether that pin's value is rendered in the 3D viewport. This is true for single-output and multi-output nodes alike — the eye icon lives on the pin row, not in the title bar. Multiple pins of the same node can be displayed simultaneously, and they are independent of wiring (you can display a pin whether or not it is wired to anything downstream).
 
+Nodes inside a higher-order function's or closure's *body region* are the one exception: they have no eye icon, because a body's nodes have no single value outside an invocation. The exception's exception is a **parameter-less closure**, whose body nodes do get working eyes — see [Viewing the contents of a parameter-less closure](#viewing-the-contents-of-a-parameter-less-closure).
+
 For multi-output nodes the pin name (`result`, `diff`, …) is shown next to each output pin. For single-output nodes the pin name is omitted (there is nothing to disambiguate); hovering still shows the name as a tooltip.
 
 When more than one output pin of a node is displayed, only the lowest-indexed displayed pin is **interactive** — i.e. only it receives clicks, hover, and selection from viewport tools. The other displayed pins are visual-only. For example, when both pins of `atom_edit` are displayed, atom selection happens against the `result` pin (with provenance mapping back to the diff under the hood).
@@ -252,6 +254,20 @@ The inline body is the *default* way to author an HOF's per-element computation,
 - The **`apply`** node calls a function value either to completion or partially — wire all the function's argument pins for a full call, or leave some unwired to receive a new function value with the remainder still to fill. Argument pins materialize from the wired `f`'s signature; no shape is set up-front. This is what makes a `Function` a genuinely callable value — for example, calling a function-factory subnetwork's `Function` output, or chaining several `apply` nodes to supply arguments one at a time.
 
 A subnetwork can also *return* a `closure` as its `Function` output, giving you a **function factory**: a subnetwork whose result is a function configured by its inputs.
+
+#### Viewing the contents of a parameter-less closure
+
+Nodes inside a body region normally have **no eye icons**: a body runs once per element (or per call), so its nodes have no single value to render — the `element` / `acc` value they read only exists during an invocation.
+
+A **`Custom` closure with zero parameters** (a thunk) is the exception. With no parameters there is nothing unknown about its body, so its nodes *can* be rendered like top-level ones, and they get working per-pin eye icons:
+
+- Toggle any eye inside the body and that pin's value appears in the 3D viewport, exactly as it would at the top level — geometry, atoms, hover values, and error badges all work.
+- **Capture wires stay live.** A body node fed by a capture from the outer scope renders with that source's current value; edit the captured `int` and the body's output updates.
+- This applies **recursively**, but only through parameter-less closures: a 0-ary closure nested inside another 0-ary closure gets eyes; one nested inside a `map` body (or inside a closure that has parameters) does not, because the enclosing `element` is still unknown.
+- Displayed body geometry is *visible* but not click-activatable — clicking it in the viewport does not activate the body node the way clicking top-level geometry does.
+- Collapsing a body only hides it on the network canvas; its displayed pins keep rendering in the 3D viewport.
+
+**Adding a parameter to a closure hides the eyes** inside its body — and inside every body nested under it — and its displayed pins stop rendering, because the body is no longer fully determined. The display state is only made **dormant**, not discarded: remove the parameter again (or undo the change) and the eyes come back with exactly the pins you had shown. The same state is saved with the design, so it survives a save/load round-trip either way.
 
 Because a `closure` and a custom node instance used as a function value are two representations of the same function-with-captures, you can convert between them at any time: right-click a `closure` to **Extract to Network…** (lift its body into a reusable named subnetwork), or right-click a custom node instance used as a function to **Convert to Closure** (pull its body inline). See [Convert between a closure and a named network](./ui.md#manipulating-nodes-and-wires) for details.
 

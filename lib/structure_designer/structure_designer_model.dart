@@ -1519,9 +1519,29 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Resolve a node by id **within its scope**. `scopeChain` is the chain of
+  /// zone-owning node ids down to the body the node lives in; empty = the
+  /// top-level network. Returns `null` if any hop is missing or is not a
+  /// zone-owning node.
+  NodeView? _resolveNodeInScope(BigInt nodeId, List<BigInt> scopeChain) {
+    final view = nodeNetworkView;
+    if (view == null) return null;
+    Map<BigInt, NodeView> nodes = view.nodes;
+    for (final hofId in scopeChain) {
+      final zone = nodes[hofId]?.zone;
+      if (zone == null) return null;
+      nodes = zone.nodes;
+    }
+    return nodes[nodeId];
+  }
+
   void toggleNodeDisplay(BigInt nodeId, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
-    final node = nodeNetworkView!.nodes[nodeId];
+    // Resolve through the scope chain: a body node's numeric id routinely
+    // collides with a top-level one (per-body `next_node_id` counters), so a
+    // bare `nodes[nodeId]` lookup would read the wrong node's `displayed` flag
+    // and toggle the body node to the wrong state.
+    final node = _resolveNodeInScope(nodeId, scopeChain);
     if (node == null) return;
 
     structure_designer_api.setNodeDisplay(

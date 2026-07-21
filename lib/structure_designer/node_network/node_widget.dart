@@ -1383,14 +1383,18 @@ class NodeWidget extends StatelessWidget {
     // pin for hit testing either. See `doc/design_node_execution.md`
     // ("Display semantics" of the Unit type).
     final bool isUnitPin = pin.effectiveDataType == 'Unit';
-    // Zone-body display suppression. Nodes inside an HOF/closure body (non-empty
-    // scope chain) can never contribute to the 3D scene — scene generation only
-    // iterates the top-level network's `displayed_nodes`, and the Rust
-    // `toggle_output_pin_display` API is inert for non-empty scope paths. So the
-    // eye would be a dead control: hide it entirely. The pin dot and its hover
-    // value (last evaluated value, from `node.outputPinStrings`) are kept.
-    final bool isBodyNode = scopeChain.isNotEmpty;
-    final bool showEyeArea = !isUnitPin && !isBodyNode;
+    // Zone-body display suppression, relaxed for 0-ary closures (issue #409).
+    // A node inside a body can contribute to the 3D scene only when its whole
+    // enclosing chain is parameter-less `closure` nodes; anywhere else the eye
+    // would be a dead control, so hide it entirely (the pin dot and its hover
+    // value are kept either way). Rust owns the rule and hands it over as
+    // `ZoneView.bodySceneEvaluable` — never re-derive the arity check here.
+    // Adding a parameter to a closure in the chain therefore makes the eyes
+    // vanish on the next refresh, and removing it brings them back along with
+    // the body's remembered (dormant, not cleared) display flags. See
+    // `doc/design_zero_ary_closure_body_display.md`.
+    final bool showEyeArea =
+        !isUnitPin && isScopeSceneEvaluable(rootView, scopeChain);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -1401,7 +1405,8 @@ class NodeWidget extends StatelessWidget {
             onTap: () {
               final model =
                   Provider.of<StructureDesignerModel>(context, listen: false);
-              model.toggleOutputPinDisplay(node.id, pin.index);
+              model.toggleOutputPinDisplay(node.id, pin.index,
+                  scopeChain: scopeChain);
             },
             child: Icon(
               isPinDisplayed ? Icons.visibility : Icons.visibility_off,

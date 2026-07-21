@@ -97,6 +97,33 @@ class LayoutCache {
   }
 }
 
+/// True when a node living at [scopeChain] can contribute to the 3D scene.
+///
+/// The top-level scope (empty chain) always can. A body node can only when its
+/// whole enclosing chain consists of parameter-less (0-ary) `closure` nodes —
+/// with no parameters there is no unknown iteration value, so the body's nodes
+/// are fully determined and evaluate against the live network stack like any
+/// top-level node. Anything else (a `map` / `filter` / `fold` / `foreach` body,
+/// or a closure with parameters) makes the whole subtree unrenderable.
+///
+/// The rule itself is **never re-derived here**: Rust computes it top-down in
+/// `build_zone_view` and hands it over as `ZoneView.bodySceneEvaluable`, which
+/// is already cumulative through the chain — so this walk only has to reach the
+/// deepest hop. Returns `false` for a chain that no longer resolves (e.g. a
+/// closure deleted mid-frame). See
+/// `doc/design_zero_ary_closure_body_display.md` (issue #409).
+bool isScopeSceneEvaluable(NodeNetworkView root, List<BigInt> scopeChain) {
+  if (scopeChain.isEmpty) return true;
+  Map<BigInt, NodeView> nodes = root.nodes;
+  ZoneView? zone;
+  for (final hofId in scopeChain) {
+    zone = nodes[hofId]?.zone;
+    if (zone == null) return false;
+    nodes = zone.nodes;
+  }
+  return zone!.bodySceneEvaluable;
+}
+
 /// A body whose rendered screen-space height falls below this threshold is
 /// collapsed: its content is hidden and the HOF renders a placeholder. The
 /// threshold is set so an HOF can still receive captures (its outer chrome
@@ -168,8 +195,8 @@ class ScopeResolver {
       if (zone == null) continue;
       final chain = [node.id];
       final hofPos = apiVec2ToOffset(node.position);
-      final bodyTopLeftLogical = hofPos +
-          Offset(hofBodyLeftOffset(node), BASE_HOF_BODY_TOP_OFFSET);
+      final bodyTopLeftLogical =
+          hofPos + Offset(hofBodyLeftOffset(node), BASE_HOF_BODY_TOP_OFFSET);
       final origin = logicalToScreen(bodyTopLeftLogical, panOffset, scale);
       layout.bodyOrigins[chain] = origin;
       _placeChildBodies(zone, chain, origin);
@@ -275,7 +302,8 @@ class ScopeResolver {
     final zone = node.zone;
     if (zone == null) return Size.zero;
     final chain = [...nodeScopeChain, node.id];
-    return layout.lookupSize(chain) ?? Size(zone.storedWidth, zone.storedHeight);
+    return layout.lookupSize(chain) ??
+        Size(zone.storedWidth, zone.storedHeight);
   }
 
   /// HOF widget footprint at [nodeScopeChain] in logical pixels (pre-scale).
@@ -388,7 +416,8 @@ class ScopeResolver {
     const padding = BASE_HOF_BODY_BOTTOM_PADDING;
     final contentWidth = maxRight + padding;
     final contentHeight = maxBottom + padding;
-    final width = contentWidth > zone.storedWidth ? contentWidth : zone.storedWidth;
+    final width =
+        contentWidth > zone.storedWidth ? contentWidth : zone.storedWidth;
     final height =
         contentHeight > zone.storedHeight ? contentHeight : zone.storedHeight;
     layout.bodySizes[chain] = Size(width, height);
@@ -812,8 +841,8 @@ class ScopeResolver {
         final vertOffset = NODE_VERT_WIRE_OFFSET +
             (pin.pinIndex.toDouble() + 0.5) * NODE_VERT_WIRE_OFFSET_PER_PARAM;
         final logicalPos = nodePos +
-            Offset(hofBodyLeftOffset(node) + PIN_HIT_AREA_WIDTH / 2,
-                vertOffset);
+            Offset(
+                hofBodyLeftOffset(node) + PIN_HIT_AREA_WIDTH / 2, vertOffset);
         final dataType = pin.pinIndex < z.zoneInputPins.length
             ? z.zoneInputPins[pin.pinIndex].effectiveDataType
             : pin.dataType;

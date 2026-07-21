@@ -103,6 +103,14 @@ The `functionPin` is a **real, working function value** (`doc/design_function_pi
 
 Note that closures' `Function`-typed pins (the `closure` node's output, the HOFs' optional `f` input, the `apply` node's `f` input) are **ordinary** `externalInput` / `externalOutput` pins that happen to carry a `Function` data type (amber color) — they are *not* the `functionPin` kind, even though they too carry `Function` values. Dragging a `closure` output into an `f` input flows through the normal pin-to-pin path; Rust's `can_be_converted_to` does the structural compatibility check. See `doc/design_closures.md`.
 
+### Body-node visibility eyes (0-ary closures)
+
+Body nodes normally have **no eye icon** — `_buildOutputPin` hides the eye area for anything in a body. The one exception is a body whose whole enclosing chain is parameter-less (`Custom`, zero params) `closure` nodes: such a body's nodes *are* scene-evaluable and get working per-pin eyes, whose handlers pass `scopeChain` through to `toggleOutputPinDisplay` (issue #409, `doc/design_zero_ary_closure_body_display.md`).
+
+**Flutter never re-derives the arity rule.** Rust folds it top-down in `build_zone_view` and publishes it as `ZoneView.bodySceneEvaluable` — already cumulative through the chain, so the free function `isScopeSceneEvaluable(root, scopeChain)` (`scope_resolver.dart`) only walks to the deepest hop and reads that one flag. It shares its definition (`displayed_node_refs::is_body_scene_evaluable`) with the scene collection that decides which bodies actually render, so eyes can't drift from what the viewport shows. Adding a parameter to any closure in the chain clears the flag and the eyes vanish; the body's stored display flags are **dormant, not cleared**, so removing the parameter brings the previous state back.
+
+Body geometry is visible in the viewport but **not click-activatable** (`viewport_pick` filters to top-level refs — the disambiguation overlay / `scrollToNode` / solo-hide are bare-node-id keyed). Collapse is a canvas concern only: a collapsed body keeps rendering its displayed pins in 3D, the eyes are just not on screen.
+
 ### Active scope chain
 
 `StructureDesignerModel.activeScopeChain: List<BigInt>` is the body that keyboard shortcuts (Delete, Ctrl+C / V / X / D) operate on. Clicking on a body's interior, on a body-internal node, or right-clicking inside a body sets the active scope. Clicking on the top-level canvas resets it to `const []`. The Rust side does not mirror this — every mutation API receives `scope_path` explicitly from the call site.

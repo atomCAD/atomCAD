@@ -235,6 +235,19 @@ pub struct ZoneView {
     /// Whether this node type supports the collapse override (true for the four
     /// HOFs, false for `closure`). Gates the context-menu group.
     pub collapsable: bool,
+    /// True when nodes **inside this body** can contribute to the 3D scene —
+    /// i.e. the body's whole enclosing chain (this HOF included) consists of
+    /// `closure` nodes with zero parameters. Computed top-down by
+    /// `build_zone_view` (`parent chain eligible && this node is a 0-ary
+    /// closure`), so the flag on the deepest hop is already cumulative.
+    ///
+    /// Flutter gates the per-pin eye toggles of body nodes on this and never
+    /// re-derives the arity rule — Rust is the single source of truth. Adding a
+    /// parameter to any closure in the chain clears it, and the body's stored
+    /// display flags go dormant (they are not cleared, so removing the
+    /// parameter brings the previous state back). See
+    /// `doc/design_zero_ary_closure_body_display.md` (issue #409).
+    pub body_scene_evaluable: bool,
 }
 
 /// Flutter-facing mirror of [`CollapseMode`]. The user's choice for whether a

@@ -491,16 +491,34 @@ fn api_to_type_args(type_args: &[APIDataType]) -> Vec<DataType> {
 ///
 /// Cross-scope wires (captures, iteration-value references, body-return wires)
 /// are deferred to U5 — U4 surfaces only wires confined to the body's scope.
+///
+/// `chain_scene_evaluable` is the *enclosing* chain's eligibility (see
+/// [`build_node_view`]); this body's own flag folds in one more hop.
 fn build_zone_view(
     node: &crate::structure_designer::node_network::Node,
     node_type: &crate::structure_designer::node_type::NodeType,
     cad_instance: &crate::api::api_common::CADInstance,
     scope_path: &[u64],
+    chain_scene_evaluable: bool,
 ) -> Option<ZoneView> {
     if !node_type.has_zone() {
         return None;
     }
     let body = node.zone.as_ref()?;
+
+    // One more hop of the eligibility rule: nodes in *this* body are
+    // scene-evaluable iff everything above was and this node is a 0-ary
+    // `closure`. Folding it top-down here (rather than re-walking the scope
+    // path per node) makes the flag on the deepest hop already cumulative. The
+    // shared helper is the same one `collect_displayed_node_refs` descends
+    // with, so the eyes Flutter renders can't drift from the bodies the scene
+    // actually evaluates. See `doc/design_zero_ary_closure_body_display.md`.
+    let body_scene_evaluable =
+        crate::structure_designer::displayed_node_refs::is_body_scene_evaluable(
+            chain_scene_evaluable,
+            node,
+            &cad_instance.structure_designer.node_type_registry,
+        );
 
     // From the body's perspective zone-input pins are sources (carry values
     // into the body), so we reuse the OutputPinView shape. The body-side
@@ -542,7 +560,13 @@ fn build_zone_view(
     body_scope_path.push(node.id);
     let mut nodes = HashMap::new();
     for (body_node_id, body_node) in body.nodes.iter() {
-        if let Some(view) = build_node_view(body_node, body, cad_instance, &body_scope_path) {
+        if let Some(view) = build_node_view(
+            body_node,
+            body,
+            cad_instance,
+            &body_scope_path,
+            body_scene_evaluable,
+        ) {
             nodes.insert(*body_node_id, view);
         }
     }
@@ -584,6 +608,7 @@ fn build_zone_view(
         collapsable: crate::structure_designer::node_network::collapsable_type_name(
             &node.node_type_name,
         ),
+        body_scene_evaluable,
     })
 }
 
@@ -593,11 +618,18 @@ fn build_zone_view(
 /// recursively for nodes inside an HOF's body (Phase U4). Returns `None` if
 /// the registry can't resolve the node's type (kept as `Option` to mirror the
 /// existing top-level path's behavior).
+///
+/// `chain_scene_evaluable` says whether nodes at `scope_path` can contribute to
+/// the 3D scene — `true` at the top level, and thereafter carried down one hop
+/// at a time by [`build_zone_view`]. It is *this* node's scope's flag, not this
+/// node's body's; the body's own flag is derived one level deeper and surfaces
+/// on `ZoneView::body_scene_evaluable`.
 fn build_node_view(
     node: &crate::structure_designer::node_network::Node,
     node_network: &crate::structure_designer::node_network::NodeNetwork,
     cad_instance: &crate::api::api_common::CADInstance,
     scope_path: &[u64],
+    chain_scene_evaluable: bool,
 ) -> Option<NodeView> {
     let node_type = cad_instance
         .structure_designer
@@ -766,7 +798,13 @@ fn build_node_view(
         })
         .unwrap_or_default();
 
-    let zone = build_zone_view(node, node_type, cad_instance, scope_path);
+    let zone = build_zone_view(
+        node,
+        node_type,
+        cad_instance,
+        scope_path,
+        chain_scene_evaluable,
+    );
 
     let derived_shape = build_derived_shape_view(node, node_network, cad_instance);
 
@@ -947,7 +985,10 @@ pub fn get_node_network_view() -> Option<NodeNetworkView> {
 
                 let mut nodes = HashMap::new();
                 for (node_id, node) in node_network.nodes.iter() {
-                    if let Some(view) = build_node_view(node, node_network, cad_instance, &[]) {
+                    // The top-level network is trivially scene-evaluable; the
+                    // flag narrows as `build_zone_view` descends into bodies.
+                    if let Some(view) = build_node_view(node, node_network, cad_instance, &[], true)
+                    {
                         nodes.insert(*node_id, view);
                     }
                 }

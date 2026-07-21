@@ -25,14 +25,20 @@ Key methods:
 - `evaluate_all_outputs(network_stack, node_id, ...)` - Returns full `EvalOutput` (all pins) from a single `eval()` call
 - `evaluate_arg()` / `evaluate_arg_required()` - Extract input pin values with type conversion
 - `evaluate_or_default(...)` - Optional input with fallback literal
-- `generate_scene()` - Top-level entry point producing the full scene
+- `generate_scene()` - Top-level entry point producing the scene data for one displayed node; delegates to `generate_scene_scoped` with `NodeRef::top(id)`
+- `generate_scene_scoped(network_name, &NodeRef, ...)` - Scope-aware variant: the displayed node may live inside a **0-ary closure body**
 
 Handles both built-in nodes (call `NodeData::eval()`) and custom node types (recursive network evaluation: `evaluate`/`evaluate_all_outputs` push the sub-network onto the stack and recurse into its return node).
+
+**`generate_scene_scoped` and the frameless body evaluation.** For a non-empty `NodeRef::scope_path` it walks the path from the top-level network down through each closure's `zone`, pushing one `NetworkStackElement { node_network: body, node_id: owner_id }` **and** one `push_eval_scope(owner_id)` per hop (pop before building the `NodeSceneData` — the struct literal `.take()`s the eval cache). Captures then resolve through the ordinary `resolve_incoming_wire` stack walk, and errors / hover strings key under the right `NodeRef`.
+
+Crucially it pushes **no zone frame**. That is the whole reason the feature is restricted to chains of 0-ary closures, which cannot legally hold `ZoneInput` wires — and it is why `current_zone_input` (which panicked) was replaced by **`try_current_zone_input(hof_id, pin_index) -> Option<&NetworkResult>`**. Three call sites use it: `resolve_incoming_wire` plus two in `zone_closure.rs` (`resolve_capture_source` and the zone-output resolver). A missing frame yields a localized `NetworkResult::Error("zone input referenced outside an invocation")` instead of a crash, because the eligibility guarantee is *derived* (it rests on validation having run and on a fresh `custom_node_type` cache — both known-fragile). **Do not reintroduce a panicking/`debug_assert`ing variant**: the frameless scene path shares this code, so an assert would fire on a legitimate path. See `doc/design_zero_ary_closure_body_display.md` §3.
 
 ## NetworkEvaluationContext
 
 Per-pass scratch state threaded through every `evaluate*` call. Notable fields:
-- `node_errors: HashMap<u64, String>`, `node_output_strings: HashMap<u64, Vec<String>>` — written during the pass and read by `generate_scene` to populate `NodeSceneData`.
+- `node_errors: HashMap<NodeRef, String>`, `node_output_strings: HashMap<NodeRef, Vec<String>>` — written during the pass and read by `generate_scene` to populate `NodeSceneData`. Keyed by **`NodeRef`, not bare id**: body nodes have per-body `next_node_id` counters, so a body node and a top-level node routinely collide numerically. The scope half of the key comes from `eval_scope_path` (below).
+- `eval_scope_path: Vec<u64>` — the scope the pass is currently evaluating in, maintained by `push_eval_scope` / `pop_eval_scope` (always paired) at every body / closure-invocation entry: `run_closure_once`, the eager-HOF body contexts, and `generate_scene_scoped`'s per-hop descent.
 - `selected_node_eval_cache: Option<Box<dyn Any>>` — the active node's eval-cache slot (used by gadgets).
 - `top_level_parameters: HashMap<String, NetworkResult>` — CLI/headless parameter injection.
 - `use_vdw_cutoff: bool` — minimization preference.

@@ -903,6 +903,8 @@ Exposes its inline zone body as a first-class `Function` value on its output pin
 
 The body is authored exactly like an HOF body: click into the region to make it the active scope, add nodes, and drag capture wires across the boundary. Captures are ordinary capture wires drawn into the body — they are *not* part of the shape, so the kind/type editor only ever describes parameters and result.
 
+**Viewing the body (0-parameter closures only).** Body nodes normally have no visibility eye icons, but a **0-parameter `Custom` closure** is the exception: with no parameters its body is fully determined, so its nodes get working per-pin eyes and render in the 3D viewport like top-level nodes. Adding a parameter hides the eyes again and stops the body rendering; the display state is remembered (dormant, not discarded) and returns if you remove the parameter. See [Viewing the contents of a parameter-less closure](../node_networks.md#viewing-the-contents-of-a-parameter-less-closure).
+
 A `closure` can be promoted into a reusable named subnetwork (and the reverse) via the right-click **Extract to Network…** / **Convert to Closure** operations — see [Convert between a closure and a named network](../ui.md#manipulating-nodes-and-wires).
 
 ## apply

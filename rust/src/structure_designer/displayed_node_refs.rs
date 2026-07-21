@@ -48,6 +48,29 @@ pub fn is_zero_ary_closure(node: &Node, registry: &NodeTypeRegistry) -> bool {
         .is_some_and(|nt| nt.zone_input_pins.is_empty())
 }
 
+/// True iff nodes inside `node`'s **body** are scene-evaluable, given whether
+/// the chain enclosing `node` already is (`parent_chain_eligible`).
+///
+/// This is the eligibility rule expressed as a single top-down fold step, and
+/// it has two callers that must never diverge:
+///
+/// * [`collect_recursive`] — decides which bodies contribute displayed nodes to
+///   the scene (it descends only from an already-eligible scope, so it folds
+///   from `true`).
+/// * `api::structure_designer::build_zone_view` — computes
+///   `ZoneView::body_scene_evaluable`, the flag Flutter gates the body nodes'
+///   eye toggles on.
+///
+/// If they disagreed the UI would offer eyes for nodes that never render (or
+/// hide eyes for nodes that do), so both go through here.
+pub fn is_body_scene_evaluable(
+    parent_chain_eligible: bool,
+    node: &Node,
+    registry: &NodeTypeRegistry,
+) -> bool {
+    parent_chain_eligible && is_zero_ary_closure(node, registry)
+}
+
 /// Walk `scope_path` from `root` and return the body network it addresses.
 /// An empty path returns `root`. `None` if any hop is missing or is not a
 /// zone-owning node.
@@ -125,12 +148,13 @@ fn collect_recursive(
 
     // Descend only through 0-ary closures — any other zone owner (map / filter
     // / fold / foreach, or a closure with parameters) blocks the chain, and
-    // so does everything nested below it.
+    // so does everything nested below it. We only ever recurse from an
+    // already-eligible scope, hence the `true`.
     for (node_id, node) in &network.nodes {
         let Some(body) = node.zone.as_deref() else {
             continue;
         };
-        if !is_zero_ary_closure(node, registry) {
+        if !is_body_scene_evaluable(true, node, registry) {
             continue;
         }
         scope_path.push(*node_id);

@@ -148,7 +148,7 @@ Design doc: `doc/design_record_types.md`.
 - **Eye icon** is per output pin, not in the title bar. Each output pin row has its own eye toggle.
 - **Multi-output nodes** (e.g. atom_edit) show pin names ("result", "diff") next to each output pin. Single-output nodes do not show pin names.
 - **`NodeView.output_pins: Vec<OutputPinView>`** and **`displayed_pins: Vec<i32>`** from the Rust API.
-- **`toggleOutputPinDisplay(nodeId, pinIndex)`** model method toggles individual pin visibility.
+- **`toggleOutputPinDisplay(nodeId, pinIndex, {scopeChain})`** model method toggles individual pin visibility. Pass the node's `scopeChain` — a body node's id collides with a top-level one, and body pins are togglable inside a parameter-less closure (see `node_network/AGENTS.md` → "Body-node visibility eyes"). Same for `toggleNodeDisplay`, which resolves the node through `_resolveNodeInScope` rather than a bare `nodes[nodeId]` lookup.
 - **Wire rendering:** output pin y-offset is per-pin (same formula as input pins). `getNodeSize()` / `estimate_node_height()` use `max(inputs, outputs, minHeight)`.
 - **`OutputPinView { name, data_type, index }`** API type for each output pin.
 

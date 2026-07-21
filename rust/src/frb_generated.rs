@@ -17390,6 +17390,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_collapseMode = <crate::api::structure_designer::structure_designer_api_types::APICollapseMode>::sse_decode(deserializer);
         let mut var_collapsed = <bool>::sse_decode(deserializer);
         let mut var_collapsable = <bool>::sse_decode(deserializer);
+        let mut var_bodySceneEvaluable = <bool>::sse_decode(deserializer);
         return crate::api::structure_designer::structure_designer_api_types::ZoneView {
             zone_input_pins: var_zoneInputPins,
             zone_output_pins: var_zoneOutputPins,
@@ -17400,6 +17401,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             collapse_mode: var_collapseMode,
             collapsed: var_collapsed,
             collapsable: var_collapsable,
+            body_scene_evaluable: var_bodySceneEvaluable,
         };
     }
 }
@@ -22828,6 +22830,7 @@ impl flutter_rust_bridge::IntoDart
             self.collapse_mode.into_into_dart().into_dart(),
             self.collapsed.into_into_dart().into_dart(),
             self.collapsable.into_into_dart().into_dart(),
+            self.body_scene_evaluable.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -26752,6 +26755,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         );
         <bool>::sse_encode(self.collapsed, serializer);
         <bool>::sse_encode(self.collapsable, serializer);
+        <bool>::sse_encode(self.body_scene_evaluable, serializer);
     }
 }
 

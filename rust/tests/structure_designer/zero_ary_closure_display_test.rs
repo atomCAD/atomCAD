@@ -22,7 +22,7 @@
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::displayed_node_refs::{
-    collect_displayed_node_refs, is_eligible_chain, is_zero_ary_closure,
+    collect_displayed_node_refs, is_body_scene_evaluable, is_eligible_chain, is_zero_ary_closure,
 };
 use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_network::{NodeRef, SourcePin};
@@ -455,6 +455,156 @@ fn collect_displayed_node_refs_skips_ineligible_bodies() {
         !collected.contains(&ids.tag_ref()),
         "a body under a parameterized closure must contribute nothing"
     );
+}
+
+// ============================================================================
+// `ZoneView.body_scene_evaluable` (Phase 4 — the flag Flutter gates eyes on)
+// ============================================================================
+
+/// Mirror of the top-down fold `api::…::build_zone_view` performs while
+/// recursing through nested bodies: start `true` at the top level and apply one
+/// `is_body_scene_evaluable` hop per zone owner. Returns the flag each body's
+/// `ZoneView` would carry, keyed by body scope chain.
+///
+/// `build_zone_view` itself is unreachable from a test — it needs a
+/// `CADInstance`, which owns a GPU-initialised `Renderer` — so this reproduces
+/// its recursion over the same shared helper the production code calls.
+fn fold_body_scene_evaluable(
+    network: &rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+    registry: &NodeTypeRegistry,
+    chain_eligible: bool,
+    scope_path: &mut Vec<u64>,
+    out: &mut Vec<(Vec<u64>, bool)>,
+) {
+    for (node_id, node) in &network.nodes {
+        let Some(body) = node.zone.as_deref() else {
+            continue;
+        };
+        let body_eligible = is_body_scene_evaluable(chain_eligible, node, registry);
+        scope_path.push(*node_id);
+        out.push((scope_path.clone(), body_eligible));
+        fold_body_scene_evaluable(body, registry, body_eligible, scope_path, out);
+        scope_path.pop();
+    }
+}
+
+fn body_scene_evaluable_flags(designer: &StructureDesigner) -> Vec<(Vec<u64>, bool)> {
+    let network = designer.get_active_node_network().expect("active network");
+    let mut out = Vec::new();
+    fold_body_scene_evaluable(
+        network,
+        &designer.node_type_registry,
+        true,
+        &mut Vec::new(),
+        &mut out,
+    );
+    out
+}
+
+fn flag_for(flags: &[(Vec<u64>, bool)], chain: &[u64]) -> bool {
+    flags
+        .iter()
+        .find(|(c, _)| c.as_slice() == chain)
+        .unwrap_or_else(|| panic!("no ZoneView for chain {chain:?}"))
+        .1
+}
+
+/// The flag the view builder folds top-down must agree with the whole-chain
+/// walk the scene collection uses. If they diverged the UI would offer eyes for
+/// nodes that never render (or hide eyes for nodes that do).
+#[test]
+fn body_scene_evaluable_agrees_with_the_chain_rule_at_every_depth() {
+    let mut designer = setup_designer_with_network("main");
+
+    // 0-ary > 0-ary: both eligible.
+    let outer = add_custom_closure(&mut designer, &[], DVec2::ZERO, vec![], DataType::Float);
+    let inner = add_custom_closure(
+        &mut designer,
+        &[outer],
+        DVec2::ZERO,
+        vec![],
+        DataType::Float,
+    );
+
+    // map > 0-ary: the `map` hop breaks the chain for everything below it.
+    let map = designer.add_node("map", DVec2::new(0.0, 400.0));
+    designer.set_node_network_data_scoped(
+        &[],
+        map,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    let under_map = add_custom_closure(&mut designer, &[map], DVec2::ZERO, vec![], DataType::Float);
+    designer.validate_active_network();
+
+    let flags = body_scene_evaluable_flags(&designer);
+    let network = designer.get_active_node_network().unwrap();
+    let registry = &designer.node_type_registry;
+
+    for chain in [
+        vec![outer],
+        vec![outer, inner],
+        vec![map],
+        vec![map, under_map],
+    ] {
+        assert_eq!(
+            flag_for(&flags, &chain),
+            is_eligible_chain(network, registry, &chain),
+            "ZoneView.body_scene_evaluable must match is_eligible_chain for {chain:?}"
+        );
+    }
+
+    // Spot-check the expected values so a rule that broke *both* sides in the
+    // same direction still fails.
+    assert!(flag_for(&flags, &[outer]));
+    assert!(flag_for(&flags, &[outer, inner]));
+    assert!(!flag_for(&flags, &[map]));
+    assert!(!flag_for(&flags, &[map, under_map]));
+}
+
+/// Adding a parameter clears the flag for the closure's whole body subtree
+/// (so Flutter drops the eyes); removing it brings the flag back.
+#[test]
+fn body_scene_evaluable_clears_on_added_param_and_returns_when_removed() {
+    let mut designer = setup_designer_with_network("main");
+    let outer = add_custom_closure(&mut designer, &[], DVec2::ZERO, vec![], DataType::Float);
+    let inner = add_custom_closure(
+        &mut designer,
+        &[outer],
+        DVec2::ZERO,
+        vec![],
+        DataType::Float,
+    );
+    designer.validate_active_network();
+
+    let flags = body_scene_evaluable_flags(&designer);
+    assert!(flag_for(&flags, &[outer]));
+    assert!(flag_for(&flags, &[outer, inner]));
+
+    // Give the OUTER closure a parameter: the inner body is two hops down and
+    // must lose the flag too.
+    set_closure_arity(
+        &mut designer,
+        &[],
+        outer,
+        vec![DataType::Int],
+        DataType::Float,
+    );
+    let flags = body_scene_evaluable_flags(&designer);
+    assert!(!flag_for(&flags, &[outer]));
+    assert!(
+        !flag_for(&flags, &[outer, inner]),
+        "an ineligible ancestor must clear the whole nested subtree's flag"
+    );
+
+    // Back to 0-ary: both return. (The body's stored display flags were never
+    // cleared, so the eyes come back showing the remembered state.)
+    set_closure_arity(&mut designer, &[], outer, vec![], DataType::Float);
+    let flags = body_scene_evaluable_flags(&designer);
+    assert!(flag_for(&flags, &[outer]));
+    assert!(flag_for(&flags, &[outer, inner]));
 }
 
 // ============================================================================
