@@ -156,6 +156,27 @@ enum APIArgumentKind {
   ;
 }
 
+/// Stored shape of an `array_append` node: the element type shared by the
+/// `array` input pin (`Array[T]`), the `element` input pin (`T`) and the
+/// output pin (`Array[T]`).
+class APIArrayAppendData {
+  final APIDataType elementType;
+
+  const APIArrayAppendData({
+    required this.elementType,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrayAppendData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType;
+}
+
 class APIArrayAtData {
   final APIDataType elementType;
 
@@ -179,6 +200,26 @@ class APIArrayAtData {
           runtimeType == other.runtimeType &&
           elementType == other.elementType &&
           index == other.index;
+}
+
+/// Stored shape of an `array_concat` node: the element type shared by both
+/// input pins and the output pin (all `Array[T]`).
+class APIArrayConcatData {
+  final APIDataType elementType;
+
+  const APIArrayConcatData({
+    required this.elementType,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrayConcatData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType;
 }
 
 /// One stored element of an `array` node, shaped for the element list in
@@ -225,6 +266,26 @@ class APIArrayElement {
           runtimeType == other.runtimeType &&
           fields == other.fields &&
           stale == other.stale;
+}
+
+/// Stored shape of an `array_len` node: the element type of the `array` input
+/// pin (`Array[T]`). The output pin is always `Int` regardless.
+class APIArrayLenData {
+  final APIDataType elementType;
+
+  const APIArrayLenData({
+    required this.elementType,
+  });
+
+  @override
+  int get hashCode => elementType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIArrayLenData &&
+          runtimeType == other.runtimeType &&
+          elementType == other.elementType;
 }
 
 /// The `array` node's editable state: its `element_type` plus one row per

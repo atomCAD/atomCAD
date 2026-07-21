@@ -402,6 +402,7 @@ New file `rust/tests/structure_designer/array_len_test.rs`:
 4. [ ] Snapshot + insta review.
 5. [ ] Text-format and `.cnnd` roundtrip cases.
 6. [ ] Reference-guide entry in `math_programming.md`.
+7. [x] API + editor for the `element_type` property — **missed in the original phase, shipped in Phase 9 below**.
 
 ---
 
@@ -581,6 +582,7 @@ New file `rust/tests/structure_designer/array_concat_test.rs`:
 4. [ ] Snapshot + insta review.
 5. [ ] Text-format and `.cnnd` roundtrip cases.
 6. [ ] Reference-guide entry in `math_programming.md`.
+7. [x] API + editor for the `element_type` property — **missed in the original phase, shipped in Phase 9 below**.
 
 ---
 
@@ -758,9 +760,72 @@ Plus:
 5. [ ] Snapshot in `node_snapshot_test.rs` + `cargo insta review`.
 6. [ ] Text-format and `.cnnd` roundtrip cases.
 7. [ ] Reference-guide entry for `array_append` in `doc/reference_guide/nodes/math_programming.md` (next to `array_concat`).
-8. [ ] No FRB regen (no API surface change beyond new node type).
+8. [x] API + editor for the `element_type` property (`APIArrayAppendData`, `get_/set_array_append_data`, `ArrayElementTypeEditor`) — **missed in the original phase, shipped in Phase 9 below**.
 
 ---
+
+## Phase 9 — property-panel editors for `array_len` / `array_concat` / `array_append` (follow-up)
+
+### The gap
+
+Phases 4, 6 and 8 each shipped an `element_type` property but no way to edit
+it. Their checklists said *"No FRB regen (no API surface change beyond new node
+type)"* — copied from Phase 2's checklist, which was wrong to carry over:
+Phase 2 (`array_at`) **did** add `APIArrayAtData` + `get_array_at_data` /
+`set_array_at_data` + `array_at_editor.dart`, because a stored property that
+drives pin types is only reachable from the UI through a property editor.
+
+The result was that all three nodes were permanently stuck at their default
+`element_type: Int` unless the user edited the network in the text format, or
+happened to create the node by dragging a typed wire into empty space (where
+`adapt_for_drag_source` infers the element type once, at creation). Meanwhile
+`doc/reference_guide/nodes/math_programming.md` documented the "Element type"
+property for all three as if it were editable.
+
+### The fix
+
+**Rust API** (`api/structure_designer/`): three one-field structs
+`APIArrayAppendData` / `APIArrayConcatData` / `APIArrayLenData` plus the
+matching `scope_path`-taking `get_*` / `set_*` pairs, modelled on
+`get_array_at_data` / `set_array_at_data`. Separate structs rather than one
+shared `{ element_type }` type, matching the per-node convention already used
+by `APIIfData` / `APISequenceData` and leaving room for the nodes to diverge.
+Undo comes for free — `set_node_network_data_scoped` snapshots node data
+centrally. Requires `flutter_rust_bridge_codegen generate`.
+
+**Flutter:** one shared widget, `node_data/array_element_type_editor.dart`
+(`ArrayElementTypeEditor`), since all three panels are a single
+`DataTypeInput` — parameterized by node type name, title, and a one-line hint
+describing which pins the element type expands onto. `node_data_widget.dart`
+gains three cases that fetch the node data and construct the right API struct
+in the `onElementTypeChanged` callback. `array_at` keeps its own editor: it has
+a second property (the stored index) and the "disable on wired input" affordance
+for the `index` pin.
+
+### Phase 9 implementation checklist
+
+1. [x] `APIArrayAppendData` / `APIArrayConcatData` / `APIArrayLenData` in `structure_designer_api_types.rs`.
+2. [x] `get_/set_array_{append,concat,len}_data` in `structure_designer_api.rs`.
+3. [x] `cargo fmt` **then** `flutter_rust_bridge_codegen generate` (fmt reformats `frb_generated.rs`; never revert it afterwards).
+4. [x] `ArrayElementTypeEditor` in `lib/structure_designer/node_data/array_element_type_editor.dart`.
+5. [x] Three `setArray{Append,Concat,Len}Data` model wrappers forwarding `propertyEditorScopeChain`.
+6. [x] Three cases in `node_data_widget.dart`.
+7. [x] `cargo clippy` + `flutter analyze` + `dart format`.
+
+No new Rust tests: the API layer is a thin wrapper (per `rust/AGENTS.md`), the
+underlying `element_type` behavior is already covered by
+`array_{len,concat,append}_test.rs`, and the editor is thin UI verified by the
+manual walkthrough below.
+
+### Manual verification
+
+For each of `array_len`, `array_concat`, `array_append`: drop the node, select
+it, and confirm the panel shows an **Element Type** picker (not a bare header).
+Change it to `IVec3` and confirm the input/output pin types on the node update
+immediately. Wire a matching `array` node in to confirm the wire is accepted,
+then Ctrl+Z and confirm the element type reverts. Re-select the node inside a
+`closure` body to confirm the scope-path plumbing reads the body node, not a
+same-id top-level one.
 
 ## Reference-guide updates (cumulative)
 

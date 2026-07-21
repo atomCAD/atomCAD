@@ -41,6 +41,7 @@ import 'package:flutter_cad/structure_designer/node_data/zip_with_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/switch_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/array_at_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/array_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/array_element_type_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/if_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/collect_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/filter_editor.dart';
@@ -642,6 +643,61 @@ class NodeDataWidget extends StatelessWidget {
           data: arrayAtData,
           model: model,
         );
+
+      case 'array_append':
+        final arrayAppendData = getArrayAppendData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return ArrayElementTypeEditor(
+          nodeTypeName: 'array_append',
+          title: 'Array Append Properties',
+          elementTypeHint:
+              'Types the `array` pin as Array[T], the `element` pin as T, '
+              'and the output as Array[T].',
+          elementType: arrayAppendData?.elementType,
+          onElementTypeChanged: (newValue) => model.setArrayAppendData(
+            selectedNode.id,
+            APIArrayAppendData(elementType: newValue),
+          ),
+        );
+
+      case 'array_concat':
+        final arrayConcatData = getArrayConcatData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return ArrayElementTypeEditor(
+          nodeTypeName: 'array_concat',
+          title: 'Array Concat Properties',
+          elementTypeHint: 'Types both input pins and the output as Array[T].',
+          elementType: arrayConcatData?.elementType,
+          onElementTypeChanged: (newValue) => model.setArrayConcatData(
+            selectedNode.id,
+            APIArrayConcatData(elementType: newValue),
+          ),
+        );
+
+      case 'array_len':
+        final arrayLenData = getArrayLenData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+
+        return ArrayElementTypeEditor(
+          nodeTypeName: 'array_len',
+          title: 'Array Len Properties',
+          elementTypeHint:
+              'Types the `array` pin as Array[T]. The output is always Int.',
+          elementType: arrayLenData?.elementType,
+          onElementTypeChanged: (newValue) => model.setArrayLenData(
+            selectedNode.id,
+            APIArrayLenData(elementType: newValue),
+          ),
+        );
+
       case 'if':
         final ifData = getIfData(
           scopePath: scopePath,

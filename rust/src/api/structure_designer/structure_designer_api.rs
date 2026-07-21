@@ -1,8 +1,11 @@
 use super::structure_designer_api_types::APIAlignment;
 use super::structure_designer_api_types::APIApplyData;
 use super::structure_designer_api_types::APIArgumentKind;
+use super::structure_designer_api_types::APIArrayAppendData;
 use super::structure_designer_api_types::APIArrayAtData;
+use super::structure_designer_api_types::APIArrayConcatData;
 use super::structure_designer_api_types::APIArrayElement;
+use super::structure_designer_api_types::APIArrayLenData;
 use super::structure_designer_api_types::APIArrayNodeData;
 use super::structure_designer_api_types::APIAtomExportFormat;
 use super::structure_designer_api_types::APIAtomReplaceData;
@@ -148,7 +151,10 @@ use crate::structure_designer::node_data::CustomNodeData;
 use crate::structure_designer::nodes::apply::ApplyData;
 use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
 use crate::structure_designer::nodes::array::ArrayData;
+use crate::structure_designer::nodes::array_append::ArrayAppendData;
 use crate::structure_designer::nodes::array_at::ArrayAtData;
+use crate::structure_designer::nodes::array_concat::ArrayConcatData;
+use crate::structure_designer::nodes::array_len::ArrayLenData;
 use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
 use crate::structure_designer::nodes::atom_cut::AtomCutData;
 use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
@@ -4773,6 +4779,63 @@ pub fn get_array_at_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayA
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_array_append_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayAppendData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let data = node_data.as_any_ref().downcast_ref::<ArrayAppendData>()?;
+
+                Some(APIArrayAppendData {
+                    element_type: data_type_to_api_data_type(&data.element_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_array_concat_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayConcatData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let data = node_data.as_any_ref().downcast_ref::<ArrayConcatData>()?;
+
+                Some(APIArrayConcatData {
+                    element_type: data_type_to_api_data_type(&data.element_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_array_len_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIArrayLenData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let data = node_data.as_any_ref().downcast_ref::<ArrayLenData>()?;
+
+                Some(APIArrayLenData {
+                    element_type: data_type_to_api_data_type(&data.element_type),
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_if_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIfData> {
     unsafe {
         with_cad_instance_or(
@@ -6945,6 +7008,69 @@ pub fn set_array_at_data(scope_path: Vec<u64>, node_id: u64, data: APIArrayAtDat
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, array_at_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_append_data(scope_path: Vec<u64>, node_id: u64, data: APIArrayAppendData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(
+                    &scope_path,
+                    node_id,
+                    Box::new(ArrayAppendData { element_type }),
+                );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_concat_data(scope_path: Vec<u64>, node_id: u64, data: APIArrayConcatData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(
+                    &scope_path,
+                    node_id,
+                    Box::new(ArrayConcatData { element_type }),
+                );
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_array_len_data(scope_path: Vec<u64>, node_id: u64, data: APIArrayLenData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let element_type = match api_data_type_to_data_type(&data.element_type) {
+                Ok(parsed_data_type) => parsed_data_type,
+                Err(_) => DataType::None,
+            };
+
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(
+                    &scope_path,
+                    node_id,
+                    Box::new(ArrayLenData { element_type }),
+                );
             refresh_structure_designer_auto(cad_instance);
         });
     }

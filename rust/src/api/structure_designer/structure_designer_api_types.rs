@@ -1422,6 +1422,25 @@ pub struct APIArrayAtData {
     pub index: i32,
 }
 
+/// Stored shape of an `array_append` node: the element type shared by the
+/// `array` input pin (`Array[T]`), the `element` input pin (`T`) and the
+/// output pin (`Array[T]`).
+pub struct APIArrayAppendData {
+    pub element_type: APIDataType,
+}
+
+/// Stored shape of an `array_concat` node: the element type shared by both
+/// input pins and the output pin (all `Array[T]`).
+pub struct APIArrayConcatData {
+    pub element_type: APIDataType,
+}
+
+/// Stored shape of an `array_len` node: the element type of the `array` input
+/// pin (`Array[T]`). The output pin is always `Int` regardless.
+pub struct APIArrayLenData {
+    pub element_type: APIDataType,
+}
+
 pub struct APIIfData {
     /// Type of the `then` / `else` value pins and of the output pin.
     pub value_type: APIDataType,

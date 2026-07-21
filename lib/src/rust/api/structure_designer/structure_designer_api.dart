@@ -992,6 +992,24 @@ APIArrayAtData? getArrayAtData(
         .crateApiStructureDesignerStructureDesignerApiGetArrayAtData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIArrayAppendData? getArrayAppendData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetArrayAppendData(
+            scopePath: scopePath, nodeId: nodeId);
+
+APIArrayConcatData? getArrayConcatData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetArrayConcatData(
+            scopePath: scopePath, nodeId: nodeId);
+
+APIArrayLenData? getArrayLenData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetArrayLenData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIIfData? getIfData({required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api.crateApiStructureDesignerStructureDesignerApiGetIfData(
         scopePath: scopePath, nodeId: nodeId);
@@ -1745,6 +1763,30 @@ void setArrayAtData(
         required APIArrayAtData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetArrayAtData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setArrayAppendData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIArrayAppendData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayAppendData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setArrayConcatData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIArrayConcatData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayConcatData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setArrayLenData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIArrayLenData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetArrayLenData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setIfData(

@@ -61,10 +61,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIArgumentKind dco_decode_api_argument_kind(dynamic raw);
 
   @protected
+  APIArrayAppendData dco_decode_api_array_append_data(dynamic raw);
+
+  @protected
   APIArrayAtData dco_decode_api_array_at_data(dynamic raw);
 
   @protected
+  APIArrayConcatData dco_decode_api_array_concat_data(dynamic raw);
+
+  @protected
   APIArrayElement dco_decode_api_array_element(dynamic raw);
+
+  @protected
+  APIArrayLenData dco_decode_api_array_len_data(dynamic raw);
 
   @protected
   APIArrayNodeData dco_decode_api_array_node_data(dynamic raw);
@@ -494,7 +503,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData dco_decode_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
+  APIArrayAppendData dco_decode_box_autoadd_api_array_append_data(dynamic raw);
+
+  @protected
   APIArrayAtData dco_decode_box_autoadd_api_array_at_data(dynamic raw);
+
+  @protected
+  APIArrayConcatData dco_decode_box_autoadd_api_array_concat_data(dynamic raw);
+
+  @protected
+  APIArrayLenData dco_decode_box_autoadd_api_array_len_data(dynamic raw);
 
   @protected
   APIArrayNodeData dco_decode_box_autoadd_api_array_node_data(dynamic raw);
@@ -1031,7 +1049,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIApplyDiffData? dco_decode_opt_box_autoadd_api_apply_diff_data(dynamic raw);
 
   @protected
+  APIArrayAppendData? dco_decode_opt_box_autoadd_api_array_append_data(
+      dynamic raw);
+
+  @protected
   APIArrayAtData? dco_decode_opt_box_autoadd_api_array_at_data(dynamic raw);
+
+  @protected
+  APIArrayConcatData? dco_decode_opt_box_autoadd_api_array_concat_data(
+      dynamic raw);
+
+  @protected
+  APIArrayLenData? dco_decode_opt_box_autoadd_api_array_len_data(dynamic raw);
 
   @protected
   APIArrayNodeData? dco_decode_opt_box_autoadd_api_array_node_data(dynamic raw);
@@ -1481,10 +1510,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIArgumentKind sse_decode_api_argument_kind(SseDeserializer deserializer);
 
   @protected
+  APIArrayAppendData sse_decode_api_array_append_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIArrayAtData sse_decode_api_array_at_data(SseDeserializer deserializer);
 
   @protected
+  APIArrayConcatData sse_decode_api_array_concat_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIArrayElement sse_decode_api_array_element(SseDeserializer deserializer);
+
+  @protected
+  APIArrayLenData sse_decode_api_array_len_data(SseDeserializer deserializer);
 
   @protected
   APIArrayNodeData sse_decode_api_array_node_data(SseDeserializer deserializer);
@@ -1965,7 +2005,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIArrayAppendData sse_decode_box_autoadd_api_array_append_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIArrayAtData sse_decode_box_autoadd_api_array_at_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrayConcatData sse_decode_box_autoadd_api_array_concat_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrayLenData sse_decode_box_autoadd_api_array_len_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2614,7 +2666,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIArrayAppendData? sse_decode_opt_box_autoadd_api_array_append_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIArrayAtData? sse_decode_opt_box_autoadd_api_array_at_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrayConcatData? sse_decode_opt_box_autoadd_api_array_concat_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIArrayLenData? sse_decode_opt_box_autoadd_api_array_len_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3142,12 +3206,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIArgumentKind self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_array_append_data(
+      APIArrayAppendData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_array_at_data(
       APIArrayAtData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_array_concat_data(
+      APIArrayConcatData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_array_element(
       APIArrayElement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_array_len_data(
+      APIArrayLenData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_array_node_data(
@@ -3670,8 +3746,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIApplyDiffData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_array_append_data(
+      APIArrayAppendData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_array_at_data(
       APIArrayAtData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_array_concat_data(
+      APIArrayConcatData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_array_len_data(
+      APIArrayLenData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_array_node_data(
@@ -4336,8 +4424,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIApplyDiffData? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_api_array_append_data(
+      APIArrayAppendData? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_api_array_at_data(
       APIArrayAtData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_array_concat_data(
+      APIArrayConcatData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_array_len_data(
+      APIArrayLenData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_array_node_data(
