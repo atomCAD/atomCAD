@@ -2151,15 +2151,9 @@ pub fn set_node_display(scope_path: Vec<u64>, node_id: u64, is_displayed: bool) 
 pub fn toggle_output_pin_display(scope_path: Vec<u64>, node_id: u64, pin_index: i32) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            if !scope_path.is_empty() {
-                // Per-pin display undo on body nodes lands in U4 alongside
-                // body authoring (see `doc/design_zones_ui.md`). For U2 we
-                // accept the parameter but body paths are inert.
-                return;
-            }
             instance
                 .structure_designer
-                .toggle_output_pin_display(node_id, pin_index);
+                .toggle_output_pin_display_scoped(&scope_path, node_id, pin_index);
             refresh_structure_designer_auto(instance);
         });
     }

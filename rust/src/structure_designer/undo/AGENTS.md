@@ -93,7 +93,7 @@ Consistent with most CAD applications. Simplifies the system significantly.
 ## Known Pitfalls
 
 - **Display state**: `add_node_with_id` always adds to `displayed_nodes`. If the original node wasn't displayed (e.g., from `duplicate_node`), explicitly remove after re-add on redo. Undo commands store `Vec<(u64, NodeDisplayType)>` and wrap in `NodeDisplayState::with_type()`.
-- **Per-pin display**: `SetOutputPinDisplayCommand` stores full `Option<NodeDisplayState>` for old/new state (atomic undo). `displayed_output_pins` is included in `SerializableNodeNetwork` snapshots automatically.
+- **Per-pin display**: `SetOutputPinDisplayCommand` stores full `Option<NodeDisplayState>` for old/new state (atomic undo — removing the last pin drops the node from `displayed_nodes` entirely). `displayed_output_pins` is included in `SerializableNodeNetwork` snapshots automatically. Like `SetNodeDisplayCommand` it carries a `scope_path` and resolves through `network_in_scope_mut`, so per-pin toggles inside a 0-ary closure body are undoable; a **scoped** display command reports `UndoRefreshMode::Full` (neither `Lightweight` nor the bare-`u64` `NodeDataChanged` can express adding/removing a *scoped* scene entry), top-level stays `Lightweight`. See `doc/design_zero_ary_closure_body_display.md` §5.
 - **next_node_id / next_param_id**: Must be saved/restored on undo. JSON snapshot comparison includes these fields.
 - **HashMap ordering**: `displayed_nodes` and `nodes` are HashMaps; test snapshot comparisons use `normalize_json()` to sort `displayed_node_ids`, `displayed_output_pins`, and `nodes` arrays.
 - **validate_active_network**: Must be called after Full refresh undo/redo to update derived state like `output_type`.

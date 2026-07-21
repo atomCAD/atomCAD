@@ -5332,6 +5332,29 @@ impl StructureDesigner {
     /// Toggle the display state of a specific output pin on a node.
     /// The node must already be displayed (in `displayed_nodes`) for this to take effect.
     pub fn toggle_output_pin_display(&mut self, node_id: u64, pin_index: i32) {
+        self.toggle_output_pin_display_scoped(&[], node_id, pin_index);
+    }
+
+    /// Scope-aware variant of [`toggle_output_pin_display`]. `scope_path` empty
+    /// = the top-level active network; non-empty = the chain of zone-owning
+    /// node ids down to a body.
+    ///
+    /// Both paths are fully equivalent — the pin set flips in the resolved
+    /// network, the live/cached scene entry's `displayed_pins` is updated
+    /// eagerly under the node's own `NodeRef`, the change is tracked for the
+    /// partial-refresh pass, and an undo command is pushed when the state
+    /// actually changed. Like [`set_node_display_scoped`], a body pin set is
+    /// *persisted* (it serializes with the body network), so it must be
+    /// undoable. See `doc/design_zero_ary_closure_body_display.md` §5.
+    ///
+    /// Toggling in an **ineligible** scope is permitted; it simply stores a
+    /// dormant pin set that reactivates if the chain becomes eligible again.
+    pub fn toggle_output_pin_display_scoped(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        pin_index: i32,
+    ) {
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
             None => return,
@@ -5339,63 +5362,63 @@ impl StructureDesigner {
 
         // Capture old display state before mutation
         let old_display_state = self
-            .node_type_registry
-            .node_networks
-            .get(&network_name)
+            .get_scope_network(scope_path)
             .and_then(|net| net.displayed_nodes.get(&node_id))
             .cloned();
 
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
-            network.set_pin_displayed(
-                node_id,
-                pin_index,
-                !network
+        let new_pins = match self.get_scope_network_mut(scope_path) {
+            Some(network) => {
+                network.set_pin_displayed(
+                    node_id,
+                    pin_index,
+                    !network
+                        .get_displayed_pins(node_id)
+                        .is_some_and(|pins| pins.contains(&pin_index)),
+                );
+                network
                     .get_displayed_pins(node_id)
-                    .is_some_and(|pins| pins.contains(&pin_index)),
-            );
-            self.pending_changes.mark_node_visibility_changed(node_id);
-
-            // Update displayed_pins on cached NodeSceneData so it renders the
-            // correct pins when restored from cache without re-evaluation.
-            let new_pins = network
-                .get_displayed_pins(node_id)
-                .cloned()
-                .unwrap_or_default();
-            let node_ref = NodeRef::top(node_id);
-            // Update in live node_data
-            if let Some(scene_data) = self
-                .last_generated_structure_designer_scene
-                .node_data
-                .get_mut(&node_ref)
-            {
-                scene_data.displayed_pins = new_pins.clone();
+                    .cloned()
+                    .unwrap_or_default()
             }
-            // Update in invisible cache
-            self.last_generated_structure_designer_scene
-                .update_cached_displayed_pins(&node_ref, new_pins);
+            None => return,
+        };
+
+        // Track that this node's visibility changed, at its own scope.
+        self.pending_changes
+            .mark_node_visibility_changed_scoped(scope_path, node_id);
+
+        // Update displayed_pins on the live and cached NodeSceneData so it
+        // renders the correct pins when restored from cache without
+        // re-evaluation.
+        let node_ref = NodeRef::scoped(scope_path, node_id);
+        if let Some(scene_data) = self
+            .last_generated_structure_designer_scene
+            .node_data
+            .get_mut(&node_ref)
+        {
+            scene_data.displayed_pins = new_pins.clone();
         }
+        self.last_generated_structure_designer_scene
+            .update_cached_displayed_pins(&node_ref, new_pins);
 
         // Capture new display state after mutation
         let new_display_state = self
-            .node_type_registry
-            .node_networks
-            .get(&network_name)
+            .get_scope_network(scope_path)
             .and_then(|net| net.displayed_nodes.get(&node_id))
             .cloned();
 
         // Only push command if display state actually changed
         if old_display_state != new_display_state {
             let node_type_name = self
-                .node_type_registry
-                .node_networks
-                .get(&network_name)
+                .get_scope_network(scope_path)
                 .and_then(|net| net.nodes.get(&node_id))
-                .map(|n| n.node_type_name.as_str())
-                .unwrap_or("node");
+                .map(|n| n.node_type_name.clone())
+                .unwrap_or_else(|| "node".to_string());
             let description = format!("Toggle {} pin {} display", node_type_name, pin_index);
             self.push_command(
                 super::undo::commands::set_output_pin_display::SetOutputPinDisplayCommand {
                     network_name,
+                    scope_path: scope_path.to_vec(),
                     node_id,
                     old_display_state,
                     new_display_state,
