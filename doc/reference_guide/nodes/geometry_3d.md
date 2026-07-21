@@ -161,7 +161,7 @@ Translates a structure-bound object — a `Blueprint` or a `Crystal` — by a re
 
 - `input: HasStructure` — the object to translate.
 - `translation: IVec3` — the translation vector in lattice coordinates.
-- `subdivision: Int` (optional) — divides the lattice spacing for finer-than-cell translations. The effective translation is `translation / subdivision`. Setting `subdivision = 1` (the default) gives whole-lattice-vector steps; larger values give fractional steps.
+- `subdivision: Int` (optional) — divides the lattice spacing for finer-than-cell translations. The effective translation is `translation / subdivision`. Setting `subdivision = 1` (the default) gives whole-lattice-vector steps; larger values give fractional steps. Wiring this pin overrides the node's stored *Subdivision* property, which then greys out in the properties panel; disconnect the wire to edit it inline again.
 
 The component-wise divisibility of `translation` by `subdivision` decides whether the result remains lattice-aligned (see [Blueprint alignment](../node_networks.md#blueprint-alignment)). When the translation is not divisible, the output is flagged `lattice_unaligned`.
 
@@ -169,7 +169,7 @@ For a `Blueprint`, only the geometry (the cookie cutter) moves; latent atoms rem
 
 `structure_move` also exposes a `diff` output pin capturing the atom motion only (the geometry/structure component is not representable in a diff; a `Blueprint` input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](atomic.md#diff-output-pins-on-atom-manipulating-nodes).
 
-You can directly enter the translation vector or drag the axes of the gadget. *Continuous* transformation in lattice space is not supported (use `free_move` for that).
+You can directly enter the translation vector or drag the axes of the gadget. The gadget snaps to the *subdivided* step, so with `subdivision = 2` it moves in half-cell increments and follows the dragged object exactly — whether the subdivision comes from the property or from a wired pin. *Continuous* transformation in lattice space is not supported (use `free_move` for that).
 
 ## structure_rot
 

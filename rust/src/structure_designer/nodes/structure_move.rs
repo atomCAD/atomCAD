@@ -36,6 +36,12 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct StructureMoveEvalCache {
     pub unit_cell: UnitCellStruct,
+    /// The subdivision actually used by `eval` — the wired `subdivision` pin's
+    /// value when connected, the stored field otherwise. The gadget must read
+    /// this rather than `StructureMoveData::lattice_subdivision`, or a wired
+    /// subdivision makes the gizmo travel `lattice_subdivision`× further than
+    /// the object it moves (issue #411).
+    pub lattice_subdivision: i32,
 }
 
 /// Wraps an extracted (or empty) diff as the `Molecule` value for the node's
@@ -68,8 +74,11 @@ impl NodeData for StructureMoveData {
     ) -> Option<Box<dyn NodeNetworkGadget>> {
         let eval_cache = structure_designer.get_selected_node_eval_cache()?;
         let cache = eval_cache.downcast_ref::<StructureMoveEvalCache>()?;
-        let gadget =
-            StructureMoveGadget::new(self.translation, self.lattice_subdivision, &cache.unit_cell);
+        let gadget = StructureMoveGadget::new(
+            self.translation,
+            cache.lattice_subdivision,
+            &cache.unit_cell,
+        );
         Some(Box::new(gadget))
     }
 
@@ -136,6 +145,7 @@ impl NodeData for StructureMoveData {
                 if network_stack.len() == 1 {
                     context.selected_node_eval_cache = Some(Box::new(StructureMoveEvalCache {
                         unit_cell: unit_cell.clone(),
+                        lattice_subdivision,
                     }));
                 }
 
@@ -176,6 +186,7 @@ impl NodeData for StructureMoveData {
                 if network_stack.len() == 1 {
                     context.selected_node_eval_cache = Some(Box::new(StructureMoveEvalCache {
                         unit_cell: unit_cell.clone(),
+                        lattice_subdivision,
                     }));
                 }
 

@@ -470,3 +470,6 @@ mod free_rot_test;
 
 #[path = "structure_designer/camera_settings_serialization_test.rs"]
 mod camera_settings_serialization_test;
+
+#[path = "structure_designer/structure_move_gadget_test.rs"]
+mod structure_move_gadget_test;
