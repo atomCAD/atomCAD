@@ -31,6 +31,7 @@ use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_ra
 use crate::display::gadget::GadgetPickContext;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::displayed_node_refs::collect_displayed_node_refs;
 use crate::structure_designer::implicit_eval::ray_tracing::{
     raytrace_geometries, raytrace_geometry,
 };
@@ -1259,23 +1260,24 @@ impl StructureDesigner {
             self.last_generated_structure_designer_scene = StructureDesignerScene::new();
             self.last_generated_structure_designer_scene.active_node_id = network.active_node_id;
 
-            // Clear input caches on all displayed nodes (full refresh: upstream may have changed)
-            for node_entry in &network.displayed_nodes {
-                if let Some(data) = network.get_node_network_data(*node_entry.0) {
+            // Snapshot the (ref, display_type) pairs so the closure below can
+            // iterate without re-borrowing `self` while `with_eval_context`
+            // owns the mutable borrow on it. The collection is
+            // eligibility-gated: top-level displayed nodes plus, recursively,
+            // displayed nodes of every body reachable through a chain of 0-ary
+            // closures (see `displayed_node_refs`).
+            let displayed = collect_displayed_node_refs(network, &self.node_type_registry);
+
+            // Clear input caches on all displayed nodes (full refresh: upstream
+            // may have changed). Resolve through the scope path so displayed
+            // body nodes get their caches cleared too — a bare id lookup would
+            // hit an unrelated top-level node on an id collision.
+            for (node_ref, _) in &displayed {
+                if let Some(data) = find_node_data_at_scope(network, node_ref) {
                     data.clear_input_cache();
                 }
             }
 
-            // Snapshot the (ref, display_type) pairs so the closure below can
-            // iterate without re-borrowing `self` while `with_eval_context`
-            // owns the mutable borrow on it. Every ref is top-level today;
-            // Phase 2 replaces this with the eligibility-gated collection over
-            // body networks too.
-            let displayed: Vec<(NodeRef, super::node_network::NodeDisplayType)> = network
-                .displayed_nodes
-                .iter()
-                .map(|(id, state)| (NodeRef::top(*id), state.display_type))
-                .collect();
             (network.active_node_id.map(NodeRef::top), displayed)
         };
 
@@ -1288,9 +1290,9 @@ impl StructureDesigner {
 
         self.with_eval_context(false, |evaluator, registry, prefs, context| {
             for (node_ref, display_type) in &displayed_node_refs {
-                let node_data = evaluator.generate_scene(
+                let node_data = evaluator.generate_scene_scoped(
                     node_network_name,
-                    node_ref.node_id,
+                    node_ref,
                     *display_type,
                     registry,
                     &prefs.geometry_visualization_preferences,
@@ -1340,13 +1342,46 @@ impl StructureDesigner {
         let active_node_ref = active_node_id.map(NodeRef::top);
         self.last_generated_structure_designer_scene.active_node_id = active_node_id;
 
+        // The eligibility-gated set of refs that should be rendered right now:
+        // the top-level `displayed_nodes` plus, recursively, the displayed
+        // nodes of every body reachable through a chain of 0-ary closures.
+        // This — not the top-level map read by bare id — is the "is this ref
+        // currently displayed?" oracle for every step below, and it is what
+        // makes a dormant flag in a newly-ineligible body stop rendering.
+        let displayed_refs: HashMap<NodeRef, super::node_network::NodeDisplayType> =
+            collect_displayed_node_refs(network, &self.node_type_registry)
+                .into_iter()
+                .collect();
+
+        // Step 0: a closure whose data changed may have flipped arity, which
+        // makes (or unmakes) its whole body subtree scene-evaluable. Drop every
+        // live + cached scene entry under it; the steps below re-evaluate the
+        // ones that are still displayed *and* eligible. `refresh_full` needs no
+        // equivalent — it starts from a fresh scene.
+        let mut resurrect: Vec<NodeRef> = Vec::new();
+        for node_ref in &changes.data_changed {
+            let is_zone_owner =
+                find_node_at_scope(network, node_ref).is_some_and(|node| node.zone.is_some());
+            if !is_zone_owner {
+                continue;
+            }
+            let mut prefix = node_ref.scope_path.clone();
+            prefix.push(node_ref.node_id);
+            self.last_generated_structure_designer_scene
+                .remove_scope_subtree(&prefix);
+            // Anything still displayed under that subtree must be rebuilt —
+            // dependency analysis does not reach *into* a body from its owner.
+            resurrect.extend(
+                displayed_refs
+                    .keys()
+                    .filter(|r| r.scope_path.starts_with(&prefix))
+                    .cloned(),
+            );
+        }
+
         // Step 1: Cache nodes that became invisible.
-        // NOTE: the "is this ref currently displayed?" test reads the TOP-LEVEL
-        // `displayed_nodes` by bare id — correct today because every tracked
-        // ref is top-level. Phase 2 must resolve `node_ref.scope_path` to its
-        // own body network and read *that* map (same for Step 3 below).
         for node_ref in &changes.visibility_changed {
-            if !network.displayed_nodes.contains_key(&node_ref.node_id) {
+            if !displayed_refs.contains_key(node_ref) {
                 // Node became invisible - move to cache for potential future restoration
                 self.last_generated_structure_designer_scene
                     .move_to_cache(node_ref);
@@ -1355,26 +1390,25 @@ impl StructureDesigner {
 
         // Step 2: Compute transitive dependencies of data changes and invalidate cache.
         // `affected_by_data_changes` is scope-aware: it may contain body-internal
-        // NodeRefs as well as top-level ones. Top-level ids drive the displayed-
-        // node intersection in Step 4 below — the synthetic body-node → HOF edge
-        // in `build_scope_reverse_dependency_map` guarantees that any body edit
-        // lifts dirtiness up to a top-level HOF, so displayed nodes downstream
-        // of an HOF are reached even when only its body changed.
+        // NodeRefs as well as top-level ones. Both participate in the displayed-
+        // node intersection in Step 4 below (a displayed node inside a 0-ary
+        // closure body is reachable through the ancestor→body capture edges in
+        // `build_scope_reverse_dependency_map`); the synthetic body-node → HOF
+        // edge additionally guarantees that any body edit lifts dirtiness up to
+        // a top-level HOF, so displayed nodes downstream of an HOF are reached
+        // even when only its body changed.
+        //
+        // Cache invalidation passes the **full** scoped set: a hidden body node
+        // does not appear in `displayed_refs`, but its invisible-cache entry
+        // must still be dropped when a captured upstream source changes — else
+        // hide → edit the captured value → show restores stale geometry.
         let affected_by_data_changes: HashSet<NodeRef> = if !changes.data_changed.is_empty() {
             if changes.skip_downstream {
                 // During interactive drag: only re-evaluate the directly changed nodes,
                 // skip computing downstream dependents for better performance.
                 let directly_changed = changes.data_changed.clone();
-                // Only top-level refs can have a cache entry today (the scene
-                // holds top-level refs only). Phase 2 drops this filter so a
-                // hidden body node's cache entry is invalidated too.
-                let top_level_refs: HashSet<NodeRef> = directly_changed
-                    .iter()
-                    .filter(|nr| nr.is_top_level())
-                    .cloned()
-                    .collect();
                 self.last_generated_structure_designer_scene
-                    .invalidate_cached_nodes(&top_level_refs);
+                    .invalidate_cached_nodes(&directly_changed);
                 directly_changed
             } else {
                 let affected = compute_downstream_dependents(network, &changes.data_changed);
@@ -1386,13 +1420,8 @@ impl StructureDesigner {
                         data.clear_input_cache();
                     }
                 }
-                let top_level_refs: HashSet<NodeRef> = affected
-                    .iter()
-                    .filter(|nr| nr.is_top_level())
-                    .cloned()
-                    .collect();
                 self.last_generated_structure_designer_scene
-                    .invalidate_cached_nodes(&top_level_refs);
+                    .invalidate_cached_nodes(&affected);
                 affected
             }
         } else {
@@ -1403,8 +1432,15 @@ impl StructureDesigner {
         // (At this point we have data in the cache that actually can be restored.)
         let mut nodes_needing_evaluation: HashSet<NodeRef> = HashSet::new();
 
+        // Whatever Step 0 evicted and is still displayed must be rebuilt.
+        nodes_needing_evaluation.extend(resurrect);
+
         for node_ref in &changes.visibility_changed {
-            if network.displayed_nodes.contains_key(&node_ref.node_id) {
+            // `displayed_refs` (not the top-level map by bare id) is the oracle:
+            // it resolves the ref's own scope network *and* gates on chain
+            // eligibility, so a body node whose chain went ineligible is never
+            // restored from the invisible cache.
+            if displayed_refs.contains_key(node_ref) {
                 // Node became visible - try to restore from cache (ultra-fast path)
                 let restored = self
                     .last_generated_structure_designer_scene
@@ -1420,12 +1456,12 @@ impl StructureDesigner {
         }
 
         // Step 4: Add visible nodes affected by data changes to evaluation set.
-        // Only top-level NodeRefs participate — body-internal nodes aren't
-        // separately displayed today, and body dirtiness has already been
-        // lifted to its enclosing top-level HOF by the synthetic edge in
-        // `build_scope_reverse_dependency_map`.
+        // Scoped refs participate too: a displayed node inside a 0-ary closure
+        // body is downstream of the ancestor sources it captures (the capture
+        // wires produce ancestor → body edges in the reverse-dependency map),
+        // so editing a captured `float` re-renders it.
         for node_ref in &affected_by_data_changes {
-            if node_ref.is_top_level() && network.displayed_nodes.contains_key(&node_ref.node_id) {
+            if displayed_refs.contains_key(node_ref) {
                 nodes_needing_evaluation.insert(node_ref.clone());
             }
         }
@@ -1436,13 +1472,13 @@ impl StructureDesigner {
         if changes.selection_changed {
             // Add previous selected node (needs from_selected_node set to false)
             if let Some(prev_node_id) = changes.previous_selection
-                && network.displayed_nodes.contains_key(&prev_node_id)
+                && displayed_refs.contains_key(&NodeRef::top(prev_node_id))
             {
                 nodes_needing_evaluation.insert(NodeRef::top(prev_node_id));
             }
             // Add current selected node (needs from_selected_node set to true)
             if let Some(curr_node_id) = changes.current_selection
-                && network.displayed_nodes.contains_key(&curr_node_id)
+                && displayed_refs.contains_key(&NodeRef::top(curr_node_id))
             {
                 nodes_needing_evaluation.insert(NodeRef::top(curr_node_id));
             }
@@ -1453,23 +1489,19 @@ impl StructureDesigner {
 
         // Step 5: Re-evaluate nodes that need it (skip if empty)
         if !nodes_needing_evaluation.is_empty() {
-            // Snapshot (id, display_type) pairs upfront so the closure body
-            // does not need to re-borrow `self.node_type_registry`.
-            let to_evaluate: Vec<(NodeRef, super::node_network::NodeDisplayType)> = {
-                let network = match self.node_type_registry.node_networks.get(node_network_name) {
-                    Some(network) => network,
-                    None => return,
-                };
+            // Snapshot (ref, display_type) pairs upfront so the closure body
+            // does not need to re-borrow `self.node_type_registry`. Display
+            // types come from the eligibility-gated collection, which resolves
+            // each ref against its own scope's `displayed_nodes`.
+            let to_evaluate: Vec<(NodeRef, super::node_network::NodeDisplayType)> =
                 nodes_needing_evaluation
                     .iter()
                     .filter_map(|node_ref| {
-                        network
-                            .displayed_nodes
-                            .get(&node_ref.node_id)
-                            .map(|state| (node_ref.clone(), state.display_type))
+                        displayed_refs
+                            .get(node_ref)
+                            .map(|display_type| (node_ref.clone(), *display_type))
                     })
-                    .collect()
-            };
+                    .collect();
 
             let mut new_scenes: Vec<(
                 NodeRef,
@@ -1478,9 +1510,9 @@ impl StructureDesigner {
 
             self.with_eval_context(false, |evaluator, registry, prefs, context| {
                 for (node_ref, display_type) in &to_evaluate {
-                    let node_data = evaluator.generate_scene(
+                    let node_data = evaluator.generate_scene_scoped(
                         node_network_name,
-                        node_ref.node_id,
+                        node_ref,
                         *display_type,
                         registry,
                         &prefs.geometry_visualization_preferences,
@@ -5229,24 +5261,28 @@ impl StructureDesigner {
         self.set_node_display_scoped(&[], node_id, is_displayed);
     }
 
-    /// Scope-aware variant of [`set_node_display`]. Empty path: existing
-    /// top-level behavior (undo command + visibility tracking). Non-empty
-    /// path: flip the body node's display flag directly via the scope-network
-    /// helper. Body-internal display undo is deferred to U4 when body
-    /// authoring lands (`doc/design_zones_ui.md` §"Phase U4").
+    /// Scope-aware variant of [`set_node_display`]. `scope_path` empty = the
+    /// top-level active network; non-empty = the chain of zone-owning node ids
+    /// down to a body.
+    ///
+    /// Both paths are fully equivalent: the flag flips in the resolved network,
+    /// the change is tracked for the partial-refresh pass, and an undo command
+    /// is pushed when the state actually changed. A body flag is *persisted*
+    /// (it serializes with the body network) and marks the design dirty, so it
+    /// must be undoable — and body state is also restored wholesale by
+    /// snapshot commands (`EditZoneBodyCommand`), which is only correct if
+    /// every intervening body mutation is itself a command. See
+    /// `doc/design_zero_ary_closure_body_display.md` §5.
+    ///
+    /// Toggling display in an **ineligible** scope is permitted; it simply
+    /// stores a dormant flag that reactivates if the chain becomes eligible
+    /// again. The UI never offers it (Phase 4 gates the eye on eligibility).
     pub fn set_node_display_scoped(
         &mut self,
         scope_path: &[u64],
         node_id: u64,
         is_displayed: bool,
     ) {
-        if !scope_path.is_empty() {
-            if let Some(network) = self.get_scope_network_mut(scope_path) {
-                network.set_node_display(node_id, is_displayed);
-            }
-            return;
-        }
-
         // Early return if active_node_network_name is None
         let network_name = match &self.active_node_network_name {
             Some(name) => name.clone(),
@@ -5255,37 +5291,35 @@ impl StructureDesigner {
 
         // Capture old display state before mutation
         let old_display_type = self
-            .node_type_registry
-            .node_networks
-            .get(&network_name)
+            .get_scope_network(scope_path)
             .and_then(|net| net.get_node_display_type(node_id));
 
-        if let Some(network) = self.node_type_registry.node_networks.get_mut(&network_name) {
+        if let Some(network) = self.get_scope_network_mut(scope_path) {
             network.set_node_display(node_id, is_displayed);
-            // Track that this node's visibility changed
-            self.pending_changes.mark_node_visibility_changed(node_id);
+        } else {
+            return;
         }
+        // Track that this node's visibility changed, at its own scope.
+        self.pending_changes
+            .mark_node_visibility_changed_scoped(scope_path, node_id);
 
         // Capture new display state after mutation
         let new_display_type = self
-            .node_type_registry
-            .node_networks
-            .get(&network_name)
+            .get_scope_network(scope_path)
             .and_then(|net| net.get_node_display_type(node_id));
 
         // Only push command if display state actually changed
         if old_display_type != new_display_type {
             let node_type_name = self
-                .node_type_registry
-                .node_networks
-                .get(&network_name)
+                .get_scope_network(scope_path)
                 .and_then(|net| net.nodes.get(&node_id))
-                .map(|n| n.node_type_name.as_str())
-                .unwrap_or("node");
+                .map(|n| n.node_type_name.clone())
+                .unwrap_or_else(|| "node".to_string());
             let description = format!("Toggle {} display", node_type_name);
             self.push_command(
                 super::undo::commands::set_node_display::SetNodeDisplayCommand {
                     network_name,
+                    scope_path: scope_path.to_vec(),
                     node_id,
                     old_display_type,
                     new_display_type,
@@ -9237,4 +9271,19 @@ fn find_node_data_at_scope<'a>(
         current = hof.zone.as_deref()?;
     }
     current.get_node_network_data(node_ref.node_id)
+}
+
+/// Walk `network` along `node_ref.scope_path` and return the node at the
+/// precise scoped address (companion to [`find_node_data_at_scope`], for
+/// callers that need the `Node` itself rather than its `NodeData`).
+fn find_node_at_scope<'a>(
+    network: &'a NodeNetwork,
+    node_ref: &NodeRef,
+) -> Option<&'a crate::structure_designer::node_network::Node> {
+    let mut current: &NodeNetwork = network;
+    for hof_id in &node_ref.scope_path {
+        let hof = current.nodes.get(hof_id)?;
+        current = hof.zone.as_deref()?;
+    }
+    current.nodes.get(&node_ref.node_id)
 }

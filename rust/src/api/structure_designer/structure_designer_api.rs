@@ -9015,11 +9015,26 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                     .atomic_structure_visualization_preferences
                     .visualization;
 
-                let hits = cad_instance.structure_designer.raytrace_per_node(
+                let mut hits = cad_instance.structure_designer.raytrace_per_node(
                     &ray_origin,
                     &ray_direction,
                     visualization,
                 );
+
+                // Click-to-activate is a **top-level-node** surface: its result
+                // types, the Flutter disambiguation overlay, `scrollToNode`,
+                // and the solo-eye "hide others" action are all keyed by bare
+                // node id, and body-internal ids routinely collide with
+                // top-level ones (per-body `next_node_id` counters). Since
+                // nodes inside a 0-ary closure body can now be displayed, their
+                // hits must be dropped from the candidate set — routing a body
+                // node's id through those surfaces would target the wrong node.
+                // Displayed body geometry is therefore visible but not
+                // click-activatable; a click on it falls through to the
+                // existing no-hit / active-node behavior. Scoped pick UX is a
+                // deferred follow-up — see
+                // `doc/design_zero_ary_closure_body_display.md` §1.
+                hits.retain(|hit| hit.node_ref.is_top_level());
 
                 if hits.is_empty() {
                     return APIViewportPickResult::NoHit;

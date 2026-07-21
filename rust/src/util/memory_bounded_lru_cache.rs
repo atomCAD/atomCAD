@@ -215,6 +215,12 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
         self.cache.contains(key)
     }
 
+    /// Iterates the cache's keys without affecting recency. Useful for bulk
+    /// invalidation passes that must select entries by a predicate on the key.
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
+        self.cache.iter().map(|(key, _)| key)
+    }
+
     /// Resizes the cache to a new maximum memory limit.
     ///
     /// If the new limit is smaller than the current usage, entries are evicted

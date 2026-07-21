@@ -624,10 +624,15 @@ fn resolve_capture_source<'a>(
         }
         SourcePin::ZoneInput { pin_index } => {
             // depth > 1 (caller guaranteed). Read the live iteration value of
-            // the referenced outer HOF.
-            context
-                .current_zone_input(incoming.source_node_id, pin_index)
-                .clone()
+            // the referenced outer HOF. Fallible for the same reason as the
+            // zone-output resolver below: a desynced network must produce a
+            // localized error, not a panic.
+            match context.try_current_zone_input(incoming.source_node_id, pin_index) {
+                Some(value) => value.clone(),
+                None => {
+                    NetworkResult::Error("zone input referenced outside an invocation".to_string())
+                }
+            }
         }
     }
 }
@@ -679,10 +684,15 @@ fn eval_step<'a>(
         SourcePin::ZoneInput { pin_index } => {
             // A body-return wire that sources from the HOF's own zone-input
             // pin: legal (passes through the iteration value unchanged). Read
-            // from the live frame.
-            context
-                .current_zone_input(incoming.source_node_id, pin_index)
-                .clone()
+            // from the live frame. Every caller of this helper is an
+            // invocation path, so the frame is always pushed; the fallible
+            // lookup only guards against a desynced network reaching here.
+            match context.try_current_zone_input(incoming.source_node_id, pin_index) {
+                Some(value) => value.clone(),
+                None => {
+                    NetworkResult::Error("zone input referenced outside an invocation".to_string())
+                }
+            }
         }
     }
 }

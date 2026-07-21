@@ -289,35 +289,26 @@ impl NetworkEvaluationContext {
         }
     }
 
-    /// Read the `pin_index`-th value of the top iteration frame for `hof_id`.
-    /// Debug-panics if no frame is active for this HOF — `evaluate_arg`
-    /// reaches this path only from a body-internal wire whose source is the
-    /// enclosing HOF's zone-input pin, which by construction means a frame
-    /// has been pushed.
-    pub fn current_zone_input(&self, hof_id: u64, pin_index: usize) -> &NetworkResult {
-        let stack = self
-            .current_zone_input_values
-            .get(&hof_id)
-            .unwrap_or_else(|| {
-                panic!(
-                    "current_zone_input: no scope-stack entry for HOF id {}",
-                    hof_id
-                )
-            });
-        let frame = stack.last().unwrap_or_else(|| {
-            panic!(
-                "current_zone_input: scope-stack for HOF id {} is empty",
-                hof_id
-            )
-        });
-        frame.get(pin_index).unwrap_or_else(|| {
-            panic!(
-                "current_zone_input: pin_index {} out of range for HOF id {} frame of len {}",
-                pin_index,
-                hof_id,
-                frame.len()
-            )
-        })
+    /// Read the `pin_index`-th value of the top iteration frame for `hof_id`,
+    /// or `None` when no such frame is active.
+    ///
+    /// Every *invocation* path (`run_closure_once` and friends) pushes the
+    /// frame before evaluating body wires, so on those paths `None` is
+    /// impossible. The fallible shape exists for the one path that evaluates a
+    /// body node with **no** zone frame pushed: scene generation of a node
+    /// inside a 0-ary closure body
+    /// (`NetworkEvaluator::generate_scene_scoped`). An eligible chain cannot
+    /// legally hold a `ZoneInput` wire — but that guarantee is *derived* (it
+    /// rests on validation rule 3 having run and on a fresh
+    /// `custom_node_type` cache), and both premises are known-fragile. The
+    /// caller turns `None` into a localized `NetworkResult::Error` rather than
+    /// letting a desynced network panic the evaluator. See
+    /// `doc/design_zero_ary_closure_body_display.md` §3.
+    pub fn try_current_zone_input(&self, hof_id: u64, pin_index: usize) -> Option<&NetworkResult> {
+        self.current_zone_input_values
+            .get(&hof_id)?
+            .last()?
+            .get(pin_index)
     }
 
     /// Build an inner context for an eager HOF body's iterations
@@ -511,6 +502,44 @@ impl NetworkEvaluator {
         &mut self,
         network_name: &str,
         node_id: u64,
+        display_type: NodeDisplayType,
+        registry: &NodeTypeRegistry,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences,
+        context: &mut NetworkEvaluationContext,
+    ) -> NodeSceneData {
+        self.generate_scene_scoped(
+            network_name,
+            &NodeRef::top(node_id),
+            display_type,
+            registry,
+            geometry_visualization_preferences,
+            context,
+        )
+    }
+
+    /// Scope-aware [`Self::generate_scene`]. `node_ref.scope_path` is the chain
+    /// of zone-owning node ids leading down to the body the node lives in
+    /// (empty = the top-level network, i.e. the historical behavior).
+    ///
+    /// A non-empty path stands up the real network stack for the body — one
+    /// `NetworkStackElement` per hop — so the node evaluates in exactly the
+    /// context an invocation would give it: body-local wires resolve inside the
+    /// body, capture wires (`source_scope_depth >= 1`) walk up the stack to
+    /// their ancestor sources. The matching `push_eval_scope` per hop keys the
+    /// node errors / hover strings under the correct `NodeRef`.
+    ///
+    /// **No zone frame is pushed** — that is the whole point of restricting
+    /// this path to 0-ary closure chains (`displayed_node_refs::is_eligible_chain`),
+    /// which cannot legally hold `ZoneInput` wires. A wire that survived a
+    /// validation desync resolves to a localized error rather than a panic
+    /// (see [`NetworkEvaluationContext::try_current_zone_input`]).
+    ///
+    /// Design: `doc/design_zero_ary_closure_body_display.md` §3.
+    #[allow(clippy::too_many_arguments)]
+    pub fn generate_scene_scoped(
+        &mut self,
+        network_name: &str,
+        node_ref: &NodeRef,
         _display_type: NodeDisplayType, //TODO: use display_type
         registry: &NodeTypeRegistry,
         geometry_visualization_preferences: &GeometryVisualizationPreferences,
@@ -518,13 +547,13 @@ impl NetworkEvaluator {
     ) -> NodeSceneData {
         //let _timer = Timer::new("generate_scene");
 
-        let network = match registry.node_networks.get(network_name) {
+        let root_network = match registry.node_networks.get(network_name) {
             Some(network) => network,
             None => return NodeSceneData::new(NodeOutput::None),
         };
 
         // Do not evaluate invalid networks
-        if !network.valid {
+        if !root_network.valid {
             return NodeSceneData::new(NodeOutput::None);
         }
 
@@ -537,29 +566,62 @@ impl NetworkEvaluator {
         // touched.
         context.node_errors.clear();
         context.node_output_strings.clear();
-        // `generate_scene` always starts a displayed node's evaluation at the
-        // top level; the scope path is rebuilt by the push/pop bracketing as
-        // the pass descends into bodies / custom networks. Clear defensively in
-        // case a prior pass left it unbalanced.
+        // The scope path is rebuilt below (one push per body hop) and then
+        // extended by the push/pop bracketing as the pass descends into
+        // further bodies / custom networks. Clear defensively in case a prior
+        // pass left it unbalanced.
         context.eval_scope_path.clear();
         context.selected_node_eval_cache = None;
 
         // We assign the root node network zero node id. It is not used in the evaluation.
-        let network_stack = vec![NetworkStackElement {
-            node_network: network,
+        let mut network_stack = vec![NetworkStackElement {
+            node_network: root_network,
             node_id: 0,
         }];
+        // Walk down to the body that owns `node_ref`, pushing one stack frame
+        // (and one eval scope) per hop. A body frame's `node_id` is the id of
+        // the zone-owning node whose body it is — the convention
+        // `build_inline_closure` / `run_closure_once` use.
+        let mut network = root_network;
+        let mut pushed_scopes = 0usize;
+        for hof_id in &node_ref.scope_path {
+            let body = match network
+                .nodes
+                .get(hof_id)
+                .and_then(|hof| hof.zone.as_deref())
+            {
+                Some(body) => body,
+                None => {
+                    // Malformed / stale chain (closure deleted, body gone).
+                    // Same convention as the missing-node path below.
+                    context
+                        .eval_scope_path
+                        .truncate(context.eval_scope_path.len().saturating_sub(pushed_scopes));
+                    return NodeSceneData::new(NodeOutput::None);
+                }
+            };
+            network_stack.push(NetworkStackElement {
+                node_network: body,
+                node_id: *hof_id,
+            });
+            context.push_eval_scope(*hof_id);
+            pushed_scopes += 1;
+            network = body;
+        }
 
+        let node_id = node_ref.node_id;
         let node = match network.nodes.get(&node_id) {
             Some(node) => node,
-            None => return NodeSceneData::new(NodeOutput::None),
+            None => {
+                for _ in 0..pushed_scopes {
+                    context.pop_eval_scope();
+                }
+                return NodeSceneData::new(NodeOutput::None);
+            }
         };
 
-        let from_selected_node = network_stack
-            .last()
-            .unwrap()
-            .node_network
-            .is_node_selected(node_id);
+        // Selection is per-network, so read it from the node's own scope.
+        let from_selected_node = network.is_node_selected(node_id);
 
         // Evaluate all outputs once (avoids redundant evaluation for multi-output nodes)
         let eval_output = {
@@ -703,6 +765,12 @@ impl NetworkEvaluator {
         // Show unit cell wireframe when eval explicitly provided a unit cell
         // (motif_edit sets unit_cell_override; other nodes don't)
         let show_unit_cell_wireframe = eval_output.unit_cell_override.is_some();
+
+        // Leave the context's scope path exactly as we found it (the inner
+        // evaluation brackets its own pushes; these are ours).
+        for _ in 0..pushed_scopes {
+            context.pop_eval_scope();
+        }
 
         // Build NodeSceneData. We `.take()` the eval cache so the next
         // `generate_scene` call sharing this context does not inherit it.
@@ -1466,9 +1534,23 @@ impl NetworkEvaluator {
                 // through the capture cache and never reach this branch
                 // (handled at step 1 above) — see worked example in
                 // `doc/design_zones.md`.
-                let value = context
-                    .current_zone_input(incoming.source_node_id, pin_index)
-                    .clone();
+                //
+                // The lookup is fallible: `generate_scene_scoped` evaluates a
+                // 0-ary closure body node with no zone frame pushed, so a
+                // `ZoneInput` wire that survived a validation desync would
+                // otherwise panic here. Localize it into a node error instead.
+                let value = match context.try_current_zone_input(incoming.source_node_id, pin_index)
+                {
+                    Some(v) => v.clone(),
+                    None => {
+                        return (
+                            NetworkResult::Error(
+                                "zone input referenced outside an invocation".to_string(),
+                            ),
+                            DataType::None,
+                        );
+                    }
+                };
 
                 // Source type is the declared type of the HOF's
                 // `pin_index`-th zone-input pin. The HOF's body frame sits

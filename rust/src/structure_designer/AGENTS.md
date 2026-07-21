@@ -28,6 +28,7 @@ structure_designer/
 ├── network_validator.rs       # Validates and repairs networks
 ├── node_dependency_analysis.rs    # Computes downstream dependents
 ├── node_display_policy_resolver.rs # Controls node visibility
+├── displayed_node_refs.rs     # Eligibility-gated collection of the scene's displayed nodes
 ├── selection_factoring.rs     # Extracts selection into subnetwork
 ├── node_inlining.rs           # Inlines a custom-node instance (inverse of factoring)
 ├── closure_network_conversion.rs # Converts closure ⇄ custom-network instance (function-value forms)
@@ -238,6 +239,15 @@ Pre-edit footprints **must be captured before mutating** (the bodies have alread
 - `Lightweight` - UI-only changes (selection, camera)
 - `Partial` - Re-evaluate only changed nodes (default)
 - `Full` - Re-evaluate entire network
+
+**The scene is keyed by `NodeRef`, not by bare node id**, and the displayed set is **derived, not read from one map**. `StructureDesignerScene.node_data`, the invisible LRU cache, and `StructureDesignerChanges.visibility_changed` all key on `NodeRef { scope_path, node_id }` — per-body `next_node_id` counters let a body node and a top-level node share a numeric id, so a bare `u64` key silently clobbers. Both refresh paths get their work list from **`displayed_node_refs::collect_displayed_node_refs(network, registry)`**: the top-level `displayed_nodes` *plus*, recursively, the `displayed_nodes` of every body reachable through an **eligible chain** — one whose every zone-owning ancestor is a `closure` node with **zero** zone-input pins (`is_zero_ary_closure`). Everything else follows from that:
+
+- Nodes inside a 0-ary closure body are **scene-evaluable**: `NetworkEvaluator::generate_scene_scoped` stands up the real network stack for the body (one frame + one `push_eval_scope` per hop) so captures resolve by the ordinary stack walk and errors/hover strings key under the right `NodeRef`. **No zone frame is pushed** — which is exactly why the rule is restricted to 0-ary chains, which cannot legally hold `ZoneInput` wires. A wire that survives a validation desync hits `NetworkEvaluationContext::try_current_zone_input` and yields a localized `NetworkResult::Error` instead of panicking.
+- Display flags stored in an **ineligible** body are **dormant, not cleared** — the collection just skips them. Flipping a closure's arity 0 → 1 stops its body rendering on the next refresh; flipping it back restores the previous display state. Never "revoke" body display flags on an arity change.
+- `refresh_partial` therefore uses the collection (not `network.displayed_nodes` by bare id) as its "is this ref displayed?" oracle for cache moves, cache restores, and the data-change intersection; it invalidates cached entries for the **full scoped** affected set (a *hidden* body node's cache entry must still be dropped when a captured upstream source changes, else hide → edit → show restores stale geometry); and a `data_changed` zone-owner evicts its whole body subtree from the scene + cache (`StructureDesignerScene::remove_scope_subtree`) before re-collecting, because dependency analysis reaches *out of* a body, never *into* one.
+- Click-to-activate (`viewport_pick`) filters its candidate set to **top-level** refs: the Flutter disambiguation overlay / `scrollToNode` / solo-hide are keyed by bare node id. Displayed body geometry is visible but not click-activatable.
+
+Design doc: `doc/design_zero_ary_closure_body_display.md` (issue #409).
 
 ## Testing
 

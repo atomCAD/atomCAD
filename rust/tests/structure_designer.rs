@@ -479,3 +479,6 @@ mod refresh_pipeline_test;
 
 #[path = "structure_designer/scene_noderef_keying_test.rs"]
 mod scene_noderef_keying_test;
+
+#[path = "structure_designer/zero_ary_closure_display_test.rs"]
+mod zero_ary_closure_display_test;

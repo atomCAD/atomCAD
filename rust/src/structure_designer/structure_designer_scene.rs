@@ -313,6 +313,29 @@ impl StructureDesignerScene {
         }
     }
 
+    /// Drops every live **and** cached scene entry whose `scope_path` starts
+    /// with `prefix` — i.e. the whole body subtree of the zone-owning node
+    /// `prefix` addresses (`prefix = <owner's scope_path> ++ [owner id]`).
+    ///
+    /// Used by the partial-refresh path when a closure's data changed: an
+    /// arity flip makes (or unmakes) its body scene-evaluable, and stale
+    /// entries there would otherwise keep rendering (or be restored from the
+    /// cache) after the chain stopped being eligible. See
+    /// `doc/design_zero_ary_closure_body_display.md` §4.
+    pub fn remove_scope_subtree(&mut self, prefix: &[u64]) {
+        self.node_data
+            .retain(|node_ref, _| !node_ref.scope_path.starts_with(prefix));
+        let stale: Vec<NodeRef> = self
+            .invisible_node_cache
+            .keys()
+            .filter(|node_ref| node_ref.scope_path.starts_with(prefix))
+            .cloned()
+            .collect();
+        for node_ref in &stale {
+            self.invisible_node_cache.pop(node_ref);
+        }
+    }
+
     /// Returns the number of nodes currently in the invisible cache
     pub fn cached_node_count(&self) -> usize {
         self.invisible_node_cache.len()
