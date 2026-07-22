@@ -245,6 +245,8 @@ Keyboard shortcuts (Delete, Ctrl+C / X / V / D) operate on whichever body you mo
 
 Body regions grow automatically to fit their content and can be dragged larger from the bottom-right corner handle. The stored size is the minimum size; live content additions and node drags grow the body in real time. Bodies don't shrink below their content.
 
+When a body would render too small to be readable — typically at the farther zoom-out levels, or a small body deep in a nested HOF — its content is hidden and the region shows a compact `[N nodes]` placeholder instead. This is purely a canvas-readability feature: nothing about the network changes, and zooming back in (or enlarging the body) restores the content. Wires that cross into a hidden body from outside — captures and references to an enclosing body's `element`/`acc` — stay visible up to the placeholder's border, so you can still see what feeds the body (and click such a wire to select it); only the body-internal portion is hidden with the content.
+
 ### Function values: closures and the `f` pin
 
 The inline body is the *default* way to author an HOF's per-element computation, but on its own it fuses that computation to a single call site. To **reuse** one computation across several HOFs — or to compute and pass around a function — atomCAD provides function values, built with the `closure` node and consumed through an HOF's optional `f` pin or the `apply` node:

@@ -1,4 +1,7 @@
+import 'dart:ui' show ClipOp;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -27,6 +30,23 @@ class WireHitResult {
 
   WireHitResult(this.sourceNodeId, this.sourcePinIndex, this.destNodeId,
       this.destParamIndex, this.scopeChain);
+}
+
+/// A boundary-crossing wire of a hidden (collapsed/compact) body, resolved to
+/// drawable screen endpoints. `destPos` is the interior phantom position when
+/// it falls inside the hidden container's rect, else the rect center. See
+/// `NodeNetworkPainter._collectCollapsedCrossingWires`.
+class _CollapsedCrossingWire {
+  final WireView wire;
+
+  /// The wire's storage scope (where it sits in the model).
+  final List<BigInt> scopeChain;
+  final Offset sourcePos;
+  final String dataType;
+  final Offset destPos;
+
+  _CollapsedCrossingWire(
+      this.wire, this.scopeChain, this.sourcePos, this.dataType, this.destPos);
 }
 
 // Grid appearance constants
@@ -177,7 +197,11 @@ class NodeNetworkPainter extends CustomPainter {
       final zone = node.zone;
       if (zone == null) continue;
       final innerChain = <BigInt>[node.id];
-      if (resolver.isBodyCollapsed(innerChain)) continue;
+      if (resolver.isBodyCollapsed(innerChain)) {
+        _drawCollapsedBodyCrossingWires(
+            resolver, node, zone, const <BigInt>[], canvas, paint);
+        continue;
+      }
       _drawWiresInZone(resolver, zone, innerChain, canvas, paint);
     }
 
@@ -210,9 +234,11 @@ class NodeNetworkPainter extends CustomPainter {
   /// not here. See `doc/design_zones_ui.md` §"Wire rendering across scopes".
   ///
   /// Bodies that are collapsed (rendered too small to be readable per the
-  /// U6 zoom-level rule) skip their content's wires; the HOF's chrome and
-  /// any wires crossing into the body still render — capture wire endpoints
-  /// land on the (still-positioned) zone-input/output pins on the HOF.
+  /// U6 zoom-level rule, or compact) hide their interior wires, but wires
+  /// *crossing* the boundary from a visible scope — captures, ancestor
+  /// iteration-value references — still render, clipped so they terminate at
+  /// the visible placeholder's border (issue #416). See
+  /// [_drawCollapsedBodyCrossingWires].
   void _drawWiresInZone(
     ScopeResolver resolver,
     ZoneView zone,
@@ -225,9 +251,127 @@ class NodeNetworkPainter extends CustomPainter {
       final inner = node.zone;
       if (inner == null) continue;
       final innerChain = [...scopeChain, node.id];
-      if (resolver.isBodyCollapsed(innerChain)) continue;
+      if (resolver.isBodyCollapsed(innerChain)) {
+        _drawCollapsedBodyCrossingWires(
+            resolver, node, inner, scopeChain, canvas, paint);
+        continue;
+      }
       _drawWiresInZone(resolver, inner, innerChain, canvas, paint);
     }
+  }
+
+  /// Screen rect of the visible stand-in for a hidden body: the body-region
+  /// placeholder at normal zoom, or the whole node rect for a compact HOF and
+  /// for the zoomed-out solid-box rendering (which has no distinct body
+  /// sub-region). Crossing wires are clipped against this rect so they
+  /// terminate exactly at its border.
+  Rect? _hiddenBodyClipRect(
+      ScopeResolver resolver, NodeView hof, List<BigInt> parentChain) {
+    final bodyChain = [...parentChain, hof.id];
+    if (zoomLevel == ZoomLevel.normal &&
+        !resolver.layout.isCompact(bodyChain)) {
+      final origin = resolver.layout.lookupOrigin(bodyChain);
+      final size = resolver.layout.lookupSize(bodyChain);
+      if (origin == null || size == null) return null;
+      return origin & (size * getZoomScale(zoomLevel));
+    }
+    final pos =
+        resolver.scopedToScreen(parentChain, apiVec2ToOffset(hof.position));
+    return pos & resolver.effectiveNodeSizeScreen(hof, parentChain);
+  }
+
+  /// True when [wire]'s source pin is rendered outside the hidden body
+  /// subtree whose scope chain has length [hiddenDepth]. Only such wires have
+  /// a visible portion to draw; wires sourced inside the hidden subtree
+  /// (interior wires, the hidden HOF's own zone-input references, body-return
+  /// wires) are fully hidden. [storageScope] is the wire's storage scope,
+  /// which always extends the hidden chain.
+  static bool _sourceVisiblyOutsideHiddenBody(
+      WireView wire, List<BigInt> storageScope, int hiddenDepth) {
+    final depth = wire.sourceScopeDepth.clamp(0, storageScope.length);
+    final sourceScopeLen = storageScope.length - depth;
+    if (wire.sourcePin is APISourcePin_ZoneInput) {
+      // The pin faces into the body of the HOF at `sourceScope ++ [nodeId]`;
+      // it is visible only when that body is a proper ancestor of the hidden
+      // one (equal length means it IS the hidden body).
+      return sourceScopeLen + 1 < hiddenDepth;
+    }
+    return sourceScopeLen < hiddenDepth;
+  }
+
+  /// Collect the boundary-crossing wires stored anywhere in a hidden body's
+  /// subtree (the body's own wires plus nested bodies', which are hidden with
+  /// it), resolved to drawable endpoints. Endpoints resolve through the
+  /// layout cache, which is populated regardless of collapse, so a crossing
+  /// wire follows the exact same Bezier it has when the body is expanded and
+  /// nothing jumps when collapse toggles. The destination falls back to the
+  /// clip rect's center when its phantom position lands outside the rect
+  /// (compact HOFs keep no expanded-body layout under their shrunken rect).
+  List<_CollapsedCrossingWire> _collectCollapsedCrossingWires(
+    ScopeResolver resolver,
+    ZoneView zone,
+    List<BigInt> scopeChain,
+    int hiddenDepth,
+    Rect clipRect,
+  ) {
+    final result = <_CollapsedCrossingWire>[];
+    for (final wire in zone.wires) {
+      if (!_sourceVisiblyOutsideHiddenBody(wire, scopeChain, hiddenDepth)) {
+        continue;
+      }
+      final source =
+          resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
+      final dest =
+          resolver.tryPinScreenPosition(_wireDestPin(wire, scopeChain));
+      if (source == null || dest == null) continue;
+      final destPos = clipRect.contains(dest.$1) ? dest.$1 : clipRect.center;
+      result.add(_CollapsedCrossingWire(
+          wire, scopeChain, source.$1, source.$2, destPos));
+    }
+    for (final node in zone.nodes.values) {
+      final inner = node.zone;
+      if (inner == null) continue;
+      final innerChain = [...scopeChain, node.id];
+      // A nested `f`-overridden body is inert regardless of the enclosing
+      // collapse — keep its captures hidden, matching the expanded-state
+      // behavior.
+      if (resolver.isBodyFunctionOverridden(innerChain)) continue;
+      result.addAll(_collectCollapsedCrossingWires(
+          resolver, inner, innerChain, hiddenDepth, clipRect));
+    }
+    return result;
+  }
+
+  /// Draw the boundary-crossing wires of a hidden body, masked by
+  /// `ClipOp.difference` so they terminate at the border of the visible
+  /// stand-in instead of vanishing entirely (issue #416) or dangling over the
+  /// placeholder. `f`-overridden bodies stay wire-free: the inline body is
+  /// inert at eval time, so drawing its captures would misrepresent the data
+  /// flow (the "driven by `f`" placeholder explains the state).
+  void _drawCollapsedBodyCrossingWires(
+    ScopeResolver resolver,
+    NodeView hof,
+    ZoneView zone,
+    List<BigInt> parentChain,
+    Canvas canvas,
+    Paint paint,
+  ) {
+    final bodyChain = [...parentChain, hof.id];
+    if (resolver.isBodyFunctionOverridden(bodyChain)) return;
+    final clipRect = _hiddenBodyClipRect(resolver, hof, parentChain);
+    if (clipRect == null) return;
+    final crossing = _collectCollapsedCrossingWires(
+        resolver, zone, bodyChain, bodyChain.length, clipRect);
+    if (crossing.isEmpty) return;
+    canvas.save();
+    canvas.clipRect(clipRect, clipOp: ClipOp.difference);
+    for (final c in crossing) {
+      // Alignment dashes are top-level-only (see _drawWiresAtScope); body
+      // captures render solid.
+      _drawWire(c.sourcePos, c.destPos, canvas, paint, c.dataType,
+          c.wire.selected, null);
+    }
+    canvas.restore();
   }
 
   void _drawWiresAtScope(
@@ -401,7 +545,8 @@ class NodeNetworkPainter extends CustomPainter {
   /// the overlay painter's stacking — body wires render *on top of* node widgets
   /// and the (hidden-under-widgets) top-level wires, so a click inside a body
   /// must never select a top-level wire passing invisibly beneath it. Collapsed
-  /// bodies are skipped (their wires aren't visible, so aren't selectable).
+  /// bodies expose only their boundary-crossing wires (the visible clipped
+  /// portion outside the placeholder), mirroring the paint pass.
   WireHitResult? findWireAtPosition(Offset position) {
     final resolver = _makeResolver();
     if (resolver == null) return null;
@@ -410,7 +555,12 @@ class NodeNetworkPainter extends CustomPainter {
       final zone = node.zone;
       if (zone == null) continue;
       final innerChain = <BigInt>[node.id];
-      if (resolver.isBodyCollapsed(innerChain)) continue;
+      if (resolver.isBodyCollapsed(innerChain)) {
+        final hit = _hitCollapsedBodyCrossingWires(
+            resolver, node, zone, const <BigInt>[], position);
+        if (hit != null) return hit;
+        continue;
+      }
       final hit = _hitWiresInZone(resolver, zone, innerChain, position);
       if (hit != null) return hit;
     }
@@ -432,11 +582,49 @@ class NodeNetworkPainter extends CustomPainter {
       final inner = node.zone;
       if (inner == null) continue;
       final innerChain = [...scopeChain, node.id];
-      if (resolver.isBodyCollapsed(innerChain)) continue;
+      if (resolver.isBodyCollapsed(innerChain)) {
+        final hit = _hitCollapsedBodyCrossingWires(
+            resolver, node, inner, scopeChain, position);
+        if (hit != null) return hit;
+        continue;
+      }
       final deep = _hitWiresInZone(resolver, inner, innerChain, position);
       if (deep != null) return deep;
     }
     return _hitWiresAtScope(resolver, zone.wires, scopeChain, position);
+  }
+
+  /// Hit-test the boundary-crossing wires of a hidden body. Only the clipped,
+  /// visible portion (outside the placeholder rect) is hittable — a click
+  /// inside the rect belongs to the node/placeholder. Mirrors
+  /// [_drawCollapsedBodyCrossingWires].
+  WireHitResult? _hitCollapsedBodyCrossingWires(
+    ScopeResolver resolver,
+    NodeView hof,
+    ZoneView zone,
+    List<BigInt> parentChain,
+    Offset position,
+  ) {
+    final bodyChain = [...parentChain, hof.id];
+    if (resolver.isBodyFunctionOverridden(bodyChain)) return null;
+    final clipRect = _hiddenBodyClipRect(resolver, hof, parentChain);
+    if (clipRect == null) return null;
+    if (clipRect.contains(position)) return null;
+    for (final c in _collectCollapsedCrossingWires(
+        resolver, zone, bodyChain, bodyChain.length, clipRect)) {
+      if (!_isSelectableWire(c.wire)) continue;
+      final band = _getBand(c.sourcePos, c.destPos, HIT_TEST_WIRE_WIDTH);
+      if (band.contains(position)) {
+        return WireHitResult(
+          c.wire.sourceNodeId,
+          BigInt.from(c.wire.sourceOutputPinIndex),
+          c.wire.destNodeId,
+          c.wire.destParamIndex,
+          c.scopeChain,
+        );
+      }
+    }
+    return null;
   }
 
   /// Hit-test the [wires] stored at [scopeChain] against [position].
