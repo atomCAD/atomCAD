@@ -2797,6 +2797,88 @@ fn undo_set_zone_size_nested_scope() {
     });
 }
 
+// ===== Deleting/duplicating a zone-owning node preserves its body (issue #415) =====
+
+/// Issue #415: deleting an HOF whose body has contents (a node + a body-return
+/// wire + a custom body size) and undoing must restore the body wholesale, not
+/// bring the HOF back with an empty default zone.
+#[test]
+fn undo_delete_hof_restores_body_contents() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.connect_zone_output_wire(&scope, int_id, 0, 0);
+    designer.begin_zone_resize(&[], map_id);
+    designer.set_zone_size(&[], map_id, 500.0, 300.0);
+    designer.end_zone_resize();
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(map_id);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+/// Issue #415, closure variant: the reporter's case. A `closure` node's body
+/// contents must survive delete + undo.
+#[test]
+fn undo_delete_closure_restores_body_contents() {
+    let mut designer = setup_designer_with_network("test");
+    let closure_id = designer.add_node("closure", DVec2::ZERO);
+    let scope = [closure_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.connect_zone_output_wire(&scope, int_id, 0, 0);
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(closure_id);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+/// Issue #415, nested variant: a body inside a body (map in map, inner body
+/// non-empty) must survive delete + undo of the outer HOF.
+#[test]
+fn undo_delete_nested_hof_restores_body_contents() {
+    let mut designer = setup_designer_with_network("test");
+    let outer = designer.add_node("map", DVec2::ZERO);
+    let inner = designer.add_node_scoped(&[outer], "map", DVec2::ZERO, None);
+    assert_ne!(inner, 0, "nested HOF add should succeed");
+    let int_id = designer.add_node_scoped(&[outer, inner], "int", DVec2::new(5.0, 5.0), None);
+    assert_ne!(int_id, 0, "depth-2 body add should succeed");
+    if let Some(network) = designer.node_type_registry.node_networks.get_mut("test") {
+        network.select_node(outer);
+    }
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.delete_selected();
+    });
+}
+
+/// Issue #415 (redo side of the same snapshot): duplicating an HOF with body
+/// contents must round-trip — undo removes the duplicate, redo re-creates it
+/// including its body.
+#[test]
+fn undo_duplicate_hof_with_body_contents() {
+    let mut designer = setup_designer_with_network("test");
+    let map_id = add_map_with_body(&mut designer);
+    let scope = [map_id];
+    let int_id = designer.add_node_scoped(&scope, "int", DVec2::new(10.0, 10.0), None);
+    designer.connect_zone_output_wire(&scope, int_id, 0, 0);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        let new_id = d.duplicate_node(map_id);
+        assert_ne!(new_id, 0, "duplicate of an HOF should succeed");
+    });
+}
+
 #[test]
 fn set_zone_size_without_change_creates_no_command() {
     let mut designer = setup_designer_with_network("test");

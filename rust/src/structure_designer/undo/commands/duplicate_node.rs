@@ -71,6 +71,9 @@ impl UndoCommand for DuplicateNodeCommand {
             Err(_) => return,
         };
 
+        // Rebuild the zone body (issue #415) while the registry is borrowable.
+        let body = snap.load_zone_body(ctx.node_type_registry);
+
         if let Some(network) = ctx.network_mut(&self.network_name) {
             network.add_node_with_id(
                 snap.node_id,
@@ -85,7 +88,7 @@ impl UndoCommand for DuplicateNodeCommand {
             // Remove from displayed to match the original behavior.
             network.displayed_nodes.remove(&snap.node_id);
 
-            // Restore custom name and arguments
+            // Restore custom name, arguments, and zone state
             if let Some(node) = network.nodes.get_mut(&snap.node_id) {
                 node.custom_name = snap.custom_name.clone();
                 for (i, arg_snap) in snap.arguments.iter().enumerate() {
@@ -93,6 +96,7 @@ impl UndoCommand for DuplicateNodeCommand {
                         arg.incoming_wires = arg_snap.incoming_wires.clone();
                     }
                 }
+                snap.apply_zone_state(node, body);
             }
         }
     }

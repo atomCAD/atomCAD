@@ -989,11 +989,29 @@ impl StructureDesigner {
         network_name: &str,
         node_id: u64,
     ) -> Option<super::undo::snapshot::NodeSnapshot> {
+        use super::serialization::node_networks_serialization::node_network_to_serializable;
         use super::undo::snapshot::{ArgumentSnapshot, NodeSnapshot};
 
         let data_json = self.snapshot_node_data(network_name, node_id)?;
-        let network = self.node_type_registry.node_networks.get(network_name)?;
-        let node = network.nodes.get(&node_id)?;
+
+        // Split borrow: zone serialization needs built_in_node_types alongside
+        // mutable node access (same pattern as `snapshot_network`).
+        let (built_in_types, node_networks) = (
+            &self.node_type_registry.built_in_node_types,
+            &mut self.node_type_registry.node_networks,
+        );
+        let network = node_networks.get_mut(network_name)?;
+        let node = network.nodes.get_mut(&node_id)?;
+
+        // Serialize the owned zone body (if any) so restoring a deleted HOF /
+        // closure brings its body contents back (issue #415).
+        let zone_json = if let Some(arc_body) = node.zone.as_mut() {
+            let body = std::sync::Arc::make_mut(arc_body);
+            let serializable = node_network_to_serializable(body, built_in_types, None).ok()?;
+            Some(serde_json::to_value(serializable).ok()?)
+        } else {
+            None
+        };
 
         Some(NodeSnapshot {
             node_id: node.id,
@@ -1008,6 +1026,16 @@ impl StructureDesigner {
                     incoming_wires: arg.incoming_wires.clone(),
                 })
                 .collect(),
+            zone_json,
+            zone_output_wires: node
+                .zone_output_arguments
+                .iter()
+                .map(|arg| arg.incoming_wires.clone())
+                .collect(),
+            body_width: node.body_width,
+            body_height: node.body_height,
+            collapse_mode: node.collapse_mode,
+            function_pin_roles: node.function_pin_roles.clone(),
         })
     }
 

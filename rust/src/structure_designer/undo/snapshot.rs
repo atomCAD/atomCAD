@@ -1,6 +1,14 @@
-use crate::structure_designer::node_network::IncomingWire;
+use crate::structure_designer::node_network::{
+    Argument, CollapseMode, FunctionPinRole, IncomingWire, Node, NodeNetwork,
+};
+use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::serialization::node_networks_serialization::{
+    SerializableNodeNetwork, serializable_to_node_network,
+};
 use glam::f64::DVec2;
 use serde_json::Value;
+use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// Full snapshot of a node, used by undo commands to restore deleted/pasted nodes.
 #[derive(Debug, Clone)]
@@ -12,6 +20,61 @@ pub struct NodeSnapshot {
     pub node_data_json: Value,
     /// All input arguments (connections into this node)
     pub arguments: Vec<ArgumentSnapshot>,
+    /// The owned zone body of a zone-owning node (HOF / `closure`), serialized
+    /// as a `SerializableNodeNetwork` JSON value. `None` for zone-less nodes.
+    /// Without this, restoring a deleted HOF brings it back with an empty body
+    /// (issue #415).
+    pub zone_json: Option<Value>,
+    /// The HOF's `zone_output_arguments` (body-return wires), one wire list per
+    /// zone-output pin. Empty for zone-less nodes.
+    pub zone_output_wires: Vec<Vec<IncomingWire>>,
+    /// Stored body dimensions (meaningful only when `zone_json.is_some()`).
+    pub body_width: f64,
+    pub body_height: f64,
+    pub collapse_mode: CollapseMode,
+    pub function_pin_roles: BTreeMap<usize, FunctionPinRole>,
+}
+
+impl NodeSnapshot {
+    /// Rebuild the zone body captured in `zone_json`, re-initializing the
+    /// derived per-node state a deserialized body needs (custom-node-type
+    /// caches, then the `apply`/`map`/`zip_with` arg-preserving layout
+    /// post-passes — same recipe as `EditZoneBodyCommand::restore`). Returns
+    /// `None` for zone-less snapshots. Must run while the registry is
+    /// borrowable, i.e. before taking the mutable network borrow.
+    pub fn load_zone_body(&self, registry: &mut NodeTypeRegistry) -> Option<NodeNetwork> {
+        let zone_json = self.zone_json.as_ref()?;
+        let serializable: SerializableNodeNetwork =
+            serde_json::from_value(zone_json.clone()).ok()?;
+        let mut body =
+            serializable_to_node_network(&serializable, &registry.built_in_node_types, None)
+                .ok()?;
+        registry.initialize_custom_node_types_for_network(&mut body);
+        registry.update_apply_pin_layouts_for_network_preserving_args(&mut body);
+        registry.update_map_pin_layouts_for_network_preserving_args(&mut body);
+        registry.update_zip_with_pin_layouts_for_network_preserving_args(&mut body);
+        Some(body)
+    }
+
+    /// Apply the zone-related snapshot fields onto a freshly re-created node
+    /// (`add_node_with_id` resets them all to zone-less defaults). `body` is
+    /// the result of [`load_zone_body`]. A no-op-equivalent for zone-less
+    /// snapshots, so callers can apply unconditionally.
+    #[allow(clippy::arc_with_non_send_sync)]
+    pub fn apply_zone_state(&self, node: &mut Node, body: Option<NodeNetwork>) {
+        node.zone = body.map(Arc::new);
+        node.zone_output_arguments = self
+            .zone_output_wires
+            .iter()
+            .map(|wires| Argument {
+                incoming_wires: wires.clone(),
+            })
+            .collect();
+        node.body_width = self.body_width;
+        node.body_height = self.body_height;
+        node.collapse_mode = self.collapse_mode;
+        node.function_pin_roles = self.function_pin_roles.clone();
+    }
 }
 
 /// Snapshot of a node's argument (one input pin).

@@ -44,9 +44,21 @@ impl DeleteNodesCommand {
                 })
                 .collect();
 
+        // Rebuild zone bodies (issue #415) while the registry is borrowable.
+        let zone_bodies: Vec<Option<crate::structure_designer::node_network::NodeNetwork>> = self
+            .deleted_nodes
+            .iter()
+            .map(|snap| snap.load_zone_body(ctx.node_type_registry))
+            .collect();
+
         if let Some(network) = ctx.network_mut(&self.network_name) {
             // Re-add all deleted nodes
-            for (snap, data_opt) in self.deleted_nodes.iter().zip(node_data_vec) {
+            for ((snap, data_opt), body) in self
+                .deleted_nodes
+                .iter()
+                .zip(node_data_vec)
+                .zip(zone_bodies)
+            {
                 let data = match data_opt {
                     Some(d) => d,
                     None => continue,
@@ -60,7 +72,7 @@ impl DeleteNodesCommand {
                     data,
                 );
 
-                // Restore custom name and arguments
+                // Restore custom name, arguments, and zone state
                 if let Some(node) = network.nodes.get_mut(&snap.node_id) {
                     node.custom_name = snap.custom_name.clone();
                     // Restore argument connections
@@ -69,6 +81,7 @@ impl DeleteNodesCommand {
                             arg.incoming_wires = arg_snap.incoming_wires.clone();
                         }
                     }
+                    snap.apply_zone_state(node, body);
                 }
             }
 
