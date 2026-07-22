@@ -25,6 +25,7 @@ structure_designer/
 ├── node_data.rs               # NodeData trait: per-node behavior
 ├── data_type.rs               # DataType enum: type system for pins
 ├── node_type_registry.rs      # Central registry of all node types
+├── network_usages.rs          # Find Usages: read-only collection of a network's instance nodes
 ├── network_validator.rs       # Validates and repairs networks
 ├── node_dependency_analysis.rs    # Computes downstream dependents
 ├── node_display_policy_resolver.rs # Controls node visibility

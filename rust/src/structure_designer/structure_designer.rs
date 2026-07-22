@@ -2024,6 +2024,24 @@ impl StructureDesigner {
         true
     }
 
+    /// Every usage (instance node) of `network_name` across the whole
+    /// registry, addressed by `(host_network, scope_path, node_id)` and sorted
+    /// for a stable order. Read-only — see `doc/design_find_usages.md`.
+    ///
+    /// Deliberately *not* the basis of [`check_delete_references`]: that one
+    /// takes a set of targets and exempts intra-set references (bulk namespace
+    /// delete), which is a different walk, not a per-target usage list.
+    pub fn network_usages(&self, network_name: &str) -> Vec<super::network_usages::NetworkUsage> {
+        super::network_usages::collect_network_usages(&self.node_type_registry, network_name)
+    }
+
+    /// Usage counts for every referenced type name, produced by a single walk
+    /// over the registry so the user-types panel doesn't issue one call per
+    /// row. Unreferenced names are absent from the map.
+    pub fn network_usage_counts(&self) -> std::collections::HashMap<String, u32> {
+        super::network_usages::collect_network_usage_counts(&self.node_type_registry)
+    }
+
     /// Check if any network outside `targets` references any network in `targets`.
     /// Returns Ok(()) if safe to delete, or Err with details if blocked.
     ///

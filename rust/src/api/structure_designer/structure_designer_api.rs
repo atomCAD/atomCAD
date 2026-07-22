@@ -47,6 +47,7 @@ use super::structure_designer_api_types::APIMotifData;
 use super::structure_designer_api_types::APIMotifParameterInfo;
 use super::structure_designer_api_types::APIMotifSubData;
 use super::structure_designer_api_types::APINamespaceRenamePreview;
+use super::structure_designer_api_types::APINetworkUsage;
 use super::structure_designer_api_types::APINodeEvaluationResult;
 use super::structure_designer_api_types::APIParameterData;
 use super::structure_designer_api_types::APIPassivateData;
@@ -1755,6 +1756,93 @@ pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidatio
             None,
         )
     }
+}
+
+/// Find Usages: every instance node of the network `network_name`, anywhere in
+/// the open document — including inside HOF / closure bodies at any depth
+/// (issue #414, `doc/design_find_usages.md`).
+///
+/// Read-only: mutates nothing, so no undo command and no refresh. Results are
+/// sorted by `(host_network, scope_path, node_id)`. The *unfiltered* set is
+/// returned; the node-level entry point drops the originating instance
+/// Flutter-side (design D3) so the backend stays generic.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_network_usages(network_name: String) -> Vec<APINetworkUsage> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let designer = &cad_instance.structure_designer;
+                designer
+                    .network_usages(&network_name)
+                    .into_iter()
+                    .map(|usage| {
+                        // The node label and the body qualifier both resolve
+                        // against the *host* network, not the active one.
+                        let host = designer
+                            .node_type_registry
+                            .node_networks
+                            .get(&usage.host_network);
+                        let node_label = host
+                            .and_then(|network| {
+                                resolve_network_scope(network, &usage.scope_path)
+                                    .and_then(|scope| scope.nodes.get(&usage.node_id))
+                            })
+                            .map(crate::structure_designer::network_usages::node_label)
+                            .unwrap_or_else(|| network_name.clone());
+                        let body_qualifier = host.and_then(|network| {
+                            let labels =
+                                crate::structure_designer::network_usages::resolve_scope_labels(
+                                    network,
+                                    &usage.scope_path,
+                                );
+                            if labels.is_empty() {
+                                None
+                            } else {
+                                Some(format!("in {} body", labels.join(" > ")))
+                            }
+                        });
+                        APINetworkUsage {
+                            host_network: usage.host_network,
+                            scope_path: usage.scope_path,
+                            node_id: usage.node_id,
+                            node_label,
+                            body_qualifier,
+                        }
+                    })
+                    .collect()
+            },
+            Vec::new(),
+        )
+    }
+}
+
+/// Usage counts for every referenced type name, from a single walk over the
+/// registry — so the user-types panel can render one badge per row without
+/// issuing N `get_network_usages` calls per rebuild. Names with no usages are
+/// absent from the map (the panel renders nothing for those).
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_network_usage_counts() -> HashMap<String, u32> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.network_usage_counts(),
+            HashMap::new(),
+        )
+    }
+}
+
+/// Walks `scope_path` (a chain of HOF node ids) down from `network`, returning
+/// the body network it names. Unlike `StructureDesigner::get_scope_network`
+/// this is rooted at an explicit network rather than the *active* one, which
+/// is what Find Usages needs — a usage generally lives in some other network.
+fn resolve_network_scope<'a>(
+    network: &'a crate::structure_designer::node_network::NodeNetwork,
+    scope_path: &[u64],
+) -> Option<&'a crate::structure_designer::node_network::NodeNetwork> {
+    let mut current = network;
+    for hof_id in scope_path {
+        current = current.nodes.get(hof_id)?.zone.as_deref()?;
+    }
+    Some(current)
 }
 
 /// Add a node network with an auto-generated unique name and activate it.

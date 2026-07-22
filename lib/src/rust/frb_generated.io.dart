@@ -40,6 +40,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
 
   @protected
+  Map<String, int> dco_decode_Map_String_u_32_None(dynamic raw);
+
+  @protected
   Map<BigInt, NodeView> dco_decode_Map_u_64_node_view_None(dynamic raw);
 
   @protected
@@ -307,6 +310,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APINamespaceRenamePreview dco_decode_api_namespace_rename_preview(
       dynamic raw);
+
+  @protected
+  APINetworkUsage dco_decode_api_network_usage(dynamic raw);
 
   @protected
   APINetworkWithValidationErrors dco_decode_api_network_with_validation_errors(
@@ -947,6 +953,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  List<APINetworkUsage> dco_decode_list_api_network_usage(dynamic raw);
+
+  @protected
   List<APINetworkWithValidationErrors>
       dco_decode_list_api_network_with_validation_errors(dynamic raw);
 
@@ -1008,6 +1017,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
+  List<(String, int)> dco_decode_list_record_string_u_32(dynamic raw);
 
   @protected
   List<(BigInt, NodeView)> dco_decode_list_record_u_64_node_view(dynamic raw);
@@ -1437,6 +1449,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
+  (String, int) dco_decode_record_string_u_32(dynamic raw);
+
+  @protected
   (String, BigInt, bool) dco_decode_record_string_usize_bool(dynamic raw);
 
   @protected
@@ -1484,6 +1499,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Map<String, String> sse_decode_Map_String_String_None(
+      SseDeserializer deserializer);
+
+  @protected
+  Map<String, int> sse_decode_Map_String_u_32_None(
       SseDeserializer deserializer);
 
   @protected
@@ -1784,6 +1803,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APINamespaceRenamePreview sse_decode_api_namespace_rename_preview(
       SseDeserializer deserializer);
+
+  @protected
+  APINetworkUsage sse_decode_api_network_usage(SseDeserializer deserializer);
 
   @protected
   APINetworkWithValidationErrors sse_decode_api_network_with_validation_errors(
@@ -2543,6 +2565,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<APINetworkUsage> sse_decode_list_api_network_usage(
+      SseDeserializer deserializer);
+
+  @protected
   List<APINetworkWithValidationErrors>
       sse_decode_list_api_network_with_validation_errors(
           SseDeserializer deserializer);
@@ -2617,6 +2643,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<(String, String)> sse_decode_list_record_string_string(
+      SseDeserializer deserializer);
+
+  @protected
+  List<(String, int)> sse_decode_list_record_string_u_32(
       SseDeserializer deserializer);
 
   @protected
@@ -3128,6 +3158,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  (String, int) sse_decode_record_string_u_32(SseDeserializer deserializer);
+
+  @protected
   (String, BigInt, bool) sse_decode_record_string_usize_bool(
       SseDeserializer deserializer);
 
@@ -3179,6 +3212,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_Map_String_String_None(
       Map<String, String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_Map_String_u_32_None(
+      Map<String, int> self, SseSerializer serializer);
 
   @protected
   void sse_encode_Map_u_64_node_view_None(
@@ -3515,6 +3552,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_namespace_rename_preview(
       APINamespaceRenamePreview self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_network_usage(
+      APINetworkUsage self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_network_with_validation_errors(
@@ -4296,6 +4337,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<APINamespaceRenameItem> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_api_network_usage(
+      List<APINetworkUsage> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_api_network_with_validation_errors(
       List<APINetworkWithValidationErrors> self, SseSerializer serializer);
 
@@ -4374,6 +4419,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_record_string_string(
       List<(String, String)> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_record_string_u_32(
+      List<(String, int)> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_record_u_64_node_view(
@@ -4886,6 +4935,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_record_string_string(
       (String, String) self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_string_u_32(
+      (String, int) self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_usize_bool(

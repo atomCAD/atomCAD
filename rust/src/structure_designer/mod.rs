@@ -13,6 +13,7 @@ pub mod implicit_eval;
 pub mod invariants;
 pub mod layout;
 pub mod navigation_history;
+pub mod network_usages;
 pub mod network_validator;
 pub mod node_data;
 pub mod node_dependency_analysis;

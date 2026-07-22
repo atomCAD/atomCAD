@@ -1119,6 +1119,31 @@ pub struct APINetworkWithValidationErrors {
     pub validation_errors: Option<String>,
 }
 
+/// One place a custom node network is used, for the Find Usages UI
+/// (issue #414, `doc/design_find_usages.md` D2).
+///
+/// The first three fields are the addressing triple the jump needs
+/// (`host_network` + `scope_path` + `node_id`); the last two are display
+/// strings resolved Rust-side so Flutter renders a picker row without
+/// re-deriving anything.
+pub struct APINetworkUsage {
+    /// Name of the network that contains the instance node.
+    pub host_network: String,
+    /// Chain of HOF node ids from `host_network`'s top level down to the body
+    /// holding the instance. Empty for a top-level usage.
+    pub scope_path: Vec<u64>,
+    /// Id of the instance node **within its own scope**.
+    pub node_id: u64,
+    /// The instance node's display label: its node name (auto-assigned as
+    /// `helper1`, `helper2`, … unless the user renamed it), falling back to
+    /// the type name for a nameless hand-authored node.
+    pub node_label: String,
+    /// Short human-readable body qualifier naming the enclosing HOF chain,
+    /// e.g. `"in map1 body"` or `"in map1 > filter1 body"`. `None` for a
+    /// top-level usage.
+    pub body_qualifier: Option<String>,
+}
+
 #[frb]
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum NodeTypeCategory {

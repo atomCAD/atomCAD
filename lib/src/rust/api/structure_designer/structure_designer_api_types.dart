@@ -2556,6 +2556,62 @@ class APINamespaceRenamePreview {
           applicable == other.applicable;
 }
 
+/// One place a custom node network is used, for the Find Usages UI
+/// (issue #414, `doc/design_find_usages.md` D2).
+///
+/// The first three fields are the addressing triple the jump needs
+/// (`host_network` + `scope_path` + `node_id`); the last two are display
+/// strings resolved Rust-side so Flutter renders a picker row without
+/// re-deriving anything.
+class APINetworkUsage {
+  /// Name of the network that contains the instance node.
+  final String hostNetwork;
+
+  /// Chain of HOF node ids from `host_network`'s top level down to the body
+  /// holding the instance. Empty for a top-level usage.
+  final Uint64List scopePath;
+
+  /// Id of the instance node **within its own scope**.
+  final BigInt nodeId;
+
+  /// The instance node's display label: its node name (auto-assigned as
+  /// `helper1`, `helper2`, … unless the user renamed it), falling back to
+  /// the type name for a nameless hand-authored node.
+  final String nodeLabel;
+
+  /// Short human-readable body qualifier naming the enclosing HOF chain,
+  /// e.g. `"in map1 body"` or `"in map1 > filter1 body"`. `None` for a
+  /// top-level usage.
+  final String? bodyQualifier;
+
+  const APINetworkUsage({
+    required this.hostNetwork,
+    required this.scopePath,
+    required this.nodeId,
+    required this.nodeLabel,
+    this.bodyQualifier,
+  });
+
+  @override
+  int get hashCode =>
+      hostNetwork.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      nodeLabel.hashCode ^
+      bodyQualifier.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINetworkUsage &&
+          runtimeType == other.runtimeType &&
+          hostNetwork == other.hostNetwork &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          nodeLabel == other.nodeLabel &&
+          bodyQualifier == other.bodyQualifier;
+}
+
 class APINetworkWithValidationErrors {
   final String name;
   final String? validationErrors;

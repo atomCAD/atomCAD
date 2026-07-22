@@ -488,3 +488,6 @@ mod zero_ary_closure_display_test;
 
 #[path = "structure_designer/zero_ary_closure_display_undo_test.rs"]
 mod zero_ary_closure_display_undo_test;
+
+#[path = "structure_designer/find_usages_test.rs"]
+mod find_usages_test;
