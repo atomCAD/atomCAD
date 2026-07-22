@@ -2667,11 +2667,19 @@ class APINodeTypeView {
   final String? summary;
   final NodeTypeCategory category;
 
+  /// Whether this node type may be placed inside a zone body (an HOF body or
+  /// a `closure` body). `false` only for `parameter` (issue #417) — the
+  /// add-node popup filters the list on this flag when the drop target is a
+  /// body scope. Single-sourced from
+  /// `node_type_registry::allowed_in_zone_body`.
+  final bool allowedInZoneBody;
+
   const APINodeTypeView({
     required this.name,
     required this.description,
     this.summary,
     required this.category,
+    required this.allowedInZoneBody,
   });
 
   @override
@@ -2679,7 +2687,8 @@ class APINodeTypeView {
       name.hashCode ^
       description.hashCode ^
       summary.hashCode ^
-      category.hashCode;
+      category.hashCode ^
+      allowedInZoneBody.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2689,7 +2698,8 @@ class APINodeTypeView {
           name == other.name &&
           description == other.description &&
           summary == other.summary &&
-          category == other.category;
+          category == other.category &&
+          allowedInZoneBody == other.allowedInZoneBody;
 }
 
 class APIParameterData {

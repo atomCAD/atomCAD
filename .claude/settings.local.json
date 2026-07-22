@@ -352,7 +352,8 @@
       "Bash(sed -i 's/    IncomingWire, NodeRef, SourcePin,/    NodeRef, SourcePin,/' tests/structure_designer/zero_ary_closure_display_test.rs)",
       "Bash(sed -i 's/        !designer.can_undo\\(\\),/        !designer.undo_stack.can_undo\\(\\),/' tests/structure_designer/zero_ary_closure_display_test.rs)",
       "Bash(rust\" | head -10; echo done)",
-      "Bash(FIXTURE_OUT=\"C:/machine_phase_systems/flutter_cad/zero_ary_closure_walkthrough.cnnd\" cargo test -j 4 --test structure_designer generate_zero_ary_closure_walkthrough_fixture -- --ignored --nocapture)"
+      "Bash(FIXTURE_OUT=\"C:/machine_phase_systems/flutter_cad/zero_ary_closure_walkthrough.cnnd\" cargo test -j 4 --test structure_designer generate_zero_ary_closure_walkthrough_fixture -- --ignored --nocapture)",
+      "Bash(parameter)"
     ]
   }
 }

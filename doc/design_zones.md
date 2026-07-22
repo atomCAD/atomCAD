@@ -456,6 +456,8 @@ Three new validation checks for zones:
 
 3. **Every zone-input reference is valid.** `IncomingWire`s with `source_pin = ZoneInput { pin_index }` must have a `source_node_id` and `source_scope_depth` that together resolve to an HOF on the stack, and `pin_index < num_zone_input_pins` of that HOF. Depth ≥ 1 (you cannot reference a sibling node's zone-input pin from outside that HOF's body). Depth > 1 is legal and corresponds to "this inner body wants the outer HOF's iteration value" — those wires are captures, pre-evaluated at inner-body-entry against the outer's then-current iteration value.
 
+4. **No `parameter` node inside a body** (added later, issue #417). A `parameter` node declares an input pin of the *enclosing network*; a body has no interface, so the node is meaningless there — body inputs are zone-input pins and captures. Reports as a **non-blocking** error on the body node (the eval guard in `ParameterData::eval` localizes the failure, so a legacy file keeps rendering the rest of its network). Every authoring path refuses the state up front, so this check only ever fires on hand-authored or pre-#417 `.cnnd`. The rule has one definition, `node_type_registry::allowed_in_zone_body`.
+
 Existing checks (acyclic-DAG within a network, type compatibility, etc.) apply unchanged to the body. Type compatibility extends naturally: the source type for `WireSource::ZoneInput { i }` is the `i`-th zone-input pin's declared type; the destination type for `ArgumentKind::ZoneOutput` is the corresponding `zone_output_pin`'s declared type. The `can_be_converted_to` rules don't change.
 
 ### Display

@@ -396,6 +396,9 @@ mod zip_with_test;
 #[path = "structure_designer/zones_test.rs"]
 mod zones_test;
 
+#[path = "structure_designer/parameter_in_zone_body_test.rs"]
+mod parameter_in_zone_body_test;
+
 #[path = "structure_designer/closures_test.rs"]
 mod closures_test;
 

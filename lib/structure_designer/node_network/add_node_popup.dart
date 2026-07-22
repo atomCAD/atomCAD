@@ -46,10 +46,19 @@ class AddNodePopup extends StatefulWidget {
   final String? filterByCompatibleType;
   final bool? draggingFromOutput;
 
+  /// Whether the node will land inside a zone body (an HOF body or a `closure`
+  /// body). When true, node types Rust marks `allowedInZoneBody: false` — today
+  /// only `parameter`, which declares an input pin of the enclosing *network*
+  /// and is meaningless in a body (issue #417) — are dropped from the list.
+  /// Rust refuses those adds regardless; this just keeps a dead entry off the
+  /// menu.
+  final bool inZoneBody;
+
   const AddNodePopup({
     super.key,
     this.filterByCompatibleType,
     this.draggingFromOutput,
+    this.inZoneBody = false,
   });
 
   @override
@@ -75,10 +84,34 @@ class _AddNodePopupState extends State<AddNodePopup> {
       categories = getNodeTypeViews();
     }
     if (categories != null) {
-      _allCategories = categories;
+      _allCategories = widget.inZoneBody
+          ? _dropNodesDisallowedInZoneBody(categories)
+          : categories;
     }
     _filteredCategories = List.from(_allCategories);
     _filterController.addListener(_filterNodes);
+  }
+
+  /// Removes node types that may not be placed in a zone body, dropping any
+  /// category left empty. The flag is computed in Rust
+  /// (`node_type_registry::allowed_in_zone_body`) so the popup and the backend
+  /// refusal can't drift apart.
+  List<APINodeCategoryView> _dropNodesDisallowedInZoneBody(
+      List<APINodeCategoryView> categories) {
+    return categories
+        .map((category) {
+          final nodes =
+              category.nodes.where((node) => node.allowedInZoneBody).toList();
+          if (nodes.isEmpty) {
+            return null;
+          }
+          return APINodeCategoryView(
+            category: category.category,
+            nodes: nodes,
+          );
+        })
+        .whereType<APINodeCategoryView>()
+        .toList();
   }
 
   void _filterNodes() {
@@ -317,6 +350,7 @@ Future<String?> showAddNodePopup(
   BuildContext context, {
   String? filterByCompatibleType,
   bool? draggingFromOutput,
+  bool inZoneBody = false,
 }) {
   return showDialog<String>(
     context: context,
@@ -324,6 +358,7 @@ Future<String?> showAddNodePopup(
     builder: (context) => AddNodePopup(
       filterByCompatibleType: filterByCompatibleType,
       draggingFromOutput: draggingFromOutput,
+      inZoneBody: inZoneBody,
     ),
   );
 }

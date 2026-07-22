@@ -57,6 +57,45 @@ impl NodeData for ParameterData {
     ) -> EvalOutput {
         let evaled_in_isolation = network_stack.len() < 2;
 
+        // Issue #417: a `parameter` node inside a zone body (an HOF body or a
+        // `closure` body) is not authorable — `add_node_scoped`,
+        // `paste_at_position_scoped` and `duplicate_node_scoped` all refuse it,
+        // and the add-node popup filters it out — but one can still arrive in a
+        // hand-authored or pre-#417 `.cnnd`. Both eval paths below are wrong for
+        // it, in different ways:
+        //
+        //  - With a real stack (eager HOFs, `apply`, and the 0-ary-closure scene
+        //    pass) the frame below us is the *zone-owning* node, not a call
+        //    site, so the argument lookup would silently return e.g. `map.xs` —
+        //    or panic outright on a `closure`, which declares no input pins.
+        //  - With a lazy walker's body-only stack (`map`/`filter`) we'd take the
+        //    isolation path and quietly behave as "constant = my `default` pin".
+        //
+        // Localize both into one error. The lazy case is detected by an empty
+        // call stack paired with a non-empty `eval_scope_path` — `run_closure_once`
+        // pushes an eval scope for the body, while a genuine top-level isolation
+        // pass has an empty path (a custom-network instance would also have
+        // pushed a *stack* frame, so it can't be confused with this). The
+        // network validator raises the matching non-blocking badge on this node.
+        let in_zone_body = if evaled_in_isolation {
+            !context.eval_scope_path.is_empty()
+        } else {
+            let parent_node_id = network_stack.last().unwrap().node_id;
+            network_stack[network_stack.len() - 2]
+                .node_network
+                .nodes
+                .get(&parent_node_id)
+                .and_then(|parent| registry.get_node_type_for_node(parent))
+                .map(|parent_type| parent_type.has_zone())
+                .unwrap_or(false)
+        };
+        if in_zone_body {
+            return EvalOutput::single(NetworkResult::Error(format!(
+                "parameter '{}': `parameter` nodes are not allowed inside a zone body",
+                self.param_name
+            )));
+        }
+
         if evaled_in_isolation {
             // Check if CLI parameter is provided (has precedence over default pin)
             if let Some(cli_value) = context.top_level_parameters.get(&self.param_name) {

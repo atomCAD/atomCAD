@@ -4,7 +4,7 @@ use crate::structure_designer::node_network::{
     function_input_pin_connected, function_pin_dispositions,
 };
 use crate::structure_designer::node_type::{OutputPinDefinition, Parameter, PinOutputType};
-use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::node_type_registry::{NodeTypeRegistry, allowed_in_zone_body};
 use crate::structure_designer::nodes::parameter::ParameterData;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -908,6 +908,36 @@ fn validate_zones_recursive(
                     ));
                 }
             }
+        }
+
+        // Issue #417: `parameter` nodes are not allowed inside a zone body (an
+        // HOF body or a `closure` body). A `parameter` declares an input pin of
+        // the enclosing *network*; a body has no interface — its inputs are
+        // zone-input pins and captures. `validate_parameters` only walks the
+        // top-level network, so a body `parameter` never gets a coherent
+        // `param_index`/`param_id` and its eval would read the enclosing HOF's
+        // arguments by a stale index.
+        //
+        // `ancestors` is non-empty exactly when `network` is a body (Pass B
+        // recurses with the extended chain), so this fires only inside bodies.
+        //
+        // Non-blocking (does NOT set `ok = false`) per the blast-radius litmus
+        // test in `structure_designer/AGENTS.md`: `ParameterData::eval` detects
+        // the same condition and returns a localized `NetworkResult::Error`, so
+        // one stray body `parameter` in a legacy file must not blank the whole
+        // network. Every authoring path that could create one is refused up
+        // front (`add_node_scoped`, `paste_at_position_scoped`,
+        // `duplicate_node_scoped`, plus the add-node popup filter), so in
+        // practice this rule only ever sees hand-authored or pre-#417 `.cnnd`.
+        if !ancestors.is_empty() && !allowed_in_zone_body(&node.node_type_name) {
+            network.validation_errors.push(ValidationError::warning(
+                format!(
+                    "`{}` nodes are not allowed inside a zone body — use the body's \
+                     zone-input pins or a capture wire from the enclosing network instead",
+                    node.node_type_name
+                ),
+                Some(node_id),
+            ));
         }
 
         // Rule 4 (closures `doc/design_closures.md`, §"Validation" check 4):

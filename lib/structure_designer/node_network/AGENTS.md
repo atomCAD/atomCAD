@@ -11,7 +11,7 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | `node_widget.dart` | Individual node rendering: pins, title, drag, context menu, HOF body region |
 | `scope_resolver.dart` | Per-frame `ScopeResolver` + `LayoutCache` for scope-aware coordinates, hit testing, and pin-position resolution |
 | `comment_node_widget.dart` | Special rendering for Comment nodes |
-| `add_node_popup.dart` | Node type picker dialog with category filtering |
+| `add_node_popup.dart` | Node type picker dialog with category filtering (+ the `inZoneBody` filter, below) |
 
 ## Coordinate System
 
@@ -110,6 +110,12 @@ Body nodes normally have **no eye icon** — `_buildOutputPin` hides the eye are
 **Flutter never re-derives the arity rule.** Rust folds it top-down in `build_zone_view` and publishes it as `ZoneView.bodySceneEvaluable` — already cumulative through the chain, so the free function `isScopeSceneEvaluable(root, scopeChain)` (`scope_resolver.dart`) only walks to the deepest hop and reads that one flag. It shares its definition (`displayed_node_refs::is_body_scene_evaluable`) with the scene collection that decides which bodies actually render, so eyes can't drift from what the viewport shows. Adding a parameter to any closure in the chain clears the flag and the eyes vanish; the body's stored display flags are **dormant, not cleared**, so removing the parameter brings the previous state back.
 
 Body geometry is visible in the viewport but **not click-activatable** (`viewport_pick` filters to top-level refs — the disambiguation overlay / `scrollToNode` / solo-hide are bare-node-id keyed). Collapse is a canvas concern only: a collapsed body keeps rendering its displayed pins in 3D, the eyes are just not on screen.
+
+### Node types that may not live in a body
+
+`showAddNodePopup(context, inZoneBody: …)` filters out node types whose `APINodeTypeView.allowedInZoneBody` is false — today only `parameter`, which declares an input pin of the enclosing *network* and is meaningless inside a body (issue #417). **Flutter never re-derives the rule**: it comes from `node_type_registry::allowed_in_zone_body` in Rust, which also backs the `add_node_scoped` / paste / duplicate refusals, so the menu can't offer something the backend would reject.
+
+Every call site must pass `inZoneBody: scopeChain.isNotEmpty`. The wire-drop-in-empty-space path (`_handleWireDropInEmptySpace`) therefore resolves `findContainingScope(dropPosition)` **before** opening the popup rather than after — the resolver is a pure function of the current model state and the popup is modal, so the scope is the same either way.
 
 ### Active scope chain
 

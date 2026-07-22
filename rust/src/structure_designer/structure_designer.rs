@@ -13,7 +13,7 @@ use super::node_network::{
 use super::node_network_gadget::NodeNetworkGadget;
 use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
-use super::node_type_registry::{NodeTypeRegistry, UserTypeKind};
+use super::node_type_registry::{NodeTypeRegistry, UserTypeKind, allowed_in_zone_body};
 use super::preferences::load_preferences;
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
 use super::undo::snapshot::PendingMove;
@@ -2694,6 +2694,13 @@ impl StructureDesigner {
         if scope_path.is_empty() {
             return self.add_node_with_drag_source(node_type_name, position, drag_source);
         }
+        // Issue #417: `parameter` nodes declare the *enclosing network's*
+        // interface and are meaningless inside a zone body. The add-node popup
+        // already filters them out for body scopes (`allowed_in_zone_body` on
+        // `APINodeTypeView`); this is the authoritative backend refusal.
+        if !allowed_in_zone_body(node_type_name) {
+            return 0;
+        }
         // Capture the body's before-state for undo (whole-body snapshot).
         let before = self.snapshot_zone_body(scope_path);
         // Case C reflow (doc/design_reflow_on_footprint_change.md): adding a node
@@ -3234,7 +3241,17 @@ impl StructureDesigner {
             Some(cb) => cb,
             None => return vec![],
         };
-        let all_clipboard_ids: HashSet<u64> = clipboard.nodes.keys().copied().collect();
+        // Issue #417: `parameter` nodes are not allowed in a zone body, so a
+        // clipboard captured at top level drops them on the way in. Wires that
+        // referenced them simply arrive unconnected (`copy_nodes_from` already
+        // skips sources outside the copied set), which is the same outcome as
+        // pasting any other partial selection.
+        let all_clipboard_ids: HashSet<u64> = clipboard
+            .nodes
+            .iter()
+            .filter(|(_, node)| allowed_in_zone_body(&node.node_type_name))
+            .map(|(id, _)| *id)
+            .collect();
         if all_clipboard_ids.is_empty() {
             return vec![];
         }
@@ -3944,6 +3961,18 @@ impl StructureDesigner {
     pub fn duplicate_node_scoped(&mut self, scope_path: &[u64], node_id: u64) -> u64 {
         if scope_path.is_empty() {
             return self.duplicate_node(node_id);
+        }
+        // Issue #417: refuse to duplicate a body node the rule forbids. This can
+        // only bite on a legacy/hand-authored body that already contains one —
+        // the validator flags those rather than deleting them, so guard the one
+        // path that could multiply them.
+        if self
+            .get_scope_network(scope_path)
+            .and_then(|network| network.nodes.get(&node_id))
+            .map(|node| !allowed_in_zone_body(&node.node_type_name))
+            .unwrap_or(false)
+        {
+            return 0;
         }
         let before = self.snapshot_zone_body(scope_path);
         // Case C reflow (doc/design_reflow_on_footprint_change.md): the duplicate

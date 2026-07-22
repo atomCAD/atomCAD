@@ -997,6 +997,7 @@ impl NodeTypeRegistry {
                 description: node_type.description.clone(),
                 summary: node_type.summary.clone(),
                 category,
+                allowed_in_zone_body: allowed_in_zone_body(&node_type.name),
             })
             .collect();
 
@@ -1058,6 +1059,7 @@ impl NodeTypeRegistry {
                     description: node.description.clone(),
                     summary: node.summary.clone(),
                     category: node.category.clone(),
+                    allowed_in_zone_body: allowed_in_zone_body(&node.name),
                 }),
         );
 
@@ -1067,6 +1069,7 @@ impl NodeTypeRegistry {
             description: network.node_type.description.clone(),
             summary: network.node_type.summary.clone(),
             category: NodeTypeCategory::Custom,
+            allowed_in_zone_body: allowed_in_zone_body(&network.node_type.name),
         }));
 
         // Group by category
@@ -3990,6 +3993,29 @@ pub fn validate_record_type_defs(registry: &NodeTypeRegistry) -> Vec<String> {
     }
 
     errors
+}
+
+/// Whether a node type may be placed inside a zone body (an HOF body or a
+/// `closure` body — any `Node.zone`), at any nesting depth.
+///
+/// Only `parameter` is excluded (issue #417). A `parameter` node declares an
+/// **input pin of the enclosing node network**; a zone body is not a network
+/// with an interface — its inputs are zone-input pins and captures. A body
+/// `parameter` is therefore meaningless, and worse than inert: `validate_parameters`
+/// only walks the top-level network, so a body `parameter` never receives a
+/// `param_id`/`param_index`, and `ParameterData::eval` would then index the
+/// enclosing HOF's `arguments` by a stale `param_index` (silently returning
+/// e.g. `map.xs`, or panicking on a `closure`, which has no input pins at all).
+///
+/// This is the single definition of the rule. Its consumers:
+/// - `StructureDesigner::add_node_scoped` (rejects the add),
+/// - `paste_at_position_scoped` / `duplicate_node_scoped` (drop the node),
+/// - `APINodeTypeView::allowed_in_zone_body` (the add-node popup filters on it),
+/// - `network_validator::validate_zones_recursive` (backstop for hand-authored
+///   or legacy `.cnnd` files),
+/// - `ParameterData::eval` (defensive localized error instead of a panic).
+pub fn allowed_in_zone_body(node_type_name: &str) -> bool {
+    node_type_name != "parameter"
 }
 
 /// Pure static-pin compatibility check for the drag-aware add-node popup.

@@ -1163,6 +1163,12 @@ pub struct APINodeTypeView {
     pub description: String,
     pub summary: Option<String>,
     pub category: NodeTypeCategory,
+    /// Whether this node type may be placed inside a zone body (an HOF body or
+    /// a `closure` body). `false` only for `parameter` (issue #417) — the
+    /// add-node popup filters the list on this flag when the drop target is a
+    /// body scope. Single-sourced from
+    /// `node_type_registry::allowed_in_zone_body`.
+    pub allowed_in_zone_body: bool,
 }
 
 /// Source pin context for the drag-aware add-node popup. When the user drags

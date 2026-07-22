@@ -160,7 +160,8 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   // Matrix types. 'IMat3' entry must come before 'Mat3' so that the
   // substring-match loop picks it for the integer variant before the float
   // variant's 'Mat3' key also matches.
-  'IMat2': Color(0xFF7986CB), // Desaturated indigo (integer variant, mirrors IMat3)
+  'IMat2':
+      Color(0xFF7986CB), // Desaturated indigo (integer variant, mirrors IMat3)
   'IMat3': Color(0xFF7986CB), // Desaturated indigo (integer variant)
   'Mat3': Color(0xFF42A5F5), // Saturated blue (float variant)
 
@@ -539,18 +540,24 @@ class NodeNetworkState extends State<NodeNetwork> {
     // see the full signature. See `doc/design_drag_aware_add_node.md` (Tier 2).
     final dataType = _dragSourceTypeFor(startPin);
 
-    final selectedNodeType = await showAddNodePopup(
-      context,
-      filterByCompatibleType: dataType,
-      draggingFromOutput: isOutput,
-    );
-
-    if (selectedNodeType == null || !mounted) return;
-
+    // Resolve the drop target's scope *before* opening the popup: the list is
+    // filtered on it (a body scope hides node types that may not live in a
+    // body — issue #417). The resolver is a pure function of the current model
+    // state and the popup is modal, so the scope computed here is the same one
+    // the post-popup code used to re-derive.
     final resolver = _makeResolver();
     if (resolver == null) return;
     final scope = resolver.findContainingScope(dropPosition);
     final logicalPosition = scope.bodyLocal;
+
+    final selectedNodeType = await showAddNodePopup(
+      context,
+      filterByCompatibleType: dataType,
+      draggingFromOutput: isOutput,
+      inZoneBody: scope.scopeChain.isNotEmpty,
+    );
+
+    if (selectedNodeType == null || !mounted) return;
 
     final newNodeId = widget.graphModel.createNode(
       selectedNodeType,
@@ -1131,7 +1138,8 @@ class NodeNetworkState extends State<NodeNetwork> {
 
         if (!context.mounted) return;
         if (value == 'add_node') {
-          String? selectedNode = await showAddNodePopup(context);
+          String? selectedNode = await showAddNodePopup(context,
+              inZoneBody: scopeChain.isNotEmpty);
           if (selectedNode != null) {
             model.createNode(selectedNode, logicalPosition,
                 scopeChain: scopeChain);
@@ -1141,7 +1149,8 @@ class NodeNetworkState extends State<NodeNetwork> {
               scopeChain: scopeChain);
         }
       } else {
-        String? selectedNode = await showAddNodePopup(context);
+        String? selectedNode =
+            await showAddNodePopup(context, inZoneBody: scopeChain.isNotEmpty);
         if (selectedNode != null) {
           model.createNode(selectedNode, logicalPosition,
               scopeChain: scopeChain);

@@ -184,6 +184,8 @@ The above image shows a subnetwork named `cube` which has an integer parameter d
 
 The *sort order* property of a parameter determines the order of the parameters in the resulting custom node.
 
+A `parameter` node declares an input pin of the node network it sits in, so it can only be placed at the **top level of a network** — never inside a higher-order function's or a `closure`'s inline body. A body is not a network with its own interface: values reach it through the body's [zone-input pins](#higher-order-functions-and-inline-bodies) (`element`, `acc`) and through [capture wires](#higher-order-functions-and-inline-bodies) from the enclosing scope. Accordingly, `parameter` does not appear in the Add Node popup when you add a node inside a body, and pasting a selection that contains one into a body drops it. An older project file that contains such a node shows a warning badge on it — the rest of the network keeps working; replace the node with a capture wire or a zone input.
+
 To make a subnetwork 'return a value' you need to set its *output node*. The output node will supply the output value of the custom node we are defining with our subnetwork. It is similar to a return statement in a programming language. You can set a node as an output node of its node network by right clicking on it and selecting the *Set as return node* menu item. 
 
 ![](../atomCAD_images/return_node.png)
@@ -213,6 +215,7 @@ The default way you supply that per-element computation is the inline-body model
 - Each higher-order-function node carries an **inline body region** inside the node — a small editable canvas of its own. You add nodes and wires *inside* the HOF the same way you do at the top level.
 - The body region has **zone-input pins** on its inner-left edge (sources that supply per-iteration values to the body — `element`, `acc`) and a **zone-output pin** on its inner-right edge (the body's per-iteration return value — `result`, `new_acc`, `out`).
 - Wires from outside the body into a body-internal pin are **captures** — they carry an outer-scope value into the per-iteration evaluation. Captures are how you parameterize a body without pre-binding function arguments: drag a wire from any outer-scope output straight into a body node's input.
+- Any node type can live in a body **except `parameter`**, which declares an input pin of the enclosing *network* and has no meaning inside a body (see [Subnetworks](#subnetworks)). Use a zone-input pin or a capture wire instead.
 
 Concretely, a `map` body that doubles each element looks like one `expr` node inside the body, with a parameter `x: Int` wired from the body's `element` source pin and `2 * x` wired into the body's `result` destination pin.
 
