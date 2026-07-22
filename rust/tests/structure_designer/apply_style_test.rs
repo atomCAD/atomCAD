@@ -26,6 +26,11 @@
 //! field: setting `"ball_and_stick"` / `"space_filling"` writes the per-atom
 //! override, `"default"` clears one, an invalid string errors naming it, and
 //! the non-serialized def growth exposes the new `record_construct` pin.
+//!
+//! Issue #413 adds the `fade_depth` field: `alpha`/`fade_depth` combine into
+//! one depth-ramped alpha write per matched atom (`xray::depth_faded_alpha`),
+//! so a later rule setting `alpha` alone exempts its atoms from an earlier
+//! rule's fade — the issue's "opaque markers inside a faded block" use case.
 
 use glam::Vec3;
 use glam::f64::{DVec2, DVec3};
@@ -293,6 +298,10 @@ fn style_rule_resolves_via_lookup() {
             (
                 "label".to_string(),
                 DataType::Optional(Box::new(DataType::String))
+            ),
+            (
+                "fade_depth".to_string(),
+                DataType::Optional(Box::new(DataType::Float))
             ),
         ]
     );
@@ -943,7 +952,15 @@ fn record_construct_style_rule_exposes_render_style_pin() {
     let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
         names,
-        vec!["element", "tag", "color", "alpha", "render_style", "label"]
+        vec![
+            "element",
+            "tag",
+            "color",
+            "alpha",
+            "render_style",
+            "label",
+            "fade_depth"
+        ]
     );
     // `Optional[String]` is exposed as a plain `String` pin (the wire layer
     // never sees `Optional`).
@@ -953,6 +970,13 @@ fn record_construct_style_rule_exposes_render_style_pin() {
         .find(|p| p.name == "render_style")
         .unwrap();
     assert_eq!(rs.data_type, DataType::String);
+    // Same for `fade_depth`: `Optional[Float]` surfaces as a plain `Float` pin.
+    let fd = nt
+        .parameters
+        .iter()
+        .find(|p| p.name == "fade_depth")
+        .unwrap();
+    assert_eq!(fd.data_type, DataType::Float);
 }
 
 // ============================================================================
@@ -1317,11 +1341,165 @@ fn record_construct_style_rule_label_pin_preserves_wires() {
     let names: Vec<&str> = nt.parameters.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
         names,
-        vec!["element", "tag", "color", "alpha", "render_style", "label"]
+        vec![
+            "element",
+            "tag",
+            "color",
+            "alpha",
+            "render_style",
+            "label",
+            "fade_depth"
+        ]
     );
     // The pre-existing wire survived the def growth.
     assert!(
         !node.arguments[2].incoming_wires.is_empty(),
         "the color wire must survive the def gaining a `label` field"
     );
+}
+
+// ============================================================================
+// fade_depth (issue #413)
+// ============================================================================
+
+/// A `StyleRule` carrying the depth-fade fields: optional selectors plus
+/// `alpha` / `fade_depth` (absent = unset).
+fn style_rule_fade(
+    element: Option<i32>,
+    tag: Option<&str>,
+    alpha: Option<f64>,
+    fade_depth: Option<f64>,
+) -> NetworkResult {
+    let mut fields = Vec::new();
+    if let Some(e) = element {
+        fields.push(("element".to_string(), NetworkResult::Int(e)));
+    }
+    if let Some(t) = tag {
+        fields.push(("tag".to_string(), NetworkResult::String(t.to_string())));
+    }
+    if let Some(a) = alpha {
+        fields.push(("alpha".to_string(), NetworkResult::Float(a)));
+    }
+    if let Some(f) = fade_depth {
+        fields.push(("fade_depth".to_string(), NetworkResult::Float(f)));
+    }
+    NetworkResult::record(fields)
+}
+
+/// The three-atom structure with authored crystal depths: atom 1 at the
+/// surface (0 Å), atom 2 halfway (4 Å), atom 3 deep (8 Å).
+fn depth_graded_structure() -> AtomicStructure {
+    let mut s = carbon_oxygen_structure();
+    s.set_atom_in_crystal_depth(1, 0.0);
+    s.set_atom_in_crystal_depth(2, 4.0);
+    s.set_atom_in_crystal_depth(3, 8.0);
+    s
+}
+
+fn assert_alpha_near(actual: f32, expected: f32, atom_id: u32) {
+    assert!(
+        (actual - expected).abs() < 1e-6,
+        "atom {}: alpha {} != expected {}",
+        atom_id,
+        actual,
+        expected
+    );
+}
+
+#[test]
+fn apply_style_fade_depth_ramps_alpha_with_depth() {
+    // alpha 0.8, fade_depth 8: surface atom keeps 0.8, the 4 Å atom is at the
+    // smoothstep midpoint (0.8 × 0.5 = 0.4), the 8 Å atom is fully transparent.
+    // Same ramp as the xray node (`depth_faded_alpha`), baked per atom.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(depth_graded_structure()),
+        rules_array(vec![style_rule_fade(None, None, Some(0.8), Some(8.0))]),
+    );
+    assert_alpha_near(result.get_atom_alpha(1), 0.8, 1);
+    assert_alpha_near(result.get_atom_alpha(2), 0.4, 2);
+    assert_alpha_near(result.get_atom_alpha(3), 0.0, 3);
+}
+
+#[test]
+fn apply_style_fade_depth_without_alpha_uses_opaque_surface() {
+    // A rule setting only `fade_depth` writes alpha with a surface value of
+    // 1.0: surface atoms stay fully opaque (entry removed), deeper atoms fade.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(depth_graded_structure()),
+        rules_array(vec![style_rule_fade(None, None, None, Some(8.0))]),
+    );
+    assert_alpha_near(result.get_atom_alpha(1), 1.0, 1);
+    assert_alpha_near(result.get_atom_alpha(2), 0.5, 2);
+    assert_alpha_near(result.get_atom_alpha(3), 0.0, 3);
+}
+
+#[test]
+fn apply_style_fade_exemption_by_later_alpha_rule() {
+    // THE issue #413 use case: fade a whole block, then exempt specific tagged
+    // atoms with a later rule. `alpha`/`fade_depth` write the alpha property as
+    // one unit, so the later rule's plain `alpha: 1.0` fully overwrites the
+    // faded value — the tagged deep atom renders opaque.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let mut s = depth_graded_structure();
+    s.add_atom_tag(3, "keep").unwrap();
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(s),
+        rules_array(vec![
+            style_rule_fade(None, None, Some(0.5), Some(8.0)),
+            style_rule_fade(None, Some("keep"), Some(1.0), None),
+        ]),
+    );
+    assert_alpha_near(result.get_atom_alpha(1), 0.5, 1); // surface, faded rule
+    assert_alpha_near(result.get_atom_alpha(2), 0.25, 2); // midpoint of the ramp
+    assert_alpha_near(result.get_atom_alpha(3), 1.0, 3); // deep but exempted
+}
+
+#[test]
+fn apply_style_fade_depth_zero_applies_alpha_uniformly() {
+    // `fade_depth: 0` (and any non-positive value) disables the ramp — the
+    // rule degenerates to a plain uniform alpha write, depth ignored.
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style(
+        &mut designer,
+        net,
+        molecule_value(depth_graded_structure()),
+        rules_array(vec![style_rule_fade(None, None, Some(0.5), Some(0.0))]),
+    );
+    for id in [1, 2, 3] {
+        assert_alpha_near(result.get_atom_alpha(id), 0.5, id);
+    }
+}
+
+#[test]
+fn apply_style_fade_depth_wrong_type_errors() {
+    let net = "test";
+    let mut designer = setup_designer_with_network(net);
+    let result = eval_apply_style_raw(
+        &mut designer,
+        net,
+        molecule_value(carbon_oxygen_structure()),
+        rules_array(vec![NetworkResult::record(vec![(
+            "fade_depth".to_string(),
+            NetworkResult::String("deep".to_string()),
+        )])]),
+    );
+    match result {
+        NetworkResult::Error(e) => {
+            assert!(e.contains("rules[0].fade_depth"), "{}", e);
+            assert!(e.contains("expected Float"), "{}", e);
+        }
+        other => panic!("Expected Error, got {:?}", other.infer_data_type()),
+    }
 }

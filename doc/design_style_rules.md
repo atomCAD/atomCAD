@@ -598,6 +598,28 @@ page reads correctly and is linked.
 
 ---
 
+## Addendum: `fade_depth` (issue #413)
+
+Added after the four phases shipped. `StyleRule` gained a seventh field,
+`fade_depth: Optional[Float]` (appended last so existing `record_construct`
+wires stay positionally stable): the depth in Å at which the rule's alpha
+write reaches full transparency, reusing `xray::depth_faded_alpha` — the
+exact ramp the xray node's own `fade_depth` pin applies (see
+`doc/design_xray_node.md` §"Depth falloff").
+
+The one design decision: `alpha` and `fade_depth` combine into **one** alpha
+write per matched atom — `depth_faded_alpha(alpha or 1.0, fade_depth or 0.0,
+atom.in_crystal_depth)` — and last-writer-wins applies to the pair as a
+unit. This mirrors the xray node (which likewise bakes the ramp into the
+static per-atom alpha at eval time) and directly serves the issue's use
+case: a match-all rule fades a block, and a later `{tag: …, alpha: 1.0}`
+rule fully overwrites the faded value on its atoms, exempting them. A rule
+setting only `fade_depth` uses a surface alpha of `1.0`. `fade_depth ≤ 0`
+or non-finite = ramp off (the helper's existing guard); no eval-side range
+validation, matching the xray pin's semantics. No renderer, FRB, Flutter,
+or `.cnnd` changes — the built-in-def growth flows through the generic
+record machinery.
+
 ## Future work
 
 - `region: Blueprint` pin on `apply_style` (AND with every rule) — composes

@@ -4,7 +4,8 @@
 //! `doc/design_atom_labels.md` (the `label` field). A `HasAtoms`-polymorphic,
 //! metadata-only pass-through in the `freeze`/`xray`/`tag` family. It takes a
 //! `rules: Array[Record(Named("StyleRule"))]` value and writes per-atom color,
-//! alpha, render-style, and label overrides onto the decorator (runtime-only
+//! alpha (optionally depth-faded via `fade_depth`, issue #413), render-style,
+//! and label overrides onto the decorator (runtime-only
 //! display state, never serialized, dropped by structure-rebuilding nodes — so
 //! place `apply_style` late in the chain).
 //!
@@ -32,6 +33,7 @@ use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::nodes::xray::depth_faded_alpha;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
@@ -53,9 +55,19 @@ struct StyleRule {
     tag: Option<String>,
     /// Property: 0–1 RGB albedo override. `None` ⇒ leave color alone.
     color: Option<Vec3>,
-    /// Property: 0–1 display alpha. `None` ⇒ leave alpha alone. `1.0` restores
-    /// full opacity (removes the entry) — see `set_atom_alpha`.
-    alpha: Option<f32>,
+    /// Property: 0–1 display alpha. `None` ⇒ leave alpha alone (unless
+    /// `fade_depth` is set, which makes the rule write alpha with a surface
+    /// value of `1.0`). `1.0` restores full opacity (removes the entry) — see
+    /// `set_atom_alpha`.
+    alpha: Option<f64>,
+    /// Property: depth (Å below the crystal surface) at which the rule's alpha
+    /// write fades to fully transparent (issue #413). `alpha` and `fade_depth`
+    /// combine into **one** alpha write per matched atom —
+    /// `xray::depth_faded_alpha(alpha or 1.0, fade_depth or 0.0, depth)` —
+    /// exactly the xray node's ramp, baked into the static per-atom alpha at
+    /// eval time. `None` + `alpha: None` ⇒ leave alpha alone; `<= 0` or
+    /// non-finite ⇒ ramp off (the helper guards).
+    fade_depth: Option<f64>,
     /// Property: per-atom render-style override (Phase 4). The outer `Option`
     /// distinguishes "field absent ⇒ leave the atom's render style alone"
     /// (`None`) from "field present" (`Some`); the inner `Option` then chooses
@@ -136,11 +148,11 @@ impl NodeData for ApplyStyleData {
 
         let output = map_atomic(input_val, move |mut structure| {
             // Snapshot the match inputs once. Writing color/alpha only touches
-            // the decorator, so `atomic_number` / `tag_bits` are stable across
-            // the passes below.
-            let atoms: Vec<(u32, i16, u32)> = structure
+            // the decorator, so `atomic_number` / `tag_bits` /
+            // `in_crystal_depth` are stable across the passes below.
+            let atoms: Vec<(u32, i16, u32, f32)> = structure
                 .iter_atoms()
-                .map(|(id, a)| (*id, a.atomic_number, a.tag_bits))
+                .map(|(id, a)| (*id, a.atomic_number, a.tag_bits, a.in_crystal_depth))
                 .collect();
 
             for rule in &rules {
@@ -155,7 +167,7 @@ impl NodeData for ApplyStyleData {
                     },
                 };
 
-                for &(id, atomic_number, tag_bits) in &atoms {
+                for &(id, atomic_number, tag_bits, depth) in &atoms {
                     if let Some(e) = rule.element
                         && atomic_number != e
                     {
@@ -170,8 +182,23 @@ impl NodeData for ApplyStyleData {
                     if let Some(color) = rule.color {
                         structure.set_atom_color(id, color);
                     }
-                    if let Some(alpha) = rule.alpha {
-                        structure.set_atom_alpha(id, alpha);
+                    // `alpha` / `fade_depth` combine into ONE alpha write
+                    // (mirroring xray: the depth ramp is baked into the static
+                    // per-atom alpha at eval time). Setting either makes the
+                    // rule write the alpha property, and last-writer-wins
+                    // applies to the pair as a unit — so a later `alpha: 1.0`
+                    // rule fully exempts its atoms from an earlier rule's fade
+                    // (the issue #413 use case). With `fade_depth` unset the
+                    // helper degenerates to the plain `alpha` write.
+                    if rule.alpha.is_some() || rule.fade_depth.is_some() {
+                        structure.set_atom_alpha(
+                            id,
+                            depth_faded_alpha(
+                                rule.alpha.unwrap_or(1.0),
+                                rule.fade_depth.unwrap_or(0.0),
+                                depth,
+                            ),
+                        );
                     }
                     // `render_style`: `Some(style)` sets the override,
                     // `None` ("default") clears it back to the global mode.
@@ -432,7 +459,7 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
         // treats ≥ 1.0 as "restore opacity" (removes the entry).
         let alpha = match item.extract_record_field("alpha") {
             None | Some(NetworkResult::None) => None,
-            Some(NetworkResult::Float(f)) => Some(*f as f32),
+            Some(NetworkResult::Float(f)) => Some(*f),
             Some(other) => {
                 return Err(format!(
                     "apply_style.rules[{}].alpha: expected Float, got {:?}",
@@ -492,6 +519,22 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
             }
         };
 
+        // `fade_depth` is `Optional[Float]`, the depth in Å at which the rule's
+        // alpha write reaches full transparency (issue #413). No range check:
+        // `depth_faded_alpha` folds `<= 0` and non-finite into "ramp off",
+        // matching the xray node's own pin semantics.
+        let fade_depth = match item.extract_record_field("fade_depth") {
+            None | Some(NetworkResult::None) => None,
+            Some(NetworkResult::Float(f)) => Some(*f),
+            Some(other) => {
+                return Err(format!(
+                    "apply_style.rules[{}].fade_depth: expected Float, got {:?}",
+                    i,
+                    other.infer_data_type()
+                ));
+            }
+        };
+
         out.push(StyleRule {
             element,
             tag,
@@ -499,6 +542,7 @@ fn parse_style_rules(items: Vec<NetworkResult>) -> Result<Vec<StyleRule>, String
             alpha,
             render_style,
             label,
+            fade_depth,
         });
     }
     Ok(out)
@@ -512,7 +556,10 @@ pub fn get_node_type() -> NodeType {
                       style rules. Each rule selects atoms by element and/or tag and sets the \
                       properties it specifies; rules apply in order, last writer wins per \
                       property. `label` draws text on the atom and expands the {element} and \
-                      {tag} tokens per atom (\"\" removes a label). Build rules with \
+                      {tag} tokens per atom (\"\" removes a label). `fade_depth` (in angstroms) \
+                      turns the rule's alpha into a depth ramp like the xray node's: `alpha` at \
+                      the crystal surface, fully transparent at `fade_depth`; a later rule \
+                      setting `alpha` alone exempts its atoms from the fade. Build rules with \
                       record_construct (schema StyleRule) and collect \
                       them with a sequence node into the `rules` pin. Like xray, styling is a \
                       metadata-only pass-through — place apply_style late in the chain, after any \
