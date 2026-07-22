@@ -878,19 +878,22 @@ Exposes its inline zone body as a first-class `Function` value on its output pin
 
 **Property**
 
-- `Kind` — a shape template that fixes the arity and decides, per pin, whether each type is **free** (you pick a `DataType`) or **fixed/derived** (supplied by the system). The five kinds are the four HOF body shapes plus a fully-flexible `Custom`:
+- `Kind` — a shape template that fixes the arity and decides, per pin, whether each type is **free** (you pick a `DataType`) or **fixed/derived** (supplied by the system). The dropdown offers the **0-ary function** first, then the four HOF body shapes, then the fully-flexible `Custom`:
 
   | Kind | parameters | result |
   |---|---|---|
+  | `() → T` *(0-ary function)* | none | free `T` (named `result`) |
   | `(T) -> U` *(map-like)* | `T` (named `element`) | free `U` (named `result`) |
   | `(T) -> Bool` *(filter-like)* | `T` (named `element`) | fixed `Bool` (named `result`) |
   | `(A, T) -> A` *(fold-like)* | `A` (named `acc`), `T` (named `element`) | derived `= A` (named `new_acc`) |
   | `(T) -> Unit` *(foreach-like)* | `T` (named `element`) | fixed `Unit` (named `out`) |
-  | `(P0, P1, …, Pn) -> R` *(`Custom`)* | arbitrary count and naming (including **0**), each independently typed | free `R` |
+  | `(P0, P1, …, Pn) -> R` *(`Custom`)* | arbitrary count and naming, each independently typed | free `R` |
 
-  The four preset kinds are the natural match for the four HOFs' `f` pins. `Custom` is the general case: it accepts any number of parameters (including zero), with user-chosen names and types, and a free return type. A 0-parameter Custom closure (a **thunk**) has type `() → R` and is rendered with a `() → R` title. Pair Custom with `apply` for partial application or for calling functions whose shapes don't match any HOF; Custom closures also flow into `map.f` via the "starts-with" rule whenever their first parameter matches the input element type.
+  **`() → T` is the default** — a freshly added `closure` node starts out 0-ary. It is a *named value evaluated in this node's captured context*: nothing needs to be supplied to it, its body renders in the 3D viewport (see below), and it can be wired straight into an ordinary `T` value pin, which forces it (see [Nullary function coercion](#function-values-and-closures)). Its editor is a single return-type picker with no parameter list. Internally it is just `Custom` with zero parameters, promoted to its own dropdown entry because it is the most-used shape; picking `custom` from an 0-ary closure seeds one parameter to get you started, and deleting the last parameter of a `Custom` closure takes you back to `() → T`.
 
-  The Node Properties panel shows a kind dropdown above one or two type pickers for the preset kinds, or a list of named-parameter rows + a return-type picker for `Custom`. Changing the kind restructures the node's zone pins through the standard repair pass.
+  The four preset kinds are the natural match for the four HOFs' `f` pins. `Custom` is the general case: it accepts any number of parameters, with user-chosen names and types, and a free return type. Pair Custom with `apply` for partial application or for calling functions whose shapes don't match any HOF; Custom closures also flow into `map.f` via the "starts-with" rule whenever their first parameter matches the input element type.
+
+  The Node Properties panel shows a kind dropdown above a single return-type picker for `() → T`, one or two type pickers for the preset kinds, or a list of named-parameter rows + a return-type picker for `Custom`. Changing the kind restructures the node's zone pins through the standard repair pass.
 
 **Output (single pin)**
 
@@ -898,12 +901,12 @@ Exposes its inline zone body as a first-class `Function` value on its output pin
 
 **Body (inline)**
 
-- Zone-input pins (inner-left): one per parameter — the preset kinds use `element` and `acc` to match the matching HOF; `Custom` uses the user-supplied parameter names. A 0-parameter Custom closure has no zone-input pins.
+- Zone-input pins (inner-left): one per parameter — the preset kinds use `element` and `acc` to match the matching HOF; `Custom` uses the user-supplied parameter names. A 0-ary closure has no zone-input pins.
 - Zone-output pin (inner-right): the result — `result`, `new_acc`, or `out` by preset kind, or `result` for `Custom`. Must have at least one incoming wire (an empty body fails validation, like any HOF body).
 
 The body is authored exactly like an HOF body: click into the region to make it the active scope, add nodes, and drag capture wires across the boundary. Captures are ordinary capture wires drawn into the body — they are *not* part of the shape, so the kind/type editor only ever describes parameters and result.
 
-**Viewing the body (0-parameter closures only).** Body nodes normally have no visibility eye icons, but a **0-parameter `Custom` closure** is the exception: with no parameters its body is fully determined, so its nodes get working per-pin eyes and render in the 3D viewport like top-level nodes. Adding a parameter hides the eyes again and stops the body rendering; the display state is remembered (dormant, not discarded) and returns if you remove the parameter. See [Viewing the contents of a parameter-less closure](../node_networks.md#viewing-the-contents-of-a-parameter-less-closure).
+**Viewing the body (0-ary closures only).** Body nodes normally have no visibility eye icons, but a **0-ary closure** is the exception: with no parameters its body is fully determined, so its nodes get working per-pin eyes and render in the 3D viewport like top-level nodes. Adding a parameter hides the eyes again and stops the body rendering; the display state is remembered (dormant, not discarded) and returns if you remove the parameter. See [Viewing the contents of a parameter-less closure](../node_networks.md#viewing-the-contents-of-a-parameter-less-closure).
 
 A `closure` can be promoted into a reusable named subnetwork (and the reverse) via the right-click **Extract to Network…** / **Convert to Closure** operations — see [Convert between a closure and a named network](../ui.md#manipulating-nodes-and-wires).
 
@@ -927,7 +930,7 @@ Calls a function value, and either runs it to completion (full application) or p
 
 - **Full eval (`k == N`)**: the function's return type `R`. When `R` is `Unit`, `apply` is gated by the [Execute action](../ui.md#execute-action-side-effect-nodes) — calling an effectful function is itself an effect.
 - **Partial application (`k < N`)**: `Function(<unwired parameter types>, R)` — a new function value bundling the wired arguments and the still-needed ones. Downstream consumers (another `apply`, an HOF's `f` pin, or a `Function`-typed pin on a subnetwork's return) consume it like any other function value.
-- **Thunk force (`N == 0`, `k == 0`)**: when `f` is a 0-parameter Custom closure (a `() → R` thunk), no argument pins appear and the output is `R` — `apply` simply runs the body.
+- **Thunk force (`N == 0`, `k == 0`)**: when `f` is a 0-ary closure (a `() → R` thunk), no argument pins appear and the output is `R` — `apply` simply runs the body.
 
 ## print
 

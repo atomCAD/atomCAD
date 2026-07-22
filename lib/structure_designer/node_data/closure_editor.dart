@@ -20,11 +20,21 @@ import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart
 ///
 /// | Kind            | free slots (user picks) | result pin       |
 /// |-----------------|-------------------------|------------------|
+/// | `() → T`        | `T`                     | free `T`         |
 /// | `(T) -> U`      | `T`, `U`                | free `U`         |
 /// | `(T) -> Bool`   | `T`                     | fixed `Bool`     |
 /// | `(A, T) -> A`   | `A`, `T`                | derived `= A`    |
 /// | `(T) -> Unit`   | `T`                     | fixed `Unit`     |
 /// | `(args…) → R`   | every param + return    | free             |
+///
+/// The first row — the **0-ary function** `() → T` (issue #418) — is not a
+/// separate `APIClosureKind`: it *is* `Custom` with an empty parameter list,
+/// promoted to its own top-of-list dropdown entry because it is by far the
+/// most-used shape ("a named value evaluated in its captured context", and the
+/// only shape whose body renders in the 3D viewport). Representing it as a
+/// second enum variant would give one concept two storage forms; instead the
+/// dropdown is keyed by [_KindOption], which folds `(kind, paramNames)` down
+/// to the entry to show.
 class ClosureShapeEditor extends StatefulWidget {
   /// Panel title (e.g. `'Closure Properties'`).
   final String title;
@@ -81,6 +91,11 @@ class ClosureShapeEditor extends StatefulWidget {
   State<ClosureShapeEditor> createState() => _ClosureShapeEditorState();
 }
 
+/// The entries of the Kind dropdown. One-to-one with `APIClosureKind` except
+/// for [nullary], which is `Custom` with zero parameters surfaced as its own
+/// first-class choice (issue #418).
+enum _KindOption { nullary, map, filter, fold, foreach, custom }
+
 class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
   /// Default for a freshly-revealed free slot (matches the Rust node default).
   static APIDataType _defaultArg() => const APIDataType(
@@ -125,18 +140,55 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
   }
 
   /// Human-readable signature for the kind dropdown.
-  static String _kindSignature(APIClosureKind kind) {
+  static String _optionSignature(_KindOption option) {
+    switch (option) {
+      case _KindOption.nullary:
+        return '() → T   · 0-ary function';
+      case _KindOption.map:
+        return '(T) → U   · map-like';
+      case _KindOption.filter:
+        return '(T) → Bool   · filter-like';
+      case _KindOption.fold:
+        return '(A, T) → A   · fold-like';
+      case _KindOption.foreach:
+        return '(T) → Unit   · foreach-like';
+      case _KindOption.custom:
+        return '(args…) → R   · custom';
+    }
+  }
+
+  /// Fold the stored `(kind, param_names)` pair down to the dropdown entry:
+  /// a `Custom` closure with no parameters shows as the 0-ary entry.
+  static _KindOption _optionFor(APIClosureKind kind, List<String> paramNames) {
     switch (kind) {
       case APIClosureKind.map:
-        return '(T) → U   · map-like';
+        return _KindOption.map;
       case APIClosureKind.filter:
-        return '(T) → Bool   · filter-like';
+        return _KindOption.filter;
       case APIClosureKind.fold:
-        return '(A, T) → A   · fold-like';
+        return _KindOption.fold;
       case APIClosureKind.foreach:
-        return '(T) → Unit   · foreach-like';
+        return _KindOption.foreach;
       case APIClosureKind.custom:
-        return '(args…) → R   · custom';
+        return paramNames.isEmpty ? _KindOption.nullary : _KindOption.custom;
+    }
+  }
+
+  /// The stored kind an entry maps to. Both [_KindOption.nullary] and
+  /// [_KindOption.custom] store `Custom`; they differ only in arity.
+  static APIClosureKind _kindOf(_KindOption option) {
+    switch (option) {
+      case _KindOption.nullary:
+      case _KindOption.custom:
+        return APIClosureKind.custom;
+      case _KindOption.map:
+        return APIClosureKind.map;
+      case _KindOption.filter:
+        return APIClosureKind.filter;
+      case _KindOption.fold:
+        return APIClosureKind.fold;
+      case _KindOption.foreach:
+        return APIClosureKind.foreach;
     }
   }
 
@@ -171,13 +223,47 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
   APIDataType _argAt(int i) =>
       (i < widget.typeArgs.length) ? widget.typeArgs[i] : _defaultArg();
 
-  /// Switch kinds, resizing `type_args` / `param_names` to the new kind.
-  /// Preset ↔ preset preserves overlap; preset ↔ Custom synthesizes/strips
-  /// `param_names` and re-encodes `type_args` as `[params..., return]`.
-  void _changeKind(APIClosureKind newKind) {
-    if (newKind == widget.kind) return;
+  /// Switch dropdown entries, resizing `type_args` / `param_names` to the new
+  /// shape. Preset ↔ preset preserves overlap; preset ↔ Custom
+  /// synthesizes/strips `param_names` and re-encodes `type_args` as
+  /// `[params..., return]`; the 0-ary entry drops every parameter and keeps
+  /// only the return type.
+  void _changeOption(_KindOption newOption) {
+    final current = _optionFor(widget.kind, widget.paramNames);
+    if (newOption == current) return;
 
-    if (newKind == APIClosureKind.custom) {
+    final newKind = _kindOf(newOption);
+
+    if (newOption == _KindOption.nullary) {
+      // → 0-ary: keep the current return type, drop all parameters.
+      final ret = widget.kind == APIClosureKind.custom
+          ? _argAt(widget.paramNames.length)
+          : _presetReturnType(widget.kind, widget.typeArgs);
+      widget.onChanged(newKind, [ret], const <String>[], widget.customLabel);
+    } else if (current == _KindOption.nullary) {
+      // 0-ary → anything: the stored `type_args` is `[return]` only, so there
+      // is nothing to carry into the new parameter slots. Seed them fresh and
+      // keep the return type where the target shape has a free one.
+      final ret = _argAt(0);
+      if (newOption == _KindOption.custom) {
+        // Seed one parameter so the entry visibly differs from 0-ary.
+        widget.onChanged(
+          newKind,
+          [_defaultArg(), ret],
+          <String>[_defaultNewParamName(const [])],
+          widget.customLabel,
+        );
+      } else {
+        final newCount = _argLabels(newKind).length;
+        final newArgs = <APIDataType>[
+          for (int i = 0; i < newCount; i++) _defaultArg(),
+        ];
+        // `map`'s second free slot *is* the return type — preserve it.
+        if (newKind == APIClosureKind.map) newArgs[1] = ret;
+        widget.onChanged(
+            newKind, newArgs, const <String>[], widget.customLabel);
+      }
+    } else if (newOption == _KindOption.custom) {
       // Preset → Custom: synthesize param names + re-encode type_args.
       final names = _presetParamNames(widget.kind);
       final paramTypes = _presetParamTypes(widget.kind, widget.typeArgs);
@@ -274,7 +360,8 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
     final newArgs = <APIDataType>[
       for (int j = 0; j < count; j++) (j == i) ? value : _argAt(j),
     ];
-    widget.onChanged(widget.kind, newArgs, widget.paramNames, widget.customLabel);
+    widget.onChanged(
+        widget.kind, newArgs, widget.paramNames, widget.customLabel);
   }
 
   // ------- Custom-kind helpers -------
@@ -285,7 +372,8 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
     final newArgs = <APIDataType>[
       for (int j = 0; j <= n; j++) (j == i) ? value : _argAt(j),
     ];
-    widget.onChanged(widget.kind, newArgs, widget.paramNames, widget.customLabel);
+    widget.onChanged(
+        widget.kind, newArgs, widget.paramNames, widget.customLabel);
   }
 
   /// Replace the name at param index `i`.
@@ -294,7 +382,8 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
       for (int j = 0; j < widget.paramNames.length; j++)
         (j == i) ? name : widget.paramNames[j],
     ];
-    widget.onChanged(widget.kind, widget.typeArgs, newNames, widget.customLabel);
+    widget.onChanged(
+        widget.kind, widget.typeArgs, newNames, widget.customLabel);
   }
 
   /// Append a new parameter row with a default name and `Float` type.
@@ -348,6 +437,8 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final option = _optionFor(widget.kind, widget.paramNames);
+
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(
@@ -368,32 +459,54 @@ class _ClosureShapeEditorState extends State<ClosureShapeEditor> {
           ],
 
           // Kind selector (the shape template).
-          DropdownButtonFormField<APIClosureKind>(
-            value: widget.kind,
+          DropdownButtonFormField<_KindOption>(
+            value: option,
             decoration: const InputDecoration(
               labelText: 'Kind',
               border: OutlineInputBorder(),
               isDense: true,
             ),
-            items: APIClosureKind.values
-                .map((k) => DropdownMenuItem(
-                      value: k,
-                      child: Text(_kindSignature(k)),
+            items: _KindOption.values
+                .map((o) => DropdownMenuItem(
+                      value: o,
+                      child: Text(_optionSignature(o)),
                     ))
                 .toList(),
-            onChanged: (newKind) {
-              if (newKind != null) _changeKind(newKind);
+            onChanged: (newOption) {
+              if (newOption != null) _changeOption(newOption);
             },
           ),
           const SizedBox(height: 8),
 
-          if (widget.kind == APIClosureKind.custom)
+          if (option == _KindOption.nullary)
+            ..._buildNullaryBranch(context)
+          else if (option == _KindOption.custom)
             ..._buildCustomBranch(context)
           else
             ..._buildPresetBranch(context),
         ],
       ),
     );
+  }
+
+  /// The 0-ary branch: no parameter list at all, just the return type. Stored
+  /// as `Custom` with `param_names == []`, so `type_args[0]` *is* the return
+  /// type (`_changeCustomTypeArg(0, …)` writes exactly that one slot).
+  List<Widget> _buildNullaryBranch(BuildContext context) {
+    return [
+      DataTypeInput(
+        label: 'Return Type (T)',
+        value: _argAt(0),
+        onChanged: (newValue) => _changeCustomTypeArg(0, newValue),
+      ),
+      const SizedBox(height: 8),
+      const Text(
+        'No parameters — the body is a named value evaluated in this node\'s '
+        'captured context. Its nodes get visibility eyes and render in the 3D '
+        'viewport. Switch Kind to "custom" to add parameters.',
+        style: TextStyle(color: Colors.white70, fontSize: 12),
+      ),
+    ];
   }
 
   List<Widget> _buildPresetBranch(BuildContext context) {

@@ -2566,3 +2566,51 @@ fn nullary_closure_forced_by_two_consumers() {
     assert_eq!(extract_int(evaluate_node(&designer, "main", expr_a)), 6);
     assert_eq!(extract_int(evaluate_node(&designer, "main", expr_b)), 7);
 }
+
+// ============================================================================
+// Default shape of a freshly-placed `closure` node (issue #418).
+// ============================================================================
+
+/// A newly added `closure` defaults to the **0-ary** `() -> Float` shape —
+/// `Custom` with no parameters — rather than the old map-like
+/// `(Float) -> Float`. This is the "named value evaluated in its captured
+/// context" shape, and the only one whose body renders in the viewport (see
+/// `doc/design_zero_ary_closure_body_display.md`).
+#[test]
+fn new_closure_node_defaults_to_zero_ary_function() {
+    use rust_lib_flutter_cad::structure_designer::data_type::FunctionType;
+
+    let mut designer = setup_designer_with_network("main");
+    let closure_id = designer.add_node("closure", DVec2::new(0.0, 0.0));
+
+    let node = designer
+        .node_type_registry
+        .node_networks
+        .get("main")
+        .unwrap()
+        .nodes
+        .get(&closure_id)
+        .unwrap();
+
+    let data = node
+        .data
+        .as_any_ref()
+        .downcast_ref::<ClosureData>()
+        .expect("node is not a closure");
+    assert_eq!(data.kind, ClosureKind::Custom);
+    assert!(data.param_names.is_empty());
+    assert_eq!(data.type_args, vec![DataType::Float]);
+
+    // The kind expands to: no zone-input pins, one `result` zone-output pin,
+    // and a `() -> Float` function value on the (single) output pin.
+    let node_type = node
+        .custom_node_type
+        .as_ref()
+        .expect("closure always has a custom node type");
+    assert!(node_type.zone_input_pins.is_empty());
+    assert_eq!(node_type.zone_output_pins.len(), 1);
+    assert_eq!(
+        node_type.output_type(),
+        &DataType::Function(FunctionType::new(vec![], DataType::Float))
+    );
+}

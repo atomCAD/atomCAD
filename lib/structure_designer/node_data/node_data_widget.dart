@@ -726,7 +726,10 @@ class NodeDataWidget extends StatelessWidget {
         return ClosureShapeEditor(
           title: 'Closure Properties',
           nodeTypeName: 'closure',
-          kind: closureData?.kind ?? APIClosureKind.map,
+          // Fallback is only reached while `loading` (the editor renders a
+          // spinner then); it mirrors the Rust `ClosureData::default` 0-ary
+          // shape — `Custom` with no parameters.
+          kind: closureData?.kind ?? APIClosureKind.custom,
           typeArgs: closureData?.typeArgs ?? const [],
           paramNames: closureData?.paramNames ?? const [],
           customLabel: closureData?.customLabel,

@@ -154,10 +154,15 @@ pub struct ClosureData {
 
 impl Default for ClosureData {
     fn default() -> Self {
-        // Default to the map-like `(T) -> U` shape with `Float` slots.
+        // Default to the **0-ary function** `() -> T` (issue #418): a `Custom`
+        // kind with no parameters, i.e. "a named value evaluated in its
+        // captured context". It is the most-reached-for shape — and the only
+        // one whose body renders in the viewport (see
+        // `doc/design_zero_ary_closure_body_display.md`), so it is also the
+        // most forgiving thing to land on a freshly-placed node.
         Self {
-            kind: ClosureKind::Map,
-            type_args: vec![DataType::Float, DataType::Float],
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Float],
             param_names: vec![],
             custom_label: None,
         }
@@ -335,13 +340,14 @@ pub fn get_node_type() -> NodeType {
         summary: None,
         category: NodeTypeCategory::MathAndProgramming,
         // External interface is filled in by `calculate_custom_node_type`; the
-        // default is the map-like `(Float) -> Float` shape.
+        // default is the 0-ary `() -> Float` shape (matches
+        // `ClosureData::default`).
         parameters: vec![],
         output_pins: OutputPinDefinition::single_fixed(DataType::Function(FunctionType::new(
-            vec![DataType::Float],
+            vec![],
             DataType::Float,
         ))),
-        zone_input_pins: vec![OutputPinDefinition::fixed("element", DataType::Float)],
+        zone_input_pins: vec![],
         zone_output_pins: vec![Parameter {
             id: None,
             name: "result".to_string(),

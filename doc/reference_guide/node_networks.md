@@ -254,7 +254,7 @@ When a body would render too small to be readable — typically at the farther z
 
 The inline body is the *default* way to author an HOF's per-element computation, but on its own it fuses that computation to a single call site. To **reuse** one computation across several HOFs — or to compute and pass around a function — atomCAD provides function values, built with the `closure` node and consumed through an HOF's optional `f` pin or the `apply` node:
 
-- A **`closure`** node owns an inline body exactly like an HOF, but instead of consuming the body inline it exposes it on a `Function`-typed output pin (rendered amber). You pick its shape — a *kind*: the four HOF body shapes (`(T) -> U`, `(T) -> Bool`, `(A, T) -> A`, `(T) -> Unit`), or **`Custom`** for an arbitrary parameter list (including 0 parameters, a thunk) with user-chosen names and types — from the Node Properties panel.
+- A **`closure`** node owns an inline body exactly like an HOF, but instead of consuming the body inline it exposes it on a `Function`-typed output pin (rendered amber). You pick its shape — a *kind* — from the Node Properties panel: the **0-ary function** `() → T` (the default), the four HOF body shapes (`(T) -> U`, `(T) -> Bool`, `(A, T) -> A`, `(T) -> Unit`), or **`Custom`** for an arbitrary parameter list with user-chosen names and types.
 - Each HOF has an optional **`f` input pin**. Wire a `closure` output of the matching shape into it and that function drives the HOF instead of its own inline body — the body is hidden in the editor while `f` is connected, and reappears when you disconnect it. `map.f` additionally accepts higher-arity functions via auto-partialization (its extra parameters ride along in the output stream's element type).
 - The **`apply`** node calls a function value either to completion or partially — wire all the function's argument pins for a full call, or leave some unwired to receive a new function value with the remainder still to fill. Argument pins materialize from the wired `f`'s signature; no shape is set up-front. This is what makes a `Function` a genuinely callable value — for example, calling a function-factory subnetwork's `Function` output, or chaining several `apply` nodes to supply arguments one at a time.
 
@@ -264,7 +264,7 @@ A subnetwork can also *return* a `closure` as its `Function` output, giving you 
 
 Nodes inside a body region normally have **no eye icons**: a body runs once per element (or per call), so its nodes have no single value to render — the `element` / `acc` value they read only exists during an invocation.
 
-A **`Custom` closure with zero parameters** (a thunk) is the exception. With no parameters there is nothing unknown about its body, so its nodes *can* be rendered like top-level ones, and they get working per-pin eye icons:
+A **0-ary closure** (kind `() → T`, the default for a new `closure` node) is the exception. With no parameters there is nothing unknown about its body, so its nodes *can* be rendered like top-level ones, and they get working per-pin eye icons:
 
 - Toggle any eye inside the body and that pin's value appears in the 3D viewport, exactly as it would at the top level — geometry, atoms, hover values, and error badges all work.
 - **Capture wires stay live.** A body node fed by a capture from the outer scope renders with that source's current value; edit the captured `int` and the body's output updates.
