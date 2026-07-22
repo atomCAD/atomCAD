@@ -171,7 +171,14 @@ class StructureDesignerModel extends ChangeNotifier {
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   /// Callback to scroll the node network panel to a specific node.
   /// Registered by NodeNetworkState during init.
-  void Function(BigInt nodeId)? onScrollToNode;
+  ///
+  /// [scopeChain] addresses a node inside an HOF / closure body (empty = the
+  /// top-level network). [screenAnchor] is the point — in the node-network
+  /// widget's local screen coordinates — that the target node's *center*
+  /// should land on; `null` centers it in the viewport, which is the
+  /// pre-Find-Usages behavior every other caller relies on.
+  void Function(BigInt nodeId, {List<BigInt> scopeChain, Offset? screenAnchor})?
+      onScrollToNode;
   bool directEditingMode = true;
   String _lastMinimizeMessage = '';
   String _lastAddHydrogenMessage = '';
@@ -1228,6 +1235,31 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Scrolls the node network panel to center the given node.
   void scrollToNode(BigInt nodeId) {
     onScrollToNode?.call(nodeId);
+  }
+
+  /// Navigate to one usage of a custom network (Find Usages, issue #414 —
+  /// `doc/design_find_usages.md` D4).
+  ///
+  /// Activating the host network routes through [setActiveNodeNetwork], so the
+  /// hop is recorded in the Rust navigation history for free and *Back* returns
+  /// to the network the jump started from. The instance is then selected in its
+  /// own scope and scrolled into view.
+  ///
+  /// [screenAnchor] makes the landing *anchored*: the target node's center is
+  /// placed at that point (the source node's center at right-click time), so
+  /// the node the user was looking at stays put on screen. Callers with no
+  /// meaningful source position (the user-types panel entry points) omit it and
+  /// get a viewport-centered landing. The zoom level is never changed.
+  void jumpToUsage(APINetworkUsage usage, {Offset? screenAnchor}) {
+    // `Uint64List` already holds `BigInt`s — no per-element conversion.
+    final scopeChain = usage.scopePath.toList();
+    setActiveNodeNetwork(usage.hostNetwork);
+    setSelectedNode(usage.nodeId, scopeChain: scopeChain);
+    // Keyboard ops (Delete, Ctrl+C/D, …) should act on the body we landed in,
+    // not on whatever body was active in the network we came from.
+    setActiveScopeChain(scopeChain);
+    onScrollToNode?.call(usage.nodeId,
+        scopeChain: scopeChain, screenAnchor: screenAnchor);
   }
 
   BigInt? getSelectedNodeId() {

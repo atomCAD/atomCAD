@@ -1637,6 +1637,26 @@ class NodeWidget extends StatelessWidget {
 
     final bool isCustomNode = isCustomNodeType(nodeTypeName: node.nodeTypeName);
 
+    // Landing anchor for a Find Usages jump: this node's center in the node-
+    // network widget's local screen coordinates. Captured **now**, before any
+    // menu opens, so a jump made through the multi-usage picker still lands
+    // anchored — the target instance's center is placed exactly where this
+    // node's center is right now ("leave the node in the same place", the
+    // issue's continuity ask; `doc/design_find_usages.md` D4). Center-to-center
+    // rather than raw cursor position because source and target nodes differ
+    // in size (pin counts). Only custom nodes offer Find Usages, so the
+    // resolver's layout pass is skipped for every other right-click.
+    Offset? usageJumpAnchor;
+    if (isCustomNode) {
+      final resolver = _resolver;
+      final Size sourceSize = node.zone != null
+          ? resolver.effectiveNodeSizeScreen(node, scopeChain)
+          : getNodeSize(node, zoomLevel);
+      usageJumpAnchor =
+          resolver.scopedToScreen(scopeChain, apiVec2ToOffset(node.position)) +
+              Offset(sourceSize.width / 2, sourceSize.height / 2);
+    }
+
     // Check if the selection can be factored into a subnetwork
     final factorInfo = getFactorSelectionInfo();
     final bool canFactor = factorInfo.canFactor;
@@ -1666,6 +1686,13 @@ class NodeWidget extends StatelessWidget {
           PopupMenuItem(
             value: 'go_to_definition',
             child: Text('Go to Definition'),
+          ),
+        // The outward counterpart of Go to Definition: where is this node's
+        // *type* used? (issue #414)
+        if (isCustomNode)
+          PopupMenuItem(
+            value: 'find_usages',
+            child: Text('Find Usages'),
           ),
         if (isCustomNode)
           PopupMenuItem(
@@ -1746,6 +1773,8 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.setActiveNodeNetwork(node.nodeTypeName);
+      } else if (value == 'find_usages') {
+        _handleFindUsages(context, position, usageJumpAnchor);
       } else if (value == 'inline') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
@@ -1846,6 +1875,83 @@ class NodeWidget extends StatelessWidget {
         model.setCollapseMode(scopeChain, node.id, APICollapseMode.collapsed);
       }
     });
+  }
+
+  /// Find Usages of this node's *type* (`doc/design_find_usages.md`, Phase 2).
+  ///
+  /// The clicked instance is dropped from the result set: it is trivially a
+  /// usage of its own type, so keeping it would make the "no usages" branch
+  /// unreachable, turn a sole usage into a jump to yourself, and degrade the
+  /// common one-other-caller case into a two-item picker containing the node
+  /// under the cursor (D3). The filter lives here rather than in the backend so
+  /// the API stays generic for the panel entry points.
+  ///
+  /// Then, on the filtered set (D5): none → SnackBar; exactly one → jump
+  /// immediately (no picker — that third click is the friction the issue is
+  /// about); several → a picker anchored at the cursor. Every branch jumps with
+  /// the anchor captured at right-click time, so going through the picker lands
+  /// just as continuously as the single-usage case.
+  Future<void> _handleFindUsages(
+      BuildContext context, RelativeRect position, Offset? anchor) async {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final typeName = node.nodeTypeName;
+    final activeNetworkName = model.nodeNetworkView?.name;
+
+    final usages = sd_api
+        .getNetworkUsages(networkName: typeName)
+        .where((u) => !(u.hostNetwork == activeNetworkName &&
+            u.nodeId == node.id &&
+            listEquals(u.scopePath.toList(), scopeChain)))
+        .toList();
+
+    if (usages.isEmpty) {
+      // "No usages" would be a lie — the clicked instance is one, just a
+      // filtered-out one.
+      messenger?.showSnackBar(
+        SnackBar(
+            content: Text("No other usages of '${getSimpleName(typeName)}'")),
+      );
+      return;
+    }
+
+    if (usages.length == 1) {
+      model.jumpToUsage(usages.first, screenAnchor: anchor);
+      return;
+    }
+
+    final picked = await showMenu<int>(
+      context: context,
+      position: position,
+      items: <PopupMenuEntry<int>>[
+        PopupMenuItem<int>(
+          enabled: false,
+          child: Text("Usages of '${getSimpleName(typeName)}'"),
+        ),
+        for (int i = 0; i < usages.length; i++)
+          PopupMenuItem<int>(
+            value: i,
+            // Qualified network names get long; cap the row so a deep
+            // namespace can't push the menu off screen.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child:
+                  Text(_usageLabel(usages[i]), overflow: TextOverflow.ellipsis),
+            ),
+          ),
+      ],
+    );
+    if (picked == null) return;
+    model.jumpToUsage(usages[picked], screenAnchor: anchor);
+  }
+
+  /// One picker row: `host network — node label (in map1 body)`. Every part is
+  /// resolved Rust-side (design D2), including the body qualifier, so nothing
+  /// is re-derived here.
+  static String _usageLabel(APINetworkUsage usage) {
+    final base = '${usage.hostNetwork} — ${usage.nodeLabel}';
+    final qualifier = usage.bodyQualifier;
+    return qualifier == null ? base : '$base ($qualifier)';
   }
 
   /// One radio-style item in the Body collapse-mode group. The check-mark is

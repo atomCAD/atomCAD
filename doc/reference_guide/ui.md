@@ -62,6 +62,9 @@ In the node network editor panel: Node titles show only the simple name, with th
 When working with custom nodes (nodes defined by subnetworks), you can quickly navigate to their definitions:
 
 - **Go to Definition:** Right-click a custom node and select *Go to Definition* to open the subnetwork that implements it.
+- **Find Usages:** Right-click a custom node and select *Find Usages* to navigate in the opposite direction — to the other places where that node's type is used. Usages are found anywhere in the open design, including inside the bodies of higher-order function nodes. If there is exactly one other usage, you jump to it straight away; if there are several, a list appears and you pick one. The node you right-clicked is not listed (it is a usage of its own type, which is never what you are looking for), so a node that is the only instance of its type reports *No other usages*.
+
+  The jump keeps you oriented: the zoom level does not change, and the node you land on appears at the same place on screen where the node you right-clicked was. The usage is also selected, so if it sits inside a collapsed function body you land on the body's node and find the usage highlighted when you open the body. Use *Back* (below) to return to where you came from.
 
 The **Node Networks** panel includes browser-like navigation buttons at the top:
 

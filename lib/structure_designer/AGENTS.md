@@ -118,6 +118,20 @@ When overlapping outputs are detected (within 0.1 Å), a disambiguation overlay 
 
 **Scroll-to-node callback pattern:** The viewport calls `model.scrollToNode(nodeId)` after activation. `StructureDesignerModel.onScrollToNode` is a callback registered by `NodeNetworkState` during `initState` (and cleared in `dispose`). This bridges the viewport→model→node-network-widget communication without requiring the viewport to hold a `GlobalKey` to the node network. SnackBar feedback (`"Activated: {nodeName}"`) confirms the activation.
 
+The callback carries two optional extras used by Find Usages (below): `scopeChain` (address a node inside an HOF/closure body) and `screenAnchor` (the point — in the node-network widget's local screen coordinates — the node's *center* should land on; omitted ⇒ viewport center, the click-to-activate behavior).
+
+## Find Usages (issue #414)
+
+The inverse of *Go to Definition*: from a custom-node instance, jump to the other places its type is used. Design doc: `doc/design_find_usages.md`.
+
+- **Backend (Phase 1)** owns the walk and the display strings: `sd_api.getNetworkUsages(networkName:)` → `List<APINetworkUsage> { hostNetwork, scopePath, nodeId, nodeLabel, bodyQualifier }`, plus a batched `getNetworkUsageCounts()` for the panel. Read-only — no refresh, no undo. Flutter never re-derives a label or a body qualifier from these.
+- **Entry point (Phase 2)** is the node context menu (`node_network/node_widget.dart` `_handleContextMenu` → `_handleFindUsages`), gated on `isCustomNodeType`. It **drops the originating instance** (active network + clicked node's scope chain + node id) — the backend deliberately returns the unfiltered set so the panel entry points (Phase 3) can reuse it. On the filtered set: 0 → SnackBar "No other usages of …", 1 → jump straight away, 2+ → a `showMenu` picker at the cursor.
+- **The jump** is `StructureDesignerModel.jumpToUsage(usage, screenAnchor:)`: `setActiveNodeNetwork` (which records the hop in the Rust navigation history for free) → scoped select → `setActiveScopeChain` → `onScrollToNode`.
+- **Anchored landing.** The anchor — the *source* node's center in node-network-local screen coordinates — is captured in `_handleContextMenu` **before any menu opens**, so a jump made through the picker still lands anchored. Zoom never changes.
+- **Two gotchas in `_scrollToNode`:**
+  1. It must set `_currentNetworkName` to the target network's name in the same `setState` that applies the pan. The top-left auto-framing (`updatePanOffsetForCurrentNetwork`) runs from *post-frame* callbacks gated on that field, so a pan applied during a network switch is otherwise silently overwritten one frame later. (The click-to-activate path never crosses a network switch, which is why it never needed this.)
+  2. A body node's position is body-local, so it is resolved via `ScopeResolver.scopedToScreen` and converted back with `screenToLogical` — pan-invariant, which is what makes the new pan well-defined. A target inside a **collapsed** body retargets to the outermost still-visible ancestor HOF; the selection stays on the real node, so opening the body reveals it highlighted. Collapse state is user intent and is never auto-expanded.
+
 Design doc: `doc/design_click_to_activate_node.md`.
 
 ## Navigation Up-Axis (view-up picker, issue #349)

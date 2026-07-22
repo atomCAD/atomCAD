@@ -496,31 +496,93 @@ class NodeNetworkState extends State<NodeNetwork> {
     super.dispose();
   }
 
-  /// Scrolls the node network view to center the given node.
-  void _scrollToNode(BigInt nodeId) {
-    final node = widget.graphModel.nodeNetworkView?.nodes[nodeId];
-    if (node == null) return;
+  /// Scrolls the node network view so the given node's center lands on
+  /// [screenAnchor] — or on the viewport center when no anchor is given (the
+  /// behavior every pre-Find-Usages caller relies on). The zoom level is never
+  /// touched.
+  ///
+  /// [scopeChain] addresses a node inside an HOF / closure body; empty means
+  /// the top-level network. A body node's position lives in its body's own
+  /// coordinate frame, so it is resolved through the [ScopeResolver]'s body
+  /// origins and converted back to top-level logical space (the conversion is
+  /// pan-invariant, which is what lets us compute the *new* pan from it).
+  ///
+  /// If the target sits inside a collapsed body its content isn't on screen at
+  /// all, so the landing retargets to the outermost ancestor HOF that is itself
+  /// visible (`doc/design_find_usages.md` D6). The selection is untouched — it
+  /// was already set by the caller — so opening the body reveals the node
+  /// highlighted. Collapse state is user intent and is never auto-expanded.
+  void _scrollToNode(BigInt nodeId,
+      {List<BigInt> scopeChain = const [], Offset? screenAnchor}) {
+    final view = widget.graphModel.nodeNetworkView;
+    if (view == null) return;
 
     // Get the widget's render box size for centering
     final renderBox = context.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final viewportSize = renderBox.size;
 
+    final resolver = _makeResolver();
+    if (resolver == null) return;
+
+    // Retarget out of any collapsed body: walk outside-in and stop at the
+    // first body whose content is hidden — its owner HOF is rendered (its own
+    // container is not collapsed), so it is the outermost visible container of
+    // the requested node.
+    List<BigInt> chain = scopeChain;
+    BigInt targetId = nodeId;
+    for (int i = 1; i <= scopeChain.length; i++) {
+      if (resolver.layout.isCollapsed(scopeChain.sublist(0, i))) {
+        chain = scopeChain.sublist(0, i - 1);
+        targetId = scopeChain[i - 1];
+        break;
+      }
+    }
+
+    final node = _resolveNodeInScope(view, chain, targetId);
+    if (node == null) return;
+
     final scale = getZoomScale(_zoomLevel);
-    final nodeSize = getNodeSize(node, _zoomLevel);
-    // Node center in logical space
-    final nodeCenterLogical = Offset(
-      node.position.x + nodeSize.width / scale / 2,
-      node.position.y + nodeSize.height / scale / 2,
-    );
-    // Pan offset so node center maps to viewport center:
-    // screenCenter = (nodeCenterLogical + panOffset) * scale
-    // panOffset = (screenCenter / scale) - nodeCenterLogical
-    final viewportCenter =
-        Offset(viewportSize.width / 2, viewportSize.height / 2);
+    // Screen footprint: HOFs use the cache-aware effective size so a grown
+    // body is centered as a whole, matching what `NodeWidget` renders.
+    final nodeSize = node.zone != null
+        ? resolver.effectiveNodeSizeScreen(node, chain)
+        : getNodeSize(node, _zoomLevel);
+    final centerScreen =
+        resolver.scopedToScreen(chain, apiVec2ToOffset(node.position)) +
+            Offset(nodeSize.width / 2, nodeSize.height / 2);
+    // Back to top-level logical space under the *current* pan, so the pan we
+    // are about to install is well-defined.
+    final nodeCenterLogical = screenToLogical(centerScreen, _panOffset, scale);
+
+    // Pan offset so the node center maps to the anchor point:
+    // anchor = (nodeCenterLogical + panOffset) * scale
+    // panOffset = (anchor / scale) - nodeCenterLogical
+    final anchor =
+        screenAnchor ?? Offset(viewportSize.width / 2, viewportSize.height / 2);
     setState(() {
-      _panOffset = (viewportCenter / scale) - nodeCenterLogical;
+      _panOffset = (anchor / scale) - nodeCenterLogical;
+      // Close the auto-framing gate. `updatePanOffsetForCurrentNetwork` runs
+      // from post-frame callbacks keyed on `_currentNetworkName`, so a jump
+      // that crosses a network switch would have its pan overwritten by the
+      // top-left framing one frame later. Claiming the name here marks the pan
+      // as already resolved for this network. (Same-network scrolls set it to
+      // the value it already had — a no-op.)
+      _currentNetworkName = view.name;
     });
+  }
+
+  /// Look up a node at [scopeChain] inside [view]. Returns null if the chain
+  /// can't be walked (e.g. a body was deleted between the jump and the scroll).
+  NodeView? _resolveNodeInScope(
+      NodeNetworkView view, List<BigInt> scopeChain, BigInt nodeId) {
+    Map<BigInt, NodeView> nodes = view.nodes;
+    for (final hofId in scopeChain) {
+      final zone = nodes[hofId]?.zone;
+      if (zone == null) return null;
+      nodes = zone.nodes;
+    }
+    return nodes[nodeId];
   }
 
   /// Handles wire dropped in empty space - shows filtered Add Node popup.
