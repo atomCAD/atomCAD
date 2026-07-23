@@ -1697,8 +1697,8 @@ impl NetworkEvaluator {
                 .results
                 .into_iter()
                 .map(|r| {
-                    if let NetworkResult::Error(_) = &r {
-                        NetworkResult::Error(format!("Error in {}", node.node_type_name))
+                    if let NetworkResult::Error(inner) = &r {
+                        NetworkResult::Error(format!("Error in {}: {}", node.node_type_name, inner))
                     } else {
                         r
                     }
@@ -1912,8 +1912,8 @@ impl NetworkEvaluator {
                     context,
                 );
                 context.pop_eval_scope();
-                if let NetworkResult::Error(_error) = &result {
-                    NetworkResult::Error(format!("Error in {}", node.node_type_name))
+                if let NetworkResult::Error(inner) = &result {
+                    NetworkResult::Error(format!("Error in {}: {}", node.node_type_name, inner))
                 } else {
                     result
                 }
