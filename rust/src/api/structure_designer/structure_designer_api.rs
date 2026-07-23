@@ -3964,7 +3964,7 @@ pub fn get_structure_move_data(scope_path: Vec<u64>, node_id: u64) -> Option<API
 
                 Some(APIStructureMoveData {
                     translation: to_api_ivec3(&structure_move_data.translation),
-                    lattice_subdivision: structure_move_data.lattice_subdivision,
+                    lattice_subdivision: to_api_ivec3(&structure_move_data.lattice_subdivision),
                 })
             },
             None,
@@ -5696,7 +5696,7 @@ pub fn set_structure_move_data(scope_path: Vec<u64>, node_id: u64, data: APIStru
         with_mut_cad_instance(|cad_instance| {
             let structure_move_data = Box::new(StructureMoveData {
                 translation: from_api_ivec3(&data.translation),
-                lattice_subdivision: data.lattice_subdivision,
+                lattice_subdivision: from_api_ivec3(&data.lattice_subdivision),
             });
             cad_instance
                 .structure_designer

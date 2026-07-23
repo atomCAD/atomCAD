@@ -3364,7 +3364,7 @@ class APIStringData {
 
 class APIStructureMoveData {
   final APIIVec3 translation;
-  final int latticeSubdivision;
+  final APIIVec3 latticeSubdivision;
 
   const APIStructureMoveData({
     required this.translation,

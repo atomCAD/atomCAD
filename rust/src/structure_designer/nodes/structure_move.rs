@@ -25,7 +25,7 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use crate::util::mat_utils::unit_ivec3;
-use crate::util::serialization_utils::ivec3_serializer;
+use crate::util::serialization_utils::{ivec3_or_int_serializer, ivec3_serializer};
 use crate::util::transform::Transform;
 use glam::DQuat;
 use glam::f64::DVec3;
@@ -36,12 +36,23 @@ use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct StructureMoveEvalCache {
     pub unit_cell: UnitCellStruct,
-    /// The subdivision actually used by `eval` — the wired `subdivision` pin's
-    /// value when connected, the stored field otherwise. The gadget must read
-    /// this rather than `StructureMoveData::lattice_subdivision`, or a wired
-    /// subdivision makes the gizmo travel `lattice_subdivision`× further than
-    /// the object it moves (issue #411).
-    pub lattice_subdivision: i32,
+    /// The per-axis subdivision actually used by `eval` — the wired
+    /// `subdiv_xyz` pin's value when connected, else the wired `subdivision`
+    /// pin splatted, else the stored field. The gadget must read this rather
+    /// than `StructureMoveData::lattice_subdivision`, or a wired subdivision
+    /// makes the gizmo travel `lattice_subdivision`× further than the object
+    /// it moves (issue #411).
+    pub lattice_subdivision: IVec3,
+}
+
+/// Renders a subdivision for user-facing strings: the scalar form (`"2"`) when
+/// uniform, the vector form (`"(2, 4, 1)"`) otherwise.
+fn format_subdivision(sub: &IVec3) -> String {
+    if sub.x == sub.y && sub.y == sub.z {
+        format!("{}", sub.x)
+    } else {
+        format!("({}, {}, {})", sub.x, sub.y, sub.z)
+    }
 }
 
 /// Wraps an extracted (or empty) diff as the `Molecule` value for the node's
@@ -59,12 +70,17 @@ fn diff_pin(mut diff: AtomicStructure) -> NetworkResult {
 pub struct StructureMoveData {
     #[serde(with = "ivec3_serializer")]
     pub translation: IVec3,
-    #[serde(default = "default_lattice_subdivision")]
-    pub lattice_subdivision: i32,
+    /// Per-axis subdivision. Old files stored a single uniform i32; the
+    /// serializer accepts both forms (a scalar splats across all three axes).
+    #[serde(
+        default = "default_lattice_subdivision",
+        with = "ivec3_or_int_serializer"
+    )]
+    pub lattice_subdivision: IVec3,
 }
 
-fn default_lattice_subdivision() -> i32 {
-    1
+fn default_lattice_subdivision() -> IVec3 {
+    IVec3::ONE
 }
 
 impl NodeData for StructureMoveData {
@@ -117,25 +133,37 @@ impl NodeData for StructureMoveData {
             Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
         };
 
-        let lattice_subdivision = match network_evaluator.evaluate_or_default(
-            network_stack,
-            node_id,
-            registry,
-            context,
-            2,
-            self.lattice_subdivision,
-            NetworkResult::extract_int,
-        ) {
-            Ok(value) => value.max(1),
-            Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
-        };
+        // Per-axis `subdiv_xyz` (pin 3) wins over the uniform `subdivision`
+        // (pin 2, splatted); both fall back to the stored per-axis field.
+        let subdiv_xyz_val =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 3);
+        if subdiv_xyz_val.is_error() {
+            return EvalOutput::multi(vec![subdiv_xyz_val.clone(), subdiv_xyz_val]);
+        }
+        let lattice_subdivision = match subdiv_xyz_val.extract_ivec3() {
+            Some(value) => value,
+            None => match network_evaluator.evaluate_or_default(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                2,
+                self.lattice_subdivision,
+                |result| result.extract_int().map(IVec3::splat),
+            ) {
+                Ok(value) => value,
+                Err(error) => return EvalOutput::multi(vec![error.clone(), error]),
+            },
+        }
+        .max(IVec3::ONE);
 
-        let subdivided_translation = translation.as_dvec3() / lattice_subdivision as f64;
+        let subdivided_translation = translation.as_dvec3() / lattice_subdivision.as_dvec3();
 
-        // Translation is lattice-safe iff each component is divisible by lattice_subdivision.
-        let divisible = translation.x.rem_euclid(lattice_subdivision) == 0
-            && translation.y.rem_euclid(lattice_subdivision) == 0
-            && translation.z.rem_euclid(lattice_subdivision) == 0;
+        // Translation is lattice-safe iff each component is divisible by its
+        // axis's subdivision.
+        let divisible = translation.x.rem_euclid(lattice_subdivision.x) == 0
+            && translation.y.rem_euclid(lattice_subdivision.y) == 0
+            && translation.z.rem_euclid(lattice_subdivision.z) == 0;
 
         match input_val {
             NetworkResult::Blueprint(shape) => {
@@ -159,7 +187,10 @@ impl NodeData for StructureMoveData {
                         || {
                             format!(
                                 "structure_move by fractional translation ({}, {}, {})/{}",
-                                translation.x, translation.y, translation.z, lattice_subdivision
+                                translation.x,
+                                translation.y,
+                                translation.z,
+                                format_subdivision(&lattice_subdivision)
                             )
                         },
                     );
@@ -214,7 +245,10 @@ impl NodeData for StructureMoveData {
                         || {
                             format!(
                                 "structure_move by fractional translation ({}, {}, {})/{}",
-                                translation.x, translation.y, translation.z, lattice_subdivision
+                                translation.x,
+                                translation.y,
+                                translation.z,
+                                format_subdivision(&lattice_subdivision)
                             )
                         },
                     );
@@ -243,8 +277,9 @@ impl NodeData for StructureMoveData {
         connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
         let show_translation = !connected_input_pins.contains("translation");
-        let show_subdivision =
-            !connected_input_pins.contains("subdivision") && self.lattice_subdivision != 1;
+        let show_subdivision = !connected_input_pins.contains("subdivision")
+            && !connected_input_pins.contains("subdiv_xyz")
+            && self.lattice_subdivision != IVec3::ONE;
 
         match (show_translation, show_subdivision) {
             (true, true) => Some(format!(
@@ -252,13 +287,16 @@ impl NodeData for StructureMoveData {
                 self.translation.x,
                 self.translation.y,
                 self.translation.z,
-                self.lattice_subdivision
+                format_subdivision(&self.lattice_subdivision)
             )),
             (true, false) => Some(format!(
                 "t: ({},{},{})",
                 self.translation.x, self.translation.y, self.translation.z
             )),
-            (false, true) => Some(format!("sub: {}", self.lattice_subdivision)),
+            (false, true) => Some(format!(
+                "sub: {}",
+                format_subdivision(&self.lattice_subdivision)
+            )),
             (false, false) => None,
         }
     }
@@ -275,7 +313,13 @@ impl NodeData for StructureMoveData {
             ),
             (
                 "subdivision".to_string(),
-                TextValue::Int(self.lattice_subdivision),
+                if self.lattice_subdivision.x == self.lattice_subdivision.y
+                    && self.lattice_subdivision.y == self.lattice_subdivision.z
+                {
+                    TextValue::Int(self.lattice_subdivision.x)
+                } else {
+                    TextValue::IVec3(self.lattice_subdivision)
+                },
             ),
         ]
     }
@@ -287,9 +331,13 @@ impl NodeData for StructureMoveData {
                 .ok_or_else(|| "translation must be an IVec3".to_string())?;
         }
         if let Some(v) = props.get("subdivision") {
-            self.lattice_subdivision = v
-                .as_int()
-                .ok_or_else(|| "subdivision must be an integer".to_string())?;
+            self.lattice_subdivision = if let Some(i) = v.as_int() {
+                IVec3::splat(i)
+            } else if let Some(vec) = v.as_ivec3() {
+                vec
+            } else {
+                return Err("subdivision must be an integer or an IVec3".to_string());
+            };
         }
         Ok(())
     }
@@ -297,6 +345,16 @@ impl NodeData for StructureMoveData {
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         let mut m = HashMap::new();
         m.insert("input".to_string(), (true, None));
+        // No matching text property (the stored `subdivision` property backs
+        // pin 2), so without this entry the introspection would mark the pin
+        // required.
+        m.insert(
+            "subdiv_xyz".to_string(),
+            (
+                false,
+                Some("overrides `subdivision` per axis when connected".to_string()),
+            ),
+        );
         m
     }
 }
@@ -304,7 +362,7 @@ impl NodeData for StructureMoveData {
 #[derive(Clone)]
 pub struct StructureMoveGadget {
     pub translation: IVec3,
-    pub lattice_subdivision: i32,
+    pub lattice_subdivision: IVec3,
     pub dragged_handle_index: Option<i32>,
     pub start_drag_offset: f64,
     pub start_drag_translation: IVec3,
@@ -392,7 +450,7 @@ impl NodeNetworkGadget for StructureMoveGadget {
 }
 
 impl StructureMoveGadget {
-    pub fn new(translation: IVec3, lattice_subdivision: i32, unit_cell: &UnitCellStruct) -> Self {
+    pub fn new(translation: IVec3, lattice_subdivision: IVec3, unit_cell: &UnitCellStruct) -> Self {
         Self {
             translation,
             lattice_subdivision,
@@ -404,14 +462,14 @@ impl StructureMoveGadget {
     }
 
     fn get_real_position(&self) -> DVec3 {
-        let subdivided_pos = self.translation.as_dvec3() / self.lattice_subdivision as f64;
+        let subdivided_pos = self.translation.as_dvec3() / self.lattice_subdivision.as_dvec3();
         self.unit_cell.dvec3_lattice_to_real(&subdivided_pos)
     }
 
     fn apply_drag_offset(&mut self, axis_index: i32, offset_delta: f64) -> bool {
         let axis_basis_vector = self.unit_cell.get_basis_vector(axis_index);
-        let rounded_delta =
-            (offset_delta / axis_basis_vector.length() * self.lattice_subdivision as f64).round();
+        let axis_subdivision = self.lattice_subdivision[axis_index as usize] as f64;
+        let rounded_delta = (offset_delta / axis_basis_vector.length() * axis_subdivision).round();
 
         if rounded_delta == 0.0 {
             return false;
@@ -432,6 +490,7 @@ pub fn get_node_type() -> NodeType {
 For a Blueprint, only the geometry (the cutter) moves; latent atoms stay anchored to the structure.
 For a Crystal, atoms and geometry move together rigidly within the structure.
 Molecule inputs are rejected (use free_move for free-space translation).
+The translation is measured in units of 1/subdivision of a lattice cell. The `subdivision` pin applies one subdivision to all three axes; the `subdiv_xyz` pin sets it per axis and overrides `subdivision` when connected (both override the stored value).
 The `diff` output pin captures the atom motion only (a Molecule diff applicable via apply_diff); geometry/structure motion is not represented in the diff. A Blueprint input yields an empty diff."
                 .to_string(),
         summary: None,
@@ -452,6 +511,11 @@ The `diff` output pin captures the atom motion only (a Molecule diff applicable 
                 name: "subdivision".to_string(),
                 data_type: DataType::Int,
             },
+            Parameter {
+                id: None,
+                name: "subdiv_xyz".to_string(),
+                data_type: DataType::IVec3,
+            },
         ],
         output_pins: vec![
             OutputPinDefinition::same_as_input("result", "input"),
@@ -463,7 +527,7 @@ The `diff` output pin captures the atom motion only (a Molecule diff applicable 
         node_data_creator: || {
             Box::new(StructureMoveData {
                 translation: IVec3::new(0, 0, 0),
-                lattice_subdivision: 1,
+                lattice_subdivision: IVec3::ONE,
             })
         },
         node_data_saver: generic_node_data_saver::<StructureMoveData>,

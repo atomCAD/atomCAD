@@ -1417,18 +1417,19 @@ fn add_structure_move(
         id,
         Box::new(StructureMoveData {
             translation,
-            lattice_subdivision: 1,
+            lattice_subdivision: IVec3::ONE,
         }),
     );
     id
 }
 
-/// Mark `structure_move`'s `input` Delayed and its two property pins Supplied —
+/// Mark `structure_move`'s `input` Delayed and its property pins Supplied —
 /// the issue's configuration.
 fn configure_move_as_delayed_input(designer: &mut StructureDesigner, network: &str, mv_id: u64) {
     set_role_raw(designer, network, mv_id, 0, FunctionPinRole::Delayed);
     set_role_raw(designer, network, mv_id, 1, FunctionPinRole::Supplied);
     set_role_raw(designer, network, mv_id, 2, FunctionPinRole::Supplied);
+    set_role_raw(designer, network, mv_id, 3, FunctionPinRole::Supplied);
 }
 
 /// An `apply` node whose `f` is wired to `source_id`'s function pin, with
@@ -1480,7 +1481,7 @@ fn roles_partition_table_covers_every_combination() {
     // All unwired, all Auto → every pin is a parameter.
     assert_eq!(
         dispositions_of(&designer, "main", mv_id),
-        vec![FunctionPinDisposition::Parameter; 3]
+        vec![FunctionPinDisposition::Parameter; 4]
     );
 
     // Auto + wired → capture-wire.
@@ -1492,6 +1493,7 @@ fn roles_partition_table_covers_every_combination() {
             FunctionPinDisposition::CaptureWire,
             FunctionPinDisposition::Parameter,
             FunctionPinDisposition::CaptureWire,
+            FunctionPinDisposition::Parameter,
         ]
     );
 
@@ -1501,12 +1503,14 @@ fn roles_partition_table_covers_every_combination() {
     set_role_raw(&mut designer, "main", mv_id, 0, FunctionPinRole::Delayed);
     set_role_raw(&mut designer, "main", mv_id, 1, FunctionPinRole::Supplied);
     set_role_raw(&mut designer, "main", mv_id, 2, FunctionPinRole::Supplied);
+    set_role_raw(&mut designer, "main", mv_id, 3, FunctionPinRole::Supplied);
     assert_eq!(
         dispositions_of(&designer, "main", mv_id),
         vec![
             FunctionPinDisposition::Parameter,
             FunctionPinDisposition::CaptureStored,
             FunctionPinDisposition::CaptureWire,
+            FunctionPinDisposition::CaptureStored,
         ]
     );
 
@@ -1525,11 +1529,12 @@ fn roles_all_supplied_is_thunk() {
     let mut designer = setup_designer_with_network("main");
     let crystal_id = add_crystal_source(&mut designer, "main", 2, 0.0);
     let mv_id = add_structure_move(&mut designer, "main", IVec3::new(1, 0, 0), -120.0);
-    // `input` is required, so capture it by wire; the two property-backed pins
+    // `input` is required, so capture it by wire; the property-backed pins
     // are Supplied from stored data.
     designer.connect_nodes(crystal_id, 0, mv_id, 0);
     set_role_raw(&mut designer, "main", mv_id, 1, FunctionPinRole::Supplied);
     set_role_raw(&mut designer, "main", mv_id, 2, FunctionPinRole::Supplied);
+    set_role_raw(&mut designer, "main", mv_id, 3, FunctionPinRole::Supplied);
 
     let zc = match evaluate_node_pin(&designer, "main", mv_id, -1) {
         NetworkResult::Function(zc) => zc,
@@ -1841,7 +1846,7 @@ fn roles_supplied_stored_value_is_fresh_after_edit() {
         mv_id,
         Box::new(StructureMoveData {
             translation: IVec3::new(5, 0, 0),
-            lattice_subdivision: 1,
+            lattice_subdivision: IVec3::ONE,
         }),
     );
 
@@ -2077,11 +2082,11 @@ fn roles_out_of_range_entries_are_pruned_and_ignored() {
     let mut designer = setup_designer_with_network("main");
     let mv_id = add_structure_move(&mut designer, "main", IVec3::ZERO, 0.0);
 
-    // Plant an entry past the last pin (structure_move has 3 input pins).
+    // Plant an entry past the last pin (structure_move has 4 input pins).
     set_role_raw(&mut designer, "main", mv_id, 7, FunctionPinRole::Supplied);
 
     // The partition ignores it — one disposition per *declared* pin.
-    assert_eq!(dispositions_of(&designer, "main", mv_id).len(), 3);
+    assert_eq!(dispositions_of(&designer, "main", mv_id).len(), 4);
 
     // And the repair pass prunes it.
     designer.validate_active_network();
@@ -2181,13 +2186,15 @@ fn api_function_pin_role_views_match_the_shared_partition() {
         views.iter().map(|v| v.effective).collect::<Vec<_>>(),
         expected
     );
-    // ...and is the table from the design doc, spelled out.
+    // ...and is the table from the design doc, spelled out. The trailing
+    // `subdiv_xyz` pin is untouched (Auto + unwired → parameter).
     assert_eq!(
         expected,
         vec![
             APIFunctionPinDisposition::Parameter,
             APIFunctionPinDisposition::CaptureStored,
             APIFunctionPinDisposition::CaptureWire,
+            APIFunctionPinDisposition::Parameter,
         ]
     );
 
@@ -2198,11 +2205,12 @@ fn api_function_pin_role_views_match_the_shared_partition() {
             APIFunctionPinRole::Delayed,
             APIFunctionPinRole::Supplied,
             APIFunctionPinRole::Supplied,
+            APIFunctionPinRole::Auto,
         ]
     );
     assert_eq!(
         views.iter().map(|v| v.wired).collect::<Vec<_>>(),
-        vec![true, false, true]
+        vec![true, false, true, false]
     );
 
     // An `Auto` pin (no stored entry) reports `Auto` explicitly — the API

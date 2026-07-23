@@ -1706,7 +1706,7 @@ fn undo_gadget_drag_lattice_move() {
     // Modify the node data as a gadget's sync_data() would
     let new_data = Box::new(StructureMoveData {
         translation: IVec3::new(3, 0, 0),
-        lattice_subdivision: 1,
+        lattice_subdivision: IVec3::ONE,
     });
     designer.set_node_network_data(node_id, new_data);
 

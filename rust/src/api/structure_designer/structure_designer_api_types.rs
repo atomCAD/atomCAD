@@ -660,7 +660,7 @@ pub struct APILatticeSymopData {
 
 pub struct APIStructureMoveData {
     pub translation: APIIVec3,
-    pub lattice_subdivision: i32,
+    pub lattice_subdivision: APIIVec3,
 }
 
 pub struct APIStructureRotData {

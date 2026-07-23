@@ -16774,7 +16774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APIStructureMoveData(
       translation: dco_decode_apii_vec_3(arr[0]),
-      latticeSubdivision: dco_decode_i_32(arr[1]),
+      latticeSubdivision: dco_decode_apii_vec_3(arr[1]),
     );
   }
 
@@ -21041,7 +21041,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_translation = sse_decode_apii_vec_3(deserializer);
-    var var_latticeSubdivision = sse_decode_i_32(deserializer);
+    var var_latticeSubdivision = sse_decode_apii_vec_3(deserializer);
     return APIStructureMoveData(
         translation: var_translation,
         latticeSubdivision: var_latticeSubdivision);
@@ -25799,7 +25799,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APIStructureMoveData self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_apii_vec_3(self.translation, serializer);
-    sse_encode_i_32(self.latticeSubdivision, serializer);
+    sse_encode_apii_vec_3(self.latticeSubdivision, serializer);
   }
 
   @protected

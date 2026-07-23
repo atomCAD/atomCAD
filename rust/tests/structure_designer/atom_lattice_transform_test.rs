@@ -14,10 +14,11 @@ fn structure_move_registration() {
     let node_type = registry.get_node_type("structure_move").unwrap();
     assert_eq!(node_type.name, "structure_move");
     assert!(node_type.public);
-    assert_eq!(node_type.parameters.len(), 3);
+    assert_eq!(node_type.parameters.len(), 4);
     assert_eq!(node_type.parameters[0].name, "input");
     assert_eq!(node_type.parameters[1].name, "translation");
     assert_eq!(node_type.parameters[2].name, "subdivision");
+    assert_eq!(node_type.parameters[3].name, "subdiv_xyz");
 }
 
 #[test]

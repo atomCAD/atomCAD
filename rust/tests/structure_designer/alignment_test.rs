@@ -121,7 +121,30 @@ fn add_structure_move(
         .downcast_mut::<StructureMoveData>()
         .unwrap();
     data.translation = translation;
-    data.lattice_subdivision = lattice_subdivision;
+    data.lattice_subdivision = IVec3::splat(lattice_subdivision);
+    id
+}
+
+/// Per-axis variant of `add_structure_move` (issue #412's `subdiv_xyz`
+/// semantics — the stored field is per-axis too).
+fn add_structure_move_per_axis(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    translation: IVec3,
+    lattice_subdivision: IVec3,
+) -> u64 {
+    let id = add_structure_move(designer, network_name, translation, 1);
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get_mut(network_name)
+        .unwrap();
+    let node = network.nodes.get_mut(&id).unwrap();
+    node.data
+        .as_any_mut()
+        .downcast_mut::<StructureMoveData>()
+        .unwrap()
+        .lattice_subdivision = lattice_subdivision;
     id
 }
 
@@ -135,6 +158,32 @@ fn structure_move_divisible_translation_preserves_alignment_blueprint() {
 
     let bp = blueprint(evaluate_raw(&designer, "t", move_id));
     assert_eq!(bp.alignment, Alignment::Aligned);
+}
+
+#[test]
+fn structure_move_per_axis_divisible_translation_preserves_alignment() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    // Each component is divisible by its own axis's subdivision.
+    let move_id =
+        add_structure_move_per_axis(&mut designer, "t", IVec3::new(1, 4, 6), IVec3::new(1, 2, 2));
+    designer.connect_nodes(cuboid_id, 0, move_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", move_id));
+    assert_eq!(bp.alignment, Alignment::Aligned);
+}
+
+#[test]
+fn structure_move_per_axis_fractional_translation_taints_alignment() {
+    let mut designer = setup_designer("t");
+    let cuboid_id = designer.add_node("cuboid", DVec2::ZERO);
+    // x = 1 is not divisible by the x subdivision 2 — a half-cell move.
+    let move_id =
+        add_structure_move_per_axis(&mut designer, "t", IVec3::new(1, 0, 0), IVec3::new(2, 1, 1));
+    designer.connect_nodes(cuboid_id, 0, move_id, 0);
+
+    let bp = blueprint(evaluate_raw(&designer, "t", move_id));
+    assert_eq!(bp.alignment, Alignment::LatticeUnaligned);
 }
 
 #[test]

@@ -25,6 +25,38 @@ pub mod ivec3_serializer {
     }
 }
 
+/// Module to handle serialization of IVec3 fields that historically stored a
+/// single uniform i32 (e.g. `structure_move.lattice_subdivision`, issue #412).
+/// Serializes as an IVec3 array; deserializes either form, splatting a legacy
+/// scalar across all three components.
+pub mod ivec3_or_int_serializer {
+    use super::*;
+
+    pub fn serialize<S>(vec: &IVec3, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        ivec3_serializer::serialize(vec, serializer)
+    }
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum IVec3OrInt {
+        Int(i32),
+        Vec(#[serde(with = "ivec3_serializer")] IVec3),
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<IVec3, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(match IVec3OrInt::deserialize(deserializer)? {
+            IVec3OrInt::Int(i) => IVec3::splat(i),
+            IVec3OrInt::Vec(v) => v,
+        })
+    }
+}
+
 pub mod ivec2_serializer {
     use super::*;
 

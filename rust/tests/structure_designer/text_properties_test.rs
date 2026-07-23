@@ -879,11 +879,16 @@ fn test_extrude_roundtrip() {
 fn test_lattice_move_roundtrip() {
     test_roundtrip(&StructureMoveData {
         translation: IVec3::new(5, 10, 15),
-        lattice_subdivision: 1,
+        lattice_subdivision: IVec3::ONE,
     });
     test_roundtrip(&StructureMoveData {
         translation: IVec3::new(-1, 2, 3),
-        lattice_subdivision: 4,
+        lattice_subdivision: IVec3::splat(4),
+    });
+    // Non-uniform per-axis subdivision emits (and re-reads) the IVec3 form.
+    test_roundtrip(&StructureMoveData {
+        translation: IVec3::new(-1, 2, 3),
+        lattice_subdivision: IVec3::new(2, 4, 1),
     });
 }
 

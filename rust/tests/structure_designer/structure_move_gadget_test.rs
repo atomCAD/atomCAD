@@ -11,6 +11,7 @@ use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::cuboid::CuboidData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
+use rust_lib_flutter_cad::structure_designer::nodes::ivec3::IVec3Data;
 use rust_lib_flutter_cad::structure_designer::nodes::structure_move::{
     StructureMoveData, StructureMoveEvalCache,
 };
@@ -44,10 +45,13 @@ fn set_node_data(
 ///
 /// When `wired_subdivision` is `Some(n)`, an `int(n)` node is wired into the
 /// `subdivision` pin (index 2) while the stored field stays at
-/// `stored_subdivision` — the divergence issue #411 is about.
-fn setup_move_with_gizmo(
-    stored_subdivision: i32,
+/// `stored_subdivision` — the divergence issue #411 is about. When
+/// `wired_subdiv_xyz` is `Some(v)`, an `ivec3(v)` node is wired into the
+/// `subdiv_xyz` pin (index 3), which overrides both (issue #412).
+fn setup_move_with_gizmo_full(
+    stored_subdivision: IVec3,
     wired_subdivision: Option<i32>,
+    wired_subdiv_xyz: Option<IVec3>,
 ) -> (StructureDesigner, u64) {
     let mut designer = StructureDesigner::new();
     designer.add_node_network("main");
@@ -91,6 +95,17 @@ fn setup_move_with_gizmo(
         designer.connect_nodes(int_id, 0, mv_id, 2);
     }
 
+    if let Some(v) = wired_subdiv_xyz {
+        let ivec3_id = designer.add_node("ivec3", DVec2::new(150.0, 300.0));
+        set_node_data(
+            &mut designer,
+            "main",
+            ivec3_id,
+            Box::new(IVec3Data { value: v }),
+        );
+        designer.connect_nodes(ivec3_id, 0, mv_id, 3);
+    }
+
     designer.validate_active_network();
     designer.select_node(mv_id);
     designer.set_node_display(mv_id, true);
@@ -99,6 +114,15 @@ fn setup_move_with_gizmo(
     designer.refresh(&changes);
 
     (designer, mv_id)
+}
+
+/// The original issue-#411 shape: uniform stored subdivision, optional wired
+/// `subdivision` pin, no `subdiv_xyz`.
+fn setup_move_with_gizmo(
+    stored_subdivision: i32,
+    wired_subdivision: Option<i32>,
+) -> (StructureDesigner, u64) {
+    setup_move_with_gizmo_full(IVec3::splat(stored_subdivision), wired_subdivision, None)
 }
 
 fn cached_unit_cell_a_length(designer: &StructureDesigner) -> f64 {
@@ -112,7 +136,7 @@ fn cached_unit_cell_a_length(designer: &StructureDesigner) -> f64 {
         .length()
 }
 
-fn cached_subdivision(designer: &StructureDesigner) -> i32 {
+fn cached_subdivision(designer: &StructureDesigner) -> IVec3 {
     designer
         .get_selected_node_eval_cache()
         .expect("the selected structure_move must populate its eval cache")
@@ -164,7 +188,7 @@ fn wired_subdivision_reaches_the_eval_cache() {
     let (designer, _) = setup_move_with_gizmo(1, Some(2));
     assert_eq!(
         cached_subdivision(&designer),
-        2,
+        IVec3::splat(2),
         "the cache must carry the resolved subdivision, not the stored field"
     );
 }
@@ -174,7 +198,27 @@ fn wired_subdivision_reaches_the_eval_cache() {
 #[test]
 fn unwired_subdivision_falls_back_to_the_stored_field() {
     let (designer, _) = setup_move_with_gizmo(3, None);
-    assert_eq!(cached_subdivision(&designer), 3);
+    assert_eq!(cached_subdivision(&designer), IVec3::splat(3));
+}
+
+/// Issue #412: a wired `subdiv_xyz` beats both the wired `subdivision` and the
+/// stored field.
+#[test]
+fn wired_subdiv_xyz_overrides_wired_subdivision() {
+    let (designer, _) =
+        setup_move_with_gizmo_full(IVec3::splat(3), Some(2), Some(IVec3::new(4, 5, 6)));
+    assert_eq!(
+        cached_subdivision(&designer),
+        IVec3::new(4, 5, 6),
+        "subdiv_xyz is the most specific source and must win"
+    );
+}
+
+/// A non-uniform stored subdivision reaches the cache unchanged (no wires).
+#[test]
+fn stored_per_axis_subdivision_reaches_the_eval_cache() {
+    let (designer, _) = setup_move_with_gizmo_full(IVec3::new(2, 4, 1), None, None);
+    assert_eq!(cached_subdivision(&designer), IVec3::new(2, 4, 1));
 }
 
 /// End-to-end: dragging the +x handle by exactly one cell must move the object
@@ -221,5 +265,23 @@ fn sub_cell_drag_lands_on_a_subdivision_step() {
         stored_translation(&designer, mv_id),
         IVec3::new(3, 0, 0),
         "1.5 cells is 3 half-cell steps; a subdivision-blind gizmo would round to 2"
+    );
+}
+
+/// Per-axis subdivision drives the gizmo per axis (issue #412): with x
+/// subdivided in halves (y, z whole), one cell of +x travel is 2 half-cell
+/// steps.
+#[test]
+fn per_axis_subdivision_drives_the_gizmo_on_its_own_axis() {
+    let (mut designer, mv_id) =
+        setup_move_with_gizmo_full(IVec3::ONE, None, Some(IVec3::new(2, 1, 1)));
+    let cell = cached_unit_cell_a_length(&designer);
+
+    drag_x_handle(&mut designer, cell);
+
+    assert_eq!(
+        stored_translation(&designer, mv_id),
+        IVec3::new(2, 0, 0),
+        "one cell of +x travel is 2 steps when only x is subdivided in halves"
     );
 }
