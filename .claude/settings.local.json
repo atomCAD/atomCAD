@@ -354,7 +354,15 @@
       "Bash(rust\" | head -10; echo done)",
       "Bash(FIXTURE_OUT=\"C:/machine_phase_systems/flutter_cad/zero_ary_closure_walkthrough.cnnd\" cargo test -j 4 --test structure_designer generate_zero_ary_closure_walkthrough_fixture -- --ignored --nocapture)",
       "Bash(parameter)",
-      "Bash(rust_lib\" | tail -5)"
+      "Bash(rust_lib\" | tail -5)",
+      "PowerShell($f = \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\SPM-tip-with-tool_2026-07-23_11-10-CET.cnnd\"; \\(Get-Item $f\\).Length; $json = Get-Content $f -Raw | ConvertFrom-Json; $json.PSObject.Properties.Name -join ', ')",
+      "PowerShell($f = \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\SPM-tip-with-tool_2026-07-23_11-10-CET.cnnd\"; $json = Get-Content $f -Raw | ConvertFrom-Json; $nets = $json.node_networks; $rows = foreach \\($p in $nets.PSObject.Properties\\) { $n = $p.Value; $count = if \\($n.nodes\\) { \\($n.nodes.PSObject.Properties | Measure-Object\\).Count } else { 0 }; [pscustomobject]@{Network=$p.Name; Nodes=$count} }; $rows | Sort-Object Nodes -Descending | Select-Object -First 15 | Format-Table -AutoSize; \"Total networks: $\\(\\($nets.PSObject.Properties | Measure-Object\\).Count\\)\"; \"Total top-level nodes: $\\(\\($rows | Measure-Object -Sum Nodes\\).Sum\\)\")",
+      "PowerShell($f = \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\SPM-tip-with-tool_2026-07-23_11-10-CET.cnnd\"; $json = Get-Content $f -Raw | ConvertFrom-Json; $nets = @\\($json.node_networks\\); \"count: $\\($nets.Count\\)\"; $nets[0].PSObject.Properties.Name -join ', ')",
+      "PowerShell($f = \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\SPM-tip-with-tool_2026-07-23_11-10-CET.cnnd\"; $json = Get-Content $f -Raw | ConvertFrom-Json; $nets = @\\($json.node_networks\\); $e = $nets[0]; \"len: $\\($e.Count\\)\"; $e[0]; $e[1].PSObject.Properties.Name -join ', ')",
+      "PowerShell($f = \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\SPM-tip-with-tool_2026-07-23_11-10-CET.cnnd\"; $json = Get-Content $f -Raw | ConvertFrom-Json; $rows = foreach \\($e in @\\($json.node_networks\\)\\) { $name = $e[0]; $net = $e[1]; $nodeCount = @\\($net.nodes\\).Count; [pscustomobject]@{Network=$name; Nodes=$nodeCount} }; $rows | Sort-Object Nodes -Descending | Select-Object -First 20 | Format-Table -AutoSize; \"Total nodes: $\\(\\($rows | Measure-Object -Sum Nodes\\).Sum\\)\")",
+      "PowerShell(dart format *)",
+      "PowerShell(flutter test *)",
+      "PowerShell(git stash *)"
     ]
   }
 }

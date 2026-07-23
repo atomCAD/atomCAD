@@ -37,6 +37,39 @@ Three discrete levels with different detail:
 - **Auto-connect:** Drop wire in empty space → opens `AddNodePopup` filtered by type
 - **Keyboard:** Ctrl+C/X/V (copy/cut/paste), Del (delete), Ctrl+D (duplicate)
 
+## Performance invariants (drag fast path + shared resolver)
+
+Two invariants keep the canvas responsive in 100+-node networks (profiled:
+a full `notifyListeners()` rebuild-and-relayout of every node widget was ~57%
+of frame time; per-widget `ScopeResolver` construction made rebuilds O(N²)):
+
+1. **One `ScopeResolver` per frame.** `NodeNetworkState._buildStackChildren`
+   constructs a single resolver and passes it down to every `NodeWidget` /
+   `CommentNodeWidget`. The resolver's constructor runs a full O(N) layout
+   pass — **never construct one per widget in a `build` method.** Event
+   handlers (context menu, drag end, hit tests) may construct their own; those
+   are one-shot. The two `NodeNetworkPainter` layers also build their own per
+   `paint` — deliberate, because paints triggered by the drag fast path need
+   positions fresher than the last widget build.
+
+2. **Continuous drags never call `notifyListeners()`.** Per-pointer-delta
+   notifications rebuild the whole canvas plus every other Consumer. Instead,
+   `StructureDesignerModel.dragRepaint` (a `ValueNotifier<int>` tick) drives:
+   - `NodeNetworkState._buildNodeWidget` wraps every node in a
+     `ListenableBuilder`; on a tick only *drag-affected* nodes (per
+     `model.isNodeDragAffected` — the dragged nodes plus a dragged
+     HOF/closure's body content) rebuild with a fresh shared-per-tick resolver
+     (`_dragFrameResolver`); all others return the identical prebuilt child,
+     which `Element.updateChild` short-circuits (no rebuild, no layout).
+   - Both wire painters receive `repaint: model.dragRepaint`, so wires track
+     the in-place-mutated positions (and the wire-drag rubber band) without
+     any widget rebuild.
+   The gesture-end commit (`updateNodePosition` / `updateSelectedNodesPosition`
+   → `refreshFromKernel`, which clears the drag state) does the one full
+   notify. **A new continuous-drag interaction must follow this pattern**; a
+   new widget that renders drag-mutated state must either live under the
+   per-node `ListenableBuilder` or listen to `dragRepaint` itself.
+
 ## Wire Rendering
 
 Wires use cubic Bezier curves with data-type-based coloring:

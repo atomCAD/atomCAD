@@ -24,22 +24,24 @@ class CommentNodeWidget extends StatefulWidget {
   final Offset panOffset;
   final ZoomLevel zoomLevel;
 
-  /// Root network view, used to build a per-frame [ScopeResolver] so the
-  /// comment is positioned in its body-local frame when it lives inside an
-  /// HOF/closure body (see [scopeChain]).
-  final NodeNetworkView rootView;
-
   /// Scope chain of the body this comment lives in (`const []` at top level).
   /// Forwarded to every selection/drag/edit API call so the right node is
   /// addressed across scopes.
   final List<BigInt> scopeChain;
+
+  /// Resolver shared by the whole canvas for the current frame (see
+  /// `NodeWidget.resolver` — constructing one per widget is O(N) each and
+  /// made canvas rebuilds O(N²)). Also the comment's positioning authority:
+  /// it maps the body-local stored position to screen when the comment lives
+  /// inside an HOF/closure body (see [scopeChain]).
+  final ScopeResolver resolver;
 
   const CommentNodeWidget({
     super.key,
     required this.node,
     required this.panOffset,
     required this.zoomLevel,
-    required this.rootView,
+    required this.resolver,
     this.scopeChain = const [],
   });
 
@@ -67,12 +69,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
     // Position via the scope resolver: the comment's stored position lives in
     // its body-local frame, which the resolver maps to screen. For the
     // top-level scope (empty chain) this is identical to `logicalToScreen`.
-    final resolver = ScopeResolver(
-      root: widget.rootView,
-      panOffset: widget.panOffset,
-      scale: scale,
-      zoomLevel: widget.zoomLevel,
-    );
+    final resolver = widget.resolver;
     final screenPos = resolver.scopedToScreen(
       widget.scopeChain,
       Offset(widget.node.position.x, widget.node.position.y),
@@ -255,8 +252,7 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
   }
 
   void _startResize(DragStartDetails details) {
-    sd_api.beginEditCommentNode(
-        scopePath: _scopePath, nodeId: widget.node.id);
+    sd_api.beginEditCommentNode(scopePath: _scopePath, nodeId: widget.node.id);
     setState(() {
       _isResizing = true;
       _resizeStartWidth = _width;

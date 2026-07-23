@@ -176,6 +176,44 @@ class StructureDesignerModel extends ChangeNotifier {
   APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
   int? atomEditSelectedElement;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
+
+  /// Drag fast-path notifier. Continuous drag gestures (node drag, wire
+  /// rubber-band drag) must NOT call [notifyListeners] per pointer delta: a
+  /// full notify rebuilds and re-lays-out every node widget plus every other
+  /// Consumer (side panels, viewport overlays) — profiled at ~57% of frame
+  /// time in 100+-node networks. Instead, drag ticks mutate the cached view
+  /// state in place and bump this notifier; only the few listeners that must
+  /// track the drag react (the drag-affected node wrappers in
+  /// `NodeNetworkState._buildNodeWidget` and the wire painters via
+  /// `CustomPainter.repaint`). A normal [notifyListeners] at gesture end
+  /// restores full coherence everywhere else.
+  final ValueNotifier<int> dragRepaint = ValueNotifier(0);
+
+  /// Scope + node ids of the node-drag in progress (null scope = no drag).
+  /// Drives [isNodeDragAffected]; cleared by [refreshFromKernel], which every
+  /// drag-commit path goes through.
+  List<BigInt>? _dragScopeChain;
+  final Set<BigInt> _draggedNodeIds = {};
+
+  /// True while a node-drag is in progress for the node at ([nodeId],
+  /// [scopeChain]): either the node itself is being dragged, or it lives in
+  /// the body of a dragged HOF/closure (its screen position follows the
+  /// ancestor). Only such nodes rebuild on a [dragRepaint] tick.
+  bool isNodeDragAffected(BigInt nodeId, List<BigInt> scopeChain) {
+    final dragScope = _dragScopeChain;
+    if (dragScope == null) return false;
+    if (scopeChain.length < dragScope.length) return false;
+    for (var i = 0; i < dragScope.length; i++) {
+      if (scopeChain[i] != dragScope[i]) return false;
+    }
+    if (scopeChain.length == dragScope.length) {
+      return _draggedNodeIds.contains(nodeId);
+    }
+    // Deeper scope: affected iff the next hop below the drag scope is one of
+    // the dragged nodes (i.e. this node lives inside a dragged HOF's body).
+    return _draggedNodeIds.contains(scopeChain[dragScope.length]);
+  }
+
   WireDropCallback?
       onWireDroppedInEmptySpace; // Callback for wire drop in empty space
   /// Callback to scroll the node network panel to a specific node.
@@ -535,17 +573,23 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Mutates positions in the body scope identified by [scopeChain]. Inside a
   /// zone body the delta is clamped so the selection can't escape the body rect
   /// on the left/top (see [_clampZoneBodyDragDelta]).
+  ///
+  /// Notifies via [dragRepaint] (drag fast path), not [notifyListeners] — the
+  /// commit at drag end does the full notify.
   void dragSelectedNodes(Offset delta, {List<BigInt> scopeChain = const []}) {
     if (nodeNetworkView == null) return;
     final containerNodes = _nodesAtScope(scopeChain);
     if (containerNodes == null) return;
     final selected = containerNodes.values.where((node) => node.selected);
     final clamped = _clampZoneBodyDragDelta(delta, selected, scopeChain);
+    _dragScopeChain = List<BigInt>.of(scopeChain);
+    _draggedNodeIds.clear();
     for (final node in selected) {
+      _draggedNodeIds.add(node.id);
       node.position = APIVec2(
           x: node.position.x + clamped.dx, y: node.position.y + clamped.dy);
     }
-    notifyListeners();
+    dragRepaint.value++;
   }
 
   /// Commit positions of all selected nodes in [scopeChain] to the kernel.
@@ -960,14 +1004,21 @@ class StructureDesignerModel extends ChangeNotifier {
 
   // Called on each small update when dragging a node
   // Works only on the UI: do not update the position in the kernel
+  //
+  // Notifies via [dragRepaint] (drag fast path), not [notifyListeners] — the
+  // commit at drag end does the full notify.
   void dragNodePosition(BigInt nodeId, Offset delta,
       {List<BigInt> scopeChain = const []}) {
     final node = _findNodeInScope(nodeId, scopeChain);
     if (node == null) return;
     final clamped = _clampZoneBodyDragDelta(delta, [node], scopeChain);
+    _dragScopeChain = List<BigInt>.of(scopeChain);
+    _draggedNodeIds
+      ..clear()
+      ..add(nodeId);
     node.position = APIVec2(
         x: node.position.x + clamped.dx, y: node.position.y + clamped.dy);
-    notifyListeners();
+    dragRepaint.value++;
   }
 
   /// Updates a node's position in the kernel and notifies listeners.
@@ -982,16 +1033,20 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Update the wire rubber band during a pin drag. The dragged wire is
+  /// painted exclusively by the overlay [NodeNetworkPainter] (no widget reads
+  /// it during build), so a [dragRepaint] tick is enough — a full
+  /// [notifyListeners] per pointer delta would rebuild the whole canvas.
   void dragWire(PinReference startPin, Offset wireEndPosition) {
     draggedWire ??= DraggedWire(startPin, wireEndPosition);
     draggedWire!.wireEndPosition = wireEndPosition;
-    notifyListeners();
+    dragRepaint.value++;
   }
 
   void cancelDragWire() {
     if (draggedWire != null) {
       draggedWire = null;
-      notifyListeners();
+      dragRepaint.value++;
     }
   }
 
@@ -3091,6 +3146,12 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void refreshFromKernel() {
+    // Any full refresh ends the node-drag fast path: the drag-commit paths
+    // (updateNodePosition / updateSelectedNodesPosition) all come through
+    // here, and a mid-drag refresh from elsewhere replaces the view objects
+    // the drag was mutating anyway (the next drag tick re-arms the state).
+    _dragScopeChain = null;
+    _draggedNodeIds.clear();
     nodeNetworkView = structure_designer_api.getNodeNetworkView();
     nodeNetworkNames =
         structure_designer_api.getNodeNetworksWithValidation() ?? [];

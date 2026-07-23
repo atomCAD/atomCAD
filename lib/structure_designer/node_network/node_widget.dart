@@ -837,27 +837,23 @@ class NodeWidget extends StatelessWidget {
   /// inputs.
   final NodeNetworkView rootView;
 
+  /// Resolver shared by the whole canvas for the current frame. Constructed
+  /// ONCE per frame in `NodeNetworkState` and passed down — its constructor
+  /// runs a full O(N) layout pass over the network, so a per-widget resolver
+  /// made canvas rebuilds O(N²) (the dominant cost in 100+-node networks).
+  final ScopeResolver resolver;
+
   NodeWidget({
     required this.node,
     required this.panOffset,
     required this.zoomLevel,
     required this.rootView,
+    required this.resolver,
     this.scopeChain = const [],
   }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
 
-  /// A resolver for this widget's current frame. Cheap to construct; the heavy
-  /// layout pass lands in phase U3.
-  ScopeResolver get _resolver => ScopeResolver(
-        root: rootView,
-        panOffset: panOffset,
-        scale: getZoomScale(zoomLevel),
-        zoomLevel: zoomLevel,
-      );
-
   @override
   Widget build(BuildContext context) {
-    final resolver = _resolver;
-
     // Choose rendering mode based on zoom level
     final Widget nodeContent = zoomLevel == ZoomLevel.normal
         ? _buildNormalNodeContent(context, resolver)
@@ -1645,11 +1641,9 @@ class NodeWidget extends StatelessWidget {
     // node's center is right now ("leave the node in the same place", the
     // issue's continuity ask; `doc/design_find_usages.md` D4). Center-to-center
     // rather than raw cursor position because source and target nodes differ
-    // in size (pin counts). Only custom nodes offer Find Usages, so the
-    // resolver's layout pass is skipped for every other right-click.
+    // in size (pin counts). Only custom nodes offer Find Usages.
     Offset? usageJumpAnchor;
     if (isCustomNode) {
-      final resolver = _resolver;
       final Size sourceSize = node.zone != null
           ? resolver.effectiveNodeSizeScreen(node, scopeChain)
           : getNodeSize(node, zoomLevel);

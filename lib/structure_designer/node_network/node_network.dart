@@ -439,14 +439,19 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
       return IgnorePointer(
         child: CustomPaint(
           painter: NodeNetworkPainter(model,
-              panOffset: panOffset, zoomLevel: zoomLevel, overlay: true),
+              panOffset: panOffset,
+              zoomLevel: zoomLevel,
+              overlay: true,
+              repaint: model.dragRepaint),
           child: Container(),
         ),
       );
     }
     return CustomPaint(
-      painter:
-          NodeNetworkPainter(model, panOffset: panOffset, zoomLevel: zoomLevel),
+      painter: NodeNetworkPainter(model,
+          panOffset: panOffset,
+          zoomLevel: zoomLevel,
+          repaint: model.dragRepaint),
       // A plain Container (no gesture/opaque behavior) so the layer fills the
       // Stack for painting but stays transparent to pointer events — taps are
       // handled by the outer Listener (see `_handleCanvasTap`).
@@ -1331,10 +1336,43 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// inside HOF/closure bodies); all other nodes get the generic [NodeWidget].
   /// Both widgets are scope-aware (positioning + key + API calls), so the same
   /// routing works for the top-level walk and the recursive zone-body walk.
+  ///
+  /// The node widget is wrapped in a [ListenableBuilder] on the model's
+  /// `dragRepaint` notifier — the node-drag fast path. Drag ticks bump that
+  /// notifier instead of `notifyListeners()`, so on each tick only the
+  /// drag-affected nodes (the dragged ones, plus a dragged HOF's body nodes,
+  /// whose screen positions follow it) rebuild with a fresh resolver; every
+  /// other node returns the identical prebuilt [child], which
+  /// `Element.updateChild` short-circuits — no rebuild, no re-layout. This is
+  /// what keeps dragging O(dragged) instead of O(network).
   Widget _buildNodeWidget(
     NodeView node,
     List<BigInt> scopeChain,
     NodeNetworkView rootView,
+    ScopeResolver resolver,
+  ) {
+    final model = widget.graphModel;
+    return ListenableBuilder(
+      // The scoped key sits on the Stack's direct child (this wrapper) so
+      // sibling reconciliation keeps working; see NodeWidgetKeys.nodeWidget.
+      key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain),
+      listenable: model.dragRepaint,
+      builder: (context, child) {
+        if (!model.isNodeDragAffected(node.id, scopeChain)) {
+          return child!;
+        }
+        return _nodeWidgetFor(
+            node, scopeChain, rootView, _dragFrameResolver(rootView));
+      },
+      child: _nodeWidgetFor(node, scopeChain, rootView, resolver),
+    );
+  }
+
+  Widget _nodeWidgetFor(
+    NodeView node,
+    List<BigInt> scopeChain,
+    NodeNetworkView rootView,
+    ScopeResolver resolver,
   ) {
     if (node.nodeTypeName == 'Comment') {
       return CommentNodeWidget(
@@ -1342,7 +1380,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         node: node,
         panOffset: _panOffset,
         zoomLevel: _zoomLevel,
-        rootView: rootView,
+        resolver: resolver,
         scopeChain: scopeChain,
       );
     }
@@ -1351,8 +1389,29 @@ class NodeNetworkState extends State<NodeNetwork> {
       panOffset: _panOffset,
       zoomLevel: _zoomLevel,
       rootView: rootView,
+      resolver: resolver,
       scopeChain: scopeChain,
     );
+  }
+
+  /// Resolver for drag-tick rebuilds of drag-affected nodes. The build-time
+  /// resolver is stale during a drag (a dragged HOF's body origin moves every
+  /// tick), so affected nodes need a fresh layout pass — but only ONE per
+  /// tick, shared across all affected nodes, not one per node.
+  int _dragResolverTick = -1;
+  ScopeResolver? _dragResolver;
+  ScopeResolver _dragFrameResolver(NodeNetworkView rootView) {
+    final tick = widget.graphModel.dragRepaint.value;
+    if (_dragResolver == null || _dragResolverTick != tick) {
+      _dragResolver = ScopeResolver(
+        root: rootView,
+        panOffset: _panOffset,
+        scale: getZoomScale(_zoomLevel),
+        zoomLevel: _zoomLevel,
+      );
+      _dragResolverTick = tick;
+    }
+    return _dragResolver!;
   }
 
   void _appendNodesRecursive(
@@ -1363,7 +1422,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     ScopeResolver resolver,
   ) {
     for (final entry in view.nodes.entries) {
-      children.add(_buildNodeWidget(entry.value, scopeChain, rootView));
+      children
+          .add(_buildNodeWidget(entry.value, scopeChain, rootView, resolver));
     }
     // Then walk into each HOF's body — body nodes are drawn after their
     // owner HOF so they layer on top. Skip if the body is collapsed.
@@ -1385,7 +1445,8 @@ class NodeNetworkState extends State<NodeNetwork> {
     ScopeResolver resolver,
   ) {
     for (final entry in zone.nodes.entries) {
-      children.add(_buildNodeWidget(entry.value, scopeChain, rootView));
+      children
+          .add(_buildNodeWidget(entry.value, scopeChain, rootView, resolver));
     }
     for (final entry in zone.nodes.entries) {
       final node = entry.value;

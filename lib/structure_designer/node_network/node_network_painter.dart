@@ -69,10 +69,15 @@ class NodeNetworkPainter extends CustomPainter {
   /// node widget's opaque body Container background.
   final bool overlay;
 
+  /// [repaint] should be the model's `dragRepaint` notifier: during the drag
+  /// fast path (node drag / wire rubber-band drag) nothing rebuilds, so the
+  /// painter must repaint from this listenable to track the live positions it
+  /// reads out of the (in-place mutated) network view.
   NodeNetworkPainter(this.graphModel,
       {this.panOffset = Offset.zero,
       this.zoomLevel = ZoomLevel.normal,
-      this.overlay = false});
+      this.overlay = false,
+      super.repaint});
 
   /// Build a [ScopeResolver] for the current frame. Returns null when no
   /// network is active. Constructed once per `paint` and once per
