@@ -1,4 +1,4 @@
-﻿use glam::f64::{DVec2, DVec3};
+use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
@@ -52,6 +52,7 @@ fn evaluate_raw(designer: &StructureDesigner, network_name: &str, node_id: u64) 
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

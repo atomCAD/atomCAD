@@ -68,6 +68,7 @@ fn evaluate_node(designer: &StructureDesigner, network_name: &str, node_id: u64)
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];
@@ -763,6 +764,7 @@ fn evaluate_with_execute_capturing_prints(
     let mut context = NetworkEvaluationContext::new();
     context.execute = execute;
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

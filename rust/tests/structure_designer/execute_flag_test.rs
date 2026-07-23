@@ -267,6 +267,7 @@ fn central_skip_rule_skips_eval_on_display_pass_when_all_pins_are_unit() {
         let mut ctx = NetworkEvaluationContext::new();
         // execute = false (the default) — display pass.
         let stack = vec![NetworkStackElement {
+            is_zone_body: false,
             node_network: &network,
             node_id: 0,
         }];
@@ -293,6 +294,7 @@ fn central_skip_rule_runs_eval_on_execute_pass_when_all_pins_are_unit() {
         let mut ctx = NetworkEvaluationContext::new();
         ctx.execute = true;
         let stack = vec![NetworkStackElement {
+            is_zone_body: false,
             node_network: &network,
             node_id: 0,
         }];
@@ -318,6 +320,7 @@ fn central_skip_rule_via_evaluate_all_outputs_skips_on_display_pass() {
     with_counter(counter.clone(), || {
         let mut ctx = NetworkEvaluationContext::new();
         let stack = vec![NetworkStackElement {
+            is_zone_body: false,
             node_network: &network,
             node_id: 0,
         }];
@@ -344,6 +347,7 @@ fn central_skip_rule_does_not_skip_mixed_output_node_on_display_pass() {
     with_counter(counter.clone(), || {
         let mut ctx = NetworkEvaluationContext::new();
         let stack = vec![NetworkStackElement {
+            is_zone_body: false,
             node_network: &network,
             node_id: 0,
         }];

@@ -1,4 +1,4 @@
-﻿// v3 â†’ v4 migration tests for the iterator refactoring (Phase 3+ of
+// v3 â†’ v4 migration tests for the iterator refactoring (Phase 3+ of
 // `doc/design_iterators.md`).
 //
 // Phase 3 ships:
@@ -58,6 +58,7 @@ fn evaluate_node(registry: &NodeTypeRegistry, network_name: &str, node_id: u64) 
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

@@ -690,6 +690,7 @@ fn build_two_int_param_add_closure() -> (StructureDesigner, ZoneClosure) {
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];
@@ -859,6 +860,7 @@ fn phase3_evaluate_node(
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];
@@ -1448,6 +1450,7 @@ fn phase4_drain_map_walker(
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

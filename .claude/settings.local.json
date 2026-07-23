@@ -362,7 +362,8 @@
       "PowerShell($f = \"C:\\\\machine_phase_systems\\\\flutter_cad\\\\SPM-tip-with-tool_2026-07-23_11-10-CET.cnnd\"; $json = Get-Content $f -Raw | ConvertFrom-Json; $rows = foreach \\($e in @\\($json.node_networks\\)\\) { $name = $e[0]; $net = $e[1]; $nodeCount = @\\($net.nodes\\).Count; [pscustomobject]@{Network=$name; Nodes=$nodeCount} }; $rows | Sort-Object Nodes -Descending | Select-Object -First 20 | Format-Table -AutoSize; \"Total nodes: $\\(\\($rows | Measure-Object -Sum Nodes\\).Sum\\)\")",
       "PowerShell(dart format *)",
       "PowerShell(flutter test *)",
-      "PowerShell(git stash *)"
+      "PowerShell(git stash *)",
+      "Bash(xargs sed -i 's/NetworkStackElement {/NetworkStackElement { is_zone_body: false,/g')"
     ]
   }
 }

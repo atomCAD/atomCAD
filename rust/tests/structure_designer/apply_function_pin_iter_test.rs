@@ -98,6 +98,7 @@ fn collect_over_applied_custom_network_iter() {
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: main,
         node_id: 0,
     }];

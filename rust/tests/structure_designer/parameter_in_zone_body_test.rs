@@ -139,6 +139,7 @@ fn evaluate_node(designer: &StructureDesigner, network_name: &str, node_id: u64)
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];
@@ -480,5 +481,48 @@ fn body_parameter_in_closure_does_not_panic() {
             msg
         ),
         other => panic!("expected Error, got {}", other.to_display_string()),
+    }
+}
+
+/// Regression (false positive): a **top-level** `parameter` feeding a
+/// custom-node instance's pin must NOT trip the zone-body guard. The instance's
+/// own parameter resolves its argument via a parent-stack excursion that pops
+/// the stack frame while the instance's eval scope stays pushed — the old
+/// heuristic (`stack.len() < 2` + non-empty `eval_scope_path`) misread exactly
+/// that state as "parameter inside a lazily-invoked zone body". The frame flag
+/// (`NetworkStackElement::is_zone_body`) reads `false` off the top-level frame
+/// instead.
+#[test]
+fn top_level_parameter_feeding_custom_instance_is_not_flagged() {
+    let mut designer = setup_designer_with_network("main");
+
+    // Custom network "Inner": one Int parameter, returned directly.
+    designer.add_node_network("Inner");
+    designer.set_active_node_network_name(Some("Inner".to_string()));
+    let inner_param_id = designer.add_node("parameter", DVec2::new(0.0, 0.0));
+    designer.set_return_node_id(Some(inner_param_id));
+    designer.validate_active_network();
+
+    // "main": top-level parameter (default = int 7) wired into an Inner instance.
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let int_id = designer.add_node("int", DVec2::new(0.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        int_id,
+        Box::new(IntData { value: 7 }),
+    );
+    let outer_param_id = designer.add_node("parameter", DVec2::new(100.0, 0.0));
+    designer.connect_nodes(int_id, 0, outer_param_id, 0);
+    let instance_id = designer.add_node("Inner", DVec2::new(300.0, 0.0));
+    designer.connect_nodes(outer_param_id, 0, instance_id, 0);
+    designer.validate_active_network();
+
+    match evaluate_node(&designer, "main", instance_id) {
+        NetworkResult::Int(v) => assert_eq!(v, 7),
+        NetworkResult::Error(msg) => {
+            panic!("top-level parameter misflagged (or eval failed): {}", msg)
+        }
+        other => panic!("expected Int(7), got {}", other.to_display_string()),
     }
 }

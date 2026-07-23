@@ -515,6 +515,7 @@ fn evaluate(registry: &NodeTypeRegistry, network: &str, node_id: u64) -> Network
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
     let stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: net,
         node_id: 0,
     }];

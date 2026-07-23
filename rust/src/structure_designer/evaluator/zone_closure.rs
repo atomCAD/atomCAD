@@ -146,6 +146,7 @@ pub fn build_inline_closure<'a>(
     // pushed stack.
     let mut body_stack = network_stack.to_vec();
     body_stack.push(NetworkStackElement {
+        is_zone_body: true,
         node_network: body.as_ref(),
         node_id,
     });
@@ -373,6 +374,7 @@ pub fn build_node_function_closure<'a>(
     let captures = {
         let mut body_stack = network_stack.to_vec();
         body_stack.push(NetworkStackElement {
+            is_zone_body: true,
             node_network: &body_network,
             node_id,
         });
@@ -499,6 +501,7 @@ pub fn run_closure_once<'a>(
     // it is the full containing-network stack + body.
     let mut body_stack = network_stack.to_vec();
     body_stack.push(NetworkStackElement {
+        is_zone_body: true,
         node_network: closure.body.as_ref(),
         node_id: closure.owner_node_id,
     });

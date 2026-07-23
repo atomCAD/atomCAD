@@ -43,6 +43,16 @@ use glam::f64::DVec2;
 pub struct NetworkStackElement<'a> {
     pub node_network: &'a NodeNetwork,
     pub node_id: u64,
+    /// `true` iff this frame was pushed as a **zone body** (an HOF/closure
+    /// body entered via `run_closure_once`, a capture pre-evaluation push, or
+    /// `generate_scene_scoped`'s per-hop body descent) — as opposed to a
+    /// custom-network instance entry or the root frame. Recorded at push time
+    /// so consumers (e.g. the `parameter` node's issue-#417 guard) can ask
+    /// "does the network I live in belong to a zone body?" without
+    /// reconstructing it from stack shape or `eval_scope_path` — both of which
+    /// are ambiguous (a parameter's parent-stack excursion pops the stack
+    /// frame while the instance's eval scope stays pushed).
+    pub is_zone_body: bool,
 }
 
 impl<'a> NetworkStackElement<'a> {
@@ -577,6 +587,7 @@ impl NetworkEvaluator {
 
         // We assign the root node network zero node id. It is not used in the evaluation.
         let mut network_stack = vec![NetworkStackElement {
+            is_zone_body: false,
             node_network: root_network,
             node_id: 0,
         }];
@@ -603,6 +614,7 @@ impl NetworkEvaluator {
                 }
             };
             network_stack.push(NetworkStackElement {
+                is_zone_body: true,
                 node_network: body,
                 node_id: *hof_id,
             });
@@ -1697,6 +1709,7 @@ impl NetworkEvaluator {
             }
             let mut child_network_stack = network_stack.to_vec();
             child_network_stack.push(NetworkStackElement {
+                is_zone_body: false,
                 node_network: child_network,
                 node_id,
             });
@@ -1919,6 +1932,7 @@ impl NetworkEvaluator {
                 }
                 let mut child_network_stack = network_stack.to_vec();
                 child_network_stack.push(NetworkStackElement {
+                    is_zone_body: false,
                     node_network: child_network,
                     node_id,
                 });

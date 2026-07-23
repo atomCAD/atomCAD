@@ -94,6 +94,7 @@ fn evaluate_with_execute(
     let mut context = NetworkEvaluationContext::new();
     context.execute = execute;
     let stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

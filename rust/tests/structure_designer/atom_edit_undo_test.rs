@@ -2774,6 +2774,7 @@ fn evaluate_atom_edit_pin(designer: &StructureDesigner, pin_index: i32) -> Atomi
         .unwrap();
     let node_id = network.active_node_id.unwrap();
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

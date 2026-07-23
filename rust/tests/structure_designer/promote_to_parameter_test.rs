@@ -1,4 +1,4 @@
-﻿//! Tests for the Promote-to-Parameter operation.
+//! Tests for the Promote-to-Parameter operation.
 
 use glam::f64::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
@@ -242,6 +242,7 @@ fn test_promote_iterator_param_fans_out_to_independent_walkers() {
         let evaluator = NetworkEvaluator::new();
         let mut context = NetworkEvaluationContext::new();
         let stack = vec![NetworkStackElement {
+            is_zone_body: false,
             node_network: network,
             node_id: 0,
         }];

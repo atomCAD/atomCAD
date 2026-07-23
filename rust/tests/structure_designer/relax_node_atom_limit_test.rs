@@ -63,6 +63,7 @@ fn evaluate_node(
     let mut context = NetworkEvaluationContext::new();
     context.use_vdw_cutoff = use_vdw_cutoff;
     let network_stack = vec![NetworkStackElement {
+        is_zone_body: false,
         node_network: network,
         node_id: 0,
     }];

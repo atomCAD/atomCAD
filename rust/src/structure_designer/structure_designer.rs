@@ -7785,6 +7785,7 @@ impl StructureDesigner {
         let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
             let network = registry.node_networks.get(&network_name).unwrap();
             let network_stack = vec![NetworkStackElement {
+                is_zone_body: false,
                 node_network: network,
                 node_id: 0,
             }];
@@ -7895,6 +7896,7 @@ impl StructureDesigner {
         let result = self.with_eval_context(true, |evaluator, registry, _prefs, context| {
             let network = registry.node_networks.get(&network_name_owned).unwrap();
             let network_stack = vec![NetworkStackElement {
+                is_zone_body: false,
                 node_network: network,
                 node_id: 0,
             }];
@@ -7962,6 +7964,7 @@ impl StructureDesigner {
         let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
             let subnetwork = registry.node_networks.get(&subnetwork_name).unwrap();
             let network_stack = vec![NetworkStackElement {
+                is_zone_body: false,
                 node_network: subnetwork,
                 node_id: 0,
             }];

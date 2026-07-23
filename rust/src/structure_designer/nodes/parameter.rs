@@ -71,24 +71,18 @@ impl NodeData for ParameterData {
         //  - With a lazy walker's body-only stack (`map`/`filter`) we'd take the
         //    isolation path and quietly behave as "constant = my `default` pin".
         //
-        // Localize both into one error. The lazy case is detected by an empty
-        // call stack paired with a non-empty `eval_scope_path` — `run_closure_once`
-        // pushes an eval scope for the body, while a genuine top-level isolation
-        // pass has an empty path (a custom-network instance would also have
-        // pushed a *stack* frame, so it can't be confused with this). The
-        // network validator raises the matching non-blocking badge on this node.
-        let in_zone_body = if evaled_in_isolation {
-            !context.eval_scope_path.is_empty()
-        } else {
-            let parent_node_id = network_stack.last().unwrap().node_id;
-            network_stack[network_stack.len() - 2]
-                .node_network
-                .nodes
-                .get(&parent_node_id)
-                .and_then(|parent| registry.get_node_type_for_node(parent))
-                .map(|parent_type| parent_type.has_zone())
-                .unwrap_or(false)
-        };
+        // Localize both into one error. "In a zone body" is read straight off
+        // the frame this parameter lives in: every body push records
+        // `is_zone_body: true` at push time. Do NOT reconstruct it from stack
+        // shape or `eval_scope_path` — both are ambiguous. The historical
+        // heuristic (`stack.len() < 2` + non-empty `eval_scope_path`) false-
+        // positived on a perfectly legal graph: a custom-network instance's
+        // parameter resolves its argument via a parent-stack *excursion*
+        // (below) that pops the stack frame while the instance's eval scope
+        // stays pushed, so a top-level `parameter` feeding that instance's pin
+        // was misread as body-resident. The network validator raises the
+        // matching non-blocking badge on this node.
+        let in_zone_body = network_stack.last().is_some_and(|frame| frame.is_zone_body);
         if in_zone_body {
             return EvalOutput::single(NetworkResult::Error(format!(
                 "parameter '{}': `parameter` nodes are not allowed inside a zone body",

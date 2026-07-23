@@ -179,7 +179,7 @@ fn test_kernel_cuboid_evaluation() {
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
     let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+    network_stack.push(NetworkStackElement { is_zone_body: false, node_network: network, node_id: 0 });
 
     // Test points:
     // 1. Point on surface (should be 0)
@@ -228,7 +228,7 @@ fn test_kernel_union_of_spheres() {
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
     let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+    network_stack.push(NetworkStackElement { is_zone_body: false, node_network: network, node_id: 0 });
 
     // Test points:
     // 1. Point inside both spheres (should be negative)
@@ -274,7 +274,7 @@ fn test_kernel_intersection_with_half_space() {
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
     let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+    network_stack.push(NetworkStackElement { is_zone_body: false, node_network: network, node_id: 0 });
 
     // Test points:
     // 1. Point outside both shapes (should be positive)
@@ -335,7 +335,7 @@ fn test_kernel_complex_csg_network() {
     let registry = &k.node_type_registry;
     let network = registry.node_networks.get("test_network").unwrap();
     let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement { node_network: network, node_id: 0 });
+    network_stack.push(NetworkStackElement { is_zone_body: false, node_network: network, node_id: 0 });
 
     // Test points:
     // 1. Point inside first sphere and cuboid (should be negative)
