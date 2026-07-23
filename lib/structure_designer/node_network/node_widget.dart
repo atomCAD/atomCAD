@@ -21,6 +21,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
         GRID_MAJOR_COLOR;
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dart';
 import 'package:flutter_cad/structure_designer/extract_closure_to_network_dialog.dart';
 
@@ -1890,11 +1891,12 @@ class NodeWidget extends StatelessWidget {
   /// immediately (no picker — that third click is the friction the issue is
   /// about); several → a picker anchored at the cursor. Every branch jumps with
   /// the anchor captured at right-click time, so going through the picker lands
-  /// just as continuously as the single-usage case.
+  /// just as continuously as the single-usage case. The branching and the
+  /// picker itself are shared with the panel entry points
+  /// (`find_usages_menu.dart`).
   Future<void> _handleFindUsages(
       BuildContext context, RelativeRect position, Offset? anchor) async {
     final model = Provider.of<StructureDesignerModel>(context, listen: false);
-    final messenger = ScaffoldMessenger.maybeOf(context);
     final typeName = node.nodeTypeName;
     final activeNetworkName = model.nodeNetworkView?.name;
 
@@ -1905,53 +1907,17 @@ class NodeWidget extends StatelessWidget {
             listEquals(u.scopePath.toList(), scopeChain)))
         .toList();
 
-    if (usages.isEmpty) {
+    await showNetworkUsagesMenu(
+      context: context,
+      model: model,
+      networkName: typeName,
+      usages: usages,
+      position: position,
       // "No usages" would be a lie — the clicked instance is one, just a
       // filtered-out one.
-      messenger?.showSnackBar(
-        SnackBar(
-            content: Text("No other usages of '${getSimpleName(typeName)}'")),
-      );
-      return;
-    }
-
-    if (usages.length == 1) {
-      model.jumpToUsage(usages.first, screenAnchor: anchor);
-      return;
-    }
-
-    final picked = await showMenu<int>(
-      context: context,
-      position: position,
-      items: <PopupMenuEntry<int>>[
-        PopupMenuItem<int>(
-          enabled: false,
-          child: Text("Usages of '${getSimpleName(typeName)}'"),
-        ),
-        for (int i = 0; i < usages.length; i++)
-          PopupMenuItem<int>(
-            value: i,
-            // Qualified network names get long; cap the row so a deep
-            // namespace can't push the menu off screen.
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child:
-                  Text(_usageLabel(usages[i]), overflow: TextOverflow.ellipsis),
-            ),
-          ),
-      ],
+      emptyMessage: "No other usages of '${getSimpleName(typeName)}'",
+      screenAnchor: anchor,
     );
-    if (picked == null) return;
-    model.jumpToUsage(usages[picked], screenAnchor: anchor);
-  }
-
-  /// One picker row: `host network — node label (in map1 body)`. Every part is
-  /// resolved Rust-side (design D2), including the body qualifier, so nothing
-  /// is re-derived here.
-  static String _usageLabel(APINetworkUsage usage) {
-    final base = '${usage.hostNetwork} — ${usage.nodeLabel}';
-    final qualifier = usage.bodyQualifier;
-    return qualifier == null ? base : '$base ($qualifier)';
   }
 
   /// One radio-style item in the Body collapse-mode group. The check-mark is

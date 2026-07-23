@@ -55,6 +55,8 @@ Node networks in a design can be browsed in the **List** tab or in the **Tree** 
 
 > Terminology: a name like `dl.lib.basepoly.cube_centered` is the qualified name of the given node network, while the name `cube_centered` is the simple name of that same node network.
 
+**Who uses this network?** In the **List** tab, a network that is used somewhere in the design shows a small grey number at the right edge of its row: how many nodes across the whole design are instances of it. Networks that nobody uses show no number at all. Click the number — or right-click the row (in either the **List** or the **Tree** tab) and choose *Find Usages* — to jump to a usage; when there are several, you pick one from a list. This is the same navigation described under [Find Usages](#navigating-between-node-networks) below, started from the panel instead of from a node, so the landing is centered in the editor rather than anchored on the node you came from.
+
 In the node network editor panel: Node titles show only the simple name, with the full qualified name available on hover.
 
 ### Navigating between node networks
@@ -65,6 +67,8 @@ When working with custom nodes (nodes defined by subnetworks), you can quickly n
 - **Find Usages:** Right-click a custom node and select *Find Usages* to navigate in the opposite direction — to the other places where that node's type is used. Usages are found anywhere in the open design, including inside the bodies of higher-order function nodes. If there is exactly one other usage, you jump to it straight away; if there are several, a list appears and you pick one. The node you right-clicked is not listed (it is a usage of its own type, which is never what you are looking for), so a node that is the only instance of its type reports *No other usages*.
 
   The jump keeps you oriented: the zoom level does not change, and the node you land on appears at the same place on screen where the node you right-clicked was. The usage is also selected, so if it sits inside a collapsed function body you land on the body's node and find the usage highlighted when you open the body. Use *Back* (below) to return to where you came from.
+
+  The same search is available from the **Node Networks** panel — see [the usage count on a panel row](#node-network-composability-and-node-networks-list-panel) above. Started from there it asks about a *network* rather than about a node under the cursor, so nothing is excluded from the result: a network nobody instantiates reports *is not used by any network*.
 
 The **Node Networks** panel includes browser-like navigation buttons at the top:
 

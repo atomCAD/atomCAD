@@ -4,6 +4,7 @@ import 'package:flutter_cad/structure_designer/identifier_validation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
+import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 
 /// Discriminator between the two kinds of user-defined types listed in this
 /// view: node networks and record type defs.
@@ -97,27 +98,32 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
             _editingName == entryName && _editingKind == entry.kind;
         final bool hasValidationErrors = entry.validationErrors != null;
 
+        // Networks only: how many instance nodes reference this network,
+        // anywhere in the design (Find Usages, issue #414). Record defs have no
+        // usage search yet, and a zero count reserves no space at all.
+        final int usageCount = entry.kind == _UserTypeKind.network
+            ? (widget.model.networkUsageCounts[entryName] ?? 0)
+            : 0;
+
         return Builder(
           builder: (BuildContext itemContext) {
             return GestureDetector(
               onSecondaryTap: () {
-                final RenderBox itemBox =
-                    itemContext.findRenderObject() as RenderBox;
-                final Offset offset = itemBox.localToGlobal(Offset.zero);
-                final Size itemSize = itemBox.size;
-                final Size screenSize = MediaQuery.of(context).size;
+                final RelativeRect position =
+                    menuPositionForWidget(itemContext);
 
-                final RelativeRect position = RelativeRect.fromLTRB(
-                  offset.dx,
-                  offset.dy,
-                  screenSize.width - (offset.dx + itemSize.width),
-                  screenSize.height - (offset.dy + itemSize.height),
-                );
-
-                showMenu(
+                showMenu<String>(
                   context: context,
                   position: position,
-                  items: [
+                  items: <PopupMenuEntry<String>>[
+                    // Navigation first, separated from the editing actions.
+                    if (entry.kind == _UserTypeKind.network) ...[
+                      const PopupMenuItem(
+                        value: 'find_usages',
+                        child: Text('Find Usages'),
+                      ),
+                      const PopupMenuDivider(),
+                    ],
                     const PopupMenuItem(
                       value: 'rename',
                       child: Text('Rename'),
@@ -136,7 +142,15 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                     ),
                   ],
                 ).then((value) {
-                  if (value == 'rename') {
+                  if (!itemContext.mounted) return;
+                  if (value == 'find_usages') {
+                    findUsagesOfNetwork(
+                      context: itemContext,
+                      model: widget.model,
+                      networkName: entryName,
+                      position: menuPositionForWidget(itemContext),
+                    );
+                  } else if (value == 'rename') {
                     _startRenaming(entryName, entry.kind);
                   } else if (value == 'duplicate') {
                     widget.model.duplicateNodeNetwork(entryName);
@@ -260,6 +274,39 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
                             ),
                           )
                         : Text(entryName, style: AppTextStyles.regular),
+                    // A bare number, no icon — the number *is* the information,
+                    // and sidebar space is tight. Clicking it opens the same
+                    // usage picker as the context-menu entry.
+                    trailing: usageCount > 0
+                        ? Builder(
+                            builder: (BuildContext countContext) => Tooltip(
+                              message:
+                                  'Used by $usageCount node${usageCount == 1 ? '' : 's'}',
+                              child: InkWell(
+                                onTap: () => findUsagesOfNetwork(
+                                  context: countContext,
+                                  model: widget.model,
+                                  networkName: entryName,
+                                  position: menuPositionForWidget(countContext),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 2),
+                                  child: Text(
+                                    '$usageCount',
+                                    style: AppTextStyles.regular.copyWith(
+                                      fontSize: 11,
+                                      color: isActive
+                                          ? AppColors.selectionForeground
+                                              .withValues(alpha: 0.8)
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : null,
                     selected: isActive,
                     selectedTileColor: AppColors.selectionBackground,
                     selectedColor: AppColors.selectionForeground,

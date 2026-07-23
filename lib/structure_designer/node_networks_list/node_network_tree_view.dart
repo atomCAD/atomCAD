@@ -7,6 +7,7 @@ import 'package:flutter_cad/structure_designer/node_networks_list/move_namespace
 import 'package:flutter_cad/structure_designer/node_networks_list/new_folder_dialog.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
+import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 
 /// Discriminator between the two kinds of leaves in the user-types tree.
 enum _LeafKind { network, recordDef }
@@ -797,6 +798,15 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         node.fullName != null && widget.model.isCliWriteLocked(node.fullName!);
 
     final items = <PopupMenuEntry<String>>[
+      // Navigation first, separated from the editing actions. Networks only —
+      // record defs have no usage search yet (design "Non-goals").
+      if (node.isLeaf && node.leafKind == _LeafKind.network) ...[
+        const PopupMenuItem(
+          value: 'find_usages',
+          child: Text('Find Usages'),
+        ),
+        const PopupMenuDivider(),
+      ],
       // Folders offer targeted creation: a new network/record def created here
       // lands inside this folder rather than at the root (the action-bar
       // buttons stay root-scoped). See issue on tree-view UX.
@@ -852,7 +862,16 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
       items: items,
     ).then((value) {
       if (!context.mounted) return;
-      if (value == 'add_folder_here') {
+      if (value == 'find_usages' && node.fullName != null) {
+        // Same cursor position as the context menu it replaces, so the picker
+        // opens where the user is already looking.
+        findUsagesOfNetwork(
+          context: context,
+          model: widget.model,
+          networkName: node.fullName!,
+          position: position,
+        );
+      } else if (value == 'add_folder_here') {
         _handleAddFolderIn(node);
       } else if (value == 'add_network_here') {
         _handleAddInFolder(node, isRecord: false);

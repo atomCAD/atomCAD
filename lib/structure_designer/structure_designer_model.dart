@@ -152,6 +152,15 @@ class StructureDesignerModel extends ChangeNotifier {
   /// alongside `nodeNetworkNames`.
   List<String> recordTypeDefNames = [];
 
+  /// How many instance nodes reference each node type, across every network in
+  /// the design (Find Usages, issue #414). Refreshed from the kernel alongside
+  /// `nodeNetworkNames` by one batched walk, so the user-types panel can show a
+  /// per-row count without issuing an FFI call per row.
+  ///
+  /// Keyed by *node type name*, which includes built-in types — always look a
+  /// network up by name rather than iterating the map.
+  Map<String, int> networkUsageCounts = {};
+
   /// Deliberately-created empty-folder paths (sorted). The tree view merges
   /// these with the folders implied by entity names. Refreshed from the kernel
   /// alongside `nodeNetworkNames`. See `doc/design_empty_folders.md`.
@@ -1357,6 +1366,9 @@ class StructureDesignerModel extends ChangeNotifier {
       }
       nodeNetworkNames =
           structure_designer_api.getNodeNetworksWithValidation() ?? [];
+      // The deleted network's own nodes were usages of *other* networks, so the
+      // counts shift even though a referenced network can never be deleted.
+      networkUsageCounts = structure_designer_api.getNetworkUsageCounts();
       notifyListeners();
       return null; // Success
     } else {
@@ -2993,6 +3005,7 @@ class StructureDesignerModel extends ChangeNotifier {
         structure_designer_api.getNodeNetworksWithValidation() ?? [];
     recordTypeDefNames = structure_designer_api.getRecordTypeDefNames() ?? [];
     folderNames = structure_designer_api.getFolderNames() ?? [];
+    networkUsageCounts = structure_designer_api.getNetworkUsageCounts();
     // The active record def is backend-owned (§8): mirror it here so the
     // schema-editor selection follows record renames/moves and survives
     // undo/redo (the backend remaps/clears it inside the relevant commands).
