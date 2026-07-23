@@ -13,7 +13,9 @@ use crate::geo_tree::csg_cache::CsgConversionCache;
 use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::evaluator::network_result::{
+    error_in_input, error_in_input_chained,
+};
 use crate::structure_designer::evaluator::zone_closure::{
     build_node_function_closure, run_closure_once,
 };
@@ -1323,8 +1325,9 @@ impl NetworkEvaluator {
                 let (result, source_type) =
                     self.resolve_incoming_wire(network_stack, registry, context, incoming);
 
-                if let NetworkResult::Error(_) = result {
-                    return error_in_input(&input_name);
+                if let NetworkResult::Error(inner) = &result {
+                    let src = Self::describe_wire_source(network_stack, incoming);
+                    return error_in_input_chained(&input_name, src.as_deref(), inner);
                 }
 
                 // Force a `() -> T` source to `T` before the merge when the
@@ -1338,8 +1341,9 @@ impl NetworkEvaluator {
                     source_type,
                     &expected_type,
                 );
-                if let NetworkResult::Error(_) = result {
-                    return error_in_input(&input_name);
+                if let NetworkResult::Error(inner) = &result {
+                    let src = Self::describe_wire_source(network_stack, incoming);
+                    return error_in_input_chained(&input_name, src.as_deref(), inner);
                 }
 
                 // convert_to handles conversion to array types, so we can convert directly.
@@ -1360,8 +1364,9 @@ impl NetworkEvaluator {
             if let Some(incoming) = incoming_wires.first() {
                 let (result, source_type) =
                     self.resolve_incoming_wire(network_stack, registry, context, incoming);
-                if let NetworkResult::Error(_) = result {
-                    return error_in_input(&input_name);
+                if let NetworkResult::Error(inner) = &result {
+                    let src = Self::describe_wire_source(network_stack, incoming);
+                    return error_in_input_chained(&input_name, src.as_deref(), inner);
                 }
                 // Force a `() -> T` source to `T` when this pin wants the value
                 // (see `doc/design_nullary_function_coercion.md`).
@@ -1373,8 +1378,9 @@ impl NetworkEvaluator {
                     source_type,
                     &expected_type,
                 );
-                if let NetworkResult::Error(_) = result {
-                    return error_in_input(&input_name);
+                if let NetworkResult::Error(inner) = &result {
+                    let src = Self::describe_wire_source(network_stack, incoming);
+                    return error_in_input_chained(&input_name, src.as_deref(), inner);
                 }
                 result.convert_to(&source_type, &expected_type, registry)
             } else {
@@ -1459,6 +1465,28 @@ impl NetworkEvaluator {
     /// code because no node populates zone data yet — every wire today has
     /// `source_scope_depth = 0` and `source_pin = NodeOutput { .. }`. See
     /// `doc/design_zones.md` (§"What's new" point 2).
+    /// Short description of a wire's source node ("expr #12") for chained
+    /// error messages. `None` when the source is not a node (zone input) or
+    /// cannot be resolved.
+    fn describe_wire_source(
+        network_stack: &[NetworkStackElement],
+        incoming: &IncomingWire,
+    ) -> Option<String> {
+        match incoming.source_pin {
+            SourcePin::NodeOutput { .. } => {
+                let depth = incoming.source_scope_depth as usize;
+                let source_frame_idx = network_stack.len().checked_sub(1 + depth)?;
+                let source_network = network_stack[source_frame_idx].node_network;
+                let source_node = source_network.nodes.get(&incoming.source_node_id)?;
+                Some(format!(
+                    "{} #{}",
+                    source_node.node_type_name, incoming.source_node_id
+                ))
+            }
+            SourcePin::ZoneInput { .. } => None,
+        }
+    }
+
     fn resolve_incoming_wire<'a>(
         &self,
         network_stack: &[NetworkStackElement<'a>],

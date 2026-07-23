@@ -6,9 +6,7 @@ use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
-use crate::structure_designer::evaluator::network_result::{
-    NetworkResult, error_in_input, input_missing_error,
-};
+use crate::structure_designer::evaluator::network_result::{NetworkResult, input_missing_error};
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -201,9 +199,11 @@ impl NodeData for ExprData {
                 return EvalOutput::single(input_missing_error(&param.name));
             }
 
-            // Check if the result is an error
-            if let NetworkResult::Error(_) = result {
-                return EvalOutput::single(error_in_input(&param.name));
+            // Propagate an input error as-is: `evaluate_arg` already wrapped
+            // it with this parameter's name ("error in x input: ..."), so
+            // re-wrapping here would just duplicate the pin name in the chain.
+            if let NetworkResult::Error(_) = &result {
+                return EvalOutput::single(result);
             }
 
             // Add the variable to our collection

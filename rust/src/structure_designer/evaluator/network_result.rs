@@ -1220,6 +1220,25 @@ pub fn error_in_input(input_name: &str) -> NetworkResult {
     NetworkResult::Error(format!("error in {} input", input_name))
 }
 
+/// Like `error_in_input`, but chains the upstream error message so the root
+/// cause survives the wrap (mirrors the custom-node "Error in X: ..." chaining).
+/// `source` names the wire's source node (e.g. "expr #12") when resolvable, so
+/// the chain identifies which node each hop's error came from — the failing
+/// node's own hover message stays unprefixed.
+pub fn error_in_input_chained(
+    input_name: &str,
+    source: Option<&str>,
+    inner: &str,
+) -> NetworkResult {
+    match source {
+        Some(src) => NetworkResult::Error(format!(
+            "error in {} input (from {}): {}",
+            input_name, src, inner
+        )),
+        None => NetworkResult::Error(format!("error in {} input: {}", input_name, inner)),
+    }
+}
+
 pub fn runtime_type_error_in_input(input_param_index: usize) -> NetworkResult {
     NetworkResult::Error(format!(
         "runtime type error in the {} indexed input",
