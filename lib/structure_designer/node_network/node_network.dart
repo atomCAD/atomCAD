@@ -37,6 +37,32 @@ double getZoomScale(ZoomLevel zoomLevel) {
   }
 }
 
+/// Discrete index mirroring the Rust `CanvasViewport.zoom_level` field
+/// (0 = normal, 1 = medium, 2 = far). Used to persist the per-network canvas
+/// viewport (issue #414 Phase 4).
+int zoomLevelToIndex(ZoomLevel zoomLevel) {
+  switch (zoomLevel) {
+    case ZoomLevel.normal:
+      return 0;
+    case ZoomLevel.zoomedOutMedium:
+      return 1;
+    case ZoomLevel.zoomedOutFar:
+      return 2;
+  }
+}
+
+/// Inverse of [zoomLevelToIndex]; unrecognized indices fall back to normal.
+ZoomLevel zoomLevelFromIndex(int index) {
+  switch (index) {
+    case 1:
+      return ZoomLevel.zoomedOutMedium;
+    case 2:
+      return ZoomLevel.zoomedOutFar;
+    default:
+      return ZoomLevel.normal;
+  }
+}
+
 // Base node dimensions and layout constants (for normal zoom level)
 // These scale proportionally with zoom level via getZoomScale()
 const double BASE_NODE_WIDTH = 160.0;
@@ -461,6 +487,10 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Store the last pointer position for panning
   Offset? _lastPanPosition;
 
+  /// Whether the current pan gesture actually moved the view. Used to avoid
+  /// persisting (and dirtying the design) on a bare middle-click with no drag.
+  bool _didPan = false;
+
   /// Rectangle selection state
   Rect? _selectionRect; // Current rectangle being drawn (screen coords)
   Offset? _selectionRectStart; // Start point of rectangle drag (screen coords)
@@ -838,6 +868,25 @@ class NodeNetworkState extends State<NodeNetwork> {
 
     // Update the current network name
     _currentNetworkName = model.nodeNetworkView!.name;
+
+    // Precedence chain (issue #414 Phase 4, `doc/design_find_usages.md` D7):
+    //   anchored jump > stored viewport > top-left framing.
+    // Anchored jumps never reach here — `_scrollToNode` closes the
+    // `_currentNetworkName` gate itself. An explicit "reset view"
+    // (forceUpdate) always re-frames the top-left node. Otherwise, restore
+    // this network's stored canvas viewport (pan + zoom) if it has one, so
+    // switching back lands where the user left off; fall through to top-left
+    // framing when there is none (fresh network / old file).
+    if (!forceUpdate) {
+      final viewport = sd_api.getActiveNetworkCanvasViewport();
+      if (viewport != null) {
+        setState(() {
+          _panOffset = Offset(viewport.panX, viewport.panY);
+          _zoomLevel = zoomLevelFromIndex(viewport.zoomLevel);
+        });
+        return;
+      }
+    }
 
     // If there are no nodes, center the view
     if (model.nodeNetworkView!.nodes.isEmpty) {
@@ -1396,6 +1445,7 @@ class NodeNetworkState extends State<NodeNetwork> {
         final screenDelta = event.position - _lastPanPosition!;
         _panOffset += screenDelta / scale;
         _lastPanPosition = event.position;
+        _didPan = true;
       });
     }
     // Rectangle selection - just update the visual, no Rust calls during drag
@@ -1407,11 +1457,16 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// Handle pointer up event to end panning or rectangle selection
   void _handlePointerUp(PointerUpEvent event) {
     if (_isMiddleMousePanning || _isShiftRightMousePanning) {
+      final didPan = _didPan;
       setState(() {
         _isMiddleMousePanning = false;
         _isShiftRightMousePanning = false;
         _lastPanPosition = null;
+        _didPan = false;
       });
+      // Persist the settled pan (end of gesture, not per-frame). Skip a bare
+      // click with no drag so it doesn't needlessly dirty the design.
+      if (didPan) _syncCanvasViewportToKernel();
     }
     // Left-button release that began on non-node space. Distinguish a *tap*
     // (click — select/clear a wire) from a *drag* (rectangle selection). A
@@ -1557,6 +1612,21 @@ class NodeNetworkState extends State<NodeNetwork> {
       _zoomLevel = newZoomLevel;
       _panOffset = newPanOffset;
     });
+    // Each discrete zoom step is its own settle point — persist it.
+    _syncCanvasViewportToKernel();
+  }
+
+  /// Persist the current pan + zoom onto the active network so switching back
+  /// (including Back/Forward) restores this exact view instead of re-framing
+  /// the top-left node (issue #414 Phase 4, `doc/design_find_usages.md` D7).
+  /// Mirrors `sync_camera_to_active_network` for the 3D camera; not
+  /// undo-tracked. No `refreshFromKernel` — this is pure view state.
+  void _syncCanvasViewportToKernel() {
+    sd_api.setActiveNetworkCanvasViewport(
+      panX: _panOffset.dx,
+      panY: _panOffset.dy,
+      zoomLevel: zoomLevelToIndex(_zoomLevel),
+    );
   }
 
   @override

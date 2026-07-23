@@ -11,6 +11,7 @@ use super::structure_designer_api_types::APIAtomExportFormat;
 use super::structure_designer_api_types::APIAtomReplaceData;
 use super::structure_designer_api_types::APIAtomReplaceRule;
 use super::structure_designer_api_types::APICandidateNode;
+use super::structure_designer_api_types::APICanvasViewport;
 use super::structure_designer_api_types::APICircleData;
 use super::structure_designer_api_types::APIClosureData;
 use super::structure_designer_api_types::APIClosureKind;
@@ -142,6 +143,7 @@ use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
 };
+use crate::structure_designer::canvas_viewport::CanvasViewport;
 use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_result::{
@@ -1843,6 +1845,55 @@ fn resolve_network_scope<'a>(
         current = current.nodes.get(hof_id)?.zone.as_deref()?;
     }
     Some(current)
+}
+
+/// Returns the active network's stored node-canvas viewport (pan + zoom), or
+/// `None` if it has none yet (fresh network / old file) — Flutter then falls
+/// back to auto-framing the top-left node. Issue #414 Phase 4,
+/// `doc/design_find_usages.md` D7.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_active_network_canvas_viewport() -> Option<APICanvasViewport> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .get_active_node_network()
+                    .and_then(|network| network.canvas_viewport.as_ref())
+                    .map(|cv| APICanvasViewport {
+                        pan_x: cv.pan_x,
+                        pan_y: cv.pan_y,
+                        zoom_level: cv.zoom_level,
+                    })
+            },
+            None,
+        )
+    }
+}
+
+/// Stores the node-canvas viewport (pan + zoom) on the active network, mirroring
+/// `sync_camera_to_active_network` for the 3D camera. Called from Flutter when a
+/// pan/zoom gesture settles. Marks the design dirty (view state is saved per
+/// network); not undo-tracked. Issue #414 Phase 4, `doc/design_find_usages.md`
+/// D7.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_active_network_canvas_viewport(pan_x: f64, pan_y: f64, zoom_level: i32) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            if let Some(network) = cad_instance
+                .structure_designer
+                .get_active_node_network_mut()
+            {
+                network.canvas_viewport = Some(CanvasViewport {
+                    pan_x,
+                    pan_y,
+                    zoom_level,
+                });
+                // View state is saved per network, so mark design as dirty.
+                cad_instance.structure_designer.set_dirty(true);
+            }
+        });
+    }
 }
 
 /// Add a node network with an auto-generated unique name and activate it.

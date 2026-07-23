@@ -1,4 +1,5 @@
 use crate::structure_designer::camera_settings::CameraSettings;
+use crate::structure_designer::canvas_viewport::CanvasViewport;
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition};
@@ -919,6 +920,10 @@ pub struct NodeNetwork {
     /// Camera settings for this network's 3D viewport.
     /// When None, uses default camera position.
     pub camera_settings: Option<CameraSettings>,
+    /// Node-canvas viewport (pan + zoom) for this network's node editor.
+    /// When None, the editor auto-frames the top-left node. See
+    /// `doc/design_find_usages.md` D7.
+    pub canvas_viewport: Option<CanvasViewport>,
 }
 
 /// Resolve the source side of an `IncomingWire` into a `NodeRef` against
@@ -1135,6 +1140,7 @@ impl NodeNetwork {
             valid: true,
             validation_errors: Vec::new(),
             camera_settings: None, // Will be populated on first use or from saved file
+            canvas_viewport: None, // Populated on pan/zoom settle or from saved file
         }
     }
 

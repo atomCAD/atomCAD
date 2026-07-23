@@ -322,6 +322,24 @@ List<APINetworkUsage> getNetworkUsages({required String networkName}) =>
 Map<String, int> getNetworkUsageCounts() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNetworkUsageCounts();
 
+/// Returns the active network's stored node-canvas viewport (pan + zoom), or
+/// `None` if it has none yet (fresh network / old file) — Flutter then falls
+/// back to auto-framing the top-left node. Issue #414 Phase 4,
+/// `doc/design_find_usages.md` D7.
+APICanvasViewport? getActiveNetworkCanvasViewport() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiGetActiveNetworkCanvasViewport();
+
+/// Stores the node-canvas viewport (pan + zoom) on the active network, mirroring
+/// `sync_camera_to_active_network` for the 3D camera. Called from Flutter when a
+/// pan/zoom gesture settles. Marks the design dirty (view state is saved per
+/// network); not undo-tracked. Issue #414 Phase 4, `doc/design_find_usages.md`
+/// D7.
+void setActiveNetworkCanvasViewport(
+        {required double panX, required double panY, required int zoomLevel}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetActiveNetworkCanvasViewport(
+            panX: panX, panY: panY, zoomLevel: zoomLevel);
+
 /// Add a node network with an auto-generated unique name and activate it.
 /// Returns the generated name so the Flutter side can select the new network
 /// (the network registry is a HashMap, so list order is not reliable — issue

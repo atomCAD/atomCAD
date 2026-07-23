@@ -636,6 +636,36 @@ class APICandidateNode {
           nodeName == other.nodeName;
 }
 
+/// Node-canvas viewport (pan + zoom) for a network's node editor, exchanged
+/// with Flutter so it can be persisted per network and restored on activation
+/// (issue #414 Phase 4, `doc/design_find_usages.md` D7).
+class APICanvasViewport {
+  final double panX;
+  final double panY;
+
+  /// Discrete zoom level, mirroring the Flutter `ZoomLevel` enum index
+  /// (0 = normal, 1 = medium, 2 = far).
+  final int zoomLevel;
+
+  const APICanvasViewport({
+    required this.panX,
+    required this.panY,
+    required this.zoomLevel,
+  });
+
+  @override
+  int get hashCode => panX.hashCode ^ panY.hashCode ^ zoomLevel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICanvasViewport &&
+          runtimeType == other.runtimeType &&
+          panX == other.panX &&
+          panY == other.panY &&
+          zoomLevel == other.zoomLevel;
+}
+
 class APICircleData {
   final APIIVec2 center;
   final int radius;

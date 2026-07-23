@@ -2,6 +2,7 @@
 
 pub mod camera_settings;
 pub mod canonicalize;
+pub mod canvas_viewport;
 pub mod cli_runner;
 pub mod closure_network_conversion;
 pub mod common_constants;

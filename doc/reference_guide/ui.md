@@ -97,6 +97,8 @@ If you get lost you can use the *View > Reset node network view* menu item.
 
 The node network can be zoomed using the mouse scroll wheel.
 
+Each node network remembers its own canvas view (pan position and zoom level). When you switch between networks — or navigate with *Back* / *Forward* — the editor restores the view you last left for that network instead of re-framing from scratch, so you land where you were looking. A brand-new network (or one saved before this was added) has no stored view, and the editor frames its top-left node instead; *View > Reset node network view* also re-frames to the top-left node. The stored view is saved as part of the `.cnnd` file.
+
 ### Manipulating nodes and wires
 
 **Add nodes**

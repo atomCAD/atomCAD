@@ -121,6 +121,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICandidateNode dco_decode_api_candidate_node(dynamic raw);
 
   @protected
+  APICanvasViewport dco_decode_api_canvas_viewport(dynamic raw);
+
+  @protected
   APICircleData dco_decode_api_circle_data(dynamic raw);
 
   @protected
@@ -544,6 +547,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICamera dco_decode_box_autoadd_api_camera(dynamic raw);
+
+  @protected
+  APICanvasViewport dco_decode_box_autoadd_api_canvas_viewport(dynamic raw);
 
   @protected
   APICircleData dco_decode_box_autoadd_api_circle_data(dynamic raw);
@@ -1101,6 +1107,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICamera? dco_decode_opt_box_autoadd_api_camera(dynamic raw);
 
   @protected
+  APICanvasViewport? dco_decode_opt_box_autoadd_api_canvas_viewport(
+      dynamic raw);
+
+  @protected
   APICircleData? dco_decode_opt_box_autoadd_api_circle_data(dynamic raw);
 
   @protected
@@ -1594,6 +1604,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICandidateNode sse_decode_api_candidate_node(SseDeserializer deserializer);
 
   @protected
+  APICanvasViewport sse_decode_api_canvas_viewport(
+      SseDeserializer deserializer);
+
+  @protected
   APICircleData sse_decode_api_circle_data(SseDeserializer deserializer);
 
   @protected
@@ -2072,6 +2086,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APICamera sse_decode_box_autoadd_api_camera(SseDeserializer deserializer);
+
+  @protected
+  APICanvasViewport sse_decode_box_autoadd_api_canvas_viewport(
+      SseDeserializer deserializer);
 
   @protected
   APICircleData sse_decode_box_autoadd_api_circle_data(
@@ -2744,6 +2762,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APICanvasViewport? sse_decode_opt_box_autoadd_api_canvas_viewport(
+      SseDeserializer deserializer);
+
+  @protected
   APICircleData? sse_decode_opt_box_autoadd_api_circle_data(
       SseDeserializer deserializer);
 
@@ -3316,6 +3338,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICandidateNode self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_canvas_viewport(
+      APICanvasViewport self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_circle_data(APICircleData self, SseSerializer serializer);
 
   @protected
@@ -3833,6 +3859,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_camera(
       APICamera self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_canvas_viewport(
+      APICanvasViewport self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_circle_data(
@@ -4519,6 +4549,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_camera(
       APICamera? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_canvas_viewport(
+      APICanvasViewport? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_circle_data(

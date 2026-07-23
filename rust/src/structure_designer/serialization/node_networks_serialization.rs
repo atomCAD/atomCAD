@@ -1,4 +1,5 @@
 use super::super::camera_settings::CameraSettings;
+use super::super::canvas_viewport::CanvasViewport;
 use super::super::node_data::CustomNodeData;
 use super::super::node_data::NoData;
 use super::super::node_data::NodeData;
@@ -76,6 +77,17 @@ impl Default for SerializableCameraSettings {
             nav_up_label: default_nav_up_label(),
         }
     }
+}
+
+/// Node-canvas viewport (pan + zoom) saved per node network. Backward
+/// compatible: the field on `SerializableNodeNetwork` uses `#[serde(default)]`,
+/// so old `.cnnd` files load with `None` and the editor falls back to top-left
+/// auto-framing (issue #414 Phase 4, `doc/design_find_usages.md` D7).
+#[derive(Serialize, Deserialize, Clone)]
+pub struct SerializableCanvasViewport {
+    pub pan_x: f64,
+    pub pan_y: f64,
+    pub zoom_level: i32,
 }
 
 /// Serializable version of Parameter struct for JSON serialization
@@ -228,6 +240,10 @@ pub struct SerializableNodeNetwork {
     /// Camera settings for this network's 3D viewport (backward compatible - defaults to None for old files)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub camera_settings: Option<SerializableCameraSettings>,
+    /// Node-canvas viewport (pan + zoom) for this network's node editor
+    /// (backward compatible - defaults to None for old files).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canvas_viewport: Option<SerializableCanvasViewport>,
 }
 
 /// Container for serializing all node networks in the NodeTypeRegistry
@@ -647,6 +663,16 @@ pub fn node_network_to_serializable(
             nav_up_label: cs.nav_up_label.clone(),
         });
 
+    // Convert canvas viewport if present
+    let canvas_viewport = network
+        .canvas_viewport
+        .as_ref()
+        .map(|cv| SerializableCanvasViewport {
+            pan_x: cv.pan_x,
+            pan_y: cv.pan_y,
+            zoom_level: cv.zoom_level,
+        });
+
     // Create the serializable network
     Ok(SerializableNodeNetwork {
         next_node_id: network.next_node_id,
@@ -656,6 +682,7 @@ pub fn node_network_to_serializable(
         displayed_node_ids,
         displayed_output_pins,
         camera_settings,
+        canvas_viewport,
     })
 }
 
@@ -801,6 +828,16 @@ pub fn serializable_to_node_network(
             nav_up_label,
         }
     });
+
+    // Convert canvas viewport if present
+    network.canvas_viewport = serializable
+        .canvas_viewport
+        .as_ref()
+        .map(|scv| CanvasViewport {
+            pan_x: scv.pan_x,
+            pan_y: scv.pan_y,
+            zoom_level: scv.zoom_level,
+        });
 
     Ok(network)
 }

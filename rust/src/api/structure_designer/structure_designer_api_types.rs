@@ -1144,6 +1144,17 @@ pub struct APINetworkUsage {
     pub body_qualifier: Option<String>,
 }
 
+/// Node-canvas viewport (pan + zoom) for a network's node editor, exchanged
+/// with Flutter so it can be persisted per network and restored on activation
+/// (issue #414 Phase 4, `doc/design_find_usages.md` D7).
+pub struct APICanvasViewport {
+    pub pan_x: f64,
+    pub pan_y: f64,
+    /// Discrete zoom level, mirroring the Flutter `ZoomLevel` enum index
+    /// (0 = normal, 1 = medium, 2 = far).
+    pub zoom_level: i32,
+}
+
 #[frb]
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum NodeTypeCategory {

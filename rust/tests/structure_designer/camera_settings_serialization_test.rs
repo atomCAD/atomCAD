@@ -42,6 +42,7 @@ fn convert_with_camera(
         displayed_node_ids: vec![],
         displayed_output_pins: vec![],
         camera_settings: Some(camera),
+        canvas_viewport: None,
     };
 
     let network =
