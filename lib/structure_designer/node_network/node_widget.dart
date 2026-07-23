@@ -1675,99 +1675,125 @@ class NodeWidget extends StatelessWidget {
     final bool canExtractToNetwork = node.nodeTypeName == 'closure' &&
         model.canExtractClosureToNetwork(node.id, scopeChain: scopeChain);
 
-    // Explicit `<String>` so the heterogeneous items list (the value-bearing
-    // items, the disabled "Body" header, and the `PopupMenuDivider`) infers
-    // `List<PopupMenuEntry<String>>` rather than collapsing to a `StatefulWidget`
-    // LUB — needed once the divider/header are mixed in.
+    // D9 (`doc/design_find_usages.md`): the menu is grouped into titled
+    // sections — Navigate / Edit / Refactor / Node / Body — using the existing
+    // disabled-header + divider idiom (the same one the Body group already
+    // used). Pure reshuffle: every item keeps its gating condition and its
+    // `value` string, so the handler below is unchanged. A section's header is
+    // emitted only when the section has at least one visible item, and a
+    // divider separates adjacent sections (no leading divider on the first
+    // visible one). Explicit `List<PopupMenuEntry<String>>` so the
+    // heterogeneous entries (value items, disabled headers, dividers) don't
+    // collapse to a `StatefulWidget` LUB.
+    final List<PopupMenuEntry<String>> items = [];
+    void addSection(String title, List<PopupMenuEntry<String>> section) {
+      if (section.isEmpty) return;
+      if (items.isNotEmpty) items.add(const PopupMenuDivider());
+      items.add(PopupMenuItem<String>(enabled: false, child: Text(title)));
+      items.addAll(section);
+    }
+
+    // Navigate: inward (Go to Definition) and outward (Find Usages, the
+    // issue-#414 counterpart) — both custom-node only.
+    addSection('Navigate', [
+      if (isCustomNode)
+        const PopupMenuItem(
+          value: 'go_to_definition',
+          child: Text('Go to Definition'),
+        ),
+      if (isCustomNode)
+        const PopupMenuItem(
+          value: 'find_usages',
+          child: Text('Find Usages'),
+        ),
+    ]);
+
+    addSection('Edit', [
+      const PopupMenuItem(
+        value: 'duplicate',
+        child: Text('Duplicate node (Ctrl+D)'),
+      ),
+      const PopupMenuItem(
+        value: 'copy',
+        child: Text('Copy (Ctrl+C)'),
+      ),
+      const PopupMenuItem(
+        value: 'cut',
+        child: Text('Cut (Ctrl+X)'),
+      ),
+    ]);
+
+    addSection('Refactor', [
+      if (isCustomNode)
+        const PopupMenuItem(
+          value: 'inline',
+          child: Text('Inline'),
+        ),
+      // Top-level only: "parameter" is a network-interface concept, and the
+      // Rust `promote_node_to_parameter` operates on the active top-level
+      // network by bare id. Offering it on a body node would mis-target a
+      // colliding top-level id (per-body id counters). Bodies expose zone
+      // inputs, not arbitrary parameters.
+      if (scopeChain.isEmpty)
+        const PopupMenuItem(
+          value: 'promote_to_parameter',
+          child: Text('Promote to Parameter'),
+        ),
+      if (canFactor)
+        const PopupMenuItem(
+          value: 'factor_into_subnetwork',
+          child: Text('Factor out to Subnetwork...'),
+        ),
+      if (canConvertToClosure)
+        const PopupMenuItem(
+          value: 'convert_to_closure',
+          child: Text('Convert to Closure'),
+        ),
+      if (canExtractToNetwork)
+        const PopupMenuItem(
+          value: 'extract_to_network',
+          child: Text('Convert Closure to Network...'),
+        ),
+    ]);
+
+    addSection('Node', [
+      PopupMenuItem(
+        value: 'execute',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(Icons.play_arrow, size: 18),
+            SizedBox(width: 8),
+            Text('Execute'),
+          ],
+        ),
+      ),
+      PopupMenuItem(
+        value: 'return',
+        child: Text(
+            node.returnNode ? 'Unset as return node' : 'Set as return node'),
+      ),
+    ]);
+
+    // Body collapse-mode radio group (collapsable HOFs only). The check-mark
+    // sits on the current `collapseMode`; picking "Auto" is the "stop
+    // overriding" path. No dialog/submenu — the flat `showMenu` has no native
+    // cascade and view state doesn't warrant a dialog.
+    if (isCollapsableHof) {
+      addSection('Body', [
+        _collapseModeItem(
+            'collapse_auto', 'Auto (follow f)', node.zone!.collapseMode),
+        _collapseModeItem(
+            'collapse_expanded', 'Always expanded', node.zone!.collapseMode),
+        _collapseModeItem(
+            'collapse_collapsed', 'Always collapsed', node.zone!.collapseMode),
+      ]);
+    }
+
     showMenu<String>(
       context: context,
       position: position,
-      items: [
-        if (isCustomNode)
-          PopupMenuItem(
-            value: 'go_to_definition',
-            child: Text('Go to Definition'),
-          ),
-        // The outward counterpart of Go to Definition: where is this node's
-        // *type* used? (issue #414)
-        if (isCustomNode)
-          PopupMenuItem(
-            value: 'find_usages',
-            child: Text('Find Usages'),
-          ),
-        if (isCustomNode)
-          PopupMenuItem(
-            value: 'inline',
-            child: Text('Inline'),
-          ),
-        PopupMenuItem(
-          value: 'execute',
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: const [
-              Icon(Icons.play_arrow, size: 18),
-              SizedBox(width: 8),
-              Text('Execute'),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'return',
-          child: Text(
-              node.returnNode ? 'Unset as return node' : 'Set as return node'),
-        ),
-        PopupMenuItem(
-          value: 'duplicate',
-          child: Text('Duplicate node (Ctrl+D)'),
-        ),
-        PopupMenuItem(
-          value: 'copy',
-          child: Text('Copy (Ctrl+C)'),
-        ),
-        PopupMenuItem(
-          value: 'cut',
-          child: Text('Cut (Ctrl+X)'),
-        ),
-        // Top-level only: "parameter" is a network-interface concept, and the
-        // Rust `promote_node_to_parameter` operates on the active top-level
-        // network by bare id. Offering it on a body node would mis-target a
-        // colliding top-level id (per-body id counters). Bodies expose zone
-        // inputs, not arbitrary parameters.
-        if (scopeChain.isEmpty)
-          PopupMenuItem(
-            value: 'promote_to_parameter',
-            child: Text('Promote to Parameter'),
-          ),
-        if (canFactor)
-          PopupMenuItem(
-            value: 'factor_into_subnetwork',
-            child: Text('Factor out to Subnetwork...'),
-          ),
-        if (canConvertToClosure)
-          PopupMenuItem(
-            value: 'convert_to_closure',
-            child: Text('Convert to Closure'),
-          ),
-        if (canExtractToNetwork)
-          PopupMenuItem(
-            value: 'extract_to_network',
-            child: Text('Convert Closure to Network...'),
-          ),
-        // Body collapse-mode radio group (collapsable HOFs only). The
-        // check-mark sits on the current `collapseMode`; picking "Auto" is the
-        // "stop overriding" path. No dialog/submenu — the flat `showMenu` has
-        // no native cascade and view state doesn't warrant a dialog.
-        if (isCollapsableHof) ...[
-          const PopupMenuDivider(),
-          const PopupMenuItem<String>(enabled: false, child: Text('Body')),
-          _collapseModeItem(
-              'collapse_auto', 'Auto (follow f)', node.zone!.collapseMode),
-          _collapseModeItem(
-              'collapse_expanded', 'Always expanded', node.zone!.collapseMode),
-          _collapseModeItem('collapse_collapsed', 'Always collapsed',
-              node.zone!.collapseMode),
-        ],
-      ],
+      items: items,
     ).then((value) {
       if (!context.mounted) return;
       if (value == 'go_to_definition') {

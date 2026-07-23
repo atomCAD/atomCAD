@@ -64,6 +64,24 @@ Wires use cubic Bezier curves with data-type-based coloring:
 - **Error:** Red border with glow
 - **Normal:** Blue border
 
+## Node context menu
+
+The right-click menu (`node_widget.dart` `_handleContextMenu`) is **grouped into
+titled sections** — Navigate / Edit / Refactor / Node / Body (`doc/design_find_usages.md`
+D9). It is built imperatively via a local `addSection(title, section)` helper, not
+as one flat `items: [...]` literal: `addSection` skips empty sections, emits a
+disabled-header `PopupMenuItem` plus a leading `PopupMenuDivider` between adjacent
+non-empty sections (none before the first). This is why a section whose items are
+all gated off (e.g. Refactor on a non-custom body node) leaves no orphan header.
+
+**To add a new item, put it inside the right section's list with its own gating
+`if`, keyed by a unique `value` string handled in the `.then()` dispatch — do not
+append a bare `PopupMenuItem` after the sections.** A flat append lands outside the
+grouping and reads as an untitled stray. Every existing item's `value` and gate
+(`isCustomNode`, `scopeChain.isEmpty`, `canFactor`, `canConvertToClosure`,
+`canExtractToNetwork`, `isCollapsableHof`) is preserved by the grouping — the
+reshuffle changed only order and headers, not behavior.
+
 ## Constants (must match Rust `node_layout.rs`)
 
 - `BASE_NODE_WIDTH = 160`

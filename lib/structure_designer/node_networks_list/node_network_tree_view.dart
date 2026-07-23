@@ -1016,6 +1016,12 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                                       ),
                                     ),
                             ),
+                            // Trailing usage count (Find Usages, issue #414),
+                            // mirroring the list view. Networks only; rendered
+                            // only when > 0 so unused networks reserve no width.
+                            if (node.isLeaf &&
+                                node.leafKind == _LeafKind.network)
+                              _buildUsageCountBadge(node, isActive),
                           ],
                         ),
                       ),
@@ -1069,6 +1075,42 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         Expanded(child: tree),
         if (_dragging) _buildRootDropBar(),
       ],
+    );
+  }
+
+  /// Trailing usage-count badge for a network leaf (Find Usages, issue #414),
+  /// mirroring the list view's trailing count. A bare number — the number *is*
+  /// the information — that opens the same usage picker on tap. Rendered only
+  /// when the count is > 0 (returns a zero-size widget otherwise), so unused
+  /// networks and record defs reserve no width. The count comes from the
+  /// model's batched `networkUsageCounts`, keyed by network name.
+  Widget _buildUsageCountBadge(_NodeNetworkTreeNode node, bool isActive) {
+    final int usageCount = widget.model.networkUsageCounts[node.fullName] ?? 0;
+    if (usageCount == 0) return const SizedBox.shrink();
+    return Builder(
+      builder: (BuildContext countContext) => Tooltip(
+        message: 'Used by $usageCount node${usageCount == 1 ? '' : 's'}',
+        child: InkWell(
+          onTap: () => findUsagesOfNetwork(
+            context: countContext,
+            model: widget.model,
+            networkName: node.fullName!,
+            position: menuPositionForWidget(countContext),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Text(
+              '$usageCount',
+              style: AppTextStyles.regular.copyWith(
+                fontSize: 11,
+                color: isActive
+                    ? AppColors.selectionForeground.withValues(alpha: 0.8)
+                    : Colors.grey,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
