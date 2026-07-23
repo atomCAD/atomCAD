@@ -1116,7 +1116,41 @@ pub struct APIParameterData {
 
 pub struct APINetworkWithValidationErrors {
     pub name: String,
-    pub validation_errors: Option<String>,
+    /// Every validation error in this network **and its zone bodies**
+    /// (recursively), each carrying enough location info to jump to the
+    /// offending node. Empty when the network is valid — the panel renders no
+    /// error badge in that case.
+    pub validation_errors: Vec<APIValidationError>,
+}
+
+/// One validation error surfaced to the user-types panel, with the addressing
+/// info needed to navigate to the offending node (error-navigation feature).
+///
+/// The first two fields (`error_text`, `blocking`) drive the badge and its
+/// tooltip; the rest are the jump target, mirroring [`APINetworkUsage`]: a
+/// scope path + node id addressing triple plus the display strings resolved
+/// Rust-side so Flutter renders a picker row without re-deriving anything.
+pub struct APIValidationError {
+    /// Human-readable error message (one error, not a joined blob).
+    pub error_text: String,
+    /// Whether this error blocks the whole network from evaluating (a blocking
+    /// error blanks the viewport) versus a non-blocking warning that only
+    /// darkens the offending node and its downstream cone. Drives red-vs-amber
+    /// badge severity. Mirrors `ValidationError::blocking`.
+    pub blocking: bool,
+    /// Chain of HOF node ids from the network's top level down to the body
+    /// holding the offending node. Empty for a top-level error.
+    pub scope_path: Vec<u64>,
+    /// Id of the offending node **within its own scope**, or `None` for a
+    /// network-level error with no node to jump to.
+    pub node_id: Option<u64>,
+    /// The offending node's display label (its node name, falling back to its
+    /// type name). `None` when there is no anchored node (`node_id` is `None`).
+    pub node_label: Option<String>,
+    /// Short human-readable body qualifier naming the enclosing HOF chain, e.g.
+    /// `"in map1 body"` or `"in map1 > filter1 body"`. `None` for a top-level
+    /// error.
+    pub body_qualifier: Option<String>,
 }
 
 /// One place a custom node network is used, for the Find Usages UI

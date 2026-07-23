@@ -10,6 +10,15 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+/// The generic error attached to an HOF in the parent network when its zone
+/// body is invalid — it exists so the HOF lights up red even when only a deep
+/// body node is at fault. It is a *marker*, not the real diagnosis: the actual
+/// error(s) live on the body network with a precise node id. Error-navigation
+/// collection recognizes and skips this marker (see
+/// `scoped_validation_errors`), so the panel navigates to the real body node
+/// rather than to the HOF.
+pub const ZONE_BODY_INVALID_MARKER: &str = "Zone body is invalid";
+
 /// Per-validation-run cache of resolved concrete output types, keyed by
 /// `(node_id, output_pin_index)`. A `None` entry means "we tried to resolve
 /// and failed" (unresolved — treated as disconnected downstream).
@@ -1132,7 +1141,7 @@ fn validate_zones_recursive(
             }
             ok = false;
             network.validation_errors.push(ValidationError::new(
-                "Zone body is invalid".to_string(),
+                ZONE_BODY_INVALID_MARKER.to_string(),
                 Some(hof_id),
             ));
         }

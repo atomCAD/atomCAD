@@ -105,6 +105,7 @@ use super::nodes::zip_with::get_node_type as zip_with_get_node_type;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
+use crate::api::structure_designer::structure_designer_api_types::APIValidationError;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::{
     DataType, FunctionType, RecordType, walk_data_type_record_names,
@@ -1128,22 +1129,50 @@ impl NodeTypeRegistry {
     }
 
     pub fn get_node_networks_with_validation(&self) -> Vec<APINetworkWithValidationErrors> {
+        use crate::structure_designer::network_usages::{
+            node_label, resolve_scope_labels, resolve_scope_network,
+        };
+        use crate::structure_designer::scoped_validation_errors::collect_scoped_validation_errors;
+
         let mut networks: Vec<APINetworkWithValidationErrors> = self
             .node_networks
             .values()
             .map(|network| {
-                let validation_errors = if network.validation_errors.is_empty() {
-                    None
-                } else {
-                    Some(
-                        network
-                            .validation_errors
-                            .iter()
-                            .map(|error| error.error_text.clone())
-                            .collect::<Vec<String>>()
-                            .join("\n"),
-                    )
-                };
+                // Collect this network's errors *and its zone bodies'* errors,
+                // each tagged with the scope path of the body it lives in, so
+                // the panel can jump to the offending node (not just the HOF).
+                let validation_errors = collect_scoped_validation_errors(network)
+                    .into_iter()
+                    .map(|scoped| {
+                        // The label and the body qualifier resolve against the
+                        // body the error lives in, exactly like a Find Usages
+                        // row — reusing the same helpers keeps the two strings
+                        // consistent.
+                        let node_label = scoped.node_id.and_then(|node_id| {
+                            resolve_scope_network(network, &scoped.scope_path)
+                                .and_then(|scope| scope.nodes.get(&node_id))
+                                .map(node_label)
+                        });
+                        let body_qualifier = if scoped.scope_path.is_empty() {
+                            None
+                        } else {
+                            let labels = resolve_scope_labels(network, &scoped.scope_path);
+                            if labels.is_empty() {
+                                None
+                            } else {
+                                Some(format!("in {} body", labels.join(" > ")))
+                            }
+                        };
+                        APIValidationError {
+                            error_text: scoped.error_text,
+                            blocking: scoped.blocking,
+                            scope_path: scoped.scope_path,
+                            node_id: scoped.node_id,
+                            node_label,
+                            body_qualifier,
+                        }
+                    })
+                    .collect();
 
                 APINetworkWithValidationErrors {
                     name: network.node_type.name.clone(),

@@ -1786,8 +1786,11 @@ pub fn get_network_usages(network_name: String) -> Vec<APINetworkUsage> {
                             .get(&usage.host_network);
                         let node_label = host
                             .and_then(|network| {
-                                resolve_network_scope(network, &usage.scope_path)
-                                    .and_then(|scope| scope.nodes.get(&usage.node_id))
+                                crate::structure_designer::network_usages::resolve_scope_network(
+                                    network,
+                                    &usage.scope_path,
+                                )
+                                .and_then(|scope| scope.nodes.get(&usage.node_id))
                             })
                             .map(crate::structure_designer::network_usages::node_label)
                             .unwrap_or_else(|| network_name.clone());
@@ -1830,21 +1833,6 @@ pub fn get_network_usage_counts() -> HashMap<String, u32> {
             HashMap::new(),
         )
     }
-}
-
-/// Walks `scope_path` (a chain of HOF node ids) down from `network`, returning
-/// the body network it names. Unlike `StructureDesigner::get_scope_network`
-/// this is rooted at an explicit network rather than the *active* one, which
-/// is what Find Usages needs — a usage generally lives in some other network.
-fn resolve_network_scope<'a>(
-    network: &'a crate::structure_designer::node_network::NodeNetwork,
-    scope_path: &[u64],
-) -> Option<&'a crate::structure_designer::node_network::NodeNetwork> {
-    let mut current = network;
-    for hof_id in scope_path {
-        current = current.nodes.get(hof_id)?.zone.as_deref()?;
-    }
-    Some(current)
 }
 
 /// Returns the active network's stored node-canvas viewport (pan + zoom), or

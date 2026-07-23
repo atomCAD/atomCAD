@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/move_namespace_dialog.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/new_folder_dialog.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/network_row_badges.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
@@ -1016,12 +1018,29 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
                                       ),
                                     ),
                             ),
-                            // Trailing usage count (Find Usages, issue #414),
-                            // mirroring the list view. Networks only; rendered
-                            // only when > 0 so unused networks reserve no width.
+                            // Trailing badges, mirroring the list view: the
+                            // validation-error badge (navigates to the offending
+                            // node) then the Find Usages count. Networks only;
+                            // each collapses to nothing when absent.
                             if (node.isLeaf &&
-                                node.leafKind == _LeafKind.network)
-                              _buildUsageCountBadge(node, isActive),
+                                node.leafKind == _LeafKind.network) ...[
+                              buildNetworkErrorBadge(
+                                context: context,
+                                model: widget.model,
+                                networkName: node.fullName!,
+                                errors: _errorsForNetwork(node.fullName!),
+                              ),
+                              buildNetworkUsageCountBadge(
+                                context: context,
+                                model: widget.model,
+                                networkName: node.fullName!,
+                                isActive: isActive,
+                              ),
+                            ],
+                            // A collapsed folder hiding an errored network shows
+                            // a roll-up dot, so errors are never fully hidden by
+                            // collapse — the dot guides the expand path down.
+                            if (!node.isLeaf) _buildFolderErrorDot(node),
                           ],
                         ),
                       ),
@@ -1078,37 +1097,55 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     );
   }
 
-  /// Trailing usage-count badge for a network leaf (Find Usages, issue #414),
-  /// mirroring the list view's trailing count. A bare number — the number *is*
-  /// the information — that opens the same usage picker on tap. Rendered only
-  /// when the count is > 0 (returns a zero-size widget otherwise), so unused
-  /// networks and record defs reserve no width. The count comes from the
-  /// model's batched `networkUsageCounts`, keyed by network name.
-  Widget _buildUsageCountBadge(_NodeNetworkTreeNode node, bool isActive) {
-    final int usageCount = widget.model.networkUsageCounts[node.fullName] ?? 0;
-    if (usageCount == 0) return const SizedBox.shrink();
-    return Builder(
-      builder: (BuildContext countContext) => Tooltip(
-        message: 'Used by $usageCount node${usageCount == 1 ? '' : 's'}',
-        child: InkWell(
-          onTap: () => findUsagesOfNetwork(
-            context: countContext,
-            model: widget.model,
-            networkName: node.fullName!,
-            position: menuPositionForWidget(countContext),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: Text(
-              '$usageCount',
-              style: AppTextStyles.regular.copyWith(
-                fontSize: 11,
-                color: isActive
-                    ? AppColors.selectionForeground.withValues(alpha: 0.8)
-                    : Colors.grey,
-              ),
-            ),
-          ),
+  /// The validation errors of the network named [networkName], or an empty list
+  /// if it has none. Looked up from the model's `nodeNetworkNames` (the tree's
+  /// own node model doesn't carry errors), keyed by qualified name.
+  List<APIValidationError> _errorsForNetwork(String networkName) {
+    for (final n in widget.model.nodeNetworkNames) {
+      if (n.name == networkName) return n.validationErrors;
+    }
+    return const [];
+  }
+
+  /// Whether the folder at [folderPath] has any descendant network with errors,
+  /// and whether any of those errors is blocking (drives red-vs-amber). A
+  /// descendant is any network whose qualified name is under `folderPath.`.
+  (bool, bool) _folderErrorState(String folderPath) {
+    final prefix = '$folderPath.';
+    bool has = false;
+    bool blocking = false;
+    for (final n in widget.model.nodeNetworkNames) {
+      if (n.validationErrors.isNotEmpty && n.name.startsWith(prefix)) {
+        has = true;
+        if (n.validationErrors.any((e) => e.blocking)) {
+          blocking = true;
+          break;
+        }
+      }
+    }
+    return (has, blocking);
+  }
+
+  /// A small roll-up dot on a **collapsed** folder that hides an errored
+  /// network. Nothing is shown when the folder is expanded (its descendants
+  /// then render their own badges) or when nothing under it has errors, so the
+  /// dot points exactly at the branch worth expanding.
+  Widget _buildFolderErrorDot(_NodeNetworkTreeNode node) {
+    final path = node.fullName;
+    if (path == null) return const SizedBox.shrink();
+    // Expanded folders reveal their descendants' own badges — no roll-up needed.
+    if (_treeController.getExpansionState(node)) return const SizedBox.shrink();
+    final (has, blocking) = _folderErrorState(path);
+    if (!has) return const SizedBox.shrink();
+    final color = blocking ? Colors.red.shade600 : Colors.orange.shade700;
+    return Tooltip(
+      message: 'Contains validation errors',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
       ),
     );

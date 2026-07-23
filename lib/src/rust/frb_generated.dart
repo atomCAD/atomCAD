@@ -16429,7 +16429,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
     return APINetworkWithValidationErrors(
       name: dco_decode_String(arr[0]),
-      validationErrors: dco_decode_opt_String(arr[1]),
+      validationErrors: dco_decode_list_api_validation_error(arr[1]),
     );
   }
 
@@ -16882,6 +16882,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIUntagData(
       name: dco_decode_String(arr[0]),
       availableTags: dco_decode_list_String(arr[1]),
+    );
+  }
+
+  @protected
+  APIValidationError dco_decode_api_validation_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return APIValidationError(
+      errorText: dco_decode_String(arr[0]),
+      blocking: dco_decode_bool(arr[1]),
+      scopePath: dco_decode_list_prim_u_64_strict(arr[2]),
+      nodeId: dco_decode_opt_box_autoadd_u_64(arr[3]),
+      nodeLabel: dco_decode_opt_String(arr[4]),
+      bodyQualifier: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -18245,6 +18261,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<APITextError> dco_decode_list_api_text_error(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_api_text_error).toList();
+  }
+
+  @protected
+  List<APIValidationError> dco_decode_list_api_validation_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_api_validation_error).toList();
   }
 
   @protected
@@ -20743,7 +20765,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_name = sse_decode_String(deserializer);
-    var var_validationErrors = sse_decode_opt_String(deserializer);
+    var var_validationErrors =
+        sse_decode_list_api_validation_error(deserializer);
     return APINetworkWithValidationErrors(
         name: var_name, validationErrors: var_validationErrors);
   }
@@ -21139,6 +21162,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_availableTags = sse_decode_list_String(deserializer);
     return APIUntagData(name: var_name, availableTags: var_availableTags);
+  }
+
+  @protected
+  APIValidationError sse_decode_api_validation_error(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_errorText = sse_decode_String(deserializer);
+    var var_blocking = sse_decode_bool(deserializer);
+    var var_scopePath = sse_decode_list_prim_u_64_strict(deserializer);
+    var var_nodeId = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_nodeLabel = sse_decode_opt_String(deserializer);
+    var var_bodyQualifier = sse_decode_opt_String(deserializer);
+    return APIValidationError(
+        errorText: var_errorText,
+        blocking: var_blocking,
+        scopePath: var_scopePath,
+        nodeId: var_nodeId,
+        nodeLabel: var_nodeLabel,
+        bodyQualifier: var_bodyQualifier);
   }
 
   @protected
@@ -22667,6 +22709,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <APITextError>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_api_text_error(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<APIValidationError> sse_decode_list_api_validation_error(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <APIValidationError>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_api_validation_error(deserializer));
     }
     return ans_;
   }
@@ -25563,7 +25618,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       APINetworkWithValidationErrors self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
-    sse_encode_opt_String(self.validationErrors, serializer);
+    sse_encode_list_api_validation_error(self.validationErrors, serializer);
   }
 
   @protected
@@ -25872,6 +25927,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.name, serializer);
     sse_encode_list_String(self.availableTags, serializer);
+  }
+
+  @protected
+  void sse_encode_api_validation_error(
+      APIValidationError self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.errorText, serializer);
+    sse_encode_bool(self.blocking, serializer);
+    sse_encode_list_prim_u_64_strict(self.scopePath, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.nodeId, serializer);
+    sse_encode_opt_String(self.nodeLabel, serializer);
+    sse_encode_opt_String(self.bodyQualifier, serializer);
   }
 
   @protected
@@ -27256,6 +27323,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_api_text_error(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_api_validation_error(
+      List<APIValidationError> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_api_validation_error(item, serializer);
     }
   }
 

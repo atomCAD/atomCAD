@@ -1260,15 +1260,106 @@ class StructureDesignerModel extends ChangeNotifier {
   /// meaningful source position (the user-types panel entry points) omit it and
   /// get a viewport-centered landing. The zoom level is never changed.
   void jumpToUsage(APINetworkUsage usage, {Offset? screenAnchor}) {
-    // `Uint64List` already holds `BigInt`s — no per-element conversion.
-    final scopeChain = usage.scopePath.toList();
-    setActiveNodeNetwork(usage.hostNetwork);
-    setSelectedNode(usage.nodeId, scopeChain: scopeChain);
+    jumpToNode(usage.hostNetwork, usage.scopePath.toList(), usage.nodeId,
+        screenAnchor: screenAnchor);
+  }
+
+  /// Jumps to a validation error's offending node, the same way [jumpToUsage]
+  /// jumps to an instance (error-navigation feature). A network-level error
+  /// with no anchored node (`nodeId == null`) has nowhere to go, so this is a
+  /// no-op for it — the caller keeps such an error non-navigable in the picker.
+  void jumpToValidationError(String networkName, APIValidationError error,
+      {Offset? screenAnchor}) {
+    final nodeId = error.nodeId;
+    if (nodeId == null) return;
+    jumpToNode(networkName, error.scopePath.toList(), nodeId,
+        screenAnchor: screenAnchor);
+  }
+
+  /// Activates [hostNetwork], selects the node at (`scopeChain`, `nodeId`) in
+  /// its own scope, and scrolls it into view — the shared spine of every
+  /// cross-network jump (Find Usages, error navigation).
+  ///
+  /// Activating the host network routes through [setActiveNodeNetwork], so the
+  /// hop is recorded in the Rust navigation history and *Back* returns to where
+  /// the jump started. [screenAnchor] makes the landing anchored (the target's
+  /// center lands there); omit it for a viewport-centered landing. Zoom is
+  /// never changed.
+  void jumpToNode(String hostNetwork, List<BigInt> scopeChain, BigInt nodeId,
+      {Offset? screenAnchor}) {
+    setActiveNodeNetwork(hostNetwork);
+    setSelectedNode(nodeId, scopeChain: scopeChain);
     // Keyboard ops (Delete, Ctrl+C/D, …) should act on the body we landed in,
     // not on whatever body was active in the network we came from.
     setActiveScopeChain(scopeChain);
-    onScrollToNode?.call(usage.nodeId,
+    onScrollToNode?.call(nodeId,
         scopeChain: scopeChain, screenAnchor: screenAnchor);
+  }
+
+  /// The active network's validation errors that are anchored to a node — the
+  /// ones [goToNextError] can cycle through — in the kernel's stable order.
+  List<APIValidationError> _activeNetworkNavigableErrors() {
+    final name = nodeNetworkView?.name;
+    if (name == null) return const [];
+    for (final n in nodeNetworkNames) {
+      if (n.name == name) {
+        return n.validationErrors.where((e) => e.nodeId != null).toList();
+      }
+    }
+    return const [];
+  }
+
+  /// Whether the active network has any navigable validation error, so the
+  /// Edit-menu "Go to next/previous error" items know when to enable.
+  bool get activeNetworkHasNavigableErrors =>
+      _activeNetworkNavigableErrors().isNotEmpty;
+
+  /// Cycles selection through the active network's validation errors, jumping to
+  /// the next ([forward] true) or previous errored node and wrapping around.
+  ///
+  /// "Current" is derived from the selected node, so there is no cycle position
+  /// to keep in sync: from an errored node you step to its neighbour; from
+  /// anywhere else you land on the first error (forward) or the last (backward).
+  /// Errors with no node to jump to are skipped. Scope is the active network
+  /// only — cross-network errors stay reachable from the user-types panel.
+  /// Returns false (doing nothing) when the active network has no navigable
+  /// error, so the caller can give feedback.
+  bool goToNextError({required bool forward}) {
+    final networkName = nodeNetworkView?.name;
+    if (networkName == null) return false;
+    final errors = _activeNetworkNavigableErrors();
+    if (errors.isEmpty) return false;
+
+    // Locate the currently selected node in the error list, if it is one.
+    final selection = getSelectedNodeWithScope();
+    int currentIndex = -1;
+    if (selection != null) {
+      for (int i = 0; i < errors.length; i++) {
+        if (errors[i].nodeId == selection.nodeId &&
+            _sameScope(errors[i].scopePath.toList(), selection.scopeChain)) {
+          currentIndex = i;
+          break;
+        }
+      }
+    }
+
+    final int nextIndex;
+    if (currentIndex == -1) {
+      nextIndex = forward ? 0 : errors.length - 1;
+    } else {
+      nextIndex =
+          (currentIndex + (forward ? 1 : -1) + errors.length) % errors.length;
+    }
+    jumpToValidationError(networkName, errors[nextIndex]);
+    return true;
+  }
+
+  bool _sameScope(List<BigInt> a, List<BigInt> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   BigInt? getSelectedNodeId() {
@@ -3211,7 +3302,7 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Whether any network in the design has validation errors.
   bool get hasValidationErrors =>
-      nodeNetworkNames.any((n) => n.validationErrors != null);
+      nodeNetworkNames.any((n) => n.validationErrors.isNotEmpty);
 
   /// Imports an XYZ file into the active atom_edit node's diff layer.
   /// Atoms and bonds are merged as pure additions (incremental import).

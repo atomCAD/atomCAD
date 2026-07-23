@@ -232,6 +232,25 @@ class _StructureDesignerState extends State<StructureDesigner> {
                               child: const Text('Validate active network'),
                             ),
                             MenuItemButton(
+                              key: const Key('goto_next_error_item'),
+                              onPressed: model.activeNetworkHasNavigableErrors
+                                  ? () => model.goToNextError(forward: true)
+                                  : null,
+                              shortcut:
+                                  const SingleActivator(LogicalKeyboardKey.f8),
+                              child: const Text('Go to next error'),
+                            ),
+                            MenuItemButton(
+                              key: const Key('goto_prev_error_item'),
+                              onPressed: model.activeNetworkHasNavigableErrors
+                                  ? () => model.goToNextError(forward: false)
+                                  : null,
+                              shortcut: const SingleActivator(
+                                  LogicalKeyboardKey.f8,
+                                  shift: true),
+                              child: const Text('Go to previous error'),
+                            ),
+                            MenuItemButton(
                               key: const Key('auto_layout_network_item'),
                               onPressed: () {
                                 widget.model.autoLayoutNetwork();
@@ -535,6 +554,29 @@ class _StructureDesignerState extends State<StructureDesigner> {
         graphModel.toggleConsolePanel();
         return KeyEventResult.handled;
       }
+    }
+
+    // F8 / Shift+F8: cycle to the next / previous validation error in the
+    // active network (error navigation), wrapping around. Node Network Mode
+    // only. Handled globally (like undo/redo) so it works whatever panel has
+    // focus. No modifier other than Shift.
+    if (event.logicalKey == LogicalKeyboardKey.f8 &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isAltPressed &&
+        !graphModel.directEditingMode) {
+      final forward = !HardwareKeyboard.instance.isShiftPressed;
+      final jumped = graphModel.goToNextError(forward: forward);
+      if (!jumped && graphModel.nodeNetworkView != null) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+            content: Text('No validation errors in this network'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            width: 300,
+          ));
+      }
+      return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
   }

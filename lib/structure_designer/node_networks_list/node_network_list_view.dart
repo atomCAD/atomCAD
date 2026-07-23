@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
+import 'package:flutter_cad/structure_designer/node_networks_list/network_row_badges.dart';
 
 /// Discriminator between the two kinds of user-defined types listed in this
 /// view: node networks and record type defs.
@@ -13,13 +15,13 @@ enum _UserTypeKind { network, recordDef }
 class _UserTypeEntry {
   final String name;
   final _UserTypeKind kind;
-  final String? validationErrors; // only meaningful for networks
+  final List<APIValidationError> validationErrors; // only networks have any
 
   _UserTypeEntry.network(this.name, this.validationErrors)
       : kind = _UserTypeKind.network;
   _UserTypeEntry.recordDef(this.name)
       : kind = _UserTypeKind.recordDef,
-        validationErrors = null;
+        validationErrors = const [];
 }
 
 /// List view widget for user types (node networks + record defs) with rename
@@ -96,7 +98,6 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
             : (entryName == activeRecordDef);
         final bool isEditing =
             _editingName == entryName && _editingKind == entry.kind;
-        final bool hasValidationErrors = entry.validationErrors != null;
 
         // Networks only: how many instance nodes reference this network,
         // anywhere in the design (Find Usages, issue #414). Record defs have no
@@ -162,163 +163,145 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
               onDoubleTap: () {
                 _startRenaming(entryName, entry.kind);
               },
-              child: Tooltip(
-                message: hasValidationErrors ? entry.validationErrors! : '',
-                child: Container(
-                  decoration: hasValidationErrors
-                      ? BoxDecoration(
-                          border: Border.all(color: Colors.red, width: 2.0),
-                          borderRadius: BorderRadius.circular(4.0),
-                        )
-                      : isEditing
-                          ? BoxDecoration(
-                              border: Border.all(
-                                color: isActive
-                                    ? Colors.white.withValues(alpha: 0.5)
-                                    : Colors.blue.withValues(alpha: 0.5),
-                                width: 1.5,
-                              ),
-                              borderRadius: BorderRadius.circular(4.0),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: (isActive ? Colors.white : Colors.blue)
-                                      .withValues(alpha: 0.2),
-                                  blurRadius: 4,
-                                  spreadRadius: 1,
-                                ),
-                              ],
-                            )
-                          : null,
-                  child: ListTile(
-                    key: Key(
-                        '${entry.kind == _UserTypeKind.network ? 'network' : 'record_def'}_item_$entryName'),
-                    dense: true,
-                    visualDensity: AppSpacing.compactVerticalDensity,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                    leading: Icon(
-                      entry.kind == _UserTypeKind.network
-                          ? Icons.account_tree
-                          : Icons.data_object,
-                      size: 16,
-                      color: isActive
-                          ? AppColors.selectionForeground
-                          : Colors.grey,
-                    ),
-                    title: isEditing
-                        ? CallbackShortcuts(
-                            bindings: {
-                              const SingleActivator(LogicalKeyboardKey.escape):
-                                  _cancelRename,
-                            },
-                            child: Theme(
-                              data: Theme.of(context).copyWith(
-                                textSelectionTheme: TextSelectionThemeData(
-                                  cursorColor:
-                                      isActive ? Colors.white : Colors.black,
-                                  selectionColor: isActive
-                                      ? Colors.white.withValues(alpha: 0.3)
-                                      : Colors.blue.withValues(alpha: 0.3),
-                                  selectionHandleColor:
-                                      isActive ? Colors.white : Colors.blue,
-                                ),
-                              ),
-                              child: TextField(
-                                key: const Key('rename_text_field'),
-                                controller: _renameController,
-                                focusNode: _renameFocusNode,
-                                autofocus: true,
-                                style: AppTextStyles.regular.copyWith(
-                                  color: isActive ? Colors.white : Colors.black,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                    borderSide: BorderSide(
-                                      color:
-                                          isActive ? Colors.white : Colors.blue,
-                                      width: 2.0,
-                                    ),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(4),
-                                    borderSide: BorderSide(
-                                      color:
-                                          isActive ? Colors.white : Colors.blue,
-                                      width: 2.5,
-                                    ),
-                                  ),
-                                  filled: true,
-                                  fillColor: isActive
-                                      ? AppColors.selectionBackground
-                                          ?.withValues(alpha: 0.9)
-                                      : Colors.white,
-                                  hintText:
-                                      'Enter network name (Esc to cancel)',
-                                  hintStyle: TextStyle(
-                                    color: isActive
-                                        ? Colors.white.withValues(alpha: 0.7)
-                                        : Colors.grey.withValues(alpha: 0.7),
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                                onSubmitted: (value) => _commitRename(),
-                                onEditingComplete: () => _commitRename(),
-                              ),
-                            ),
-                          )
-                        : Text(entryName, style: AppTextStyles.regular),
-                    // A bare number, no icon — the number *is* the information,
-                    // and sidebar space is tight. Clicking it opens the same
-                    // usage picker as the context-menu entry.
-                    trailing: usageCount > 0
-                        ? Builder(
-                            builder: (BuildContext countContext) => Tooltip(
-                              message:
-                                  'Used by $usageCount node${usageCount == 1 ? '' : 's'}',
-                              child: InkWell(
-                                onTap: () => findUsagesOfNetwork(
-                                  context: countContext,
-                                  model: widget.model,
-                                  networkName: entryName,
-                                  position: menuPositionForWidget(countContext),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 4, vertical: 2),
-                                  child: Text(
-                                    '$usageCount',
-                                    style: AppTextStyles.regular.copyWith(
-                                      fontSize: 11,
-                                      color: isActive
-                                          ? AppColors.selectionForeground
-                                              .withValues(alpha: 0.8)
-                                          : Colors.grey,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        : null,
-                    selected: isActive,
-                    selectedTileColor: AppColors.selectionBackground,
-                    selectedColor: AppColors.selectionForeground,
-                    onTap: () {
-                      if (isEditing) return;
-                      if (entry.kind == _UserTypeKind.network) {
-                        widget.model.setActiveNodeNetwork(entryName);
-                      } else {
-                        widget.model.setActiveRecordDef(entryName);
-                      }
-                    },
+              child: Container(
+                decoration: isEditing
+                    ? BoxDecoration(
+                        border: Border.all(
+                          color: isActive
+                              ? Colors.white.withValues(alpha: 0.5)
+                              : Colors.blue.withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        borderRadius: BorderRadius.circular(4.0),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (isActive ? Colors.white : Colors.blue)
+                                .withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      )
+                    : null,
+                child: ListTile(
+                  key: Key(
+                      '${entry.kind == _UserTypeKind.network ? 'network' : 'record_def'}_item_$entryName'),
+                  dense: true,
+                  visualDensity: AppSpacing.compactVerticalDensity,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                  leading: Icon(
+                    entry.kind == _UserTypeKind.network
+                        ? Icons.account_tree
+                        : Icons.data_object,
+                    size: 16,
+                    color:
+                        isActive ? AppColors.selectionForeground : Colors.grey,
                   ),
+                  title: isEditing
+                      ? CallbackShortcuts(
+                          bindings: {
+                            const SingleActivator(LogicalKeyboardKey.escape):
+                                _cancelRename,
+                          },
+                          child: Theme(
+                            data: Theme.of(context).copyWith(
+                              textSelectionTheme: TextSelectionThemeData(
+                                cursorColor:
+                                    isActive ? Colors.white : Colors.black,
+                                selectionColor: isActive
+                                    ? Colors.white.withValues(alpha: 0.3)
+                                    : Colors.blue.withValues(alpha: 0.3),
+                                selectionHandleColor:
+                                    isActive ? Colors.white : Colors.blue,
+                              ),
+                            ),
+                            child: TextField(
+                              key: const Key('rename_text_field'),
+                              controller: _renameController,
+                              focusNode: _renameFocusNode,
+                              autofocus: true,
+                              style: AppTextStyles.regular.copyWith(
+                                color: isActive ? Colors.white : Colors.black,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                  borderSide: BorderSide(
+                                    color:
+                                        isActive ? Colors.white : Colors.blue,
+                                    width: 2.0,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(4),
+                                  borderSide: BorderSide(
+                                    color:
+                                        isActive ? Colors.white : Colors.blue,
+                                    width: 2.5,
+                                  ),
+                                ),
+                                filled: true,
+                                fillColor: isActive
+                                    ? AppColors.selectionBackground
+                                        ?.withValues(alpha: 0.9)
+                                    : Colors.white,
+                                hintText: 'Enter network name (Esc to cancel)',
+                                hintStyle: TextStyle(
+                                  color: isActive
+                                      ? Colors.white.withValues(alpha: 0.7)
+                                      : Colors.grey.withValues(alpha: 0.7),
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                              onSubmitted: (value) => _commitRename(),
+                              onEditingComplete: () => _commitRename(),
+                            ),
+                          ),
+                        )
+                      : Text(entryName, style: AppTextStyles.regular),
+                  // Trailing badges: the validation-error badge (clickable,
+                  // navigates to the offending node) stacked above the Find
+                  // Usages count. Both collapse to nothing when absent, so a
+                  // clean network with no usages shows no trailing widget.
+                  trailing: (entry.validationErrors.isEmpty && usageCount == 0)
+                      ? null
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            buildNetworkErrorBadge(
+                              context: context,
+                              model: widget.model,
+                              networkName: entryName,
+                              errors: entry.validationErrors,
+                            ),
+                            buildNetworkUsageCountBadge(
+                              context: context,
+                              model: widget.model,
+                              networkName: entryName,
+                              isActive: isActive,
+                            ),
+                          ],
+                        ),
+                  selected: isActive,
+                  selectedTileColor: AppColors.selectionBackground,
+                  selectedColor: AppColors.selectionForeground,
+                  onTap: () {
+                    if (isEditing) return;
+                    if (entry.kind == _UserTypeKind.network) {
+                      widget.model.setActiveNodeNetwork(entryName);
+                    } else {
+                      widget.model.setActiveRecordDef(entryName);
+                    }
+                  },
                 ),
               ),
             );

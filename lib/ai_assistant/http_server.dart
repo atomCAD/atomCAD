@@ -742,9 +742,11 @@ class AiAssistantServer {
       final activeMarker = isActive ? '* ' : '  ';
       final activeSuffix = isActive ? '  (active)' : '';
 
-      if (network.validationErrors != null) {
+      if (network.validationErrors.isNotEmpty) {
+        final errorText =
+            network.validationErrors.map((e) => e.errorText).join('; ');
         buffer.writeln(
-            '$activeMarker${network.name}$activeSuffix  [ERROR: ${network.validationErrors}]');
+            '$activeMarker${network.name}$activeSuffix  [ERROR: $errorText]');
         errorCount++;
       } else {
         buffer.writeln('$activeMarker${network.name}$activeSuffix');

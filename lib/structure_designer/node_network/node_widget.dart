@@ -1694,7 +1694,10 @@ class NodeWidget extends StatelessWidget {
     }
 
     // Navigate: inward (Go to Definition) and outward (Find Usages, the
-    // issue-#414 counterpart) — both custom-node only.
+    // issue-#414 counterpart) — both custom-node only — plus "Go to next
+    // error", offered on an errored node so you can step through the network's
+    // problems from the one you found (same cycle as F8).
+    final bool hasError = node.error != null && node.error!.isNotEmpty;
     addSection('Navigate', [
       if (isCustomNode)
         const PopupMenuItem(
@@ -1705,6 +1708,11 @@ class NodeWidget extends StatelessWidget {
         const PopupMenuItem(
           value: 'find_usages',
           child: Text('Find Usages'),
+        ),
+      if (hasError)
+        const PopupMenuItem(
+          value: 'go_to_next_error',
+          child: Text('Go to next error (F8)'),
         ),
     ]);
 
@@ -1802,6 +1810,10 @@ class NodeWidget extends StatelessWidget {
         model.setActiveNodeNetwork(node.nodeTypeName);
       } else if (value == 'find_usages') {
         _handleFindUsages(context, position, usageJumpAnchor);
+      } else if (value == 'go_to_next_error') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        model.goToNextError(forward: true);
       } else if (value == 'inline') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

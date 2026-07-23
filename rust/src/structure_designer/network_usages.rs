@@ -77,6 +77,21 @@ pub fn collect_network_usage_counts(registry: &NodeTypeRegistry) -> HashMap<Stri
     counts
 }
 
+/// Walks `scope_path` (a chain of HOF node ids) down from `network`, returning
+/// the body network it names, or `None` if the path doesn't resolve. Rooted at
+/// an explicit network rather than the *active* one, which is what Find Usages
+/// and error-navigation need — the target generally lives in some other network.
+pub fn resolve_scope_network<'a>(
+    network: &'a NodeNetwork,
+    scope_path: &[u64],
+) -> Option<&'a NodeNetwork> {
+    let mut current = network;
+    for hof_id in scope_path {
+        current = current.nodes.get(hof_id)?.zone.as_deref()?;
+    }
+    Some(current)
+}
+
 /// Resolves the chain of enclosing HOF nodes named by `scope_path` into
 /// display labels, starting from `network`'s top level. Stops early (returning
 /// what it has) if the path doesn't resolve — a caller-facing display string is

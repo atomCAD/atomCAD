@@ -2644,11 +2644,16 @@ class APINetworkUsage {
 
 class APINetworkWithValidationErrors {
   final String name;
-  final String? validationErrors;
+
+  /// Every validation error in this network **and its zone bodies**
+  /// (recursively), each carrying enough location info to jump to the
+  /// offending node. Empty when the network is valid — the panel renders no
+  /// error badge in that case.
+  final List<APIValidationError> validationErrors;
 
   const APINetworkWithValidationErrors({
     required this.name,
-    this.validationErrors,
+    required this.validationErrors,
   });
 
   @override
@@ -3600,6 +3605,71 @@ class APIUntagData {
           runtimeType == other.runtimeType &&
           name == other.name &&
           availableTags == other.availableTags;
+}
+
+/// One validation error surfaced to the user-types panel, with the addressing
+/// info needed to navigate to the offending node (error-navigation feature).
+///
+/// The first two fields (`error_text`, `blocking`) drive the badge and its
+/// tooltip; the rest are the jump target, mirroring [`APINetworkUsage`]: a
+/// scope path + node id addressing triple plus the display strings resolved
+/// Rust-side so Flutter renders a picker row without re-deriving anything.
+class APIValidationError {
+  /// Human-readable error message (one error, not a joined blob).
+  final String errorText;
+
+  /// Whether this error blocks the whole network from evaluating (a blocking
+  /// error blanks the viewport) versus a non-blocking warning that only
+  /// darkens the offending node and its downstream cone. Drives red-vs-amber
+  /// badge severity. Mirrors `ValidationError::blocking`.
+  final bool blocking;
+
+  /// Chain of HOF node ids from the network's top level down to the body
+  /// holding the offending node. Empty for a top-level error.
+  final Uint64List scopePath;
+
+  /// Id of the offending node **within its own scope**, or `None` for a
+  /// network-level error with no node to jump to.
+  final BigInt? nodeId;
+
+  /// The offending node's display label (its node name, falling back to its
+  /// type name). `None` when there is no anchored node (`node_id` is `None`).
+  final String? nodeLabel;
+
+  /// Short human-readable body qualifier naming the enclosing HOF chain, e.g.
+  /// `"in map1 body"` or `"in map1 > filter1 body"`. `None` for a top-level
+  /// error.
+  final String? bodyQualifier;
+
+  const APIValidationError({
+    required this.errorText,
+    required this.blocking,
+    required this.scopePath,
+    this.nodeId,
+    this.nodeLabel,
+    this.bodyQualifier,
+  });
+
+  @override
+  int get hashCode =>
+      errorText.hashCode ^
+      blocking.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      nodeLabel.hashCode ^
+      bodyQualifier.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIValidationError &&
+          runtimeType == other.runtimeType &&
+          errorText == other.errorText &&
+          blocking == other.blocking &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          nodeLabel == other.nodeLabel &&
+          bodyQualifier == other.bodyQualifier;
 }
 
 class APIVec2Data {

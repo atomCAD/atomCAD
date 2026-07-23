@@ -429,6 +429,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIUntagData dco_decode_api_untag_data(dynamic raw);
 
   @protected
+  APIValidationError dco_decode_api_validation_error(dynamic raw);
+
+  @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
 
   @protected
@@ -986,6 +989,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APITextError> dco_decode_list_api_text_error(dynamic raw);
+
+  @protected
+  List<APIValidationError> dco_decode_list_api_validation_error(dynamic raw);
 
   @protected
   List<ElementSummary> dco_decode_list_element_summary(dynamic raw);
@@ -1945,6 +1951,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIUntagData sse_decode_api_untag_data(SseDeserializer deserializer);
 
   @protected
+  APIValidationError sse_decode_api_validation_error(
+      SseDeserializer deserializer);
+
+  @protected
   APIVec2 sse_decode_api_vec_2(SseDeserializer deserializer);
 
   @protected
@@ -2617,6 +2627,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APITextError> sse_decode_list_api_text_error(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIValidationError> sse_decode_list_api_validation_error(
       SseDeserializer deserializer);
 
   @protected
@@ -3715,6 +3729,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_untag_data(APIUntagData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_validation_error(
+      APIValidationError self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
 
   @protected
@@ -4401,6 +4419,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_text_error(
       List<APITextError> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_validation_error(
+      List<APIValidationError> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_element_summary(
