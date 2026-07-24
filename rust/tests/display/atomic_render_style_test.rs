@@ -14,8 +14,8 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
     Atom, AtomRenderStyle, AtomicStructure, HitTestResult,
 };
 use rust_lib_flutter_cad::display::atomic_tessellator::{
-    AtomicTessellatorParams, BAS_STICK_RADIUS, effective_visualization, get_displayed_atom_radius,
-    tessellate_atomic_structure, tessellate_atomic_structure_impostors,
+    AtomicTessellatorParams, BAS_STICK_RADIUS, effective_displayed_atom_radius,
+    get_displayed_atom_radius, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
 };
 use rust_lib_flutter_cad::display::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
@@ -83,16 +83,13 @@ fn single_carbon_radius(viz: AtomicStructureVisualization) -> f64 {
     m.vertices[0].radius as f64
 }
 
-/// A per-atom effective-visualization radius closure for `hit_test`, resolving
-/// each atom's override against `global` (mirrors what a real caller would pass
-/// once picking structures carry overrides).
+/// A per-atom effective-visualization radius closure for `hit_test` — the same
+/// `effective_displayed_atom_radius` every production caller injects.
 fn effective_radius(
     s: &AtomicStructure,
     global: AtomicStructureVisualization,
 ) -> impl Fn(&Atom) -> f64 + '_ {
-    move |atom: &Atom| {
-        get_displayed_atom_radius(atom, &effective_visualization(s, atom.id, &global))
-    }
+    move |atom: &Atom| effective_displayed_atom_radius(s, atom, &global)
 }
 
 // ============================================================================

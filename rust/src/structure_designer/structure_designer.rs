@@ -27,7 +27,7 @@ use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
 use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::gadget::GadgetPickContext;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
@@ -6704,7 +6704,13 @@ impl StructureDesigner {
                         ray_origin,
                         ray_direction,
                         visualization,
-                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        |atom| {
+                            effective_displayed_atom_radius(
+                                atomic_structure,
+                                atom,
+                                &display_visualization,
+                            )
+                        },
                         BAS_STICK_RADIUS,
                     ) {
                         crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
@@ -6787,7 +6793,13 @@ impl StructureDesigner {
                         ray_origin,
                         ray_direction,
                         visualization,
-                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        |atom| {
+                            effective_displayed_atom_radius(
+                                atomic_structure,
+                                atom,
+                                &display_visualization,
+                            )
+                        },
                         BAS_STICK_RADIUS,
                     )
                     && closest.as_ref().is_none_or(|c| distance < c.2)
@@ -6838,7 +6850,13 @@ impl StructureDesigner {
                         ray_origin,
                         ray_direction,
                         visualization,
-                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        |atom| {
+                            effective_displayed_atom_radius(
+                                atomic_structure,
+                                atom,
+                                &display_visualization,
+                            )
+                        },
                         BAS_STICK_RADIUS,
                     )
                     && closest.as_ref().is_none_or(|c| distance < c.3)
@@ -6893,7 +6911,13 @@ impl StructureDesigner {
                         ray_origin,
                         ray_direction,
                         visualization,
-                        |atom| get_displayed_atom_radius(atom, &display_visualization),
+                        |atom| {
+                            effective_displayed_atom_radius(
+                                atomic_structure,
+                                atom,
+                                &display_visualization,
+                            )
+                        },
                         BAS_STICK_RADIUS,
                     ) {
                         crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)

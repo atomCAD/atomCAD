@@ -425,9 +425,14 @@ occludable atoms are tessellated anyway.
 
 ### Picking
 
-`hit_test` resolves each atom's pick radius through
-`effective_visualization` (it has `&self`, so the decorator is in reach; the
-global preference stays a parameter as the fallback). Bonds are pickable iff
+Each atom's pick radius resolves through `effective_visualization` (the
+decorator override, else the global preference). The radius→mode mapping
+lives in `display` (`get_displayed_atom_radius`), which crystolecule must
+not depend on, so the resolution rides the radius closure that every
+`hit_test` caller injects: `effective_displayed_atom_radius(structure, atom,
+&global)` in `display/atomic_tessellator.rs`. (This was originally shipped
+with the callers still injecting the bare global-mode radius — mixed-style
+picking selected the wrong atom; the helper is the fix.) Bonds are pickable iff
 **at least one endpoint's effective mode is ball-and-stick**, at stick
 radius — Decision 1's first clause, but *not* its overstretched clause.
 Overstretched SF–SF bonds stay **rendered-but-unpickable**: that is today's
@@ -437,8 +442,11 @@ adopting "pickable iff rendered" verbatim would change zero-override scenes
 — breaking the same no-overrides-identical invariant Decision 2 is built to
 preserve. If overstretched-bond picking is ever wanted, it is an independent
 behavior change to propose on its own, not a side effect of this feature.
-Call sites are unchanged. atom_edit's own structures carry no overrides
-today, so tool behavior is identical there by construction.
+Bond pickability needs no call-site change (`hit_test` has `&self`, so the
+decorator is in reach); the atom pick radius touches every call site's
+injected closure (viewport raytrace/hover plus the atom_edit/edit_atom
+tools). atom_edit's own structures carry no overrides today, so tool
+behavior is identical there by construction.
 
 ## Phases
 

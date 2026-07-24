@@ -174,3 +174,95 @@ fn test_get_node_display_name_unknown_node() {
     let name = designer.get_node_display_name(999);
     assert_eq!(name, "node #999");
 }
+
+// --- Per-atom render-style overrides (apply_style) drive the pick radius ---
+
+/// Build a designer whose scene holds one carbon at the origin, optionally
+/// carrying a render-style override (as `apply_style` would set).
+fn setup_designer_with_styled_carbon(
+    style: Option<rust_lib_flutter_cad::crystolecule::atomic_structure::AtomRenderStyle>,
+) -> StructureDesigner {
+    let mut designer = StructureDesigner::new();
+    designer.add_node_network("test");
+    designer.set_active_node_network_name(Some("test".to_string()));
+
+    let mut structure = AtomicStructure::new();
+    let atom_id = structure.add_atom(6, DVec3::ZERO);
+    if let Some(style) = style {
+        structure.set_atom_render_style(atom_id, style);
+    }
+    let scene_data = NodeSceneData::new(NodeOutput::Atomic(structure, None));
+    designer
+        .last_generated_structure_designer_scene
+        .node_data
+        .insert(NodeRef::top(1), scene_data);
+
+    designer
+}
+
+/// A ray offset that separates carbon's two pick radii: past the ball-and-stick
+/// radius (min(1.7 * 0.25, 0.77 * 0.9) = 0.425 Å) but inside the space-filling
+/// vdW radius (1.7 Å).
+const BETWEEN_BAS_AND_VDW: f64 = 1.0;
+
+#[test]
+fn test_space_filling_styled_atom_picks_at_vdw_radius_in_bas_scene() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomRenderStyle;
+
+    let designer = setup_designer_with_styled_carbon(Some(AtomRenderStyle::SpaceFilling));
+    let ray_origin = DVec3::new(BETWEEN_BAS_AND_VDW, 0.0, -50.0);
+    let ray_direction = DVec3::new(0.0, 0.0, 1.0);
+
+    let hits = designer.raytrace_per_node(
+        &ray_origin,
+        &ray_direction,
+        &AtomicStructureVisualization::BallAndStick,
+    );
+
+    assert_eq!(
+        hits.len(),
+        1,
+        "space-filling-styled atom must pick at its rendered vdW radius"
+    );
+}
+
+#[test]
+fn test_bas_styled_atom_does_not_pick_at_vdw_radius_in_space_filling_scene() {
+    use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomRenderStyle;
+
+    let designer = setup_designer_with_styled_carbon(Some(AtomRenderStyle::BallAndStick));
+    let ray_origin = DVec3::new(BETWEEN_BAS_AND_VDW, 0.0, -50.0);
+    let ray_direction = DVec3::new(0.0, 0.0, 1.0);
+
+    let hits = designer.raytrace_per_node(
+        &ray_origin,
+        &ray_direction,
+        &AtomicStructureVisualization::SpaceFilling,
+    );
+
+    assert!(
+        hits.is_empty(),
+        "B&S-styled atom must not steal picks out to the vdW radius"
+    );
+}
+
+#[test]
+fn test_unstyled_atom_pick_radius_follows_global_mode() {
+    let designer = setup_designer_with_styled_carbon(None);
+    let ray_origin = DVec3::new(BETWEEN_BAS_AND_VDW, 0.0, -50.0);
+    let ray_direction = DVec3::new(0.0, 0.0, 1.0);
+
+    let hits = designer.raytrace_per_node(
+        &ray_origin,
+        &ray_direction,
+        &AtomicStructureVisualization::SpaceFilling,
+    );
+    assert_eq!(hits.len(), 1, "no-override space-filling pick unchanged");
+
+    let hits = designer.raytrace_per_node(
+        &ray_origin,
+        &ray_direction,
+        &AtomicStructureVisualization::BallAndStick,
+    );
+    assert!(hits.is_empty(), "no-override ball-and-stick pick unchanged");
+}

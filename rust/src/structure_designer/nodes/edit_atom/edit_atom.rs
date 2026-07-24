@@ -6,7 +6,7 @@ use crate::api::structure_designer::structure_designer_preferences::AtomicStruct
 use crate::crystolecule::atomic_structure::BondReference;
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::map_atomic;
@@ -265,7 +265,7 @@ pub fn select_atom_or_bond_by_ray(
         ray_start,
         ray_dir,
         visualization,
-        |atom| get_displayed_atom_radius(atom, &display_visualization),
+        |atom| effective_displayed_atom_radius(atomic_structure, atom, &display_visualization),
         BAS_STICK_RADIUS,
     ) {
         HitTestResult::Atom(atom_id, _distance) => {
@@ -367,7 +367,7 @@ pub fn draw_bond_by_ray(
         ray_start,
         ray_dir,
         visualization,
-        |atom| get_displayed_atom_radius(atom, &display_visualization),
+        |atom| effective_displayed_atom_radius(atomic_structure, atom, &display_visualization),
         BAS_STICK_RADIUS,
     ) {
         HitTestResult::Atom(id, _) => id,

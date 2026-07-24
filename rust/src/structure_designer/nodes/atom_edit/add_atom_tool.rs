@@ -13,7 +13,7 @@ use crate::crystolecule::guided_placement::{
     compute_guided_placement, compute_ring_preview_positions, cone_half_angle_for_ring,
     ray_ring_nearest_point, ray_sphere_nearest_point,
 };
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::util::hit_test_utils;
@@ -150,7 +150,7 @@ pub fn start_guided_placement(
             ray_start,
             ray_dir,
             visualization,
-            |atom| get_displayed_atom_radius(atom, &display_visualization),
+            |atom| effective_displayed_atom_radius(result_structure, atom, &display_visualization),
             BAS_STICK_RADIUS,
         ) {
             HitTestResult::Atom(id, _) => id,

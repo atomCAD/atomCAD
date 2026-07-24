@@ -447,6 +447,22 @@ pub fn get_displayed_atom_radius(atom: &Atom, visualization: &AtomicStructureVis
     }
 }
 
+/// The atom's displayed radius under its *effective* visualization — its
+/// decorator render-style override, else `global`. This is the radius fn every
+/// `AtomicStructure::hit_test` caller must inject, so an atom picks with the
+/// same sphere it renders with when styles are mixed
+/// (`doc/design_style_rules.md` §Picking). Passing the bare
+/// global-mode `get_displayed_atom_radius` instead makes a space-filling-styled
+/// atom in a ball-and-stick scene pick at its tiny B&S radius (clicks on its
+/// visible surface fall through) and vice versa.
+pub fn effective_displayed_atom_radius(
+    structure: &AtomicStructure,
+    atom: &Atom,
+    global: &AtomicStructureVisualization,
+) -> f64 {
+    get_displayed_atom_radius(atom, &effective_visualization(structure, atom.id, global))
+}
+
 /// Returns true if the bond between two atoms is long enough that the
 /// space-filling spheres don't touch — i.e., the gap should be bridged
 /// by rendering the bond stick.

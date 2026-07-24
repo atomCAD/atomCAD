@@ -4,7 +4,7 @@ use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DMat4, DVec2, DVec3, DVec4};
@@ -45,7 +45,7 @@ pub fn select_atom_or_bond_by_ray(
             ray_start,
             ray_dir,
             visualization,
-            |atom| get_displayed_atom_radius(atom, &display_visualization),
+            |atom| effective_displayed_atom_radius(result_structure, atom, &display_visualization),
             BAS_STICK_RADIUS,
         )
     };

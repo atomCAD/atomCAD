@@ -28,7 +28,7 @@ use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::crystolecule::atomic_structure::HitTestResult;
 use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, get_displayed_atom_radius};
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use glam::f64::{DVec2, DVec3};
@@ -130,7 +130,7 @@ fn hit_test_atom_ref(
             ray_origin,
             ray_direction,
             visualization,
-            |atom| get_displayed_atom_radius(atom, &display_visualization),
+            |atom| effective_displayed_atom_radius(result_structure, atom, &display_visualization),
             BAS_STICK_RADIUS,
         );
         match hit {
