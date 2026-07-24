@@ -225,7 +225,10 @@ Replace the whole-network evaluation refusal with per-node poisoning:
   this node (by id, in the node's own scope). If so it does **not**
   call `eval`; it synthesizes `NetworkResult::Error("<validation error
   text>")` as the node's output and records it under the node's
-  `NodeRef` like any runtime error.
+  `NodeRef` like any runtime error. (The synthesized entry is a
+  propagation vehicle, not a second error: badge display and the panel
+  harvest dedupe it against the validation entry — see D8's
+  coexistence rule.)
 - Downstream consumers receive the synthesized error through the
   existing chaining machinery (`evaluate_arg`); independent nodes
   evaluate untouched. The viewport shows everything evaluable.
@@ -319,21 +322,63 @@ Record the chain **structurally in the context**, without touching
 
 - At the wire-resolution choke point (`evaluate_arg` /
   `resolve_incoming_wire`), whenever a resolved wire value is an
-  `Error`, record `consumer NodeRef → source NodeRef` in a new
-  `context.node_error_origins: HashMap<NodeRef, NodeRef>`. Recording at
-  resolution time covers both wrapped and verbatim pass-through cases
-  uniformly — it fires before the consumer decides what to do with the
-  error.
+  `Error`, record an origin link for the consumer in a new
+  `context.node_error_origins` map. Recording at resolution time covers
+  both wrapped and verbatim pass-through cases uniformly — it fires
+  before the consumer decides what to do with the error.
+- **Origins are recorded as jump-ready addresses, not raw eval refs.**
+  An eval-scoped `NodeRef` interleaves zone-body hops and
+  custom-network-instance hops and means nothing to the navigation
+  layer. Reconstructing the distinction after the fact from bare ids is
+  fragile — but at record time the evaluator holds the full network
+  stack, where every frame knows whether it is a zone hop
+  (`is_zone_body`) and, for a network hop, *which* network it entered
+  (`NetworkStackElement.node_network`). So the link value is an
+  `ErrorOrigin { host_network: String, scope_path: Vec<u64> (zone hops
+  since the last network hop), node_id: u64 }`, computed from the live
+  stack — exactly the triple `jumpToNode` consumes. The map key is the
+  consumer's eval-scoped `NodeRef` (same keying as `node_errors`).
+  Conceptually `ErrorOrigin` ≡ `(host_network, NodeRef)` — the **global
+  address of a node in the .cnnd document**, the same triple
+  `APINetworkUsage` already uses for Find Usages. Each link stores the
+  address of the consumer's *immediate* origin; the root cause is
+  derived by following links to the chain's end, so the full chain
+  remains available (future debug-stack substrate). Note the network
+  half of the address is the network's *name* — safe here only because
+  origin links are runtime-only and regenerated on every refresh (a
+  rename triggers a refresh, so a stale name is never dereferenced).
+  Persisting these addresses would require a stable-network-id scheme
+  first (the issue-#377 name-vs-stable-id lesson).
+- **Chains cross network boundaries.** The custom-network wrap sites
+  (`Error in {network}: …`, `network_evaluator.rs:1742`, `1958`) do not
+  pass through `evaluate_arg`, so they must record the boundary link
+  explicitly: instance node → the child network's return-node cone
+  (whose internal links already exist, since `evaluate_arg` runs inside
+  the child too). With the boundary link in place, a chain
+  `M-consumer → … → instance I → C.return → … → X` is complete and
+  every hop is navigable.
 - **A root cause is an errored node with no origin link.** The panel
   lists root causes; derived errors are collapsed behind them (shown
   indented / on demand in the picker, not as top-level entries), so one
-  failure does not flood the list with its downstream cone.
+  failure does not flood the list with its downstream cone. A root
+  cause may live in **another network** than the one whose evaluation
+  surfaced it; its row carries a provenance qualifier (e.g.
+  `in C (via instance1)`).
 - **"Go to root cause"**: from any errored node (context menu) or any
   derived entry (picker row action), follow the links to the end and
-  jump via the existing `jumpToNode` spine.
-- Cross-network chains stop at the instance node in this stage (the
-  custom-network hop's inner refs are not viewable in the active
-  scene); the user descends with Go to Definition. Stated limitation.
+  jump via the existing `jumpToNode` spine — including across network
+  boundaries.
+- **Landing in another network:** activating the root cause's host
+  network re-evaluates it *standalone* (its own parameter defaults and
+  display set), so the target node may legitimately show no badge — the
+  error existed only under the originating instance's arguments. The
+  jump still selects and scrolls to the node, and the UI shows the
+  original error text + provenance in a transient surface (snackbar /
+  status line): the user lands with the context in hand even though the
+  live badge cannot reproduce it. (Viewing a definition in the *actual
+  call context* of an instance is the "super advanced" follow-up
+  already noted in `doc/design_find_usages.md`; explicitly out of
+  scope.)
 - **Interaction with memoization** (the one cross-doc touch point):
   origin links must be recorded at wire resolution *even on a memo
   cache hit* — a cached upstream `Error` still links its second
@@ -342,9 +387,52 @@ Record the chain **structurally in the context**, without touching
 ### D8. Fix the eval-error suppression gate (standalone bug fix)
 
 `build_node_view` appends the scene's eval error unless **this node**
-already has a validation error — replacing the whole-network
+has a **blocking** validation error — replacing the whole-network
 `validation_errors.is_empty()` check (`structure_designer_api.rs:676`).
 Ship first; independent of everything else.
+
+**Multiplicity and coexistence rule.** A node can carry *several*
+validation entries (`validation_errors` is a `Vec` with no per-node
+dedupe; the zones pass accumulates, `expr` can push multiple) but at
+most *one* eval error (`node_errors` is keyed by `NodeRef`, last write
+wins).
+
+**Neither surface is limited to one entry per node.** The canvas node
+badge/tooltip already joins all of the node's messages with newlines
+(`build_node_view`), and the panel lists one row per *error* (a node
+may contribute several rows, each with its own severity color and
+source icon; the badge counts errors, not nodes). There is no display
+slot forcing a choice between validation and evaluation.
+
+**There is exactly one suppression, and it is about redundancy, not
+capacity — applied identically on every surface** (canvas badge,
+tooltip, panel list, F8 targets):
+
+- *Blocking validation error + eval error:* the eval entry is dropped.
+  Under D3 this collision is degenerate by construction — the poisoned
+  node was never evaluated; its "eval error" is the **byte-identical
+  synthesized copy** of the validation text, manufactured only so
+  downstream nodes receive a propagating `Error`. Showing it would
+  print the same sentence twice for one underlying fact.
+- *Everything else is always shown everywhere:* multiple validation
+  entries all appear; a validation warning **never** suppresses
+  anything — warnings evaluate (D3), and the eval can fail for a
+  different, more specific reason, so warning(s) + eval error appear
+  together (suppressing the eval error would mask the actual runtime
+  failure behind an advisory).
+
+Distinct from suppression: **derived-error collapsing (D7) is
+panel-only presentation.** Derived eval errors (those with an origin
+link — the downstream cone of a root cause) are collapsed behind their
+root-cause row in the panel list, reachable on demand in the picker
+rather than shown as top-level rows. On the **canvas** they remain
+fully visible per node — when looking at a node the user wants to know
+why *it* is dark; when scanning the panel the user wants one row per
+underlying problem, not its downstream echoes.
+
+**F8 cycles distinct errored nodes, not entries** — multiple entries
+on one node would otherwise make a keypress a visible no-op; the
+landing shows all of the node's messages anyway.
 
 ### D9. Fold the third channel into the two real ones
 
@@ -371,46 +459,195 @@ migrate. The wrap sites are ~4 (`evaluate_arg`) + 2 (custom-network) +
 ~6 (zone/closure). This obsoletes none of D7's UI — it upgrades its
 data source and is the substrate for a future debug call stack.
 
+## Regression strategy
+
+This design changes validation outcomes, evaluation gating, and error
+text — the three things most likely to silently regress the ~3400-test
+baseline and existing user `.cnnd` designs. Cross-cutting measures,
+built once and reused by every phase:
+
+**R1. The `.cnnd` validation-corpus snapshot harness (built in Phase 2,
+the backbone of the story).** A new test loads **every** fixture under
+`rust/tests/fixtures/**/*.cnnd` (49 files today; new fixtures join
+automatically), runs the full validate pass, and insta-snapshots, per
+network: `(name, valid, [(node_id, scope, blocking, error_text)])`,
+sorted deterministically. The snapshot is recorded **before** the first
+behavioral phase lands, so every later phase's effect on real designs
+shows up as a reviewable `cargo insta review` diff — intended changes
+are accepted deliberately; anything unexpected is a caught regression.
+Phases 2, 3, and 6 each predict their own diff shape in their Tests
+subsection (e.g. "additional errors may appear; no `valid` flag may
+change").
+
+**R2. Eval-equivalence guard for healthy networks.** Cone-gating must
+be a provable no-op wherever there are no blocking validation errors.
+Structurally: the skip-and-synthesize branch is only reachable when a
+blocking error is attributed to the node, so a clean network cannot
+take it. Behaviorally: a corpus-driven test evaluates the displayed
+nodes of every fixture network that validates clean and asserts the
+recorded `node_errors` set is empty and results are non-`Error`, before
+and after Phase 3 (same harness, second snapshot section).
+
+**R3. Full-suite gates per phase.** Every phase lands only with
+`cargo test -j 4` green, `flutter analyze` clean, and the Flutter smoke
+test (`flutter test integration_test/`) passing. Expectation updates to
+existing tests are enumerated in the phase's Tests subsection (found
+via targeted greps, e.g. `validation_errors.len()`, error-text
+substrings) and changed *deliberately*, never as drive-by fixes.
+
+**R4. Manual walkthrough for thin UI phases.** Per the project's
+testing convention, panel/badge/menu UI (Phases 4–5) is verified by a
+scripted manual walkthrough (checklist in the phase) rather than
+mandated widget tests; the Rust API surface below it gets the
+automated coverage.
+
 ## Phases
 
 ### Phase 1 — Gate fix (D8)
-Per-node suppression check in `build_node_view`. Test: node A with a
-validation warning + node B with a runtime error → B's badge shows.
+
+Per-node, blocking-only suppression check in `build_node_view`.
+
+#### Tests
+- New: node A with a validation warning + node B with a runtime error
+  → B's badge shows (the old network-wide gate hid it).
+- New: node C with a warning *and* its own runtime error → C's badge
+  shows both messages.
+- New: node D with a blocking validation error → only the validation
+  text (no duplicate once Phase 3's synthesized entry exists; until
+  then, D simply has no eval entry).
+- Regression: full suite (R3). Display-layer only — no corpus diff
+  expected (R1 not yet built; this phase is safe to land first
+  precisely because it cannot change validation or evaluation state).
 
 ### Phase 2 — Validation accumulation (D4)
-`validate_wires` accumulates per node; `validate_parameters` where
-safe. Tests: a network with two independent type mismatches reports
-both; `valid` flips identically to today.
+
+`validate_wires` accumulates per node (per-node early-outs retained —
+later checks within one node assume earlier invariants);
+`validate_parameters` accumulates where safe. **Build the R1 corpus
+harness in this phase, recording the pre-change baseline first.**
+
+#### Tests
+- New: a network with two independent type mismatches reports both
+  errors, attributed to the right nodes.
+- New: `valid` flips under exactly the same conditions as before —
+  a fixture that was invalid stays invalid, valid stays valid
+  (asserted network-wide by the R1 snapshot: the `valid` column must
+  show **zero** diffs in this phase).
+- Corpus (R1): expected diff shape — *additional* error rows may
+  appear on already-invalid networks; no row may disappear; no `valid`
+  flag may change.
+- Expectation review (R3): grep and enumerate tests asserting
+  `validation_errors.len() == 1` / first-error-only behavior; update
+  each deliberately.
+- Ordering note: this phase must land **before or with** Phase 3
+  (D4 rule) — an unrecorded error is an unpoisoned node.
 
 ### Phase 3 — Cone-scoped blocking (D3, D5)
-Evaluator skip-and-synthesize; `generate_scene` blank restricted to the
-interface residue; cycle-detection rule; `execute_node`/CLI gate
-relaxation. Tests: lone `relax` + independent finished subgraph → the
-subgraph renders, the `relax` shows its validation error as its output
-error; type-mismatch node's eval is never entered (no panic); A-uses-
-invalid-B → only the instance cone dark in A; authored wire cycle →
-all members flagged, no hang; malformed parameter → network still
-refuses as before.
+
+Evaluator skip-and-synthesize; `generate_scene` blank restricted to
+the interface residue; new cycle-detection rule; `execute_node`/CLI
+gate relaxation.
+
+#### Tests
+- New: lone `relax` + independent finished subgraph → the subgraph
+  renders; the `relax` node's output is the synthesized validation
+  error; its `eval` was never entered.
+- New: type-mismatch destination node's `eval` is never entered (the
+  panic class this gate historically protected against) — assert via
+  a test node/counter or the absence of the panic under a crafted
+  mismatch fixture.
+- New: A-uses-invalid-B → only the instance cone dark in A; A's other
+  nodes evaluate; B's own scene still refuses if B has interface-level
+  errors, renders with poisoned cones otherwise.
+- New: authored wire cycle (hand-built fixture — the UI cannot create
+  one yet) → all cycle members flagged, evaluation terminates, no
+  hang/overflow; cycle members' cones dark, independents render.
+- New: malformed `parameter` network → still refuses whole-network
+  evaluation (residue preserved); instances of it in a parent are
+  poisoned nodes, parent renders otherwise.
+- New: `execute_node` on a poisoned cone yields the synthesized
+  `Error` result (no special-case refusal needed); on a clean cone in
+  a partially-broken network it executes normally.
+- Corpus (R1): expected diff — new cycle-rule rows possible on
+  hand-authored fixtures; **no other validation rows change**. The
+  `valid` column may only change for fixtures the cycle rule newly
+  catches.
+- Eval-equivalence (R2): activated this phase — clean fixture networks
+  evaluate identically before/after.
+- Undo interplay: existing `undo_test.rs` suite green — validation
+  runs on the same triggers as before; only the evaluation *gate*
+  moved.
 
 ### Phase 4 — Unified list + UI (D1, D2, D6)
+
 API: per-network error list gains eval entries (active network live,
-inactive snapshots); severity + source fields. Flutter: bolt icons,
-dimmed stale entries, badge/picker/tooltip/F8 consume the merged list;
-`hasValidationErrors`-style aggregates keep a blocking-only variant for
-the direct-editing banner. Reference guide updated.
+inactive snapshots; synthesized-duplicate dedupe per D8); severity +
+source fields. Flutter: bolt icons, dimmed stale entries,
+badge/picker/tooltip/F8 consume the merged list;
+`hasValidationErrors`-style aggregates keep a blocking-only variant
+for the direct-editing banner. Reference guide updated.
+
+#### Tests
+- New (Rust API): merged-list getter — validation + eval entries with
+  correct severity/source tagging; a poisoned node contributes exactly
+  one entry (dedupe); warning + eval error contributes two.
+- New (Rust API): snapshot lifecycle — refresh replaces the active
+  network's eval entries wholesale (no accumulation across refreshes);
+  switching networks preserves the inactive snapshot; re-activating
+  and refreshing replaces it.
+- New (Rust API): jump-target validation — a snapshot entry whose node
+  was deleted is dropped, not returned.
+- Expectation review (R3): `hasValidationErrors` consumers (the
+  direct-editing banner gate) keep blocking-only semantics — test that
+  an eval-error-only design does not trip the banner.
+- Manual walkthrough (R4): badge counts/colors/icons in List + Tree
+  tabs; dimmed stale entries after switching away and back; F8 over a
+  mixed validation/eval set; tooltip contents; `atomcad-cli` /
+  `http_server` textual output ([ERROR: …] lines) spot-checked.
 
 ### Phase 5 — Root-cause navigation (D7)
-`node_error_origins` recording; root-cause filtering in the harvested
-snapshot; derived-entry collapsing in the picker; "Go to root cause" in
-the node context menu (Navigate section) and picker rows. Tests: chain
-of three nodes → one root entry; origins recorded on pass-through nodes
-(walkers, if/switch) as well as wrapped ones.
+
+`node_error_origins` recording with jump-ready `ErrorOrigin` values
+(wire-resolution sites + the two custom-network boundary wrap sites);
+root-cause filtering in the harvested snapshot; derived-entry
+collapsing in the picker; "Go to root cause" in the node context menu
+(Navigate section) and picker rows; cross-network landing with the
+transient original-error display.
+
+#### Tests
+- New: chain of three nodes → one root entry; the derived entries
+  carry origin links pointing one hop upstream each.
+- New: origins recorded on pass-through nodes (walkers, if/switch,
+  per-node early-return guards) as well as text-wrapped ones.
+- New: error inside custom network C used by M → M-side chain
+  terminates at a root whose `ErrorOrigin` addresses `(C, scope, X)`;
+  the boundary link exists on the instance node; zone hops inside C
+  produce the correct body `scope_path`.
+- New: links are pass-scoped — a second refresh regenerates them; no
+  stale link survives an edit that fixes the root cause.
+- New: F8 cycles distinct errored nodes (a node with several entries
+  is visited once).
+- Manual walkthrough (R4): cross-network "Go to root cause" landing —
+  selection, scroll, transient original-error display; derived
+  collapsing in the picker.
 
 ### Phase 6 — Chain hygiene (D9 + violations)
+
 Fix `lattice_symop` / `array` / `atom_composediff` / `apply_diff`
 inner-cause loss; route `motif`/`materialize`/`motif_sub` errors into
 the unified list; document the no-re-wrap convention in
 `rust/src/structure_designer/nodes/AGENTS.md`.
+
+#### Tests
+- New: per fixed node, upstream error text survives the node's wrap
+  (root cause reachable both textually and via origin links).
+- New: `motif`/`materialize`/`motif_sub` parse errors appear in the
+  unified list as non-blocking validation entries; their canvas badge
+  behavior is unchanged.
+- Expectation review (R3): the <10 test files matching error-text
+  substrings — update each deliberately where wording changed.
+- Corpus (R1): expected diff — `motif`/`materialize`/`motif_sub`
+  fixtures may gain non-blocking rows; no `valid` flag may change.
 
 ### Future (explicitly deferred)
 - D10 structured `EvalError` payload; debug call-stack UI.
@@ -421,11 +658,17 @@ the unified list; document the no-re-wrap convention in
 
 ## Deferred / follow-ups
 
-- The `Error in {network}` wrap keeps only the type name; D10's frames
-  carry instance identity. Until then, cross-network root-cause
-  navigation stops at the instance node (D7).
+- The `Error in {network}` wrap *text* keeps only the type name; D7's
+  boundary links carry full instance identity structurally, so
+  navigation is unaffected. D10's frames additionally fix the display
+  string itself.
 - `describe_wire_source` returns `None` for `ZoneInput` sources; D7's
   origin links cover these structurally (link recorded at resolution),
   so the text gap stops mattering for navigation.
+- Viewing a definition network in the actual call context of the
+  originating instance (real argument values instead of parameter
+  defaults after a cross-network root-cause jump) — the
+  `doc/design_find_usages.md` "super advanced" follow-up; would let the
+  landed-on root cause reproduce its badge live.
 - Panel eval coverage for *inactive* networks' newly-introduced errors
   requires background evaluation; out of scope.
