@@ -242,10 +242,64 @@ pub fn apply_diff(
         &mut stats,
     );
 
+    // Step 4: Carry per-atom style decorations through to surviving atoms.
+    carry_style_decorations(base, &mut result, &provenance);
+
     DiffApplicationResult {
         result,
         provenance,
         stats,
+    }
+}
+
+/// Copies the per-atom *style* decorator entries — color, alpha, render style,
+/// label (the `apply_style` / `xray` family, `doc/design_style_rules.md`) —
+/// from the base structure onto the surviving result atoms, remapped through
+/// `base_to_result`. Styling follows atom identity: pass-throughs and
+/// diff-matched atoms (moves / replacements) keep their base atom's style,
+/// deleted atoms' entries don't map, and diff-added atoms start unstyled (a
+/// diff never carries styling). Without this, any `apply_diff`-based node
+/// (`atom_edit`, `apply_diff`, `atom_composediff`) wiped upstream styling even
+/// when its diff was empty.
+///
+/// Only the four style maps are copied. The rest of the decorator — selection,
+/// marker highlights, gadget visuals, ghost metadata — is transient interaction
+/// state of the producing node's own view and must not propagate downstream.
+fn carry_style_decorations(
+    base: &AtomicStructure,
+    result: &mut AtomicStructure,
+    provenance: &DiffProvenance,
+) {
+    let base_dec = base.decorator();
+    if base_dec.atom_color.is_empty()
+        && base_dec.atom_alpha.is_empty()
+        && base_dec.atom_render_style.is_empty()
+        && base_dec.atom_label.is_empty()
+    {
+        return;
+    }
+
+    let map = &provenance.base_to_result;
+    let result_dec = result.decorator_mut();
+    for (base_id, color) in &base_dec.atom_color {
+        if let Some(&result_id) = map.get(base_id) {
+            result_dec.atom_color.insert(result_id, *color);
+        }
+    }
+    for (base_id, alpha) in &base_dec.atom_alpha {
+        if let Some(&result_id) = map.get(base_id) {
+            result_dec.atom_alpha.insert(result_id, *alpha);
+        }
+    }
+    for (base_id, style) in &base_dec.atom_render_style {
+        if let Some(&result_id) = map.get(base_id) {
+            result_dec.atom_render_style.insert(result_id, *style);
+        }
+    }
+    for (base_id, label) in &base_dec.atom_label {
+        if let Some(&result_id) = map.get(base_id) {
+            result_dec.atom_label.insert(result_id, label.clone());
+        }
     }
 }
 

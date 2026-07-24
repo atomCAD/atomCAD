@@ -1,7 +1,9 @@
+use glam::Vec3;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_DELETED;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
+    AtomDisplayState, AtomRenderStyle, AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER,
+    UNCHANGED_ATOMIC_NUMBER,
 };
 use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::{
     AtomSource, DiffStats, apply_diff, enrich_diff_with_base_bonds,
@@ -2041,4 +2043,99 @@ fn apply_extract_roundtrip_reproduces_tags_with_different_bits() {
 /// Thin wrapper so this file needn't import `extract_diff` at the top.
 fn extract_diff_via(before: &AtomicStructure, after: &AtomicStructure) -> AtomicStructure {
     rust_lib_flutter_cad::crystolecule::atomic_structure_diff::extract_diff(before, after, 0.0)
+}
+
+// ============================================================================
+// Style decoration carry-through (atom_edit styling wipe regression)
+// ============================================================================
+// Styling (color / alpha / render style / label — the apply_style / xray
+// family) lives on the decorator, keyed by atom id. apply_diff rebuilds the
+// result structure from scratch, so without an explicit carry-through every
+// apply_diff-based node (atom_edit, apply_diff, atom_composediff) wiped all
+// upstream styling even when its diff was empty.
+
+#[test]
+fn empty_diff_preserves_style_decorations() {
+    let mut base = create_ethane_like();
+    base.set_atom_color(1, Vec3::new(0.0, 0.0, 1.0));
+    base.set_atom_alpha(2, 0.25);
+    base.set_atom_render_style(3, AtomRenderStyle::SpaceFilling);
+    base.set_atom_label(4, "H2".to_string());
+
+    let diff = AtomicStructure::new_diff();
+    let applied = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    let map = &applied.provenance.base_to_result;
+    let result = &applied.result;
+
+    assert_eq!(
+        result.get_atom_color(map[&1]),
+        Some(Vec3::new(0.0, 0.0, 1.0))
+    );
+    assert_eq!(result.get_atom_alpha(map[&2]), 0.25);
+    assert_eq!(
+        result.get_atom_render_style(map[&3]),
+        Some(AtomRenderStyle::SpaceFilling)
+    );
+    assert_eq!(result.get_atom_label(map[&4]), Some("H2"));
+}
+
+#[test]
+fn style_follows_atom_identity_through_edits() {
+    // Styles stick to surviving atoms: a moved atom and a replaced atom keep
+    // their base atom's style, a deleted atom's entry is dropped, and a pure
+    // addition starts unstyled.
+    let mut base = create_ethane_like();
+    let blue = Vec3::new(0.0, 0.0, 1.0);
+    let red = Vec3::new(1.0, 0.0, 0.0);
+    let green = Vec3::new(0.0, 1.0, 0.0);
+    base.set_atom_color(1, blue); // will be moved
+    base.set_atom_color(2, red); // will be replaced (C -> Si)
+    base.set_atom_color(3, green); // will be deleted
+
+    let mut diff = AtomicStructure::new_diff();
+    // Move base atom 1: anchored at its base position, new position elsewhere.
+    let moved = diff.add_atom(6, DVec3::new(0.0, 3.0, 0.0));
+    diff.set_anchor_position(moved, DVec3::new(0.0, 0.0, 0.0));
+    // Replace base atom 2 in place.
+    diff.add_atom(14, DVec3::new(1.5, 0.0, 0.0));
+    // Delete base atom 3.
+    diff.add_atom(DELETED_SITE_ATOMIC_NUMBER, DVec3::new(-0.5, 0.5, 0.0));
+    // Pure addition.
+    let added = diff.add_atom(7, DVec3::new(5.0, 5.0, 5.0));
+
+    let applied = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+    let result = &applied.result;
+
+    let moved_id = id_at(result, DVec3::new(0.0, 3.0, 0.0));
+    assert_eq!(result.get_atom_color(moved_id), Some(blue));
+
+    let replaced_id = id_at(result, DVec3::new(1.5, 0.0, 0.0));
+    assert_eq!(result.get_atom(replaced_id).unwrap().atomic_number, 14);
+    assert_eq!(result.get_atom_color(replaced_id), Some(red));
+
+    let added_id = applied.provenance.diff_to_result[&added];
+    assert_eq!(result.get_atom_color(added_id), None);
+
+    // The deleted atom's entry must not survive under any result id.
+    assert_eq!(result.decorator().atom_color.len(), 2);
+}
+
+#[test]
+fn interaction_state_is_not_carried_through() {
+    // Selection and marker highlights are the producing node's own view state,
+    // not styling — they must not leak into the result.
+    let mut base = create_ethane_like();
+    base.set_atom_color(1, Vec3::new(0.0, 0.0, 1.0)); // makes the carry pass run
+    base.decorator_mut()
+        .set_atom_display_state(1, AtomDisplayState::Marked);
+    base.decorator_mut().select_bond(&BondReference {
+        atom_id1: 1,
+        atom_id2: 2,
+    });
+
+    let diff = AtomicStructure::new_diff();
+    let applied = apply_diff(&base, &diff, DEFAULT_TOLERANCE);
+
+    assert!(applied.result.decorator().atom_display_states.is_empty());
+    assert!(!applied.result.decorator().has_selected_bonds());
 }

@@ -310,7 +310,7 @@ Setting `fade_depth` to a positive distance fixes that. Atoms then fade smoothly
 **Limitations to keep in mind:**
 
 - **Ghost atoms stay pickable.** Viewport hit-testing (hover readouts, click-to-activate, atom-editing on a displayed result) ignores alpha, so a nearly-invisible ghost atom still intercepts clicks and hovers ahead of the buried atoms it reveals.
-- **Place `xray` near the end of the chain — after any rebuilding node.** Nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, …) silently drop the transparency recording; the atoms simply render opaque again downstream, with no error. Put `xray` after those nodes.
+- **Place `xray` near the end of the chain — after any rebuilding node.** Nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, …) silently drop the transparency recording; the atoms simply render opaque again downstream, with no error. Put `xray` after those nodes. Editing nodes (`atom_edit`, `relax`, movement nodes, other atom ops) preserve it — each surviving atom keeps its recorded alpha.
 - **Intersecting ghosts can blend slightly wrong.** Where ghost impostors mutually intersect (a bond shaft entering its own atom's sphere, two heavily overlapping ghost spheres) the per-pixel blend order inside the intersection can be imperfect. This is inherent to sorted alpha blending and is subtle at a uniform region alpha.
 
 ## tag
@@ -430,6 +430,8 @@ The `expr` node is **not** an authoring path — its record literals cannot expr
 ### Placement
 
 **Place `apply_style` late in the chain — after any rebuilding node.** Styling is transient display state recorded on atoms; nodes that *rebuild* a structure rather than edit it in place (`materialize`, `patch_latticefill`, lattice fill) create fresh atoms and silently drop the styling, with no error. Put `apply_style` after those nodes, the same rule as `xray`.
+
+Editing nodes preserve styling: `atom_edit` (and the other atom ops) carry each surviving atom's style through, following the atom's identity — an atom you move or replace keeps its style, deleted atoms' styles vanish, and atoms added by the edit start unstyled. Note that styles are applied where the `apply_style` node sits: an atom styled by an upstream element rule keeps its color even if a downstream `atom_edit` changes its element. Re-run the rules after the edit (place `apply_style` downstream) when you want them evaluated against the edited structure.
 
 ## passivate
 
