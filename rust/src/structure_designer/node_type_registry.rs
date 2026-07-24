@@ -88,6 +88,7 @@ use super::nodes::sequence::get_node_type as sequence_get_node_type;
 use super::nodes::sphere::get_node_type as sphere_get_node_type;
 use super::nodes::string::get_node_type as string_get_node_type;
 use super::nodes::structure::get_node_type as structure_get_node_type;
+use super::nodes::structure_invert::get_node_type as structure_invert_get_node_type;
 use super::nodes::structure_move::get_node_type as structure_move_get_node_type;
 use super::nodes::structure_rot::get_node_type as structure_rot_get_node_type;
 use super::nodes::structure_unpack::get_node_type as structure_unpack_get_node_type;
@@ -838,6 +839,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(diff_get_node_type());
         ret.add_node_type(geo_trans_get_node_type());
         ret.add_node_type(lattice_symop_get_node_type());
+        ret.add_node_type(structure_invert_get_node_type());
         ret.add_node_type(structure_move_get_node_type());
         ret.add_node_type(structure_rot_get_node_type());
         ret.add_node_type(motif_get_node_type());

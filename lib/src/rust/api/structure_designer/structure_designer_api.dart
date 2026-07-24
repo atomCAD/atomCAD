@@ -922,6 +922,12 @@ APIStructureMoveData? getStructureMoveData(
         .crateApiStructureDesignerStructureDesignerApiGetStructureMoveData(
             scopePath: scopePath, nodeId: nodeId);
 
+APIStructureInvertData? getStructureInvertData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetStructureInvertData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIStructureRotData? getStructureRotData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1383,6 +1389,14 @@ void setStructureMoveData(
         required APIStructureMoveData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetStructureMoveData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+void setStructureInvertData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIStructureInvertData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetStructureInvertData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 void setStructureRotData(

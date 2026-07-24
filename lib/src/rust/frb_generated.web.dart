@@ -404,6 +404,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStringData dco_decode_api_string_data(dynamic raw);
 
   @protected
+  APIStructureInvertData dco_decode_api_structure_invert_data(dynamic raw);
+
+  @protected
   APIStructureMoveData dco_decode_api_structure_move_data(dynamic raw);
 
   @protected
@@ -752,6 +755,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIStringData dco_decode_box_autoadd_api_string_data(dynamic raw);
+
+  @protected
+  APIStructureInvertData dco_decode_box_autoadd_api_structure_invert_data(
+      dynamic raw);
 
   @protected
   APIStructureMoveData dco_decode_box_autoadd_api_structure_move_data(
@@ -1318,6 +1325,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIStringData? dco_decode_opt_box_autoadd_api_string_data(dynamic raw);
+
+  @protected
+  APIStructureInvertData? dco_decode_opt_box_autoadd_api_structure_invert_data(
+      dynamic raw);
 
   @protected
   APIStructureMoveData? dco_decode_opt_box_autoadd_api_structure_move_data(
@@ -1923,6 +1934,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIStringData sse_decode_api_string_data(SseDeserializer deserializer);
 
   @protected
+  APIStructureInvertData sse_decode_api_structure_invert_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIStructureMoveData sse_decode_api_structure_move_data(
       SseDeserializer deserializer);
 
@@ -2350,6 +2365,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIStringData sse_decode_box_autoadd_api_string_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIStructureInvertData sse_decode_box_autoadd_api_structure_invert_data(
       SseDeserializer deserializer);
 
   @protected
@@ -3028,6 +3047,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIStructureInvertData? sse_decode_opt_box_autoadd_api_structure_invert_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIStructureMoveData? sse_decode_opt_box_autoadd_api_structure_move_data(
       SseDeserializer deserializer);
 
@@ -3700,6 +3723,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_string_data(APIStringData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_structure_invert_data(
+      APIStructureInvertData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_structure_move_data(
       APIStructureMoveData self, SseSerializer serializer);
 
@@ -4135,6 +4162,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_string_data(
       APIStringData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_structure_invert_data(
+      APIStructureInvertData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_structure_move_data(
@@ -4821,6 +4852,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_string_data(
       APIStringData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_structure_invert_data(
+      APIStructureInvertData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_structure_move_data(

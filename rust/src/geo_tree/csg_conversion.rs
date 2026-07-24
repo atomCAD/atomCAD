@@ -6,6 +6,7 @@ use crate::geo_tree::csg_utils::dmat2_affine_to_csg_matrix4;
 use crate::geo_tree::csg_utils::dmat3_affine_to_csg_matrix4;
 use crate::geo_tree::csg_utils::dvec3_to_point3;
 use crate::geo_tree::csg_utils::dvec3_to_vector3;
+use crate::geo_tree::csg_utils::point_inversion_csg_matrix4;
 use crate::geo_tree::csg_utils::scale_to_csg;
 use crate::util::transform::Transform;
 use csgrs::mesh::polygon::Polygon;
@@ -121,6 +122,9 @@ impl GeoNode {
             ),
             GeoNodeKind::Transform { transform, shape } => {
                 Self::transform_to_csg(transform, shape, cache.as_deref_mut())
+            }
+            GeoNodeKind::PointInvert { center, shape } => {
+                Self::point_invert_to_csg(*center, shape, cache.as_deref_mut())
             }
             GeoNodeKind::Union3D { shapes } => Self::union_3d_to_csg(shapes, cache.as_deref_mut()),
             GeoNodeKind::Intersection3D { shapes } => {
@@ -286,6 +290,30 @@ impl GeoNode {
     ) -> Option<CSGMesh> {
         let mesh = shape.internal_to_csg_mesh(false, cache)?;
         Some(Self::apply_transform_to_csg(&mesh, transform))
+    }
+
+    /// Point inversion (`x ↦ 2·center − x`) of the child mesh. The affine map
+    /// has det = −1, and csgrs's `Mesh::transform` maps vertex positions and
+    /// normals (inverse-transpose keeps the normals outward for a reflection)
+    /// but leaves each polygon's vertex *order* untouched — so the winding no
+    /// longer agrees with the normals and the solid is inside-out for CSG.
+    /// `Polygon::flip` fixes the winding and rebuilds the plane, but it also
+    /// negates the vertex normals (which were already correct), so those are
+    /// negated back afterwards.
+    fn point_invert_to_csg(
+        center: DVec3,
+        shape: &GeoNode,
+        cache: Option<&mut CsgConversionCache>,
+    ) -> Option<CSGMesh> {
+        let mesh = shape.internal_to_csg_mesh(false, cache)?;
+        let mut inverted = mesh.transform(&point_inversion_csg_matrix4(center));
+        for poly in &mut inverted.polygons {
+            poly.flip();
+            for vert in &mut poly.vertices {
+                vert.normal = -vert.normal;
+            }
+        }
+        Some(inverted)
     }
 
     fn union_2d_to_csg(

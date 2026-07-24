@@ -151,6 +151,9 @@ impl ImplicitGeometry3D for GeoNode {
             GeoNodeKind::Transform { transform, shape } => {
                 Self::transform_implicit_eval(transform, shape, sample_point)
             }
+            GeoNodeKind::PointInvert { center, shape } => {
+                Self::point_invert_implicit_eval(*center, shape, sample_point)
+            }
             GeoNodeKind::Union3D { shapes } => Self::union_3d_implicit_eval(shapes, sample_point),
             GeoNodeKind::Intersection3D { shapes } => {
                 Self::intersection_3d_implicit_eval(shapes, sample_point)
@@ -205,6 +208,9 @@ impl ImplicitGeometry3D for GeoNode {
             GeoNodeKind::Transform { transform, shape } => {
                 Self::transform_implicit_eval_batch(transform, shape, sample_points, results)
             }
+            GeoNodeKind::PointInvert { center, shape } => {
+                Self::point_invert_implicit_eval_batch(*center, shape, sample_points, results)
+            }
             GeoNodeKind::Union3D { shapes } => {
                 Self::union_3d_implicit_eval_batch(shapes, sample_points, results)
             }
@@ -231,6 +237,7 @@ impl ImplicitGeometry3D for GeoNode {
                 | GeoNodeKind::Ellipsoid { .. }
                 | GeoNodeKind::Extrude { .. }
                 | GeoNodeKind::Transform { .. }
+                | GeoNodeKind::PointInvert { .. }
                 | GeoNodeKind::Union3D { .. }
                 | GeoNodeKind::Intersection3D { .. }
                 | GeoNodeKind::Difference3D { .. }
@@ -610,6 +617,26 @@ impl GeoNode {
 
         // Evaluate the shape at all transformed points using batch evaluation
         shape.implicit_eval_3d_batch(&transformed_points, results);
+    }
+
+    /// Point inversion is an involutive isometry, so the SDF of the inverted
+    /// shape at `p` is exactly the child's SDF at the pre-image `2·center − p`
+    /// (distances are preserved; no Lipschitz correction needed).
+    fn point_invert_implicit_eval(center: DVec3, shape: &GeoNode, sample_point: &DVec3) -> f64 {
+        shape.implicit_eval_3d(&(2.0 * center - *sample_point))
+    }
+
+    fn point_invert_implicit_eval_batch(
+        center: DVec3,
+        shape: &GeoNode,
+        sample_points: &[DVec3; BATCH_SIZE],
+        results: &mut [f64; BATCH_SIZE],
+    ) {
+        let mut inverted_points = [DVec3::ZERO; BATCH_SIZE];
+        for i in 0..BATCH_SIZE {
+            inverted_points[i] = 2.0 * center - sample_points[i];
+        }
+        shape.implicit_eval_3d_batch(&inverted_points, results);
     }
 
     fn union_2d_implicit_eval(shapes: &[GeoNode], sample_point: &DVec2) -> f64 {

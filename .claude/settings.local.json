@@ -363,7 +363,12 @@
       "PowerShell(dart format *)",
       "PowerShell(flutter test *)",
       "PowerShell(git stash *)",
-      "Bash(xargs sed -i 's/NetworkStackElement {/NetworkStackElement { is_zone_body: false,/g')"
+      "Bash(xargs sed -i 's/NetworkStackElement {/NetworkStackElement { is_zone_body: false,/g')",
+      "Bash(sed -i 's/^pub mod structure_move;/pub mod structure_invert;\\\\npub mod structure_move;/' src/structure_designer/nodes/mod.rs)",
+      "Bash(sed -i 's/^use super::nodes::structure_move::get_node_type as structure_move_get_node_type;/use super::nodes::structure_invert::get_node_type as structure_invert_get_node_type;\\\\nuse super::nodes::structure_move::get_node_type as structure_move_get_node_type;/' src/structure_designer/node_type_registry.rs)",
+      "Bash(sed -i 's/        ret.add_node_type\\(structure_move_get_node_type\\(\\)\\);/        ret.add_node_type\\(structure_invert_get_node_type\\(\\)\\);\\\\n        ret.add_node_type\\(structure_move_get_node_type\\(\\)\\);/' src/structure_designer/node_type_registry.rs)",
+      "Bash(sed -i 's/    APILatticeSymopData, APIRotationalSymmetry, APIStructureMoveData, APIStructureRotData,/    APILatticeSymopData, APIRotationalSymmetry, APIStructureInvertData, APIStructureMoveData,\\\\n    APIStructureRotData,/' structure_designer_api.rs)",
+      "Bash(sed -i 's/^use crate::structure_designer::nodes::structure_move::StructureMoveData;/use crate::structure_designer::nodes::structure_invert::StructureInvertData;\\\\nuse crate::structure_designer::nodes::structure_move::StructureMoveData;/' structure_designer_api.rs)"
     ]
   }
 }

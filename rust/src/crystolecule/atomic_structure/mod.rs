@@ -1141,6 +1141,27 @@ impl AtomicStructure {
         }
     }
 
+    /// Point inversion through `center`: every atom position `p` maps to
+    /// `2·center − p`. This improper isometry (det = −1) cannot be expressed
+    /// via [`Self::transform`]'s quaternion, hence a dedicated method. Bonds
+    /// and atom ids are untouched, so diff extraction stays id-stable.
+    pub fn invert_through(&mut self, center: DVec3) {
+        let atom_ids: Vec<u32> = self.atom_ids().cloned().collect();
+
+        for atom_id in atom_ids {
+            if let Some(atom) = self.get_atom(atom_id) {
+                let new_position = 2.0 * center - atom.position;
+                self.set_atom_position(atom_id, new_position);
+            }
+        }
+
+        // Also invert anchor positions (for diff structures).
+        // When anchor_positions is empty (non-diff structures) this is a no-op.
+        for pos in self.anchor_positions.values_mut() {
+            *pos = 2.0 * center - *pos;
+        }
+    }
+
     /// Replaces the atomic number of an atom with a new value
     ///
     /// # Returns

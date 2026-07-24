@@ -137,7 +137,8 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIDataTypeBase, APINetworkWithValidationErrors, APINodeCategoryView, NodeNetworkView,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
-    APILatticeSymopData, APIRotationalSymmetry, APIStructureMoveData, APIStructureRotData,
+    APILatticeSymopData, APIRotationalSymmetry, APIStructureInvertData, APIStructureMoveData,
+    APIStructureRotData,
 };
 use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_symmetries::{
@@ -228,6 +229,7 @@ use crate::structure_designer::nodes::reg_poly::RegPolyData;
 use crate::structure_designer::nodes::sequence::SequenceData;
 use crate::structure_designer::nodes::sphere::SphereData;
 use crate::structure_designer::nodes::string::StringData;
+use crate::structure_designer::nodes::structure_invert::StructureInvertData;
 use crate::structure_designer::nodes::structure_move::StructureMoveData;
 use crate::structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
 use crate::structure_designer::nodes::supercell::SupercellData;
@@ -3961,6 +3963,37 @@ pub fn get_structure_move_data(scope_path: Vec<u64>, node_id: u64) -> Option<API
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn get_structure_invert_data(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APIStructureInvertData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = match cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)
+                {
+                    Some(data) => data,
+                    None => return None,
+                };
+                let structure_invert_data =
+                    match node_data.as_any_ref().downcast_ref::<StructureInvertData>() {
+                        Some(data) => data,
+                        None => return None,
+                    };
+
+                Some(APIStructureInvertData {
+                    pivot_point: to_api_ivec3(&structure_invert_data.pivot_point),
+                    subdivision: structure_invert_data.subdivision,
+                })
+            },
+            None,
+        )
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn get_structure_rot_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIStructureRotData> {
     unsafe {
         with_cad_instance_or(
@@ -5689,6 +5722,22 @@ pub fn set_structure_move_data(scope_path: Vec<u64>, node_id: u64, data: APIStru
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, structure_move_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_structure_invert_data(scope_path: Vec<u64>, node_id: u64, data: APIStructureInvertData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let structure_invert_data = Box::new(StructureInvertData {
+                pivot_point: from_api_ivec3(&data.pivot_point),
+                subdivision: data.subdivision.max(1),
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, structure_invert_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

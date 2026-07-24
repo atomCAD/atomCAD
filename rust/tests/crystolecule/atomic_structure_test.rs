@@ -1192,3 +1192,71 @@ fn transform_with_no_anchors_is_noop() {
     assert!(structure.has_bond_between(id1, id2));
     assert_eq!(structure.get_num_of_bonds(), 1);
 }
+
+// ============================================================================
+// Group 9: Point Inversion Tests (structure_invert)
+// ============================================================================
+
+#[test]
+fn invert_through_maps_positions_and_keeps_bonds() {
+    let mut structure = AtomicStructure::new();
+    let id1 = structure.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    let id2 = structure.add_atom(7, DVec3::new(0.0, 2.0, 3.0));
+    structure.add_bond(id1, id2, 1);
+
+    let center = DVec3::new(1.0, 1.0, -1.0);
+    structure.invert_through(center);
+
+    // p ↦ 2·center − p
+    let atom1 = structure.get_atom(id1).unwrap();
+    assert!(
+        atom1.position.distance(DVec3::new(1.0, 2.0, -2.0)) < 1e-10,
+        "Atom 1 should be at (1, 2, -2), got {:?}",
+        atom1.position
+    );
+    let atom2 = structure.get_atom(id2).unwrap();
+    assert!(
+        atom2.position.distance(DVec3::new(2.0, 0.0, -5.0)) < 1e-10,
+        "Atom 2 should be at (2, 0, -5), got {:?}",
+        atom2.position
+    );
+
+    // Elements and bonds untouched.
+    assert_eq!(atom1.atomic_number, 6);
+    assert_eq!(atom2.atomic_number, 7);
+    assert!(structure.has_bond_between(id1, id2));
+    assert_eq!(structure.get_num_of_bonds(), 1);
+}
+
+#[test]
+fn invert_through_maps_anchor_positions() {
+    let mut structure = AtomicStructure::new_diff();
+    let atom_id = structure.add_atom(6, DVec3::new(1.0, 0.0, 0.0));
+    structure.set_anchor_position(atom_id, DVec3::new(0.5, 0.5, 0.5));
+
+    structure.invert_through(DVec3::new(2.0, 0.0, 0.0));
+
+    let anchor = structure.anchor_position(atom_id).unwrap();
+    assert!(
+        anchor.distance(DVec3::new(3.5, -0.5, -0.5)) < 1e-10,
+        "Anchor should be at (3.5, -0.5, -0.5), got {:?}",
+        anchor
+    );
+}
+
+#[test]
+fn invert_through_twice_is_identity() {
+    let mut structure = AtomicStructure::new();
+    let id = structure.add_atom(6, DVec3::new(1.25, -2.5, 0.75));
+
+    let center = DVec3::new(0.3, 0.7, -1.1);
+    structure.invert_through(center);
+    structure.invert_through(center);
+
+    let atom = structure.get_atom(id).unwrap();
+    assert!(
+        atom.position.distance(DVec3::new(1.25, -2.5, 0.75)) < 1e-10,
+        "Double inversion should restore the position, got {:?}",
+        atom.position
+    );
+}

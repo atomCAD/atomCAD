@@ -2752,6 +2752,19 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  APIStructureInvertData? getStructureInvertData(BigInt nodeId) {
+    return structure_designer_api.getStructureInvertData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  void setStructureInvertData(BigInt nodeId, APIStructureInvertData data) {
+    structure_designer_api.setStructureInvertData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   APIStructureRotData? getStructureRotData(BigInt nodeId) {
     return structure_designer_api.getStructureRotData(
         scopePath: propertyEditorScopePath, nodeId: nodeId);

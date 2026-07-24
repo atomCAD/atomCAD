@@ -65,6 +65,13 @@ enum GeoNodeKind {
         transform: Transform,
         shape: Box<GeoNode>,
     },
+    /// Point inversion through `center`: every point `p` of the child shape maps
+    /// to `2·center − p`. This is an improper isometry (det = −1), which is why
+    /// it cannot ride on `Transform` (translation + quaternion, det = +1 only).
+    PointInvert {
+        center: DVec3,
+        shape: Box<GeoNode>,
+    },
     Union2D {
         shapes: Vec<GeoNode>,
     },
@@ -187,6 +194,14 @@ impl GeoNode {
                     "{}Transform({})\n{}",
                     prefix,
                     format_transform(transform),
+                    shape.display_with_indent(indent + 1)
+                )
+            }
+            GeoNodeKind::PointInvert { center, shape } => {
+                format!(
+                    "{}PointInvert(center: {})\n{}",
+                    prefix,
+                    format_vec3(center),
                     shape.display_with_indent(indent + 1)
                 )
             }
@@ -502,6 +517,23 @@ impl GeoNode {
         }
     }
 
+    /// Point inversion of `shape` through `center` (`p ↦ 2·center − p`), the
+    /// improper isometry used by the `structure_invert` node. Being an isometry,
+    /// the child's SDF values carry over exactly (see `implicit_eval.rs`).
+    pub fn point_invert(center: DVec3, shape: Box<GeoNode>) -> Self {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&[0x10]); // variant tag
+        hasher.update(&center.x.to_le_bytes());
+        hasher.update(&center.y.to_le_bytes());
+        hasher.update(&center.z.to_le_bytes());
+        hasher.update(shape.hash.as_bytes());
+
+        Self {
+            kind: GeoNodeKind::PointInvert { center, shape },
+            hash: hasher.finalize(),
+        }
+    }
+
     pub fn union_2d(shapes: Vec<GeoNode>) -> Self {
         let mut hasher = blake3::Hasher::new();
         hasher.update(&[0x08]); // variant tag
@@ -762,6 +794,11 @@ impl MemorySizeEstimator for GeoNode {
             }
             GeoNodeKind::Transform { shape, .. } => {
                 std::mem::size_of::<Transform>()
+                    + std::mem::size_of::<Box<GeoNode>>()
+                    + shape.estimate_memory_bytes()
+            }
+            GeoNodeKind::PointInvert { shape, .. } => {
+                std::mem::size_of::<DVec3>()
                     + std::mem::size_of::<Box<GeoNode>>()
                     + shape.estimate_memory_bytes()
             }

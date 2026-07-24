@@ -192,3 +192,23 @@ Lattice alignment is always preserved by the rotation itself, but the rotation m
 For a `Blueprint`, only the geometry rotates. For a `Crystal`, atoms and geometry rotate together.
 
 `structure_rot` also exposes a `diff` output pin capturing the atom motion only (a `Blueprint` input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](atomic.md#diff-output-pins-on-atom-manipulating-nodes).
+
+## structure_invert
+
+Inverts a structure-bound object — a `Blueprint` or a `Crystal` — through a pivot point in lattice space: every position `p` maps to `2·pivot − p`. Like the other `structure_*` movement nodes, the input pin is `HasStructure` and the concrete variant flows through unchanged. `Molecule` inputs are rejected.
+
+Point inversion is the missing improper operation alongside `structure_move` and `structure_rot`: it produces the **mirror image (enantiomer)** of a structure while staying in lattice space. Any *reflection* can be built from it as a two-node chain — invert, then `structure_rot` by 180° about the mirror plane's normal (a reflection equals inversion composed with a half-turn).
+
+**Input pins**
+
+- `input: HasStructure` — the object to invert.
+- `pivot_point: IVec3` — pivot numerator in lattice coordinates. Defaults to the origin `(0, 0, 0)`.
+- `subdivision: Int` (optional, default 1) — the pivot is `pivot_point / subdivision`, so fractional-cell pivots are expressible. Example: diamond's inversion centers sit at C–C bond midpoints — `pivot_point (1, 1, 1)` with `subdivision 8` is the bond-center pivot `(1/8, 1/8, 1/8)`.
+
+Alignment (see [Blueprint alignment](../node_networks.md#blueprint-alignment)): when the pivot is an inversion center of the crystal — the inversion maps every motif site and bond onto the crystal (possibly swapping sublattices, as the diamond bond-center pivot does) — the output stays `aligned`. Otherwise it is flagged `motif_unaligned` when `2·pivot` is still a whole lattice vector (the lattice grid survives, the motif decoration does not), or `lattice_unaligned` when it is not.
+
+For a `Blueprint`, only the geometry (the cookie cutter) is inverted. For a `Crystal`, atoms and geometry are inverted together. Note that inversion flips chirality: for a motif that is not inversion-symmetric about the chosen pivot, the result is the mirror-image crystal.
+
+When the node is selected, a small red sphere marks the pivot position in the viewport (display only — the pivot is edited via the properties panel or the input pins).
+
+`structure_invert` also exposes a `diff` output pin capturing the atom motion only (a `Blueprint` input yields an empty diff) — see [Diff output pins on atom-manipulating nodes](atomic.md#diff-output-pins-on-atom-manipulating-nodes).

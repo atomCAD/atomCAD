@@ -144,6 +144,9 @@ mod relax_diff_output_test;
 #[path = "structure_designer/movement_diff_output_test.rs"]
 mod movement_diff_output_test;
 
+#[path = "structure_designer/structure_invert_test.rs"]
+mod structure_invert_test;
+
 #[path = "structure_designer/atom_op_diff_output_test.rs"]
 mod atom_op_diff_output_test;
 

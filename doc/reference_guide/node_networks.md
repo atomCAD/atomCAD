@@ -85,7 +85,7 @@ Some operations are naturally polymorphic over multiple phase types — e.g. `pa
 | Abstract type | Members | Used by |
 |---|---|---|
 | `HasAtoms` | `Crystal`, `Molecule` | atom operations: `atom_edit`, `apply_diff`, `relax`, `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, `freeze`, `unfreeze`, `atom_union`, `atom_composediff` |
-| `HasStructure` | `Blueprint`, `Crystal` | structure-aligned operations: `structure_move`, `structure_rot`, `get_structure` |
+| `HasStructure` | `Blueprint`, `Crystal` | structure-aligned operations: `structure_move`, `structure_rot`, `structure_invert`, `get_structure` |
 | `HasFreeLinOps` | `Blueprint`, `Molecule` | free movement: `free_move`, `free_rot` |
 
 Abstract types appear **only** as input-pin types on built-in polymorphic nodes. Every actual value flowing through a wire is concrete — a `Crystal`, a `Molecule`, a `Blueprint` — never an abstract type. Each concrete type implicitly converts to any abstract type that contains it; there is no implicit conversion in the other direction.
@@ -137,6 +137,8 @@ Alignment is a *derived* property — every node computes it from its inputs and
 | `structure_move`, when components are not divisible | promotes to at least `lattice-unaligned` |
 | `structure_rot`, when the rotation is also a motif symmetry | pass-through |
 | `structure_rot`, when the rotation is not a motif symmetry | promotes to at least `motif-unaligned` |
+| `structure_invert`, when the pivot is a crystal inversion center | pass-through |
+| `structure_invert`, other pivots | promotes to at least `motif-unaligned` (`lattice-unaligned` when `2·pivot` is not a lattice vector) |
 | `free_move`, `free_rot` | promotes to at least `lattice-unaligned` |
 | `union`, `intersect`, `diff`, `atom_union` | the most-degraded input wins (max over inputs) |
 | `materialize`, `dematerialize` | pass-through |

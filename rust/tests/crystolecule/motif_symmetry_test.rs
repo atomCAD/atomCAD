@@ -7,7 +7,9 @@
 
 use glam::f64::DVec3;
 use glam::i32::IVec3;
-use rust_lib_flutter_cad::crystolecule::motif_symmetry::rotation_preserves_motif;
+use rust_lib_flutter_cad::crystolecule::motif_symmetry::{
+    inversion_preserves_motif, rotation_preserves_motif,
+};
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
 
 // Diamond cubic axes, as ordered by `analyze_cubic_symmetries`:
@@ -115,6 +117,66 @@ fn nonzero_motif_offset_breaks_rotation_symmetry_around_origin_pivot() {
         Some(3),
         1,
         IVec3::ZERO
+    ));
+}
+
+// ---- inversion_preserves_motif (structure_invert) ----
+
+#[test]
+fn inversion_through_lattice_point_is_not_a_diamond_motif_symmetry() {
+    // Diamond is centrosymmetric, but its inversion centers are at bond
+    // midpoints, not lattice points: inverting through the origin maps
+    // INTERIOR1 (0.25, 0.25, 0.25) to (0.75, 0.75, 0.75), not a motif site.
+    let structure = Structure::diamond();
+    assert!(!inversion_preserves_motif(&structure, IVec3::ZERO, 1));
+    // Any whole-lattice pivot is equivalent to the origin.
+    assert!(!inversion_preserves_motif(
+        &structure,
+        IVec3::new(1, 0, 2),
+        1
+    ));
+}
+
+#[test]
+fn inversion_through_bond_center_is_a_diamond_motif_symmetry() {
+    // The C–C bond midpoint (1/8, 1/8, 1/8) is a diamond inversion center:
+    // it swaps the two FCC sublattices (CORNER ↔ INTERIOR1, etc.).
+    let structure = Structure::diamond();
+    assert!(inversion_preserves_motif(
+        &structure,
+        IVec3::new(1, 1, 1),
+        8
+    ));
+}
+
+#[test]
+fn inversion_through_arbitrary_fractional_point_is_not_a_diamond_motif_symmetry() {
+    // (3/8, 3/8, 3/8) maps INTERIOR1 (0.25, 0.25, 0.25) to (0.5, 0.5, 0.5),
+    // not a motif site.
+    let structure = Structure::diamond();
+    assert!(!inversion_preserves_motif(
+        &structure,
+        IVec3::new(3, 3, 3),
+        8
+    ));
+    // Cell body center (1/2, 1/2, 1/2) maps INTERIOR1 to (0.75, 0.75, 0.75).
+    assert!(!inversion_preserves_motif(
+        &structure,
+        IVec3::new(1, 1, 1),
+        2
+    ));
+}
+
+#[test]
+fn nonzero_motif_offset_breaks_inversion_through_bond_center() {
+    // Shifting the motif moves the inversion centers along with it, so the
+    // formerly valid bond-center pivot no longer works.
+    let mut structure = Structure::diamond();
+    structure.motif_offset = DVec3::new(0.3, 0.0, 0.0);
+    assert!(!inversion_preserves_motif(
+        &structure,
+        IVec3::new(1, 1, 1),
+        8
     ));
 }
 

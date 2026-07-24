@@ -18,6 +18,33 @@ pub fn unscale_from_csg(coord: f64) -> f64 {
     //coord
 }
 
+/// Build the 4×4 affine matrix for the point inversion `x ↦ 2·center − x`.
+///
+/// The linear part (−I) is dimensionless and must NOT be scaled; the
+/// translation `2·center` carries length units and gets `scale_to_csg` once —
+/// unlike [`dmat3_affine_to_csg_matrix4`], whose basis columns also carry
+/// units. The transformed mesh is already in CSG-scaled coordinates.
+pub fn point_inversion_csg_matrix4(center: DVec3) -> Matrix4<Real> {
+    Matrix4::new(
+        -1.0,
+        0.0,
+        0.0,
+        scale_to_csg(2.0 * center.x) as Real,
+        0.0,
+        -1.0,
+        0.0,
+        scale_to_csg(2.0 * center.y) as Real,
+        0.0,
+        0.0,
+        -1.0,
+        scale_to_csg(2.0 * center.z) as Real,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    )
+}
+
 pub fn dvec3_to_point3(dvec3: DVec3) -> Point3<Real> {
     Point3::new(
         scale_to_csg(dvec3.x) as Real,

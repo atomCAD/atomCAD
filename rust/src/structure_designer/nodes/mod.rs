@@ -86,6 +86,7 @@ pub mod sequence;
 pub mod sphere;
 pub mod string;
 pub mod structure;
+pub mod structure_invert;
 pub mod structure_move;
 pub mod structure_rot;
 pub mod structure_unpack;

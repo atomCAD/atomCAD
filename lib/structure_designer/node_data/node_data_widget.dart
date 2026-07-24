@@ -12,6 +12,7 @@ import 'package:flutter_cad/structure_designer/node_data/half_space_editor.dart'
 import 'package:flutter_cad/structure_designer/node_data/drawing_plane_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/geo_trans_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/lattice_symop_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/structure_invert_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/structure_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/structure_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_move_editor.dart';
@@ -359,6 +360,16 @@ class NodeDataWidget extends StatelessWidget {
         return StructureMoveEditor(
           nodeId: selectedNode.id,
           data: structureMoveData,
+          model: model,
+        );
+      case 'structure_invert':
+        // Fetch the structure invert data here in the parent widget
+        final structureInvertData =
+            model.getStructureInvertData(selectedNode.id);
+
+        return StructureInvertEditor(
+          nodeId: selectedNode.id,
+          data: structureInvertData,
           model: model,
         );
       case 'structure_rot':

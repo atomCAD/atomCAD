@@ -663,6 +663,11 @@ pub struct APIStructureMoveData {
     pub lattice_subdivision: APIIVec3,
 }
 
+pub struct APIStructureInvertData {
+    pub pivot_point: APIIVec3,
+    pub subdivision: i32,
+}
+
 pub struct APIStructureRotData {
     pub axis_index: Option<i32>,
     pub step: i32,

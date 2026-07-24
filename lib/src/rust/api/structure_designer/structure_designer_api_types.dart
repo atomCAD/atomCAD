@@ -3367,6 +3367,27 @@ class APIStringData {
           value == other.value;
 }
 
+class APIStructureInvertData {
+  final APIIVec3 pivotPoint;
+  final int subdivision;
+
+  const APIStructureInvertData({
+    required this.pivotPoint,
+    required this.subdivision,
+  });
+
+  @override
+  int get hashCode => pivotPoint.hashCode ^ subdivision.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIStructureInvertData &&
+          runtimeType == other.runtimeType &&
+          pivotPoint == other.pivotPoint &&
+          subdivision == other.subdivision;
+}
+
 class APIStructureMoveData {
   final APIIVec3 translation;
   final APIIVec3 latticeSubdivision;

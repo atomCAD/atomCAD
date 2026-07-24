@@ -12,3 +12,6 @@ mod implicit_eval_test;
 
 #[path = "geo_tree/ellipsoid_test.rs"]
 mod ellipsoid_test;
+
+#[path = "geo_tree/point_invert_test.rs"]
+mod point_invert_test;
