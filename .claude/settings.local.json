@@ -368,7 +368,10 @@
       "Bash(sed -i 's/^use super::nodes::structure_move::get_node_type as structure_move_get_node_type;/use super::nodes::structure_invert::get_node_type as structure_invert_get_node_type;\\\\nuse super::nodes::structure_move::get_node_type as structure_move_get_node_type;/' src/structure_designer/node_type_registry.rs)",
       "Bash(sed -i 's/        ret.add_node_type\\(structure_move_get_node_type\\(\\)\\);/        ret.add_node_type\\(structure_invert_get_node_type\\(\\)\\);\\\\n        ret.add_node_type\\(structure_move_get_node_type\\(\\)\\);/' src/structure_designer/node_type_registry.rs)",
       "Bash(sed -i 's/    APILatticeSymopData, APIRotationalSymmetry, APIStructureMoveData, APIStructureRotData,/    APILatticeSymopData, APIRotationalSymmetry, APIStructureInvertData, APIStructureMoveData,\\\\n    APIStructureRotData,/' structure_designer_api.rs)",
-      "Bash(sed -i 's/^use crate::structure_designer::nodes::structure_move::StructureMoveData;/use crate::structure_designer::nodes::structure_invert::StructureInvertData;\\\\nuse crate::structure_designer::nodes::structure_move::StructureMoveData;/' structure_designer_api.rs)"
+      "Bash(sed -i 's/^use crate::structure_designer::nodes::structure_move::StructureMoveData;/use crate::structure_designer::nodes::structure_invert::StructureInvertData;\\\\nuse crate::structure_designer::nodes::structure_move::StructureMoveData;/' structure_designer_api.rs)",
+      "PowerShell(git status --short; git log main..errors-memoization --oneline; git log errors-memoization --oneline -3; git merge-base --is-ancestor errors-memoization main; echo \"ancestor-check exit: $LASTEXITCODE\")",
+      "PowerShell(Select-String -Path doc/design_error_management.md -Pattern 'Cross-network blast radius' | Measure-Object | ForEach-Object {\"working tree hits: $\\($_.Count\\)\"}; git grep -c 'Cross-network blast radius' HEAD -- doc/design_error_management.md; git grep -c 'Cross-network blast radius' 8a6bd3a8 -- doc/design_error_management.md; git diff 8a6bd3a8 --stat -- doc/design_error_management.md)",
+      "PowerShell(git *)"
     ]
   }
 }
