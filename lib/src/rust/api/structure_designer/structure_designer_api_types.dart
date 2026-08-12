@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -1210,6 +1210,21 @@ enum APIEditAtomTool {
   default_,
   addAtom,
   addBond,
+  ;
+}
+
+/// Which pipeline produced an error entry (`doc/design_error_management.md`
+/// D1/D2). Users act on both the same way ("this part is broken"); the source
+/// is surfaced as an icon (structural glyph vs bolt), never as a color — the
+/// color channel keeps encoding severity.
+enum APIErrorSource {
+  /// A structural check over the design (analogous to compilation).
+  validation,
+
+  /// A runtime failure while computing results (analogous to running the
+  /// program). Covers only what was evaluated: displayed nodes and their
+  /// upstream cones.
+  evaluation,
   ;
 }
 
@@ -2645,10 +2660,12 @@ class APINetworkUsage {
 class APINetworkWithValidationErrors {
   final String name;
 
-  /// Every validation error in this network **and its zone bodies**
-  /// (recursively), each carrying enough location info to jump to the
-  /// offending node. Empty when the network is valid — the panel renders no
-  /// error badge in that case.
+  /// The network's **unified error list** (`doc/design_error_management.md`
+  /// D1): every validation error in this network **and its zone bodies**
+  /// (recursively), plus the network's last-known evaluation errors (live
+  /// for the active network, a dimmed snapshot for inactive ones — D6).
+  /// Each entry carries enough location info to jump to the offending node.
+  /// Empty when the network has no errors — the panel renders no badge.
   final List<APIValidationError> validationErrors;
 
   const APINetworkWithValidationErrors({
@@ -3628,22 +3645,36 @@ class APIUntagData {
           availableTags == other.availableTags;
 }
 
-/// One validation error surfaced to the user-types panel, with the addressing
-/// info needed to navigate to the offending node (error-navigation feature).
+/// One entry of a network's unified error list (validation + evaluation)
+/// surfaced to the user-types panel, with the addressing info needed to
+/// navigate to the offending node (error-navigation feature).
 ///
-/// The first two fields (`error_text`, `blocking`) drive the badge and its
-/// tooltip; the rest are the jump target, mirroring [`APINetworkUsage`]: a
-/// scope path + node id addressing triple plus the display strings resolved
-/// Rust-side so Flutter renders a picker row without re-deriving anything.
+/// The first four fields (`error_text`, `blocking`, `source`, `stale`) drive
+/// the badge and its tooltip; the rest are the jump target, mirroring
+/// [`APINetworkUsage`]: a scope path + node id addressing triple plus the
+/// display strings resolved Rust-side so Flutter renders a picker row without
+/// re-deriving anything.
 class APIValidationError {
   /// Human-readable error message (one error, not a joined blob).
   final String errorText;
 
-  /// Whether this error blocks the whole network from evaluating (a blocking
-  /// error blanks the viewport) versus a non-blocking warning that only
-  /// darkens the offending node and its downstream cone. Drives red-vs-amber
-  /// badge severity. Mirrors `ValidationError::blocking`.
+  /// Severity: `true` means the node's output is unavailable and its
+  /// downstream cone is dark (red), whether because evaluation was skipped
+  /// (a cone-poisoning validation error) or because it ran and failed (an
+  /// evaluation error — always `true`). `false` is an advisory warning
+  /// (amber); everything still evaluates. Drives red-vs-amber badge
+  /// severity. Mirrors `ValidationError::blocking` for validation entries.
   final bool blocking;
+
+  /// Which pipeline produced this entry — drives the row/tooltip icon
+  /// (structural glyph vs bolt), never the color.
+  final APIErrorSource source;
+
+  /// `true` for an evaluation entry of an *inactive* network: it reflects
+  /// the last evaluation before the user switched away, not live state.
+  /// Rendered dimmed ("from last evaluation"). Always `false` for
+  /// validation entries (validation is always fresh, whole-design).
+  final bool stale;
 
   /// Chain of HOF node ids from the network's top level down to the body
   /// holding the offending node. Empty for a top-level error.
@@ -3665,6 +3696,8 @@ class APIValidationError {
   const APIValidationError({
     required this.errorText,
     required this.blocking,
+    required this.source,
+    required this.stale,
     required this.scopePath,
     this.nodeId,
     this.nodeLabel,
@@ -3675,6 +3708,8 @@ class APIValidationError {
   int get hashCode =>
       errorText.hashCode ^
       blocking.hashCode ^
+      source.hashCode ^
+      stale.hashCode ^
       scopePath.hashCode ^
       nodeId.hashCode ^
       nodeLabel.hashCode ^
@@ -3687,6 +3722,8 @@ class APIValidationError {
           runtimeType == other.runtimeType &&
           errorText == other.errorText &&
           blocking == other.blocking &&
+          source == other.source &&
+          stale == other.stale &&
           scopePath == other.scopePath &&
           nodeId == other.nodeId &&
           nodeLabel == other.nodeLabel &&

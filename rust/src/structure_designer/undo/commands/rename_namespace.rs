@@ -60,7 +60,13 @@ impl RenameNamespaceCommand {
             };
             match r.kind {
                 UserTypeKind::Network => {
-                    apply_rename_core(ctx.node_type_registry, ctx.active_network_name, from, to);
+                    apply_rename_core(
+                        ctx.node_type_registry,
+                        ctx.active_network_name,
+                        ctx.eval_error_snapshots,
+                        from,
+                        to,
+                    );
                 }
                 UserTypeKind::Record => {
                     // Helper 1 — infallible. The target name was just vacated by

@@ -17,6 +17,7 @@ impl UndoCommand for RenameNetworkCommand {
         apply_rename_core(
             ctx.node_type_registry,
             ctx.active_network_name,
+            ctx.eval_error_snapshots,
             &self.new_name,
             &self.old_name,
         );
@@ -26,6 +27,7 @@ impl UndoCommand for RenameNetworkCommand {
         apply_rename_core(
             ctx.node_type_registry,
             ctx.active_network_name,
+            ctx.eval_error_snapshots,
             &self.old_name,
             &self.new_name,
         );

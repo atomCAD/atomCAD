@@ -228,6 +228,7 @@ fn undo_stack_empty_stack_returns_none() {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
+        eval_error_snapshots: &mut designer.eval_error_snapshots,
     };
 
     assert!(!stack.can_undo());
@@ -255,6 +256,7 @@ fn undo_stack_push_undo_redo_cursor_behavior() {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
+        eval_error_snapshots: &mut designer.eval_error_snapshots,
     };
     assert!(stack.undo(&mut ctx).is_some());
 
@@ -287,6 +289,7 @@ fn undo_stack_redo_tail_truncation_on_push() {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
+        eval_error_snapshots: &mut designer.eval_error_snapshots,
     };
 
     stack.push(Box::new(DummyCommand::new("cmd1")));
@@ -326,6 +329,7 @@ fn undo_stack_max_history_eviction() {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
+        eval_error_snapshots: &mut designer.eval_error_snapshots,
     };
 
     // Can only undo 3 times (cmd4, cmd3, cmd2), not 4
@@ -367,6 +371,7 @@ fn undo_stack_suppression() {
         node_type_registry: &mut designer.node_type_registry,
         active_network_name: &mut designer.active_node_network_name,
         active_record_def_name: &mut designer.active_record_def_name,
+        eval_error_snapshots: &mut designer.eval_error_snapshots,
     };
 
     stack.undo(&mut ctx);

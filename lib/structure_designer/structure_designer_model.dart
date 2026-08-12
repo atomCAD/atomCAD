@@ -1351,14 +1351,25 @@ class StructureDesignerModel extends ChangeNotifier {
         scopeChain: scopeChain, screenAnchor: screenAnchor);
   }
 
-  /// The active network's validation errors that are anchored to a node — the
-  /// ones [goToNextError] can cycle through — in the kernel's stable order.
+  /// The active network's errors (validation + evaluation) that are anchored
+  /// to a node — the ones [goToNextError] can cycle through — in the kernel's
+  /// stable order, deduplicated to **one entry per errored node**: F8 cycles
+  /// distinct nodes, not entries, so a node carrying several messages (e.g. a
+  /// warning plus its own runtime error) is visited once — the landing shows
+  /// all of its messages anyway (`doc/design_error_management.md` D8).
   List<APIValidationError> _activeNetworkNavigableErrors() {
     final name = nodeNetworkView?.name;
     if (name == null) return const [];
     for (final n in nodeNetworkNames) {
       if (n.name == name) {
-        return n.validationErrors.where((e) => e.nodeId != null).toList();
+        final seenNodes = <String>{};
+        final out = <APIValidationError>[];
+        for (final e in n.validationErrors) {
+          if (e.nodeId == null) continue;
+          final key = '${e.scopePath.join(',')}/${e.nodeId}';
+          if (seenNodes.add(key)) out.add(e);
+        }
+        return out;
       }
     }
     return const [];
@@ -3374,9 +3385,15 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  /// Whether any network in the design has validation errors.
-  bool get hasValidationErrors =>
-      nodeNetworkNames.any((n) => n.validationErrors.isNotEmpty);
+  /// Whether any network in the design has *validation* errors.
+  ///
+  /// Deliberately filtered to validation-source entries: the per-network
+  /// error list is unified (validation + evaluation), but this aggregate
+  /// gates the direct-editing warning banner, which is about structural
+  /// validity — an eval-error-only design must not trip it
+  /// (`doc/design_error_management.md` Phase 4).
+  bool get hasValidationErrors => nodeNetworkNames.any((n) =>
+      n.validationErrors.any((e) => e.source == APIErrorSource.validation));
 
   /// Imports an XYZ file into the active atom_edit node's diff layer.
   /// Atoms and bonds are merged as pure additions (incremental import).

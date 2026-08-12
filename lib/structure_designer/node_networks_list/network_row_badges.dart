@@ -6,8 +6,15 @@ import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Shared trailing badges for a network row in the user-types panel — the
-/// validation-error badge and the Find Usages count — so the flat list view and
-/// the tree view render them identically and can't drift apart.
+/// error badge and the Find Usages count — so the flat list view and the tree
+/// view render them identically and can't drift apart.
+///
+/// The error badge consumes the network's **unified error list** (validation
+/// + evaluation entries, `doc/design_error_management.md` D1): the color
+/// channel encodes severity (red = something doesn't evaluate, amber =
+/// advisory) and the icon encodes the source — filled circle / warning
+/// triangle for validation, a bolt for evaluation (dimmed/outlined when the
+/// entry is a stale snapshot of an inactive network, D6).
 ///
 /// Both are small clickable pills anchored via [menuPositionForWidget]:
 /// - The **error badge** (this file) opens a picker of the network's errors,
@@ -15,7 +22,7 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 ///   go there" grammar Find Usages gave instance usages, applied to errors.
 /// - The **usage count** delegates to [findUsagesOfNetwork] unchanged.
 
-/// Whether a validation error can be navigated to (it is anchored to a node).
+/// Whether an error entry can be navigated to (it is anchored to a node).
 bool _isNavigable(APIValidationError e) => e.nodeId != null;
 
 /// The severity color for a set of errors: red when any error blocks the whole
@@ -50,10 +57,17 @@ Widget buildNetworkErrorBadge({
   final color = _severityColor(errors);
   final icon = _severityIcon(errors);
   // The full error list on hover — progressive disclosure: glance (badge) →
-  // peek (tooltip) → act (click). Each error on its own line.
+  // peek (tooltip) → act (click). Each error on its own line. The tooltip is
+  // plain text, so the source icon degrades to a ⚡ marker on eval entries
+  // (and a stale entry says where it came from).
   final tooltip = errors.map((e) {
+    final buffer = StringBuffer('• ');
+    if (e.source == APIErrorSource.evaluation) buffer.write('⚡ ');
+    buffer.write(e.errorText);
     final q = e.bodyQualifier;
-    return q == null ? '• ${e.errorText}' : '• ${e.errorText} ($q)';
+    if (q != null) buffer.write(' ($q)');
+    if (e.stale) buffer.write(' — from last evaluation');
+    return buffer.toString();
   }).join('\n');
 
   return Builder(
@@ -137,8 +151,8 @@ Widget buildNetworkUsageCountBadge({
   );
 }
 
-/// Presents a network's validation [errors] and jumps to the picked one's
-/// offending node.
+/// Presents a network's [errors] (validation + evaluation) and jumps to the
+/// picked one's offending node.
 ///
 /// Mirrors [showNetworkUsagesMenu]'s grammar so the two badges on a row behave
 /// the same: a single navigable error jumps immediately (no extra click); a
@@ -187,12 +201,26 @@ Future<void> showValidationErrorsMenu({
   model.jumpToValidationError(networkName, errors[picked]);
 }
 
-/// One picker row: a severity icon plus the error text and (for a body error)
-/// its `in map1 body` qualifier.
+/// One picker row: a severity-colored source icon plus the error text and
+/// (for a body error) its `in map1 body` qualifier. The icon encodes the
+/// source (structural glyph vs bolt), the color the severity; a stale eval
+/// entry (inactive network's last-known snapshot) renders dimmed with an
+/// outlined bolt and a "from last evaluation" note.
 Widget _errorMenuRow(APIValidationError error) {
-  final color = error.blocking ? Colors.red.shade600 : Colors.orange.shade700;
-  final icon = error.blocking ? Icons.error : Icons.warning_amber_rounded;
+  final isEval = error.source == APIErrorSource.evaluation;
+  final color = error.stale
+      ? Colors.grey
+      : error.blocking
+          ? Colors.red.shade600
+          : Colors.orange.shade700;
+  final icon = isEval
+      ? (error.stale ? Icons.offline_bolt_outlined : Icons.offline_bolt)
+      : (error.blocking ? Icons.error : Icons.warning_amber_rounded);
   final qualifier = error.bodyQualifier;
+  final subtitle = [
+    if (qualifier != null) qualifier,
+    if (error.stale) 'from last evaluation',
+  ].join(' — ');
   return ConstrainedBox(
     constraints: const BoxConstraints(maxWidth: 420),
     child: Row(
@@ -213,10 +241,14 @@ Widget _errorMenuRow(APIValidationError error) {
                 error.errorText,
                 overflow: TextOverflow.ellipsis,
                 maxLines: 2,
+                // A stale entry reads as history, not live state.
+                style: error.stale
+                    ? AppTextStyles.regular.copyWith(color: Colors.grey)
+                    : null,
               ),
-              if (qualifier != null)
+              if (subtitle.isNotEmpty)
                 Text(
-                  qualifier,
+                  subtitle,
                   overflow: TextOverflow.ellipsis,
                   style: AppTextStyles.regular.copyWith(
                     fontSize: 11,

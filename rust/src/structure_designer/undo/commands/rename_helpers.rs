@@ -1,18 +1,31 @@
+use crate::structure_designer::eval_errors::EvalErrorEntry;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use std::collections::HashMap;
 
 /// Core rename logic shared between single rename and namespace rename,
 /// in both main-method and undo-command contexts.
 ///
 /// Handles: registry move, active name update, node type reference cascade,
-/// backtick reference cascade.
+/// backtick reference cascade, eval-error-snapshot re-key (the snapshot map
+/// is long-lived runtime state keyed by network name, so a rename must move
+/// its entry or the renamed network's dimmed panel errors silently vanish —
+/// `doc/design_error_management.md` D6 key lifecycle).
 ///
 /// Does NOT handle: validation, navigation history, clipboard, dirty/refresh, undo push.
 pub fn apply_rename_core(
     registry: &mut NodeTypeRegistry,
     active_name: &mut Option<String>,
+    eval_error_snapshots: &mut HashMap<String, Vec<EvalErrorEntry>>,
     old_name: &str,
     new_name: &str,
 ) {
+    // Re-key the renamed network's eval-error snapshot. (Phase-4 entries hold
+    // no embedded network names; when Phase 5's cross-network jump addresses
+    // land, this is also where stored `host_network` names get rewritten.)
+    if let Some(entries) = eval_error_snapshots.remove(old_name) {
+        eval_error_snapshots.insert(new_name.to_string(), entries);
+    }
+
     // Take the network out and re-insert with new name
     let mut network = match registry.node_networks.remove(old_name) {
         Some(n) => n,

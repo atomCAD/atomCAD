@@ -509,3 +509,6 @@ mod scoped_validation_errors_test;
 
 #[path = "structure_designer/error_display_test.rs"]
 mod error_display_test;
+
+#[path = "structure_designer/eval_error_snapshot_test.rs"]
+mod eval_error_snapshot_test;

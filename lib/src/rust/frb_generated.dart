@@ -15798,6 +15798,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIErrorSource dco_decode_api_error_source(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return APIErrorSource.values[raw as int];
+  }
+
+  @protected
   APIExecuteResult dco_decode_api_execute_result(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -16970,15 +16976,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIValidationError dco_decode_api_validation_error(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return APIValidationError(
       errorText: dco_decode_String(arr[0]),
       blocking: dco_decode_bool(arr[1]),
-      scopePath: dco_decode_list_prim_u_64_strict(arr[2]),
-      nodeId: dco_decode_opt_box_autoadd_u_64(arr[3]),
-      nodeLabel: dco_decode_opt_String(arr[4]),
-      bodyQualifier: dco_decode_opt_String(arr[5]),
+      source: dco_decode_api_error_source(arr[2]),
+      stale: dco_decode_bool(arr[3]),
+      scopePath: dco_decode_list_prim_u_64_strict(arr[4]),
+      nodeId: dco_decode_opt_box_autoadd_u_64(arr[5]),
+      nodeLabel: dco_decode_opt_String(arr[6]),
+      bodyQualifier: dco_decode_opt_String(arr[7]),
     );
   }
 
@@ -20168,6 +20176,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIErrorSource sse_decode_api_error_source(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return APIErrorSource.values[inner];
+  }
+
+  @protected
   APIExecuteResult sse_decode_api_execute_result(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_ok = sse_decode_bool(deserializer);
@@ -21277,6 +21292,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_errorText = sse_decode_String(deserializer);
     var var_blocking = sse_decode_bool(deserializer);
+    var var_source = sse_decode_api_error_source(deserializer);
+    var var_stale = sse_decode_bool(deserializer);
     var var_scopePath = sse_decode_list_prim_u_64_strict(deserializer);
     var var_nodeId = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_nodeLabel = sse_decode_opt_String(deserializer);
@@ -21284,6 +21301,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return APIValidationError(
         errorText: var_errorText,
         blocking: var_blocking,
+        source: var_source,
+        stale: var_stale,
         scopePath: var_scopePath,
         nodeId: var_nodeId,
         nodeLabel: var_nodeLabel,
@@ -25195,6 +25214,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_error_source(
+      APIErrorSource self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_api_execute_result(
       APIExecuteResult self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -26069,6 +26095,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.errorText, serializer);
     sse_encode_bool(self.blocking, serializer);
+    sse_encode_api_error_source(self.source, serializer);
+    sse_encode_bool(self.stale, serializer);
     sse_encode_list_prim_u_64_strict(self.scopePath, serializer);
     sse_encode_opt_box_autoadd_u_64(self.nodeId, serializer);
     sse_encode_opt_String(self.nodeLabel, serializer);

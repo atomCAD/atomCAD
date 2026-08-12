@@ -1748,11 +1748,14 @@ pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidatio
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
+                // The unified per-network error list: validation entries plus
+                // each network's last-known evaluation errors (live for the
+                // active network, dimmed snapshot for inactive ones). See
+                // `doc/design_error_management.md` D1/D6.
                 Some(
                     cad_instance
                         .structure_designer
-                        .node_type_registry
-                        .get_node_networks_with_validation(),
+                        .get_node_networks_with_errors(),
                 )
             },
             None,

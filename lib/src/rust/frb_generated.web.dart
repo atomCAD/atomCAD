@@ -174,6 +174,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool dco_decode_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIErrorSource dco_decode_api_error_source(dynamic raw);
+
+  @protected
   APIExecuteResult dco_decode_api_execute_result(dynamic raw);
 
   @protected
@@ -1676,6 +1679,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool sse_decode_api_edit_atom_tool(SseDeserializer deserializer);
+
+  @protected
+  APIErrorSource sse_decode_api_error_source(SseDeserializer deserializer);
 
   @protected
   APIExecuteResult sse_decode_api_execute_result(SseDeserializer deserializer);
@@ -3438,6 +3444,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_edit_atom_tool(
       APIEditAtomTool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_error_source(
+      APIErrorSource self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_execute_result(

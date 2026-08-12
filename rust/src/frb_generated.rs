@@ -13457,6 +13457,18 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIErrorSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_api_types::APIErrorSource::Validation,
+1 => crate::api::structure_designer::structure_designer_api_types::APIErrorSource::Evaluation,
+            _ => unreachable!("Invalid variant for APIErrorSource: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::structure_designer::structure_designer_api_types::APIExecuteResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -14872,6 +14884,8 @@ impl SseDecode
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_errorText = <String>::sse_decode(deserializer);
         let mut var_blocking = <bool>::sse_decode(deserializer);
+        let mut var_source = <crate::api::structure_designer::structure_designer_api_types::APIErrorSource>::sse_decode(deserializer);
+        let mut var_stale = <bool>::sse_decode(deserializer);
         let mut var_scopePath = <Vec<u64>>::sse_decode(deserializer);
         let mut var_nodeId = <Option<u64>>::sse_decode(deserializer);
         let mut var_nodeLabel = <Option<String>>::sse_decode(deserializer);
@@ -14879,6 +14893,8 @@ impl SseDecode
         return crate::api::structure_designer::structure_designer_api_types::APIValidationError {
             error_text: var_errorText,
             blocking: var_blocking,
+            source: var_source,
+            stale: var_stale,
             scope_path: var_scopePath,
             node_id: var_nodeId,
             node_label: var_nodeLabel,
@@ -19583,6 +19599,33 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_api_types::APIErrorSource
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Validation => 0.into_dart(),
+            Self::Evaluation => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_api_types::APIErrorSource
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_api_types::APIErrorSource,
+    > for crate::api::structure_designer::structure_designer_api_types::APIErrorSource
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_api_types::APIErrorSource {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIExecuteResult
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -21986,6 +22029,8 @@ impl flutter_rust_bridge::IntoDart
         [
             self.error_text.into_into_dart().into_dart(),
             self.blocking.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+            self.stale.into_into_dart().into_dart(),
             self.scope_path.into_into_dart().into_dart(),
             self.node_id.into_into_dart().into_dart(),
             self.node_label.into_into_dart().into_dart(),
@@ -24093,6 +24138,15 @@ crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool::A
     }
 }
 
+impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIErrorSource {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_api_types::APIErrorSource::Validation => { 0 }
+crate::api::structure_designer::structure_designer_api_types::APIErrorSource::Evaluation => { 1 }
+ _ => { unimplemented!(""); }}, serializer);
+    }
+}
+
 impl SseEncode for crate::api::structure_designer::structure_designer_api_types::APIExecuteResult {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -25050,6 +25104,11 @@ impl SseEncode
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.error_text, serializer);
         <bool>::sse_encode(self.blocking, serializer);
+        <crate::api::structure_designer::structure_designer_api_types::APIErrorSource>::sse_encode(
+            self.source,
+            serializer,
+        );
+        <bool>::sse_encode(self.stale, serializer);
         <Vec<u64>>::sse_encode(self.scope_path, serializer);
         <Option<u64>>::sse_encode(self.node_id, serializer);
         <Option<String>>::sse_encode(self.node_label, serializer);

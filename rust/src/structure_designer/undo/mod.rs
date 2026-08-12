@@ -1,8 +1,10 @@
 pub mod commands;
 pub mod snapshot;
 
+use super::eval_errors::EvalErrorEntry;
 use super::node_network::NodeNetwork;
 use super::node_type_registry::NodeTypeRegistry;
+use std::collections::HashMap;
 use std::fmt::Debug;
 
 /// What kind of refresh is needed after undo/redo.
@@ -54,6 +56,11 @@ pub struct UndoContext<'a> {
     /// rename/move/delete commands remap or clear it so the schema-editor
     /// selection survives undo/redo. See `doc/design_hierarchical_records.md` §8.
     pub active_record_def_name: &'a mut Option<String>,
+    /// Last-known eval-error snapshots keyed by network name (error-management
+    /// Phase 4, D6). Network rename commands re-key entries through
+    /// `apply_rename_core` so a renamed network's dimmed panel errors follow
+    /// it across undo/redo too.
+    pub eval_error_snapshots: &'a mut HashMap<String, Vec<EvalErrorEntry>>,
 }
 
 impl<'a> UndoContext<'a> {

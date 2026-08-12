@@ -103,6 +103,7 @@ use super::nodes::vec3::get_node_type as vec3_get_node_type;
 use super::nodes::with_structure::get_node_type as with_structure_get_node_type;
 use super::nodes::xray::get_node_type as xray_get_node_type;
 use super::nodes::zip_with::get_node_type as zip_with_get_node_type;
+use crate::api::structure_designer::structure_designer_api_types::APIErrorSource;
 use crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors;
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
@@ -1168,6 +1169,12 @@ impl NodeTypeRegistry {
                         APIValidationError {
                             error_text: scoped.error_text,
                             blocking: scoped.blocking,
+                            // Validation entries are always fresh (validation
+                            // covers the whole design on every pass), so they
+                            // are never stale. Eval entries are appended by
+                            // `StructureDesigner::get_node_networks_with_errors`.
+                            source: APIErrorSource::Validation,
+                            stale: false,
                             scope_path: scoped.scope_path,
                             node_id: scoped.node_id,
                             node_label,

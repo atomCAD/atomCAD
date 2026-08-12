@@ -1,4 +1,5 @@
 use super::camera_settings::CameraSettings;
+use super::eval_errors::{EvalErrorEntry, harvest_eval_errors};
 use super::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement, PrintLogEntry,
 };
@@ -183,6 +184,15 @@ pub struct StructureDesigner {
     // (Phase 4 — Console panel).
     pub print_log: Vec<PrintLogEntry>,
 
+    // Last-known evaluation-error snapshot per network, keyed by network name
+    // (error-management Phase 4, `doc/design_error_management.md` D6).
+    // Runtime-only — never serialized. The active network's entry is replaced
+    // wholesale by each evaluating refresh (`harvest_eval_error_snapshot`);
+    // inactive networks keep their last harvest and render dimmed in the
+    // user-types panel. Rename re-keys entries (via `apply_rename_core`);
+    // deletion drops them (plus a purge of dead keys at each harvest).
+    pub eval_error_snapshots: HashMap<String, Vec<EvalErrorEntry>>,
+
     // Per-load report of parameter-id de-duplication repairs (F6 of
     // `doc/design_parameter_wire_stability.md`). Populated by
     // `load_node_networks` when a loaded project contained duplicate `param_id`s
@@ -232,6 +242,7 @@ impl StructureDesigner {
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
             print_log: Vec::new(),
+            eval_error_snapshots: HashMap::new(),
             pending_load_param_id_repairs: Vec::new(),
         }
     }
@@ -598,6 +609,7 @@ impl StructureDesigner {
             node_type_registry: &mut self.node_type_registry,
             active_network_name: &mut self.active_node_network_name,
             active_record_def_name: &mut self.active_record_def_name,
+            eval_error_snapshots: &mut self.eval_error_snapshots,
         });
         self.undo_stack = stack;
 
@@ -619,6 +631,7 @@ impl StructureDesigner {
             node_type_registry: &mut self.node_type_registry,
             active_network_name: &mut self.active_node_network_name,
             active_record_def_name: &mut self.active_record_def_name,
+            eval_error_snapshots: &mut self.eval_error_snapshots,
         });
         self.undo_stack = stack;
 
@@ -1274,6 +1287,110 @@ impl StructureDesigner {
                 self.refresh_partial(&node_network_name, changes);
             }
         }
+
+        // After each evaluating refresh, replace the active network's
+        // last-known evaluation-error snapshot from the live scene so the
+        // user-types panel's unified error list stays current (error-management
+        // Phase 4, D6). Lightweight refreshes don't re-evaluate, so the scene's
+        // error state cannot have changed — skip the harvest there to keep
+        // selection/camera updates cheap.
+        if !matches!(changes.mode, RefreshMode::Lightweight) {
+            self.harvest_eval_error_snapshot(&node_network_name);
+        }
+    }
+
+    /// Replaces `network_name`'s (the active network's) eval-error snapshot
+    /// with a fresh harvest of the live scene, and purges snapshot keys whose
+    /// network no longer exists — so a network later re-created under a
+    /// deleted network's name starts with no inherited errors (D6 key
+    /// lifecycle). See `eval_errors` for the harvest filtering rules.
+    fn harvest_eval_error_snapshot(&mut self, network_name: &str) {
+        let registry = &self.node_type_registry;
+        self.eval_error_snapshots
+            .retain(|name, _| registry.node_networks.contains_key(name));
+        let Some(network) = self.node_type_registry.node_networks.get(network_name) else {
+            return;
+        };
+        let all_node_errors = self
+            .last_generated_structure_designer_scene
+            .get_all_node_errors();
+        let entries = harvest_eval_errors(network, &all_node_errors);
+        self.eval_error_snapshots
+            .insert(network_name.to_string(), entries);
+    }
+
+    /// The unified per-network error list for the user-types panel
+    /// (`doc/design_error_management.md` D1): the registry's validation
+    /// entries plus each network's last-known evaluation errors — live for
+    /// the active network (its snapshot was harvested by the latest refresh),
+    /// dimmed (`stale == true`) for inactive ones.
+    ///
+    /// Snapshot entries are re-validated against the current network here:
+    /// an entry whose node vanished is dropped rather than returned (a jump
+    /// must never target a dead node), and an entry whose node has since
+    /// gained a blocking validation error is deduped away (D8 — the predicate
+    /// state can change after harvest, e.g. a cross-network cascade stamping
+    /// "References invalid node network" on an instance in an inactive
+    /// network).
+    pub fn get_node_networks_with_errors(
+        &self,
+    ) -> Vec<crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors>
+    {
+        use crate::api::structure_designer::structure_designer_api_types::{
+            APIErrorSource, APIValidationError,
+        };
+        use crate::structure_designer::eval_errors::has_blocking_validation_error;
+        use crate::structure_designer::network_usages::{
+            node_label, resolve_scope_labels, resolve_scope_network,
+        };
+
+        let mut networks = self.node_type_registry.get_node_networks_with_validation();
+        for entry in &mut networks {
+            let Some(snapshot) = self.eval_error_snapshots.get(&entry.name) else {
+                continue;
+            };
+            let Some(network) = self.node_type_registry.node_networks.get(&entry.name) else {
+                continue;
+            };
+            let stale = self.active_node_network_name.as_deref() != Some(entry.name.as_str());
+            for eval_error in snapshot {
+                let Some(scope) = resolve_scope_network(network, &eval_error.scope_path) else {
+                    continue;
+                };
+                let Some(node) = scope.nodes.get(&eval_error.node_id) else {
+                    continue;
+                };
+                if has_blocking_validation_error(scope, eval_error.node_id) {
+                    continue;
+                }
+                // Label + qualifier resolve exactly like a validation row's
+                // (`get_node_networks_with_validation`), so the two entry
+                // kinds render consistently in the picker.
+                let body_qualifier = if eval_error.scope_path.is_empty() {
+                    None
+                } else {
+                    let labels = resolve_scope_labels(network, &eval_error.scope_path);
+                    if labels.is_empty() {
+                        None
+                    } else {
+                        Some(format!("in {} body", labels.join(" > ")))
+                    }
+                };
+                entry.validation_errors.push(APIValidationError {
+                    error_text: eval_error.error_text.clone(),
+                    // An evaluation error always means "this node's output is
+                    // unavailable" — Error severity (red), never advisory.
+                    blocking: true,
+                    source: APIErrorSource::Evaluation,
+                    stale,
+                    scope_path: eval_error.scope_path.clone(),
+                    node_id: Some(eval_error.node_id),
+                    node_label: Some(node_label(node)),
+                    body_qualifier,
+                });
+            }
+        }
+        networks
     }
 
     // Full refresh implementation - re-evaluates all displayed nodes
@@ -1719,10 +1836,12 @@ impl StructureDesigner {
             return false;
         }
 
-        // Core rename (registry, active name, node type refs, backtick refs)
+        // Core rename (registry, active name, node type refs, backtick refs,
+        // eval-error-snapshot re-key)
         super::undo::commands::rename_helpers::apply_rename_core(
             &mut self.node_type_registry,
             &mut self.active_node_network_name,
+            &mut self.eval_error_snapshots,
             old_name,
             new_name,
         );
@@ -1965,6 +2084,7 @@ impl StructureDesigner {
                     super::undo::commands::rename_helpers::apply_rename_core(
                         &mut self.node_type_registry,
                         &mut self.active_node_network_name,
+                        &mut self.eval_error_snapshots,
                         &r.old_name,
                         &r.new_name,
                     );
@@ -2108,6 +2228,12 @@ impl StructureDesigner {
 
         // Remove the network from the registry
         self.node_type_registry.node_networks.remove(network_name);
+
+        // Drop the deleted network's eval-error snapshot so a network later
+        // created under the same name starts with no inherited errors (D6 key
+        // lifecycle; a purge at each harvest additionally covers deletion
+        // paths that bypass this method, e.g. redo of a delete).
+        self.eval_error_snapshots.remove(network_name);
 
         // Update the active_node_network_name if it was the deleted network
         if let Some(active_name) = &self.active_node_network_name
@@ -2363,9 +2489,11 @@ impl StructureDesigner {
         let active_network_before = self.active_node_network_name.clone();
         let active_record_def_before = self.active_record_def_name.clone();
 
-        // Remove all affected networks and record defs.
+        // Remove all affected networks and record defs. Deleted networks'
+        // eval-error snapshots go with them (D6 key lifecycle).
         for name in &affected_networks {
             self.node_type_registry.node_networks.remove(name);
+            self.eval_error_snapshots.remove(name);
         }
         for name in &affected_records {
             self.node_type_registry.record_type_defs.remove(name);
@@ -5115,6 +5243,11 @@ impl StructureDesigner {
         // Clear all networks
         self.node_type_registry.node_networks.clear();
 
+        // Eval-error snapshots belong to the old document — clear them, or a
+        // same-named network in the fresh project (e.g. "Main") would inherit
+        // ghost errors (D6 key lifecycle).
+        self.eval_error_snapshots.clear();
+
         // Clear user-declared record type definitions (they belong to the old
         // document). Built-in record defs (e.g. ElementMapping) are
         // application-supplied and intentionally preserved.
@@ -7556,6 +7689,11 @@ impl StructureDesigner {
 
         // Clear navigation history since we're loading a new design file
         self.navigation_history.clear();
+
+        // Eval-error snapshots belong to the previous document — clear them,
+        // or a same-named network in the loaded file would inherit ghost
+        // errors (D6 key lifecycle).
+        self.eval_error_snapshots.clear();
 
         // Clear undo stack — loaded file starts with fresh history
         self.undo_stack.clear();
