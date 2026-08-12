@@ -1179,6 +1179,11 @@ impl NodeTypeRegistry {
                             node_id: scoped.node_id,
                             node_label,
                             body_qualifier,
+                            // A validation entry always addresses a node of the
+                            // network it is listed under, and is never derived
+                            // (it has no upstream error to come from).
+                            host_network: None,
+                            root_cause: None,
                         }
                     })
                     .collect();

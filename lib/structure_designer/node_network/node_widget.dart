@@ -22,6 +22,7 @@ import 'package:flutter_cad/structure_designer/node_network/node_network_painter
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
+import 'package:flutter_cad/structure_designer/root_cause_navigation.dart';
 import 'package:flutter_cad/structure_designer/factor_into_subnetwork_dialog.dart';
 import 'package:flutter_cad/structure_designer/extract_closure_to_network_dialog.dart';
 
@@ -1641,9 +1642,12 @@ class NodeWidget extends StatelessWidget {
     // node's center is right now ("leave the node in the same place", the
     // issue's continuity ask; `doc/design_find_usages.md` D4). Center-to-center
     // rather than raw cursor position because source and target nodes differ
-    // in size (pin counts). Only custom nodes offer Find Usages.
+    // in size (pin counts). Only custom nodes offer Find Usages — but an
+    // errored node of any type can offer "Go to root cause", which lands the
+    // same anchored way.
+    final bool nodeHasError = node.error != null && node.error!.isNotEmpty;
     Offset? usageJumpAnchor;
-    if (isCustomNode) {
+    if (isCustomNode || nodeHasError) {
       final Size sourceSize = node.zone != null
           ? resolver.effectiveNodeSizeScreen(node, scopeChain)
           : getNodeSize(node, zoomLevel);
@@ -1691,7 +1695,15 @@ class NodeWidget extends StatelessWidget {
     // issue-#414 counterpart) — both custom-node only — plus "Go to next
     // error", offered on an errored node so you can step through the network's
     // problems from the one you found (same cycle as F8).
-    final bool hasError = node.error != null && node.error!.isNotEmpty;
+    final bool hasError = nodeHasError;
+    // "Go to root cause" (`doc/design_error_management.md` D7): offered only
+    // when this node's error is *derived* — i.e. it came in through a wire and
+    // the evaluator recorded where from. A root cause has nothing upstream to
+    // go to, so the item stays hidden there rather than becoming a no-op.
+    final APIErrorRootCause? rootCause = hasError
+        ? sd_api.getNodeRootCause(
+            scopePath: scopeChainToBytes(scopeChain), nodeId: node.id)
+        : null;
     addSection('Navigate', [
       if (isCustomNode)
         const PopupMenuItem(
@@ -1702,6 +1714,11 @@ class NodeWidget extends StatelessWidget {
         const PopupMenuItem(
           value: 'find_usages',
           child: Text('Find Usages'),
+        ),
+      if (rootCause != null)
+        const PopupMenuItem(
+          value: 'go_to_root_cause',
+          child: Text('Go to root cause'),
         ),
       if (hasError)
         const PopupMenuItem(
@@ -1804,6 +1821,13 @@ class NodeWidget extends StatelessWidget {
         model.setActiveNodeNetwork(node.nodeTypeName);
       } else if (value == 'find_usages') {
         _handleFindUsages(context, position, usageJumpAnchor);
+      } else if (value == 'go_to_root_cause') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        // Anchored like a Find Usages jump when this node offers an anchor, so
+        // the canvas doesn't lurch when the root lives in another network.
+        goToRootCause(context, model, rootCause!,
+            screenAnchor: usageJumpAnchor);
       } else if (value == 'go_to_next_error') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

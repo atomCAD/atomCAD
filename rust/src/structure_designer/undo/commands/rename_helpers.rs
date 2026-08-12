@@ -19,12 +19,19 @@ pub fn apply_rename_core(
     old_name: &str,
     new_name: &str,
 ) {
-    // Re-key the renamed network's eval-error snapshot. (Phase-4 entries hold
-    // no embedded network names; when Phase 5's cross-network jump addresses
-    // land, this is also where stored `host_network` names get rewritten.)
+    // Re-key the renamed network's eval-error snapshot, then rewrite the
+    // renamed name wherever it appears *inside* stored entries: Phase 5's jump
+    // addresses embed `host_network` names (a cross-network root cause and the
+    // root-cause pointer of every derived row), and the snapshot deliberately
+    // outlives a refresh, so a stale name would jump nowhere.
     if let Some(entries) = eval_error_snapshots.remove(old_name) {
         eval_error_snapshots.insert(new_name.to_string(), entries);
     }
+    crate::structure_designer::eval_errors::rewrite_network_name_in_snapshots(
+        eval_error_snapshots,
+        old_name,
+        new_name,
+    );
 
     // Take the network out and re-insert with new name
     let mut network = match registry.node_networks.remove(old_name) {

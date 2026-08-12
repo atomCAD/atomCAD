@@ -22,6 +22,7 @@ use super::structure_designer_api_types::APICompatibilityReport;
 use super::structure_designer_api_types::APIDataType;
 use super::structure_designer_api_types::APIDerivedShapeView;
 use super::structure_designer_api_types::APIDragSource;
+use super::structure_designer_api_types::APIErrorRootCause;
 use super::structure_designer_api_types::APIExecuteResult;
 use super::structure_designer_api_types::APIExportAtomsData;
 use super::structure_designer_api_types::APIExprData;
@@ -1757,6 +1758,29 @@ pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidatio
                         .structure_designer
                         .get_node_networks_with_errors(),
                 )
+            },
+            None,
+        )
+    }
+}
+
+/// "Go to root cause" for one node of the active network
+/// (`doc/design_error_management.md` D7): follows the node's origin links to
+/// the end and returns the failure its error derives from, addressed globally
+/// (the root may live in another network). `None` when the node is itself the
+/// root cause, has no evaluation error, or its root has since vanished.
+///
+/// Read-only: mutates nothing, so no undo command and no refresh. Backs the
+/// node context-menu action; the panel picker reads the same address off each
+/// row's `root_cause`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_node_root_cause(scope_path: Vec<u64>, node_id: u64) -> Option<APIErrorRootCause> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .get_node_root_cause(&scope_path, node_id)
             },
             None,
         )

@@ -1319,15 +1319,32 @@ class StructureDesignerModel extends ChangeNotifier {
         screenAnchor: screenAnchor);
   }
 
-  /// Jumps to a validation error's offending node, the same way [jumpToUsage]
-  /// jumps to an instance (error-navigation feature). A network-level error
-  /// with no anchored node (`nodeId == null`) has nowhere to go, so this is a
-  /// no-op for it — the caller keeps such an error non-navigable in the picker.
+  /// Jumps to an error's offending node, the same way [jumpToUsage] jumps to an
+  /// instance (error-navigation feature). A network-level error with no
+  /// anchored node (`nodeId == null`) has nowhere to go, so this is a no-op for
+  /// it — the caller keeps such an error non-navigable in the picker.
+  ///
+  /// [networkName] is the network the error was *listed* under; an entry whose
+  /// `hostNetwork` is set addresses a node in another network — a root cause
+  /// reached across a custom-network boundary (`doc/design_error_management.md`
+  /// D7) — and the jump follows it there.
   void jumpToValidationError(String networkName, APIValidationError error,
       {Offset? screenAnchor}) {
     final nodeId = error.nodeId;
     if (nodeId == null) return;
-    jumpToNode(networkName, error.scopePath.toList(), nodeId,
+    jumpToNode(
+        error.hostNetwork ?? networkName, error.scopePath.toList(), nodeId,
+        screenAnchor: screenAnchor);
+  }
+
+  /// Jumps to a root cause — the terminal of an error's origin-link walk
+  /// (`doc/design_error_management.md` D7). The address is global, so this
+  /// routinely lands in another network; the caller pairs it with the transient
+  /// original-error surface, because activating that network re-evaluates it
+  /// *standalone* (its own parameter defaults and display set) and the target
+  /// may legitimately show no live badge there.
+  void jumpToRootCause(APIErrorRootCause root, {Offset? screenAnchor}) {
+    jumpToNode(root.hostNetwork, root.scopePath.toList(), root.nodeId,
         screenAnchor: screenAnchor);
   }
 
@@ -1366,6 +1383,10 @@ class StructureDesignerModel extends ChangeNotifier {
         final out = <APIValidationError>[];
         for (final e in n.validationErrors) {
           if (e.nodeId == null) continue;
+          // A cross-network root cause is listed here but lives elsewhere; F8
+          // deliberately stays inside the network being edited (those entries
+          // remain reachable from the panel badge).
+          if (e.hostNetwork != null) continue;
           final key = '${e.scopePath.join(',')}/${e.nodeId}';
           if (seenNodes.add(key)) out.add(e);
         }

@@ -302,6 +302,21 @@ List<APINetworkWithValidationErrors>? getNodeNetworksWithValidation() => RustLib
     .instance.api
     .crateApiStructureDesignerStructureDesignerApiGetNodeNetworksWithValidation();
 
+/// "Go to root cause" for one node of the active network
+/// (`doc/design_error_management.md` D7): follows the node's origin links to
+/// the end and returns the failure its error derives from, addressed globally
+/// (the root may live in another network). `None` when the node is itself the
+/// root cause, has no evaluation error, or its root has since vanished.
+///
+/// Read-only: mutates nothing, so no undo command and no refresh. Backs the
+/// node context-menu action; the panel picker reads the same address off each
+/// row's `root_cause`.
+APIErrorRootCause? getNodeRootCause(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetNodeRootCause(
+            scopePath: scopePath, nodeId: nodeId);
+
 /// Find Usages: every instance node of the network `network_name`, anywhere in
 /// the open document — including inside HOF / closure bodies at any depth
 /// (issue #414, `doc/design_find_usages.md`).

@@ -12,6 +12,7 @@ use crate::geo_tree::GeoNode;
 use crate::geo_tree::csg_cache::CsgConversionCache;
 use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
+use crate::structure_designer::eval_errors::{ErrorAddress, ErrorOrigin};
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::{
     error_in_input, error_in_input_chained,
@@ -162,6 +163,18 @@ pub struct NetworkEvaluationContext {
     /// output pins), keyed by scope-aware [`NodeRef`] for the same reason as
     /// `node_errors`.
     pub node_output_strings: HashMap<NodeRef, Vec<String>>,
+    /// **Origin links**: for each consumer that received an `Error` through a
+    /// wire, the address of the node the error came from — one entry per
+    /// distinct failing input, in input-pin order, deduped by address
+    /// (`doc/design_error_management.md` D7). The key is the consumer's
+    /// eval-scoped [`NodeRef`], the same keying as `node_errors`, so a chain is
+    /// followed by walking `source_ref` from link to link.
+    ///
+    /// Recorded at wire-resolution time, which covers text-wrapped and verbatim
+    /// pass-through consumers uniformly — it fires *before* the consumer decides
+    /// what to do with the error. A node with no link is a **root cause**.
+    /// Runtime-only and pass-scoped: a fresh pass regenerates the whole map.
+    pub node_error_origins: HashMap<NodeRef, Vec<ErrorOrigin>>,
     /// The scope path of the node currently being evaluated — the chain of HOF
     /// body-owner ids (and custom-network instance ids) from the displayed
     /// top-level node down to the current frame. Maintained by
@@ -293,6 +306,7 @@ impl NetworkEvaluationContext {
         Self {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
+            node_error_origins: HashMap::new(),
             eval_scope_path: Vec::new(),
             selected_node_eval_cache: None,
             top_level_parameters: HashMap::new(),
@@ -385,8 +399,9 @@ impl NetworkEvaluationContext {
     ///   pre-evaluated into a separate map by its `eval` and sealed onto the
     ///   inner context afterward; until that point the inner context shares
     ///   the empty sentinel.
-    /// - `node_errors`, `node_output_strings`, `selected_node_eval_cache`,
-    ///   `top_level_parameters` — per-pass scratch state, scoped to the body.
+    /// - `node_errors`, `node_output_strings`, `node_error_origins`,
+    ///   `selected_node_eval_cache`, `top_level_parameters` — per-pass scratch
+    ///   state, scoped to the body.
     /// - `print_buffer` — drained back into the outer context at end of call
     ///   via [`drain_inner_context`] so prints emitted from inside the body
     ///   aggregate into the single per-pass log.
@@ -398,6 +413,7 @@ impl NetworkEvaluationContext {
         Self {
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
+            node_error_origins: HashMap::new(),
             // The body's nodes are scoped under the same path as the eager HOF
             // that is iterating them — carry it through so any strings/errors
             // they record are keyed consistently (the eager body's own
@@ -476,6 +492,33 @@ impl NetworkEvaluationContext {
     /// The scope-aware address of `node_id` at the current evaluation scope.
     pub fn node_ref(&self, node_id: u64) -> NodeRef {
         NodeRef::scoped(&self.eval_scope_path, node_id)
+    }
+
+    /// The scope-aware address of a node `hops_up` scopes above the current
+    /// one — the source side of a capture wire (`source_scope_depth`). Every
+    /// body / instance entry pushes exactly one eval-scope element, so walking
+    /// `hops_up` frames up the network stack is the same as truncating the
+    /// scope path by `hops_up`. Returns `None` when the path is shorter than
+    /// the requested depth (a body-only synthetic stack, or a desynced wire).
+    pub fn node_ref_up(&self, hops_up: usize, node_id: u64) -> Option<NodeRef> {
+        let len = self.eval_scope_path.len().checked_sub(hops_up)?;
+        Some(NodeRef::scoped(&self.eval_scope_path[..len], node_id))
+    }
+
+    /// Record one origin link for `consumer` (D7). Links accumulate in
+    /// input-pin order (the order `evaluate_arg` is called per parameter) and
+    /// are deduped by address, so a consumer with two independently failing
+    /// inputs keeps a link to each while a fan-in of two wires from the same
+    /// source keeps one.
+    pub fn record_error_origin(&mut self, consumer: NodeRef, origin: ErrorOrigin) {
+        let links = self.node_error_origins.entry(consumer).or_default();
+        if links
+            .iter()
+            .any(|existing| existing.address == origin.address)
+        {
+            return;
+        }
+        links.push(origin);
     }
 }
 
@@ -630,6 +673,7 @@ impl NetworkEvaluator {
         // touched.
         context.node_errors.clear();
         context.node_output_strings.clear();
+        context.node_error_origins.clear();
         // The scope path is rebuilt below (one push per body hop) and then
         // extended by the push/pop bracketing as the pass descends into
         // further bodies / custom networks. Clear defensively in case a prior
@@ -847,6 +891,7 @@ impl NetworkEvaluator {
             displayed_pins,
             node_errors: context.node_errors.clone(),
             node_output_strings: context.node_output_strings.clone(),
+            node_error_origins: context.node_error_origins.clone(),
             unit_cell,
             construction_plane,
             show_unit_cell_wireframe,
@@ -1390,6 +1435,7 @@ impl NetworkEvaluator {
                     self.resolve_incoming_wire(network_stack, registry, context, incoming);
 
                 if let NetworkResult::Error(inner) = &result {
+                    Self::record_wire_origin(network_stack, context, incoming, node_id);
                     let src = Self::describe_wire_source(network_stack, incoming);
                     return error_in_input_chained(&input_name, src.as_deref(), inner);
                 }
@@ -1429,6 +1475,7 @@ impl NetworkEvaluator {
                 let (result, source_type) =
                     self.resolve_incoming_wire(network_stack, registry, context, incoming);
                 if let NetworkResult::Error(inner) = &result {
+                    Self::record_wire_origin(network_stack, context, incoming, node_id);
                     let src = Self::describe_wire_source(network_stack, incoming);
                     return error_in_input_chained(&input_name, src.as_deref(), inner);
                 }
@@ -1549,6 +1596,82 @@ impl NetworkEvaluator {
             }
             SourcePin::ZoneInput { .. } => None,
         }
+    }
+
+    /// The **jump-ready global address** ([`ErrorAddress`]) of the node `depth`
+    /// frames up the network stack — the source side of a wire
+    /// (`source_scope_depth`).
+    ///
+    /// Computed from the live network stack rather than from `eval_scope_path`,
+    /// because only the stack distinguishes a zone-body hop (`is_zone_body`)
+    /// from a custom-network entry: the address's `scope_path` is the chain of
+    /// zone-body hops *since the last network hop*, and its `host_network` is
+    /// the network that hop entered. Returns `None` when the walk runs off the
+    /// bottom of the stack without reaching a network frame — the lazy walkers'
+    /// per-element step, which stands up a body-only synthetic stack. Such a
+    /// consumer simply records no link and stays a root cause.
+    fn wire_source_address(
+        network_stack: &[NetworkStackElement],
+        depth: usize,
+        node_id: u64,
+    ) -> Option<ErrorAddress> {
+        let mut idx = network_stack.len().checked_sub(1 + depth)?;
+        let mut scope_path: Vec<u64> = Vec::new();
+        while network_stack[idx].is_zone_body {
+            scope_path.push(network_stack[idx].node_id);
+            idx = idx.checked_sub(1)?;
+        }
+        scope_path.reverse();
+        Some(ErrorAddress {
+            host_network: network_stack[idx].node_network.node_type.name.clone(),
+            scope_path,
+            node_id,
+        })
+    }
+
+    /// Record the origin link for a wire that resolved to an `Error`
+    /// (`doc/design_error_management.md` D7). Called from the wire-resolution
+    /// choke point in [`Self::evaluate_arg`], so it fires uniformly whether the
+    /// consumer wraps the error in chain text, forwards it verbatim, or
+    /// tolerates it.
+    ///
+    /// `ZoneInput` sources are skipped: an iteration value is not a node, so
+    /// there is nothing to navigate to and the consumer stays a root cause.
+    ///
+    /// One known approximation: a custom-network `parameter` resolves its
+    /// argument through a **parent-stack excursion** that pops the network stack
+    /// frame while the instance's eval scope stays pushed
+    /// (`nodes/parameter.rs`), so links recorded during it are keyed under a
+    /// scope path one hop too deep — the same skew `node_errors` already has on
+    /// that path, which is why the two stay consistent with each other. The
+    /// jump *address* is unaffected (it comes from the stack, which the
+    /// excursion keeps honest).
+    fn record_wire_origin(
+        network_stack: &[NetworkStackElement],
+        context: &mut NetworkEvaluationContext,
+        incoming: &IncomingWire,
+        consumer_node_id: u64,
+    ) {
+        let SourcePin::NodeOutput { .. } = incoming.source_pin else {
+            return;
+        };
+        let depth = incoming.source_scope_depth as usize;
+        let Some(address) =
+            Self::wire_source_address(network_stack, depth, incoming.source_node_id)
+        else {
+            return;
+        };
+        let Some(source_ref) = context.node_ref_up(depth, incoming.source_node_id) else {
+            return;
+        };
+        let consumer = context.node_ref(consumer_node_id);
+        context.record_error_origin(
+            consumer,
+            ErrorOrigin {
+                address,
+                source_ref,
+            },
+        );
     }
 
     fn resolve_incoming_wire<'a>(
@@ -1863,15 +1986,42 @@ impl NetworkEvaluator {
                 // the top-level id space, so scope their errors/strings under this
                 // instance id (keeps them from clobbering same-id nodes in the
                 // active network — those internals are never read back in the view).
+                let return_node_id = child_network.return_node_id.unwrap();
                 context.push_eval_scope(node_id);
                 let eval_output = self.evaluate_all_outputs(
                     &child_network_stack,
-                    child_network.return_node_id.unwrap(),
+                    return_node_id,
                     registry,
                     false,
                     context,
                 );
+                // The boundary origin link (D7). The wrap below does not go
+                // through `evaluate_arg`, so the instance's link to the child
+                // network's return-node cone is recorded explicitly — with it,
+                // a chain `consumer → … → instance → C.return → … → X` is
+                // complete and every hop is navigable. Taken while the child
+                // scope is still pushed, so `return_ref` keys the same way the
+                // return node's own error does.
+                let return_ref = context.node_ref(return_node_id);
                 context.pop_eval_scope();
+                if eval_output
+                    .results
+                    .iter()
+                    .any(|r| matches!(r, NetworkResult::Error(_)))
+                {
+                    let consumer = context.node_ref(node_id);
+                    context.record_error_origin(
+                        consumer,
+                        ErrorOrigin {
+                            address: ErrorAddress {
+                                host_network: node.node_type_name.clone(),
+                                scope_path: Vec::new(),
+                                node_id: return_node_id,
+                            },
+                            source_ref: return_ref,
+                        },
+                    );
+                }
                 // Wrap errors with the custom network name for better diagnostics
                 let child_display_results = eval_output.display_results;
                 let results: Vec<NetworkResult> = eval_output
@@ -2142,17 +2292,33 @@ impl NetworkEvaluator {
                     }
                     // Scope the custom-network internals under this instance id
                     // (see the matching branch in `evaluate_all_outputs`).
+                    let return_node_id = child_network.return_node_id.unwrap();
                     context.push_eval_scope(node_id);
                     let result = self.evaluate(
                         &child_network_stack,
-                        child_network.return_node_id.unwrap(),
+                        return_node_id,
                         output_pin_index,
                         registry,
                         false,
                         context,
                     );
+                    // Boundary origin link — see the matching branch in
+                    // `evaluate_all_outputs`.
+                    let return_ref = context.node_ref(return_node_id);
                     context.pop_eval_scope();
                     if let NetworkResult::Error(inner) = &result {
+                        let consumer = context.node_ref(node_id);
+                        context.record_error_origin(
+                            consumer,
+                            ErrorOrigin {
+                                address: ErrorAddress {
+                                    host_network: node.node_type_name.clone(),
+                                    scope_path: Vec::new(),
+                                    node_id: return_node_id,
+                                },
+                                source_ref: return_ref,
+                            },
+                        );
                         NetworkResult::Error(format!("Error in {}: {}", node.node_type_name, inner))
                     } else {
                         result

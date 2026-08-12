@@ -174,6 +174,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool dco_decode_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIErrorRootCause dco_decode_api_error_root_cause(dynamic raw);
+
+  @protected
   APIErrorSource dco_decode_api_error_source(dynamic raw);
 
   @protected
@@ -600,6 +603,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool dco_decode_box_autoadd_api_edit_atom_tool(dynamic raw);
+
+  @protected
+  APIErrorRootCause dco_decode_box_autoadd_api_error_root_cause(dynamic raw);
 
   @protected
   APIExportAtomsData dco_decode_box_autoadd_api_export_atoms_data(dynamic raw);
@@ -1168,6 +1174,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool? dco_decode_opt_box_autoadd_api_edit_atom_tool(dynamic raw);
 
   @protected
+  APIErrorRootCause? dco_decode_opt_box_autoadd_api_error_root_cause(
+      dynamic raw);
+
+  @protected
   APIExportAtomsData? dco_decode_opt_box_autoadd_api_export_atoms_data(
       dynamic raw);
 
@@ -1681,6 +1691,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIEditAtomTool sse_decode_api_edit_atom_tool(SseDeserializer deserializer);
 
   @protected
+  APIErrorRootCause sse_decode_api_error_root_cause(
+      SseDeserializer deserializer);
+
+  @protected
   APIErrorSource sse_decode_api_error_source(SseDeserializer deserializer);
 
   @protected
@@ -2170,6 +2184,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIEditAtomTool sse_decode_box_autoadd_api_edit_atom_tool(
+      SseDeserializer deserializer);
+
+  @protected
+  APIErrorRootCause sse_decode_box_autoadd_api_error_root_cause(
       SseDeserializer deserializer);
 
   @protected
@@ -2855,6 +2873,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIErrorRootCause? sse_decode_opt_box_autoadd_api_error_root_cause(
+      SseDeserializer deserializer);
+
+  @protected
   APIExportAtomsData? sse_decode_opt_box_autoadd_api_export_atoms_data(
       SseDeserializer deserializer);
 
@@ -3446,6 +3468,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIEditAtomTool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_error_root_cause(
+      APIErrorRootCause self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_error_source(
       APIErrorSource self, SseSerializer serializer);
 
@@ -3968,6 +3994,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_edit_atom_tool(
       APIEditAtomTool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_error_root_cause(
+      APIErrorRootCause self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_export_atoms_data(
@@ -4666,6 +4696,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_edit_atom_tool(
       APIEditAtomTool? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_error_root_cause(
+      APIErrorRootCause? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_export_atoms_data(

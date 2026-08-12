@@ -1183,8 +1183,39 @@ pub struct APIValidationError {
     pub node_label: Option<String>,
     /// Short human-readable body qualifier naming the enclosing HOF chain, e.g.
     /// `"in map1 body"` or `"in map1 > filter1 body"`. `None` for a top-level
-    /// error.
+    /// error. For a cross-network root cause it also carries the provenance
+    /// (`"in C"` / `"in C > map1 body"`).
     pub body_qualifier: Option<String>,
+    /// Name of the network the offending node lives in, when that is **not**
+    /// the network this list belongs to — a root cause reached through origin
+    /// links across a custom-network boundary (`doc/design_error_management.md`
+    /// D7). `None` for the ordinary case; the jump then targets the listing
+    /// network. Callers must jump to `host_network ?? <listing network>`.
+    pub host_network: Option<String>,
+    /// `Some(root)` marks this entry as **derived** — its node received an
+    /// `Error` through a wire, and `root` addresses the failure it came from.
+    /// The panel collapses derived entries behind the row(s) representing
+    /// `root`'s node instead of listing them at top level, so one failure does
+    /// not flood the list with its downstream cone. `None` ⇒ this entry is a
+    /// root cause. Always `None` for validation entries.
+    pub root_cause: Option<APIErrorRootCause>,
+}
+
+/// Where a derived error actually comes from (`doc/design_error_management.md`
+/// D7) — the terminal of the origin-link walk, addressed globally so the jump
+/// can cross network boundaries.
+///
+/// The addressing triple mirrors [`APINetworkUsage`]; `error_text` is the root's
+/// *own* message, shown in a transient surface after a cross-network jump
+/// (activating another network re-evaluates it standalone, so the target may
+/// legitimately show no live badge — the transient text is the context).
+pub struct APIErrorRootCause {
+    pub host_network: String,
+    pub scope_path: Vec<u64>,
+    pub node_id: u64,
+    /// The root-cause node's display label (its node name, else its type name).
+    pub node_label: String,
+    pub error_text: String,
 }
 
 /// One place a custom node network is used, for the Find Usages UI

@@ -1314,7 +1314,10 @@ impl StructureDesigner {
         let all_node_errors = self
             .last_generated_structure_designer_scene
             .get_all_node_errors();
-        let entries = harvest_eval_errors(network, &all_node_errors);
+        let all_origins = self
+            .last_generated_structure_designer_scene
+            .get_all_node_error_origins();
+        let entries = harvest_eval_errors(network, &all_node_errors, &all_origins);
         self.eval_error_snapshots
             .insert(network_name.to_string(), entries);
     }
@@ -1349,31 +1352,47 @@ impl StructureDesigner {
             let Some(snapshot) = self.eval_error_snapshots.get(&entry.name) else {
                 continue;
             };
-            let Some(network) = self.node_type_registry.node_networks.get(&entry.name) else {
-                continue;
-            };
             let stale = self.active_node_network_name.as_deref() != Some(entry.name.as_str());
             for eval_error in snapshot {
-                let Some(scope) = resolve_scope_network(network, &eval_error.scope_path) else {
+                // The offending node lives either in this network or — for a
+                // root cause reached across a custom-network boundary (D7) — in
+                // the network the entry names.
+                let host_name = eval_error.host_network.as_deref().unwrap_or(&entry.name);
+                let Some(host) = self.node_type_registry.node_networks.get(host_name) else {
+                    continue;
+                };
+                let Some(scope) = resolve_scope_network(host, &eval_error.scope_path) else {
                     continue;
                 };
                 let Some(node) = scope.nodes.get(&eval_error.node_id) else {
                     continue;
                 };
-                if has_blocking_validation_error(scope, eval_error.node_id) {
+                // The D8 dedupe applies to rows of *this* network: a poisoned
+                // node is represented by its blocking validation row here. A
+                // cross-network row is exempt — that validation row lives in the
+                // other network's list, so dropping it here would leave the
+                // derived entries with no collapse parent.
+                if eval_error.host_network.is_none()
+                    && has_blocking_validation_error(scope, eval_error.node_id)
+                {
                     continue;
                 }
                 // Label + qualifier resolve exactly like a validation row's
                 // (`get_node_networks_with_validation`), so the two entry
-                // kinds render consistently in the picker.
-                let body_qualifier = if eval_error.scope_path.is_empty() {
+                // kinds render consistently in the picker; a cross-network row
+                // additionally names its host network as provenance.
+                let body_labels = if eval_error.scope_path.is_empty() {
                     None
                 } else {
-                    let labels = resolve_scope_labels(network, &eval_error.scope_path);
-                    if labels.is_empty() {
-                        None
-                    } else {
-                        Some(format!("in {} body", labels.join(" > ")))
+                    let labels = resolve_scope_labels(host, &eval_error.scope_path);
+                    (!labels.is_empty()).then(|| labels.join(" > "))
+                };
+                let body_qualifier = match (eval_error.host_network.as_deref(), body_labels) {
+                    (None, None) => None,
+                    (None, Some(labels)) => Some(format!("in {} body", labels)),
+                    (Some(host_name), None) => Some(format!("in {}", host_name)),
+                    (Some(host_name), Some(labels)) => {
+                        Some(format!("in {} > {} body", host_name, labels))
                     }
                 };
                 entry.validation_errors.push(APIValidationError {
@@ -1387,10 +1406,58 @@ impl StructureDesigner {
                     node_id: Some(eval_error.node_id),
                     node_label: Some(node_label(node)),
                     body_qualifier,
+                    host_network: eval_error.host_network.clone(),
+                    root_cause: self.resolve_api_root_cause(eval_error.root.as_ref()),
                 });
             }
         }
         networks
+    }
+
+    /// Resolve a stored [`RootCauseRef`] into the API shape, dropping it when
+    /// the target no longer exists (a vanished root makes its derived entries
+    /// plain top-level rows rather than rows pointing at a dead node).
+    fn resolve_api_root_cause(
+        &self,
+        root: Option<&crate::structure_designer::eval_errors::RootCauseRef>,
+    ) -> Option<crate::api::structure_designer::structure_designer_api_types::APIErrorRootCause>
+    {
+        use crate::api::structure_designer::structure_designer_api_types::APIErrorRootCause;
+        use crate::structure_designer::network_usages::{node_label, resolve_scope_network};
+
+        let root = root?;
+        let network = self
+            .node_type_registry
+            .node_networks
+            .get(&root.address.host_network)?;
+        let scope = resolve_scope_network(network, &root.address.scope_path)?;
+        let node = scope.nodes.get(&root.address.node_id)?;
+        Some(APIErrorRootCause {
+            host_network: root.address.host_network.clone(),
+            scope_path: root.address.scope_path.clone(),
+            node_id: root.address.node_id,
+            node_label: node_label(node),
+            error_text: root.error_text.clone(),
+        })
+    }
+
+    /// "Go to root cause" for one node of the **active** network
+    /// (`doc/design_error_management.md` D7): the terminal of its origin-link
+    /// walk, or `None` when the node is itself a root cause (or carries no
+    /// evaluation error at all). Backs the node context-menu action; the picker
+    /// rows read the same address off `APIValidationError::root_cause`.
+    pub fn get_node_root_cause(
+        &self,
+        scope_path: &[u64],
+        node_id: u64,
+    ) -> Option<crate::api::structure_designer::structure_designer_api_types::APIErrorRootCause>
+    {
+        let network_name = self.active_node_network_name.as_deref()?;
+        let snapshot = self.eval_error_snapshots.get(network_name)?;
+        let entry = snapshot.iter().find(|e| {
+            e.host_network.is_none() && e.node_id == node_id && e.scope_path == scope_path
+        })?;
+        self.resolve_api_root_cause(entry.root.as_ref())
     }
 
     // Full refresh implementation - re-evaluates all displayed nodes

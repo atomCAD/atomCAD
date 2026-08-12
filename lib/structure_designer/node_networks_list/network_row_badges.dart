@@ -3,6 +3,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
+import 'package:flutter_cad/structure_designer/root_cause_navigation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Shared trailing badges for a network row in the user-types panel — the
@@ -24,6 +25,74 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
 /// Whether an error entry can be navigated to (it is anchored to a node).
 bool _isNavigable(APIValidationError e) => e.nodeId != null;
+
+/// The address of the node an entry is anchored to, as a comparable key.
+/// `hostNetwork` is set only on a cross-network root cause; every other entry
+/// addresses a node of the network it is listed under.
+String _nodeKey(String networkName, APIValidationError e) =>
+    '${e.hostNetwork ?? networkName}|${e.scopePath.join(',')}|${e.nodeId}';
+
+/// The address of an entry's *root cause*, in the same key space as
+/// [_nodeKey] — so a derived entry finds the row representing its root
+/// **node**, which may be that node's validation row rather than an eval row (a
+/// derived chain routinely terminates at a cone-poisoned node whose synthesized
+/// eval entry the D8 dedupe drops).
+String? _rootKey(APIValidationError e) {
+  final root = e.rootCause;
+  if (root == null) return null;
+  return '${root.hostNetwork}|${root.scopePath.join(',')}|${root.nodeId}';
+}
+
+/// One underlying problem: the row the panel lists at top level plus the
+/// downstream entries collapsed behind it (`doc/design_error_management.md`
+/// D7). Derived entries are *presentation*-collapsed only — on the canvas every
+/// node still badges its own error, because when looking at a node the user
+/// wants to know why *it* is dark.
+class _ErrorGroup {
+  _ErrorGroup(this.root);
+  final APIValidationError root;
+  final List<APIValidationError> derived = [];
+}
+
+/// Groups [errors] into one entry per underlying problem: root causes (and
+/// every validation row) stay top level; each derived eval entry is filed
+/// behind the row representing its root-cause node.
+///
+/// A derived entry whose root is not represented in this list — its row was
+/// dropped, or the root lives in a network whose rows are listed elsewhere — is
+/// promoted to top level rather than hidden. Losing an error is worse than
+/// showing it twice.
+List<_ErrorGroup> _groupErrorsByRootCause(
+    String networkName, List<APIValidationError> errors) {
+  final groups = <_ErrorGroup>[];
+  final byNode = <String, _ErrorGroup>{};
+  for (final e in errors) {
+    if (e.rootCause != null) continue;
+    final group = _ErrorGroup(e);
+    groups.add(group);
+    // Several rows can represent one node (e.g. two validation errors); the
+    // first one becomes the collapse parent.
+    byNode.putIfAbsent(_nodeKey(networkName, e), () => group);
+  }
+  for (final e in errors) {
+    if (e.rootCause == null) continue;
+    final parent = byNode[_rootKey(e)];
+    if (parent != null) {
+      parent.derived.add(e);
+    } else {
+      groups.add(_ErrorGroup(e));
+    }
+  }
+  return groups;
+}
+
+/// What the user picked in the error menu: a row (jump to its node) or a row's
+/// "go to root cause" action.
+class _ErrorPick {
+  const _ErrorPick(this.error, {this.goToRoot = false});
+  final APIValidationError error;
+  final bool goToRoot;
+}
 
 /// The severity color for a set of errors: red when any error blocks the whole
 /// network from evaluating, amber when they are all non-blocking warnings.
@@ -56,17 +125,26 @@ Widget buildNetworkErrorBadge({
   if (errors.isEmpty) return const SizedBox.shrink();
   final color = _severityColor(errors);
   final icon = _severityIcon(errors);
-  // The full error list on hover — progressive disclosure: glance (badge) →
-  // peek (tooltip) → act (click). Each error on its own line. The tooltip is
-  // plain text, so the source icon degrades to a ⚡ marker on eval entries
-  // (and a stale entry says where it came from).
-  final tooltip = errors.map((e) {
+  // The badge counts **problems**, not symptoms: one entry per root cause, with
+  // its downstream cone collapsed behind it (D7). Otherwise a single failure
+  // three nodes deep would read as "3 errors" while the picker showed one row.
+  final groups = _groupErrorsByRootCause(networkName, errors);
+  // The full list on hover — progressive disclosure: glance (badge) → peek
+  // (tooltip) → act (click). Each problem on its own line, with the size of its
+  // downstream cone noted rather than enumerated. The tooltip is plain text, so
+  // the source icon degrades to a ⚡ marker on eval entries (and a stale entry
+  // says where it came from).
+  final tooltip = groups.map((group) {
+    final e = group.root;
     final buffer = StringBuffer('• ');
     if (e.source == APIErrorSource.evaluation) buffer.write('⚡ ');
     buffer.write(e.errorText);
     final q = e.bodyQualifier;
     if (q != null) buffer.write(' ($q)');
     if (e.stale) buffer.write(' — from last evaluation');
+    if (group.derived.isNotEmpty) {
+      buffer.write(' (+${group.derived.length} downstream)');
+    }
     return buffer.toString();
   }).join('\n');
 
@@ -97,7 +175,7 @@ Widget buildNetworkErrorBadge({
                 Icon(icon, size: 11, color: Colors.white),
                 const SizedBox(width: 2),
                 Text(
-                  '${errors.length}',
+                  '${groups.length}',
                   style: AppTextStyles.regular.copyWith(
                     fontSize: 11,
                     color: Colors.white,
@@ -157,8 +235,14 @@ Widget buildNetworkUsageCountBadge({
 /// Mirrors [showNetworkUsagesMenu]'s grammar so the two badges on a row behave
 /// the same: a single navigable error jumps immediately (no extra click); a
 /// single network-level error with no node to jump to shows its text in a
-/// SnackBar; otherwise a picker lists every error — navigable ones jump,
+/// SnackBar; otherwise a picker lists every problem — navigable ones jump,
 /// network-level ones are shown disabled (their text is still readable).
+///
+/// The list is **one row per underlying problem** (D7): derived errors — the
+/// downstream cone of a root cause — are indented under their root instead of
+/// competing with it for attention, and each carries a "go to root cause"
+/// action. A root cause that lives in another network is listed here too, with
+/// its provenance, because it is the failure this network's errors come from.
 Future<void> showValidationErrorsMenu({
   required BuildContext context,
   required StructureDesignerModel model,
@@ -168,9 +252,10 @@ Future<void> showValidationErrorsMenu({
 }) async {
   if (errors.isEmpty) return;
   final messenger = ScaffoldMessenger.maybeOf(context);
+  final groups = _groupErrorsByRootCause(networkName, errors);
 
-  if (errors.length == 1) {
-    final only = errors.first;
+  if (groups.length == 1 && groups.first.derived.isEmpty) {
+    final only = groups.first.root;
     if (_isNavigable(only)) {
       model.jumpToValidationError(networkName, only);
     } else {
@@ -179,26 +264,42 @@ Future<void> showValidationErrorsMenu({
     return;
   }
 
-  final picked = await showMenu<int>(
+  final picked = await showMenu<_ErrorPick>(
     context: context,
     position: position,
-    items: <PopupMenuEntry<int>>[
-      PopupMenuItem<int>(
+    items: <PopupMenuEntry<_ErrorPick>>[
+      PopupMenuItem<_ErrorPick>(
         enabled: false,
         child: Text("Errors in '${getSimpleName(networkName)}'"),
       ),
-      for (int i = 0; i < errors.length; i++)
-        PopupMenuItem<int>(
-          value: i,
+      for (final group in groups) ...[
+        PopupMenuItem<_ErrorPick>(
+          value: _ErrorPick(group.root),
           // A network-level error has no node to jump to — keep it visible but
           // unselectable so the count matches the list.
-          enabled: _isNavigable(errors[i]),
-          child: _errorMenuRow(errors[i]),
+          enabled: _isNavigable(group.root),
+          child: _errorMenuRow(group.root),
         ),
+        for (final derived in group.derived)
+          PopupMenuItem<_ErrorPick>(
+            value: _ErrorPick(derived),
+            enabled: _isNavigable(derived),
+            child: _errorMenuRow(derived, indented: true),
+          ),
+      ],
     ],
   );
   if (picked == null) return;
-  model.jumpToValidationError(networkName, errors[picked]);
+  final root = picked.error.rootCause;
+  if (picked.goToRoot && root != null) {
+    // The picker is a route: the panel row that anchored it can be gone by the
+    // time it closes, and `goToRootCause` needs a live context for its
+    // transient surface.
+    if (!context.mounted) return;
+    goToRootCause(context, model, root);
+    return;
+  }
+  model.jumpToValidationError(networkName, picked.error);
 }
 
 /// One picker row: a severity-colored source icon plus the error text and
@@ -206,7 +307,12 @@ Future<void> showValidationErrorsMenu({
 /// source (structural glyph vs bolt), the color the severity; a stale eval
 /// entry (inactive network's last-known snapshot) renders dimmed with an
 /// outlined bolt and a "from last evaluation" note.
-Widget _errorMenuRow(APIValidationError error) {
+///
+/// [indented] marks a *derived* row — one of the root's downstream echoes,
+/// nested under it. Such a row also carries a "go to root cause" action, which
+/// pops the menu with [_ErrorPick.goToRoot] set so the caller jumps to the
+/// failure instead of to this symptom.
+Widget _errorMenuRow(APIValidationError error, {bool indented = false}) {
   final isEval = error.source == APIErrorSource.evaluation;
   final color = error.stale
       ? Colors.grey
@@ -227,6 +333,8 @@ Widget _errorMenuRow(APIValidationError error) {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // A derived row sits visually under its root cause.
+        if (indented) const SizedBox(width: 18),
         Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Icon(icon, size: 14, color: color),
@@ -258,6 +366,25 @@ Widget _errorMenuRow(APIValidationError error) {
             ],
           ),
         ),
+        if (error.rootCause != null) ...[
+          const SizedBox(width: 8),
+          // Popping the menu route with a `goToRoot` pick keeps the whole
+          // decision in the caller's single `picked` branch.
+          Builder(
+            builder: (rowContext) => Tooltip(
+              message: 'Go to root cause',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: () => Navigator.of(rowContext)
+                    .pop(_ErrorPick(error, goToRoot: true)),
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
+                  child: Icon(Icons.arrow_upward, size: 14, color: Colors.grey),
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     ),
   );

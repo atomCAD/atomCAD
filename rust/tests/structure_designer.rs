@@ -512,3 +512,6 @@ mod error_display_test;
 
 #[path = "structure_designer/eval_error_snapshot_test.rs"]
 mod eval_error_snapshot_test;
+
+#[path = "structure_designer/error_origins_test.rs"]
+mod error_origins_test;

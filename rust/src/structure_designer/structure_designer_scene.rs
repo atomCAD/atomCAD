@@ -6,6 +6,7 @@ use crate::display::surface_point_cloud::SurfacePointCloud;
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::geo_tree::GeoNode;
 use crate::renderer::tessellator::tessellator::Tessellatable;
+use crate::structure_designer::eval_errors::ErrorOrigin;
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::node_network::NodeRef;
 use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
@@ -81,6 +82,13 @@ pub struct NodeSceneData {
     /// for all nodes in the evaluation chain.
     pub node_output_strings: HashMap<NodeRef, Vec<String>>,
 
+    /// Origin links collected during evaluation of this node and its
+    /// dependencies (`doc/design_error_management.md` D7): consumer's
+    /// scope-aware [`NodeRef`] -> the addresses its failing inputs came from,
+    /// in input-pin order. A node absent from this map received no errored
+    /// input and is therefore a **root cause**.
+    pub node_error_origins: HashMap<NodeRef, Vec<ErrorOrigin>>,
+
     /// Unit cell associated with this node's output (if applicable)
     pub unit_cell: Option<UnitCellStruct>,
 
@@ -109,6 +117,7 @@ impl NodeSceneData {
             displayed_pins: HashSet::from([0]),
             node_errors: HashMap::new(),
             node_output_strings: HashMap::new(),
+            node_error_origins: HashMap::new(),
             unit_cell: None,
             construction_plane: None,
             show_unit_cell_wireframe: false,
@@ -220,6 +229,18 @@ impl StructureDesignerScene {
             all_errors.extend(node_data.node_errors.clone());
         }
         all_errors
+    }
+
+    /// Helper to get all origin links from all nodes, keyed by the consumer's
+    /// scope-aware [`NodeRef`] — the companion of [`Self::get_all_node_errors`]
+    /// that lets the harvest classify each error as a root cause or a derived
+    /// one (`doc/design_error_management.md` D7).
+    pub fn get_all_node_error_origins(&self) -> HashMap<NodeRef, Vec<ErrorOrigin>> {
+        let mut all_origins = HashMap::new();
+        for node_data in self.node_data.values() {
+            all_origins.extend(node_data.node_error_origins.clone());
+        }
+        all_origins
     }
 
     /// Helper to get all output strings from all nodes, keyed by scope-aware
@@ -420,6 +441,25 @@ impl MemorySizeEstimator for NodeSceneData {
             })
             .sum::<usize>();
 
+        // Estimate node_error_origins HashMap (one small address per link)
+        let node_error_origins_size = self
+            .node_error_origins
+            .values()
+            .map(|origins| {
+                std::mem::size_of::<NodeRef>()
+                    + std::mem::size_of::<Vec<ErrorOrigin>>()
+                    + origins
+                        .iter()
+                        .map(|o| {
+                            std::mem::size_of::<ErrorOrigin>()
+                                + o.address.host_network.capacity()
+                                + o.address.scope_path.len() * std::mem::size_of::<u64>()
+                                + o.source_ref.scope_path.len() * std::mem::size_of::<u64>()
+                        })
+                        .sum::<usize>()
+            })
+            .sum::<usize>();
+
         // Estimate unit_cell (if present)
         // UnitCellStruct is a simple struct with a few f64 fields, estimate conservatively
         let unit_cell_size = if self.unit_cell.is_some() {
@@ -456,6 +496,7 @@ impl MemorySizeEstimator for NodeSceneData {
             + pin_outputs_size
             + node_errors_size
             + node_output_strings_size
+            + node_error_origins_size
             + unit_cell_size
             + eval_cache_size
     }
