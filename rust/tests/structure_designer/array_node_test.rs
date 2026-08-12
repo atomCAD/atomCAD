@@ -1623,12 +1623,13 @@ fn array_set_element_type_is_a_no_op_for_the_same_type() {
 /// A retype makes every downstream wire's type check fail. Note what actually
 /// happens: the repair pass does **not** drop those wires (it rebuilds a node's
 /// own `arguments`, and `array` has no input pins) — instead the validator
-/// flags a *blocking* "Data type mismatch" and the whole network stops
-/// evaluating. So the network-wide state a retype changes is the validation
-/// result, and only the structural-edit path re-validates and full-refreshes
+/// flags a *blocking* "Data type mismatch" which cone-poisons the destination
+/// node (since error-management Phase 3 the network as a whole stays valid).
+/// So the network-wide state a retype changes is the validation result, and
+/// only the structural-edit path re-validates and full-refreshes
 /// (`set_node_network_data_scoped` deliberately does neither). A plain
 /// node-data undo would restore `element_type` while leaving the network
-/// stuck invalid on a stale error.
+/// stuck with a stale error.
 #[test]
 fn array_set_element_type_undo_restores_network_validity() {
     let (mut designer, array_id, array_at_id) = designer_with_array_feeding_array_at();
@@ -1640,8 +1641,8 @@ fn array_set_element_type_undo_restores_network_validity() {
     assert_eq!(element_type_of(&designer, array_id), DataType::String);
     let (valid, errors) = validity(&designer);
     assert!(
-        !valid,
-        "Array[String] cannot feed array_at's Array[Int] pin"
+        valid,
+        "the node-attributed mismatch must not flip the network's `valid` flag"
     );
     assert_eq!(
         errors,
@@ -1661,5 +1662,12 @@ fn array_set_element_type_undo_restores_network_validity() {
 
     assert!(designer.redo(), "the retype must be redoable");
     assert_eq!(element_type_of(&designer, array_id), DataType::String);
-    assert!(!validity(&designer).0);
+    // The redone retype re-records the mismatch error (still cone-scoped:
+    // `valid` remains true).
+    let (valid, errors) = validity(&designer);
+    assert!(valid);
+    assert_eq!(
+        errors,
+        vec!["Data type mismatch: input expects Array(Int), but source outputs Array(String)"]
+    );
 }

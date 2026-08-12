@@ -729,9 +729,17 @@ fn guard_incompatible_retype_preserves_wire_but_flags_error() {
         .as_ref()
         .unwrap();
     assert_eq!(nt.parameters[a_idx2].data_type, DataType::Vec3);
-    // ...and the network is now invalid (the type mismatch is surfaced).
+    // ...and the type mismatch is surfaced as a blocking error on the node
+    // (cone-scoped since error-management Phase 3 — `valid` stays true).
+    assert!(net.valid, "node-attributed error must not flip `valid`");
     assert!(
-        !net.valid,
-        "an Int source feeding a Vec3 field must make the network invalid"
+        net.validation_errors.iter().any(|e| e.blocking
+            && e.node_id == Some(rc)
+            && e.error_text.contains("Data type mismatch")),
+        "the mismatch must be recorded on the record_construct node; got {:?}",
+        net.validation_errors
+            .iter()
+            .map(|e| &e.error_text)
+            .collect::<Vec<_>>()
     );
 }

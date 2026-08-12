@@ -735,7 +735,12 @@ fn validation_function_pin_captures_and_thunk_mismatch() {
     // `map.f` (needs a leading Int param). Surfaces as a type mismatch.
     designer.connect_nodes(x_int, 0, expr_id, 0); // capture x → () -> Int
     let (valid, errors) = validate_and_errors(&mut designer, "main");
-    assert!(!valid, "an all-captured thunk does not fit map.f");
+    // Cone-scoped blocking (error-management Phase 3): the mismatch is a
+    // blocking error attributed to the map node; `valid` stays true.
+    assert!(
+        valid,
+        "a node-attributed blocking error must not flip `valid`"
+    );
     assert!(
         errors.iter().any(|e| e.contains("mismatch")),
         "expected a wire type-mismatch error, got {errors:?}"
@@ -795,9 +800,11 @@ fn validation_function_pin_type_match_and_mismatch() {
         wire_function_pin(&mut designer, "main", expr_id, map_id, 1);
 
         let (valid, errors) = validate_and_errors(&mut designer, "main");
+        // Cone-scoped blocking (error-management Phase 3): the mismatch is a
+        // blocking error attributed to the map node; `valid` stays true.
         assert!(
-            !valid,
-            "element-type-mismatched function pin must be invalid"
+            valid,
+            "a node-attributed blocking error must not flip `valid`"
         );
         assert!(
             errors.iter().any(|e| e.contains("mismatch")),

@@ -270,9 +270,12 @@ fn validator_flags_abstract_to_concrete_wire_instead_of_skipping() {
         .node_networks
         .get("main")
         .unwrap();
+    // Cone-scoped blocking (`doc/design_error_management.md` D3/D5): the
+    // node-attributed mismatch poisons the destination instead of flipping
+    // the network's `valid` flag.
     assert!(
-        !network.valid,
-        "HasAtoms → Float wire must invalidate the network"
+        network.valid,
+        "a node-attributed blocking error must not flip `valid`"
     );
     assert!(
         network

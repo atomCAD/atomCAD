@@ -248,7 +248,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
             if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
                 parameter_nodes.push((node_id, param_data));
             } else {
-                errors.push(ValidationError::new(
+                errors.push(ValidationError::interface_error(
                     "Parameter node has invalid data type".to_string(),
                     Some(node_id),
                 ));
@@ -261,7 +261,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     let mut param_names: HashMap<String, u64> = HashMap::new();
     for (node_id, param_data) in &parameter_nodes {
         if param_names.contains_key(&param_data.param_name) {
-            errors.push(ValidationError::new(
+            errors.push(ValidationError::interface_error(
                 format!("Duplicate parameter name '{}'", param_data.param_name),
                 Some(*node_id),
             ));
@@ -274,7 +274,7 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     // input-pin types on built-in polymorphic nodes, not on user-declared parameter pins.
     for (node_id, param_data) in &parameter_nodes {
         if contains_abstract(&param_data.data_type) {
-            errors.push(ValidationError::new(
+            errors.push(ValidationError::interface_error(
                 format!(
                     "Parameter '{}' has abstract type {:?}; abstract phase types are not allowed on parameter pins",
                     param_data.param_name, param_data.data_type
@@ -748,12 +748,12 @@ pub fn validate_network(
     network.valid = true;
     network.validation_errors.clear();
 
-    // Add initial errors first if provided
+    // Add initial errors first if provided. Whether they affect `valid` is
+    // decided by the residue predicate at the end of this function (D5) —
+    // node-attributed blocking errors (e.g. expr parse errors) cone-poison
+    // their node instead of blanking the network.
     if let Some(errors) = initial_errors {
-        for error in errors {
-            network.validation_errors.push(error);
-            network.valid = false;
-        }
+        network.validation_errors.extend(errors);
     }
 
     // Check if interface changed before validation (to detect changes)
@@ -762,11 +762,17 @@ pub fn validate_network(
     // Store old parameters before updating them
     let old_parameters = network.node_type.parameters.clone();
 
-    // Validate parameters (this updates parameter order and indices)
+    // Validate parameters (this updates parameter order and indices). Its
+    // errors carry `interface: true`, so the residue predicate below keeps
+    // the whole network refusing evaluation — a desynced parameter interface
+    // is the known call-site OOB-panic class (see
+    // `doc/design_error_management.md` D5).
     if !validate_parameters(network) {
-        network.valid = false;
+        network.valid = !crate::structure_designer::node_network::has_interface_residue(
+            &network.validation_errors,
+        );
         return NetworkValidationResult {
-            valid: false,
+            valid: network.valid,
             interface_changed,
         };
     }
@@ -826,20 +832,26 @@ pub fn validate_network(
 
     // VALIDATION PHASE: Check wire validity and resolve polymorphic output pins.
     let mut ctx = ValidationContext::new();
-    let wires_valid = validate_wires(network, node_type_registry, &mut ctx);
-    if !wires_valid {
-        network.valid = false;
-    }
+    validate_wires(network, node_type_registry, &mut ctx);
 
     // VALIDATION PHASE: Zone-specific rules (rule 1: zone-output pins have
     // wires; rule 2: capture wires resolve; rule 3: zone-input references
-    // resolve). Recurses into every HOF node's owned body and walks nested
-    // zones with the ancestor chain extended. See `doc/design_zones.md`
-    // (§"Validation").
-    let zones_valid = validate_zones_recursive(network, &[], &[], node_type_registry);
-    if !zones_valid {
-        network.valid = false;
-    }
+    // resolve) plus per-scope wire-cycle detection. Recurses into every HOF
+    // node's owned body and walks nested zones with the ancestor chain
+    // extended. See `doc/design_zones.md` (§"Validation").
+    validate_zones_recursive(network, &[], &[], node_type_registry);
+
+    // D5 (`doc/design_error_management.md`): `valid` means "free of the
+    // interface residue" — an interface-level error or a blocking error with
+    // no node attribution. Node-attributed blocking errors do NOT flip it;
+    // they cone-poison their node at evaluation time instead (D3's
+    // skip-and-synthesize in the evaluator). Every `.valid` reader — the
+    // scene gate, the custom-network eval refusal, the "References invalid
+    // node network" rule, the execute/CLI gates, the upward validity cascade
+    // — asks "is this network usable at all?", and inherits the shrunk
+    // meaning through this one producer-side redefinition.
+    network.valid =
+        !crate::structure_designer::node_network::has_interface_residue(&network.validation_errors);
 
     // Update the network's output type based on return node, using resolved
     // concrete types for any polymorphic pins on the return node. This runs
@@ -908,6 +920,212 @@ fn parameter_is_required(node: &Node, param_name: &str) -> bool {
     }
 }
 
+/// Detect wire cycles within the scope of `network` and return one blocking
+/// validation error per cycle member (`doc/design_error_management.md` D5).
+///
+/// The dependency graph is **cross-scope-complete**: wires are not scope-local
+/// (capture wires and zone-output wires thread through zone bodies), so a
+/// cycle can run "node X → captured into H's body → body node → zone-output
+/// wire → H's output → ordinary wires → X" — invisible to a DFS that treats H
+/// as opaque. The saving structural fact: a body node's output is consumable
+/// only intra-body or by the owning node's `zone_output_arguments` — there is
+/// no wire from outside into a body — so every cross-scope cycle passes
+/// through the zone-owning node itself. The graph for scope S is therefore:
+///
+/// - one vertex per node of S; one edge per depth-0 regular wire in S;
+/// - for each zone-owning node H of S (HOFs *and* `closure` nodes), every
+///   capture / zone-output wire anywhere in H's body subtree whose
+///   `source_scope_depth` resolves to a node of S contributes the edge
+///   "H depends on that node". Captures resolving to a scope *above* S are
+///   projected onto the zone-owning ancestor when that ancestor's own scope
+///   is validated (this function runs once per scope via
+///   `validate_zones_recursive`).
+///
+/// `ZoneInput` references need no edge — they reach the iteration value
+/// through H's own input wires, which are already edges. Custom-network
+/// *reference* cycles are rejected at network-creation time.
+fn detect_wire_cycles(network: &NodeNetwork) -> Vec<ValidationError> {
+    let scope_nodes: HashSet<u64> = network.nodes.keys().copied().collect();
+
+    // Adjacency: source node -> its same-scope consumers ("consumer depends
+    // on source"). Deduped via HashSet targets.
+    let mut edges: HashMap<u64, HashSet<u64>> = HashMap::new();
+    for (&node_id, node) in &network.nodes {
+        // Regular wires stored on this scope's nodes: depth 0 = same-scope
+        // source. (Depth ≥ 1 resolves above S and is projected when the
+        // ancestor scope is validated.)
+        for arg in &node.arguments {
+            for w in &arg.incoming_wires {
+                if matches!(w.source_pin, SourcePin::NodeOutput { .. })
+                    && w.source_scope_depth == 0
+                    && scope_nodes.contains(&w.source_node_id)
+                {
+                    edges.entry(w.source_node_id).or_default().insert(node_id);
+                }
+            }
+        }
+        // Zone-owning node: project every dependency its body subtree has on
+        // a node of THIS scope onto the owner itself.
+        if let Some(body) = node.zone.as_deref() {
+            let mut sources: HashSet<u64> = HashSet::new();
+            collect_scope_sources_in_body_frame(node, body, 1, &scope_nodes, &mut sources);
+            for src in sources {
+                edges.entry(src).or_default().insert(node_id);
+            }
+        }
+    }
+
+    let cycle_groups = find_cycle_sccs(network, &edges);
+    let mut errors = Vec::new();
+    for group in cycle_groups {
+        let description: Vec<String> = group
+            .iter()
+            .map(|id| {
+                let type_name = network
+                    .nodes
+                    .get(id)
+                    .map(|n| n.node_type_name.as_str())
+                    .unwrap_or("node");
+                format!("{} #{}", type_name, id)
+            })
+            .collect();
+        let text = format!("Wire cycle detected among: {}", description.join(", "));
+        for id in group {
+            errors.push(ValidationError::new(text.clone(), Some(id)));
+        }
+    }
+    errors
+}
+
+/// Collect the ids of scope-S nodes that the body subtree rooted at
+/// (`owner`, `body`) depends on through capture / zone-output wires.
+/// `rel_depth` is the frame depth of `body` relative to S (the top zone
+/// owner's own body is 1); a wire stored in a frame at depth `k` with
+/// `source_scope_depth == k` resolves to S exactly.
+fn collect_scope_sources_in_body_frame(
+    owner: &Node,
+    body: &NodeNetwork,
+    rel_depth: usize,
+    scope_nodes: &HashSet<u64>,
+    sources: &mut HashSet<u64>,
+) {
+    // The owner's zone-output wires live in its body's frame.
+    for zarg in &owner.zone_output_arguments {
+        for w in &zarg.incoming_wires {
+            if matches!(w.source_pin, SourcePin::NodeOutput { .. })
+                && w.source_scope_depth as usize == rel_depth
+                && scope_nodes.contains(&w.source_node_id)
+            {
+                sources.insert(w.source_node_id);
+            }
+        }
+    }
+    for inner_node in body.nodes.values() {
+        for arg in &inner_node.arguments {
+            for w in &arg.incoming_wires {
+                if matches!(w.source_pin, SourcePin::NodeOutput { .. })
+                    && w.source_scope_depth as usize == rel_depth
+                    && scope_nodes.contains(&w.source_node_id)
+                {
+                    sources.insert(w.source_node_id);
+                }
+            }
+        }
+        if let Some(inner_body) = inner_node.zone.as_deref() {
+            collect_scope_sources_in_body_frame(
+                inner_node,
+                inner_body,
+                rel_depth + 1,
+                scope_nodes,
+                sources,
+            );
+        }
+    }
+}
+
+/// Strongly connected components of the scope dependency graph that
+/// constitute cycles: every SCC of size ≥ 2, plus single nodes with a
+/// self-loop edge. Iterative Tarjan (no recursion — the graph is
+/// user-authored, so a deep linear chain must not overflow the stack).
+/// Groups and their members are sorted by node id for deterministic error
+/// output.
+fn find_cycle_sccs(network: &NodeNetwork, edges: &HashMap<u64, HashSet<u64>>) -> Vec<Vec<u64>> {
+    let mut ids: Vec<u64> = network.nodes.keys().copied().collect();
+    ids.sort_unstable();
+    let index_of: HashMap<u64, usize> = ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let n = ids.len();
+    let adj: Vec<Vec<usize>> = ids
+        .iter()
+        .map(|id| {
+            let mut targets: Vec<usize> = edges
+                .get(id)
+                .map(|t| t.iter().map(|x| index_of[x]).collect())
+                .unwrap_or_default();
+            targets.sort_unstable();
+            targets
+        })
+        .collect();
+
+    const UNVISITED: usize = usize::MAX;
+    let mut index = vec![UNVISITED; n];
+    let mut low = vec![0usize; n];
+    let mut on_stack = vec![false; n];
+    let mut stack: Vec<usize> = Vec::new();
+    let mut next_index = 0usize;
+    let mut groups: Vec<Vec<u64>> = Vec::new();
+
+    for start in 0..n {
+        if index[start] != UNVISITED {
+            continue;
+        }
+        // Explicit call stack of (vertex, next-child position).
+        let mut call: Vec<(usize, usize)> = vec![(start, 0)];
+        while let Some(&(v, pos)) = call.last() {
+            if pos == 0 && index[v] == UNVISITED {
+                index[v] = next_index;
+                low[v] = next_index;
+                next_index += 1;
+                stack.push(v);
+                on_stack[v] = true;
+            }
+            if pos < adj[v].len() {
+                let w = adj[v][pos];
+                call.last_mut().unwrap().1 += 1;
+                if index[w] == UNVISITED {
+                    call.push((w, 0));
+                } else if on_stack[w] {
+                    low[v] = low[v].min(index[w]);
+                }
+            } else {
+                call.pop();
+                if low[v] == index[v] {
+                    // v is an SCC root: pop its component.
+                    let mut scc = Vec::new();
+                    loop {
+                        let w = stack.pop().unwrap();
+                        on_stack[w] = false;
+                        scc.push(w);
+                        if w == v {
+                            break;
+                        }
+                    }
+                    let is_cycle = scc.len() > 1 || adj[v].binary_search(&v).is_ok();
+                    if is_cycle {
+                        let mut group: Vec<u64> = scc.into_iter().map(|w| ids[w]).collect();
+                        group.sort_unstable();
+                        groups.push(group);
+                    }
+                }
+                if let Some(&(parent, _)) = call.last() {
+                    low[parent] = low[parent].min(low[v]);
+                }
+            }
+        }
+    }
+    groups.sort();
+    groups
+}
+
 fn validate_zones_recursive(
     network: &mut NodeNetwork,
     ancestors: &[&NodeNetwork],
@@ -915,6 +1133,19 @@ fn validate_zones_recursive(
     registry: &NodeTypeRegistry,
 ) -> bool {
     let mut ok = true;
+
+    // Wire-cycle rule (`doc/design_error_management.md` D5): this function is
+    // called exactly once per scope (the top-level network from
+    // `validate_network`, every zone body via the Pass B recursion below), so
+    // running the detection here covers every scope of the design. Blocking,
+    // attributed to every cycle member — under cone-scoped blocking (D3) the
+    // evaluator skips the members' `eval`, so evaluation never enters the
+    // cycle.
+    let cycle_errors = detect_wire_cycles(network);
+    if !cycle_errors.is_empty() {
+        ok = false;
+        network.validation_errors.extend(cycle_errors);
+    }
 
     let node_ids: Vec<u64> = network.nodes.keys().copied().collect();
 
@@ -1179,12 +1410,24 @@ fn validate_zones_recursive(
             network.validation_errors.push(err);
         }
 
+        // D5: a body's `valid` flag follows the same interface-residue
+        // predicate as a top-level network's (bodies have no parameter
+        // interface, so in practice this only flips on an unattributed
+        // blocking error). The blast-radius vehicle for body errors is the
+        // marker below, not this flag.
+        {
+            let body = Arc::make_mut(&mut body_arc);
+            body.valid = !crate::structure_designer::node_network::has_interface_residue(
+                &body.validation_errors,
+            );
+        }
+
         if !body_inner_ok {
-            {
-                let body = Arc::make_mut(&mut body_arc);
-                body.valid = false;
-            }
             ok = false;
+            // The marker is a blocking error attributed to the zone-owning
+            // node: under cone-scoped blocking (D3) it poisons the owner —
+            // the node whose eval would run the broken body — while the rest
+            // of the parent network keeps evaluating.
             network.validation_errors.push(ValidationError::new(
                 ZONE_BODY_INVALID_MARKER.to_string(),
                 Some(hof_id),

@@ -157,7 +157,14 @@ fn two_independent_type_mismatches_are_both_reported() {
         .node_networks
         .get("Main")
         .unwrap();
-    assert!(!network.valid, "type mismatches must still flip `valid`");
+    // Phase 2 asserted the mismatches still flipped `valid` (isolating
+    // accumulation from the semantic change); Phase 3 (cone-scoped blocking)
+    // then deliberately changed that: node-attributed blocking errors poison
+    // their nodes, `valid` stays true.
+    assert!(
+        network.valid,
+        "node-attributed blocking errors must not flip `valid`"
+    );
     let mismatch_nodes: Vec<Option<u64>> = network
         .validation_errors
         .iter()

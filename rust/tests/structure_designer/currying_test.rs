@@ -1116,9 +1116,12 @@ fn apply_phase3_prefix_only_validation_rejects_gap() {
         .validate_active_network()
         .map(|r| r.valid)
         .unwrap_or(false);
+    // Cone-scoped blocking (error-management Phase 3): the prefix-gap rule is
+    // a blocking error attributed to the apply node — it poisons the node's
+    // cone but no longer flips the network's `valid` flag.
     assert!(
-        !valid,
-        "apply with non-prefix wiring (arg0 unwired, arg1 wired) must be invalid"
+        valid,
+        "a node-attributed blocking error must not flip `valid`"
     );
 
     let errors: Vec<String> = designer

@@ -393,6 +393,9 @@ mod record_construct_property_panel_test;
 #[path = "structure_designer/switch_test.rs"]
 mod switch_test;
 
+#[path = "structure_designer/cone_scoped_blocking_test.rs"]
+mod cone_scoped_blocking_test;
+
 #[path = "structure_designer/zip_with_test.rs"]
 mod zip_with_test;
 

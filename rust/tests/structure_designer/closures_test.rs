@@ -1730,9 +1730,11 @@ fn validation_wrong_arity_closure_into_f_rejected() {
     designer.connect_nodes(map_closure_id, 0, fold_id, 2); // f — arity 1 vs expected 2
 
     let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    // Cone-scoped blocking (error-management Phase 3): the node-attributed
+    // mismatch poisons the fold node; the network's `valid` flag stays true.
     assert!(
-        !valid,
-        "a wrong-arity closure wired into fold.f must be rejected"
+        valid,
+        "a node-attributed blocking error must not flip `valid`"
     );
     assert!(
         errors
@@ -1773,9 +1775,11 @@ fn validation_type_incompatible_closure_into_f_rejected() {
     designer.connect_nodes(map_closure_id, 0, filter_id, 1); // f — returns Int, not Bool
 
     let (valid, errors) = validate_and_collect_errors(&mut designer, "main");
+    // Cone-scoped blocking (error-management Phase 3): the node-attributed
+    // mismatch poisons the filter node; the network's `valid` flag stays true.
     assert!(
-        !valid,
-        "a closure with an incompatible return type wired into filter.f must be rejected"
+        valid,
+        "a node-attributed blocking error must not flip `valid`"
     );
     assert!(
         errors

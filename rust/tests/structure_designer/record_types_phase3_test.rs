@@ -800,9 +800,20 @@ fn retyping_field_disconnects_now_incompatible_wire() {
     // x wire (pin 1) stays connected (Int â†’ Int).
     assert_eq!(construct_node.arguments[1].argument_output_pins().len(), 1);
 
-    // The retype made the Int â†’ Vec3 wire incompatible; the network is
-    // marked invalid so the user notices.
-    assert!(!net.valid, "network should be invalid after retype");
+    // The retype made the Int → Vec3 wire incompatible; the mismatch is a
+    // blocking error on the construct node (cone-scoped since
+    // error-management Phase 3 — `valid` stays true).
+    assert!(net.valid, "node-attributed error must not flip `valid`");
+    assert!(
+        net.validation_errors.iter().any(|e| e.blocking
+            && e.node_id == Some(construct)
+            && e.error_text.contains("Data type mismatch")),
+        "the mismatch must be recorded on the construct node; got {:?}",
+        net.validation_errors
+            .iter()
+            .map(|e| &e.error_text)
+            .collect::<Vec<_>>()
+    );
 }
 
 // ============================================================================

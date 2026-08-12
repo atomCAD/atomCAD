@@ -23,7 +23,7 @@ use crate::structure_designer::implicit_eval::surface_splatting_2d::generate_2d_
 use crate::structure_designer::implicit_eval::surface_splatting_3d::generate_point_cloud;
 use crate::structure_designer::node_data::EvalOutput;
 use crate::structure_designer::node_network::{
-    IncomingWire, Node, NodeDisplayType, NodeNetwork, NodeRef, SourcePin,
+    IncomingWire, Node, NodeDisplayType, NodeNetwork, NodeRef, SourcePin, node_poison_message,
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
@@ -223,6 +223,52 @@ pub struct NetworkEvaluationContext {
     /// Phase 3 lands the field; no HOF builds a captures map yet, so the
     /// lookup path always misses in existing code.
     pub captured_source_values: Arc<HashMap<CaptureKey, NetworkResult>>,
+    /// Re-entrancy guard: the set of evaluation frames currently on the call
+    /// stack of this pass, keyed by [`EvalFrameKey`] (the network-stack
+    /// fingerprint + node id — see `eval_frame_key` for why NOT by
+    /// `NodeRef`). Inserted before a node's eval dispatch, removed after it
+    /// returns. Re-entering a key already in the set means a wire cycle
+    /// escaped validation (hand-authored `.cnnd` bypasses connect-time
+    /// checks) — the evaluator synthesizes a localized "evaluation cycle
+    /// detected" error instead of recursing until the stack overflows.
+    /// Legitimate *sequential* re-evaluation (fan-out re-evaluation, per-item
+    /// body runs, chained instances of one custom network) never trips it.
+    /// See `doc/design_error_management.md` D5 ("Defense in depth").
+    pub eval_in_progress: HashSet<EvalFrameKey>,
+}
+
+/// Identity of an evaluation frame chain for the re-entrancy guard: a hash
+/// over one `(network address, owning node id)` pair per network-stack frame,
+/// plus the id of the node being evaluated. Two evaluations collide iff they
+/// run the same node against the byte-identical stack — which is exactly (and
+/// only) genuine re-entrancy. (A 64-bit SipHash digest rather than the full
+/// frame list: evaluation recursion is stack-size-critical in debug builds —
+/// deep node chains sit near the thread stack limit — so the per-call key
+/// must be a scalar, not a heap list with per-frame stack slots. A spurious
+/// collision needs two live frames hashing identically: ~2⁻⁶⁴ per pair.)
+///
+/// Deliberately built from the **network stack**, not from
+/// `eval_scope_path` + node id (a `NodeRef`): the scope path does not track
+/// stack *excursions* — a custom-network `parameter` resolves its argument by
+/// popping the stack frame while the instance's eval scope stays pushed (see
+/// `nodes/parameter.rs`), and per-network id counters collide — so a
+/// scope-keyed guard falsely flagged legal graphs (a parent-frame parameter
+/// evaluated during the excursion collided with the child network's same-id
+/// parameter). Network pointers are stable for the duration of a pass:
+/// top-level networks are borrowed immutably from the registry and zone
+/// bodies are `Arc`-shared (CoW cloning happens only on mutation, never
+/// during evaluation).
+pub type EvalFrameKey = u64;
+
+fn eval_frame_key(network_stack: &[NetworkStackElement], node_id: u64) -> EvalFrameKey {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for frame in network_stack {
+        (frame.node_network as *const NodeNetwork as usize).hash(&mut hasher);
+        frame.node_id.hash(&mut hasher);
+    }
+    node_id.hash(&mut hasher);
+    hasher.finish()
 }
 
 impl Default for NetworkEvaluationContext {
@@ -255,6 +301,7 @@ impl NetworkEvaluationContext {
             print_buffer: Vec::new(),
             current_zone_input_values: HashMap::new(),
             captured_source_values: empty_captures(),
+            eval_in_progress: HashSet::new(),
         }
     }
 
@@ -363,6 +410,11 @@ impl NetworkEvaluationContext {
             print_buffer: Vec::new(),
             current_zone_input_values: self.current_zone_input_values.clone(),
             captured_source_values: empty_captures(),
+            // Fresh per body context: an escaped cycle that threads through an
+            // eager body is still caught in the *outer* context — the owner's
+            // capture pre-evaluation runs there while the owner's own eval is
+            // in progress.
+            eval_in_progress: HashSet::new(),
         }
     }
 
@@ -1537,23 +1589,36 @@ impl NetworkEvaluator {
                 let source_slice = &network_stack[..=source_frame_idx];
                 let source_network = source_slice.last().unwrap().node_network;
 
-                let source_type =
-                    if let Some(source_node) = source_network.nodes.get(&incoming.source_node_id) {
-                        // Resolve the concrete output type. For polymorphic pins
-                        // (`SameAsInput` / `SameAsArrayElements`) the declared
-                        // type is `DataType::None`, which would defeat
-                        // `convert_to`'s single→array auto-wrap.
-                        registry
-                            .resolve_output_type(source_node, source_network, pin_index)
-                            .unwrap_or_else(|| {
-                                registry
-                                    .get_node_type_for_node(source_node)
-                                    .map(|nt| nt.get_output_pin_type(pin_index))
-                                    .unwrap_or(DataType::None)
-                            })
-                    } else {
-                        DataType::None
-                    };
+                // A poisoned source (blocking validation error, D3) is never
+                // type-resolved: `resolve_output_type` recurses through
+                // `SameAsInput` chains with no cycle guard, so resolving a
+                // wire-cycle member would overflow the stack. The `evaluate`
+                // call below synthesizes the poison error without resolving,
+                // and the caller's error check short-circuits before the
+                // source type is ever used for conversion.
+                let source_poisoned =
+                    node_poison_message(&source_network.validation_errors, incoming.source_node_id)
+                        .is_some();
+
+                let source_type = if source_poisoned {
+                    DataType::None
+                } else if let Some(source_node) = source_network.nodes.get(&incoming.source_node_id)
+                {
+                    // Resolve the concrete output type. For polymorphic pins
+                    // (`SameAsInput` / `SameAsArrayElements`) the declared
+                    // type is `DataType::None`, which would defeat
+                    // `convert_to`'s single→array auto-wrap.
+                    registry
+                        .resolve_output_type(source_node, source_network, pin_index)
+                        .unwrap_or_else(|| {
+                            registry
+                                .get_node_type_for_node(source_node)
+                                .map(|nt| nt.get_output_pin_type(pin_index))
+                                .unwrap_or(DataType::None)
+                        })
+                } else {
+                    DataType::None
+                };
 
                 let result = self.evaluate(
                     source_slice,
@@ -1645,9 +1710,68 @@ impl NetworkEvaluator {
         }
     }
 
+    /// Localized message for the re-entrancy backstop (an evaluation cycle
+    /// that escaped validation — see `doc/design_error_management.md` D5,
+    /// "Defense in depth").
+    fn cycle_error_message(network: &NodeNetwork, node_id: u64) -> String {
+        let type_name = network
+            .nodes
+            .get(&node_id)
+            .map(|n| n.node_type_name.as_str())
+            .unwrap_or("node");
+        format!("evaluation cycle detected at {} #{}", type_name, node_id)
+    }
+
+    /// Cone-scoped blocking (skip-and-synthesize, `doc/design_error_management.md`
+    /// D3): when the node's own network attributes a blocking (non-interface)
+    /// validation error to it, the node's `eval` must NOT run — historically
+    /// these rules blocked because evaluating the broken node could panic or
+    /// produce garbage, and safety comes from *not evaluating*. The node's
+    /// output becomes a `NetworkResult::Error` synthesized from the error
+    /// text(s), recorded under its `NodeRef` like any runtime error so
+    /// downstream consumers receive it through the ordinary chaining
+    /// machinery, while independent nodes evaluate untouched.
+    ///
+    /// Cone-scoped blocking (skip-and-synthesize, `doc/design_error_management.md`
+    /// D3): when the node's own network attributes a blocking (non-interface)
+    /// validation error to it, the node's `eval` must NOT run — historically
+    /// these rules blocked because evaluating the broken node could panic or
+    /// produce garbage, and safety comes from *not evaluating*. The caller
+    /// turns the returned message into a `NetworkResult::Error` as the node's
+    /// output; this helper records it under the node's `NodeRef` like any
+    /// runtime error so downstream consumers receive it through the ordinary
+    /// chaining machinery, while independent nodes evaluate untouched.
+    ///
+    /// Returns `Some(message)` when the node is poisoned. (A small return
+    /// type on purpose: this runs on every `evaluate` frame, and evaluation
+    /// recursion is stack-size-critical in debug builds.)
+    fn check_node_poisoned(
+        network_stack: &[NetworkStackElement],
+        node_id: u64,
+        context: &mut NetworkEvaluationContext,
+    ) -> Option<String> {
+        let current_network = network_stack.last().unwrap().node_network;
+        let msg = node_poison_message(&current_network.validation_errors, node_id)?;
+        let key = context.node_ref(node_id);
+        context.node_errors.insert(key, msg.clone());
+        Some(msg)
+    }
+
     /// Evaluate a node and return all output pin results.
     /// Used by generate_scene() to avoid redundant evaluation when
     /// displaying multiple output pins of the same node.
+    ///
+    /// Applies the two central gates ahead of the dispatch: cone-scoped
+    /// blocking (skip-and-synthesize, D3) and the cycle re-entrancy backstop
+    /// (D5). [`Self::evaluate`] applies the same pair.
+    ///
+    /// STACK-SIZE WARNING: this function recurses once per wire hop and deep
+    /// node chains run close to the debug-build thread stack limit (caught by
+    /// `tag_test`'s 33-node chain), so the gates deliberately avoid wrapper
+    /// functions, labeled blocks, and large by-value temporaries. The price
+    /// is manual guard cleanup: **every `return` between the
+    /// `eval_in_progress.insert` below and the final removal at the tail
+    /// must run `context.eval_in_progress.remove(&frame_key)` first.**
     pub fn evaluate_all_outputs<'a>(
         &self,
         network_stack: &[NetworkStackElement<'a>],
@@ -1656,158 +1780,206 @@ impl NetworkEvaluator {
         decorate: bool,
         context: &mut NetworkEvaluationContext,
     ) -> EvalOutput {
-        let node = NetworkStackElement::get_top_node(network_stack, node_id);
-
-        // Central skip rule for `Unit`-returning nodes: when the pass is *not*
-        // an explicit Execute and every resolved output pin of this node is
-        // `DataType::Unit`, skip `NodeData::eval` entirely and synthesise an
-        // `EvalOutput` of all `NetworkResult::Unit` values directly. This is
-        // what gates side-effect nodes (`export_atoms`, `foreach`, future
-        // effect nodes) on display passes — `eval` only runs when the user
-        // actually invokes Execute. The check uses **resolved** output types
-        // (via `resolve_output_type`) so polymorphic pins resolving to Unit
-        // are also covered. See `doc/design_node_execution.md` (Phase 2 —
-        // Central skip rule for Unit-returning nodes).
-        if !context.execute
-            && let Some(node_type) = registry.get_node_type_for_node(node)
+        if let Some(msg) = Self::check_node_poisoned(network_stack, node_id, context) {
+            return EvalOutput::single(NetworkResult::Error(msg));
+        }
+        let frame_key = eval_frame_key(network_stack, node_id);
+        if !context.eval_in_progress.insert(frame_key) {
+            let msg =
+                Self::cycle_error_message(network_stack.last().unwrap().node_network, node_id);
+            context
+                .node_errors
+                .insert(context.node_ref(node_id), msg.clone());
+            return EvalOutput::single(NetworkResult::Error(msg));
+        }
         {
-            let pin_count = node_type.output_pin_count();
-            if pin_count > 0 {
-                let current_network = network_stack.last().unwrap().node_network;
-                let all_unit = (0..pin_count).all(|pin_idx| {
-                    registry
-                        .resolve_output_type(node, current_network, pin_idx as i32)
-                        .map(|t| t == DataType::Unit)
-                        .unwrap_or(false)
-                });
-                if all_unit {
-                    let results = vec![NetworkResult::Unit; pin_count];
-                    // Record per-pin display strings so the UI renders the
-                    // node consistently with non-skipped passes.
-                    let pin_strings: Vec<String> =
-                        results.iter().map(|r| r.to_display_string()).collect();
-                    let key = context.node_ref(node_id);
-                    context.node_output_strings.insert(key, pin_strings);
-                    return EvalOutput::multi(results);
+            let node = NetworkStackElement::get_top_node(network_stack, node_id);
+
+            // Central skip rule for `Unit`-returning nodes: when the pass is *not*
+            // an explicit Execute and every resolved output pin of this node is
+            // `DataType::Unit`, skip `NodeData::eval` entirely and synthesise an
+            // `EvalOutput` of all `NetworkResult::Unit` values directly. This is
+            // what gates side-effect nodes (`export_atoms`, `foreach`, future
+            // effect nodes) on display passes — `eval` only runs when the user
+            // actually invokes Execute. The check uses **resolved** output types
+            // (via `resolve_output_type`) so polymorphic pins resolving to Unit
+            // are also covered. See `doc/design_node_execution.md` (Phase 2 —
+            // Central skip rule for Unit-returning nodes).
+            if !context.execute
+                && let Some(node_type) = registry.get_node_type_for_node(node)
+            {
+                let pin_count = node_type.output_pin_count();
+                if pin_count > 0 {
+                    let current_network = network_stack.last().unwrap().node_network;
+                    let all_unit = (0..pin_count).all(|pin_idx| {
+                        registry
+                            .resolve_output_type(node, current_network, pin_idx as i32)
+                            .map(|t| t == DataType::Unit)
+                            .unwrap_or(false)
+                    });
+                    if all_unit {
+                        let results = vec![NetworkResult::Unit; pin_count];
+                        // Record per-pin display strings so the UI renders the
+                        // node consistently with non-skipped passes.
+                        let pin_strings: Vec<String> =
+                            results.iter().map(|r| r.to_display_string()).collect();
+                        let key = context.node_ref(node_id);
+                        context.node_output_strings.insert(key, pin_strings);
+                        context.eval_in_progress.remove(&frame_key);
+                        return EvalOutput::multi(results);
+                    }
                 }
             }
-        }
 
-        let eval_output = if registry
-            .built_in_node_types
-            .contains_key(&node.node_type_name)
-        {
-            node.data
-                .eval(self, network_stack, node_id, registry, decorate, context)
-        } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
-            // custom node — evaluate return node, pass through all outputs
-            if !child_network.valid {
-                return EvalOutput::single(NetworkResult::Error(format!(
-                    "{} is invalid",
+            let eval_output = if registry
+                .built_in_node_types
+                .contains_key(&node.node_type_name)
+            {
+                node.data
+                    .eval(self, network_stack, node_id, registry, decorate, context)
+            } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
+                // custom node — evaluate return node, pass through all outputs
+                if !child_network.valid {
+                    context.eval_in_progress.remove(&frame_key);
+                    return EvalOutput::single(NetworkResult::Error(format!(
+                        "{} is invalid",
+                        node.node_type_name
+                    )));
+                }
+                let mut child_network_stack = network_stack.to_vec();
+                child_network_stack.push(NetworkStackElement {
+                    is_zone_body: false,
+                    node_network: child_network,
+                    node_id,
+                });
+                if child_network.return_node_id.is_none() {
+                    context.eval_in_progress.remove(&frame_key);
+                    return EvalOutput::single(NetworkResult::Error(format!(
+                        "{} has no return node",
+                        node.node_type_name
+                    )));
+                }
+                // Entering a custom-network instance: its internal node ids share
+                // the top-level id space, so scope their errors/strings under this
+                // instance id (keeps them from clobbering same-id nodes in the
+                // active network — those internals are never read back in the view).
+                context.push_eval_scope(node_id);
+                let eval_output = self.evaluate_all_outputs(
+                    &child_network_stack,
+                    child_network.return_node_id.unwrap(),
+                    registry,
+                    false,
+                    context,
+                );
+                context.pop_eval_scope();
+                // Wrap errors with the custom network name for better diagnostics
+                let child_display_results = eval_output.display_results;
+                let results: Vec<NetworkResult> = eval_output
+                    .results
+                    .into_iter()
+                    .map(|r| {
+                        if let NetworkResult::Error(inner) = &r {
+                            NetworkResult::Error(format!(
+                                "Error in {}: {}",
+                                node.node_type_name, inner
+                            ))
+                        } else {
+                            r
+                        }
+                    })
+                    .collect();
+                let mut output = EvalOutput::multi(results);
+                output.display_results = child_display_results;
+                output
+            } else {
+                EvalOutput::single(NetworkResult::Error(format!(
+                    "Unknown node type: {}",
                     node.node_type_name
-                )));
+                )))
+            };
+
+            // Runtime guard: if a node produced a value whose inferred data type
+            // is abstract, that is a bug in a polymorphic node's `eval` (it failed
+            // to re-wrap its result in a concrete variant). Replace such values
+            // with a NetworkResult::Error so downstream state is not corrupted.
+            // In debug builds this also asserts — should be unreachable in a
+            // valid, well-implemented graph.
+            let mut eval_output = eval_output;
+            for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
+                if let Some(t) = result.infer_data_type()
+                    && t.is_abstract()
+                {
+                    debug_assert!(
+                        false,
+                        "node {} pin {} produced value with abstract type {:?}",
+                        node_id, pin_idx, t
+                    );
+                    *result = NetworkResult::Error(format!(
+                        "node produced value with abstract type {:?} on pin {}",
+                        t, pin_idx
+                    ));
+                }
             }
-            let mut child_network_stack = network_stack.to_vec();
-            child_network_stack.push(NetworkStackElement {
-                is_zone_body: false,
-                node_network: child_network,
-                node_id,
-            });
-            if child_network.return_node_id.is_none() {
-                return EvalOutput::single(NetworkResult::Error(format!(
-                    "{} has no return node",
-                    node.node_type_name
-                )));
+
+            // Record error from primary (pin 0) result
+            let primary = eval_output.primary();
+            if let NetworkResult::Error(error_message) = primary {
+                let key = context.node_ref(node_id);
+                context.node_errors.insert(key, error_message.clone());
             }
-            // Entering a custom-network instance: its internal node ids share
-            // the top-level id space, so scope their errors/strings under this
-            // instance id (keeps them from clobbering same-id nodes in the
-            // active network — those internals are never read back in the view).
-            context.push_eval_scope(node_id);
-            let eval_output = self.evaluate_all_outputs(
-                &child_network_stack,
-                child_network.return_node_id.unwrap(),
-                registry,
-                false,
-                context,
-            );
-            context.pop_eval_scope();
-            // Wrap errors with the custom network name for better diagnostics
-            let child_display_results = eval_output.display_results;
-            let results: Vec<NetworkResult> = eval_output
+            // Record per-pin display strings. A node may publish a custom
+            // subtitle via `EvalOutput::pin_subtitles` (e.g. `collect` reports
+            // "(stopped at limit N)" when the cap was hit); falls back to the
+            // result's display string (truncated to `ARRAY_DISPLAY_CAP` array
+            // elements) when no override is set.
+            let pin_strings: Vec<String> = eval_output
                 .results
-                .into_iter()
-                .map(|r| {
-                    if let NetworkResult::Error(inner) = &r {
-                        NetworkResult::Error(format!("Error in {}: {}", node.node_type_name, inner))
-                    } else {
-                        r
-                    }
+                .iter()
+                .enumerate()
+                .map(|(idx, r)| {
+                    eval_output
+                        .pin_subtitles
+                        .get(&idx)
+                        .cloned()
+                        .unwrap_or_else(|| r.to_display_string_capped(ARRAY_DISPLAY_CAP))
                 })
                 .collect();
-            let mut output = EvalOutput::multi(results);
-            output.display_results = child_display_results;
-            output
-        } else {
-            EvalOutput::single(NetworkResult::Error(format!(
-                "Unknown node type: {}",
-                node.node_type_name
-            )))
-        };
-
-        // Runtime guard: if a node produced a value whose inferred data type
-        // is abstract, that is a bug in a polymorphic node's `eval` (it failed
-        // to re-wrap its result in a concrete variant). Replace such values
-        // with a NetworkResult::Error so downstream state is not corrupted.
-        // In debug builds this also asserts — should be unreachable in a
-        // valid, well-implemented graph.
-        let mut eval_output = eval_output;
-        for (pin_idx, result) in eval_output.results.iter_mut().enumerate() {
-            if let Some(t) = result.infer_data_type()
-                && t.is_abstract()
-            {
-                debug_assert!(
-                    false,
-                    "node {} pin {} produced value with abstract type {:?}",
-                    node_id, pin_idx, t
-                );
-                *result = NetworkResult::Error(format!(
-                    "node produced value with abstract type {:?} on pin {}",
-                    t, pin_idx
-                ));
-            }
-        }
-
-        // Record error from primary (pin 0) result
-        let primary = eval_output.primary();
-        if let NetworkResult::Error(error_message) = primary {
             let key = context.node_ref(node_id);
-            context.node_errors.insert(key, error_message.clone());
-        }
-        // Record per-pin display strings. A node may publish a custom
-        // subtitle via `EvalOutput::pin_subtitles` (e.g. `collect` reports
-        // "(stopped at limit N)" when the cap was hit); falls back to the
-        // result's display string (truncated to `ARRAY_DISPLAY_CAP` array
-        // elements) when no override is set.
-        let pin_strings: Vec<String> = eval_output
-            .results
-            .iter()
-            .enumerate()
-            .map(|(idx, r)| {
-                eval_output
-                    .pin_subtitles
-                    .get(&idx)
-                    .cloned()
-                    .unwrap_or_else(|| r.to_display_string_capped(ARRAY_DISPLAY_CAP))
-            })
-            .collect();
-        let key = context.node_ref(node_id);
-        context.node_output_strings.insert(key, pin_strings);
+            context.node_output_strings.insert(key, pin_strings);
 
-        eval_output
+            context.eval_in_progress.remove(&frame_key);
+            eval_output
+        }
+    }
+
+    /// The `-1` function-pin arm of [`Self::evaluate`], split out so its
+    /// temporaries live in a transient frame instead of costing every
+    /// recursive `evaluate` frame stack space. The caller has already
+    /// inserted `frame_key` into the re-entrancy guard; this removes it.
+    fn evaluate_function_pin<'a>(
+        &self,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        context: &mut NetworkEvaluationContext,
+        frame_key: EvalFrameKey,
+    ) -> NetworkResult {
+        let result = build_node_function_closure(self, network_stack, node_id, registry, context)
+            .map(NetworkResult::Function)
+            .unwrap_or_else(|e| e); // e is already NetworkResult::Error(_)
+        context.eval_in_progress.remove(&frame_key);
+        result
     }
 
     // Evaluates the specified node (calculates the NetworkResult on its output pin).
+    //
+    // This function applies the same two central gates as
+    // `evaluate_all_outputs` ahead of the dispatch: cone-scoped blocking
+    // (skip-and-synthesize, D3) and the cycle re-entrancy backstop (D5). The
+    // poison check deliberately precedes the `-1` function-pin branch inside:
+    // a poisoned node must not be usable as a function value either — the
+    // synthesized closure would carry the broken wiring into a body the
+    // poison lookup can't see.
     pub fn evaluate<'a>(
         &self,
         network_stack: &[NetworkStackElement<'a>],
@@ -1834,161 +2006,189 @@ impl NetworkEvaluator {
             return NetworkResult::Error(msg);
         }
 
-        // Function pin (`output_pin_index == -1`): synthesize a `Function`
-        // value from this node viewed as a function of its *unconnected* inputs,
-        // with its connected inputs frozen as captures. It runs no `eval`, is
-        // never `Unit`, and has no display string — so it short-circuits ahead
-        // of the central skip rule and the built-in/custom dispatch below. The
-        // returned `Function(zc)` flows into an HOF `f` pin / `apply` exactly
-        // like a `closure` node's output. See
-        // `doc/design_node_function_pin_captures.md`.
-        if output_pin_index == -1 {
-            return build_node_function_closure(self, network_stack, node_id, registry, context)
-                .map(NetworkResult::Function)
-                .unwrap_or_else(|e| e); // e is already NetworkResult::Error(_)
+        if let Some(msg) = Self::check_node_poisoned(network_stack, node_id, context) {
+            return NetworkResult::Error(msg);
         }
+        // See the STACK-SIZE WARNING on `evaluate_all_outputs`: every `return`
+        // between this insert and the removal at the tail must run
+        // `context.eval_in_progress.remove(&frame_key)` first.
+        let frame_key = eval_frame_key(network_stack, node_id);
+        if !context.eval_in_progress.insert(frame_key) {
+            let msg =
+                Self::cycle_error_message(network_stack.last().unwrap().node_network, node_id);
+            context
+                .node_errors
+                .insert(context.node_ref(node_id), msg.clone());
+            return NetworkResult::Error(msg);
+        }
+        {
+            // Function pin (`output_pin_index == -1`): synthesize a `Function`
+            // value from this node viewed as a function of its *unconnected* inputs,
+            // with its connected inputs frozen as captures. It runs no `eval`, is
+            // never `Unit`, and has no display string — so it short-circuits ahead
+            // of the central skip rule and the built-in/custom dispatch below. The
+            // returned `Function(zc)` flows into an HOF `f` pin / `apply` exactly
+            // like a `closure` node's output. Handled in a helper so its
+            // temporaries don't cost this recursive frame stack space. See
+            // `doc/design_node_function_pin_captures.md`.
+            if output_pin_index == -1 {
+                return self.evaluate_function_pin(
+                    network_stack,
+                    node_id,
+                    registry,
+                    context,
+                    frame_key,
+                );
+            }
 
-        // Subtitle override published by `NodeData::eval` via
-        // `EvalOutput::pin_subtitles` for the requested pin. The outer
-        // single-pin clobber at the end of this method honors it instead
-        // of the result's `to_display_string()`.
-        let mut pin_subtitle_override: Option<String> = None;
+            // Subtitle override published by `NodeData::eval` via
+            // `EvalOutput::pin_subtitles` for the requested pin. The outer
+            // single-pin clobber at the end of this method honors it instead
+            // of the result's `to_display_string()`.
+            let mut pin_subtitle_override: Option<String> = None;
 
-        let result = {
-            let node = NetworkStackElement::get_top_node(network_stack, node_id);
+            let result = {
+                let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
-            // Central skip rule for `Unit`-returning nodes (mirrors
-            // `evaluate_all_outputs`). When the pass is not an Execute and
-            // every resolved output pin of this node is `DataType::Unit`, we
-            // synthesise `NetworkResult::Unit` directly instead of running
-            // the node's `eval`. This is what makes side-effect nodes
-            // (`export_atoms`, `foreach`, …) cost-free on display passes
-            // regardless of whether they are reached via
-            // `evaluate_all_outputs` (top-level displayed node) or via
-            // `evaluate` (consumed as another node's input). See
-            // `doc/design_node_execution.md` (Phase 2 — Central skip rule).
-            if !context.execute
-                && let Some(node_type) = registry.get_node_type_for_node(node)
-            {
-                let pin_count = node_type.output_pin_count();
-                if pin_count > 0 {
-                    let current_network = network_stack.last().unwrap().node_network;
-                    let all_unit = (0..pin_count).all(|pin_idx| {
-                        registry
-                            .resolve_output_type(node, current_network, pin_idx as i32)
-                            .map(|t| t == DataType::Unit)
-                            .unwrap_or(false)
-                    });
-                    if all_unit {
-                        let pin_strings: Vec<String> = (0..pin_count)
-                            .map(|_| NetworkResult::Unit.to_display_string())
-                            .collect();
-                        let key = context.node_ref(node_id);
-                        context.node_output_strings.insert(key, pin_strings);
-                        return NetworkResult::Unit;
+                // Central skip rule for `Unit`-returning nodes (mirrors
+                // `evaluate_all_outputs`). When the pass is not an Execute and
+                // every resolved output pin of this node is `DataType::Unit`, we
+                // synthesise `NetworkResult::Unit` directly instead of running
+                // the node's `eval`. This is what makes side-effect nodes
+                // (`export_atoms`, `foreach`, …) cost-free on display passes
+                // regardless of whether they are reached via
+                // `evaluate_all_outputs` (top-level displayed node) or via
+                // `evaluate` (consumed as another node's input). See
+                // `doc/design_node_execution.md` (Phase 2 — Central skip rule).
+                if !context.execute
+                    && let Some(node_type) = registry.get_node_type_for_node(node)
+                {
+                    let pin_count = node_type.output_pin_count();
+                    if pin_count > 0 {
+                        let current_network = network_stack.last().unwrap().node_network;
+                        let all_unit = (0..pin_count).all(|pin_idx| {
+                            registry
+                                .resolve_output_type(node, current_network, pin_idx as i32)
+                                .map(|t| t == DataType::Unit)
+                                .unwrap_or(false)
+                        });
+                        if all_unit {
+                            let pin_strings: Vec<String> = (0..pin_count)
+                                .map(|_| NetworkResult::Unit.to_display_string())
+                                .collect();
+                            let key = context.node_ref(node_id);
+                            context.node_output_strings.insert(key, pin_strings);
+                            context.eval_in_progress.remove(&frame_key);
+                            return NetworkResult::Unit;
+                        }
                     }
                 }
-            }
 
-            if registry
-                .built_in_node_types
-                .contains_key(&node.node_type_name)
-            {
-                let eval_output =
-                    node.data
-                        .eval(self, network_stack, node_id, registry, decorate, context);
-                // Record all pin strings now, since eval() already computed them all.
-                // This prevents partial overwrites when get_all_node_output_strings()
-                // aggregates across multiple generate_scene() contexts. Pins may
-                // publish a custom subtitle via `EvalOutput::pin_subtitles`.
-                let pin_strings: Vec<String> = eval_output
-                    .results
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, r)| {
-                        eval_output
-                            .pin_subtitles
-                            .get(&idx)
-                            .cloned()
-                            .unwrap_or_else(|| r.to_display_string())
-                    })
-                    .collect();
+                if registry
+                    .built_in_node_types
+                    .contains_key(&node.node_type_name)
+                {
+                    let eval_output =
+                        node.data
+                            .eval(self, network_stack, node_id, registry, decorate, context);
+                    // Record all pin strings now, since eval() already computed them all.
+                    // This prevents partial overwrites when get_all_node_output_strings()
+                    // aggregates across multiple generate_scene() contexts. Pins may
+                    // publish a custom subtitle via `EvalOutput::pin_subtitles`.
+                    let pin_strings: Vec<String> = eval_output
+                        .results
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, r)| {
+                            eval_output
+                                .pin_subtitles
+                                .get(&idx)
+                                .cloned()
+                                .unwrap_or_else(|| r.to_display_string())
+                        })
+                        .collect();
+                    let key = context.node_ref(node_id);
+                    context.node_output_strings.insert(key, pin_strings);
+                    // Capture subtitle for the requested pin so the outer clobber
+                    // below preserves it (otherwise it would be replaced by the
+                    // result's raw display string — e.g. an array dump).
+                    let requested_pin_idx = if output_pin_index < 0 {
+                        0
+                    } else {
+                        output_pin_index as usize
+                    };
+                    pin_subtitle_override =
+                        eval_output.pin_subtitles.get(&requested_pin_idx).cloned();
+                    eval_output.get(output_pin_index)
+                } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name)
+                {
+                    // custom node — pass through the requested output pin index to the return node
+                    if !child_network.valid {
+                        context.eval_in_progress.remove(&frame_key);
+                        return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
+                    }
+                    let mut child_network_stack = network_stack.to_vec();
+                    child_network_stack.push(NetworkStackElement {
+                        is_zone_body: false,
+                        node_network: child_network,
+                        node_id,
+                    });
+                    if child_network.return_node_id.is_none() {
+                        context.eval_in_progress.remove(&frame_key);
+                        return NetworkResult::Error(format!(
+                            "{} has no return node",
+                            node.node_type_name
+                        ));
+                    }
+                    // Scope the custom-network internals under this instance id
+                    // (see the matching branch in `evaluate_all_outputs`).
+                    context.push_eval_scope(node_id);
+                    let result = self.evaluate(
+                        &child_network_stack,
+                        child_network.return_node_id.unwrap(),
+                        output_pin_index,
+                        registry,
+                        false,
+                        context,
+                    );
+                    context.pop_eval_scope();
+                    if let NetworkResult::Error(inner) = &result {
+                        NetworkResult::Error(format!("Error in {}: {}", node.node_type_name, inner))
+                    } else {
+                        result
+                    }
+                } else {
+                    NetworkResult::Error(format!("Unknown node type: {}", node.node_type_name))
+                }
+            };
+
+            // Check for error and store it in the context
+            if let NetworkResult::Error(error_message) = &result {
                 let key = context.node_ref(node_id);
-                context.node_output_strings.insert(key, pin_strings);
-                // Capture subtitle for the requested pin so the outer clobber
-                // below preserves it (otherwise it would be replaced by the
-                // result's raw display string — e.g. an array dump).
-                let requested_pin_idx = if output_pin_index < 0 {
-                    0
-                } else {
-                    output_pin_index as usize
-                };
-                pin_subtitle_override = eval_output.pin_subtitles.get(&requested_pin_idx).cloned();
-                eval_output.get(output_pin_index)
-            } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name) {
-                // custom node — pass through the requested output pin index to the return node
-                if !child_network.valid {
-                    return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
-                }
-                let mut child_network_stack = network_stack.to_vec();
-                child_network_stack.push(NetworkStackElement {
-                    is_zone_body: false,
-                    node_network: child_network,
-                    node_id,
-                });
-                if child_network.return_node_id.is_none() {
-                    return NetworkResult::Error(format!(
-                        "{} has no return node",
-                        node.node_type_name
-                    ));
-                }
-                // Scope the custom-network internals under this instance id
-                // (see the matching branch in `evaluate_all_outputs`).
-                context.push_eval_scope(node_id);
-                let result = self.evaluate(
-                    &child_network_stack,
-                    child_network.return_node_id.unwrap(),
-                    output_pin_index,
-                    registry,
-                    false,
-                    context,
-                );
-                context.pop_eval_scope();
-                if let NetworkResult::Error(inner) = &result {
-                    NetworkResult::Error(format!("Error in {}: {}", node.node_type_name, inner))
-                } else {
-                    result
-                }
-            } else {
-                NetworkResult::Error(format!("Unknown node type: {}", node.node_type_name))
+                context.node_errors.insert(key, error_message.clone());
             }
-        };
 
-        // Check for error and store it in the context
-        if let NetworkResult::Error(error_message) = &result {
+            // Record per-pin display string (single-pin evaluation overwrites).
+            // A subtitle override published via `EvalOutput::pin_subtitles` (e.g.
+            // `collect`'s "(stopped at limit N)") wins over the raw result
+            // display (truncated to `ARRAY_DISPLAY_CAP` array elements).
+            let display_string = pin_subtitle_override
+                .unwrap_or_else(|| result.to_display_string_capped(ARRAY_DISPLAY_CAP));
+            let pin_index = if output_pin_index < 0 {
+                0
+            } else {
+                output_pin_index as usize
+            };
             let key = context.node_ref(node_id);
-            context.node_errors.insert(key, error_message.clone());
-        }
+            let entry = context.node_output_strings.entry(key).or_default();
+            // Grow the vec if needed
+            if entry.len() <= pin_index {
+                entry.resize(pin_index + 1, String::new());
+            }
+            entry[pin_index] = display_string;
 
-        // Record per-pin display string (single-pin evaluation overwrites).
-        // A subtitle override published via `EvalOutput::pin_subtitles` (e.g.
-        // `collect`'s "(stopped at limit N)") wins over the raw result
-        // display (truncated to `ARRAY_DISPLAY_CAP` array elements).
-        let display_string = pin_subtitle_override
-            .unwrap_or_else(|| result.to_display_string_capped(ARRAY_DISPLAY_CAP));
-        let pin_index = if output_pin_index < 0 {
-            0
-        } else {
-            output_pin_index as usize
-        };
-        let key = context.node_ref(node_id);
-        let entry = context.node_output_strings.entry(key).or_default();
-        // Grow the vec if needed
-        if entry.len() <= pin_index {
-            entry.resize(pin_index + 1, String::new());
+            context.eval_in_progress.remove(&frame_key);
+            result
         }
-        entry[pin_index] = display_string;
-
-        result
     }
 }

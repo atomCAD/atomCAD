@@ -143,9 +143,16 @@ fn polymorphic_output_with_unconnected_input_flags_node_invalid() {
         .node_networks
         .get("test")
         .unwrap();
+    // Cone-scoped blocking (error-management Phase 3): the unresolved output
+    // is a blocking error attributed to the poly node — it poisons the node's
+    // cone but no longer flips the network's `valid` flag.
+    assert!(network.valid, "node-attributed error must not flip `valid`");
     assert!(
-        !network.valid,
-        "poly with unconnected abstract input must be invalid"
+        network
+            .validation_errors
+            .iter()
+            .any(|e| e.blocking && e.node_id == Some(1)),
+        "the poly node must carry a blocking validation error"
     );
 }
 
@@ -177,9 +184,16 @@ fn mixed_phase_array_into_same_as_array_elements_flags_node_invalid() {
         .node_networks
         .get("test")
         .unwrap();
+    // Cone-scoped blocking (error-management Phase 3): the unresolved output
+    // is a blocking error attributed to arr_poly — it poisons the node's cone
+    // but no longer flips the network's `valid` flag.
+    assert!(network.valid, "node-attributed error must not flip `valid`");
     assert!(
-        !network.valid,
-        "arr_poly fed mixed Crystal+Molecule must be invalid"
+        network
+            .validation_errors
+            .iter()
+            .any(|e| e.blocking && e.node_id == Some(3)),
+        "arr_poly must carry a blocking validation error"
     );
 }
 

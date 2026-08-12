@@ -548,9 +548,20 @@ fn test_load_atom_trans_and_lattice_symop_dropped() {
     let structure_move_id = structure_move.id;
     let mut network = registry.node_networks.remove("Main").unwrap();
     validate_network(&mut network, &mut registry, None);
+    // Since error-management Phase 3 (`doc/design_error_management.md` D3/D5)
+    // the dangling consumers' blocking errors are node-attributed and
+    // cone-scoped: they poison the consumers instead of invalidating the
+    // whole network.
     assert!(
-        !network.valid,
-        "network should be invalid after the migration dropped nodes with polymorphic downstream consumers"
+        network.valid,
+        "node-attributed blocking errors must not flip the network's `valid` flag"
+    );
+    assert!(
+        network
+            .validation_errors
+            .iter()
+            .any(|e| e.blocking && e.node_id.is_some()),
+        "the dangling consumers should carry blocking validation errors"
     );
     let error_nodes: std::collections::HashSet<u64> = network
         .validation_errors

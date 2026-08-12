@@ -2963,11 +2963,10 @@ impl StructureDesigner {
                 // A freshly added zone-bearing node (`closure`, `map`, `filter`,
                 // `fold`, `foreach`) has an empty body, so its zone-output pin
                 // has no incoming wire — an immediate zone-rule violation. Without
-                // validating here the network stays `valid` and the only feedback
-                // is the eval-time "body has no incoming wire on zone-output pin"
-                // hover message; validating surfaces the canonical validation
-                // error (and blanks the viewport) consistently with every other
-                // path that reaches the same invalid state.
+                // validating here the only feedback is the eval-time "body has no
+                // incoming wire on zone-output pin" hover message; validating
+                // surfaces the canonical validation error consistently with every
+                // other path that reaches the same state.
                 || self
                     .node_type_registry
                     .get_node_type(node_type_name)

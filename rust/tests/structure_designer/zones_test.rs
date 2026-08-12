@@ -2294,9 +2294,11 @@ fn validation_rule2_capture_wire_missing_source() {
         .get("main")
         .unwrap();
     let all_errors = collect_all_errors(network);
+    // Cone-scoped blocking (error-management Phase 3): the capture-wire error
+    // is node-attributed and no longer flips the network's `valid` flag.
     assert!(
-        !network.valid,
-        "Network with bad capture wire should be invalid"
+        network.valid,
+        "a node-attributed blocking error must not flip `valid`"
     );
     assert!(
         all_errors.iter().any(|e| {
@@ -2372,9 +2374,11 @@ fn validation_rule3_zone_input_pin_index_out_of_range() {
         .get("main")
         .unwrap();
     let all_errors = collect_all_errors(network);
+    // Cone-scoped blocking (error-management Phase 3): node-attributed, so
+    // `valid` stays true while the error is recorded.
     assert!(
-        !network.valid,
-        "Network with bad ZoneInput pin_index should be invalid"
+        network.valid,
+        "a node-attributed blocking error must not flip `valid`"
     );
     assert!(
         all_errors.iter().any(|e| {
@@ -2449,7 +2453,12 @@ fn validation_rule3_zone_input_depth_zero_rejected() {
         .get("main")
         .unwrap();
     let all_errors = collect_all_errors(network);
-    assert!(!network.valid, "ZoneInput at depth=0 must be rejected");
+    // Cone-scoped blocking (error-management Phase 3): node-attributed, so
+    // `valid` stays true while the error is recorded.
+    assert!(
+        network.valid,
+        "a node-attributed blocking error must not flip `valid`"
+    );
     assert!(
         all_errors.iter().any(|e| {
             let lower = e.to_lowercase();

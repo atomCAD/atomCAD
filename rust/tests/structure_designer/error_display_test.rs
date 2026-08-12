@@ -273,10 +273,11 @@ fn warning_and_own_runtime_error_are_both_shown() {
 }
 
 /// Design-doc Phase 1 test 3: a node with a *blocking* validation error shows
-/// only the validation text. At this phase the network is still
-/// whole-network-gated (`valid == false` blanks the scene), so the node has
-/// no eval entry at all; the unit tests above additionally pin that a
-/// synthesized eval entry (Phase 3) would be dropped.
+/// only the validation text. Since Phase 3 (cone-scoped blocking) the network
+/// stays `valid` and the poisoned node carries a *synthesized* eval entry
+/// (the skip-and-synthesize propagation vehicle, equal to the validation
+/// text); the D8 dedupe drops that entry from the badge, so the displayed
+/// message list is still exactly the validation text.
 #[test]
 fn blocking_error_shows_only_validation_text() {
     let mut designer = setup_designer_with_network("main");
@@ -298,16 +299,20 @@ fn blocking_error_shows_only_validation_text() {
         "the unresolved-output rule is blocking at this phase; got: {}",
         blocking.error_text
     );
-    assert!(!designer.get_active_node_network().unwrap().valid);
+    assert!(
+        designer.get_active_node_network().unwrap().valid,
+        "cone-scoped blocking: a node-attributed error must not flip `valid`"
+    );
 
     full_refresh(&mut designer);
 
     let eval_error = designer
         .last_generated_structure_designer_scene
         .get_node_error(&[], relax_id);
-    assert!(
-        eval_error.is_none(),
-        "an invalid network is not evaluated at this phase, so no eval entry exists"
+    assert_eq!(
+        eval_error.as_deref(),
+        Some(blocking.error_text.as_str()),
+        "the poisoned node carries the synthesized eval entry (its validation text)"
     );
 
     let messages = collect_node_error_messages(&errors, relax_id, eval_error);

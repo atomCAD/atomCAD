@@ -1,5 +1,6 @@
 ---
 source: tests/integration/validation_corpus_test.rs
+assertion_line: 157
 expression: out
 ---
 === apply_function_pin/apply_over_custom_network_iter.cnnd
@@ -37,7 +38,7 @@ expression: out
 === lattice_space_migration/atom_fill_unwired_shape.cnnd
   network 'Main' valid=true
 === lattice_space_migration/atom_trans_present.cnnd
-  network 'Main' valid=false
+  network 'Main' valid=true
     scope=[] node=3 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
     scope=[] node=6 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
 === lattice_space_migration/corrupt_v2.cnnd
@@ -58,7 +59,7 @@ expression: out
 === lattice_space_migration/primitive_with_lattice.cnnd
   network 'Main' valid=true
 === lattice_space_migration/pure_rename.cnnd
-  network 'Main' valid=false
+  network 'Main' valid=true
     scope=[] node=2 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
 === lattice_space_migration/real_diamond.cnnd
   network 'sample' valid=true
@@ -90,7 +91,7 @@ expression: out
   network 'TTPL' valid=true
   network 'TTPL.0_combinatorics' valid=true
   network 'TTPL.0_proxy(111)' valid=true
-  network 'TTPL.0_tool-on-proxy(111)' valid=false
+  network 'TTPL.0_tool-on-proxy(111)' valid=true
     scope=[] node=27 blocking=true "Output pin 'result' (SameAsArrayElements(diffs)) could not be resolved to a concrete type"
   network 'TTPL.hexirod(111)' valid=true
   network 'TTPL.hexirod(111)_R30°' valid=true
@@ -108,7 +109,7 @@ expression: out
   network 'experiment.parameter-in-closure' valid=true
     scope=[1] node=1 blocking=false "`parameter` nodes are not allowed inside a zone body — use the body's zone-input pins or a capture wire from the enclosing network instead"
     scope=[] node=1 blocking=false "Zone-output pin 'result' has no incoming wire"
-  network 'z_ISSUE.proxy(111)att1' valid=false
+  network 'z_ISSUE.proxy(111)att1' valid=true
     scope=[] node=10 blocking=false "Zone-output pin 'out' has no incoming wire"
     scope=[] node=11 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
     scope=[] node=8 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
@@ -122,7 +123,7 @@ expression: out
   network 'Main' valid=true
   network 'ScaleBy' valid=true
 === zones_migration/hof_source_for_hof_f.cnnd
-  network 'Main' valid=false
+  network 'Main' valid=true
     scope=[] node=2 blocking=true "Data type mismatch: input expects AnyFunction { leading_params: [Float] }, but source outputs Iterator(Int)"
     scope=[] node=4 blocking=true "Data type mismatch: input expects AnyFunction { leading_params: [Float] }, but source outputs Function(FunctionType { parameter_types: [Iterator(Float)], output_type: Iterator(Float) })"
 === zones_migration/nested_custom_network.cnnd
@@ -143,7 +144,7 @@ expression: out
 === zones_migration/simple_map_with_capture.cnnd
   network 'Main' valid=true
 === zones_migration/type_mismatch_source.cnnd
-  network 'Main' valid=false
+  network 'Main' valid=true
     scope=[] node=4 blocking=true "Data type mismatch: input expects AnyFunction { leading_params: [Float] }, but source outputs Function(FunctionType { parameter_types: [Vec3], output_type: Vec3 })"
 === zones_migration/v3_chained_through.cnnd
   network 'Main' valid=true

@@ -373,7 +373,13 @@
       "PowerShell(Select-String -Path doc/design_error_management.md -Pattern 'Cross-network blast radius' | Measure-Object | ForEach-Object {\"working tree hits: $\\($_.Count\\)\"}; git grep -c 'Cross-network blast radius' HEAD -- doc/design_error_management.md; git grep -c 'Cross-network blast radius' 8a6bd3a8 -- doc/design_error_management.md; git diff 8a6bd3a8 --stat -- doc/design_error_management.md)",
       "PowerShell(git *)",
       "Bash(INSTA_UPDATE=always cargo test --test integration corpus_snapshot -j 4)",
-      "Bash(tasklist //FI \"IMAGENAME eq flutter_tester.exe\")"
+      "Bash(tasklist //FI \"IMAGENAME eq flutter_tester.exe\")",
+      "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" abstract_output_type_test::validator_flags array_node_test::array_set_element_type_undo atom_replace_region_test::region_backward crystal_molecule_split error_display_test::blocking_error network_validator_test::two_independent)",
+      "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" closures_test::validation_type_incompatible closures_test::validation_wrong_arity currying_test::apply_phase3_prefix_only function_pin_test::validation_function_pin record_field_rename_wire_loss_test::guard_incompatible record_types_phase3_test::retyping_field record_field_identity_undo_test::property_field_edits)",
+      "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" array_node_test::array_set_element_type_undo)",
+      "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" tag_test::tag_limit_errors_on_offending_node)",
+      "Bash(RUST_MIN_STACK=67108864 \"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" tag_test::tag_limit_errors_on_offending_node)",
+      "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" zones_test::validation_rule2_capture zones_test::validation_rule3 zip_with_test::zip_phase3_retype_lane_drops)"
     ]
   }
 }

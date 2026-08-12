@@ -2613,11 +2613,19 @@ fn zip_phase3_retype_lane_drops_incompatible_body_wires() {
     );
 
     // The external Iter[Int] → Iter[Crystal] wire stays and validation flags
-    // it (the usual wire-type revalidation).
+    // it (the usual wire-type revalidation). Cone-scoped since
+    // error-management Phase 3: the blocking error is attributed to the
+    // zip_with node and `valid` stays true.
     assert_eq!(zip_node.arguments[1].len(), 1);
     assert!(
-        !net.valid,
-        "the incompatible external wire must flag the network invalid"
+        net.valid,
+        "a node-attributed blocking error must not flip `valid`"
+    );
+    assert!(
+        net.validation_errors
+            .iter()
+            .any(|e| e.blocking && e.node_id == Some(zip_id)),
+        "the incompatible external wire must be flagged on the zip_with node"
     );
 }
 

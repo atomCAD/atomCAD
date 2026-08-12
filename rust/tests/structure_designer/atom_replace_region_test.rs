@@ -497,6 +497,20 @@ fn region_backward_compat_argument_padding() {
         "padded region pin should be unconnected"
     );
 
+    // The test-support `value` node's output pin is statically untypeable
+    // (`Fixed(None)`), so the validate pass above records a spurious
+    // "Data type mismatch" on the atom_replace node — which, under
+    // cone-scoped blocking (error-management Phase 3), would poison its
+    // evaluation. Clear the harness-artifact errors so the evaluation below
+    // exercises the padded arguments, which is what this test is about.
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut(net)
+        .unwrap()
+        .validation_errors
+        .clear();
+
     // And the node still evaluates (globally, since region is unconnected).
     let result = evaluate_to_atomic(&designer, net, replace_id);
     assert_eq!(count_element(&result, 14), 2, "global replace still works");

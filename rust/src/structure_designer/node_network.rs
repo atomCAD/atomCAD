@@ -50,20 +50,34 @@ impl NodeDisplayState {
 pub struct ValidationError {
     pub error_text: String,
     pub node_id: Option<u64>,
-    /// Whether this error blocks evaluation of the whole network. A blocking
-    /// error flips `NodeNetwork::valid`, so `generate_scene` refuses to
-    /// evaluate the network and the viewport goes blank. A non-blocking error
-    /// (`blocking == false`) still surfaces as a node badge but leaves `valid`
-    /// untouched, so unrelated/upstream nodes keep evaluating and displaying.
+    /// Whether this error makes the attributed node's output unavailable. A
+    /// blocking error attributed to a node **cone-poisons** it: the evaluator
+    /// skips the node's `eval` and synthesizes a `NetworkResult::Error` from
+    /// the error text(s) as the node's output, so only the node and its
+    /// downstream cone go dark while independent nodes keep evaluating (see
+    /// `doc/design_error_management.md` D3). A non-blocking error
+    /// (`blocking == false`) is an advisory warning: it surfaces as a node
+    /// badge but the node still evaluates.
     ///
-    /// Non-blocking is used for conditions the evaluator already turns into a
-    /// localized `NetworkResult::Error` (e.g. an unconnected zone-output pin on
-    /// an independent HOF/closure): the runtime poisons only that node's output
-    /// and its downstream cone, so there is no reason to blank the whole scene.
+    /// A blocking error with **no** node attribution (`node_id == None`)
+    /// cannot be localized to a cone; it makes the whole network refuse
+    /// evaluation (the interface residue, together with `interface` below).
     ///
     /// Defaults to blocking when missing from older serialized errors.
     #[serde(default = "default_blocking")]
     pub blocking: bool,
+    /// Whether this error corrupts the network's *interface* (its parameter
+    /// list as seen by call sites in other networks). Interface errors are
+    /// node-attributed but must NOT be cone-scoped: instances map arguments
+    /// by parameter index, so a desynced interface is the known OOB-panic
+    /// class. Any interface error keeps `NodeNetwork::valid == false`, so the
+    /// whole network refuses evaluation and the "References invalid node
+    /// network" rule poisons its instances elsewhere. Set only by the
+    /// `validate_parameters` rules (`doc/design_error_management.md` D5);
+    /// new rules default to `false` — marking a rule interface-level is a
+    /// deliberate act, like choosing `blocking` vs `warning`.
+    #[serde(default)]
+    pub interface: bool,
 }
 
 fn default_blocking() -> bool {
@@ -71,26 +85,80 @@ fn default_blocking() -> bool {
 }
 
 impl ValidationError {
-    /// A blocking validation error: flips the network's `valid` flag, so the
-    /// whole network refuses to evaluate.
+    /// A blocking validation error. When attributed to a node, the node is
+    /// cone-poisoned (its `eval` is skipped and its output is a synthesized
+    /// `Error`); when unattributed (`node_id == None`), the whole network
+    /// refuses to evaluate.
     pub fn new(error_text: String, node_id: Option<u64>) -> Self {
         Self {
             error_text,
             node_id,
             blocking: true,
+            interface: false,
         }
     }
 
-    /// A non-blocking validation error: surfaces as a node badge but does not
-    /// flip the network's `valid` flag, so the rest of the network still
-    /// evaluates. Use only for conditions the runtime already localizes into a
-    /// `NetworkResult::Error` (see the `blocking` field docs).
+    /// A non-blocking validation error (advisory warning): surfaces as a node
+    /// badge but the node still evaluates. Use for conditions under which the
+    /// node's output remains at least partially useful.
     pub fn warning(error_text: String, node_id: Option<u64>) -> Self {
         Self {
             error_text,
             node_id,
             blocking: false,
+            interface: false,
         }
+    }
+
+    /// An interface-level validation error: the network's parameter interface
+    /// is corrupted, so the whole network refuses to evaluate (and instances
+    /// of it elsewhere are poisoned via the "References invalid node network"
+    /// rule). Only the `validate_parameters` rules construct these.
+    pub fn interface_error(error_text: String, node_id: Option<u64>) -> Self {
+        Self {
+            error_text,
+            node_id,
+            blocking: true,
+            interface: true,
+        }
+    }
+}
+
+/// Whether `validation_errors` contains the **interface residue** — the error
+/// class that cannot be localized to a node's cone and therefore makes the
+/// whole network refuse evaluation: any interface-level error, or a blocking
+/// error with no node attribution (nothing to poison).
+///
+/// `NodeNetwork::valid` is defined as the negation of this predicate (computed
+/// by `validate_network`); every `.valid` reader — the scene gate, the
+/// custom-network eval refusal, the "References invalid node network" rule,
+/// the execute/CLI gates — asks "is this network usable at all?", and the
+/// residue is the answer. See `doc/design_error_management.md` D5.
+pub fn has_interface_residue(validation_errors: &[ValidationError]) -> bool {
+    validation_errors
+        .iter()
+        .any(|e| e.interface || (e.blocking && e.node_id.is_none()))
+}
+
+/// The **cone-poison** message for `node_id`, if any: the texts of every
+/// blocking, non-interface validation error attributed to the node, joined
+/// with newlines (the same join convention the canvas tooltip uses). `Some`
+/// means the evaluator must not call the node's `eval`; it synthesizes a
+/// `NetworkResult::Error` with this message as the node's output instead
+/// (skip-and-synthesize, `doc/design_error_management.md` D3).
+///
+/// Interface errors are excluded: they put the whole network into the refusal
+/// residue (`has_interface_residue`), so evaluation never reaches the node.
+pub fn node_poison_message(validation_errors: &[ValidationError], node_id: u64) -> Option<String> {
+    let texts: Vec<&str> = validation_errors
+        .iter()
+        .filter(|e| e.blocking && !e.interface && e.node_id == Some(node_id))
+        .map(|e| e.error_text.as_str())
+        .collect();
+    if texts.is_empty() {
+        None
+    } else {
+        Some(texts.join("\n"))
     }
 }
 
@@ -98,9 +166,9 @@ impl ValidationError {
 /// tooltip: every validation error attributed to the node, plus the node's
 /// evaluation error — unless the node itself carries a **blocking** validation
 /// error, in which case the eval entry is suppressed as redundant (a node with
-/// a blocking error either was never evaluated, or — once cone-scoped blocking
-/// exists — carries a synthesized eval entry that merely repeats the
-/// validation text). The suppression is a per-node predicate check, never a
+/// a blocking error is cone-poisoned — never evaluated — and its eval entry is
+/// the synthesized propagation vehicle that merely repeats the validation
+/// text). The suppression is a per-node predicate check, never a
 /// text comparison, and a *warning* never suppresses anything: warnings
 /// evaluate, and the eval error can be a different, more specific failure.
 ///

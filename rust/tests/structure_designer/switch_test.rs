@@ -1163,8 +1163,11 @@ fn test_set_switch_data_value_type_retype_changes_pins() {
     // doc's aspirational test 9, the repair pass does NOT drop the now-
     // type-incompatible external wires — `set_custom_node_type`'s by-id argument
     // rebuild preserves them, and `validate_wires` flags the mismatch as a
-    // *blocking* error rather than disconnecting. So the wires remain (feeding a
-    // now-invalid network) and the case/output pins retype to Crystal.
+    // *blocking* error rather than disconnecting. So the wires remain and the
+    // case/output pins retype to Crystal. Since error-management Phase 3
+    // (cone-scoped blocking, `doc/design_error_management.md` D3/D5) the
+    // node-attributed blocking error no longer flips `valid` — it poisons the
+    // switch node's cone instead.
     let mut designer = setup_designer_with_network("test");
     let (sw, _sel, s10, _s20, _s30, _d) = build_three_case_int_switch(&mut designer, 10);
 
@@ -1196,11 +1199,19 @@ fn test_set_switch_data_value_type_retype_changes_pins() {
         .unwrap();
     assert_eq!(ct.parameters[1].data_type, DataType::Crystal);
     assert_eq!(*ct.output_type(), DataType::Crystal);
-    // The Int wire is preserved (not type-pruned); the network is now invalid.
+    // The Int wire is preserved (not type-pruned); the mismatch is a blocking
+    // error attributed to the switch node, which cone-poisons the node while
+    // the network as a whole stays valid (usable).
     assert!(switch_has_source(&designer, "test", sw, s10));
     assert!(
-        !net.valid,
-        "an Int source feeding a Crystal case pin makes the network invalid"
+        net.valid,
+        "a node-attributed blocking error must not flip the network's `valid` flag"
+    );
+    assert!(
+        net.validation_errors
+            .iter()
+            .any(|e| e.blocking && e.node_id == Some(sw)),
+        "the type mismatch must be recorded as a blocking error on the switch node"
     );
 }
 

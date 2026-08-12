@@ -677,15 +677,28 @@ fn property_run(seed: u64) {
             }
         }
 
-        // --- Validity oracle: invalid iff some wired field rejects its source. ---
+        // --- Error oracle: a "Data type mismatch" error exists iff some wired
+        // field rejects its source. (Since error-management Phase 3 the
+        // mismatch cone-poisons the node instead of flipping `valid`, which
+        // stays true throughout.) ---
         designer.validate_active_network();
-        let expect_valid = model
+        let expect_mismatch = model
             .iter()
-            .all(|f| f.source.is_none() || pin_accepts_int_source(&f.ty));
-        assert_eq!(
-            designer.node_type_registry.node_networks["Main"].valid, expect_valid,
-            "seed={} step={}: validity must track type compatibility of wired fields",
+            .any(|f| f.source.is_some() && !pin_accepts_int_source(&f.ty));
+        let main = &designer.node_type_registry.node_networks["Main"];
+        assert!(
+            main.valid,
+            "seed={} step={}: node-attributed errors must not flip `valid`",
             seed, step
+        );
+        assert_eq!(
+            main.validation_errors
+                .iter()
+                .any(|e| e.error_text.contains("Data type mismatch")),
+            expect_mismatch,
+            "seed={} step={}: mismatch errors must track type compatibility of wired fields",
+            seed,
+            step
         );
 
         // --- Undo/redo round-trips the def state byte-identically. ---
