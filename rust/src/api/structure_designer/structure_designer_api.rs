@@ -669,20 +669,18 @@ fn build_node_view(
         });
     }
 
-    let mut error_messages = Vec::new();
-    for validation_error in &node_network.validation_errors {
-        if validation_error.node_id == Some(node.id) {
-            error_messages.push(validation_error.error_text.clone());
-        }
-    }
-    if node_network.validation_errors.is_empty()
-        && let Some(eval_error) = cad_instance
+    // Per-node, blocking-only suppression of the eval error (D8 in
+    // `doc/design_error_management.md`): a validation error elsewhere in the
+    // network — or a mere warning on this node — must not hide this node's
+    // runtime error badge.
+    let error_messages = crate::structure_designer::node_network::collect_node_error_messages(
+        &node_network.validation_errors,
+        node.id,
+        cad_instance
             .structure_designer
             .last_generated_structure_designer_scene
-            .get_node_error(scope_path, node.id)
-    {
-        error_messages.push(eval_error);
-    }
+            .get_node_error(scope_path, node.id),
+    );
     let error = if error_messages.is_empty() {
         None
     } else {

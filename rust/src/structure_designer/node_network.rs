@@ -94,6 +94,36 @@ impl ValidationError {
     }
 }
 
+/// Assemble the error messages a single node surfaces on its canvas badge /
+/// tooltip: every validation error attributed to the node, plus the node's
+/// evaluation error — unless the node itself carries a **blocking** validation
+/// error, in which case the eval entry is suppressed as redundant (a node with
+/// a blocking error either was never evaluated, or — once cone-scoped blocking
+/// exists — carries a synthesized eval entry that merely repeats the
+/// validation text). The suppression is a per-node predicate check, never a
+/// text comparison, and a *warning* never suppresses anything: warnings
+/// evaluate, and the eval error can be a different, more specific failure.
+///
+/// See `doc/design_error_management.md` D8.
+pub fn collect_node_error_messages(
+    validation_errors: &[ValidationError],
+    node_id: u64,
+    eval_error: Option<String>,
+) -> Vec<String> {
+    let mut error_messages = Vec::new();
+    let mut has_blocking = false;
+    for validation_error in validation_errors {
+        if validation_error.node_id == Some(node_id) {
+            error_messages.push(validation_error.error_text.clone());
+            has_blocking |= validation_error.blocking;
+        }
+    }
+    if !has_blocking && let Some(eval_error) = eval_error {
+        error_messages.push(eval_error);
+    }
+    error_messages
+}
+
 /// Scope-aware address of a node. The `scope_path` is the chain of HOF node
 /// ids identifying the body the node lives in; an empty path means the
 /// top-level network. Used by the change-tracking and dependency-analysis

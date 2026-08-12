@@ -503,3 +503,6 @@ mod find_usages_test;
 
 #[path = "structure_designer/scoped_validation_errors_test.rs"]
 mod scoped_validation_errors_test;
+
+#[path = "structure_designer/error_display_test.rs"]
+mod error_display_test;
