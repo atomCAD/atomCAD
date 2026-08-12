@@ -752,11 +752,15 @@ runtime error), so the assertion is that the outcome snapshot is
 R1's in Phase 2.)
 
 **R3. Full-suite gates per phase.** Every phase lands only with
-`cargo test -j 4` green, `flutter analyze` clean, and the Flutter smoke
-test (`flutter test integration_test/`) passing. Expectation updates to
-existing tests are enumerated in the phase's Tests subsection (found
-via targeted greps, e.g. `validation_errors.len()`, error-text
-substrings) and changed *deliberately*, never as drive-by fixes.
+`cargo test -j 4` green and `flutter analyze` clean. The Flutter smoke
+test (`flutter test integration_test/`) is **run manually by the
+maintainer, never by the implementing agent** (it is unreliable from an
+agent shell — see the note in `AGENTS.md` / `doc/testing.md`); the agent
+lists it as a pending manual step alongside the R4 walkthrough.
+Expectation updates to existing tests are enumerated in the phase's
+Tests subsection (found via targeted greps, e.g.
+`validation_errors.len()`, error-text substrings) and changed
+*deliberately*, never as drive-by fixes.
 
 **R4. Manual walkthrough after every phase with a user-perceivable
 change.** Per the project's testing convention, UI behavior is

@@ -227,33 +227,44 @@ fn repair_call_sites_for_network(
 }
 
 fn validate_parameters(network: &mut NodeNetwork) -> bool {
-    // Collect all parameter nodes
-    let mut parameter_nodes: Vec<(u64, &ParameterData)> = Vec::new();
+    // D4 (`doc/design_error_management.md`): accumulate where safe — the
+    // cast-failure, duplicate-name, and abstract-type checks each run over
+    // every parameter node and record every violation before this function
+    // gives up. When any error was recorded the parameter-interface rebuild
+    // below is still skipped wholesale (same as the old first-error
+    // behavior): a partially-rebuilt interface out of a broken parameter set
+    // is exactly the call-site desync class this pass protects against.
+    let mut errors: Vec<ValidationError> = Vec::new();
 
-    for (node_id, node) in &network.nodes {
+    // Collect all parameter nodes, in ascending node-id order so the error
+    // list (and which duplicate "loses" the name check) is deterministic.
+    let mut parameter_nodes: Vec<(u64, &ParameterData)> = Vec::new();
+    let mut node_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    node_ids.sort_unstable();
+    for node_id in node_ids {
+        let node = &network.nodes[&node_id];
         if node.node_type_name == "parameter" {
             // Cast node data to ParameterData
             if let Some(param_data) = (*node.data).as_any_ref().downcast_ref::<ParameterData>() {
-                parameter_nodes.push((*node_id, param_data));
+                parameter_nodes.push((node_id, param_data));
             } else {
-                network.validation_errors.push(ValidationError::new(
+                errors.push(ValidationError::new(
                     "Parameter node has invalid data type".to_string(),
-                    Some(*node_id),
+                    Some(node_id),
                 ));
-                return false;
             }
         }
     }
 
-    // Validate param_name uniqueness
+    // Validate param_name uniqueness: the first occurrence (lowest node id)
+    // keeps the name; every later duplicate gets its own error.
     let mut param_names: HashMap<String, u64> = HashMap::new();
     for (node_id, param_data) in &parameter_nodes {
-        if let Some(_existing_node_id) = param_names.get(&param_data.param_name) {
-            network.validation_errors.push(ValidationError::new(
+        if param_names.contains_key(&param_data.param_name) {
+            errors.push(ValidationError::new(
                 format!("Duplicate parameter name '{}'", param_data.param_name),
                 Some(*node_id),
             ));
-            return false;
         } else {
             param_names.insert(param_data.param_name.clone(), *node_id);
         }
@@ -263,15 +274,19 @@ fn validate_parameters(network: &mut NodeNetwork) -> bool {
     // input-pin types on built-in polymorphic nodes, not on user-declared parameter pins.
     for (node_id, param_data) in &parameter_nodes {
         if contains_abstract(&param_data.data_type) {
-            network.validation_errors.push(ValidationError::new(
+            errors.push(ValidationError::new(
                 format!(
                     "Parameter '{}' has abstract type {:?}; abstract phase types are not allowed on parameter pins",
                     param_data.param_name, param_data.data_type
                 ),
                 Some(*node_id),
             ));
-            return false;
         }
+    }
+
+    if !errors.is_empty() {
+        network.validation_errors.extend(errors);
+        return false;
     }
 
     // Sort parameter nodes by sort_order (primary) and node_id (secondary)
@@ -478,220 +493,250 @@ fn validate_wires(
     node_type_registry: &NodeTypeRegistry,
     ctx: &mut ValidationContext,
 ) -> bool {
-    // Validate wires - pure checking, no repairs
-    for (dest_node_id, dest_node) in &network.nodes {
-        // Check if this node references a node network and validate its validity
-        if let Some(referenced_network) = node_type_registry
-            .node_networks
-            .get(&dest_node.node_type_name)
-            && !referenced_network.valid
-        {
-            network.validation_errors.push(ValidationError::new(
-                format!(
-                    "References invalid node network '{}'",
-                    dest_node.node_type_name
-                ),
-                Some(*dest_node_id),
-            ));
-            return false;
-        }
-
-        // Get the destination node type to access parameter information
-        let dest_node_type = match node_type_registry.get_node_type_for_node(dest_node) {
-            Some(node_type) => node_type,
-            None => {
-                network.validation_errors.push(ValidationError::new(
-                    format!("Unknown node type '{}'", dest_node.node_type_name),
-                    Some(*dest_node_id),
-                ));
-                return false;
-            }
+    // D4 (`doc/design_error_management.md`): accumulate per node instead of
+    // short-circuiting the whole pass — under cone-scoped blocking (D3) an
+    // error the validator did not record is a node that is not poisoned, so
+    // every invalid node must get its error. Within one node the checks keep
+    // their early-outs (later checks assume earlier invariants); the first
+    // error per node is recorded and validation moves on to the next node.
+    // Nodes are visited in ascending-id order so the error list (and the
+    // panel/F8 order built from it) is deterministic — the old first-error
+    // behavior followed HashMap iteration order.
+    //
+    // Some checks attribute their error to the *source* node of a wire, so
+    // the same (node, message) pair can be produced once per consuming wire;
+    // exact repeats are deduped to keep one row per underlying fact.
+    let mut errors: Vec<ValidationError> = Vec::new();
+    let mut node_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    node_ids.sort_unstable();
+    for node_id in node_ids {
+        let Some(dest_node) = network.nodes.get(&node_id) else {
+            continue;
         };
+        if let Some(err) = validate_node_wires(network, node_type_registry, ctx, node_id, dest_node)
+            && !errors
+                .iter()
+                .any(|e| e.node_id == err.node_id && e.error_text == err.error_text)
+        {
+            errors.push(err);
+        }
+    }
+    let ok = errors.is_empty();
+    network.validation_errors.extend(errors);
+    ok
+}
 
-        // Validate argument count matches parameter count
-        // (This should always pass after repair phase)
-        if dest_node.arguments.len() != dest_node_type.parameters.len() {
-            network.validation_errors.push(ValidationError::new(
-                format!(
-                    "Node has {} arguments but type expects {} parameters",
-                    dest_node.arguments.len(),
-                    dest_node_type.parameters.len()
-                ),
-                Some(*dest_node_id),
+/// Runs the wire/type checks for a single destination node and returns the
+/// first violation found (checks within one node early-out — later checks
+/// assume earlier invariants). `None` means the node passed. The returned
+/// error is usually attributed to `dest_node_id`, but source-side checks
+/// attribute to the offending source node.
+fn validate_node_wires(
+    network: &NodeNetwork,
+    node_type_registry: &NodeTypeRegistry,
+    ctx: &mut ValidationContext,
+    dest_node_id: u64,
+    dest_node: &Node,
+) -> Option<ValidationError> {
+    // Check if this node references a node network and validate its validity
+    if let Some(referenced_network) = node_type_registry
+        .node_networks
+        .get(&dest_node.node_type_name)
+        && !referenced_network.valid
+    {
+        return Some(ValidationError::new(
+            format!(
+                "References invalid node network '{}'",
+                dest_node.node_type_name
+            ),
+            Some(dest_node_id),
+        ));
+    }
+
+    // Get the destination node type to access parameter information
+    let dest_node_type = match node_type_registry.get_node_type_for_node(dest_node) {
+        Some(node_type) => node_type,
+        None => {
+            return Some(ValidationError::new(
+                format!("Unknown node type '{}'", dest_node.node_type_name),
+                Some(dest_node_id),
             ));
-            return false;
+        }
+    };
+
+    // Validate argument count matches parameter count
+    // (This should always pass after repair phase)
+    if dest_node.arguments.len() != dest_node_type.parameters.len() {
+        return Some(ValidationError::new(
+            format!(
+                "Node has {} arguments but type expects {} parameters",
+                dest_node.arguments.len(),
+                dest_node_type.parameters.len()
+            ),
+            Some(dest_node_id),
+        ));
+    }
+
+    // Validate each argument (input pin) of the destination node
+    for (arg_index, argument) in dest_node.arguments.iter().enumerate() {
+        // Get parameter information for this argument
+        let parameter = &dest_node_type.parameters[arg_index];
+
+        // Validate non-multi input pins have at most one connection
+        if !parameter.data_type.is_array() && argument.len() > 1 {
+            return Some(ValidationError::new(
+                format!(
+                    "Non-multi parameter '{}' has {} connections, but only 1 is allowed",
+                    parameter.name,
+                    argument.len()
+                ),
+                Some(dest_node_id),
+            ));
         }
 
-        // Validate each argument (input pin) of the destination node
-        for (arg_index, argument) in dest_node.arguments.iter().enumerate() {
-            // Get parameter information for this argument
-            let parameter = &dest_node_type.parameters[arg_index];
+        // Validate data types for each connected source node
+        for incoming in &argument.incoming_wires {
+            let source_node_id = &incoming.source_node_id;
+            let output_pin_index = match incoming.source_pin {
+                crate::structure_designer::node_network::SourcePin::NodeOutput { pin_index } => {
+                    pin_index
+                }
+                // Zone-input sources (later phases) aren't validated here.
+                crate::structure_designer::node_network::SourcePin::ZoneInput { .. } => {
+                    continue;
+                }
+            };
+            let output_pin_index = &output_pin_index;
+            // Get the source node
+            let source_node = match network.nodes.get(source_node_id) {
+                Some(node) => node,
+                None => {
+                    return Some(ValidationError::new(
+                        "Wire references non-existent source node".to_string(),
+                        Some(dest_node_id),
+                    ));
+                }
+            };
 
-            // Validate non-multi input pins have at most one connection
-            if !parameter.data_type.is_array() && argument.len() > 1 {
-                network.validation_errors.push(ValidationError::new(
+            // Check if this source node references a node network and validate its validity
+            if let Some(referenced_network) = node_type_registry
+                .node_networks
+                .get(&source_node.node_type_name)
+                && !referenced_network.valid
+            {
+                return Some(ValidationError::new(
                     format!(
-                        "Non-multi parameter '{}' has {} connections, but only 1 is allowed",
-                        parameter.name,
-                        argument.len()
+                        "Source node references invalid node network '{}'",
+                        source_node.node_type_name
                     ),
-                    Some(*dest_node_id),
+                    Some(*source_node_id),
                 ));
-                return false;
             }
 
-            // Validate data types for each connected source node
-            for incoming in &argument.incoming_wires {
-                let source_node_id = &incoming.source_node_id;
-                let output_pin_index = match incoming.source_pin {
-                    crate::structure_designer::node_network::SourcePin::NodeOutput {
-                        pin_index,
-                    } => pin_index,
-                    // Zone-input sources (later phases) aren't validated here.
-                    crate::structure_designer::node_network::SourcePin::ZoneInput { .. } => {
-                        continue;
-                    }
-                };
-                let output_pin_index = &output_pin_index;
-                // Get the source node
-                let source_node = match network.nodes.get(source_node_id) {
-                    Some(node) => node,
-                    None => {
-                        network.validation_errors.push(ValidationError::new(
-                            "Wire references non-existent source node".to_string(),
-                            Some(*dest_node_id),
-                        ));
-                        return false;
-                    }
-                };
-
-                // Check if this source node references a node network and validate its validity
-                if let Some(referenced_network) = node_type_registry
-                    .node_networks
-                    .get(&source_node.node_type_name)
-                    && !referenced_network.valid
-                {
-                    network.validation_errors.push(ValidationError::new(
-                        format!(
-                            "Source node references invalid node network '{}'",
-                            source_node.node_type_name
-                        ),
+            // Get the source node type to access its output type
+            let _source_node_type = match node_type_registry.get_node_type_for_node(source_node) {
+                Some(node_type) => node_type,
+                None => {
+                    return Some(ValidationError::new(
+                        format!("Unknown source node type '{}'", source_node.node_type_name),
                         Some(*source_node_id),
                     ));
-                    return false;
                 }
+            };
 
-                // Get the source node type to access its output type
-                let _source_node_type = match node_type_registry.get_node_type_for_node(source_node)
-                {
-                    Some(node_type) => node_type,
-                    None => {
-                        network.validation_errors.push(ValidationError::new(
-                            format!("Unknown source node type '{}'", source_node.node_type_name),
-                            Some(*source_node_id),
-                        ));
-                        return false;
-                    }
-                };
+            // Validate data type compatibility using the resolved concrete
+            // source type. If resolution fails (unresolved polymorphic
+            // output upstream), treat the wire as disconnected — the
+            // upstream node itself is flagged invalid below.
+            let source_data_type = match ctx.resolve(
+                network,
+                node_type_registry,
+                *source_node_id,
+                *output_pin_index,
+            ) {
+                Some(t) => t,
+                None => continue,
+            };
 
-                // Validate data type compatibility using the resolved concrete
-                // source type. If resolution fails (unresolved polymorphic
-                // output upstream), treat the wire as disconnected — the
-                // upstream node itself is flagged invalid below.
-                let source_data_type = match ctx.resolve(
-                    network,
-                    node_type_registry,
-                    *source_node_id,
-                    *output_pin_index,
-                ) {
-                    Some(t) => t,
-                    None => continue,
-                };
-
-                let dest_data_type =
-                    node_type_registry.get_node_param_data_type(dest_node, arg_index);
-                if !DataType::can_be_converted_to(
-                    &source_data_type,
-                    &dest_data_type,
-                    node_type_registry,
-                ) {
-                    network.validation_errors.push(ValidationError::new(
-                        format!(
-                            "Data type mismatch: input expects {:?}, but source outputs {:?}",
-                            parameter.data_type, source_data_type
-                        ),
-                        Some(*dest_node_id),
-                    ));
-                    return false;
-                }
-            }
-
-            // Note: a direct "abstract input pin unconnected → invalid" check
-            // is subsumed by the polymorphic-output-unresolved check below
-            // once a node's outputs are migrated to `SameAsInput` /
-            // `SameAsArrayElements`. Not-yet-migrated nodes still declare
-            // `Fixed(Atomic)` on their outputs, and enforcing the rule on
-            // their abstract input pins directly would flag existing valid
-            // graphs invalid before migration lands. The uniform rule is
-            // applied via the output-resolution check below.
-        }
-
-        // Polymorphic output pins must resolve to a concrete type. If any
-        // output is unresolved, the node is flagged invalid. This is the
-        // uniform rule that covers both single-input SameAsInput pins
-        // (disconnected input) and SameAsArrayElements pins (mixed phases,
-        // empty arrays, upstream unresolved).
-        for pin_index_usize in 0..dest_node_type.output_pin_count() {
-            let pin_index = pin_index_usize as i32;
-            let pin = &dest_node_type.output_pins[pin_index_usize];
-            let is_polymorphic = !matches!(pin.data_type, PinOutputType::Fixed(_));
-            if !is_polymorphic {
-                continue;
-            }
-            if ctx
-                .resolve(network, node_type_registry, *dest_node_id, pin_index)
-                .is_none()
-            {
-                network.validation_errors.push(ValidationError::new(
+            let dest_data_type = node_type_registry.get_node_param_data_type(dest_node, arg_index);
+            if !DataType::can_be_converted_to(
+                &source_data_type,
+                &dest_data_type,
+                node_type_registry,
+            ) {
+                return Some(ValidationError::new(
                     format!(
-                        "Output pin '{}' ({}) could not be resolved to a concrete type",
-                        pin.name, pin.data_type
+                        "Data type mismatch: input expects {:?}, but source outputs {:?}",
+                        parameter.data_type, source_data_type
                     ),
-                    Some(*dest_node_id),
+                    Some(dest_node_id),
                 ));
-                return false;
             }
         }
 
-        // Defensive rule: an output pin's resolved type must never be
-        // `AnyFunction`. Built-in nodes don't declare it on outputs
-        // (the registry-build-time debug assertion in `NodeTypeRegistry::add_node_type`
-        // catches authoring mistakes), and no `SameAsInput` / `SameAsArrayElements`
-        // pin can resolve to `AnyFunction` either (sources always carry a fully
-        // -specified `Function`). This is here so a stray hand-edited fixture
-        // can't sneak it past the type checker. See
-        // `doc/design_function_pin_unification.md` Phase A.
-        for pin_index_usize in 0..dest_node_type.output_pin_count() {
-            let pin_index = pin_index_usize as i32;
-            let resolved = ctx.resolve(network, node_type_registry, *dest_node_id, pin_index);
-            if let Some(t) = resolved
-                && matches!(t, DataType::AnyFunction { .. })
-            {
-                let pin = &dest_node_type.output_pins[pin_index_usize];
-                network.validation_errors.push(ValidationError::new(
-                    format!(
-                        "Output pin '{}' resolves to `AnyFunction`; \
-                             `AnyFunction` is an input-pin-only type",
-                        pin.name
-                    ),
-                    Some(*dest_node_id),
-                ));
-                return false;
-            }
+        // Note: a direct "abstract input pin unconnected → invalid" check
+        // is subsumed by the polymorphic-output-unresolved check below
+        // once a node's outputs are migrated to `SameAsInput` /
+        // `SameAsArrayElements`. Not-yet-migrated nodes still declare
+        // `Fixed(Atomic)` on their outputs, and enforcing the rule on
+        // their abstract input pins directly would flag existing valid
+        // graphs invalid before migration lands. The uniform rule is
+        // applied via the output-resolution check below.
+    }
+
+    // Polymorphic output pins must resolve to a concrete type. If any
+    // output is unresolved, the node is flagged invalid. This is the
+    // uniform rule that covers both single-input SameAsInput pins
+    // (disconnected input) and SameAsArrayElements pins (mixed phases,
+    // empty arrays, upstream unresolved).
+    for pin_index_usize in 0..dest_node_type.output_pin_count() {
+        let pin_index = pin_index_usize as i32;
+        let pin = &dest_node_type.output_pins[pin_index_usize];
+        let is_polymorphic = !matches!(pin.data_type, PinOutputType::Fixed(_));
+        if !is_polymorphic {
+            continue;
+        }
+        if ctx
+            .resolve(network, node_type_registry, dest_node_id, pin_index)
+            .is_none()
+        {
+            return Some(ValidationError::new(
+                format!(
+                    "Output pin '{}' ({}) could not be resolved to a concrete type",
+                    pin.name, pin.data_type
+                ),
+                Some(dest_node_id),
+            ));
         }
     }
 
-    true
+    // Defensive rule: an output pin's resolved type must never be
+    // `AnyFunction`. Built-in nodes don't declare it on outputs
+    // (the registry-build-time debug assertion in `NodeTypeRegistry::add_node_type`
+    // catches authoring mistakes), and no `SameAsInput` / `SameAsArrayElements`
+    // pin can resolve to `AnyFunction` either (sources always carry a fully
+    // -specified `Function`). This is here so a stray hand-edited fixture
+    // can't sneak it past the type checker. See
+    // `doc/design_function_pin_unification.md` Phase A.
+    for pin_index_usize in 0..dest_node_type.output_pin_count() {
+        let pin_index = pin_index_usize as i32;
+        let resolved = ctx.resolve(network, node_type_registry, dest_node_id, pin_index);
+        if let Some(t) = resolved
+            && matches!(t, DataType::AnyFunction { .. })
+        {
+            let pin = &dest_node_type.output_pins[pin_index_usize];
+            return Some(ValidationError::new(
+                format!(
+                    "Output pin '{}' resolves to `AnyFunction`; \
+                             `AnyFunction` is an input-pin-only type",
+                    pin.name
+                ),
+                Some(dest_node_id),
+            ));
+        }
+    }
+
+    None
 }
 
 pub fn validate_network(

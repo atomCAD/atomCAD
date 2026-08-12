@@ -24,3 +24,6 @@ mod export_atoms_migration_test;
 
 #[path = "integration/passivate_migration_test.rs"]
 mod passivate_migration_test;
+
+#[path = "integration/validation_corpus_test.rs"]
+mod validation_corpus_test;

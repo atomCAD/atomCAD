@@ -1,0 +1,361 @@
+---
+source: tests/integration/validation_corpus_test.rs
+expression: out
+---
+=== apply_function_pin/apply_over_custom_network_iter.cnnd
+  network 'Main' node=2 pin=0 -> Ok
+  network 'Main' node=3 pin=0 -> Ok
+  network 'Main' node=4 pin=0 -> Ok
+  network 'Main' node=6 pin=0 -> Ok
+  network 'Main' node=7 pin=0 -> Ok
+  network 'mynet' node=1 pin=0 -> Ok
+  network 'mynet' node=2 pin=0 -> Ok
+  network 'mynet' node=3 pin=0 -> Ok
+  network 'mynet' node=4 pin=0 -> Ok
+  network 'mynet' node=5 pin=0 -> Ok
+  network 'mynet' node=6 pin=0 -> Ok
+=== inline_metadata_migration/old_format_metadata.cnnd
+  network 'Main' node=3 pin=0 -> Ok
+=== invariants/healthy.cnnd
+  network 'Sub' node=1 pin=0 -> Error: default input is missing
+  network 'Sub' node=2 pin=0 -> Error: default input is missing
+  network 'Sub' node=3 pin=0 -> Ok
+  network 'main' node=1 pin=0 -> Ok
+  network 'main' node=2 pin=0 -> Ok
+  network 'main' node=3 pin=0 -> Ok
+=== iterator_migration/old_custom_iter_producer_to_array_at.cnnd
+  network 'Main' node=3 pin=0 -> Ok
+=== iterator_migration/old_double_fanout.cnnd
+  network 'Main' node=5 pin=0 -> Error: error in array input (from collect #7): error in iter input (from map #2): map: body has no incoming wire on zone-output pin
+=== iterator_migration/old_filter_to_array_concat.cnnd
+  network 'Main' node=3 pin=0 -> Error: error in a input (from collect #4): error in iter input (from filter #2): filter: body has no incoming wire on zone-output pin
+=== iterator_migration/old_malformed_arguments.cnnd
+  network 'Main' node=3 pin=0 -> Ok
+=== iterator_migration/old_map_to_array_at.cnnd
+  network 'Main' node=4 pin=0 -> Error: error in array input (from collect #5): error in iter input (from map #2): map: body has no incoming wire on zone-output pin
+=== iterator_migration/old_product_to_array_at.cnnd
+  network 'Main' node=5 pin=0 -> Ok
+=== iterator_migration/old_range_to_array_len.cnnd
+  network 'Main' node=2 pin=0 -> Ok
+=== iterator_migration/old_v2_with_iterator_chain.cnnd
+  network 'Main' node=2 pin=0 -> Ok
+=== lattice_space_migration/atom_fill_split.cnnd
+  network 'Main' node=9 pin=0 -> Error: error in shape input (from with_structure #13): error in structure input (from structure #12): error in motif input (from motif #3): Motif not parsed
+=== lattice_space_migration/atom_fill_unwired_shape.cnnd
+  network 'Main' node=2 pin=0 -> Error: shape input is missing
+=== lattice_space_migration/custom_network.cnnd
+  network 'Main' node=1 pin=0 -> Ok
+=== lattice_space_migration/frame_transform_present.cnnd
+  network 'Main' node=1 pin=0 -> Ok
+=== lattice_space_migration/function_type_parameter.cnnd
+  network 'higher_order' node=1 pin=0 -> Error: default input is missing
+=== lattice_space_migration/motif_mof5.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== lattice_space_migration/motif_offset_only_chained.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== lattice_space_migration/motif_offset_only_unchained.cnnd
+  network 'Main' node=2 pin=0 -> Error: shape input is missing
+=== lattice_space_migration/primitive_with_lattice.cnnd
+  network 'Main' node=2 pin=0 -> Ok
+=== lattice_space_migration/real_diamond.cnnd
+  network 'sample' node=12 pin=0 -> Ok
+  network 'sample' node=25 pin=0 -> Ok
+=== lattice_space_migration/real_extrude_demo.cnnd
+  network 'Demo_Extrusion' node=3 pin=0 -> Ok
+  network 'Demo_Extrusion' node=4 pin=0 -> Ok
+  network 'Demo_Extrusion' node=6 pin=0 -> Ok
+  network 'Demo_Extrusion' node=7 pin=0 -> Ok
+  network 'Demo_Extrusion' node=8 pin=0 -> Ok
+  network 'Demo_Extrusion' node=9 pin=0 -> Ok
+  network 'M' node=2 pin=0 -> Ok
+  network 'M' node=3 pin=0 -> Ok
+  network 'P' node=4 pin=0 -> Ok
+  network 'P' node=5 pin=0 -> Ok
+  network 'S' node=4 pin=0 -> Ok
+  network 'S' node=5 pin=0 -> Ok
+=== lattice_space_migration/real_mof5.cnnd
+  network 'motif_MOF5' node=3 pin=0 -> Ok
+  network 'motif_MOF5' node=4 pin=0 -> Ok
+  network 'sample' node=4 pin=0 -> Ok
+  network 'unit_cell_MOF5' node=1 pin=0 -> Ok
+=== lattice_space_migration/shared_unit_cell.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== lattice_space_migration/trivial_v3.cnnd
+  network 'Main' node=1 pin=0 -> Ok
+=== multi_output_migration/old_atom_edit_output_diff_false.cnnd
+  network 'Main' node=3 pin=0 -> Ok
+=== multi_output_migration/old_atom_edit_output_diff_true.cnnd
+  network 'Main' node=3 pin=1 -> Ok
+=== multi_output_migration/old_builtin_only.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== multi_output_migration/old_custom_network.cnnd
+  network 'Main' node=1 pin=0 -> Error: Error in my_shape: error in radius input (from parameter #3): default input is missing
+=== rename_wire_loss/before.cnnd
+  network '0test' node=1 pin=0 -> Ok
+  network '0test' node=2 pin=0 -> Ok
+  network 'BIG_tip' node=3 pin=0 -> Ok
+  network 'BIG_tip' node=5 pin=0 -> Ok
+  network 'BIG_tip' node=6 pin=0 -> Ok
+  network 'BIG_tip' node=8 pin=0 -> Ok
+  network 'BIG_tip' node=11 pin=0 -> Ok
+  network 'BIG_tip' node=14 pin=0 -> Ok
+  network 'BIG_tip' node=15 pin=0 -> Ok
+  network 'BIG_tip' node=17 pin=0 -> Ok
+  network 'BIG_tip' node=18 pin=0 -> Ok
+  network 'TTPL' node=1 pin=0 -> Ok
+  network 'TTPL' node=3 pin=0 -> Ok
+  network 'TTPL' node=4 pin=0 -> Ok
+  network 'TTPL' node=5 pin=0 -> Ok
+  network 'TTPL' node=6 pin=0 -> Ok
+  network 'TTPL' node=7 pin=0 -> Ok
+  network 'TTPL' node=8 pin=0 -> Ok
+  network 'TTPL' node=9 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=1 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=3 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=4 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=5 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=12 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=15 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=19 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=20 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=21 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=22 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=25 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=26 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=27 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=28 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=29 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=31 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=32 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=33 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=34 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=35 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=36 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=36 pin=1 -> Ok
+  network 'TTPL.0_combinatorics' node=37 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=38 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=39 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=40 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=41 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=43 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=44 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=45 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=50 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=51 pin=0 -> Ok
+  network 'TTPL.0_combinatorics' node=52 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=3 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=4 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=5 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=6 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=7 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=9 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=10 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=11 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=15 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=16 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=17 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=18 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=19 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=20 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=24 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=25 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=26 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=27 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=28 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=34 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=35 pin=0 -> Error: shift input is missing
+  network 'TTPL.0_proxy(111)' node=36 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=37 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=38 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=41 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=42 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=46 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=47 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=48 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=49 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=50 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=51 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=53 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=54 pin=0 -> Ok
+  network 'TTPL.0_proxy(111)' node=55 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=14 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=19 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=20 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=21 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=22 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=23 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=24 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=25 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=26 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=29 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=30 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=31 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=32 pin=0 -> Ok
+  network 'TTPL.hexirod(111)' node=33 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=14 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=19 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=20 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=21 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=22 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=23 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=24 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=25 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=26 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=29 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=30 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=31 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=32 pin=0 -> Ok
+  network 'TTPL.hexirod(111)_R30°' node=33 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=4 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=5 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=6 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=7 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=8 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=9 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=10 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=11 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=12 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=13 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=14 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=15 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=16 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=17 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=18 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=19 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=20 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=21 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=22 pin=0 -> Ok
+  network 'TTPL.hexrod(111)' node=23 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=4 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=5 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=6 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=7 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=8 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=9 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=10 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=11 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=12 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=13 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=14 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=15 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=16 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=17 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=18 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=19 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=20 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=21 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=22 pin=0 -> Ok
+  network 'TTPL.hexrod(111)_R30°' node=23 pin=0 -> Ok
+  network 'TTPL.tool-example_no-toothnails' node=2 pin=0 -> Ok
+  network 'TTPL.tool-scaffold' node=1 pin=0 -> Ok
+  network 'TTPL.wall_centered' node=8 pin=0 -> Ok
+  network 'TTPL.wall_centered' node=14 pin=0 -> Ok
+  network 'TTPL.wall_centered' node=15 pin=0 -> Ok
+  network 'TTPL.wall_centered' node=16 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=1 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=2 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=3 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=4 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=5 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=6 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=7 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=9 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=10 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=11 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=12 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=13 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=15 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=16 pin=0 -> Ok
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' node=18 pin=0 -> Ok
+  network 'UNTITLED' node=3 pin=0 -> Error: experiment.naming_ENTERISSUE has no return node
+  network 'UNTITLED' node=6 pin=0 -> Ok
+  network 'UNTITLED' node=7 pin=0 -> Ok
+  network 'UNTITLED' node=10 pin=0 -> Error: experiment.parameter-in-closure has no return node
+  network 'experiment.freeform_prism' node=20 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=27 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=29 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=31 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=32 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=33 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=34 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=35 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=37 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=38 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=39 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=40 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=41 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=42 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=43 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=44 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=45 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=46 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=47 pin=0 -> Ok
+  network 'experiment.freeform_prism' node=49 pin=0 -> Error: x input is missing
+  network 'experiment.freeform_prism' node=50 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=2 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=3 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=4 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=11 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=12 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=13 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=14 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=15 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=16 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=17 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=18 pin=0 -> Ok
+  network 'experiment.freefrom_iprism' node=21 pin=0 -> Error: index input is missing
+  network 'experiment.freefrom_iprism' node=22 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=14 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=15 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=16 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=19 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=20 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=21 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=22 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=23 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=24 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=25 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=26 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=28 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=29 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=30 pin=0 -> Ok
+  network 'experiment.hexirod(111)_copy' node=31 pin=0 -> Ok
+  network 'experiment.naming_ENTERISSUE' node=1 pin=0 -> Error: off1 input is missing
+  network 'experiment.naming_ENTERISSUE' node=2 pin=0 -> Ok
+  network 'experiment.naming_ENTERISSUE' node=3 pin=0 -> Ok
+  network 'experiment.naming_ENTERISSUE' node=4 pin=0 -> Ok
+  network 'experiment.parameter-in-closure' node=1 pin=0 -> Error: closure: body has no incoming wire on zone-output pin
+  network 'experiment.parameter-in-closure' node=2 pin=0 -> Ok
+  network 'z_ISSUE.proxy(111)att2' node=5 pin=0 -> Ok
+  network 'z_ISSUE.proxy(111)att2' node=6 pin=0 -> Ok
+  network 'z_ISSUE.proxy(111)att2' node=7 pin=0 -> Ok
+  network 'z_ISSUE.proxy(111)att2' node=16 pin=0 -> Ok
+  network 'z_ISSUE.proxy(111)att2' node=17 pin=0 -> Ok
+  network 'z_ISSUE.proxy(111)att2' node=18 pin=0 -> Ok
+=== rename_wire_loss/minimal.cnnd
+  network 'victim' node=1 pin=0 -> Ok
+  network 'victim' node=2 pin=0 -> Ok
+=== zones_migration/already_v5.cnnd
+  network 'Main' node=1 pin=0 -> Ok
+=== zones_migration/custom_subnetwork_instance_source.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== zones_migration/nested_custom_network.cnnd
+  network 'Main' node=1 pin=0 -> Ok
+=== zones_migration/no_extras_preserved.cnnd
+  network 'Main' node=3 pin=0 -> Ok
+=== zones_migration/nonprefix_capture.cnnd
+  network 'Main' node=5 pin=0 -> Ok
+=== zones_migration/real_filter_then_fold.cnnd
+  network 'Main' node=8 pin=0 -> Ok
+=== zones_migration/simple_filter_with_capture.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== zones_migration/simple_fold_with_capture.cnnd
+  network 'Main' node=5 pin=0 -> Ok
+=== zones_migration/simple_foreach_with_capture.cnnd
+  network 'Main' node=4 pin=0 -> Ok
+=== zones_migration/simple_map_with_capture.cnnd
+  network 'Main' node=5 pin=0 -> Ok
+=== zones_migration/v3_chained_through.cnnd
+  network 'Main' node=6 pin=0 -> Ok
+=== zones_migration/v4_no_hofs.cnnd
+  network 'Main' node=1 pin=0 -> Ok

@@ -6,11 +6,17 @@
 
 ```bash
 cd rust && cargo test          # All Rust tests
-flutter test integration_test/ # Flutter test
+flutter test integration_test/ # Flutter smoke test — HUMAN-ONLY (see note)
 
 # Coverage report (requires cargo-llvm-cov)
 .\scripts\coverage.ps1 -Open   # Windows: generate and open HTML report
 ```
+
+> **Note:** the Flutter smoke test is run **manually by the maintainer only**.
+> AI agents must not run it — it is unreliable from an agent shell
+> (app-launch/debug-connection failures, window-size-dependent assertions) and
+> wastes minutes per attempt. Agents cover their changes with the Rust suite
+> and `flutter analyze`, and list the smoke test as a pending manual step.
 
 ## Rust Tests (rust/tests/)
 

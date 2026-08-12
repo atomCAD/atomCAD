@@ -87,9 +87,17 @@ cargo test crystolecule        # Crystolecule module
 # Update snapshots after intentional changes
 cargo insta review
 
-# Flutter smoke test
+# Flutter smoke test — HUMAN-ONLY, do not run as an AI agent (see below)
 flutter test integration_test/
 ```
+
+**AI agents must NOT run the Flutter smoke test (`flutter test
+integration_test/`).** It is unreliable when driven from an agent shell on this
+machine (app-launch/debug-connection failures, window-size-dependent layout
+assertions) and burns minutes per attempt. The maintainer runs it manually.
+When a task's checklist calls for the smoke test, treat it as part of the
+manual walkthrough handed to the human — run the Rust suite and
+`flutter analyze` yourself, then list the smoke test as a pending manual step.
 
 See `doc/testing.md` for test coverage details.
 

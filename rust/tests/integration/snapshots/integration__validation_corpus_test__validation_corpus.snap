@@ -1,0 +1,151 @@
+---
+source: tests/integration/validation_corpus_test.rs
+expression: out
+---
+=== apply_function_pin/apply_over_custom_network_iter.cnnd
+  network 'Main' valid=true
+  network 'mynet' valid=true
+=== inline_metadata_migration/old_format_metadata.cnnd
+  network 'Main' valid=true
+=== invariants/healthy.cnnd
+  network 'Sub' valid=true
+  network 'main' valid=true
+=== iterator_migration/old_custom_iter_producer_to_array_at.cnnd
+  network 'Main' valid=true
+  network 'MakeRange' valid=true
+=== iterator_migration/old_double_fanout.cnnd
+  network 'Main' valid=true
+    scope=[] node=2 blocking=false "Zone-output pin 'result' has no incoming wire"
+=== iterator_migration/old_filter_to_array_concat.cnnd
+  network 'Main' valid=true
+    scope=[] node=2 blocking=false "Zone-output pin 'keep' has no incoming wire"
+=== iterator_migration/old_malformed_arguments.cnnd
+  network 'Main' valid=true
+=== iterator_migration/old_malformed_map_output_type.cnnd
+  LOAD FAILED: In network 'Main': unknown variant `ThisIsNotAValidDataType`, expected one of `None`, `Bool`, `String`, `Int`, `Float`, `Vec2`, `Vec3`, `IVec2`, `IVec3`, `IMat2`, `IMat3`, `Mat3`, `LatticeVecs`, `DrawingPlane`, `Geometry2D`, `Blueprint`, `HasAtoms`, `Crystal`, `Molecule`, `HasStructure`, `HasFreeLinOps`, `Motif`, `Structure`, `Unit`, `Array`, `Iterator`, `Optional`, `Function`, `AnyFunction`, `Record`
+=== iterator_migration/old_map_to_array_at.cnnd
+  network 'Main' valid=true
+    scope=[] node=2 blocking=false "Zone-output pin 'result' has no incoming wire"
+=== iterator_migration/old_product_to_array_at.cnnd
+  network 'Main' valid=true
+=== iterator_migration/old_range_to_array_len.cnnd
+  network 'Main' valid=true
+=== iterator_migration/old_v2_with_iterator_chain.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/atom_fill_split.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/atom_fill_unwired_shape.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/atom_trans_present.cnnd
+  network 'Main' valid=false
+    scope=[] node=3 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
+    scope=[] node=6 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
+=== lattice_space_migration/corrupt_v2.cnnd
+  LOAD FAILED: EOF while parsing a value at line 28 column 0
+=== lattice_space_migration/custom_network.cnnd
+  network 'Main' valid=true
+  network 'my_custom' valid=true
+=== lattice_space_migration/frame_transform_present.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/function_type_parameter.cnnd
+  network 'higher_order' valid=true
+=== lattice_space_migration/motif_mof5.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/motif_offset_only_chained.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/motif_offset_only_unchained.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/primitive_with_lattice.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/pure_rename.cnnd
+  network 'Main' valid=false
+    scope=[] node=2 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
+=== lattice_space_migration/real_diamond.cnnd
+  network 'sample' valid=true
+=== lattice_space_migration/real_extrude_demo.cnnd
+  network 'Demo_Extrusion' valid=true
+  network 'M' valid=true
+  network 'P' valid=true
+  network 'S' valid=true
+=== lattice_space_migration/real_mof5.cnnd
+  network 'motif_MOF5' valid=true
+  network 'sample' valid=true
+  network 'unit_cell_MOF5' valid=true
+=== lattice_space_migration/shared_unit_cell.cnnd
+  network 'Main' valid=true
+=== lattice_space_migration/trivial_v3.cnnd
+  network 'Main' valid=true
+=== multi_output_migration/old_atom_edit_output_diff_false.cnnd
+  network 'Main' valid=true
+=== multi_output_migration/old_atom_edit_output_diff_true.cnnd
+  network 'Main' valid=true
+=== multi_output_migration/old_builtin_only.cnnd
+  network 'Main' valid=true
+=== multi_output_migration/old_custom_network.cnnd
+  network 'Main' valid=true
+  network 'my_shape' valid=true
+=== rename_wire_loss/before.cnnd
+  network '0test' valid=true
+  network 'BIG_tip' valid=true
+  network 'TTPL' valid=true
+  network 'TTPL.0_combinatorics' valid=true
+  network 'TTPL.0_proxy(111)' valid=true
+  network 'TTPL.0_tool-on-proxy(111)' valid=false
+    scope=[] node=27 blocking=true "Output pin 'result' (SameAsArrayElements(diffs)) could not be resolved to a concrete type"
+  network 'TTPL.hexirod(111)' valid=true
+  network 'TTPL.hexirod(111)_R30°' valid=true
+  network 'TTPL.hexrod(111)' valid=true
+  network 'TTPL.hexrod(111)_R30°' valid=true
+  network 'TTPL.tool-example_no-toothnails' valid=true
+  network 'TTPL.tool-scaffold' valid=true
+  network 'TTPL.wall_centered' valid=true
+  network 'TTPL.z_combinatorics_zipWith-ISSUE' valid=true
+  network 'UNTITLED' valid=true
+  network 'experiment.freeform_prism' valid=true
+  network 'experiment.freefrom_iprism' valid=true
+  network 'experiment.hexirod(111)_copy' valid=true
+  network 'experiment.naming_ENTERISSUE' valid=true
+  network 'experiment.parameter-in-closure' valid=true
+    scope=[1] node=1 blocking=false "`parameter` nodes are not allowed inside a zone body — use the body's zone-input pins or a capture wire from the enclosing network instead"
+    scope=[] node=1 blocking=false "Zone-output pin 'result' has no incoming wire"
+  network 'z_ISSUE.proxy(111)att1' valid=false
+    scope=[] node=10 blocking=false "Zone-output pin 'out' has no incoming wire"
+    scope=[] node=11 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
+    scope=[] node=8 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
+    scope=[] node=9 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
+  network 'z_ISSUE.proxy(111)att2' valid=true
+=== rename_wire_loss/minimal.cnnd
+  network 'victim' valid=true
+=== zones_migration/already_v5.cnnd
+  network 'Main' valid=true
+=== zones_migration/custom_subnetwork_instance_source.cnnd
+  network 'Main' valid=true
+  network 'ScaleBy' valid=true
+=== zones_migration/hof_source_for_hof_f.cnnd
+  network 'Main' valid=false
+    scope=[] node=2 blocking=true "Data type mismatch: input expects AnyFunction { leading_params: [Float] }, but source outputs Iterator(Int)"
+    scope=[] node=4 blocking=true "Data type mismatch: input expects AnyFunction { leading_params: [Float] }, but source outputs Function(FunctionType { parameter_types: [Iterator(Float)], output_type: Iterator(Float) })"
+=== zones_migration/nested_custom_network.cnnd
+  network 'DoMap' valid=true
+  network 'Main' valid=true
+=== zones_migration/no_extras_preserved.cnnd
+  network 'Main' valid=true
+=== zones_migration/nonprefix_capture.cnnd
+  network 'Main' valid=true
+=== zones_migration/real_filter_then_fold.cnnd
+  network 'Main' valid=true
+=== zones_migration/simple_filter_with_capture.cnnd
+  network 'Main' valid=true
+=== zones_migration/simple_fold_with_capture.cnnd
+  network 'Main' valid=true
+=== zones_migration/simple_foreach_with_capture.cnnd
+  network 'Main' valid=true
+=== zones_migration/simple_map_with_capture.cnnd
+  network 'Main' valid=true
+=== zones_migration/type_mismatch_source.cnnd
+  network 'Main' valid=false
+    scope=[] node=4 blocking=true "Data type mismatch: input expects AnyFunction { leading_params: [Float] }, but source outputs Function(FunctionType { parameter_types: [Vec3], output_type: Vec3 })"
+=== zones_migration/v3_chained_through.cnnd
+  network 'Main' valid=true
+=== zones_migration/v4_no_hofs.cnnd
+  network 'Main' valid=true
