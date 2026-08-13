@@ -381,7 +381,11 @@
       "Bash(RUST_MIN_STACK=67108864 \"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" tag_test::tag_limit_errors_on_offending_node)",
       "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" zones_test::validation_rule2_capture zones_test::validation_rule3 zip_with_test::zip_phase3_retype_lane_drops)",
       "Bash(rust\" | head -10)",
-      "Bash(xargs -I{} echo \"uncommitted tracked changes: {}\")"
+      "Bash(xargs -I{} echo \"uncommitted tracked changes: {}\")",
+      "PowerShell(Set-Content *)",
+      "PowerShell($b=[System.IO.File]::ReadAllBytes\\('lib\\\\structure_designer\\\\structure_designer.dart'\\)[0..3]; $b -join ',')",
+      "PowerShell($p='C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\\\\structure_designer\\\\structure_designer.dart'; $t=[System.IO.File]::ReadAllText\\($p\\); $enc=New-Object System.Text.UTF8Encoding\\($false\\); [System.IO.File]::WriteAllText\\($p,$t,$enc\\); \\([System.IO.File]::ReadAllBytes\\($p\\)[0..3]\\) -join ',')",
+      "PowerShell($p='C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\\\\structure_designer\\\\structure_designer.dart'; $t=[System.IO.File]::ReadAllText\\($p,[System.Text.UTF8Encoding]::new\\($false\\)\\); $bytes=[System.Text.Encoding]::GetEncoding\\(1252\\).GetBytes\\($t\\); [System.IO.File]::WriteAllBytes\\($p,$bytes\\); \"done\")"
     ]
   }
 }

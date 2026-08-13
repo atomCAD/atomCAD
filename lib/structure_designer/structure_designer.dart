@@ -94,6 +94,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
                           MenuItemButton(
                             key: const Key('save_design_item'),
                             onPressed: model.canSave ? _saveDesign : null,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.keyS,
+                                control: true),
                             child: const Text('Save Design'),
                           ),
                           MenuItemButton(
@@ -188,7 +191,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                 ? () {
                                     final desc = graphModel.undo();
                                     if (desc != null) {
-                                      _showUndoRedoSnackBar(
+                                      _showTransientSnackBar(
                                           context, 'Undo: $desc');
                                     }
                                   }
@@ -206,7 +209,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                 ? () {
                                     final desc = graphModel.redo();
                                     if (desc != null) {
-                                      _showUndoRedoSnackBar(
+                                      _showTransientSnackBar(
                                           context, 'Redo: $desc');
                                     }
                                   }
@@ -497,8 +500,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
     );
   }
 
-  /// Global keyboard handler for undo/redo.
-  /// Catches Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y regardless of which panel has focus.
+  /// Global keyboard handler for undo/redo and quick save.
+  /// Catches Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y / Ctrl+S regardless of which panel
+  /// has focus.
   KeyEventResult _handleGlobalKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
@@ -509,7 +513,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
           event.logicalKey == LogicalKeyboardKey.keyY) {
         final desc = graphModel.redo();
         if (desc != null) {
-          _showUndoRedoSnackBar(context, 'Redo: $desc');
+          _showTransientSnackBar(context, 'Redo: $desc');
         }
         return KeyEventResult.handled;
       }
@@ -517,13 +521,20 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (event.logicalKey == LogicalKeyboardKey.keyZ) {
         final desc = graphModel.undo();
         if (desc != null) {
-          _showUndoRedoSnackBar(context, 'Undo: $desc');
+          _showTransientSnackBar(context, 'Undo: $desc');
         }
         return KeyEventResult.handled;
       }
       // Ctrl+`: Toggle Console panel.
       if (event.logicalKey == LogicalKeyboardKey.backquote) {
         graphModel.toggleConsolePanel();
+        return KeyEventResult.handled;
+      }
+      // Ctrl+S: Quick save (issue #397). Shift is excluded so that
+      // Ctrl+Shift+S stays free.
+      if (event.logicalKey == LogicalKeyboardKey.keyS &&
+          !HardwareKeyboard.instance.isShiftPressed) {
+        _saveDesign();
         return KeyEventResult.handled;
       }
     }
@@ -553,7 +564,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
     return KeyEventResult.ignored;
   }
 
-  void _showUndoRedoSnackBar(BuildContext context, String message) {
+  /// Short floating confirmation used by the keyboard-driven actions
+  /// (undo/redo, quick save) that otherwise leave no visible trace.
+  void _showTransientSnackBar(BuildContext context, String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -781,13 +794,36 @@ class _StructureDesignerState extends State<StructureDesigner> {
     }
   }
 
-  void _saveDesign() {
+  /// Quick save — *File > Save Design* and `Ctrl+S` (issue #397).
+  ///
+  /// Writes the design back to the file it was loaded from / last saved to. A
+  /// design that has never been saved has no path, so this falls back to the
+  /// Save As dialog rather than failing with the kernel's "No file path
+  /// available" error: from the keyboard there is no disabled menu item to
+  /// signal that Save isn't applicable yet.
+  ///
+  /// Saving is otherwise silent apart from the window-title dirty marker, so
+  /// the keyboard path confirms itself with a short snack bar.
+  Future<void> _saveDesign() async {
+    // Commit any pending text-field edit before writing the file — property
+    // editors write their value through on focus loss.
     FocusManager.instance.primaryFocus?.unfocus();
+
+    if (graphModel.filePath == null) {
+      await _saveDesignAs();
+      return;
+    }
+    if (!graphModel.isDirty) {
+      _showTransientSnackBar(context, 'No changes to save');
+      return;
+    }
 
     final result = graphModel.saveNodeNetworks();
     if (!result.success) {
       _showSaveErrorDialog(result.errorMessage);
+      return;
     }
+    _showTransientSnackBar(context, 'Saved ${graphModel.displayFileName}');
   }
 
   void _showSaveErrorDialog(String errorMessage) {
