@@ -94,6 +94,15 @@ class TestKeys {
   static const Key atomicVisBallAndStick = Key('atomic_vis_ball_and_stick');
   static const Key atomicVisSpaceFilling = Key('atomic_vis_space_filling');
 
+  // Background visualization keys (Display panel counterparts of the
+  // Preferences > Background checkboxes)
+  static const Key backgroundVisShowAxes = Key('background_vis_show_axes');
+  static const Key backgroundVisShowGrid = Key('background_vis_show_grid');
+
+  // Editing mode keys
+  static const Key modeDirectEditing = Key('mode_direct_editing');
+  static const Key modeNodeNetwork = Key('mode_node_network');
+
   // Camera control keys
   static const Key cameraViewDropdown = Key('camera_view_dropdown');
   static const Key cameraPerspectiveButton = Key('camera_perspective_button');

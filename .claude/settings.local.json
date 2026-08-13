@@ -380,7 +380,8 @@
       "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" tag_test::tag_limit_errors_on_offending_node)",
       "Bash(RUST_MIN_STACK=67108864 \"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" tag_test::tag_limit_errors_on_offending_node)",
       "Bash(\"./target/debug/deps/structure_designer-f376e31b152a0178.exe\" zones_test::validation_rule2_capture zones_test::validation_rule3 zip_with_test::zip_phase3_retype_lane_drops)",
-      "Bash(rust\" | head -10)"
+      "Bash(rust\" | head -10)",
+      "Bash(xargs -I{} echo \"uncommitted tracked changes: {}\")"
     ]
   }
 }

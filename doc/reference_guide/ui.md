@@ -259,6 +259,8 @@ This panel contains common settings for how geometry and atomic structures are v
 
 ![](../atomCAD_images/display_preferences_panel.png)
 
+The buttons are arranged in **groups separated by vertical lines**, and a group is always of one kind: either a *radio group*, where exactly one button is lit at a time (the geometry rendering methods), or a run of independent *on/off toggles* (show axes, show grid). This matters because a lit button looks the same either way — the separators tell you whether the neighbours are alternatives to each other or unrelated switches. Groups covering the same subject sit next to each other, and the whole bar reflows into as many lines as it needs, so widening or narrowing the sidebar changes how the groups are distributed across lines.
+
 ### Geometry Visualization mode
 
 Choose how geometry node outputs are rendered:
@@ -288,6 +290,17 @@ Even when a non-Manual policy is active, you can still toggle a pin's visibility
 - Ball and stick: atoms are represented with small balls (their radius is half the covalent radius) and bonds are represented as sticks.
 - Space-filling: atoms are represented as big balls: their radius is exactly the van der Waals radius (we use data published by Santiago Alvarez in 2014)
 - **Scene transparency** (opacity icon): a toggle that ghosts the whole scene so you can see internal features through their surroundings — a quick, non-destructive alternative to placing [`xray`](nodes/atomic.md#xray) nodes. It flips the *Make whole scene transparent* preference on or off; the alpha it uses (default 0.5) is set in **Edit → Preferences → Atomic Structure Visualization**. Impostor rendering only. It multiplies with any per-region `xray` transparency, so `xray`-ghosted atoms stay more transparent than the rest of the scene.
+
+### Background (axes and grid)
+
+Two toggles for the scene's background furniture, mirroring the checkboxes in **Edit → Preferences → Background**. They are here because they are typically flipped back and forth while framing a screenshot, which is awkward to do from inside the preferences dialog.
+
+- **Show axes** (axis icon): shows or hides the Cartesian axes. Same setting as *Show Axes* in the preferences dialog; the subordinate *Show Lattice Axes* option remains there.
+- **Show grid** (grid icon): shows or hides the Cartesian grid. Note this is a *different* control from the **Wireframe** geometry rendering mode, whose icon is also a grid — wireframe changes how your geometry is drawn, this one only affects the background.
+
+### Editing mode
+
+The last group switches between [Direct Editing Mode](./direct_editing.md) (pencil icon) and Node Network Mode (tree icon), the same as *View → Switch to …*. The pencil is greyed out when there is no displayed `atom_edit` node selected to edit; its tooltip says so.
 
 ## Camera Control Panel
 
@@ -364,9 +377,9 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Setting | Description |
 |---------|-------------|
 | Background Color | The scene background color. |
-| Show Axes | Toggles visibility of the Cartesian axes. |
+| Show Axes | Toggles visibility of the Cartesian axes. Mirrors the toggle in the [Display Preferences panel](#background-axes-and-grid). |
 | Show Lattice Axes | Toggles dotted lines showing non-Cartesian lattice directions (nested under Show Axes). |
-| Show Grid | Toggles visibility of the Cartesian grid. |
+| Show Grid | Toggles visibility of the Cartesian grid. Mirrors the toggle in the [Display Preferences panel](#background-axes-and-grid). |
 | Grid Size | Spacing between grid lines. |
 | Grid Color / Grid Strong Color | Colors for regular and primary (axis-aligned) grid lines. |
 | Show Lattice Grid | Toggles a secondary grid aligned to the lattice (useful for non-cubic unit cells). |

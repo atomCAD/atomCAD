@@ -17,9 +17,13 @@ structure_designer/
 ├── main_content_area.dart            # Resizable split: viewport + (network editor | schema editor)
 ├── schema_editor.dart                # Record-def field editor (active when activeRecordDefName != null)
 ├── camera_control_widget.dart        # Camera view selector (ortho/perspective)
-├── node_display_widget.dart          # Display policy buttons (Manual/Selected/Frontier)
-├── atomic_structure_visualization_widget.dart  # Atom/bond 3D display
-├── geometry_visualization_widget.dart          # Geometry 3D display
+├── display_panel.dart                # DISPLAY section: assembles the clusters below
+├── display_button_group.dart         # Icon button + grouping/separator/wrap rules
+├── geometry_visualization_widget.dart          # Geometry 3D display cluster
+├── atomic_structure_visualization_widget.dart  # Atom/bond 3D display cluster
+├── background_visualization_widget.dart        # Show axes / show grid cluster
+├── node_display_widget.dart          # Display policy cluster (Manual/Selected/Frontier)
+├── mode_toggle_widget.dart           # Direct Editing / Node Network mode cluster
 ├── preferences_window.dart           # Settings dialog
 ├── factor_into_subnetwork_dialog.dart # Extract selection to subnetwork
 ├── extract_closure_to_network_dialog.dart # Name dialog for Closure→Network conversion
@@ -51,6 +55,14 @@ User interaction → Model method → Rust API call → refreshFromKernel() → 
 Access via `Provider.of<StructureDesignerModel>(context)` or `Consumer<StructureDesignerModel>`.
 
 All Rust state is fetched into `NodeNetworkView` (the model's snapshot of current network state).
+
+## DISPLAY panel (sidebar)
+
+The DISPLAY section is a bar of small icon buttons assembled by `display_panel.dart` out of *clusters*, one per subject, each built by the file that owns that subject (`geometry_visualization_widget.dart`, `background_visualization_widget.dart`, …). Those files export a `xxxCluster(model)` **function**, not a widget — `DisplayPanel` owns the single `Consumer<StructureDesignerModel>`.
+
+The grouping contract is documented in `display_button_group.dart` and is worth knowing before adding a control: a `DisplayButtonGroup` is never a mix of radio-group members and toggles (both render "selected" identically, so a mixed group is ambiguous), and separators between groups are inserted by `DisplayGroupBar` rather than by callers. Line breaking is computed from a fixed button extent — if you change `DisplayIconButton`'s icon size or padding, update the extent constants alongside it.
+
+**Adding a display control means adding it to the cluster whose subject it belongs to.** A new cluster is warranted only by a genuinely new subject, and must then be added to *both* branches of `DisplayPanel` (or deliberately just the Node Network one — Direct Editing Mode drops the geometry and node-display-policy clusters).
 
 ## Property Panel Scope (zones)
 

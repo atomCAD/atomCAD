@@ -1,147 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_preferences.dart';
-import 'package:provider/provider.dart';
-import '../common/ui_common.dart';
+import 'display_button_group.dart';
 import 'structure_designer_model.dart';
 
-/// Widget that allows selecting between different geometry visualization modes
-class GeometryVisualizationWidget extends StatelessWidget {
-  final StructureDesignerModel model;
+/// The geometry cluster of the DISPLAY panel: the rendering-method radio group,
+/// then the "show geometry shell on Crystal and Molecule" toggle.
+///
+/// Two groups rather than one because the shell toggle is a different axis of
+/// choice from the rendering method — see `display_button_group.dart`.
+DisplayGroupCluster geometryVisualizationCluster(StructureDesignerModel model) {
+  final prefs = model.preferences?.geometryVisualizationPreferences;
 
-  const GeometryVisualizationWidget({
-    super.key,
-    required this.model,
-  });
+  void setMethod(GeometryVisualization visualization, bool wireframe) {
+    if (prefs == null) return;
+    prefs.geometryVisualization = visualization;
+    prefs.wireframeGeometry = wireframe;
+    model.setPreferences(model.preferences!);
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: model,
-      child: Consumer<StructureDesignerModel>(
-        builder: (context, model, child) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              // Surface Splatting Button (point cloud visualization)
-              _buildIconButton(
-                context,
-                Icons.blur_on, // Using blur_on to represent point cloud
-                'Geometry visualization: Surface Splatting',
-                key: const Key('geometry_vis_surface_splatting'),
-                isSelected: model.preferences?.geometryVisualizationPreferences
-                        .geometryVisualization ==
-                    GeometryVisualization.surfaceSplatting,
-                onPressed: () {
-                  model.preferences?.geometryVisualizationPreferences
-                          .geometryVisualization =
-                      GeometryVisualization.surfaceSplatting;
-                  model.preferences?.geometryVisualizationPreferences
-                      .wireframeGeometry = false;
-                  model.setPreferences(model.preferences!);
-                },
-              ),
-
-              // Wireframe Button
-              _buildIconButton(
-                context,
-                Icons.grid_3x3, // Using grid to represent wireframe
-                'Geometry visualization: Wireframe',
-                key: const Key('geometry_vis_wireframe'),
-                isSelected: model.preferences?.geometryVisualizationPreferences
-                            .geometryVisualization ==
-                        GeometryVisualization.explicitMesh &&
-                    model.preferences?.geometryVisualizationPreferences
-                            .wireframeGeometry ==
-                        true,
-                onPressed: () {
-                  model.preferences?.geometryVisualizationPreferences
-                          .geometryVisualization =
-                      GeometryVisualization.explicitMesh;
-                  model.preferences?.geometryVisualizationPreferences
-                      .wireframeGeometry = true;
-                  model.setPreferences(model.preferences!);
-                },
-              ),
-
-              // Solid Button
-              _buildIconButton(
-                context,
-                Icons.view_in_ar, // Using 3D object icon for solid
-                'Geometry visualization: Solid',
-                key: const Key('geometry_vis_solid'),
-                isSelected: model.preferences?.geometryVisualizationPreferences
-                            .geometryVisualization ==
-                        GeometryVisualization.explicitMesh &&
-                    model.preferences?.geometryVisualizationPreferences
-                            .wireframeGeometry ==
-                        false,
-                onPressed: () {
-                  model.preferences?.geometryVisualizationPreferences
-                          .geometryVisualization =
-                      GeometryVisualization.explicitMesh;
-                  model.preferences?.geometryVisualizationPreferences
-                      .wireframeGeometry = false;
-                  model.setPreferences(model.preferences!);
-                },
-              ),
-
-              // Separator between "geometry rendering method" cluster and
-              // the "shell display" toggle (different axis of choice).
-              Container(
-                width: 1,
-                height: 20,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                color: Colors.grey[400],
-              ),
-
-              // Show geometry shell on Crystal / Molecule toggle
-              _buildIconButton(
-                context,
-                Icons.layers,
-                'Show geometry shell on Crystal and Molecule',
-                key: const Key('geometry_vis_shell_on_atomic'),
-                isSelected: model.preferences?.geometryVisualizationPreferences
-                        .showGeometryShellForAtomic ==
-                    true,
-                onPressed: () {
-                  final current = model
-                          .preferences
-                          ?.geometryVisualizationPreferences
-                          .showGeometryShellForAtomic ??
-                      true;
-                  model.preferences?.geometryVisualizationPreferences
-                      .showGeometryShellForAtomic = !current;
-                  model.setPreferences(model.preferences!);
-                },
-              ),
-            ],
-          );
+  return DisplayGroupCluster([
+    // Radio group: how geometry node outputs are rendered.
+    DisplayButtonGroup([
+      DisplayIconButton(
+        key: const Key('geometry_vis_surface_splatting'),
+        icon: Icons.blur_on, // Using blur_on to represent point cloud
+        tooltip: 'Geometry visualization: Surface Splatting',
+        isSelected: prefs?.geometryVisualization ==
+            GeometryVisualization.surfaceSplatting,
+        onPressed: () =>
+            setMethod(GeometryVisualization.surfaceSplatting, false),
+      ),
+      DisplayIconButton(
+        key: const Key('geometry_vis_wireframe'),
+        icon: Icons.grid_3x3, // Using grid to represent wireframe
+        tooltip: 'Geometry visualization: Wireframe',
+        isSelected: prefs?.geometryVisualization ==
+                GeometryVisualization.explicitMesh &&
+            prefs?.wireframeGeometry == true,
+        onPressed: () => setMethod(GeometryVisualization.explicitMesh, true),
+      ),
+      DisplayIconButton(
+        key: const Key('geometry_vis_solid'),
+        icon: Icons.view_in_ar, // Using 3D object icon for solid
+        tooltip: 'Geometry visualization: Solid',
+        isSelected: prefs?.geometryVisualization ==
+                GeometryVisualization.explicitMesh &&
+            prefs?.wireframeGeometry == false,
+        onPressed: () => setMethod(GeometryVisualization.explicitMesh, false),
+      ),
+    ]),
+    // Toggle: draw the geometry shell alongside the atoms of Crystal/Molecule.
+    DisplayButtonGroup([
+      DisplayIconButton(
+        key: const Key('geometry_vis_shell_on_atomic'),
+        icon: Icons.layers,
+        tooltip: 'Show geometry shell on Crystal and Molecule',
+        isSelected: prefs?.showGeometryShellForAtomic == true,
+        onPressed: () {
+          if (prefs == null) return;
+          prefs.showGeometryShellForAtomic = !prefs.showGeometryShellForAtomic;
+          model.setPreferences(model.preferences!);
         },
       ),
-    );
-  }
-
-  Widget _buildIconButton(BuildContext context, IconData icon, String tooltip,
-      {required bool isSelected, required VoidCallback onPressed, Key? key}) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        key: key,
-        color: isSelected ? AppColors.primaryAccent : Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4.0)),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4.0),
-          onTap: onPressed,
-          child: Padding(
-            padding: const EdgeInsets.all(2.0),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isSelected ? Colors.white : Colors.grey[700],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+    ]),
+  ]);
 }

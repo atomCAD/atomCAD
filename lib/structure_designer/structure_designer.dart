@@ -10,13 +10,10 @@ import 'structure_designer_model.dart';
 import 'node_network/node_network.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
-import 'atomic_structure_visualization_widget.dart';
-import 'geometry_visualization_widget.dart';
+import 'display_panel.dart';
 import 'import_cnnd_library_dialog.dart';
 import 'node_networks_list/node_networks_panel.dart';
-import 'node_display_widget.dart';
 import 'node_data/node_data_widget.dart';
-import 'direct_mode_display_widget.dart';
 import 'camera_control_widget.dart';
 import 'preferences_window.dart';
 import 'main_content_area.dart';
@@ -332,13 +329,14 @@ class _StructureDesignerState extends State<StructureDesigner> {
           ),
           child: Column(
             children: [
-              // Simplified Display section (atomic visualization + mode switch)
+              // Simplified Display section (no geometry / node display policy)
               Section(
                 title: 'Display',
                 content: Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8.0, vertical: 4.0),
-                  child: DirectModeDisplayWidget(model: graphModel),
+                  child:
+                      DisplayPanel(model: graphModel, directEditingMode: true),
                 ),
                 expand: false,
               ),
@@ -431,33 +429,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
           title: 'Display',
           content: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: Column(
-              children: [
-                // First row: Geometry visualization and Node display
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    GeometryVisualizationWidget(model: graphModel),
-                    NodeDisplayWidget(model: graphModel),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                // Second row: Atomic structure visualization + mode switch
-                Row(
-                  children: [
-                    AtomicStructureVisualizationWidget(model: graphModel),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 1,
-                      height: 20,
-                      color: Colors.grey.shade400,
-                    ),
-                    const SizedBox(width: 8),
-                    ModeToggleButtons(model: graphModel),
-                  ],
-                ),
-              ],
-            ),
+            child: DisplayPanel(model: graphModel),
           ),
           expand: false,
         ),
