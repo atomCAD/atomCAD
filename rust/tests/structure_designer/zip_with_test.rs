@@ -322,6 +322,14 @@ fn wire_body_node_to_zone_output(
             source_pin: SourcePin::NodeOutput { pin_index: 0 },
             source_scope_depth: 0,
         });
+
+    // The app's mutators re-validate after every structural edit; this helper
+    // pokes the registry directly, so re-validate by hand. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error left behind by the
+    // mid-construction validate is **blocking**, and a blocking error
+    // cone-poisons its node (D3) — without this the HOF would never evaluate.
+    designer.validate_active_network();
 }
 
 /// Build a 2-lane Int zip whose body sums the two elements. Returns
@@ -824,6 +832,12 @@ fn zip_nested_in_map_body_with_deep_capture() {
             });
     }
 
+    // Re-validate after the direct-registry construction above: since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error is blocking and would
+    // cone-poison the HOF (D3).
+    designer.validate_active_network();
+
     // Zip body: expr `a + b + e` where `e` deep-captures the outer map's
     // element (ZoneInput pin 0 of map_id at depth 2 from the zip body).
     let expr_id = {
@@ -928,6 +942,12 @@ fn zip_nested_in_map_body_with_deep_capture() {
                 source_scope_depth: 0,
             });
     }
+
+    // Re-validate after the direct-registry construction above: since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error is blocking and would
+    // cone-poison the zip node (D3).
+    designer.validate_active_network();
 
     // Per outer element e ∈ [0,1]: zip [1,2,3] ⊗ [10,20] with a+b+e →
     // [11+e, 22+e], collected into an array.
@@ -1073,10 +1093,15 @@ fn zip_malformed_body_single_construction_error() {
     designer.connect_nodes(r2, 0, zip_id, 1);
     // No body, no zone-output wire.
 
+    // Since the D9 severity sweep (`doc/design_error_management.md` Phase 6)
+    // the missing zone-output wire is a **blocking** validation error, so the
+    // zip is cone-poisoned: its `eval` is never entered and the output is the
+    // synthesized validation text rather than `build_inline_closure`'s
+    // runtime message. Either way it is one error, not one per element.
     let result = evaluate_node(&designer, "main", zip_id);
     match result {
         NetworkResult::Error(msg) => assert!(
-            msg.contains("zip_with") && msg.contains("zone-output"),
+            msg.contains("Zone-output pin") && msg.contains("no incoming wire"),
             "unexpected error message: {}",
             msg
         ),
@@ -2273,6 +2298,14 @@ fn build_zip_with_nested_map_deep_captures(designer: &mut StructureDesigner) -> 
     designer.connect_nodes(r1, 0, zip_id, 0);
     designer.connect_nodes(r2, 0, zip_id, 1);
     designer.connect_nodes(r3, 0, zip_id, 2);
+
+    // The bodies above were poked straight into the registry, and an ordinary
+    // (non-function) wire does not re-validate — so the stale "Zone-output pin
+    // ... has no incoming wire" error would survive. Since the D9 severity
+    // sweep (`doc/design_error_management.md` Phase 6) that error is blocking
+    // and would cone-poison the zip (D3). The app's real body-wiring path
+    // (`connect_zone_output_wire`) validates for exactly this reason.
+    designer.validate_active_network();
 
     (zip_id, map_id, inner_expr_id)
 }

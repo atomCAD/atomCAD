@@ -25,8 +25,11 @@ use rust_lib_flutter_cad::structure_designer::node_network::{
 };
 use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
+use rust_lib_flutter_cad::structure_designer::nodes::motif_sub::MotifSubData;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 // ============================================================================
 // Helpers
@@ -68,10 +71,34 @@ fn add_expr_with_unwired_param(designer: &mut StructureDesigner) -> u64 {
     expr_id
 }
 
+/// Add a `motif_sub` whose stored parameter-element definition does not parse.
+/// Since Phase 6 this is the canonical *non-blocking* validation error
+/// ("Parameter element parse error: …", attributed to the node,
+/// `blocking == false`): `motif_sub::eval` ignores `self.error` entirely and
+/// still emits a usable motif, so the node's output stays useful. Its required
+/// `motif` input is left unwired, so the node *also* fails at runtime for an
+/// independent reason — the warning + eval-error pair.
+///
+/// (The former fixture here — a `map` with an empty inline body — became
+/// *blocking* in the D9 severity sweep, so it no longer exercises the
+/// warning arm of the gate.)
+fn add_motif_sub_with_bad_definition(designer: &mut StructureDesigner) -> u64 {
+    let id = designer.add_node("motif_sub", DVec2::new(0.0, 0.0));
+    let mut data = MotifSubData {
+        parameter_element_value_definition: "PRIMARY C EXTRA TOKENS".to_string(),
+        error: None,
+        parameter_element_values: HashMap::new(),
+        available_parameters: RefCell::new(Vec::new()),
+    };
+    let _ = data.parse_and_validate(0);
+    designer.set_node_network_data_scoped(&[], id, Box::new(data));
+    id
+}
+
 /// Add `range -> map` where the map's inline body is left empty — its
-/// `result` zone-output pin has no incoming wire, which is the canonical
-/// *non-blocking* validation error ("Zone-output pin 'result' has no incoming
-/// wire", attributed to the map node, `blocking == false`).
+/// `result` zone-output pin has no incoming wire, a **blocking** validation
+/// error on the map node since the D9 severity sweep.
+#[allow(dead_code)]
 fn add_map_with_empty_body(designer: &mut StructureDesigner) -> u64 {
     let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
     designer.set_node_network_data_scoped(
@@ -183,32 +210,33 @@ fn unattributed_error_neither_shows_nor_suppresses() {
 // Integration tests — real validate + refresh state through the same helper
 // ============================================================================
 
-/// Design-doc Phase 1 test 1: node A (a `map` with an empty body) carries a
-/// validation *warning*, node B (an `expr` with an unwired parameter) fails at
-/// runtime → B's badge shows its runtime error. Under the old network-wide
-/// gate the warning anywhere in the network hid B's eval error.
+/// Design-doc Phase 1 test 1: node A (a `motif_sub` with an unparseable
+/// definition) carries a validation *warning*, node B (an `expr` with an
+/// unwired parameter) fails at runtime → B's badge shows its runtime error.
+/// Under the old network-wide gate the warning anywhere in the network hid
+/// B's eval error.
 #[test]
 fn runtime_error_badge_survives_warning_elsewhere_in_network() {
     let mut designer = setup_designer_with_network("main");
 
-    let map_id = add_map_with_empty_body(&mut designer);
+    let warned_id = add_motif_sub_with_bad_definition(&mut designer);
     let expr_id = add_expr_with_unwired_param(&mut designer);
 
     // Only the runtime-error node is displayed (and therefore evaluated).
-    designer.set_node_display(map_id, false);
+    designer.set_node_display(warned_id, false);
     designer.set_node_display(expr_id, true);
 
     designer.validate_active_network();
 
     let errors = validation_errors_of(&designer);
-    let map_warning = errors
+    let warning = errors
         .iter()
-        .find(|e| e.node_id == Some(map_id))
-        .expect("empty map body must produce a validation error on the map node");
+        .find(|e| e.node_id == Some(warned_id))
+        .expect("an unparseable definition must produce a validation error on the node");
     assert!(
-        !map_warning.blocking,
-        "the zone-output rule must be non-blocking; got: {}",
-        map_warning.error_text
+        !warning.blocking,
+        "the motif_sub parse-error rule must be non-blocking; got: {}",
+        warning.error_text
     );
     assert!(
         designer.get_active_node_network().unwrap().valid,
@@ -242,12 +270,12 @@ fn runtime_error_badge_survives_warning_elsewhere_in_network() {
 fn warning_and_own_runtime_error_are_both_shown() {
     let mut designer = setup_designer_with_network("main");
 
-    let map_id = add_map_with_empty_body(&mut designer);
-    // Displayed → evaluated → `build_inline_closure` fails on the missing
-    // zone-output wire, the same condition the warning predicts. (Phase 6's
-    // severity sweep will later promote this rule to blocking and dedupe the
-    // pair; at this phase both messages showing is the specified behavior.)
-    designer.set_node_display(map_id, true);
+    // Displayed → evaluated → the required `motif` input is unwired, so the
+    // node fails at runtime for a reason *independent* of the advisory parse
+    // warning. That independence is the point: the warning must not mask the
+    // more specific runtime failure.
+    let node_id = add_motif_sub_with_bad_definition(&mut designer);
+    designer.set_node_display(node_id, true);
 
     designer.validate_active_network();
     full_refresh(&mut designer);
@@ -255,16 +283,16 @@ fn warning_and_own_runtime_error_are_both_shown() {
     let errors = validation_errors_of(&designer);
     let warning_text = errors
         .iter()
-        .find(|e| e.node_id == Some(map_id) && !e.blocking)
-        .expect("map must carry its non-blocking zone-output error")
+        .find(|e| e.node_id == Some(node_id) && !e.blocking)
+        .expect("motif_sub must carry its non-blocking parse error")
         .error_text
         .clone();
     let eval_error = designer
         .last_generated_structure_designer_scene
-        .get_node_error(&[], map_id)
-        .expect("the displayed map with an empty body must record a runtime error");
+        .get_node_error(&[], node_id)
+        .expect("the displayed motif_sub with an unwired motif input must record a runtime error");
 
-    let messages = collect_node_error_messages(&errors, map_id, Some(eval_error.clone()));
+    let messages = collect_node_error_messages(&errors, node_id, Some(eval_error.clone()));
     assert_eq!(
         messages,
         vec![warning_text, eval_error],

@@ -225,6 +225,12 @@ fn wire_function_pin(
             source_pin: SourcePin::NodeOutput { pin_index: -1 },
             source_scope_depth: 0,
         });
+    // Wiring `f` suspends the HOF's "zone-output pin needs a wire" rule, but
+    // only on the next validate pass — and this helper pokes the registry
+    // directly instead of going through a re-validating mutator. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) that stale
+    // error is **blocking**, so it would cone-poison the HOF (D3).
+    designer.validate_active_network();
 }
 
 /// Build and register a custom network `name` whose interface is `params`
@@ -450,6 +456,14 @@ fn wire_body_node_to_zone_output(
             source_pin: SourcePin::NodeOutput { pin_index: 0 },
             source_scope_depth: 0,
         });
+
+    // The app's mutators re-validate after every structural edit; this helper
+    // pokes the registry directly, so re-validate by hand. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error left behind by the
+    // mid-construction validate is **blocking**, and a blocking error
+    // cone-poisons its node (D3) — without this the HOF would never evaluate.
+    designer.validate_active_network();
 }
 
 /// Add a map-like `(Int) -> Int` `closure` node whose body computes `expression`
@@ -519,6 +533,12 @@ fn wire_pin0(
             source_pin: SourcePin::NodeOutput { pin_index: 0 },
             source_scope_depth: 0,
         });
+    // Wiring `f` suspends the HOF's "zone-output pin needs a wire" rule, but
+    // only on the next validate pass — and this helper pokes the registry
+    // directly instead of going through a re-validating mutator. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) that stale
+    // error is **blocking**, so it would cone-poison the HOF (D3).
+    designer.validate_active_network();
 }
 
 /// Read the `map.f` consumer wire's `(source_node_id, source_pin)`.

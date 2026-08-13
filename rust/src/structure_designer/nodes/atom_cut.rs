@@ -11,6 +11,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::first_array_element_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -85,6 +86,15 @@ impl NodeData for AtomCutData {
             let err = NetworkResult::Error("Invalid shapes input.".to_string());
             return EvalOutput::multi(vec![err.clone(), err]);
         };
+
+        // Chain hygiene (`doc/design_error_management.md` Phase 6): a cutter
+        // element that is itself an `Error` must forward its own text. The loop
+        // below silently *drops* every non-Blueprint element, so without this an
+        // upstream failure would turn into a wrong (smaller) cut with no error
+        // at all — the worst shape of inner-cause loss.
+        if let Some(err) = first_array_element_error("cutters", &shape_results) {
+            return EvalOutput::multi(vec![err.clone(), err]);
+        }
 
         let mut shapes: Vec<GeoNode> = Vec::new();
         for shape_val in shape_results {

@@ -9,6 +9,7 @@ use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::evaluator::network_result::first_array_element_error;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::propagate_alignment_with_reason;
 use crate::structure_designer::evaluator::network_result::structure_mismatch_error;
@@ -63,6 +64,9 @@ impl NodeData for DiffData {
             context,
         ) {
             Ok(parts) => parts,
+            Err(HelperUnionError::Upstream(err)) => {
+                return EvalOutput::single(*err);
+            }
             Err(HelperUnionError::NoShapes) => {
                 return EvalOutput::single(error_in_input(&base_input_name));
             }
@@ -84,6 +88,9 @@ impl NodeData for DiffData {
                 context,
             ) {
                 Ok(parts) => parts,
+                Err(HelperUnionError::Upstream(err)) => {
+                    return EvalOutput::single(*err);
+                }
                 Err(HelperUnionError::NoShapes) => {
                     return EvalOutput::single(error_in_input(&sub_input_name));
                 }
@@ -134,6 +141,12 @@ impl NodeData for DiffData {
 }
 
 enum HelperUnionError {
+    /// The input, or one of its elements, evaluated to an `Error`. The payload
+    /// is the (already localized) error to forward verbatim, so the upstream
+    /// root cause survives instead of collapsing into a bare
+    /// "error in <pin> input" (`doc/design_error_management.md` Phase 6 —
+    /// chain hygiene).
+    Upstream(Box<NetworkResult>),
     /// The input array was empty, missing, or contained a non-Blueprint value.
     NoShapes,
     /// Two or more Blueprints in the array carried different Structures.
@@ -159,7 +172,7 @@ fn helper_union<'a>(
     );
 
     if let NetworkResult::Error(_) = shapes_val {
-        return Err(HelperUnionError::NoShapes);
+        return Err(HelperUnionError::Upstream(Box::new(shapes_val)));
     }
 
     let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
@@ -167,6 +180,16 @@ fn helper_union<'a>(
     } else {
         return Err(HelperUnionError::NoShapes);
     };
+
+    if let Some(err) = first_array_element_error(
+        &registry.get_parameter_name(
+            NetworkStackElement::get_top_node(network_stack, node_id),
+            parameter_index,
+        ),
+        &shape_results,
+    ) {
+        return Err(HelperUnionError::Upstream(Box::new(err)));
+    }
 
     if shape_results.is_empty() {
         return Err(HelperUnionError::NoShapes);

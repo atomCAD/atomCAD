@@ -17,8 +17,11 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types:
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::nodes::expr::{ExprData, ExprParameter};
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
+use rust_lib_flutter_cad::structure_designer::nodes::motif_sub::MotifSubData;
 use rust_lib_flutter_cad::structure_designer::nodes::range::RangeData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 // ============================================================================
 // Helpers
@@ -78,10 +81,32 @@ fn fix_expr(designer: &mut StructureDesigner, expr_id: u64) {
     designer.set_node_network_data_scoped(&[], expr_id, Box::new(data));
 }
 
+/// Add a displayed `motif_sub` whose stored parameter-element definition does
+/// not parse: a **non-blocking** validation warning on the node
+/// ("Parameter element parse error: …", surfaced by `NodeData::get_data_error`
+/// since `doc/design_error_management.md` Phase 6) *and*, because its required
+/// `motif` input is unwired, an independent runtime failure. The canonical
+/// warning + eval-error pair after the D9 severity sweep promoted the
+/// zone-output rule to blocking.
+fn add_displayed_motif_sub_with_bad_definition(designer: &mut StructureDesigner) -> u64 {
+    let id = designer.add_node("motif_sub", DVec2::new(0.0, 0.0));
+    let mut data = MotifSubData {
+        parameter_element_value_definition: "PRIMARY C EXTRA TOKENS".to_string(),
+        error: None,
+        parameter_element_values: HashMap::new(),
+        available_parameters: RefCell::new(Vec::new()),
+    };
+    let _ = data.parse_and_validate(0);
+    designer.set_node_network_data_scoped(&[], id, Box::new(data));
+    designer.set_node_display(id, true);
+    id
+}
+
 /// Add a displayed `range -> map` where the map's inline body is left empty:
-/// a non-blocking validation warning on the map ("Zone-output pin 'result'
-/// has no incoming wire") *and* a runtime failure when the displayed map
-/// evaluates its empty body.
+/// a **blocking** validation error on the map ("Zone-output pin 'result' has
+/// no incoming wire" — blocking since the D9 severity sweep) whose eval entry
+/// is the deduped synthesized vehicle.
+#[allow(dead_code)]
 fn add_displayed_map_with_empty_body(designer: &mut StructureDesigner) -> u64 {
     let range_id = designer.add_node("range", DVec2::new(0.0, 0.0));
     designer.set_node_network_data_scoped(
@@ -208,31 +233,33 @@ fn poisoned_node_contributes_exactly_one_entry() {
 #[test]
 fn warning_plus_eval_error_contributes_two_entries() {
     let mut designer = setup_designer_with_network("main");
-    let map_id = add_displayed_map_with_empty_body(&mut designer);
+    let node_id = add_displayed_motif_sub_with_bad_definition(&mut designer);
     validate_and_refresh(&mut designer);
 
     let networks = designer.get_node_networks_with_errors();
     let main = network_entry(&networks, "main");
-    let map_rows: Vec<_> = main
+    let rows: Vec<_> = main
         .validation_errors
         .iter()
-        .filter(|e| e.node_id == Some(map_id))
+        .filter(|e| e.node_id == Some(node_id))
         .collect();
     assert_eq!(
-        map_rows.len(),
+        rows.len(),
         2,
         "warning + eval error must both appear; got: {:?}",
-        map_rows
-            .iter()
+        rows.iter()
             .map(|e| (&e.error_text, e.source))
             .collect::<Vec<_>>()
     );
-    let warning = map_rows
+    let warning = rows
         .iter()
         .find(|e| e.source == APIErrorSource::Validation)
-        .expect("the amber zone-output warning is present");
-    assert!(!warning.blocking, "the zone-output rule is a warning");
-    let eval = map_rows
+        .expect("the amber parse-error warning is present");
+    assert!(
+        !warning.blocking,
+        "the motif_sub parse-error rule is a warning (its eval still emits a usable motif)"
+    );
+    let eval = rows
         .iter()
         .find(|e| e.source == APIErrorSource::Evaluation)
         .expect("the red runtime entry is present");

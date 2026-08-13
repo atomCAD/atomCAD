@@ -7,6 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::evaluator::network_result::BlueprintData;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::first_array_element_error;
 use crate::structure_designer::evaluator::network_result::propagate_alignment_with_reason;
 use crate::structure_designer::evaluator::network_result::structure_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
@@ -60,6 +61,14 @@ impl NodeData for IntersectData {
                 "Expected array of geometry shapes".to_string(),
             ));
         };
+
+        // Chain hygiene (`doc/design_error_management.md` Phase 6): an element
+        // that is itself an `Error` must forward its own text — falling through
+        // to the "All inputs must be geometry objects" arm below would replace
+        // the upstream root cause with a misleading type complaint.
+        if let Some(err) = first_array_element_error("shapes", &shape_results) {
+            return EvalOutput::single(err);
+        }
 
         let shape_count = shape_results.len();
 

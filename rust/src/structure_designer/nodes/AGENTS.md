@@ -134,6 +134,46 @@ Access pin 0's declared type via `node_type.output_type()` — returns `&DataTyp
 3. For polymorphic nodes (abstract input), match on the concrete variant (`NetworkResult::Crystal(c) => ...`, `NetworkResult::Molecule(m) => ...`) and re-wrap in the same variant at the output so `SameAsInput` typing is preserved. See `structure_move.rs` / `atom_edit_data.rs` for reference.
 4. Return `EvalOutput::single(NetworkResult::Blueprint(...))` for single-output, or `EvalOutput::multi(vec![...])` for multi-output.
 
+### Errors: never re-wrap, never replace an upstream cause
+
+An error a node receives on an input is **already localized and already
+chained** — `evaluate_arg` is the chaining hub (`error in {pin} input (from
+{type} #{id}): {inner}`, `network_result::error_in_input_chained`) and it also
+records the D7 **origin link** that makes "Go to root cause" work
+(`doc/design_error_management.md`). Two rules follow, and both are about not
+destroying information the evaluator already produced:
+
+- **Do not re-wrap.** Forward an errored input verbatim
+  (`if let NetworkResult::Error(_) = v { return EvalOutput::single(v); }`, the
+  near-universal early-return guard). Adding another `error in … input:` layer
+  on top duplicates the hub's own wrap and makes the message a nesting doll.
+  Multi-output nodes forward it on **every** pin (`multi(vec![err.clone(),
+  err])`), never `single(err)` — see the diff-output bullet above.
+- **Never replace an error with a type complaint.** The recurring bug shape is
+  a `match` that dispatches on the expected variant and falls through to an
+  ad-hoc `"all inputs must be X"` arm — which an `Error` value also lands in,
+  so the root cause is swapped for a sentence that is simply false. This bites
+  hardest on **array inputs**, whose elements can individually be errors
+  (`sequence` stores each wired input verbatim; `collect` can drain an erroring
+  stream). Right after unwrapping `NetworkResult::Array(..)`, and **before** any
+  per-element dispatch, call the shared scanner:
+
+  ```rust
+  if let Some(err) = first_array_element_error("shapes", &shape_results) {
+      return EvalOutput::single(err);
+  }
+  ```
+
+  Current callers: `union` / `union_2d` / `intersect` / `intersect_2d` /
+  `diff` / `diff_2d` (through `helper_union`'s `HelperUnionError::Upstream`
+  variant), `atom_union`, `atom_cut`, `atom_composediff`. `patch_build` does
+  the same inline with an explicit per-element `Error` arm. A loop that
+  *silently drops* unexpected elements (as `atom_cut` did) is the worst
+  variant — the node then produces a quietly wrong result with no error at all.
+
+Errors are runtime-only (`NetworkResult` has no `Serialize`/`PartialEq`), and
+`convert_to` is a no-op on `Error`, so forwarding is always type-safe.
+
 ## edit_atom/ Subdirectory
 
 Interactive atom editing node with command history (undo/redo):

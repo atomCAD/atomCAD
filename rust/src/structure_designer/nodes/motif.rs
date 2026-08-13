@@ -7,7 +7,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{EvalOutput, NodeData, NodeDataError};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -101,6 +101,15 @@ impl NodeData for MotifData {
         _connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
         self.name.clone()
+    }
+
+    /// Blocking: with an unparsed definition there is no motif to emit — `eval`
+    /// returns this very text as its `NetworkResult::Error`. Reporting it here
+    /// puts the failure in the unified error list (`doc/design_error_management.md`
+    /// D9) and cone-poisons the node, which makes D8's dedupe drop the
+    /// now-redundant eval entry so the badge shows the sentence exactly once.
+    fn get_data_error(&self) -> Option<NodeDataError> {
+        self.error.clone().map(NodeDataError::blocking)
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {

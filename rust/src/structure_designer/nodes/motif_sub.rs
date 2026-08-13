@@ -5,7 +5,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::node_data::{EvalOutput, NodeData};
+use crate::structure_designer::node_data::{EvalOutput, NodeData, NodeDataError};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -201,6 +201,15 @@ impl NodeData for MotifSubData {
         _connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
         None
+    }
+
+    /// Non-blocking: `eval` never consults `self.error` — an unparsed
+    /// definition simply leaves `parameter_element_values` empty and the node
+    /// still emits a usable motif. Surfacing it here folds the previously
+    /// badge-only parse error into the unified list
+    /// (`doc/design_error_management.md` D9).
+    fn get_data_error(&self) -> Option<NodeDataError> {
+        self.error.clone().map(NodeDataError::warning)
     }
 
     fn get_text_properties(&self) -> Vec<(String, TextValue)> {

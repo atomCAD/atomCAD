@@ -8,6 +8,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::evaluator::network_result::error_in_input;
+use crate::structure_designer::evaluator::network_result::first_array_element_error;
 use crate::structure_designer::evaluator::network_result::input_missing_error;
 use crate::structure_designer::evaluator::network_result::unit_cell_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
@@ -54,52 +55,53 @@ impl NodeData for Diff2DData {
             return EvalOutput::single(input_missing_error(&base_input_name));
         }
 
-        let (mut geometry, mut frame_translation, base_drawing_plane) = helper_union(
+        let (mut geometry, mut frame_translation, result_drawing_plane) = match helper_union(
             network_evaluator,
             network_stack,
             node_id,
             0,
             registry,
             context,
-        );
-
-        if geometry.is_none() {
-            return EvalOutput::single(error_in_input(&base_input_name));
-        }
-
-        if base_drawing_plane.is_none() {
-            return EvalOutput::single(unit_cell_mismatch_error());
-        }
-
-        let result_drawing_plane = base_drawing_plane.unwrap();
+        ) {
+            Ok(parts) => parts,
+            Err(HelperUnionError::Upstream(err)) => {
+                return EvalOutput::single(*err);
+            }
+            Err(HelperUnionError::NoShapes) => {
+                return EvalOutput::single(error_in_input(&base_input_name));
+            }
+            Err(HelperUnionError::PlaneMismatch) => {
+                return EvalOutput::single(unit_cell_mismatch_error());
+            }
+        };
 
         if !node.arguments[1].is_empty() {
-            let (sub_geometry, sub_frame_translation, sub_drawing_plane) = helper_union(
+            let (sub_geometry, sub_frame_translation, sub_drawing_plane) = match helper_union(
                 network_evaluator,
                 network_stack,
                 node_id,
                 1,
                 registry,
                 context,
-            );
-
-            if sub_geometry.is_none() {
-                return EvalOutput::single(error_in_input(&sub_input_name));
-            }
-
-            if sub_drawing_plane.is_none() {
-                return EvalOutput::single(unit_cell_mismatch_error());
-            }
+            ) {
+                Ok(parts) => parts,
+                Err(HelperUnionError::Upstream(err)) => {
+                    return EvalOutput::single(*err);
+                }
+                Err(HelperUnionError::NoShapes) => {
+                    return EvalOutput::single(error_in_input(&sub_input_name));
+                }
+                Err(HelperUnionError::PlaneMismatch) => {
+                    return EvalOutput::single(unit_cell_mismatch_error());
+                }
+            };
 
             // Check drawing plane compatibility between base and sub
-            if !result_drawing_plane.is_compatible(&sub_drawing_plane.unwrap()) {
+            if !result_drawing_plane.is_compatible(&sub_drawing_plane) {
                 return EvalOutput::single(unit_cell_mismatch_error());
             }
 
-            geometry = Some(GeoNode::difference_2d(
-                Box::new(geometry.unwrap()),
-                Box::new(sub_geometry.unwrap()),
-            ));
+            geometry = GeoNode::difference_2d(Box::new(geometry), Box::new(sub_geometry));
 
             frame_translation += sub_frame_translation;
             frame_translation *= 0.5;
@@ -108,7 +110,7 @@ impl NodeData for Diff2DData {
         EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
             drawing_plane: result_drawing_plane,
             frame_transform: Transform2D::new(frame_translation, 0.0),
-            geo_tree_root: geometry.unwrap(),
+            geo_tree_root: geometry,
         }))
     }
 
@@ -131,6 +133,20 @@ impl NodeData for Diff2DData {
     }
 }
 
+/// Why `helper_union` could not produce a unioned geometry for one input pin.
+enum HelperUnionError {
+    /// The input, or one of its elements, evaluated to an `Error`. The payload
+    /// is the (already localized) error to forward verbatim, so the upstream
+    /// root cause survives instead of collapsing into a bare
+    /// "error in <pin> input" (`doc/design_error_management.md` Phase 6 —
+    /// chain hygiene).
+    Upstream(Box<NetworkResult>),
+    /// The input array was empty, missing, or contained a non-Geometry2D value.
+    NoShapes,
+    /// Two or more geometries in the array sit on incompatible drawing planes.
+    PlaneMismatch,
+}
+
 fn helper_union<'a>(
     network_evaluator: &NetworkEvaluator,
     network_stack: &[NetworkStackElement<'a>],
@@ -138,7 +154,7 @@ fn helper_union<'a>(
     parameter_index: usize,
     registry: &NodeTypeRegistry,
     context: &mut NetworkEvaluationContext,
-) -> (Option<GeoNode>, DVec2, Option<DrawingPlane>) {
+) -> Result<(GeoNode, DVec2, DrawingPlane), HelperUnionError> {
     let mut shapes: Vec<GeoNode> = Vec::new();
     let mut frame_translation = DVec2::ZERO;
 
@@ -151,20 +167,32 @@ fn helper_union<'a>(
     );
 
     if let NetworkResult::Error(_) = shapes_val {
-        return (None, DVec2::ZERO, None);
+        return Err(HelperUnionError::Upstream(Box::new(shapes_val)));
     }
 
     // Extract the array elements from shapes_val
     let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
         array_elements
     } else {
-        return (None, DVec2::ZERO, None);
+        return Err(HelperUnionError::NoShapes);
     };
+
+    // Chain hygiene (`doc/design_error_management.md` Phase 6): forward a
+    // failing element's own error instead of reporting it as `NoShapes`.
+    if let Some(err) = first_array_element_error(
+        &registry.get_parameter_name(
+            NetworkStackElement::get_top_node(network_stack, node_id),
+            parameter_index,
+        ),
+        &shape_results,
+    ) {
+        return Err(HelperUnionError::Upstream(Box::new(err)));
+    }
 
     let shape_count = shape_results.len();
 
     if shape_count == 0 {
-        return (None, DVec2::ZERO, None);
+        return Err(HelperUnionError::NoShapes);
     }
 
     // Extract geometries and check unit cell compatibility
@@ -173,13 +201,13 @@ fn helper_union<'a>(
         if let NetworkResult::Geometry2D(shape) = shape_val {
             geometries.push(shape);
         } else {
-            return (None, DVec2::ZERO, None);
+            return Err(HelperUnionError::NoShapes);
         }
     }
 
     // Check drawing plane compatibility - compare all to the first geometry
     if !GeometrySummary2D::all_have_compatible_drawing_planes(&geometries) {
-        return (None, DVec2::ZERO, None);
+        return Err(HelperUnionError::PlaneMismatch);
     }
 
     // All drawing planes are compatible, proceed with union
@@ -190,11 +218,11 @@ fn helper_union<'a>(
     }
 
     frame_translation /= shape_count as f64;
-    (
-        Some(GeoNode::union_2d(shapes)),
+    Ok((
+        GeoNode::union_2d(shapes),
         frame_translation,
-        Some(first_drawing_plane),
-    )
+        first_drawing_plane,
+    ))
 }
 
 pub fn get_node_type() -> NodeType {

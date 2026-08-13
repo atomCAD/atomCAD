@@ -1161,6 +1161,28 @@ fn validate_zones_recursive(
             continue;
         };
 
+        // Stored-data errors (`doc/design_error_management.md` D9, Phase 6):
+        // `motif` / `motif_sub` / `materialize` parse a user-typed definition
+        // string when their data is set and keep the failure on the node data.
+        // That used to be a **third** error channel — visible only as a node
+        // badge, absent from the panel list and the F8 cycle. Asking the node
+        // data on every validate pass folds it into the one unified list with
+        // no transient `initial_errors` plumbing to keep in sync.
+        //
+        // Deliberately does **not** set `ok = false` even for a blocking one:
+        // `ok` drives the parent's `ZONE_BODY_INVALID_MARKER`, i.e. it poisons
+        // the *owning HOF*. A broken `motif` inside a body should darken that
+        // motif's cone (which the blocking flag already does via D3), not the
+        // whole HOF — the same blast-radius argument D3 made for the network.
+        if let Some(data_error) = node.data.get_data_error() {
+            let error = if data_error.blocking {
+                ValidationError::new(data_error.message, Some(node_id))
+            } else {
+                ValidationError::warning(data_error.message, Some(node_id))
+            };
+            network.validation_errors.push(error);
+        }
+
         // Rule 1: every zone-output pin must have at least one incoming wire.
         //
         // Suspended for an HOF whose `f` (Function) pin is connected: the
@@ -1176,18 +1198,28 @@ fn validate_zones_recursive(
                     .map(|arg| !arg.incoming_wires.is_empty())
                     .unwrap_or(false);
                 if !has_wire {
-                    // Non-blocking (does NOT set `ok = false`): the evaluator
-                    // already turns a missing zone-output wire into a localized
-                    // `NetworkResult::Error` (`zone_closure::build_inline_closure`),
-                    // so an independent HOF/closure with an unwired body should
-                    // not blank the whole viewport. We still push the error so
-                    // the node lights up with a badge — but because the runtime
-                    // poisons only this node and its downstream cone, the rest of
-                    // the network stays evaluable. When the closure is actually
-                    // consumed, the consumer goes dark via normal error
-                    // propagation. (closures `doc/design_closures.md`
+                    // **Blocking** since the D9 severity sweep
+                    // (`doc/design_error_management.md` Phase 6). This rule was
+                    // a warning only because the runtime already localized the
+                    // failure — `zone_closure::build_inline_closure` turns a
+                    // missing zone-output wire into a `NetworkResult::Error`, so
+                    // blocking under the *old* whole-network semantics would
+                    // have blanked the viewport. Under cone-scoped blocking (D3)
+                    // that reason is gone: the node's output genuinely is
+                    // unavailable, skip-and-synthesize reports the same *fact*
+                    // (in this rule's wording rather than
+                    // `build_inline_closure`'s, so downstream chain text shifts
+                    // slightly), and D8's dedupe now shows **one** entry instead
+                    // of an amber validation row plus the red eval row it
+                    // predicted. (closures `doc/design_closures.md`
                     // §"Validation" check 1 / check 2.)
-                    network.validation_errors.push(ValidationError::warning(
+                    //
+                    // Deliberately does NOT set `ok = false`: `ok` drives the
+                    // parent's `ZONE_BODY_INVALID_MARKER`, which would poison
+                    // the *enclosing* HOF for a broken nested closure. The
+                    // blocking flag alone confines the damage to this node's
+                    // cone, which is the whole point of the sweep.
+                    network.validation_errors.push(ValidationError::new(
                         format!("Zone-output pin '{}' has no incoming wire", pin.name),
                         Some(node_id),
                     ));
@@ -1206,16 +1238,22 @@ fn validate_zones_recursive(
         // `ancestors` is non-empty exactly when `network` is a body (Pass B
         // recurses with the extended chain), so this fires only inside bodies.
         //
-        // Non-blocking (does NOT set `ok = false`) per the blast-radius litmus
-        // test in `structure_designer/AGENTS.md`: `ParameterData::eval` detects
-        // the same condition and returns a localized `NetworkResult::Error`, so
-        // one stray body `parameter` in a legacy file must not blank the whole
-        // network. Every authoring path that could create one is refused up
+        // **Blocking** since the D9 severity sweep
+        // (`doc/design_error_management.md` Phase 6) — third member of the
+        // "demoted only because the runtime already localizes it" class:
+        // `ParameterData::eval` detects the same condition and returns a
+        // localized `NetworkResult::Error`, which under the old whole-network
+        // semantics would have blanked everything. The node's output is not
+        // useful, so blocking is the honest severity; skip-and-synthesize now
+        // reports this (more specific) text instead and D8's dedupe keeps it to
+        // one entry. Every authoring path that could create one is refused up
         // front (`add_node_scoped`, `paste_at_position_scoped`,
         // `duplicate_node_scoped`, plus the add-node popup filter), so in
         // practice this rule only ever sees hand-authored or pre-#417 `.cnnd`.
+        // Does NOT set `ok = false` — poisoning the enclosing HOF for one stray
+        // body node is exactly the blast radius D3 shrank.
         if !ancestors.is_empty() && !allowed_in_zone_body(&node.node_type_name) {
-            network.validation_errors.push(ValidationError::warning(
+            network.validation_errors.push(ValidationError::new(
                 format!(
                     "`{}` nodes are not allowed inside a zone body — use the body's \
                      zone-input pins or a capture wire from the enclosing network instead",
@@ -1232,13 +1270,15 @@ fn validate_zones_recursive(
         // function-type/shape is checked by `validate_wires` via
         // `can_be_converted_to`, like any other typed wire.
         if node.node_type_name == "apply" && !function_input_pin_connected(node, node_type) {
-            // Non-blocking (does NOT set `ok = false`), same rationale as the
+            // **Blocking** since the D9 severity sweep, same rationale as the
             // zone-output rule above: `apply.eval` returns a clean localized
-            // `NetworkResult::Error("apply: f not connected")` when `f` is
-            // disconnected (`nodes/apply.rs`), so an independent/unconsumed
-            // `apply` with no `f` must not blank the whole network. The badge
-            // still appears; only nodes downstream of this `apply` go dark.
-            network.validation_errors.push(ValidationError::warning(
+            // `NetworkResult::Error("apply: f not connected")` (`nodes/apply.rs`),
+            // so this was demoted purely to avoid the old whole-network blank.
+            // Under D3 the `apply`'s output is unavailable and only its cone
+            // goes dark either way, so blocking is the honest severity and D8's
+            // dedupe collapses the former amber+red pair into one entry.
+            // Does NOT set `ok = false` — see the zone-output rule above.
+            network.validation_errors.push(ValidationError::new(
                 "apply: required `f` (Function) pin is not connected".to_string(),
                 Some(node_id),
             ));

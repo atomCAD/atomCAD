@@ -131,6 +131,13 @@ fn wire_body_node_to_zone_output(
             source_pin: SourcePin::NodeOutput { pin_index: 0 },
             source_scope_depth: 0,
         });
+    // The app's mutators re-validate after every structural edit; this helper
+    // pokes the registry directly, so re-validate by hand. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error left behind by the
+    // mid-construction validate is **blocking**, and a blocking error
+    // cone-poisons its node (D3) — without this the HOF would never evaluate.
+    designer.validate_active_network();
 }
 
 fn evaluate_node(designer: &StructureDesigner, network_name: &str, node_id: u64) -> NetworkResult {
@@ -312,7 +319,7 @@ fn duplicate_in_body_refuses_a_legacy_parameter() {
 // ============================================================================
 
 #[test]
-fn validator_flags_body_parameter_without_blocking() {
+fn validator_flags_body_parameter_cone_scoped() {
     let mut designer = setup_designer_with_network("main");
     let map_id = map_over_range(&mut designer);
     let param_id = force_parameter_into_body(&mut designer, "main", map_id, "legacy");
@@ -337,12 +344,30 @@ fn validator_flags_body_parameter_without_blocking() {
         "unexpected message: {}",
         err.error_text
     );
-    assert!(!err.blocking, "the rule must be non-blocking");
+    assert!(
+        err.blocking,
+        "since the D9 severity sweep (`doc/design_error_management.md` Phase 6)          the rule is blocking — a body `parameter` has no coherent argument to          read, so its output is unavailable"
+    );
 
-    // Non-blocking ⇒ neither the body nor the network is invalidated, so the
-    // rest of the design keeps evaluating.
+    // Blocking but node-attributed ⇒ it cone-poisons the `parameter` only.
+    // Neither the body nor the network is invalidated (D5's residue-only
+    // `valid`), and the rule deliberately does not raise the body's
+    // `ZONE_BODY_INVALID_MARKER`, so the enclosing `map` is not poisoned
+    // either — the rest of the design keeps evaluating.
     assert!(body.valid, "body must stay valid");
     assert!(network.valid, "network must stay valid");
+    assert!(
+        !network
+            .validation_errors
+            .iter()
+            .any(|e| e.node_id == Some(map_id)),
+        "the enclosing map must not be poisoned by the body rule; errors: {:?}",
+        network
+            .validation_errors
+            .iter()
+            .map(|e| (e.node_id, e.error_text.clone()))
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]

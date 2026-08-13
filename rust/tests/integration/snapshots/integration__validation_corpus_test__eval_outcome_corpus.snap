@@ -25,14 +25,8 @@ expression: out
   network 'main' node=3 pin=0 -> Ok
 === iterator_migration/old_custom_iter_producer_to_array_at.cnnd
   network 'Main' node=3 pin=0 -> Ok
-=== iterator_migration/old_double_fanout.cnnd
-  network 'Main' node=5 pin=0 -> Error: error in array input (from collect #7): error in iter input (from map #2): map: body has no incoming wire on zone-output pin
-=== iterator_migration/old_filter_to_array_concat.cnnd
-  network 'Main' node=3 pin=0 -> Error: error in a input (from collect #4): error in iter input (from filter #2): filter: body has no incoming wire on zone-output pin
 === iterator_migration/old_malformed_arguments.cnnd
   network 'Main' node=3 pin=0 -> Ok
-=== iterator_migration/old_map_to_array_at.cnnd
-  network 'Main' node=4 pin=0 -> Error: error in array input (from collect #5): error in iter input (from map #2): map: body has no incoming wire on zone-output pin
 === iterator_migration/old_product_to_array_at.cnnd
   network 'Main' node=5 pin=0 -> Ok
 === iterator_migration/old_range_to_array_len.cnnd
@@ -324,8 +318,6 @@ expression: out
   network 'experiment.naming_ENTERISSUE' node=2 pin=0 -> Ok
   network 'experiment.naming_ENTERISSUE' node=3 pin=0 -> Ok
   network 'experiment.naming_ENTERISSUE' node=4 pin=0 -> Ok
-  network 'experiment.parameter-in-closure' node=1 pin=0 -> Error: closure: body has no incoming wire on zone-output pin
-  network 'experiment.parameter-in-closure' node=2 pin=0 -> Ok
   network 'z_ISSUE.proxy(111)att2' node=5 pin=0 -> Ok
   network 'z_ISSUE.proxy(111)att2' node=6 pin=0 -> Ok
   network 'z_ISSUE.proxy(111)att2' node=7 pin=0 -> Ok

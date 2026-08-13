@@ -515,3 +515,6 @@ mod eval_error_snapshot_test;
 
 #[path = "structure_designer/error_origins_test.rs"]
 mod error_origins_test;
+
+#[path = "structure_designer/chain_hygiene_test.rs"]
+mod chain_hygiene_test;

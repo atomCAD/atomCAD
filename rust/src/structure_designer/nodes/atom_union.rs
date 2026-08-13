@@ -5,7 +5,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::{
-    Alignment, NetworkResult, propagate_alignment_with_reason,
+    Alignment, NetworkResult, first_array_element_error, propagate_alignment_with_reason,
 };
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
@@ -56,6 +56,14 @@ impl NodeData for AtomUnionData {
                 "Expected array of atomic structures".to_string(),
             ));
         };
+
+        // Chain hygiene (`doc/design_error_management.md` Phase 6): an element
+        // that is itself an `Error` must forward its own text — the
+        // "All inputs must be atomic structures" arms below would replace the
+        // upstream root cause with a misleading type complaint.
+        if let Some(err) = first_array_element_error("structures", &structure_results) {
+            return EvalOutput::single(err);
+        }
 
         if structure_results.is_empty() {
             return EvalOutput::single(NetworkResult::Error(

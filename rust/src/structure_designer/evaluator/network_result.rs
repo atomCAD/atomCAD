@@ -1239,6 +1239,35 @@ pub fn error_in_input_chained(
     }
 }
 
+/// Scans the elements of an evaluated `Array` input and returns the **first**
+/// element that is an `Error`, re-wrapped so the element's own text (the root
+/// cause) survives and the failing index is named.
+///
+/// Array elements can carry errors: `sequence` puts each wired input into the
+/// array verbatim, and `collect` can drain an erroring stream. A consumer that
+/// pattern-matches elements for its expected variant and falls through to an
+/// ad-hoc "all inputs must be X" message **destroys the root cause** — the user
+/// is told the array holds the wrong kind of thing when in truth one upstream
+/// node failed. Call this right after unwrapping `NetworkResult::Array(..)`,
+/// before any per-element type dispatch. See `doc/design_error_management.md`
+/// Phase 6 ("chain hygiene") and the no-re-wrap convention in
+/// `structure_designer/nodes/AGENTS.md`.
+pub fn first_array_element_error(
+    input_name: &str,
+    elements: &[NetworkResult],
+) -> Option<NetworkResult> {
+    elements.iter().enumerate().find_map(|(index, element)| {
+        if let NetworkResult::Error(inner) = element {
+            Some(NetworkResult::Error(format!(
+                "error in {} input (element {}): {}",
+                input_name, index, inner
+            )))
+        } else {
+            None
+        }
+    })
+}
+
 pub fn runtime_type_error_in_input(input_param_index: usize) -> NetworkResult {
     NetworkResult::Error(format!(
         "runtime type error in the {} indexed input",

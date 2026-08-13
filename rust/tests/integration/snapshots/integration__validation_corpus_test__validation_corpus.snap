@@ -1,6 +1,5 @@
 ---
 source: tests/integration/validation_corpus_test.rs
-assertion_line: 157
 expression: out
 ---
 === apply_function_pin/apply_over_custom_network_iter.cnnd
@@ -16,17 +15,17 @@ expression: out
   network 'MakeRange' valid=true
 === iterator_migration/old_double_fanout.cnnd
   network 'Main' valid=true
-    scope=[] node=2 blocking=false "Zone-output pin 'result' has no incoming wire"
+    scope=[] node=2 blocking=true "Zone-output pin 'result' has no incoming wire"
 === iterator_migration/old_filter_to_array_concat.cnnd
   network 'Main' valid=true
-    scope=[] node=2 blocking=false "Zone-output pin 'keep' has no incoming wire"
+    scope=[] node=2 blocking=true "Zone-output pin 'keep' has no incoming wire"
 === iterator_migration/old_malformed_arguments.cnnd
   network 'Main' valid=true
 === iterator_migration/old_malformed_map_output_type.cnnd
   LOAD FAILED: In network 'Main': unknown variant `ThisIsNotAValidDataType`, expected one of `None`, `Bool`, `String`, `Int`, `Float`, `Vec2`, `Vec3`, `IVec2`, `IVec3`, `IMat2`, `IMat3`, `Mat3`, `LatticeVecs`, `DrawingPlane`, `Geometry2D`, `Blueprint`, `HasAtoms`, `Crystal`, `Molecule`, `HasStructure`, `HasFreeLinOps`, `Motif`, `Structure`, `Unit`, `Array`, `Iterator`, `Optional`, `Function`, `AnyFunction`, `Record`
 === iterator_migration/old_map_to_array_at.cnnd
   network 'Main' valid=true
-    scope=[] node=2 blocking=false "Zone-output pin 'result' has no incoming wire"
+    scope=[] node=2 blocking=true "Zone-output pin 'result' has no incoming wire"
 === iterator_migration/old_product_to_array_at.cnnd
   network 'Main' valid=true
 === iterator_migration/old_range_to_array_len.cnnd
@@ -35,6 +34,7 @@ expression: out
   network 'Main' valid=true
 === lattice_space_migration/atom_fill_split.cnnd
   network 'Main' valid=true
+    scope=[] node=9 blocking=false "Parameter element parse error: Parse error at line 1: Expected format: PARAMETER_NAME ELEMENT_NAME, got 3 tokens"
 === lattice_space_migration/atom_fill_unwired_shape.cnnd
   network 'Main' valid=true
 === lattice_space_migration/atom_trans_present.cnnd
@@ -107,10 +107,10 @@ expression: out
   network 'experiment.hexirod(111)_copy' valid=true
   network 'experiment.naming_ENTERISSUE' valid=true
   network 'experiment.parameter-in-closure' valid=true
-    scope=[1] node=1 blocking=false "`parameter` nodes are not allowed inside a zone body — use the body's zone-input pins or a capture wire from the enclosing network instead"
-    scope=[] node=1 blocking=false "Zone-output pin 'result' has no incoming wire"
+    scope=[1] node=1 blocking=true "`parameter` nodes are not allowed inside a zone body — use the body's zone-input pins or a capture wire from the enclosing network instead"
+    scope=[] node=1 blocking=true "Zone-output pin 'result' has no incoming wire"
   network 'z_ISSUE.proxy(111)att1' valid=true
-    scope=[] node=10 blocking=false "Zone-output pin 'out' has no incoming wire"
+    scope=[] node=10 blocking=true "Zone-output pin 'out' has no incoming wire"
     scope=[] node=11 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
     scope=[] node=8 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"
     scope=[] node=9 blocking=true "Output pin 'result' (SameAsInput(input)) could not be resolved to a concrete type"

@@ -113,6 +113,38 @@ impl Clone for Box<dyn NodeData> {
     }
 }
 
+/// A stored-data problem reported by [`NodeData::get_data_error`], which the
+/// validator turns into a `ValidationError` attributed to the node.
+///
+/// `blocking` follows the same litmus as every other validation rule (see
+/// `structure_designer/AGENTS.md`, "Validation errors: blocking vs
+/// non-blocking vs interface"): *is the node's output still useful?* A `motif`
+/// whose definition failed to parse has no motif to emit, so it blocks (and is
+/// cone-poisoned); `materialize` / `motif_sub` merely lose their per-element
+/// overrides and keep producing atoms, so they warn.
+pub struct NodeDataError {
+    pub message: String,
+    pub blocking: bool,
+}
+
+impl NodeDataError {
+    /// The node's output is unavailable — cone-poisons the node (D3).
+    pub fn blocking(message: String) -> Self {
+        Self {
+            message,
+            blocking: true,
+        }
+    }
+
+    /// Advisory — the node keeps evaluating and producing a useful value.
+    pub fn warning(message: String) -> Self {
+        Self {
+            message,
+            blocking: false,
+        }
+    }
+}
+
 pub trait NodeData: Any + AsAny {
     fn provide_gadget(
         &self,
@@ -176,6 +208,25 @@ pub trait NodeData: Any + AsAny {
     /// Default implementation returns empty HashMap (assumes all non-property parameters are required).
     fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
         HashMap::new()
+    }
+
+    /// A problem in this node's **stored data** — typically a parse error in a
+    /// definition string the user typed — that the validator should surface as
+    /// a `ValidationError` on every validate pass.
+    ///
+    /// Nodes like `motif` / `motif_sub` / `materialize` parse a stored text
+    /// definition when their data is set (`parse_and_validate`) and keep the
+    /// failure in a `#[serde(skip)]` `error` field. Before this hook that
+    /// failure reached the user only through the node's own eval/badge — it was
+    /// a third, ad-hoc error channel invisible to the panel's error list and to
+    /// the F8 cycle. Reporting it here folds it into the one unified list
+    /// (`doc/design_error_management.md` D9), and because the validator asks on
+    /// every pass there is no transient `initial_errors` plumbing to keep in
+    /// sync.
+    ///
+    /// Default: `None` — a node with no stored-data failure mode.
+    fn get_data_error(&self) -> Option<NodeDataError> {
+        None
     }
 
     /// Adapt this node's stored data so its pins line up with a dragged source pin.

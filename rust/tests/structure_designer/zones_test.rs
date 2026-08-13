@@ -248,6 +248,14 @@ fn wire_body_node_to_zone_output(
             source_pin: SourcePin::NodeOutput { pin_index: 0 },
             source_scope_depth: 0,
         });
+
+    // The app's mutators re-validate after every structural edit; this helper
+    // pokes the registry directly, so re-validate by hand. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error left behind by the
+    // mid-construction validate is **blocking**, and a blocking error
+    // cone-poisons its node (D3) — without this the HOF would never evaluate.
+    designer.validate_active_network();
 }
 
 /// Generalized version of `wire_zone_input_to_body_node` that lets the caller
@@ -2136,13 +2144,16 @@ fn validation_rule1_zone_output_pin_missing_wire() {
 }
 
 /// Adding a zone-bearing node (here a `closure`) must validate immediately so
-/// its badge appears at once — but the empty body's missing zone-output wire is
-/// a *non-blocking* error, so the network stays valid. Regression test for the
-/// "different error message" half of the closure refresh bug (an unvalidated
-/// closure surfaced only the eval-time hover message, not the canonical
-/// validation error), now also asserting the error doesn't blank the network.
+/// its badge appears at once. Since the D9 severity sweep
+/// (`doc/design_error_management.md` Phase 6) the empty body's missing
+/// zone-output wire is a **blocking** error — but it is node-attributed, so
+/// under cone-scoped blocking (D3) the network still stays `valid` and only
+/// the closure's own cone goes dark. Regression test for the "different error
+/// message" half of the closure refresh bug (an unvalidated closure surfaced
+/// only the eval-time hover message, not the canonical validation error),
+/// now also asserting the error doesn't blank the network.
 #[test]
-fn adding_closure_node_validates_with_nonblocking_error() {
+fn adding_closure_node_validates_with_blocking_but_cone_scoped_error() {
     let mut designer = setup_designer_with_network("main");
 
     let closure_id = designer.add_node("closure", DVec2::new(0.0, 0.0));
@@ -2158,7 +2169,8 @@ fn adding_closure_node_validates_with_nonblocking_error() {
     assert!(
         network.valid,
         "An empty `closure` must NOT invalidate the network (its missing \
-         zone-output wire is a non-blocking error)"
+         zone-output wire is node-attributed, so it cone-poisons the closure \
+         instead of blanking the network)"
     );
     let badge = network
         .validation_errors
@@ -2166,8 +2178,8 @@ fn adding_closure_node_validates_with_nonblocking_error() {
         .find(|e| e.node_id == Some(closure_id));
     assert!(
         badge.is_some(),
-        "Adding an empty `closure` should immediately surface a (non-blocking) \
-         validation error on the closure node; errors: {:?}",
+        "Adding an empty `closure` should immediately surface a validation \
+         error on the closure node; errors: {:?}",
         network
             .validation_errors
             .iter()
@@ -2175,8 +2187,9 @@ fn adding_closure_node_validates_with_nonblocking_error() {
             .collect::<Vec<_>>(),
     );
     assert!(
-        !badge.unwrap().blocking,
-        "the missing zone-output-wire error must be non-blocking"
+        badge.unwrap().blocking,
+        "since the D9 severity sweep the missing zone-output-wire error is \
+         blocking (the closure's output is unavailable), but cone-scoped"
     );
 }
 

@@ -372,6 +372,14 @@ fn wire_foreach_body_node_to_zone_output(
             source_pin: SourcePin::NodeOutput { pin_index: 0 },
             source_scope_depth: 0,
         });
+
+    // The app's mutators re-validate after every structural edit; this helper
+    // pokes the registry directly, so re-validate by hand. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error left behind by the
+    // mid-construction validate is **blocking**, and a blocking error
+    // cone-poisons its node (D3) — without this the HOF would never evaluate.
+    designer.validate_active_network();
 }
 
 // ============================================================================
@@ -719,6 +727,12 @@ fn foreach_with_export_atoms_body_writes_n_files_under_execute() {
                 source_scope_depth: 0,
             });
     }
+
+    // Re-validate after the direct-registry construction above: since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error is blocking and would
+    // cone-poison the HOF (D3).
+    designer.validate_active_network();
 
     // Display pass: no files should land.
     let display = evaluate_with_execute(&designer, "main", foreach_id, false);

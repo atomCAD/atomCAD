@@ -5,6 +5,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationCo
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
+use crate::structure_designer::evaluator::network_result::first_array_element_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{
@@ -62,6 +63,14 @@ impl NodeData for AtomComposeDiffData {
                 "atom_composediff: 'diffs' input must be an array of atomic structures".to_string(),
             ));
         };
+
+        // 2b. Chain hygiene (`doc/design_error_management.md` Phase 6): an
+        //     element that is itself an `Error` must forward its own text — the
+        //     "input N is not an atomic structure" arms below would replace the
+        //     upstream root cause with a misleading type complaint.
+        if let Some(err) = first_array_element_error("diffs", &diffs_array) {
+            return EvalOutput::single(err);
+        }
 
         // 3. Edge case: empty input
         if diffs_array.is_empty() {

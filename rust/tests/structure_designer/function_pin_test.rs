@@ -214,6 +214,13 @@ fn wire_function_pin(
             source_pin: SourcePin::NodeOutput { pin_index: -1 },
             source_scope_depth: 0,
         });
+    // The app's mutators re-validate after every structural edit; this helper
+    // pokes the registry directly, so re-validate by hand. Since the D9
+    // severity sweep (`doc/design_error_management.md` Phase 6) the stale
+    // "Zone-output pin ... has no incoming wire" error left behind by the
+    // mid-construction validate is **blocking**, and a blocking error
+    // cone-poisons its node (D3) — without this the HOF would never evaluate.
+    designer.validate_active_network();
 }
 
 /// Add a `map` node configured for `input_type -> output_type` and return its id.
