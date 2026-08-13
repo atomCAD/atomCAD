@@ -1336,6 +1336,11 @@ class NodeWidget extends StatelessWidget {
   /// a node-specific line to the pin's tooltip (e.g. apply.f → "apply will
   /// call it on the wired arguments"). See
   /// `doc/design_function_pin_unification.md` (Phase D).
+  ///
+  /// [label] is passed on as the tooltip's pin name as well as being rendered
+  /// inline: the inline text is ellipsized to the node width, so long names
+  /// sharing a prefix are indistinguishable on the node itself and the tooltip
+  /// is the only place the full name can be read (issue #407).
   Widget _buildInputPin(String label, PinReference pinReference, bool multi,
       {String? extraTooltipLine}) {
     return Row(
@@ -1343,6 +1348,7 @@ class NodeWidget extends StatelessWidget {
         PinWidget(
           pinReference: pinReference,
           multi: multi,
+          pinName: label,
           extraTooltipLine: extraTooltipLine,
         ),
         SizedBox(width: 2),

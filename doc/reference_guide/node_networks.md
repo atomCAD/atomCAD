@@ -12,7 +12,7 @@ A **node** may have zero or more *named input pins* (also called the node’s *p
 
 Most nodes also have one *function pin* in the upper-right corner, which lets the node itself be used as a first-class function value — "this node, viewed as a function of its inputs". See [The function pin](#the-function-pin). It is suppressed on the higher-order-function nodes themselves (`map`, `filter`, `fold`, `foreach`), which author their per-element computation as an *inline body region* by default and accept a reusable function value through an ordinary `f` *input* pin (see [Function values: closures and the `f` pin](#function-values-closures-and-the-f-pin)) rather than through this corner pin. See the [Higher-order functions](#higher-order-functions-and-inline-bodies) section.
 
-Each pin has a data type. Hovering over a pin shows its type; the pin color also indicates the type. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
+Each pin has a data type. Hovering over a pin shows its name and its type; the pin color also indicates the type. The name matters on input pins in particular: a node is only so wide, so a long parameter name is cut off with an ellipsis on the node itself, and two parameters sharing a long prefix look identical there — the tooltip is where you read the full name. A wire may only connect an output pin to an input pin, and the two pins must either have the same data type or the output type must be implicitly convertible to the input type. (We will discuss implicit conversion soon.)
 
 ### Output pins, eye icon, and display
 
@@ -20,7 +20,7 @@ Every output pin has its own **eye icon** next to it that toggles whether that p
 
 Nodes inside a higher-order function's or closure's *body region* are the one exception: they have no eye icon, because a body's nodes have no single value outside an invocation. The exception's exception is a **parameter-less closure**, whose body nodes do get working eyes — see [Viewing the contents of a parameter-less closure](#viewing-the-contents-of-a-parameter-less-closure).
 
-For multi-output nodes the pin name (`result`, `diff`, …) is shown next to each output pin. For single-output nodes the pin name is omitted (there is nothing to disambiguate); hovering still shows the name as a tooltip.
+For multi-output nodes the pin name (`result`, `diff`, …) is shown next to each output pin, and the hover tooltip repeats it. For single-output nodes the pin name is omitted in both places (there is nothing to disambiguate).
 
 When more than one output pin of a node is displayed, only the lowest-indexed displayed pin is **interactive** — i.e. only it receives clicks, hover, and selection from viewport tools. The other displayed pins are visual-only. For example, when both pins of `atom_edit` are displayed, atom selection happens against the `result` pin (with provenance mapping back to the diff under the hood).
 
