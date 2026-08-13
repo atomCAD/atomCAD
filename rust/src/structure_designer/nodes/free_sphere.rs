@@ -1,3 +1,23 @@
+//! The `free_sphere` node: the **real-space (Å) float** analog of `sphere`
+//! (issue #381, `doc/design_free_sphere_circle.md`).
+//!
+//! `center: Vec3` (`DVec3`, `dvec3_serializer`) + `radius: f64`, defaulting to
+//! `ZERO` / `5.0`. This file mirrors `sphere.rs` **minus** the lattice→real
+//! conversion (`ivec3_lattice_to_real` / `effective_unit_cell`): the geo_tree is
+//! already real-space, so it builds `GeoNode::sphere` **directly** and stays
+//! Euclidean — it is deliberately *not* touched by the lattice-covariant
+//! semantics `sphere.rs` carries.
+//!
+//! It takes the same optional `structure` input (default diamond, for the
+//! downstream `materialize`) and emits `BlueprintData { alignment:
+//! Alignment::Aligned, .. }` — a fractional *cutter* does **not** taint
+//! alignment (design §3.5, the opposite of `free_move`'s conservative taint).
+//! There is **no gadget**, for parity with `sphere`. Text properties use
+//! `as_vec3` / `as_float`, which accept whole-number `IVec3` from the parser.
+//!
+//! The API + FRB + Flutter editor plumbing mirrors `free_move`; the editor is
+//! `lib/structure_designer/node_data/free_sphere_editor.dart`.
+
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;

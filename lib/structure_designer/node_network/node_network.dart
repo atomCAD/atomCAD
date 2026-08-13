@@ -547,6 +547,13 @@ class NodeNetworkState extends State<NodeNetwork> {
   /// visible (`doc/design_find_usages.md` D6). The selection is untouched — it
   /// was already set by the caller — so opening the body reveals the node
   /// highlighted. Collapse state is user intent and is never auto-expanded.
+  ///
+  /// **`_currentNetworkName` must be set to the target network's name in the
+  /// same `setState` that applies the pan.** The top-left auto-framing
+  /// (`updatePanOffsetForCurrentNetwork`) runs from *post-frame* callbacks gated
+  /// on that field, so a pan applied during a network switch is otherwise
+  /// silently overwritten one frame later. (Click-to-activate never crosses a
+  /// network switch, which is why it never needed this.)
   void _scrollToNode(BigInt nodeId,
       {List<BigInt> scopeChain = const [], Offset? screenAnchor}) {
     final view = widget.graphModel.nodeNetworkView;

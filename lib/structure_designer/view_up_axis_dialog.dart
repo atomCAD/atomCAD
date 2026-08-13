@@ -1,3 +1,34 @@
+/// The view-up axis picker (issue #349, `doc/design_view_up_axis.md`).
+///
+/// The turntable's screen-vertical axis is pickable (default world +Z). The
+/// orbit math itself lives in `lib/common/cad_viewport.dart::rotateCamera`,
+/// which reads the axis from `camera.navUp` for **both** the horizontal-orbit
+/// axis and the no-roll up reference — the two places that used to hard-code
+/// `Vector3(0, 0, 1)`. The Rust setters re-align `up` to the new axis at pick
+/// time (design D3), so by the time the user orbits, the pose is already
+/// roll-free with respect to the axis; the existing pole guard is axis-agnostic
+/// and carries over. That math is **not** unit-tested — verify it by the manual
+/// walkthrough in the design doc's Verification section.
+///
+/// This dialog is a `DraggableDialog` with a Plane(hkl) / Direction[uvw]
+/// `SegmentedButton`, the shared `MillerIndexMap` + `IVec3Input` (one `_index`
+/// reused across both modes), the lattice-source line, a **From displayed
+/// plane** button, and Apply / Reset (Z) / Close with inline error text.
+///
+/// `_adoptFromLabel` parses the kernel's provenance label (`"(h k l)"` /
+/// `"[u v w]"`) back into `_index` + `_mode`. It runs on open (`initState`) and
+/// after a successful "From displayed plane", so the fields always reflect the
+/// live axis — without it, Apply after From-displayed-plane re-resolved the
+/// stale default and jumped the camera.
+///
+/// The entry point is `camera_control_widget.dart::_buildUpAxisButton`, and the
+/// model side is `viewUpInfo` + the `setViewUpFrom*` / `resetViewUp` wrappers
+/// (no `scope_path` — the camera is global to the active network).
+///
+/// This dialog is a deliberately replaceable front-end (design D7): #391 later
+/// swaps the body for a unified gizmo calling the same setters.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/inputs/ivec3_input.dart';

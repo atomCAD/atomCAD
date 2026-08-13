@@ -1,3 +1,34 @@
+/// The 3D viewport, including **click-to-activate**
+/// (`doc/design_click_to_activate_node.md`).
+///
+/// When several nodes are visible, clicking a non-active node's rendered output
+/// activates that node — a two-step interaction, where the first click activates
+/// and the second performs the normal action. The interception happens in
+/// `onPointerDown` **before** delegate dispatch, calling the Rust
+/// `viewport_pick()`, which returns `ActivateNode`, `Disambiguation`,
+/// `ActiveNodeHit`, or `NoHit`. A performance guard skips the pick entirely when
+/// only 0–1 nodes are displayed.
+///
+/// Overlapping outputs (within 0.1 Å) raise a `_DisambiguationOverlay` popup near
+/// the click, offering two actions per candidate: name click (activate + scroll)
+/// and solo eye icon (activate + scroll + hide the other overlapping nodes). If
+/// the active node is among the overlapping hits, the click passes through as
+/// normal.
+///
+/// **Scroll-to-node callback pattern.** After activating, the viewport calls
+/// `model.scrollToNode(nodeId)`. `StructureDesignerModel.onScrollToNode` is a
+/// callback registered by `NodeNetworkState` in `initState` (cleared in
+/// `dispose`), which bridges viewport → model → node-network-widget without the
+/// viewport holding a `GlobalKey` to the node network. A SnackBar
+/// (`"Activated: {nodeName}"`) confirms the activation.
+///
+/// The callback carries two optional extras used by Find Usages: `scopeChain`
+/// (to address a node inside an HOF / closure body) and `screenAnchor` (the
+/// point, in the node-network widget's local screen coordinates, that the node's
+/// *center* should land on — omitted means viewport center, which is the
+/// click-to-activate behavior).
+library;
+
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/gestures.dart';

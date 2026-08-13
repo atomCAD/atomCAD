@@ -19,6 +19,40 @@
 //! loop recurses on the returned `Function` until either the args run out
 //! (returning a partial closure or the final result) or the body returns a
 //! non-function. See `doc/design_currying.md` §"`apply` semantics".
+//!
+//! # The derived layout is unserialized state
+//!
+//! **Preserve it positionally on any non-derivable pass.**
+//! `ApplyData::calculate_custom_node_type` only ever emits the bare `[f]` pin;
+//! the real `[f, arg0, …]` layout is *derived* from the wired `f` source by the
+//! post-pass, **not** by `calculate_custom_node_type` (the
+//! `doc/design_currying.md` Phase 3 plan that put it there is stale). Because
+//! the layout is unserialized and the `f`-source can live in a not-yet-loaded
+//! network, it often can't be derived at the moment a node is first processed —
+//! yet the `arg0…` wires are already present (positionally) in the deserialized
+//! `arguments`. Two operations drop those wires if they run against the
+//! under-derived `[f]` layout: a **by-name `arguments` rebuild**
+//! (`set_custom_node_type(.., refresh_args = true)` — there is no name for the
+//! `arg0` slot yet) and **`repair_network_arguments` truncation** (cuts to the
+//! `[f]` count).
+//!
+//! The rule: any pass that touches an `apply` before its layout is derived must
+//! preserve `arguments` **positionally** — use
+//! `update_apply_pin_layouts_for_network_preserving_args` (not the by-name
+//! variant) and run it **before** `repair_network_arguments`. Current
+//! preserving call sites: `.cnnd` load (`validate_network` ordering +
+//! `repair_node_network`'s `apply`-special-cased `refresh_args = false`),
+//! closure⇄network conversion, and body-undo restore
+//! (`undo/commands/edit_zone_body.rs`, `extract_closure_body.rs`). By-name and
+//! positional coincide on an already-consistent graph (arg pins are named
+//! `arg0, arg1, …` by index), so preserving is safe everywhere; they diverge
+//! *only* in the freshly-loaded / under-derived state, which is exactly where
+//! by-name is lossy. The end-to-end load reasoning lives in
+//! `serialization/AGENTS.md` ("Load pipeline & derived state"); the bug class is
+//! the same shape as `walk_all_nodes` skipping body nodes. Regression coverage:
+//! `tests/structure_designer/apply_function_pin_iter_test.rs` (load) and
+//! `currying_test.rs::apply_phase3_rewire_f_to_lower_arity_shrinks_arg_pins`
+//! (arity shrink).
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;

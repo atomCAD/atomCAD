@@ -1,3 +1,22 @@
+//! The `sphere` node — **lattice-covariant**: it emits the lattice image of a
+//! ball (`doc/design_lattice_covariant_sphere_circle.md`).
+//!
+//! `center` and `radius` are integers in **lattice cells**, mapped through the
+//! cell matrix. On a cubic cell that is an ordinary Euclidean sphere (unchanged
+//! and byte-identical to the pre-covariance behavior); on any non-cubic cell it
+//! is an **ellipsoid** — `GeoNode::ellipsoid(L·c₀, r·[a b c])`. The
+//! `GeoNode::ellipsoid` *constructor* snaps spherical (orthogonal, equal-length)
+//! bases back to `GeoNodeKind::Sphere`, so cubic cells never reach the ellipsoid
+//! arm at all and keep the same geo hash, SDF, and materialize counts as before.
+//!
+//! A non-positive radius keeps the legacy Euclidean emission verbatim
+//! (`GeoNode::sphere(x₀, r·|a|)`): `r == 0` is a point, `r < 0` is empty.
+//!
+//! The semantics are **lattice-discrete**: the set of *integer* lattice points
+//! inside is the same discrete ball on every cell. Contrast `free_sphere.rs`,
+//! the real-space (Å) float analog, which stays Euclidean by design. `circle.rs`
+//! is the 2D counterpart of this file.
+
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::structure::Structure;
 use crate::geo_tree::GeoNode;

@@ -18,6 +18,40 @@
 //! `zip_with` the variadic pin list must survive case edits without dropping
 //! wires — case identity rides on a hidden stable `id` per case stamped onto
 //! `Parameter.id`, never on the derived name.
+//!
+//! # Eval
+//!
+//! Extract the selector, find the case whose literal equals it (first-match-wins
+//! for the impossible hand-authored duplicate state), and lazily evaluate
+//! **only** the matched pin, or `default` if none matched — the same laziness
+//! and optionality contract as `if`.
+//!
+//! # Case-list edits
+//!
+//! Pin names come from `derived_case_pin_names` (sanitized + deduped) and are
+//! cosmetic; `next_case_id` mints the real identity and is **never** computed as
+//! max+1 (same hazard class as `next_param_id`). Edits go through the
+//! value-keyed two-pass id merge [`SwitchData::merge_cases`] — value-match
+//! before positional fallback, so an unchanged value never loses its wire — and
+//! a selector-type flip runs `convert_selector_type` first (in-place Int↔String
+//! conversion, rejecting an unparseable or post-conversion-colliding
+//! String→Int).
+//!
+//! Because these edits drop and retype wires they are **not** pure node-data
+//! edits: the `StructureDesigner`-level `set_switch_data` pushes the shared
+//! whole-network-snapshot `NodeStructureEditCommand` (the same command
+//! `zip_with` lane edits use). The API layer (`get_switch_data` /
+//! `set_switch_data`, both `scope_path`-taking) is a thin wrapper that adds no
+//! undo logic — case values cross the FFI boundary as **strings** and the setter
+//! parses them per selector type, returning an `APIResult` on a bad Int.
+//!
+//! `heal` restores every setter invariant when loading hand-authored `.cnnd`:
+//! bad selector domain, mismatched value variants, missing ids, post-conversion
+//! duplicates, and the all-dropped case (falls back to `default`).
+//!
+//! Flutter editor: `lib/structure_designer/node_data/switch_editor.dart`
+//! (Int/String selector dropdown + `DataTypeInput` value type + per-case text
+//! field with Add/delete + inline `APIResult` error).
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;

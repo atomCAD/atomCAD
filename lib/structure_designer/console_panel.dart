@@ -1,3 +1,31 @@
+/// The Console panel: a docked-bottom strip showing entries pushed by `print`
+/// nodes (`doc/design_node_execution.md`, Phase 4).
+///
+/// State lives on `StructureDesignerModel`, not here:
+/// - `printLog: List<APIPrintLogEntry>` accumulates entries.
+/// - `consolePanelVisible: bool` toggles visibility (zero height when off).
+/// - `unreadPrintLogCount: int` drives the new-entries dot.
+///
+/// `refreshFromKernel()` polls `sd_api.takePrintLog()` after every refresh and
+/// appends to `printLog`. That drain-on-read is what keeps the Rust-side buffer
+/// bounded, as long as the user occasionally exercises the app.
+///
+/// **The `executeNode()` call site must not also push `APIExecuteResult.logs`
+/// into `printLog`.** Those logs are only this Execute pass's prints (sliced
+/// Rust-side from `pass_start`), and the polling drain above already feeds them
+/// in the general case — pushing both double-displays every execute-pass entry.
+///
+/// The panel is wired into `structure_designer.dart` as the last child of the
+/// main `Column` (so it docks below the main content area), with a
+/// *View > Show/Hide Console* menu entry and a global **Ctrl + backtick**
+/// shortcut in `_handleGlobalKeyEvent`.
+///
+/// **PlatformInt64 gotcha.** `APIPrintLogEntry.timestampMs` is FRB's
+/// `PlatformInt64` — typedef'd to `int` on native and `BigInt` on web. The code
+/// below uses `int` directly, which is correct for desktop (this project's
+/// primary target); it needs a `.toInt()` adapter if web ever becomes real.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:provider/provider.dart';

@@ -11,7 +11,46 @@
 //! The core `apply_patch` is a plain function (node-free testable). It also
 //! returns a [`CompatibilityReport`] — the welded-vs-orphaned collar counts and
 //! a post-weld over-coordination count (§6), the data behind a future
-//! compatibility badge.
+//! compatibility badge. The report (now including `placed_cells`, where 0 means
+//! nothing tiled and surfaces as a red "No tiles placed" badge) is cached in a
+//! `#[serde(skip)] RefCell<Option<_>>` on `PatchLatticeFillData` — interior
+//! mutability, because `eval` takes `&self`; the same pattern as
+//! `MaterializeData::available_parameters`.
+//!
+//! # Coordinate frame (`doc/design_patch_cell_selection.md`)
+//!
+//! `extract_patch_tile` keeps the tile in **authored absolute coordinates**,
+//! with no hidden re-anchoring. `origin` here is a whole-cell **offset**
+//! (default `(0,0,0)` = as-drawn), so build → apply-to-the-same-crystal is the
+//! identity. Every placement is a whole-lattice-vector translation, so the
+//! `origin` pin's offset reaches atoms as `p + lattice·(origin + Σ kᵢ·vᵢ)`
+//! (target-mapped) before any test runs.
+//!
+//! # Cell selection (`select_patch_cells`)
+//!
+//! Tests the tile's **interior (non-ghost) atoms**: placed, then projected onto
+//! the test plane (in-plane components kept, normal component → `center_depth`),
+//! and **all** must be inside the region. There is no rhombus and no synthetic
+//! anchor — this replaced `tile_reference_anchor` / `footprint_corners` /
+//! `corner_in_region_shadow`, keeping only `free_directions`. An empty-interior
+//! guard returns no cells.
+//!
+//! `center_depth` is chosen per free direction by the bool
+//! `test_height_at_origin`: **false** (the default) uses the target-derived
+//! `region_center_depths` midpoint, robust to an off-origin or thin slab;
+//! `true` uses the lattice origin (0), which is simpler but selects nothing when
+//! the target doesn't straddle the origin.
+//!
+//! # Debug flags
+//!
+//! Two bools, both default false. `debug_project_to_test_plane` flattens placed
+//! atoms onto the test plane and skips the weld. `debug_show_frontier_tiles`
+//! places the ±1 Cartesian box of cells and flags the not-selected ones
+//! **frozen** (an empty selection falls back to the −1..+1 block around origin).
+//! The report is always computed from the real selected-cell weld.
+//!
+//! **After editing `APIPatchLatticeFillData`, re-run
+//! `flutter_rust_bridge_codegen generate`** — `frb_generated.rs` constructs it.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_structure::{AtomicStructure, TagError};

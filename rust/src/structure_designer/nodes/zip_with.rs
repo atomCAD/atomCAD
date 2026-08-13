@@ -7,6 +7,37 @@
 //! is carried by a hidden stable id per lane stamped onto `Parameter.id`, never
 //! by the name, so external wires follow their lane across removal of an
 //! earlier lane. See `doc/design_zip_with.md`.
+//!
+//! # Lanes
+//!
+//! Default 2, minimum 1 (a degenerate `map`); **zero is rejected**.
+//! `ZipWithLane.id` is minted from a persisted `next_lane_id` counter — **never**
+//! max+1, same hazard class as `next_param_id`. External wires ride that id, but
+//! body-internal `ZoneInput { pin_index }` wires are **index**-based, so lane
+//! removal must remap them **at mutation time**
+//! (`remap_zip_body_wires_for_lane_removal`, which recurses into nested HOF
+//! bodies matching on exact depth + id). A validate-time repair cannot do this —
+//! it has no removal diff to work from.
+//!
+//! Because lane edits drop and remap wires they are **not** pure node-data
+//! edits: the `StructureDesigner`-level ops `set_zip_with_data` (positional
+//! whole-list id merge + output type) and `remove_zip_with_lane` (id-accurate)
+//! push a whole-network-snapshot `NodeStructureEditCommand` (shared with
+//! `switch` case edits). The API layer (`get`/`set_zip_with_data`,
+//! `remove_zip_with_lane`) is a thin `scope_path`-taking wrapper adding no undo
+//! logic.
+//!
+//! # Output type
+//!
+//! The `f`-derivation post-pass `update_zip_with_pin_layouts_for_network`
+//! (`node_type_registry.rs`, sibling of `map`'s) derives the output pin type
+//! from a wired `f`'s tail. Output is a **lazy walker**
+//! (`WalkerKind::ZipZone`, shortest-input truncation) carried as
+//! `NetworkResult::Iterator`.
+//!
+//! Flutter editor: `node_data/zip_with_editor.dart` — per-lane `xs{i}` type rows
+//! + Add Input + delete; the Output Type row swaps to the shared
+//! `DerivedOutputTypeDisplay` when `f` is wired.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::{DataType, FunctionType};

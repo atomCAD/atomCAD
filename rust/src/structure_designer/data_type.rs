@@ -498,6 +498,44 @@ impl DataType {
     /// `is_tag_only_widening`), never value-converting widenings such as
     /// `Int → Float`. See `doc/design_record_types.md` Phase 4.
     ///
+    /// The rest of the rule inventory:
+    /// - Numeric/vector widenings: `Int ↔ Float`, `IVec2 ↔ Vec2`,
+    ///   `IVec3 ↔ Vec3`, `IMat3 ↔ Mat3` (the float→int direction truncates).
+    ///   `IVec3` does **not** auto-promote to a diagonal `IMat3` — wire through
+    ///   an `imat3_diag` node instead (`doc/design_matrix_types.md` D4).
+    /// - Single value → `Array` (broadcasting); `LatticeVecs → DrawingPlane`
+    ///   (legacy).
+    /// - Concrete phase type → its abstract supertypes (Crystal/Molecule →
+    ///   `HasAtoms`; Blueprint/Crystal → `HasStructure`; Blueprint/Molecule →
+    ///   `HasFreeLinOps`). No abstract → concrete downcasts, no cross-abstract
+    ///   edges.
+    /// - `Function → Function` requires the same arity *after canonical
+    ///   flattening* — `FunctionType::new` absorbs nested `Function` returns at
+    ///   construction, so `(A) → (B, C) → D` and `(A, B, C) → D` are
+    ///   byte-identical in memory — with parameters and return type pairwise
+    ///   convertible. `Function → AnyFunction { leading_params }` is accepted
+    ///   when the source's parameter list **starts with** `leading_params`
+    ///   (pairwise convertible); an empty `leading_params` accepts any
+    ///   function. `AnyFunction` is **input-only** and is rejected as a source
+    ///   type. Partial application is expressed at the value layer
+    ///   (`ZoneClosure::pre_supplied_args`), never in the type layer. See
+    ///   `doc/design_currying.md`, `doc/design_function_pin_unification.md`.
+    /// - Iterators (`doc/design_iterators.md`): `Array[S] → Iter[T]` (eager
+    ///   element conversion at wrap time, wraps as `Walker::from_array`),
+    ///   `S → Iter[T]` (single-element broadcast), `Iter[T] → Iter[T]`
+    ///   (identity passthrough), and `Iter[S] → Iter[T]` when `S → T` — the
+    ///   last one **lazily**: the wire wraps the source in
+    ///   `WalkerKind::Convert`, which runs `convert_to` on each pulled element
+    ///   (issue #330). The reverse `Iter[T] → Array[T]` is **deliberately not**
+    ///   an implicit conversion — turning a fused stream back into a
+    ///   materialized array is exactly the operation iterators avoid — so it is
+    ///   rejected at validation and the user must insert a `collect` node.
+    ///   Iterator-typed values also cannot be captured into closures (the
+    ///   walker would alias across invocations), and `Iter[T]` is not allowed
+    ///   as a record field type.
+    /// - `Unit` supports a universal `T → Unit` discard widening at field
+    ///   level; `Unit → T` is rejected.
+    ///
     /// # Parameters
     /// * `source_type` - The source data type
     /// * `dest_type` - The destination data type

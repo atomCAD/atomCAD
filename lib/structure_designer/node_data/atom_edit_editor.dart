@@ -615,6 +615,41 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
 
   /// Phase-driven Guideline tool panel (Define / Place / Move). Reads the
   /// tool view via FFI each build; `null` (tool not active) renders nothing.
+  ///
+  /// A **guideline** is a transient line constraining atom placement to
+  /// hard-to-hit positions (issue #368, `doc/atom_edit/design_atom_guidelines.md`).
+  /// It is a dedicated **fourth tool** — a 4th button in the atom_edit toolbar
+  /// (`Icons.timeline`, F5), gated to `atom_edit` and not offered on `motif`.
+  /// The line is transient: **not serialized, not undoable**, gone on tool
+  /// switch or node deselect; Clear (or Escape) drops it back to `Define`.
+  ///
+  /// This panel reads `atom_edit_api.getGuidelineToolView()` live each build and
+  /// switches on `APIGuidelinePhase`:
+  /// - **Define** (`_buildGuidelineDefine`) — an instruction plus a Create
+  ///   button labeled from `view.definingCount` (1 → "Directional line" and a
+  ///   direction `Vec3Input`/Normalize, 2 → "Center line", 3 → "Equidistant
+  ///   line"), enabled when `view.canCreate`. `_createGuideline` calls
+  ///   `model.guidelineCreateFromDefining(dir)` and SnackBars a non-empty error.
+  /// - **Place** (`_buildGuidelinePlace`) — a two-way `FloatInput` (key
+  ///   `guideline_position`, `view.t`) → `model.guidelineSetPosition`, an
+  ///   element selector, **Place atom** → `model.guidelinePlaceAtom`, and Clear.
+  /// - **Move** (`_buildGuidelineMove`) — the same `t` field, now the picked
+  ///   atom's live projection, plus Clear.
+  ///
+  /// The guideline FFI is **global** (it operates on the active node), so the
+  /// model methods — `guidelineCreateFromDefining` (returns the error string),
+  /// `guidelineSetPosition`, `guidelinePlaceAtom`, `guidelineClear`,
+  /// `guidelineSetEnteredDirection`, and `notifyGuidelineToolSync` (a plain
+  /// notify for live drag rebuilds) — take no `scope_path`.
+  ///
+  /// Viewport side (`structure_designer_viewport.dart`): pointer interaction
+  /// runs through a dedicated `_AtomEditGuidelineDelegate`, selected by
+  /// `primaryPointerDelegate` when the active tool is `guideline`, forwarding
+  /// down/move/up to `guidelinePointer{Down,Move,Up}` and cancel to
+  /// `guidelineResetInteraction`. A move returning `true` calls
+  /// `renderingNeeded()` + `model.notifyGuidelineToolSync()` so the `t` field
+  /// tracks the atom live. **Escape** (after guided-placement precedence) clears
+  /// the guideline when `getGuidelineToolView() != null`; **F5** selects the tool.
   Widget _buildGuidelinePanel() {
     final view = atom_edit_api.getGuidelineToolView();
     final bool active = view != null && view.phase != APIGuidelinePhase.define;

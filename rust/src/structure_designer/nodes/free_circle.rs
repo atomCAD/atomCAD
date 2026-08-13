@@ -1,3 +1,18 @@
+//! The `free_circle` node: the **real-space (Å) float** analog of `circle`
+//! (issue #381, `doc/design_free_sphere_circle.md`).
+//!
+//! `center: Vec2` (`DVec2`, `dvec2_serializer`) + `radius: f64`, defaulting to
+//! `ZERO` / `5.0`. It mirrors `circle.rs` **minus** the lattice→real conversion:
+//! the geo_tree is already real-space, so it builds `GeoNode::circle`
+//! **directly** and stays Euclidean — deliberately *not* touched by the
+//! lattice-covariant semantics `circle.rs` carries.
+//!
+//! It takes the optional `d_plane` input (its `center` is real-space within that
+//! plane's frame) and outputs `Geometry2D`. There is **no gadget**, for parity
+//! with `circle`. Text properties use `as_vec2` / `as_float`, which accept
+//! whole-number `IVec2` from the parser. Editor:
+//! `lib/structure_designer/node_data/free_circle_editor.dart`.
+
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::geo_tree::GeoNode;

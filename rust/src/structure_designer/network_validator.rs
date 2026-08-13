@@ -1,3 +1,105 @@
+//! Network validation: the pass that walks a `NodeNetwork` — and, recursively,
+//! every zone body — and records `ValidationError`s on it.
+//!
+//! The severity model (blocking = cone-poisons the node, non-blocking =
+//! advisory badge, interface = whole-network refusal) and the litmus test for
+//! choosing between them when adding a rule are in `../AGENTS.md` §"Validation
+//! errors". What follows is the mechanics that only matter once you are editing
+//! this file. Design doc: `doc/design_error_management.md`.
+//!
+//! # Passes accumulate
+//!
+//! Since error-management Phase 2 (D4) the wire/parameter passes **accumulate**
+//! rather than stopping at the first violation: `validate_wires` records each
+//! node's first error (sorted-node-id order, exact-duplicate rows deduped) and
+//! moves on; `validate_parameters` records every violation but skips the
+//! interface rebuild when any exists. Under cone-poisoning this is load-bearing,
+//! not cosmetic: an error the validator did not record is a node that is *not*
+//! poisoned.
+//!
+//! # Stored-data errors
+//!
+//! `NodeData::get_data_error() -> Option<NodeDataError>` lets a node report a
+//! problem in its own stored data — today the parse failure of a definition
+//! string on `motif` (blocking: no motif to emit), and on `motif_sub` /
+//! `materialize` (warnings: their `eval` no-ops on unparsed data and still emits
+//! a usable value). `validate_zones_recursive`'s Pass A asks every node on every
+//! validate pass and pushes the corresponding `ValidationError`, so these reach
+//! the unified panel list and the F8 cycle with no transient `initial_errors`
+//! plumbing. (`expr` keeps its `initial_errors` route because its errors must be
+//! attached at data-set time, before the parse result is stored.)
+//!
+//! # Wire cycles
+//!
+//! `validate_zones_recursive` runs `detect_wire_cycles` once per scope: it builds
+//! the cross-scope-complete dependency graph (regular depth-0 wires, plus every
+//! capture / zone-output wire in a zone owner's body subtree whose depth resolves
+//! to the scope, projected onto the owner) and flags every cycle member with a
+//! blocking error via Tarjan SCC — so evaluation never enters a fully poisoned
+//! cycle. Defense in depth for cycles that escape validation (hand-authored
+//! `.cnnd` bypasses connect-time checks): the evaluator's
+//! `context.eval_in_progress` re-entrancy guard turns same-frame re-entry into a
+//! localized "evaluation cycle detected" error instead of a hang. That guard keys
+//! on the **network-stack fingerprint** (`EvalFrameKey`), NOT on `NodeRef` — the
+//! eval scope path does not track the `parameter` node's stack excursion, so a
+//! scope-keyed guard falsely flags legal graphs (per-network id collisions).
+//! Related invariant: `resolve_output_type` has **no** cycle guard, because the
+//! evaluator must never type-resolve a poisoned source (`resolve_incoming_wire`
+//! skips resolution for them); keep it that way.
+//!
+//! # The Phase 6 severity sweep (D9)
+//!
+//! Three rules that were warnings *only* because the runtime already localized
+//! the failure — unwired zone-output pin on an HOF/`closure`, `apply` with its
+//! required `f` unwired, and `parameter` inside a zone body (#417) — are now
+//! **blocking**. Their skip-and-synthesize output says what their `eval` used to
+//! (the wording is now the validation rule's, so downstream chain *text* changed
+//! slightly), and D8's dedupe shows **one** entry per node instead of an amber
+//! validation row plus the red eval row it predicted. The
+//! `Supplied`-but-unwired-and-required rule stays a warning: pin 0 still
+//! displays. Two consequences to preserve when adding rules in this area:
+//!
+//! - A blocking rule inside a **zone body** must not also set
+//!   `validate_zones_recursive`'s local `ok = false` unless the *owner's* eval is
+//!   genuinely broken: `ok` is what raises [`ZONE_BODY_INVALID_MARKER`] on the
+//!   enclosing HOF, i.e. it poisons the whole HOF. One stray broken body node
+//!   should darken its own cone, not the HOF — the same blast-radius argument D3
+//!   made for the network.
+//! - Tests (and any code) that build a body by poking the registry directly must
+//!   **re-validate** afterwards: an ordinary wire does not re-validate
+//!   (`connect_nodes` only does so for function wires; the app's real body-wiring
+//!   paths `connect_wire_scoped` / `connect_zone_output_wire` always do), so a
+//!   stale "zone-output pin has no incoming wire" error now cone-poisons the node
+//!   instead of merely showing amber.
+//!
+//! # Zone rule 4: no `parameter` node in a body (#417)
+//!
+//! A `parameter` declares an input pin of the enclosing *network*, and a body has
+//! no interface. The rule is single-sourced as
+//! `node_type_registry::allowed_in_zone_body(name)`, whose other consumers are
+//! `add_node_scoped` / `paste_at_position_scoped` / `duplicate_node_scoped`
+//! (refuse/drop), `APINodeTypeView::allowed_in_zone_body` (the add-node popup
+//! filters a body-scoped list on it), and `ParameterData::eval` (localized
+//! error) — so the validation rule is only ever reached by hand-authored or
+//! pre-#417 `.cnnd`.
+//!
+//! That `eval` guard is what makes the localized choice legal: without it the two
+//! eval paths are wrong in different ways. On a real stack the frame below the
+//! parameter is the zone **owner**, so `parent_node.arguments[param_index]` reads
+//! e.g. `map.xs` (or panics on a `closure`, which has no input pins); on a lazy
+//! walker's body-only stack it silently degrades to "constant = my `default`
+//! pin". The guard reads "am I in a zone body?" straight off the frame it lives
+//! in — `NetworkStackElement::is_zone_body`, recorded `true` at every body push
+//! (`run_closure_once`, the capture pre-evaluation pushes, `generate_scene_scoped`'s
+//! per-hop descent) and `false` for custom-network entries and root frames.
+//! **Never reconstruct this from stack shape or `eval_scope_path`**: the original
+//! heuristic (*empty call stack + non-empty `eval_scope_path`*) false-positived on
+//! a legal graph, because a custom network's parameter resolves its argument via a
+//! parent-stack excursion that pops the stack frame while the instance's eval
+//! scope stays pushed — so a top-level `parameter` feeding a custom-node
+//! instance's pin was misread as body-resident. Regression test:
+//! `parameter_in_zone_body_test.rs::top_level_parameter_feeding_custom_instance_is_not_flagged`.
+
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::node_network::{
     Argument, FunctionPinDisposition, IncomingWire, Node, NodeNetwork, SourcePin, ValidationError,

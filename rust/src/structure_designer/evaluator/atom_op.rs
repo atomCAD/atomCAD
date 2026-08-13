@@ -1,3 +1,71 @@
+//! Shared seams for atom-operation nodes: **region gating** and **diff output
+//! pins**. Both are patterns spanning many node files, so the helpers live here
+//! rather than being re-implemented per node.
+//!
+//! # Region gating (`doc/design_blueprint_region_atom_edits.md` Part A)
+//!
+//! `passivate`, `remove_hydrogen`, `infer_bonds`, `atom_replace`, and the
+//! metadata-edit pair `freeze` / `unfreeze` each carry an optional
+//! `region: Blueprint` input pin **as their last pin**. Disconnected
+//! (`NetworkResult::None`) → operate on **all** atoms (the unchanged legacy
+//! behavior); connected → only atoms whose position is inside the region volume,
+//! where membership is `region_geo.implicit_eval_3d(pos) <=
+//! DEFAULT_REGION_MARGIN` (the 0.1 Å constant shared from
+//! `crystolecule::lattice_fill`).
+//!
+//! [`map_atomic_in_region`] is the seam (sibling of `map_atomic`): it
+//! batch-computes membership over all atom positions and hands the per-atom
+//! `in_region: &dyn Fn(u32) -> bool` predicate to the mutation closure. A
+//! `region == None` short-circuits to "all in-region", so it subsumes
+//! `map_atomic`. Rules to preserve when adding a region-gated op:
+//!
+//! - Test the **host / existing** atom, never a newly-created one
+//!   (`infer_bonds` is one-endpoint-inside).
+//! - Evaluate `region` with `evaluate_arg` (optional), **not**
+//!   `evaluate_arg_required`.
+//! - **Multiple regions = chained nodes.** There is no multi-region pin here;
+//!   the painter's-algorithm pattern is unique to `materialize.regions` (Part B).
+//! - No `.cnnd` migration is needed — the new pin appears unconnected on
+//!   existing nodes.
+//!
+//! # Diff output pins (issue #295, `doc/design_diff_outputs_for_atom_ops.md`)
+//!
+//! `relax`, the four movement nodes (`free_move` / `free_rot` /
+//! `structure_move` / `structure_rot`), `atom_replace`, and `atom_cut` each
+//! carry a second `diff` output pin (pin 1) alongside `result` (pin 0) — the
+//! same two-pin shape as `atom_edit`:
+//!
+//! ```text
+//! output_pins = [same_as_input("result", <input pin name>), fixed("diff", Molecule)]
+//! ```
+//!
+//! (the input pin name is `"molecule"` for relax/atom_replace/atom_cut,
+//! `"input"` for the movement nodes). The primitive is
+//! `crystolecule::atomic_structure_diff::extract_diff(before, after, eps)`,
+//! which derives an applyable `Molecule` diff from a before/after pair **by atom
+//! id** — all these nodes mutate a clone in place, so ids are stable (see the
+//! design doc's §1.5 id-stability audit).
+//!
+//! The pattern: snapshot `before` *before* the mutation, run the existing
+//! mutation, `extract_diff`, return `EvalOutput::multi([result, diff_pin])`.
+//! **Every** error / early-return path must return two-pin errors
+//! (`multi(vec![err.clone(), err])`) — do *not* copy `atom_edit`'s
+//! `EvalOutput::single(error)`, which degrades pin 1 to `None`. `relax` and the
+//! movement nodes snapshot inline; `atom_replace` / `atom_cut` route through
+//! `map_atomic` / `map_atomic_in_region` (which consume the input) and so use
+//! [`snapshot_atoms`], [`diff_output_pin`], and [`eval_output_with_diff`] here.
+//!
+//! `relax` additionally has a serde-defaulted `diff_min_move: f64` prune
+//! property (the eps passed to `extract_diff`; the only FRB regen in the
+//! feature); the others always pass eps = 0.0. Movement / atom_replace /
+//! atom_cut on Blueprint or non-atomic inputs produce an **empty** diff (§2.3),
+//! and movement diffs capture **atom motion only** (§2.4). There is no `.cnnd`
+//! migration and no snapshot churn (output pins live on `NodeType`), and these
+//! nodes must **not** override `default_display_all_output_pins` — a diff draws
+//! viewport geometry, so the pin-0-only default is correct. Explicitly out of
+//! scope: `passivate`, `remove_hydrogen`, `infer_bonds`, `freeze` / `unfreeze`,
+//! `atom_union`.
+
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::geo_tree::GeoNode;

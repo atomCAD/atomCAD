@@ -1,3 +1,30 @@
+//! The `if` node: select one of two values by a boolean condition.
+//!
+//! The module is named `if_else` because `if` is a reserved Rust identifier; the
+//! node type name string is `"if"`.
+//!
+//! Pins are `cond: Bool`, `then: T`, `else: T` → output `T`, where `T` is the
+//! stored `value_type` property (default `Float`), expanded onto the pins by
+//! `calculate_custom_node_type` — the same idiom as `parameter` / `array_at`.
+//! `value_type` is canonicalized in `canonicalize.rs` (it can be a `Function`).
+//!
+//! Two things distinguish this from an `expr` conditional:
+//!
+//! - It selects **structural** values (Crystal / Molecule / Blueprint /
+//!   Geometry / Function …), which `expr` cannot carry.
+//! - It is **lazy**: `eval` pulls `cond` first and evaluates *only* the taken
+//!   branch, so the untaken branch's upstream cone is never computed and an
+//!   error in it never poisons the output. (`expr` eagerly evaluates every wired
+//!   input.)
+//!
+//! All three pins are optional, per the "every pin type is implicitly optional"
+//! model: an unwired `cond` is inert (`None`), and an unwired taken branch
+//! yields `None`.
+//!
+//! The n-way generalization keyed by a value is the `switch` node
+//! (`switch.rs`). Flutter editor:
+//! `lib/structure_designer/node_data/if_editor.dart`.
+
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;

@@ -157,3 +157,30 @@ are unsure which page a change belongs on, grep `doc/reference_guide/` for the
 nearest existing topic. Backend-only or internal-only changes (evaluator
 internals, refactors, new private helpers) do **not** need a guide update — only
 things a user can see or do.
+
+### `AGENTS.md` files — keep them in sync too
+
+The `AGENTS.md` files are the contributor-facing counterpart of the reference
+guide: they describe the conventions, invariants, and gotchas of the code in
+their own directory. They go stale the same way documentation does.
+
+**When a change invalidates, outgrows, or adds to something a directory's
+`AGENTS.md` describes, update that file in the same change.** Concretely, update
+it when you:
+
+- break or replace a documented convention or invariant (e.g. a new required
+  parameter on a family of API functions, a changed refresh/validation order)
+- add a new subsystem, module, or node category that belongs in that directory's
+  overview or file map
+- discover a non-obvious pitfall that cost you time and would cost the next
+  contributor the same
+- add a new subdirectory with its own `AGENTS.md` — also add it to the
+  "Subdirectory Instructions" list at the top of this file and to the parent
+  directory's list
+
+Update the **most specific** file that covers the change (e.g. a nodes-only
+convention belongs in `rust/src/structure_designer/nodes/AGENTS.md`, not here).
+Routine changes that merely follow the documented conventions — a new node that
+looks like its siblings, a bug fix, a refactor that preserves the invariants —
+need **no** `AGENTS.md` update. These files are guidance, not a changelog: keep
+them short and don't record individual fixes or feature history in them.

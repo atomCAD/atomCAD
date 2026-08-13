@@ -1,3 +1,46 @@
+/// The data-type picker, including the **structural** `Iter` and `Function`
+/// branches (`doc/design_structural_function_and_iter_types.md`).
+///
+/// `APIDataTypeBase` carries first-class `Iter` and `Function` variants
+/// alongside `Custom`, with one shared `children: List<APIDataType>` field on
+/// `APIDataType` whose meaning is interpreted locally to the base: `Iter` ⇒ one
+/// child (the element type), `Function` ⇒ N+1 children (params, then the
+/// return type). Flat bases never use the field — they carry `children: const
+/// []`.
+///
+/// Iter and Function render here as a compact one-line summary (via the
+/// top-level `apiDataTypeToString`, e.g. `Iter[Float]`, `(Int, Bool) → String`,
+/// `Array[Iter[X]]`) plus a ✎ Edit button opening `showTypeEditorDialog`
+/// (`type_editor_dialog.dart`), which hosts the full structural editor.
+///
+/// **Why a dialog, not inline:** inline editing got cramped fast — a
+/// `DataTypeInput` slot inside a per-row property editor is typically half the
+/// panel width, and the recursive Function widget bled visually past sibling
+/// rows with no scoping. A dedicated draggable surface keeps the parent column
+/// thin at any nesting depth. Iter is dialog-hosted too, for consistency.
+///
+/// **Default seeding.** The dropdown-change handler below is the *single* point
+/// that seeds `children`: `Iter` ⇒ `[Float]`, `Function` ⇒ `[Float, Float]`
+/// (arity 1), everything else ⇒ `const []`. Switching away from Iter/Function
+/// drops `children` back to `const []`. The dialog and `FunctionTypeInput`
+/// defensively fall back to `Float` if `children` is malformed. The outer Array
+/// checkbox preserves `children`, so `Array[Iter[T]]` stays well-formed across
+/// toggles.
+///
+/// **`Optional[T]`** (`doc/design_optional_type.md`) is a dropdown base entry
+/// like `Iter`, but appears **only when `allowOptional: true`** — set only by
+/// the record `SchemaEditor`, since `Optional` is a record-field modifier and
+/// never a pin type. Its inner type is edited through the same
+/// `showTypeEditorDialog` with `optionalInner: true`, which hides the ill-formed
+/// inners (`Optional` / `Iter` / `Unit` / `None`); the outer Array checkbox is
+/// hidden for Optional.
+///
+/// The **Custom… text fallback** stays for the long tail (anonymous records, and
+/// any future type without first-class API surface). The Rust→API converter
+/// prefers the structural variants, so a previously-typed `Custom: Iter[Int]`
+/// silently upgrades to the structural form on next paint — no migration.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/string_input.dart';

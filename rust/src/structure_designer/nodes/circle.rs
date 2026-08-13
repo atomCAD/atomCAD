@@ -1,3 +1,17 @@
+//! The `circle` node — **lattice-covariant**: the 2D counterpart of
+//! `sphere.rs` (`doc/design_lattice_covariant_sphere_circle.md`).
+//!
+//! `center` and `radius` are integers in **lattice cells**. On a cubic cell this
+//! is an ordinary Euclidean circle (byte-identical to the pre-covariance
+//! behavior); on any non-cubic cell it is an **ellipse** —
+//! `GeoNode::ellipse(...)`, whose constructor snaps spherical (orthogonal,
+//! equal-length) bases back to `GeoNodeKind::Circle` so cubic cells never reach
+//! the ellipse arm. A non-positive radius keeps the legacy Euclidean emission
+//! verbatim (`r == 0` is a point, `r < 0` is empty).
+//!
+//! See `sphere.rs` for the full rationale. Contrast `free_circle.rs`, the
+//! real-space (Å) float analog, which stays Euclidean by design.
+
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::geo_tree::GeoNode;
