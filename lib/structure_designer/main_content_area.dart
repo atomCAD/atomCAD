@@ -6,6 +6,7 @@ import 'package:flutter_cad/structure_designer/node_network/network_editor_tabs.
 import 'package:flutter_cad/structure_designer/schema_editor.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_data_widget.dart';
+import 'package:flutter_cad/structure_designer/qualified_name_header.dart';
 
 /// The main content area of the structure designer, containing the 3D viewport and node network.
 class MainContentArea extends StatelessWidget {
@@ -100,7 +101,8 @@ class MainContentArea extends StatelessWidget {
             ),
             // Hide the node-data side panel while the schema editor is shown
             // — record defs have no per-node properties to edit there.
-            if (!isSchemaEditor) _buildNodeDataPanel(isVertical: true),
+            if (!isSchemaEditor)
+              _buildNodeDataPanel(isVertical: true, model: model),
           ],
         );
       },
@@ -120,19 +122,32 @@ class MainContentArea extends StatelessWidget {
               flex: 4,
               child: _buildBottomEditor(),
             ),
-            if (!isSchemaEditor) _buildNodeDataPanel(isVertical: false),
+            if (!isSchemaEditor)
+              _buildNodeDataPanel(isVertical: false, model: model),
           ],
         );
       },
     );
   }
 
-  /// Builds the node data panel with appropriate decoration based on orientation
-  Widget _buildNodeDataPanel({required bool isVertical}) {
+  /// Builds the node data panel with appropriate decoration based on
+  /// orientation, headed by the active network's qualified name (issue #207).
+  ///
+  /// The header sits here rather than inside `NetworkDescriptionEditor` so it
+  /// is present for **every** state of the panel — with a node selected just as
+  /// much as without one. Which network you are editing is context for the
+  /// whole panel, not a property of the no-selection case; before this, the
+  /// qualified name was not displayed anywhere in the application.
+  ///
+  /// The panel is hidden outright while the schema editor is active (see the
+  /// callers), so there is no record-def case to handle: `SchemaEditor` carries
+  /// its own name header.
+  Widget _buildNodeDataPanel(
+      {required bool isVertical, required StructureDesignerModel model}) {
+    final networkName = model.nodeNetworkView?.name;
     return Container(
       width: isVertical ? 400 : double.infinity,
       height: isVertical ? double.infinity : 240,
-      padding: const EdgeInsets.all(8.0),
       decoration: BoxDecoration(
         border: Border(
           // Apply different border based on orientation
@@ -144,7 +159,26 @@ class MainContentArea extends StatelessWidget {
               : BorderSide.none,
         ),
       ),
-      child: NodeDataWidget(graphModel: graphModel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Full-bleed strip: the panel's own padding moved onto the body below
+          // so the header spans edge to edge like the schema editor's.
+          if (networkName != null)
+            QualifiedNameHeader(
+              qualifiedName: networkName,
+              icon: Icons.account_tree,
+              copyTooltip: 'Copy qualified network name',
+              copyConfirmation: 'Network name copied to clipboard',
+            ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: NodeDataWidget(graphModel: graphModel),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -258,6 +258,21 @@ The properties of the active node can be edited here.
 
 ![](../atomCAD_images/cuboid_properties_panel.png)
 
+**Which network am I in?** The panel is headed by the qualified name of the active node network, with the namespace greyed and the network's own name emphasised:
+
+```
+dl.lib.basepoly.cube_centered
+```
+
+When the name is too long for the panel it breaks after the namespace's dot, so the part you usually want — the name itself — is never the part that gets cut off:
+
+```
+dl.lib.irod100.
+x_rect100_centered
+```
+
+The header stays put whichever node is selected, and the name can be selected with the mouse; the **⧉** button beside it copies the whole qualified name to the clipboard in one click — handy when you need to type it into a dialog, hand it to the command line, or quote it in a bug report.
+
 This is different for each node, we will discuss this in depth at the specific nodes. There are some general features though:
 
 - When dragging the mouse on integer number editor fields the number can be
@@ -268,7 +283,7 @@ In case no node is selected the description of the active node network can be ed
 
 ![](../atomCAD_images/network_description.png)
 
-This description will be displayed beside the custom node in the *Add Node* window. 
+This description will be displayed beside the custom node in the *Add Node* window. The shorter **Summary** above it is what verbose command-line listings show. Both belong to the network named in the panel header, so if you are unsure which network's documentation you are typing into, look at the top of the panel.
 
 ## Display Preferences Panel
 
