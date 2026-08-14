@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
@@ -26,7 +27,6 @@ void goToRootCause(
   APIErrorRootCause root, {
   Offset? screenAnchor,
 }) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
   // Read the provenance *before* the jump — afterwards the active network is
   // the root's own, and every root would look same-network.
   final crossNetwork = model.nodeNetworkView?.name != root.hostNetwork;
@@ -36,7 +36,8 @@ void goToRootCause(
   final label = crossNetwork
       ? '${getSimpleName(root.hostNetwork)} — ${root.nodeLabel}'
       : root.nodeLabel;
-  messenger?.showSnackBar(
-    SnackBar(content: Text('Root cause: $label — ${root.errorText}')),
-  );
+  // Copyable rather than merely transient: across a network boundary this
+  // flash is frequently the *only* place the original error text is legible
+  // (the node landed on may show no live badge at all — see above).
+  showCopyableSnackBar(context, 'Root cause: $label — ${root.errorText}');
 }

@@ -5,6 +5,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
     as atom_edit_api;
 import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_description_button.dart';
@@ -832,15 +833,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
   void _createGuideline() {
     final error = widget.model.guidelineCreateFromDefining(_guidelineDirection);
     if (error.isNotEmpty && mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(error),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      showErrorSnackBar(context, error);
     }
   }
 
@@ -1331,9 +1324,7 @@ class _AtomEditEditorState extends State<AtomEditEditor> {
       } else {
         final error = atom_edit_api.atomEditAddTag(name: name);
         if (error != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error)),
-          );
+          showErrorSnackBar(context, error);
         }
       }
       widget.model.refreshFromKernel();
@@ -2109,13 +2100,10 @@ class _ModifyMeasurementDialogState extends State<_ModifyMeasurementDialog> {
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
             ),
-            // Error message
+            // Error message (selectable + copyable, issue #359).
             if (_errorMessage != null) ...[
               const SizedBox(height: 8),
-              Text(
-                _errorMessage!,
-                style: TextStyle(color: Colors.red[700], fontSize: 12),
-              ),
+              ErrorBanner(message: _errorMessage!),
             ],
             const SizedBox(height: 24),
             Row(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
+import 'package:flutter_cad/structure_designer/error_report.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 import 'package:flutter_cad/structure_designer/root_cause_navigation.dart';
@@ -23,68 +25,13 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 ///   go there" grammar Find Usages gave instance usages, applied to errors.
 /// - The **usage count** delegates to [findUsagesOfNetwork] unchanged.
 
-/// Whether an error entry can be navigated to (it is anchored to a node).
-bool _isNavigable(APIValidationError e) => e.nodeId != null;
+// The root-cause grouping (`ErrorGroup`, `groupErrorsByRootCause`) and the
+// navigability predicate (`isNavigableError`) live in `error_report.dart`, so
+// this picker and the copied bug report can never disagree about what counts
+// as one problem.
 
-/// The address of the node an entry is anchored to, as a comparable key.
-/// `hostNetwork` is set only on a cross-network root cause; every other entry
-/// addresses a node of the network it is listed under.
-String _nodeKey(String networkName, APIValidationError e) =>
-    '${e.hostNetwork ?? networkName}|${e.scopePath.join(',')}|${e.nodeId}';
-
-/// The address of an entry's *root cause*, in the same key space as
-/// [_nodeKey] — so a derived entry finds the row representing its root
-/// **node**, which may be that node's validation row rather than an eval row (a
-/// derived chain routinely terminates at a cone-poisoned node whose synthesized
-/// eval entry the D8 dedupe drops).
-String? _rootKey(APIValidationError e) {
-  final root = e.rootCause;
-  if (root == null) return null;
-  return '${root.hostNetwork}|${root.scopePath.join(',')}|${root.nodeId}';
-}
-
-/// One underlying problem: the row the panel lists at top level plus the
-/// downstream entries collapsed behind it (`doc/design_error_management.md`
-/// D7). Derived entries are *presentation*-collapsed only — on the canvas every
-/// node still badges its own error, because when looking at a node the user
-/// wants to know why *it* is dark.
-class _ErrorGroup {
-  _ErrorGroup(this.root);
-  final APIValidationError root;
-  final List<APIValidationError> derived = [];
-}
-
-/// Groups [errors] into one entry per underlying problem: root causes (and
-/// every validation row) stay top level; each derived eval entry is filed
-/// behind the row representing its root-cause node.
-///
-/// A derived entry whose root is not represented in this list — its row was
-/// dropped, or the root lives in a network whose rows are listed elsewhere — is
-/// promoted to top level rather than hidden. Losing an error is worse than
-/// showing it twice.
-List<_ErrorGroup> _groupErrorsByRootCause(
-    String networkName, List<APIValidationError> errors) {
-  final groups = <_ErrorGroup>[];
-  final byNode = <String, _ErrorGroup>{};
-  for (final e in errors) {
-    if (e.rootCause != null) continue;
-    final group = _ErrorGroup(e);
-    groups.add(group);
-    // Several rows can represent one node (e.g. two validation errors); the
-    // first one becomes the collapse parent.
-    byNode.putIfAbsent(_nodeKey(networkName, e), () => group);
-  }
-  for (final e in errors) {
-    if (e.rootCause == null) continue;
-    final parent = byNode[_rootKey(e)];
-    if (parent != null) {
-      parent.derived.add(e);
-    } else {
-      groups.add(_ErrorGroup(e));
-    }
-  }
-  return groups;
-}
+/// How many lines of message text one picker row shows before ellipsizing.
+const int _ERROR_ROW_MAX_LINES = 8;
 
 /// What the user picked in the error menu: a row (jump to its node) or a row's
 /// "go to root cause" action.
@@ -128,12 +75,16 @@ Widget buildNetworkErrorBadge({
   // The badge counts **problems**, not symptoms: one entry per root cause, with
   // its downstream cone collapsed behind it (D7). Otherwise a single failure
   // three nodes deep would read as "3 errors" while the picker showed one row.
-  final groups = _groupErrorsByRootCause(networkName, errors);
+  final groups = groupErrorsByRootCause(networkName, errors);
   // The full list on hover — progressive disclosure: glance (badge) → peek
   // (tooltip) → act (click). Each problem on its own line, with the size of its
   // downstream cone noted rather than enumerated. The tooltip is plain text, so
   // the source icon degrades to a ⚡ marker on eval entries (and a stale entry
   // says where it came from).
+  //
+  // A tooltip cannot be selected (it is an overlay that dismisses on
+  // pointer-exit), so the copy affordances live one step further in: the
+  // picker's *Copy all* header action and its per-row copy buttons.
   final tooltip = groups.map((group) {
     final e = group.root;
     final buffer = StringBuffer('• ');
@@ -243,6 +194,11 @@ Widget buildNetworkUsageCountBadge({
 /// competing with it for attention, and each carries a "go to root cause"
 /// action. A root cause that lives in another network is listed here too, with
 /// its provenance, because it is the failure this network's errors come from.
+///
+/// Every row also carries a **copy** button, and the header a **Copy all** that
+/// puts the whole network's report on the clipboard (issue #359). Those buttons
+/// deliberately do *not* pop the menu route — copying one message is usually
+/// followed by copying another, or by jumping to the node.
 Future<void> showValidationErrorsMenu({
   required BuildContext context,
   required StructureDesignerModel model,
@@ -251,15 +207,16 @@ Future<void> showValidationErrorsMenu({
   required RelativeRect position,
 }) async {
   if (errors.isEmpty) return;
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  final groups = _groupErrorsByRootCause(networkName, errors);
+  final groups = groupErrorsByRootCause(networkName, errors);
 
   if (groups.length == 1 && groups.first.derived.isEmpty) {
     final only = groups.first.root;
-    if (_isNavigable(only)) {
+    if (isNavigableError(only)) {
       model.jumpToValidationError(networkName, only);
     } else {
-      messenger?.showSnackBar(SnackBar(content: Text(only.errorText)));
+      // Not navigable and not persistent — so the message gets a Copy action
+      // rather than a selection it could never hold still for.
+      showErrorSnackBar(context, only.errorText);
     }
     return;
   }
@@ -270,21 +227,38 @@ Future<void> showValidationErrorsMenu({
     items: <PopupMenuEntry<_ErrorPick>>[
       PopupMenuItem<_ErrorPick>(
         enabled: false,
-        child: Text("Errors in '${getSimpleName(networkName)}'"),
+        // `MainAxisSize.min`, not an `Expanded` title: `showMenu` lays its
+        // items out under an `IntrinsicWidth`, and a flex child there is a
+        // trap. Every other row in this menu sizes the same way.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("Errors in '${getSimpleName(networkName)}'"),
+            const SizedBox(width: 8),
+            CopyTextButton(
+              text: formatNetworkErrorReport(networkName, errors),
+              tooltip: 'Copy all problems in this network',
+              confirmation: 'Copied ${groups.length} '
+                  'problem${groups.length == 1 ? '' : 's'} to clipboard',
+              size: 15,
+            ),
+          ],
+        ),
       ),
       for (final group in groups) ...[
         PopupMenuItem<_ErrorPick>(
           value: _ErrorPick(group.root),
           // A network-level error has no node to jump to — keep it visible but
-          // unselectable so the count matches the list.
-          enabled: _isNavigable(group.root),
-          child: _errorMenuRow(group.root),
+          // unselectable so the count matches the list. Its copy button still
+          // works: a nested InkWell is hit-tested even in a disabled item.
+          enabled: isNavigableError(group.root),
+          child: _errorMenuRow(networkName, group.root),
         ),
         for (final derived in group.derived)
           PopupMenuItem<_ErrorPick>(
             value: _ErrorPick(derived),
-            enabled: _isNavigable(derived),
-            child: _errorMenuRow(derived, indented: true),
+            enabled: isNavigableError(derived),
+            child: _errorMenuRow(networkName, derived, indented: true),
           ),
       ],
     ],
@@ -312,7 +286,14 @@ Future<void> showValidationErrorsMenu({
 /// nested under it. Such a row also carries a "go to root cause" action, which
 /// pops the menu with [_ErrorPick.goToRoot] set so the caller jumps to the
 /// failure instead of to this symptom.
-Widget _errorMenuRow(APIValidationError error, {bool indented = false}) {
+///
+/// The text wraps to [_ERROR_ROW_MAX_LINES] rather than the 2 it used to: a
+/// chained runtime error (`error in a input (from sphere #12): …`) was reliably
+/// unreadable here, which is half of what issue #359 was about. The remaining
+/// cap keeps one pathological message from producing a menu taller than the
+/// screen — the copy button hands over the untruncated text.
+Widget _errorMenuRow(String networkName, APIValidationError error,
+    {bool indented = false}) {
   final isEval = error.source == APIErrorSource.evaluation;
   final color = error.stale
       ? Colors.grey
@@ -348,7 +329,7 @@ Widget _errorMenuRow(APIValidationError error, {bool indented = false}) {
               Text(
                 error.errorText,
                 overflow: TextOverflow.ellipsis,
-                maxLines: 2,
+                maxLines: _ERROR_ROW_MAX_LINES,
                 // A stale entry reads as history, not live state.
                 style: error.stale
                     ? AppTextStyles.regular.copyWith(color: Colors.grey)
@@ -366,8 +347,17 @@ Widget _errorMenuRow(APIValidationError error, {bool indented = false}) {
             ],
           ),
         ),
+        const SizedBox(width: 8),
+        // Copies this one entry, formatted the same way the whole-design
+        // report formats it (tags + location + text) — a bare message with no
+        // node id is much less useful in a bug report. Unlike the ↑ button
+        // below it does *not* pop the route, so the list survives the copy.
+        CopyTextButton(
+          text: formatErrorEntry(networkName, error, derived: indented),
+          tooltip: 'Copy this problem',
+        ),
         if (error.rootCause != null) ...[
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           // Popping the menu route with a `goToRoot` pick keeps the whole
           // decision in the caller's single `picked` branch.
           Builder(

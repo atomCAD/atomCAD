@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import '../common/draggable_dialog.dart';
 import '../src/rust/api/structure_designer/import_api.dart';
 import 'structure_designer_model.dart';
@@ -359,28 +360,9 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Error message display
+            // Error message display (selectable + copyable, issue #359).
             if (_errorMessage != null && !_isLoading) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.red[50],
-                  border: Border.all(color: Colors.red[300]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.red[600], size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: TextStyle(color: Colors.red[700]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ErrorBanner(message: _errorMessage!),
               const SizedBox(height: 16),
             ] else ...[
               const SizedBox(height: 8),
@@ -469,11 +451,7 @@ class _ImportCnndLibraryDialogState extends State<ImportCnndLibraryDialog> {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            Text(
-              _errorMessage!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.red[600]),
-            ),
+            ErrorBanner(message: _errorMessage!),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _loadLibrary,

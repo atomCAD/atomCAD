@@ -3416,6 +3416,15 @@ class StructureDesignerModel extends ChangeNotifier {
   bool get hasValidationErrors => nodeNetworkNames.any((n) =>
       n.validationErrors.any((e) => e.source == APIErrorSource.validation));
 
+  /// Whether *any* network has anything in its unified error list — validation
+  /// or evaluation, blocking or advisory.
+  ///
+  /// Unlike [hasValidationErrors] this is deliberately unfiltered: it gates
+  /// *Edit > Copy all problems* (issue #359), whose whole point is to hand over
+  /// everything that is wrong, whatever produced it.
+  bool get hasAnyProblems =>
+      nodeNetworkNames.any((n) => n.validationErrors.isNotEmpty);
+
   /// Imports an XYZ file into the active atom_edit node's diff layer.
   /// Atoms and bonds are merged as pure additions (incremental import).
   /// Returns an empty string on success, or an error message on failure.

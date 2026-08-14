@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
@@ -375,11 +376,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
 
     if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                'Rename failed: ${errorMessage ?? 'name already exists'}')),
-      );
+      showErrorSnackBar(
+          context, 'Rename failed: ${errorMessage ?? 'name already exists'}');
     }
 
     _renameFocusNode.unfocus();
@@ -763,9 +761,7 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     _markNamespaceExpanded(fullPath);
     final error = widget.model.addFolder(fullPath);
     if (error != null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create folder: $error')),
-      );
+      showErrorSnackBar(context, 'Could not create folder: $error');
     }
   }
 

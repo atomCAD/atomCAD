@@ -61,6 +61,14 @@ Node networks in a design can be browsed in the **List** tab or in the **Tree** 
 
 Hovering the badge lists the problems; clicking it takes you to them. If there is a single problem tied to a node, clicking jumps straight there; if there are several, a list appears and you pick one, and each entry names the offending node (and, for a problem inside a higher-order function body, which body it is in). Choosing one activates the network, selects the node, and scrolls it into view — the same oriented jump as *Find Usages* — so you no longer have to hunt through a large network for the thing that is broken. This works from both the **List** and the **Tree** tab. In the **Tree** tab, a collapsed folder that hides an errored network is marked with a small red or amber dot, so a problem is never fully concealed by a collapsed branch — the dot points at the branch to expand.
 
+**Getting the text out.** Error messages are meant to be pasteable into a bug report, so every error surface offers a way to copy it:
+
+- *Edit > Copy all problems* copies **the whole design's** problem list — every network, every entry, with its severity, its kind (structural/runtime), the node it sits on and its downstream trail — as a plain-text report. This is the one to use when filing an issue. It is available in Direct Editing Mode too, where the only other error surface is a banner that carries no message at all.
+- In the problem list opened from a row badge, the header carries a **⧉** that copies just that network's problems, and every entry carries its own **⧉**. Copying does not close the list.
+- Right-click a broken node in the editor → *Copy error message* copies that node's message, prefixed with which network and node it came from. (The red hover tooltip cannot be selected with the mouse — it disappears the moment the pointer leaves the node — so this is how you get its text.)
+- Error dialogs (*Load Error*, *Save Error*, *Import Error*, "cannot delete…") and the red error boxes in the property panels have **selectable** text and a **Copy** button.
+- Failure messages that flash at the bottom of the window carry a **Copy** action for as long as they are on screen.
+
 Two things to know about runtime entries:
 
 - **Coverage:** runtime errors exist only for what was actually evaluated — the displayed nodes and everything feeding them. A node that is neither displayed nor upstream of anything displayed is never evaluated, so a failure lurking in it surfaces only once it participates in a displayed result.
@@ -76,8 +84,8 @@ A failure spreads: the node that broke goes dark, and so does everything downstr
 
 From any consequence you can go straight to the thing that caused it:
 
-- **Right-click a broken node → *Go to root cause***, offered whenever the node's error came in through a wire rather than starting there.
-- In the panel's problem list, an indented entry carries a small **↑** button that does the same.
+- **Right-click a broken node → *Go to root cause***, offered whenever the node's error came in through a wire rather than starting there. (The same menu offers *Copy error message*.)
+- In the panel's problem list, an indented entry carries a small **↑** button that does the same, and a **⧉** that copies it.
 
 The jump follows the failure wherever it lives — **including into another network**. If the root cause is inside a custom node, the panel lists it as its own entry qualified with the network it lives in (*in myPart*), and jumping activates that network and selects the node. One thing to expect there: a network is evaluated on its own terms when you open it — with its own parameter defaults — so the node you land on may show **no** error badge, because the failure only happens with the arguments the calling network passes in. That is why the jump also flashes the original error text: you land with the context in hand. Use *Back* to return to where you came from.
 
@@ -331,6 +339,7 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
 - *Edit > Validate active network*: Validates the active node network and reports any errors. Available in Node Network Mode only.
 - *Edit > Go to next error* (`F8`) / *Edit > Go to previous error* (`Shift+F8`): Steps selection through the active network's errors one at a time, wrapping around, so you can walk its problems without hunting for the red nodes. Each step activates the errored node and scrolls it into view (the same oriented jump the error badge uses). Greyed out when the active network has no errors. Available in Node Network Mode only.
 - *Edit > Auto-Layout Network*: Automatically arranges nodes in the current node network using the Sugiyama layout algorithm for a clean, readable layout.
+- *Edit > Copy all problems*: Copies every problem in the design — across all networks — to the clipboard as a plain-text report, for pasting into a bug report. Greyed out when the design has no problems. Available in both modes. See [Where is the error?](#node-networks-panel) above.
 - *View > Switch to Horizontal Layout* / *View > Switch to Vertical Layout*: Changes the orientation of the node network editor panel.
 - *View > Show/Hide Console* (**Ctrl + backtick**): Toggles the [Console panel](#console-panel) docked at the bottom of the window.
 

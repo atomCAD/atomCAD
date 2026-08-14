@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_cad/common/api_utils.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
@@ -1552,11 +1553,46 @@ class NodeWidget extends StatelessWidget {
     );
   }
 
-  /// Wraps a widget with error tooltip
+  /// The node's error packaged for a bug report (issue #359): which network
+  /// and node it sits on, then the message.
+  ///
+  /// A bare message loses the two facts a reader needs first, and the canvas
+  /// tooltip has no room to carry them — so *Copy error message* adds them
+  /// rather than copying `node.error` verbatim. The shape deliberately echoes
+  /// `error_report.dart`'s entry lines so a pasted single error and a pasted
+  /// whole-design report read alike.
+  String _errorReportForNode(StructureDesignerModel model) {
+    final custom = node.customName;
+    final label = (custom != null && custom.isNotEmpty)
+        ? custom
+        : getSimpleName(node.nodeTypeName);
+    final network = model.nodeNetworkView?.name ?? '<unknown network>';
+    final body =
+        scopeChain.isEmpty ? '' : ' (in body ${scopeChain.join(' > ')})';
+    return 'atomCAD — error on node #${node.id} `$label` in `$network`$body\n'
+        '${node.error}';
+  }
+
+  /// Wraps a widget with error tooltip.
+  ///
+  /// The tooltip stays a tooltip — it cannot be made selectable (an overlay
+  /// that dismisses on pointer-exit has no drag-select). It instead carries a
+  /// dimmed footer pointing at the copy action, so the user who wants the text
+  /// out of the app finds it from the surface where they hit the wall (#359).
   Widget _wrapWithErrorTooltip(Widget child) {
     return Tooltip(
-      message: node.error!,
-      textStyle: const TextStyle(fontSize: 14, color: Colors.white),
+      // The base style rides on the span, not on `textStyle` — `Tooltip`
+      // asserts the two are never both set.
+      richMessage: TextSpan(
+        style: const TextStyle(fontSize: 14, color: Colors.white),
+        children: [
+          TextSpan(text: node.error!),
+          const TextSpan(
+            text: '\n\nRight-click → Copy error message',
+            style: TextStyle(fontSize: 12, color: Colors.white70),
+          ),
+        ],
+      ),
       decoration: BoxDecoration(
         color: Colors.red.shade700,
         borderRadius: BorderRadius.circular(4),
@@ -1746,6 +1782,18 @@ class NodeWidget extends StatelessWidget {
         value: 'cut',
         child: Text('Cut (Ctrl+X)'),
       ),
+      // Issue #359. The canvas error surface is a `Tooltip`, which is an
+      // overlay that dismisses on pointer-exit and does not accept
+      // hit-testing — there is no drag-select to be had on it, whatever
+      // widget goes inside. So the primary error surface gets a copy
+      // *action* instead, and it lives in Edit because it is a clipboard
+      // operation like the two above it (the label disambiguates it from
+      // "Copy", which copies the node itself).
+      if (nodeHasError)
+        const PopupMenuItem(
+          value: 'copy_error',
+          child: Text('Copy error message'),
+        ),
     ]);
 
     addSection('Refactor', [
@@ -1838,18 +1886,18 @@ class NodeWidget extends StatelessWidget {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         model.goToNextError(forward: true);
+      } else if (value == 'copy_error') {
+        final model =
+            Provider.of<StructureDesignerModel>(context, listen: false);
+        copyTextToClipboard(context, _errorReportForNode(model),
+            confirmation: 'Error message copied to clipboard');
       } else if (value == 'inline') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);
         final result = model.inlineCustomNode(node.id, scopeChain: scopeChain);
         if (!context.mounted) return;
         if (!result.success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.error ?? 'Could not inline node'),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
+          showErrorSnackBar(context, result.error ?? 'Could not inline node');
         }
       } else if (value == 'execute') {
         final model =
@@ -1883,12 +1931,7 @@ class NodeWidget extends StatelessWidget {
         final result = model.promoteNodeToParameter(node.id);
         if (!context.mounted) return;
         if (!result.success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.error ?? 'Could not promote node'),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
+          showErrorSnackBar(context, result.error ?? 'Could not promote node');
         }
       } else if (value == 'factor_into_subnetwork') {
         final model =
@@ -1901,12 +1944,8 @@ class NodeWidget extends StatelessWidget {
             model.convertInstanceToClosure(node.id, scopeChain: scopeChain);
         if (!context.mounted) return;
         if (!result.success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(result.error ?? 'Could not convert to closure'),
-              backgroundColor: Colors.red.shade700,
-            ),
-          );
+          showErrorSnackBar(
+              context, result.error ?? 'Could not convert to closure');
         }
       } else if (value == 'extract_to_network') {
         final model =
@@ -2079,12 +2118,7 @@ Future<void> runExecuteWithPlacard(
 
   if (messenger == null) return;
   if (thrown != null) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text('Execute failed: $thrown'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    showErrorSnackBarOn(messenger, 'Execute failed: $thrown');
     return;
   }
   if (result == null) {
@@ -2094,12 +2128,7 @@ Future<void> runExecuteWithPlacard(
     return;
   }
   if (!result.ok) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(result.error ?? 'Execute failed'),
-        backgroundColor: Colors.red,
-      ),
-    );
+    showErrorSnackBarOn(messenger, result.error ?? 'Execute failed');
   } else {
     messenger.showSnackBar(
       const SnackBar(

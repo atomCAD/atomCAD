@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/new_folder_dialog.dart';
@@ -279,19 +280,15 @@ class NodeNetworksActionBar extends StatelessWidget {
     );
   }
 
-  // Show error dialog when deletion fails
+  // Show error dialog when deletion fails. The shared `showErrorDialog` makes
+  // the message selectable and copyable (issue #359) — a "cannot delete, it is
+  // still referenced by …" list is exactly the kind of thing that gets pasted.
   Future<void> _showDeleteErrorDialog(
       BuildContext context, String errorMessage, String title) {
-    return showDraggableAlertDialog(
+    return showErrorDialog(
       context: context,
-      title: Text(title),
-      content: Text(errorMessage),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
+      title: title,
+      message: errorMessage,
     );
   }
 }

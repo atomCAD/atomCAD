@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/inputs/data_type_input.dart';
@@ -217,29 +218,11 @@ class ExprEditorState extends State<ExprEditor> {
             ),
           ),
 
-          // Error message display
+          // Error message display (selectable + copyable, issue #359).
           if (widget.data?.error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(4.0),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.error,
-                    width: 1.0,
-                  ),
-                ),
-                child: Text(
-                  widget.data!.error!,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onErrorContainer,
-                    fontSize: 12.0,
-                  ),
-                ),
-              ),
+              child: ErrorBanner(message: widget.data!.error!),
             ),
 
           const SizedBox(height: 16),

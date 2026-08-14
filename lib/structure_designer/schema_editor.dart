@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/data_type_input.dart';
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
@@ -102,9 +103,7 @@ class _SchemaEditorState extends State<SchemaEditor> {
     final error = widget.model.updateRecordTypeDef(widget.defName, _fields);
     if (error != null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error)),
-        );
+        showErrorSnackBar(context, error);
       }
       _refetch();
     } else {

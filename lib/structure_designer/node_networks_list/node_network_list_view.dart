@@ -4,6 +4,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
 import 'package:flutter_cad/structure_designer/identifier_validation.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/common/draggable_dialog.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/structure_designer/find_usages_menu.dart';
 import 'package:flutter_cad/structure_designer/node_networks_list/network_row_badges.dart';
@@ -335,23 +336,17 @@ class _NodeNetworkListViewState extends State<NodeNetworkListView>
       final validationError = validateUserName(newName);
       if (validationError != null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rename failed: $validationError')),
-          );
+          showErrorSnackBar(context, 'Rename failed: $validationError');
         }
       } else if (kind == _UserTypeKind.network) {
         final success = widget.model.renameNodeNetwork(oldName, newName);
         if (!success && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Rename failed: name already exists')),
-          );
+          showErrorSnackBar(context, 'Rename failed: name already exists');
         }
       } else {
         final error = widget.model.renameRecordTypeDef(oldName, newName);
         if (error != null && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rename failed: $error')),
-          );
+          showErrorSnackBar(context, 'Rename failed: $error');
         }
       }
     }

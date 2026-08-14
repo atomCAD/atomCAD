@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../common/draggable_dialog.dart';
+import '../common/error_display.dart';
 import '../common/export_format_dialog.dart';
 import '../common/menu_widget.dart';
 import '../common/section.dart';
+import 'error_report.dart';
 import 'structure_designer_model.dart';
 import 'node_network/node_network.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
@@ -264,6 +266,18 @@ class _StructureDesignerState extends State<StructureDesigner> {
                               child: const Text('Auto-Layout Network'),
                             ),
                           ],
+                          const Divider(),
+                          // Available in *both* modes on purpose: in Direct
+                          // Editing Mode the only error surface is a banner
+                          // that carries no message at all, so this is the one
+                          // way to find out what is actually wrong (#359).
+                          MenuItemButton(
+                            key: const Key('copy_all_problems_item'),
+                            onPressed: model.hasAnyProblems
+                                ? () => _copyAllProblems(context, model)
+                                : null,
+                            child: const Text('Copy all problems'),
+                          ),
                           MenuItemButton(
                             key: const Key('preferences_item'),
                             onPressed: _showPreferences,
@@ -564,6 +578,23 @@ class _StructureDesignerState extends State<StructureDesigner> {
     return KeyEventResult.ignored;
   }
 
+  /// *Edit > Copy all problems* — puts the whole design's unified error list on
+  /// the clipboard as a Markdown report (issue #359).
+  ///
+  /// Everything it needs is already in `model.nodeNetworkNames`, so this is a
+  /// pure Flutter-side render with no FFI call and nothing to refresh.
+  void _copyAllProblems(BuildContext context, StructureDesignerModel model) {
+    final report = formatDesignErrorReport(model.nodeNetworkNames);
+    final count = model.nodeNetworkNames.fold<int>(
+        0, (sum, n) => sum + countProblems(n.name, n.validationErrors));
+    copyTextToClipboard(
+      context,
+      report,
+      confirmation:
+          'Copied $count problem${count == 1 ? '' : 's'} to clipboard',
+    );
+  }
+
   /// Short floating confirmation used by the keyboard-driven actions
   /// (undo/redo, quick save) that otherwise leave no visible trace.
   void _showTransientSnackBar(BuildContext context, String message) {
@@ -616,16 +647,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
       String filePath = result.files.first.path!;
       final error = graphModel.importXyzIntoAtomEdit(filePath);
       if (error.isNotEmpty && mounted) {
-        showDraggableAlertDialog(
+        showErrorDialog(
           context: context,
-          title: const Text('Import Error'),
-          content: Text(error),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
+          title: 'Import Error',
+          message: error,
         );
       }
     }
@@ -663,16 +688,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
     final loadResult = graphModel.loadNodeNetworks(filePath);
 
     if (!loadResult.success && mounted) {
-      showDraggableAlertDialog(
+      showErrorDialog(
         context: context,
-        title: const Text('Load Error'),
-        content: Text(loadResult.errorMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
+        title: 'Load Error',
+        message: loadResult.errorMessage,
       );
     } else if (loadResult.success) {
       _showLoadRepairModalIfNeeded();
@@ -750,16 +769,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (!loadResult.success) {
         // Show error dialog
         if (mounted) {
-          showDraggableAlertDialog(
+          showErrorDialog(
             context: context,
-            title: const Text('Load Error'),
-            content: Text(loadResult.errorMessage),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
+            title: 'Load Error',
+            message: loadResult.errorMessage,
           );
         }
       } else {
@@ -827,16 +840,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
   }
 
   void _showSaveErrorDialog(String errorMessage) {
-    showDraggableAlertDialog(
+    showErrorDialog(
       context: context,
-      title: const Text('Save Error'),
-      content: Text(errorMessage),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('OK'),
-        ),
-      ],
+      title: 'Save Error',
+      message: errorMessage,
     );
   }
 

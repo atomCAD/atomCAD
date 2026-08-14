@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/error_display.dart';
 import 'package:flutter_cad/common/ui_common.dart';
 import 'package:flutter_cad/inputs/type_editor_dialog.dart';
 import 'package:flutter_cad/src/rust/api/common_api_types.dart';
@@ -96,7 +97,7 @@ class _ArrayEditorState extends State<ArrayEditor> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
-            _buildErrorBanner(context, _error!),
+            ErrorBanner(message: _error!),
           ],
         ],
       ),
@@ -256,23 +257,6 @@ class _ArrayEditorState extends State<ArrayEditor> {
           child: const Text('Reset'),
         ),
       ],
-    );
-  }
-
-  Widget _buildErrorBanner(BuildContext context, String message) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: scheme.errorContainer,
-        border: Border.all(color: scheme.error),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        message,
-        style: TextStyle(fontSize: 12, color: scheme.onErrorContainer),
-      ),
     );
   }
 }

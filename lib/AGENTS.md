@@ -65,6 +65,42 @@ common_api.setCameraTransform(transform: transform);
 
 ## Common Patterns
 
+### Showing an Error Message (never hand-roll one)
+
+Every user-facing failure message must be **extractable** — issue #359. The rule,
+and the widgets that implement it, live in `lib/common/error_display.dart`:
+
+> **Transient surfaces get a copy _action_; persistent surfaces get real
+> _selection_ (plus a copy button).**
+
+Flutter's `Tooltip` and `SnackBar` are overlay entries that vanish on
+pointer-exit / on a timer, and a tooltip does not accept hit-testing — there is
+no drag-select to be had on either, whatever widget goes inside. So they get a
+**Copy** affordance instead of being "made selectable"; only surfaces that hold
+still are selectable.
+
+| Surface | Use | Never |
+|---|---|---|
+| Inline red box in a panel/dialog | `ErrorBanner(message: …)` | a hand-rolled `Container` + `Text` |
+| Bottom toast for a **failure** | `showErrorSnackBar(context, msg)` (or `showErrorSnackBarOn(messenger, msg)` after an async gap) | `SnackBar(backgroundColor: Colors.red…)` |
+| Bottom toast that merely *carries* error text | `showCopyableSnackBar(context, msg)` | — |
+| Modal failure dialog | `showErrorDialog(context:, title:, message:)` | `showDraggableAlertDialog(content: Text(err))` |
+| A tooltip-only error surface | keep the tooltip, add a copy action elsewhere (context menu, adjacent button) | trying to make the tooltip selectable |
+
+Purely *informational* snackbars ("Saved foo.cnnd", "Activated: X", "Atom is
+fully bonded") deliberately keep their plain styling and short duration — there
+is nothing there worth reporting, and a Copy action on them is noise.
+
+`lib/structure_designer/error_report.dart` renders the design's unified error
+list (`doc/design_error_management.md` D1) as a plain-text report for
+*Edit > Copy all problems* and the error picker's *Copy all*. It is also the
+**shared home of the root-cause grouping** (`groupErrorsByRootCause`,
+`ErrorGroup`, `isNavigableError`) that the panel badge and picker consume, so
+the copied report and the on-screen list can never disagree about what counts as
+one problem. It is pure Dart over the generated API data classes — unit-tested
+in `test/error_report_test.dart`, which is the only thing in `test/` and runs in
+well under a second (unlike `integration_test/`, which agents must not run).
+
 ### Dialogs Must Be Draggable
 
 All dialogs in this application **must be draggable**. Use the `DraggableDialog` widget from `lib/common/draggable_dialog.dart`.
