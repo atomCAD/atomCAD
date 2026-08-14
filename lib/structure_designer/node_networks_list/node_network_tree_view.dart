@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_fancy_tree_view/flutter_fancy_tree_view.dart';
@@ -142,6 +144,14 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   bool _editingIsLeaf = true; // Whether the node being edited is a leaf
   final TextEditingController _renameController = TextEditingController();
   final FocusNode _renameFocusNode = FocusNode();
+
+  /// Scrolls the tree. Owned here (rather than left implicit) so a drag near
+  /// the top/bottom edge can scroll the list toward an off-screen destination.
+  final ScrollController _scrollController = ScrollController();
+
+  /// Wraps the tree's scrollable so the drag handler can measure the visible
+  /// viewport rect in global coordinates.
+  final GlobalKey _treeViewportKey = GlobalKey();
 
   @override
   bool get wantKeepAlive => true; // Keep widget alive when switching tabs
@@ -476,6 +486,146 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
   /// True while a tree row is being dragged. Drives the "Move to top level"
   /// drop bar, which only appears mid-drag.
   bool _dragging = false;
+
+  /// How long the cursor must rest on a collapsed folder before it springs
+  /// open. Long enough not to fire while merely crossing the folder on the way
+  /// somewhere else, short enough to feel like a shortcut rather than a wait.
+  static const Duration _HOVER_EXPAND_DELAY = Duration(milliseconds: 600);
+
+  /// Distance from the tree's top/bottom edge within which a drag starts
+  /// auto-scrolling, and the top speed reached at the very edge (px/second).
+  static const double _AUTO_SCROLL_EDGE = 40.0;
+  static const double _AUTO_SCROLL_MAX_SPEED = 700.0;
+
+  /// Ticker period for auto-scroll. ~60 Hz.
+  static const Duration _AUTO_SCROLL_TICK = Duration(milliseconds: 16);
+
+  Timer? _hoverExpandTimer;
+
+  /// Path of the folder the pending [_hoverExpandTimer] belongs to, so a
+  /// re-entry into the *same* folder doesn't restart the countdown.
+  String? _hoverExpandPath;
+
+  Timer? _autoScrollTimer;
+
+  /// Current auto-scroll speed in px/second; positive scrolls down. Zero means
+  /// the pointer is not in an edge zone.
+  double _autoScrollVelocity = 0.0;
+
+  /// Springs a collapsed folder open when the drag rests on it, so a
+  /// destination inside a branch that was never expanded is still reachable
+  /// without dropping the drag to expand it by hand.
+  ///
+  /// Called when the drag *enters* [node] (from `onWillAcceptWithDetails`,
+  /// which fires for rejected targets too — a folder can be an invalid drop
+  /// destination itself while still being worth opening to reach its
+  /// children). Does nothing for leaves, already-expanded folders, empty
+  /// folders, or the dragged folder's own subtree (nothing there is a legal
+  /// destination anyway).
+  void _scheduleHoverExpand(
+      _NodeNetworkTreeNode dragged, _NodeNetworkTreeNode target) {
+    final path = target.fullName;
+    if (target.isLeaf || path == null || target.children.isEmpty) return;
+    if (_treeController.getExpansionState(target)) return;
+    final draggedPath = dragged.fullName;
+    if (draggedPath != null &&
+        !dragged.isLeaf &&
+        (path == draggedPath || path.startsWith('$draggedPath.'))) {
+      return;
+    }
+    if (_hoverExpandPath == path && _hoverExpandTimer?.isActive == true) return;
+
+    _hoverExpandTimer?.cancel();
+    _hoverExpandPath = path;
+    _hoverExpandTimer = Timer(_HOVER_EXPAND_DELAY, () {
+      if (!mounted) return;
+      setState(() {
+        _treeController.expand(target);
+        _expandedNamespaces.add(path);
+      });
+    });
+  }
+
+  /// Cancels a pending hover-expand. [path] scopes the cancel to one folder so
+  /// a stale `onLeave` (delivered after the drag already entered the next row)
+  /// cannot kill the new folder's countdown; pass null to cancel outright.
+  void _cancelHoverExpand({String? path}) {
+    if (path != null && _hoverExpandPath != path) return;
+    _hoverExpandTimer?.cancel();
+    _hoverExpandTimer = null;
+    _hoverExpandPath = null;
+  }
+
+  /// Updates the auto-scroll velocity from the drag's global position: inside
+  /// the top/bottom [_AUTO_SCROLL_EDGE] band the tree scrolls toward the edge,
+  /// faster the closer the pointer gets to it. Driven from the `Draggable`'s
+  /// `onDragUpdate` (which fires for the whole drag, wherever the pointer is)
+  /// rather than from a `DragTarget`, so it works over the gaps between rows
+  /// and past the end of the list.
+  void _updateAutoScroll(Offset globalPosition) {
+    final box =
+        _treeViewportKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      _stopAutoScroll();
+      return;
+    }
+    final top = box.localToGlobal(Offset.zero).dy;
+    final bottom = top + box.size.height;
+    final y = globalPosition.dy;
+
+    double velocity = 0.0;
+    if (y < top + _AUTO_SCROLL_EDGE) {
+      // Clamped so a pointer dragged well above the tree still scrolls at the
+      // top speed instead of overshooting into a huge velocity.
+      final depth =
+          ((top + _AUTO_SCROLL_EDGE) - y).clamp(0.0, _AUTO_SCROLL_EDGE);
+      velocity = -_AUTO_SCROLL_MAX_SPEED * (depth / _AUTO_SCROLL_EDGE);
+    } else if (y > bottom - _AUTO_SCROLL_EDGE) {
+      final depth =
+          (y - (bottom - _AUTO_SCROLL_EDGE)).clamp(0.0, _AUTO_SCROLL_EDGE);
+      velocity = _AUTO_SCROLL_MAX_SPEED * (depth / _AUTO_SCROLL_EDGE);
+    }
+
+    _autoScrollVelocity = velocity;
+    if (velocity == 0.0) {
+      _stopAutoScroll();
+    } else {
+      _autoScrollTimer ??=
+          Timer.periodic(_AUTO_SCROLL_TICK, (_) => _autoScrollTick());
+    }
+  }
+
+  /// One auto-scroll step. Stops itself at either end of the list so the timer
+  /// doesn't keep running against a clamped offset.
+  void _autoScrollTick() {
+    if (!_scrollController.hasClients) {
+      _stopAutoScroll();
+      return;
+    }
+    final position = _scrollController.position;
+    final delta =
+        _autoScrollVelocity * (_AUTO_SCROLL_TICK.inMilliseconds / 1000.0);
+    final target = (position.pixels + delta)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (target == position.pixels) {
+      _stopAutoScroll();
+      return;
+    }
+    _scrollController.jumpTo(target);
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+    _autoScrollVelocity = 0.0;
+  }
+
+  /// Tears down both drag-time helpers. Called on drag end (however it ends)
+  /// and on dispose.
+  void _endDragAssists() {
+    _cancelHoverExpand();
+    _stopAutoScroll();
+  }
 
   /// Destination namespace for a drop landing on [target]: a folder drops into
   /// itself; a leaf drops into its own containing namespace (file-explorer
@@ -935,6 +1085,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
   @override
   void dispose() {
+    _endDragAssists();
+    _scrollController.dispose();
     _renameFocusNode.removeListener(_onRenameFocusChange);
     _renameController.dispose();
     _renameFocusNode.dispose();
@@ -957,6 +1109,10 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
 
     final tree = AnimatedTreeView<_NodeNetworkTreeNode>(
+      // The key measures the visible viewport for drag auto-scroll; the
+      // controller is what does the scrolling.
+      key: _treeViewportKey,
+      controller: _scrollController,
       treeController: _treeController,
       nodeBuilder: (context, entry) {
         final node = entry.node;
@@ -1096,10 +1252,16 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         // accepts into its own containing namespace (file-explorer style).
         final Widget dropTarget = DragTarget<_NodeNetworkTreeNode>(
           onWillAcceptWithDetails: (details) {
+            // Entering a row is also what arms hover-to-expand — including on
+            // rows that reject the drop, since a folder can be an illegal
+            // destination while still being the way in to a legal one.
+            _scheduleHoverExpand(details.data, node);
             if (identical(details.data, node)) return false;
             return _isValidDrop(details.data, _dropNamespaceFor(node));
           },
+          onLeave: (_) => _cancelHoverExpand(path: node.fullName),
           onAcceptWithDetails: (details) {
+            _endDragAssists();
             _performDrop(context, details.data, _dropNamespaceFor(node));
           },
           builder: (context, candidate, rejected) {
@@ -1123,7 +1285,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           feedback: _buildDragFeedback(node),
           childWhenDragging: Opacity(opacity: 0.4, child: dropTarget),
           onDragStarted: () => setState(() => _dragging = true),
-          onDragEnd: (_) => setState(() => _dragging = false),
+          onDragUpdate: (details) => _updateAutoScroll(details.globalPosition),
+          onDragEnd: (_) {
+            _endDragAssists();
+            setState(() => _dragging = false);
+          },
           child: dropTarget,
         );
       },

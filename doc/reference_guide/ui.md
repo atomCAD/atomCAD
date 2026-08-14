@@ -64,6 +64,29 @@ Two ways to aim somewhere else:
 
 A network is created under an automatic name (`UNTITLED`, `UNTITLED1`, …) and becomes active immediately, with its folder expanded so you can see where it landed; rename it in place by double-clicking its row. If it landed in the wrong folder, *Move / rename…* in its right-click menu moves it in one step, and `Ctrl+Z` undoes the creation entirely.
 
+**Renaming and moving.** Double-clicking a row renames it in place. What that in-place field edits differs between the two tabs, deliberately:
+
+- In the **List** tab it holds the whole qualified name, so you can retype the path there.
+- In the **Tree** tab it holds only the row's own name — its place in the hierarchy is already shown by where the row sits. Typing a dot into it still works and pushes the item *deeper*: renaming `myname` to `sub.myname` inside folder `a.b` gives `a.b.sub.myname`.
+
+To move something *rootwards* or sideways — the direction in-place renaming cannot express — use **Move / rename…** from the row's right-click menu. It works on a network, on a record type def, and on a whole folder, and opens a dialog holding the **full qualified path** for you to edit:
+
+- Editing the last segment renames it, exactly like the in-place field.
+- Editing the leading part moves it: `a.b.myname` → `a.myname` promotes it one level, `a.b.myname` → `c.myname` moves it into a different folder.
+- **Clearing the field entirely** (folders only) promotes the folder's whole contents to the top level.
+
+Applied to a folder, the operation is a batch: the dialog lists every `old → new` rename it is about to perform, so you can see the whole subtree move before committing. Names that would collide with something already there are flagged in red and the **Apply** button stays disabled until you resolve them. Moves are undoable with `Ctrl+Z` like any other edit.
+
+**Drag and drop.** In the **Tree** tab you can also just drag a row onto its destination:
+
+- Dropping onto a **folder** moves the item into that folder. Dropping onto another **item** moves it into *that item's* folder — the same "drop next to a sibling" convention file explorers use.
+- While a drag is in progress, a **Move to top level** bar appears at the bottom of the panel; dropping there promotes the item to the root.
+- Resting the cursor on a **collapsed folder** springs it open, so you can drop into a branch that was closed when you started dragging.
+- Dragging near the **top or bottom edge** of the panel scrolls the tree, so a destination that is off screen is still reachable in one drag.
+- Dropping a folder into itself or into one of its own descendants is refused (the row will not highlight).
+
+A drop does not commit anything on its own: it opens the same *Move / rename…* dialog, pre-filled with the destination you dropped on. So you always get the preview, the conflict check and a **Cancel** — an accidental drop costs one click on *Cancel*, not an undo.
+
 **Who uses this network?** In the **List** tab, a network that is used somewhere in the design shows a small grey number at the right edge of its row: how many nodes across the whole design are instances of it. Networks that nobody uses show no number at all. Click the number — or right-click the row (in either the **List** or the **Tree** tab) and choose *Find Usages* — to jump to a usage; when there are several, you pick one from a list. This is the same navigation described under [Find Usages](#navigating-between-node-networks) below, started from the panel instead of from a node, so the landing is centered in the editor rather than anchored on the node you came from.
 
 **Where is the error?** When something in a network is broken, its row shows a small coloured badge at the right edge (above the usage count) carrying the number of *problems* — one per underlying failure, not one per node it made dark (see [One problem, one entry](#one-problem-one-entry) below). The badge covers **both kinds of problem**: structural (validation) errors found by checking the design, and runtime (evaluation) errors that happened while computing results — a node whose relax failed or whose required input is unwired appears here just like a badly-wired one. The colour encodes severity: **red** when at least one problem makes a node's output unavailable (that node and everything downstream of it goes dark), **amber** when the problems are only advisory warnings. In the problem list, the *icon* tells the two kinds apart: a filled circle or warning triangle for structural problems, a **bolt** (⚡) for runtime ones.
