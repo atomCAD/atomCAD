@@ -28,6 +28,7 @@ import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
+import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 
 /// Distinguishes the five kinds of pin slots a node can expose. Replaces the
 /// legacy `(PinType, pinIndex == -1)` discriminator pair that today
@@ -1645,22 +1646,36 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
-  void addNewNodeNetwork() {
-    // Rust returns the generated name (and has already activated it). The
-    // registry is a HashMap, so we cannot infer the new network from list
-    // order — selecting `nodeNetworkNames.last` picked a random network
-    // (issue #315). Select the returned name explicitly instead.
-    final newNetworkName = structure_designer_api.addNewNodeNetwork();
-    if (newNetworkName.isNotEmpty) {
-      setActiveNodeNetwork(newNetworkName);
-    } else {
-      refreshFromKernel();
-    }
+  /// The namespace a newly created user type lands in by default: the folder
+  /// of the active item — the record def when the schema editor is open,
+  /// otherwise the active network — and the root when nothing is active
+  /// (issue #308).
+  ///
+  /// The rule is deliberately self-correcting: in a flat design the active
+  /// network *is* at the root, so this returns `''` and creation behaves as it
+  /// always did; it only diverges once a hierarchy exists, which is exactly
+  /// when landing beside your siblings is what you want. Creating at the root
+  /// from inside a namespace is still possible — see the tree view's
+  /// background context menu (`node_network_tree_view.dart`).
+  ///
+  /// Note the tree view has no selection state of its own, so "selected" and
+  /// "active" are the same thing here.
+  String get activeNamespace {
+    final defName = activeRecordDefName;
+    if (defName != null) return getNamespace(defName);
+    final networkName = nodeNetworkView?.name;
+    if (networkName != null) return getNamespace(networkName);
+    return '';
   }
 
   /// Adds a new node network with an auto-generated unique name under
   /// `namespace` (a dot-delimited folder path; empty string = root) and
   /// activates it. Returns the generated qualified name, or null on failure.
+  ///
+  /// Rust returns the generated name (and has already activated it). The
+  /// registry is a HashMap, so we cannot infer the new network from list
+  /// order — selecting `nodeNetworkNames.last` picked a random network
+  /// (issue #315). Select the returned name explicitly instead.
   String? addNewNodeNetworkInNamespace(String namespace) {
     final newNetworkName = structure_designer_api.addNewNodeNetworkInNamespace(
         namespace: namespace);

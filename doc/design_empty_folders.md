@@ -13,8 +13,8 @@ This pairs badly with the "Add node network / Add record" folder context-menu ac
 ## Goal
 
 Let the user create an empty folder (primarily via a folder's right-click menu;
-secondarily via an action-bar button for root-level folders), with the lightest
-backend support that is still consistent.
+secondarily via an action-bar button), with the lightest backend support that is
+still consistent.
 
 ## Semantics (decided)
 
@@ -134,8 +134,10 @@ folders). Save writes `registry.folders`; load sets it then runs
   through the existing `namespaceNodes` map.
 - **Folder context menu** gains **"New folder…"** (creates a subfolder inside the
   right-clicked folder) — the primary entry point.
-- **Action bar** gains a **"New folder"** button (creates a root-level folder) — the
-  only way to make a top-level folder.
+- **Action bar** gains a **"New folder"** button. It originally created only root-level
+  folders; since issue #308 it creates inside the active item's namespace like its
+  neighbours, and the tree's **background right-click menu** ("New folder at root…") is
+  the way to make a top-level folder from inside a namespace.
 - New-folder name dialog (prompts for the simple name; folders are about their name, so
   unlike networks/records they are not auto-named).
 

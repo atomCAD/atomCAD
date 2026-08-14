@@ -220,3 +220,7 @@ Unified user-types panel — lists both node networks and record type defs:
 - `node_networks_action_bar.dart` - Add/delete/navigate buttons; the "Add" action offers both "new network" and "new record def"
 
 Selecting an entry sets it active in the model — networks set `activeNetworkName`, record defs set `activeRecordDefName`. `MainContentArea` swaps the editor accordingly.
+
+**Creation is namespace-relative** (issue #308). A new user type lands in `StructureDesignerModel.activeNamespace` — the folder of the active record def, else of the active network, else the root — never unconditionally at the root. Any *new* creation entry point must follow this: pass a namespace to `addNewNodeNetworkInNamespace` / `addNewRecordTypeDefInNamespace` / `addFolder` rather than calling a root-scoped variant, and name the destination in the tooltip or dialog subtitle so the user can see where it will go. The tree view has no selection state of its own, so "selected" and "active" are the same thing here.
+
+The corollary is load-bearing: because the buttons inherit, **the root needs its own explicit gesture** or it becomes unreachable in a fully namespaced design. That is the tree view's background right-click menu (`_withRootContextMenu` / `_showRootContextMenu`). Don't remove it while the action bar inherits, and if you add a third creation surface, decide which of the two it is.

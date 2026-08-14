@@ -749,11 +749,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
   }
 
-  /// Creates a new empty subfolder inside the folder `node`. Prompts for the
-  /// folder name (folders are about their name), then creates it and expands
-  /// the parent so the new folder is visible. See `doc/design_empty_folders.md`.
-  Future<void> _handleAddFolderIn(_NodeNetworkTreeNode node) async {
-    final parent = node.fullName ?? '';
+  /// Creates a new empty subfolder inside [parent] (empty = the root). Prompts
+  /// for the folder name (folders are about their name), then creates it and
+  /// expands the parent so the new folder is visible. See
+  /// `doc/design_empty_folders.md`.
+  Future<void> _handleAddFolderIn(String parent) async {
     final name =
         await showNewFolderNameDialog(context: context, parentPath: parent);
     if (name == null || name.trim().isEmpty || !mounted) return;
@@ -765,11 +765,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
   }
 
-  /// Creates a new node network or record def inside the folder `node` (a
-  /// namespace). The simple name is auto-generated to be unique; the user can
-  /// rename it afterwards. The folder is expanded so the new item is visible.
-  void _handleAddInFolder(_NodeNetworkTreeNode node, {required bool isRecord}) {
-    final namespace = node.fullName ?? '';
+  /// Creates a new node network or record def inside the namespace [namespace]
+  /// (empty = the root). The simple name is auto-generated to be unique; the
+  /// user can rename it afterwards. The folder is expanded so the new item is
+  /// visible.
+  void _handleAddIn(String namespace, {required bool isRecord}) {
     _markNamespaceExpanded(namespace);
     if (isRecord) {
       widget.model.addNewRecordTypeDefInNamespace(namespace);
@@ -778,18 +778,61 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     }
   }
 
-  void _showContextMenu(
-    BuildContext context,
-    _NodeNetworkTreeNode node,
-    Offset globalPosition,
-  ) {
+  RelativeRect _menuPosition(BuildContext context, Offset globalPosition) {
     final screenSize = MediaQuery.of(context).size;
-    final position = RelativeRect.fromLTRB(
+    return RelativeRect.fromLTRB(
       globalPosition.dx,
       globalPosition.dy,
       screenSize.width - globalPosition.dx,
       screenSize.height - globalPosition.dy,
     );
+  }
+
+  /// Right-clicking the empty space below the tree creates **at the root**.
+  ///
+  /// This is the escape hatch that makes the action bar's namespace-inheriting
+  /// buttons safe (issue #308): once every network lives in a namespace, the
+  /// toolbar can no longer reach the root, so the root needs an explicit,
+  /// discoverable gesture of its own. It also removes an old asymmetry — every
+  /// folder could be right-clicked to create inside it, but the root could not.
+  /// The labels say "at root" precisely because the toolbar no longer does.
+  void _showRootContextMenu(BuildContext context, Offset globalPosition) {
+    final position = _menuPosition(context, globalPosition);
+    showMenu<String>(
+      context: context,
+      position: position,
+      items: const [
+        PopupMenuItem(
+          value: 'add_folder_root',
+          child: Text('New folder at root…'),
+        ),
+        PopupMenuItem(
+          value: 'add_network_root',
+          child: Text('Add node network at root'),
+        ),
+        PopupMenuItem(
+          value: 'add_record_root',
+          child: Text('Add record at root'),
+        ),
+      ],
+    ).then((value) {
+      if (!context.mounted) return;
+      if (value == 'add_folder_root') {
+        _handleAddFolderIn('');
+      } else if (value == 'add_network_root') {
+        _handleAddIn('', isRecord: false);
+      } else if (value == 'add_record_root') {
+        _handleAddIn('', isRecord: true);
+      }
+    });
+  }
+
+  void _showContextMenu(
+    BuildContext context,
+    _NodeNetworkTreeNode node,
+    Offset globalPosition,
+  ) {
+    final position = _menuPosition(context, globalPosition);
 
     // Check current CLI lock state for this node
     final isLocked =
@@ -806,8 +849,9 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
         const PopupMenuDivider(),
       ],
       // Folders offer targeted creation: a new network/record def created here
-      // lands inside this folder rather than at the root (the action-bar
-      // buttons stay root-scoped). See issue on tree-view UX.
+      // lands inside this folder rather than in the active item's namespace
+      // (which is what the action-bar buttons use — issue #308). Right-clicking
+      // the empty space below the tree is the same menu scoped to the root.
       if (!node.isLeaf) ...[
         const PopupMenuItem(
           value: 'add_folder_here',
@@ -870,11 +914,11 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
           position: position,
         );
       } else if (value == 'add_folder_here') {
-        _handleAddFolderIn(node);
+        _handleAddFolderIn(node.fullName ?? '');
       } else if (value == 'add_network_here') {
-        _handleAddInFolder(node, isRecord: false);
+        _handleAddIn(node.fullName ?? '', isRecord: false);
       } else if (value == 'add_record_here') {
-        _handleAddInFolder(node, isRecord: true);
+        _handleAddIn(node.fullName ?? '', isRecord: true);
       } else if (value == 'rename') {
         _startRenaming(node);
       } else if (value == 'move') {
@@ -907,8 +951,8 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
     final folders = widget.model.folderNames;
 
     if (nodeNetworks.isEmpty && recordDefs.isEmpty && folders.isEmpty) {
-      return const Center(
-        child: Text('No user types defined'),
+      return _withRootContextMenu(
+        const Center(child: Text('No user types defined')),
       );
     }
 
@@ -1087,9 +1131,24 @@ class _NodeNetworkTreeViewState extends State<NodeNetworkTreeView>
 
     return Column(
       children: [
-        Expanded(child: tree),
+        Expanded(child: _withRootContextMenu(tree)),
         if (_dragging) _buildRootDropBar(),
       ],
+    );
+  }
+
+  /// Wraps the tree body so a right-click that does **not** land on a row opens
+  /// the root creation menu. Row-level `onSecondaryTapDown` handlers sit deeper
+  /// in the tree and win the gesture arena, so this only fires on the empty
+  /// space below/around the rows. `HitTestBehavior.opaque` is what makes that
+  /// empty space hit-testable at all.
+  Widget _withRootContextMenu(Widget child) {
+    return GestureDetector(
+      key: const Key('tree_background_context_menu'),
+      behavior: HitTestBehavior.opaque,
+      onSecondaryTapDown: (details) =>
+          _showRootContextMenu(context, details.globalPosition),
+      child: child,
     );
   }
 
