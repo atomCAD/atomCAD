@@ -144,7 +144,7 @@ In Direct Editing Mode, *File > Import XYZ* imports atoms from an XYZ file direc
 ## Other capabilities
 
 - **Undo / Redo** (`Ctrl+Z` / `Ctrl+Shift+Z` or `Ctrl+Y`): All editing actions can be undone and redone.
-- **Quick save** (`Ctrl+S`): Saves the design back to its current file without a dialog (see [Menu Bar](./ui.md#menu-bar)).
+- **Quick save** (`Ctrl+S`): Saves the design back to its current file without a dialog. **Ctrl+Shift+S** is *Save Design As*, which always opens the file dialog (see [Menu Bar](./ui.md#menu-bar)).
 - **Export** via *File > Export visible* to `.mol` or `.xyz` format.
 
 ## Switching between modes

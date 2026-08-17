@@ -104,6 +104,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
                           MenuItemButton(
                             key: const Key('save_design_as_item'),
                             onPressed: _saveDesignAs,
+                            shortcut: const SingleActivator(
+                                LogicalKeyboardKey.keyS,
+                                control: true,
+                                shift: true),
                             child: const Text('Save Design As'),
                           ),
                           MenuItemButton(
@@ -514,9 +518,9 @@ class _StructureDesignerState extends State<StructureDesigner> {
     );
   }
 
-  /// Global keyboard handler for undo/redo and quick save.
-  /// Catches Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y / Ctrl+S regardless of which panel
-  /// has focus.
+  /// Global keyboard handler for undo/redo and saving.
+  /// Catches Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y / Ctrl+S / Ctrl+Shift+S regardless
+  /// of which panel has focus.
   KeyEventResult _handleGlobalKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
@@ -544,8 +548,16 @@ class _StructureDesignerState extends State<StructureDesigner> {
         graphModel.toggleConsolePanel();
         return KeyEventResult.handled;
       }
+      // Ctrl+Shift+S: Save As (issue #99) — always a dialog, whether or not the
+      // design already has a file. Must be tested before the quick-save branch,
+      // which excludes Shift precisely to leave this combo free.
+      if (event.logicalKey == LogicalKeyboardKey.keyS &&
+          HardwareKeyboard.instance.isShiftPressed) {
+        _saveDesignAs();
+        return KeyEventResult.handled;
+      }
       // Ctrl+S: Quick save (issue #397). Shift is excluded so that
-      // Ctrl+Shift+S stays free.
+      // Ctrl+Shift+S stays with Save As above.
       if (event.logicalKey == LogicalKeyboardKey.keyS &&
           !HardwareKeyboard.instance.isShiftPressed) {
         _saveDesign();

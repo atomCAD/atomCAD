@@ -387,7 +387,8 @@
       "PowerShell($p='C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\\\\structure_designer\\\\structure_designer.dart'; $t=[System.IO.File]::ReadAllText\\($p\\); $enc=New-Object System.Text.UTF8Encoding\\($false\\); [System.IO.File]::WriteAllText\\($p,$t,$enc\\); \\([System.IO.File]::ReadAllBytes\\($p\\)[0..3]\\) -join ',')",
       "PowerShell($p='C:\\\\machine_phase_systems\\\\flutter_cad\\\\lib\\\\structure_designer\\\\structure_designer.dart'; $t=[System.IO.File]::ReadAllText\\($p,[System.Text.UTF8Encoding]::new\\($false\\)\\); $bytes=[System.Text.Encoding]::GetEncoding\\(1252\\).GetBytes\\($t\\); [System.IO.File]::WriteAllBytes\\($p,$bytes\\); \"done\")",
       "PowerShell(grep *)",
-      "Bash(sed 's/ //g')"
+      "Bash(sed 's/ //g')",
+      "Bash(sort -t: -k2 -rn)"
     ]
   }
 }
