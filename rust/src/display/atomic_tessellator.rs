@@ -2,18 +2,18 @@ use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::crystolecule::atomic_structure::{
     Atom, AtomDisplayState, AtomRenderStyle, AtomicStructure, BondReference,
 };
-use crate::renderer::tessellator::tessellator::{self, OccluderSphere};
 use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+use atomcad_renderer::tessellator::tessellator::{self, OccluderSphere};
 // Scene trait removed - is_atom_marked was deprecated and always returned false
 use crate::display::preferences::{
     AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
 };
-use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
-use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
-use crate::renderer::label_atlas::layout_label;
-use crate::renderer::label_mesh::LabelMesh;
-use crate::renderer::mesh::{Material, Mesh};
-use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
+use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
+use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
+use atomcad_renderer::label_atlas::layout_label;
+use atomcad_renderer::label_mesh::LabelMesh;
+use atomcad_renderer::mesh::{Material, Mesh};
+use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use atomcad_util::timer::Timer;
 use glam::f32::Vec3;
 use glam::f64::DVec3;

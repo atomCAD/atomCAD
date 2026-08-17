@@ -96,12 +96,15 @@ lto = "thin"
 flutter_rust_bridge = "=2.10.0"
 # Extracted backend crates (doc/design_rust_crate_split.md)
 atomcad-geo-tree = { path = "crates/atomcad-geo-tree" }
+atomcad-renderer = { path = "crates/atomcad-renderer" }
 atomcad-util = { path = "crates/atomcad-util" }
 dlopen = { workspace = true }
 lazy_static = { workspace = true }
+# wgpu / image: Phase 3 moved the renderer out, but `api/screenshot_api.rs` reads
+# the rendered texture back with `wgpu` and encodes it with `image`, so both stay
+# here as well. (`bytemuck` did leave — the renderer was its only user.)
 wgpu = { workspace = true }
 tokio = { workspace = true }
-bytemuck = { workspace = true }
 glam = { workspace = true }
 lru = { workspace = true }
 thiserror = { workspace = true }
@@ -129,7 +132,7 @@ flutter_rust_bridge_codegen = "2.10.0"
 serde_with = "3.5.1"
 
 [dev-dependencies]
-ab_glyph = "0.2.32"
+# ab_glyph moved to `crates/atomcad-renderer` with `examples/gen_font_atlas.rs`.
 insta = { workspace = true }
 tempfile = { workspace = true }
 

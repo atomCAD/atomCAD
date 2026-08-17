@@ -1,5 +1,5 @@
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::LineMesh;
 use glam::f32::Vec3;
 
 /// Color for unit cell wireframe edges.

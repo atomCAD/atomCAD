@@ -10,7 +10,7 @@
 //! `add_atom_quad` / `add_bond_quad` bookkeeping (4 vertices + 6 indices + 1
 //! sort center per quad).
 
-use rust_lib_flutter_cad::renderer::transparent_impostor_mesh::{
+use atomcad_renderer::transparent_impostor_mesh::{
     TransparentImpostorMesh, TransparentImpostorVertex,
 };
 use std::mem::offset_of;

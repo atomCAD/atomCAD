@@ -5,7 +5,7 @@ use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::preferences::BackgroundPreferences;
-use crate::renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::LineMesh;
 
 // Constants for coordinate system visualization
 pub const X_AXIS_COLOR: [f32; 3] = [1.0, 0.0, 0.0]; // Red for X-axis

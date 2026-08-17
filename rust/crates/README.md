@@ -10,6 +10,7 @@ it.
 |---|---|---|
 | `atomcad-util` | `rust/src/util/` | 1 |
 | `atomcad-geo-tree` | `rust/src/geo_tree/` | 2 |
+| `atomcad-renderer` | `rust/src/renderer/` | 3 |
 
 Conventions for anything added here:
 
@@ -26,3 +27,10 @@ Conventions for anything added here:
   (`atomcad-crystolecule/tests/crystolecule/…`); the repetition is load-bearing
   because it keeps ~250 `#[path]` declarations and the test-data paths valid
   (D5.1)
+- a test that reaches *up* out of the crate cannot come along; it goes to a
+  root-package harness named `<module>_api.rs` (`atomcad-renderer` left four
+  such tests behind in `rust/tests/renderer_api/`), per D5 and D5.1a
+- committed assets a crate `include_bytes!`/`include_str!`s belong **inside**
+  the crate (`atomcad-renderer/assets/`), together with any example that
+  generates them — a relative `include_*!` path is resolved against the *source
+  file*, so it silently changes meaning when the file moves

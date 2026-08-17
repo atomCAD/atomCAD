@@ -22,8 +22,8 @@ use crate::api::structure_designer::structure_designer_preferences::AtomicStruct
 use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::renderer::renderer::Renderer;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_renderer::renderer::Renderer;
 use atomcad_util::transform::Transform;
 use dlopen::{
     Error as LibError,
@@ -36,29 +36,29 @@ use std::time::Instant;
 
 fn to_renderer_camera_canonical_view(
     view: APICameraCanonicalView,
-) -> crate::renderer::camera::CameraCanonicalView {
+) -> atomcad_renderer::camera::CameraCanonicalView {
     match view {
-        APICameraCanonicalView::Custom => crate::renderer::camera::CameraCanonicalView::Custom,
-        APICameraCanonicalView::Top => crate::renderer::camera::CameraCanonicalView::Top,
-        APICameraCanonicalView::Bottom => crate::renderer::camera::CameraCanonicalView::Bottom,
-        APICameraCanonicalView::Front => crate::renderer::camera::CameraCanonicalView::Front,
-        APICameraCanonicalView::Back => crate::renderer::camera::CameraCanonicalView::Back,
-        APICameraCanonicalView::Left => crate::renderer::camera::CameraCanonicalView::Left,
-        APICameraCanonicalView::Right => crate::renderer::camera::CameraCanonicalView::Right,
+        APICameraCanonicalView::Custom => atomcad_renderer::camera::CameraCanonicalView::Custom,
+        APICameraCanonicalView::Top => atomcad_renderer::camera::CameraCanonicalView::Top,
+        APICameraCanonicalView::Bottom => atomcad_renderer::camera::CameraCanonicalView::Bottom,
+        APICameraCanonicalView::Front => atomcad_renderer::camera::CameraCanonicalView::Front,
+        APICameraCanonicalView::Back => atomcad_renderer::camera::CameraCanonicalView::Back,
+        APICameraCanonicalView::Left => atomcad_renderer::camera::CameraCanonicalView::Left,
+        APICameraCanonicalView::Right => atomcad_renderer::camera::CameraCanonicalView::Right,
     }
 }
 
 fn to_api_camera_canonical_view(
-    view: crate::renderer::camera::CameraCanonicalView,
+    view: atomcad_renderer::camera::CameraCanonicalView,
 ) -> APICameraCanonicalView {
     match view {
-        crate::renderer::camera::CameraCanonicalView::Custom => APICameraCanonicalView::Custom,
-        crate::renderer::camera::CameraCanonicalView::Top => APICameraCanonicalView::Top,
-        crate::renderer::camera::CameraCanonicalView::Bottom => APICameraCanonicalView::Bottom,
-        crate::renderer::camera::CameraCanonicalView::Front => APICameraCanonicalView::Front,
-        crate::renderer::camera::CameraCanonicalView::Back => APICameraCanonicalView::Back,
-        crate::renderer::camera::CameraCanonicalView::Left => APICameraCanonicalView::Left,
-        crate::renderer::camera::CameraCanonicalView::Right => APICameraCanonicalView::Right,
+        atomcad_renderer::camera::CameraCanonicalView::Custom => APICameraCanonicalView::Custom,
+        atomcad_renderer::camera::CameraCanonicalView::Top => APICameraCanonicalView::Top,
+        atomcad_renderer::camera::CameraCanonicalView::Bottom => APICameraCanonicalView::Bottom,
+        atomcad_renderer::camera::CameraCanonicalView::Front => APICameraCanonicalView::Front,
+        atomcad_renderer::camera::CameraCanonicalView::Back => APICameraCanonicalView::Back,
+        atomcad_renderer::camera::CameraCanonicalView::Left => APICameraCanonicalView::Left,
+        atomcad_renderer::camera::CameraCanonicalView::Right => APICameraCanonicalView::Right,
     }
 }
 

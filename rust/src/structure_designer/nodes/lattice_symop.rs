@@ -3,8 +3,6 @@ use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::analyze_unit_cell_symmetries;
 use crate::display::gadget::{Gadget, GadgetPickContext};
-use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::{
@@ -23,6 +21,8 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::utils::xyz_gadget_utils;
 use atomcad_geo_tree::GeoNode;
+use atomcad_renderer::mesh::Mesh;
+use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use atomcad_util::serialization_utils::{ivec3_serializer, option_dvec3_serializer};
 use atomcad_util::transform::Transform;
 use glam::DQuat;
@@ -381,13 +381,13 @@ impl Tessellatable for LatticeSymopGadget {
             let bottom_center = self.frame_transform.translation - normalized_axis * half_length;
 
             // Use yellow color for the rotation axis
-            let yellow_material = crate::renderer::mesh::Material::new(
+            let yellow_material = atomcad_renderer::mesh::Material::new(
                 &glam::f32::Vec3::new(1.0, 1.0, 0.0), // Yellow color
                 0.4,
                 0.8,
             );
 
-            crate::renderer::tessellator::tessellator::tessellate_cylinder(
+            atomcad_renderer::tessellator::tessellator::tessellate_cylinder(
                 output_mesh,
                 &top_center,
                 &bottom_center,

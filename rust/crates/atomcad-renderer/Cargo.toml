@@ -1,0 +1,27 @@
+[package]
+name = "atomcad-renderer"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# Depends on `atomcad-util` only (doc/design_rust_crate_split.md, Phase 3).
+# Versions come from [workspace.dependencies] in ../../Cargo.toml (D4).
+#
+# This crate owns the whole GPU stack: `wgpu` and `bytemuck` are named nowhere
+# else in the tree except `src/api/screenshot_api.rs`, which reads back the
+# rendered texture, so `wgpu` and `image` also stay in the root manifest for
+# now. `bytemuck` left the root entirely.
+[dependencies]
+atomcad-util = { path = "../atomcad-util" }
+bytemuck = { workspace = true }
+glam = { workspace = true }
+image = { workspace = true }
+wgpu = { workspace = true }
+
+# `ab_glyph` is used by `examples/gen_font_atlas.rs` and nowhere else, so the
+# shipping cdylib gains no dependency from it. The example moved here with
+# `assets/` and `src/font_metrics.rs`, the two artifacts it writes.
+[dev-dependencies]
+ab_glyph = "0.2.32"

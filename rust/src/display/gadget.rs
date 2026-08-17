@@ -1,4 +1,4 @@
-use crate::renderer::tessellator::tessellator::Tessellatable;
+use atomcad_renderer::tessellator::tessellator::Tessellatable;
 use glam::f64::DVec3;
 
 /// Camera-derived information for gadget picking, allowing hit tests to

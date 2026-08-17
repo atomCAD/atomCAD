@@ -12,10 +12,11 @@ Dependencies flow downward (no circular dependencies):
 │        display           │          api             │
 │   (Tessellation)         │   (Flutter API layer)    │
 ├──────────────────────────┴──────────────────────────┤
-│  crystolecule  │  geo_tree   │  renderer  │  expr   │
-│  (Atoms/bonds) │  (CSG/SDF)  │  (wgpu)    │ (Lang)  │
-│                │  extracted: │            │         │
-│                │ atomcad-geo-tree         │         │
+│  crystolecule  │  geo_tree   │  renderer  │   expr  │
+│  (Atoms/bonds) │  (CSG/SDF)  │   (wgpu)   │  (Lang) │
+│                │  extracted  │  extracted │         │
+│                │ atomcad-    │ atomcad-   │         │
+│                │  geo-tree   │  renderer  │         │
 ├─────────────────────────────────────────────────────┤
 │         util  →  crate `atomcad-util` (extracted)    │
 └─────────────────────────────────────────────────────┘
@@ -25,7 +26,6 @@ Dependencies flow downward (no circular dependencies):
 
 - **structure_designer/** - Node network, evaluator, serialization (.cnnd) (see `src/structure_designer/AGENTS.md`)
 - **crystolecule/** - Atomic structures, unit cells, motifs, lattice operations (see `src/crystolecule/AGENTS.md`)
-- **renderer/** - wgpu rendering, shaders (*.wgsl), mesh management
 - **display/** - Tessellates domain objects (atoms, geometry) into meshes
 - **expr/** - Expression language (lexer, parser, validation)
 - **api/** - Flutter Rust Bridge API layer
@@ -42,6 +42,19 @@ Dependencies flow downward (no circular dependencies):
   and `blake3`; note `src/display/csg_to_poly_mesh.rs` still names `csgrs` /
   `geo` / `nalgebra` directly, so those three also stay in the root manifest
   until `atomcad-display` is extracted.
+- **`crates/atomcad-renderer/`** - was `src/renderer/`; wgpu rendering, shaders
+  (`*.wgsl`), mesh management, camera math. Depends on `atomcad-util` only.
+  Imported as `atomcad_renderer::…` (**not** `crate::renderer::…`), including
+  from tests. It owns the GPU stack (`wgpu`, `bytemuck`) plus `image`, the
+  committed `assets/` (SDF font atlas, its source font and license) and
+  `examples/gen_font_atlas.rs`, the generator for `assets/font_atlas.png` and
+  `src/font_metrics.rs` — run it with
+  `cargo run --release -p atomcad-renderer --example gen_font_atlas`. Note
+  `src/api/screenshot_api.rs` still names `wgpu` and `image` directly, so those
+  two also stay in the root manifest. Its GPU-free tests live in
+  `crates/atomcad-renderer/tests/renderer/`; the four api-level
+  axis-resolution tests that used to sit in `camera_test.rs` are at
+  `rust/tests/renderer_api/` (see Testing below).
 
 ## Cargo workspace
 
@@ -50,8 +63,9 @@ builds) **and** the workspace root. Extracted crates live in `rust/crates/` and
 are picked up by the `members = ["crates/*"]` glob. This is step 0 of
 `doc/design_rust_crate_split.md`, which converts the top-level modules into
 crates so the dependency DAG above becomes compiler-enforced rather than
-convention-enforced. `atomcad-util` (Phase 1) and `atomcad-geo-tree` (Phase 2)
-are extracted; the remaining modules follow in Phases 3-6.
+convention-enforced. `atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2) and
+`atomcad-renderer` (Phase 3) are extracted; the remaining modules follow in
+Phases 4-6.
 
 Rules that follow from that layout:
 
@@ -79,6 +93,15 @@ Rules that follow from that layout:
   (`use atomcad_util::…`), not `rust_lib_flutter_cad::…`. Doc-tests are compiled
   as external users of the crate that defines them, so a stale prefix here fails
   the run even though `cargo build` is green.
+- **A relative `include_bytes!` / `include_str!` path changes meaning when its
+  source file moves.** Extracting a crate reparents every such path by two
+  directory levels, and the failure is a compile error only if the file happens
+  not to exist at the new location — so move the asset into the crate and
+  re-derive the path, don't patch in `../` hops. `atomcad-renderer` owns
+  `assets/font_atlas.png` for this reason.
+- Committed generated artifacts should be regenerable *in place* after a move:
+  re-run the generator and confirm a byte-identical diff. That is the only real
+  proof both the read path and the write path survived.
 
 ## Adding a New Node Type
 
@@ -139,15 +162,27 @@ When adding new functionality to the Rust codebase:
    - `rust/tests/structure_designer/` - Structure designer tests
    - `rust/tests/crystolecule/` - Atomic structure tests
    - `rust/crates/atomcad-geo-tree/tests/geo_tree/` - Geometry tests
+   - `rust/crates/atomcad-renderer/tests/renderer/` - GPU-free renderer tests
+     (camera math, label layout, impostor meshes, transparent sort)
    - `rust/crates/atomcad-util/tests/util/` - Utility tests
    - `rust/tests/expr/` - Expression language tests
    - `rust/tests/integration/` - Integration/roundtrip tests
+   - `rust/tests/renderer_api/` - the renderer-adjacent tests that reach *up*
+     into `api` / `crystolecule` and so cannot live in `atomcad-renderer`
 
    An extracted crate keeps the module's original directory name inside its
    `tests/` (`atomcad-geo-tree/tests/geo_tree/`, beside `tests/geo_tree.rs`).
    The apparent redundancy is load-bearing: it keeps every `#[path]` string and
    every `CARGO_MANIFEST_DIR`-relative test-data path valid across the move
    (design doc D5.1). Do not tidy it.
+
+   **Which harness a new test belongs in is decided by what it imports, not by
+   what it is about.** A member crate cannot depend on the root crate, so a test
+   naming anything in `rust_lib_flutter_cad::api` has to sit in a root-package
+   harness even when its subject lives in an extracted crate — that is why
+   `rust/tests/renderer_api.rs` exists beside
+   `crates/atomcad-renderer/tests/renderer.rs`. Prefer splitting a file at that
+   seam over dragging its whole subject upward.
 
 **When tests may be skipped:**
 - **API wrapper functions** (`rust/src/api/`) - these are thin wrappers; test the underlying core function instead

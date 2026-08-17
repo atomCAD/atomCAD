@@ -7,6 +7,10 @@
 //! `quad_centers` bookkeeping, and that delete-marker / space-filling filtering
 //! survive the refactor.
 
+use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
+use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
+use atomcad_renderer::camera::Camera;
+use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
@@ -18,10 +22,6 @@ use rust_lib_flutter_cad::display::preferences::{
     BackgroundPreferences, DisplayPreferences, GeometryVisualizationPreferences, MeshSmoothing,
 };
 use rust_lib_flutter_cad::display::scene_tessellator::tessellate_scene_content;
-use rust_lib_flutter_cad::renderer::atom_impostor_mesh::AtomImpostorMesh;
-use rust_lib_flutter_cad::renderer::bond_impostor_mesh::BondImpostorMesh;
-use rust_lib_flutter_cad::renderer::camera::Camera;
-use rust_lib_flutter_cad::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
     NodeOutput, NodeSceneData, StructureDesignerScene,
 };

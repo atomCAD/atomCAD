@@ -2,16 +2,16 @@ use super::camera::Camera;
 use super::gpu_mesh::GPUMesh;
 use super::mesh::Mesh;
 use super::mesh::Vertex;
-use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
-use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
-use crate::renderer::label_atlas::decode_font_atlas;
-use crate::renderer::label_mesh::LabelMesh;
-use crate::renderer::label_mesh::LabelVertex;
-use crate::renderer::line_mesh::LineMesh;
-use crate::renderer::line_mesh::LineVertex;
-use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
-use crate::renderer::transparent_impostor_mesh::TransparentImpostorVertex;
-use crate::renderer::transparent_sort::sorted_transparent_indices;
+use crate::atom_impostor_mesh::AtomImpostorMesh;
+use crate::bond_impostor_mesh::BondImpostorMesh;
+use crate::label_atlas::decode_font_atlas;
+use crate::label_mesh::LabelMesh;
+use crate::label_mesh::LabelVertex;
+use crate::line_mesh::LineMesh;
+use crate::line_mesh::LineVertex;
+use crate::transparent_impostor_mesh::TransparentImpostorMesh;
+use crate::transparent_impostor_mesh::TransparentImpostorVertex;
+use crate::transparent_sort::sorted_transparent_indices;
 use bytemuck;
 use glam::f32::Mat4;
 use glam::f32::Vec3;
@@ -578,7 +578,7 @@ impl Renderer {
             vertex: VertexState {
                 module: atom_impostor_shader,
                 entry_point: Some("vs_main"),
-                buffers: &[crate::renderer::atom_impostor_mesh::AtomImpostorVertex::desc()],
+                buffers: &[crate::atom_impostor_mesh::AtomImpostorVertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
@@ -632,7 +632,7 @@ impl Renderer {
             vertex: VertexState {
                 module: bond_impostor_shader,
                 entry_point: Some("vs_main"),
-                buffers: &[crate::renderer::bond_impostor_mesh::BondImpostorVertex::desc()],
+                buffers: &[crate::bond_impostor_mesh::BondImpostorVertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(FragmentState {
@@ -1318,10 +1318,7 @@ impl Renderer {
     }
 
     /// Sets the camera to a canonical view
-    pub fn set_camera_canonical_view(
-        &mut self,
-        view: crate::renderer::camera::CameraCanonicalView,
-    ) {
+    pub fn set_camera_canonical_view(&mut self, view: crate::camera::CameraCanonicalView) {
         self.camera.set_canonical_view(view);
         self.update_camera_buffer();
     }

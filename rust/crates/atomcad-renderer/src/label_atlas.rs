@@ -6,7 +6,7 @@
 //! scales into world units and turns into billboard quads.
 //!
 //! **This module needs no atlas handle to lay text out.** Glyph metrics are a
-//! `const` table ([`crate::renderer::font_metrics`]), so the layout path is
+//! `const` table ([`crate::font_metrics`]), so the layout path is
 //! pure arithmetic and unit-testable without a GPU. The PNG is decoded exactly
 //! once, renderer-side, to upload the texture.
 //!
@@ -14,7 +14,7 @@
 //! (which is the atom's anchor). The caller multiplies by the world-space label
 //! scale; see `doc/design_atom_labels.md` §Label size.
 
-use crate::renderer::font_metrics::{
+use crate::font_metrics::{
     ATLAS_HEIGHT, ATLAS_WIDTH, CAP_HEIGHT_EM, FIRST_CHAR, GLYPH_METRICS, GlyphMetrics, LAST_CHAR,
 };
 
@@ -44,7 +44,7 @@ pub struct FontAtlasImage {
 /// generated metrics table: both mean the committed atlas and `font_metrics.rs`
 /// were not generated together, which would garble every glyph on screen.
 pub fn decode_font_atlas() -> FontAtlasImage {
-    const ATLAS_PNG: &[u8] = include_bytes!("../../assets/font_atlas.png");
+    const ATLAS_PNG: &[u8] = include_bytes!("../assets/font_atlas.png");
 
     let image = image::load_from_memory_with_format(ATLAS_PNG, image::ImageFormat::Png)
         .expect("font_atlas.png failed to decode");

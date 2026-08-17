@@ -7,8 +7,8 @@
 //! winding. These tests lock the ordering (perspective, orthographic, rotated
 //! camera), the winding/permutation invariants, and the degenerate inputs.
 
+use atomcad_renderer::transparent_sort::sorted_transparent_indices;
 use glam::f32::{Mat4, Vec3};
-use rust_lib_flutter_cad::renderer::transparent_sort::sorted_transparent_indices;
 
 /// A right-handed look-at view matrix, matching `Camera::build_view_matrix`.
 fn look_at(eye: Vec3, target: Vec3, up: Vec3) -> Mat4 {

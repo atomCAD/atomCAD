@@ -9,15 +9,15 @@ use crate::display::poly_mesh_tessellator::{
 use crate::display::preferences::{AtomicRenderingMethod, DisplayPreferences};
 use crate::display::surface_point_tessellator;
 use crate::display::unit_cell_wireframe_tessellator;
-use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
-use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
-use crate::renderer::camera::Camera;
-use crate::renderer::label_mesh::LabelMesh;
-use crate::renderer::line_mesh::LineMesh;
-use crate::renderer::mesh::{Material, Mesh};
-use crate::renderer::tessellator::tessellator::{TessellationOutput, tessellate_cuboid};
-use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::structure_designer::structure_designer_scene::{NodeOutput, StructureDesignerScene};
+use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
+use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
+use atomcad_renderer::camera::Camera;
+use atomcad_renderer::label_mesh::LabelMesh;
+use atomcad_renderer::line_mesh::LineMesh;
+use atomcad_renderer::mesh::{Material, Mesh};
+use atomcad_renderer::tessellator::tessellator::{TessellationOutput, tessellate_cuboid};
+use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f32::Vec3;
 use glam::f64::{DQuat, DVec3};
 

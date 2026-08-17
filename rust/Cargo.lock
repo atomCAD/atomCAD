@@ -227,6 +227,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-renderer"
+version = "0.1.0"
+dependencies = [
+ "ab_glyph",
+ "atomcad-util",
+ "bytemuck",
+ "glam",
+ "image",
+ "wgpu",
+]
+
+[[package]]
 name = "atomcad-util"
 version = "0.1.0"
 dependencies = [
@@ -3022,11 +3034,10 @@ dependencies = [
 name = "rust_lib_flutter_cad"
 version = "0.1.0"
 dependencies = [
- "ab_glyph",
  "atomcad-geo-tree",
+ "atomcad-renderer",
  "atomcad-util",
  "blake3",
- "bytemuck",
  "csgrs",
  "dirs",
  "dlopen",

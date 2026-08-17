@@ -1,10 +1,10 @@
 use super::common_api_types::{APIIVec2, APIIVec3, APITransform, APIVec2, APIVec3};
 use crate::api::structure_designer::structure_designer_preferences as api_prefs;
 use crate::display::preferences as display_prefs;
-use crate::renderer::renderer::Renderer;
 use crate::structure_designer::camera_settings::CameraSettings;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
+use atomcad_renderer::renderer::Renderer;
 use atomcad_util::transform::Transform;
 use glam::DQuat;
 use glam::f64::DVec2;

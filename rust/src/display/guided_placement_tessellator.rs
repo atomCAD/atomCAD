@@ -1,7 +1,7 @@
 use crate::crystolecule::atomic_structure::atomic_structure_decorator::{
     WireframeRingVisuals, WireframeSphereVisuals,
 };
-use crate::renderer::line_mesh::LineMesh;
+use atomcad_renderer::line_mesh::LineMesh;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
 

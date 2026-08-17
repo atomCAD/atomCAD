@@ -11,8 +11,8 @@
 //! Also covers `add_glyph_quad`'s bookkeeping, including the deliberate
 //! y-crossing between plane offsets (y up) and atlas UVs (y down).
 
+use atomcad_renderer::label_mesh::{LabelMesh, LabelVertex};
 use glam::f32::Vec3;
-use rust_lib_flutter_cad::renderer::label_mesh::{LabelMesh, LabelVertex};
 use std::mem::offset_of;
 
 /// Every attribute the layout must declare: (shader_location, byte offset,

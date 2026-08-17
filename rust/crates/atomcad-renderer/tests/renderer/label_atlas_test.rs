@@ -15,10 +15,10 @@
 //!   outline clipped flat at every glyph edge — so the padding is asserted
 //!   explicitly.
 
-use rust_lib_flutter_cad::renderer::font_metrics::{
+use atomcad_renderer::font_metrics::{
     ATLAS_HEIGHT, ATLAS_WIDTH, CAP_HEIGHT_EM, FIRST_CHAR, GLYPH_METRICS, LAST_CHAR, SDF_SPREAD_EM,
 };
-use rust_lib_flutter_cad::renderer::label_atlas::{decode_font_atlas, glyph_metrics, layout_label};
+use atomcad_renderer::label_atlas::{decode_font_atlas, glyph_metrics, layout_label};
 
 /// Every printable-ASCII codepoint the atlas promises to cover.
 fn ascii_glyphs() -> impl Iterator<Item = char> {

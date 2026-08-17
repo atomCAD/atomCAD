@@ -4,8 +4,6 @@ use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::crystolecule::motif_symmetry::inversion_preserves_motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::{Gadget, GadgetPickContext};
-use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::{
@@ -24,6 +22,8 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use atomcad_geo_tree::GeoNode;
+use atomcad_renderer::mesh::Mesh;
+use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use atomcad_util::serialization_utils::ivec3_serializer;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
@@ -321,9 +321,9 @@ impl Tessellatable for StructureInvertGadget {
         let pivot_real = self.unit_cell.dvec3_lattice_to_real(&pivot_frac);
 
         let red_material =
-            crate::renderer::mesh::Material::new(&glam::f32::Vec3::new(1.0, 0.0, 0.0), 0.4, 0.0);
+            atomcad_renderer::mesh::Material::new(&glam::f32::Vec3::new(1.0, 0.0, 0.0), 0.4, 0.0);
 
-        crate::renderer::tessellator::tessellator::tessellate_sphere(
+        atomcad_renderer::tessellator::tessellator::tessellate_sphere(
             output_mesh,
             &pivot_real,
             0.4,

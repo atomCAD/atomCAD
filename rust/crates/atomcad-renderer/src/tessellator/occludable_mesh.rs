@@ -1,4 +1,4 @@
-use crate::renderer::mesh::{Material, Mesh, Vertex};
+use crate::mesh::{Material, Mesh, Vertex};
 use glam::Vec3;
 
 /// A vertex that can be marked as occluded during tessellation

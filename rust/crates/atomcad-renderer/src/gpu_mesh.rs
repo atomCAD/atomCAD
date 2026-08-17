@@ -1,9 +1,9 @@
 use super::mesh::Mesh;
-use crate::renderer::atom_impostor_mesh::AtomImpostorMesh;
-use crate::renderer::bond_impostor_mesh::BondImpostorMesh;
-use crate::renderer::label_mesh::LabelMesh;
-use crate::renderer::line_mesh::LineMesh;
-use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
+use crate::atom_impostor_mesh::AtomImpostorMesh;
+use crate::bond_impostor_mesh::BondImpostorMesh;
+use crate::label_mesh::LabelMesh;
+use crate::line_mesh::LineMesh;
+use crate::transparent_impostor_mesh::TransparentImpostorMesh;
 use bytemuck;
 use glam::Mat4;
 use wgpu::{BufferUsages, Device, util::DeviceExt};
@@ -91,21 +91,18 @@ impl GPUMesh {
                 (vertex_buffer, "Empty Triangle Vertex Buffer")
             }
             MeshType::Lines => {
-                let vertex_buffer =
-                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Empty Line Vertex Buffer"),
-                        contents: bytemuck::cast_slice(
-                            &[] as &[crate::renderer::line_mesh::LineVertex]
-                        ),
-                        usage: BufferUsages::VERTEX,
-                    });
+                let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Empty Line Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&[] as &[crate::line_mesh::LineVertex]),
+                    usage: BufferUsages::VERTEX,
+                });
                 (vertex_buffer, "Empty Line Vertex Buffer")
             }
             MeshType::AtomImpostors => {
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Empty Atom Impostor Vertex Buffer"),
                     contents: bytemuck::cast_slice(
-                        &[] as &[crate::renderer::atom_impostor_mesh::AtomImpostorVertex]
+                        &[] as &[crate::atom_impostor_mesh::AtomImpostorVertex]
                     ),
                     usage: BufferUsages::VERTEX,
                 });
@@ -115,7 +112,7 @@ impl GPUMesh {
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Empty Bond Impostor Vertex Buffer"),
                     contents: bytemuck::cast_slice(
-                        &[] as &[crate::renderer::bond_impostor_mesh::BondImpostorVertex]
+                        &[] as &[crate::bond_impostor_mesh::BondImpostorVertex]
                     ),
                     usage: BufferUsages::VERTEX,
                 });
@@ -125,7 +122,7 @@ impl GPUMesh {
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Empty Transparent Impostor Vertex Buffer"),
                     contents: bytemuck::cast_slice(
-                        &[] as &[crate::renderer::transparent_impostor_mesh::TransparentImpostorVertex],
+                        &[] as &[crate::transparent_impostor_mesh::TransparentImpostorVertex]
                     ),
                     usage: BufferUsages::VERTEX,
                 });
@@ -134,9 +131,7 @@ impl GPUMesh {
             MeshType::Labels => {
                 let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Empty Label Vertex Buffer"),
-                    contents: bytemuck::cast_slice(
-                        &[] as &[crate::renderer::label_mesh::LabelVertex]
-                    ),
+                    contents: bytemuck::cast_slice(&[] as &[crate::label_mesh::LabelVertex]),
                     usage: BufferUsages::VERTEX,
                 });
                 (vertex_buffer, "Empty Label Vertex Buffer")

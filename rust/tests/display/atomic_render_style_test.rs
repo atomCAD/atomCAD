@@ -8,6 +8,10 @@
 //! and `hit_test`'s per-atom bond pickability. No-override scenes stay
 //! byte-identical to the legacy single-global-mode behavior.
 
+use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
+use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
+use atomcad_renderer::mesh::Mesh;
+use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization as ApiVisualization;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{
@@ -20,10 +24,6 @@ use rust_lib_flutter_cad::display::atomic_tessellator::{
 use rust_lib_flutter_cad::display::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
 };
-use rust_lib_flutter_cad::renderer::atom_impostor_mesh::AtomImpostorMesh;
-use rust_lib_flutter_cad::renderer::bond_impostor_mesh::BondImpostorMesh;
-use rust_lib_flutter_cad::renderer::mesh::Mesh;
-use rust_lib_flutter_cad::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 
 // ============================================================================
 // Helpers

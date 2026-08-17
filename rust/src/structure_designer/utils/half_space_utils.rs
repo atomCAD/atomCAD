@@ -1,7 +1,7 @@
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::renderer::mesh::Material;
-use crate::renderer::mesh::Mesh;
-use crate::renderer::tessellator::tessellator;
+use atomcad_renderer::mesh::Material;
+use atomcad_renderer::mesh::Mesh;
+use atomcad_renderer::tessellator::tessellator;
 use atomcad_util::hit_test_utils::cylinder_hit_test;
 use atomcad_util::hit_test_utils::get_closest_point_on_first_ray;
 use atomcad_util::hit_test_utils::sphere_hit_test;

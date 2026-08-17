@@ -1426,6 +1426,161 @@ some crates build without a GPU stack.
 
 *Estimate: 1 day.*
 
+#### Phase 3 — landed 2026-08-17
+
+**Changes.** `rust/src/renderer/` → `rust/crates/atomcad-renderer/src/`
+(22 files, `mod.rs` → `lib.rs`; 6 of them `.wgsl` shader sources, plus the
+`tessellator/` subdirectory's 3), and `rust/tests/renderer.rs` +
+`rust/tests/renderer/` → `crates/atomcad-renderer/tests/`, keeping the D5.1
+directory-name rule. The crate takes `atomcad-util` plus `bytemuck`, `glam`,
+`image` and `wgpu` from `[workspace.dependencies]`; the root package gains
+`atomcad-renderer = { path = "crates/atomcad-renderer" }` and loses
+`pub mod renderer;` from `lib.rs`.
+
+`~87 call sites` was exact: of the 113 `crate::renderer::` occurrences, 26 were
+internal self-references (rewritten to `crate::`) and **87** were external
+(rewritten to `atomcad_renderer::`) across 26 source files. Another 7 files —
+6 test files under the `display` / `structure_designer` harnesses plus
+`examples/crate_split_bench.rs` — had
+`rust_lib_flutter_cad::renderer::` → `atomcad_renderer::`. `renderer`
+contributed zero of the 15 `pub(crate)` items, so once again no visibility
+escalation was needed. Phase 1's doc-test trap did not bite: the only fenced
+block in the module is a ` ```text ` diagram in `camera.rs`, and no file
+mentioned `rust_lib_flutter_cad` (both checked before moving).
+
+**Only `bytemuck` actually left the root manifest, not the three deps the phase
+description names** — the same correction Phase 2 needed. `src/api/screenshot_api.rs`
+reads the rendered texture back with `wgpu` and encodes the PNG with `image`, so
+those two stay in the root `[dependencies]` and are now shared. `bytemuck` had no
+user outside `renderer/` and was removed. A comment in `rust/Cargo.toml` records
+why the other two stayed. The claim "first phase after which some crates build
+without a GPU stack" was **already true after Phase 1**: `wgpu` was only ever a
+dependency of the root package, so `cargo test -p atomcad-util` never built it.
+What Phase 3 actually changes is that the GPU stack is now *owned* by one crate
+rather than by the 191k-line monolith.
+
+**The one genuinely non-mechanical problem was a committed asset, not code.**
+`label_atlas.rs` embeds the SDF font atlas with
+`include_bytes!("../../assets/font_atlas.png")`. That path is resolved against
+the *source file*, so extracting the crate reparents it by two levels and it
+silently means something else. `rust/assets/` (the atlas, `DejaVuSans-Bold.ttf`
+and its license) therefore moved **into** the crate as
+`crates/atomcad-renderer/assets/`, and the path became `../assets/…`. Two things
+travelled with it, because they address the same files through
+`CARGO_MANIFEST_DIR`:
+
+- `examples/gen_font_atlas.rs`, the offline generator, → `crates/atomcad-renderer/examples/`,
+  with `manifest_dir.join("src/renderer/font_metrics.rs")` becoming
+  `…join("src/font_metrics.rs")` and its usage line becoming
+  `cargo run --release -p atomcad-renderer --example gen_font_atlas` (the `-p`
+  is now required: `cargo run` in a root-package workspace defaults to the root).
+- the `ab_glyph` dev-dependency, which that example is the sole user of. It is
+  the only dependency this phase moved wholesale.
+
+The alternative — leaving `assets/` at `rust/assets/` and writing
+`../../../assets/…` — works but re-encodes the crate's depth in the tree, the
+same objection D4 raises against inlining `csgrs`'s path in a member manifest.
+Keeping the asset with the code that embeds it also keeps `atomcad-renderer`
+self-contained, which matters for the same reason it does for
+`atomcad-crystolecule` (see Deferred / follow-ups).
+
+**Verification worth copying in later phases:** re-running the generator
+in place produced a **byte-identical** `assets/font_atlas.png` and
+`src/font_metrics.rs`. `cargo build` proves the *read* path
+(`include_bytes!`); only re-running the writer proves the *write* path, and a
+committed generated artifact has one of each.
+
+This trap will not recur: after Phase 3 there is **no** `include_bytes!` or
+`include_str!` left anywhere in `rust/src/` or `rust/tests/`, so Phases 4–6 have
+no embedded assets to reparent. The `CARGO_MANIFEST_DIR`-relative *runtime*
+paths D5.1 and D5.3 deal with are a separate mechanism and still apply.
+
+Beyond the asset, `cargo build` succeeded on the first attempt.
+`rustfmt` did have to reflow four files inside the crate
+(`gpu_mesh.rs`, `renderer.rs`, `label_atlas.rs`, `occludable_mesh.rs`) and two
+outside it (`api/common_api.rs`, `display/atomic_tessellator.rs`), because
+`crate::renderer::X` and `atomcad_renderer::X` are different widths and several
+call sites sat near the 100-column limit. That is expected of every phase from
+here on: **run `cargo fmt` as part of the move, not as an afterthought**, or
+`cargo fmt -- --check` fails on a purely mechanical rewrite.
+
+**`camera_test.rs` had to be split — the first instance of D5.1a's pattern
+outside `structure_designer`.** D5 lists `renderer/camera_test.rs` among the 6
+files that "cannot travel downward with their crate" and leaves the treatment to
+the implementor. Neither D5 branch was right as stated: the up-reach is not
+incidental (the file genuinely exercises `api::common_api`'s
+`resolve_miller_plane_up` / `resolve_lattice_direction_up` / `drawing_plane_up`
+against `crystolecule`'s `DrawingPlane` and `UnitCellStruct`), but moving the
+whole file up would have stranded 12 pure `Camera`-math tests above the crate
+that owns `Camera`. The file already had a clean seam — a
+`// --- Phase 2: axis resolution helpers ---` banner separating the two halves,
+and the api-side half touches no `Camera` at all — so it was cut there:
+
+```
+crates/atomcad-renderer/tests/renderer/camera_test.rs   # 12 camera-math tests
+rust/tests/renderer_api.rs                              # new root harness
+rust/tests/renderer_api/camera_axis_resolution_test.rs  # the 4 api-level tests
+```
+
+The root harness is named after D5.1a's `structure_designer_api` precedent, so
+the convention is established before Phase 6 needs it at scale: **a test's home
+is decided by what it imports, not by what it is about.** The other four
+`tests/renderer/` files reach no further than `atomcad_renderer` and moved
+intact.
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo clippy -j 4`, `cargo clippy --all-targets -j 4`, `cargo fmt -- --check`,
+`flutter_rust_bridge_codegen generate` + `git diff --numstat lib/src/rust`,
+`flutter analyze`, `cargo build --release`,
+`cargo run --release -p atomcad-renderer --example gen_font_atlas` (byte-identical
+output), and cargokit (`flutter build windows --debug` rebuilt
+`rust_lib_flutter_cad.dll` and linked `atomCAD.exe`). No `.snap.new` files.
+`Cargo.lock` gained only the `atomcad-renderer` package node and moved
+`ab_glyph` / `bytemuck` between packages — no version resolution changed.
+`git status` shows `../csgrs` untouched.
+**Pending manual step for the maintainer:** launch the app (`flutter run`,
+release DLL) and the Flutter smoke test.
+
+**Test count: 5,054 — identical to Phases 0, 1 and 2** (5,040 passed, 14
+ignored), under both `cargo test -j 4` and `cargo test --workspace -j 4`. The
+42 renderer tests split across the harness boundary rather than moving as a
+block, which is the number to recognise if a later phase reads this table:
+
+| binary | Phase 2 | Phase 3 |
+|---|---|---|
+| `tests/renderer.rs` (root package) | 42 | — |
+| `atomcad-renderer` `tests/renderer.rs` | — | **38** |
+| `tests/renderer_api.rs` (root package) | — | **4** |
+
+Every other binary's count is unchanged. Like `geo_tree`, `renderer` had no lib
+unittests and no doc-tests, so nothing moved between those buckets.
+
+**Lint baselines held exactly:** `cargo clippy -j 4` → **36** warnings in the
+root lib, **0** in `atomcad-renderer`, `atomcad-geo-tree` and `atomcad-util`;
+`cargo clippy --all-targets -j 4` → **112** individual warnings (36 lib + 61
+`structure_designer` + 5 `crystolecule` + 4 `expr` + 4 `geo_tree` + 1 `display`
++ 1 `util`, with the new `renderer` and `renderer_api` binaries and the moved
+`gen_font_atlas` example contributing zero); `flutter analyze` → **139** issues.
+Unlike Phase 2, the `mod.rs` → `lib.rs` promotion introduced no new lint: the
+`#![allow(clippy::module_inception)]` that `mod.rs` carried for
+`renderer::renderer` simply became crate-level and now also covers
+`tessellator::tessellator`, whose own `#![allow]` is left in place as redundant
+but harmless.
+
+**Generated bindings: zero content change.**
+`git diff --numstat lib/src/rust rust/src/frb_generated.rs` is empty, no
+directory appeared or disappeared under `lib/src/rust/`, and
+`lib/src/rust/crystolecule/` is still untouched (Phase 4's problem).
+`renderer` looked like it might be FRB-reachable, since `api/common_api.rs` —
+which *is* in `rust_input` — both imports `Renderer` and names
+`CameraCanonicalView` in function signatures. It is not: `Renderer` appears only
+in a function body (`:120`), and the two `CameraCanonicalView` converters
+(`to_renderer_camera_canonical_view`, `to_api_camera_canonical_view`) are
+private `fn`, so neither type is reachable from an exported signature. The
+Dart-facing shape is the existing `APICameraCanonicalView` twin — D9a's pattern
+was, as in Phase 1, already in place for the one type that mattered.
+`frb_generated.rs` contains zero occurrences of `renderer::`.
+
 ### Phase 4 — `atomcad-crystolecule`
 
 24,996 lines plus 29,166 test lines; ~250 call sites. Includes D6:

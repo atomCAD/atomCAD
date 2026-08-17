@@ -12,6 +12,8 @@
 //! `TriangleMesh` mode — which they only do because the call sits outside the
 //! rendering-method match.
 
+use atomcad_renderer::camera::Camera;
+use atomcad_renderer::label_mesh::LabelMesh;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use rust_lib_flutter_cad::display::atomic_tessellator::{
@@ -22,8 +24,6 @@ use rust_lib_flutter_cad::display::preferences::{
     BackgroundPreferences, DisplayPreferences, GeometryVisualizationPreferences, MeshSmoothing,
 };
 use rust_lib_flutter_cad::display::scene_tessellator::tessellate_scene_content;
-use rust_lib_flutter_cad::renderer::camera::Camera;
-use rust_lib_flutter_cad::renderer::label_mesh::LabelMesh;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
     NodeOutput, NodeSceneData, StructureDesignerScene,
 };

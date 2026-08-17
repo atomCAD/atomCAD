@@ -5,15 +5,18 @@
 //! never:
 //!
 //! ```text
-//! cd rust && cargo run --release --example gen_font_atlas
+//! cd rust && cargo run --release -p atomcad-renderer --example gen_font_atlas
 //! ```
 //!
-//! It writes two committed artifacts:
+//! (The `-p` is needed because `cargo run` in a workspace with a root package
+//! defaults to that root package, which no longer holds this example.)
 //!
-//! - `rust/assets/font_atlas.png` — a single-channel (R8) signed-distance-field
+//! It writes two committed artifacts, both inside this crate:
+//!
+//! - `assets/font_atlas.png` — a single-channel (R8) signed-distance-field
 //!   atlas covering printable ASCII `0x20..=0x7E`.
-//! - `rust/src/renderer/font_metrics.rs` — a `const` metrics table, so the
-//!   shipping binary parses no font and reads no metrics file at startup.
+//! - `src/font_metrics.rs` — a `const` metrics table, so the shipping binary
+//!   parses no font and reads no metrics file at startup.
 //!
 //! `ab_glyph` is a **dev-dependency**: it is used here and nowhere else, so the
 //! shipping `cdylib` gains no dependency from this file.
@@ -119,7 +122,7 @@ fn main() {
     .expect("failed to write the atlas PNG");
     println!("wrote {} ({atlas_w}×{atlas_h})", atlas_path.display());
 
-    let metrics_path = manifest_dir.join("src/renderer/font_metrics.rs");
+    let metrics_path = manifest_dir.join("src/font_metrics.rs");
     let source = emit_metrics(&glyphs, &uvs, atlas_w, atlas_h, cap_height_em);
     std::fs::write(&metrics_path, source).expect("failed to write the metrics table");
     println!("wrote {}", metrics_path.display());
