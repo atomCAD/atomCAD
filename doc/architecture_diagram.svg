@@ -68,14 +68,14 @@
     <path class="dependency-arrow" d="M 865.581183321874,389.9654919723377 Q 1039.039779600989,465.9280740024372 1227.5561054071277,483.8108421425887"/>
     <path class="dependency-arrow" d="M 869.2796440615272,354.58639124203927 Q 1061.0205645279498,375.9149476659692 1250.0411339813554,337.30520506193216"/>
     <path class="dependency-arrow" d="M 536.9090848369307,360.0 Q 583.7533266703148,390.0 630.5975685036989,360.0"/>
-    <path class="dependency-arrow" d="M 340.3961624829486,360.0 Q 381.743538823009,390.0 423.09091516306927,360.0"/>
+    <path class="dependency-arrow" d="M 301.6708249673535,360.0 Q 362.3808700652114,390.0 423.09091516306927,360.0"/>
   </g>
   <g id="modules">
   <g id="module-ui">
-    <circle class="module-circle" cx="210" cy="360.0" r="130.39616248294865" fill="#EC4899"/>
+    <circle class="module-circle" cx="210" cy="360.0" r="91.67082496735352" fill="#EC4899"/>
     <text class="module-label" x="210" y="350.0" style="font-size: 20px">ui</text>
     <text class="module-loc" x="210" y="375.0">
-      <tspan style="font-size: 18px; font-weight: bold">76,310</tspan>
+      <tspan style="font-size: 18px; font-weight: bold">37,715</tspan>
       <tspan style="font-size: 12.6px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>

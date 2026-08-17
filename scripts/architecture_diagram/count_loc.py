@@ -67,21 +67,28 @@ def count_rust_module(module_path: Path) -> int:
     return total
 
 def count_flutter_ui() -> int:
-    """Count LOC in Flutter UI code, excluding generated files."""
+    """Count LOC in hand-written Flutter UI code, excluding generated files."""
     lib_path = PROJECT_ROOT / 'lib'
+    frb_bindings = lib_path / 'src' / 'rust'
     total = 0
-    
+
     if not lib_path.exists():
         print(f"Warning: Flutter lib directory does not exist: {lib_path}")
         return 0
-    
+
     for dart_file in lib_path.rglob('*.dart'):
-        # Exclude generated files
+        # Exclude generated files. `lib/src/rust/` is the flutter_rust_bridge
+        # output — ~40k lines, more than the whole hand-written UI once, and
+        # counting it would inflate the `ui` circle by 2x. The Rust side
+        # excludes `frb_generated.rs` for the same reason.
+        if frb_bindings in dart_file.parents:
+            continue
         if dart_file.name.endswith('.g.dart'):
             continue
         if dart_file.name.endswith('.freezed.dart'):
             continue
-        
+
+
         total += count_loc_in_file(dart_file)
     
     return total

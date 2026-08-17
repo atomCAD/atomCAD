@@ -34,6 +34,47 @@ A crate directory is named `atomcad-<module>` and imported as
 table: it is a dev-only helper crate (shared test assertions and the
 `rust/tests/fixtures/` resolver), never a runtime dependency.
 
+### Crate sizes
+
+Non-empty, non-comment lines; each crate's `src/` beside its own `tests/`.
+Regenerate with `python scripts/architecture_diagram/crate_size_table.py`.
+
+| Crate | Source | Files | Test code | Tests |
+|---|---:|---:|---:|---:|
+| `atomcad-structure-designer` | 63,985 | 245 | 82,756 | 3,358 |
+| `atomcad-crystolecule` | 18,676 | 50 | 21,134 | 1,171 |
+| `atomcad-renderer` | 4,180 | 17 | 652 | 38 |
+| `atomcad-display` | 2,583 | 12 | 642 | 28 |
+| `atomcad-geo-tree` | 2,101 | 8 | 1,216 | 66 |
+| `atomcad-util` | 1,348 | 15 | 118 | 15 |
+| `atomcad-test-support` | 121 | 3 | — | — |
+| `rust_lib_flutter_cad (api)` | 14,535 | 22 | 9,142 | 359 |
+| Flutter UI (lib/, Dart) | 37,715 | 166 | 2,467 | — |
+| **Total (hand-written)** | **145,244** | **538** | **118,127** | **5,035** |
+
+Generated code is excluded throughout: `rust/src/frb_generated.rs` (26,200
+lines) and `lib/src/rust/` (40,222 lines) are flutter_rust_bridge output.
+Measured at commit `0b22183d` (2026-08-17).
+
+Three things the table cannot say for itself:
+
+- **Test code is attributed by location, not by subject.** The root package's
+  9,142 test lines are the cross-layer `tests/integration/` corpus (4,391)
+  *plus* the two api-side harnesses that exercise lower crates —
+  `structure_designer_api/` (4,664 lines, 242 tests) and `renderer_api/` (65
+  lines, 4 tests). Those exist because a member crate cannot depend on the root
+  crate, not because the subject lives up there.
+- **`expr` is inside `atomcad-structure-designer`** (D8): 2,407 of its source
+  lines and 5,972 of its test lines.
+- **`atomcad-structure-designer` is 59 % of the backend**, and 31,570 of its
+  63,985 lines are the 129 node implementations under `nodes/`. Splitting those
+  out is the largest remaining structural prize and needs its own design — see
+  Deferred / follow-ups in `doc/design_rust_crate_split.md`.
+
+The suite reports ~5,054 tests against the 5,035 `#[test]` functions counted
+here; the difference is doc-tests plus a handful of inline `#[cfg(test)]`
+modules that predate the "tests go in `tests/`" convention.
+
 Two rules follow from the layering and are worth knowing before adding code:
 
 - **Which side of the boundary a type belongs on.** A *domain concept* belongs
