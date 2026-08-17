@@ -2,7 +2,6 @@ use crate::api::structure_designer::structure_designer_api_types::NodeTypeCatego
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::display::gadget::{Gadget, GadgetPickContext};
-use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::tessellator::tessellator::{
     Tessellatable, TessellationOutput, tessellate_cone, tessellate_cylinder, tessellate_sphere,
@@ -22,6 +21,7 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::hit_test_utils::get_closest_point_on_first_ray;
 use atomcad_util::serialization_utils::dvec3_serializer;
 use atomcad_util::transform::Transform;

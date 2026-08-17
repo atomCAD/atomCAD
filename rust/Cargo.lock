@@ -214,6 +214,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-geo-tree"
+version = "0.1.0"
+dependencies = [
+ "atomcad-util",
+ "blake3",
+ "csgrs",
+ "geo",
+ "glam",
+ "nalgebra",
+ "rayon",
+]
+
+[[package]]
 name = "atomcad-util"
 version = "0.1.0"
 dependencies = [
@@ -3010,6 +3023,7 @@ name = "rust_lib_flutter_cad"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "atomcad-geo-tree",
  "atomcad-util",
  "blake3",
  "bytemuck",
@@ -3026,7 +3040,6 @@ dependencies = [
  "lazy_static",
  "lru",
  "nalgebra",
- "rayon",
  "regex",
  "rustc-hash 2.1.1",
  "serde",

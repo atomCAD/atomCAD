@@ -1,8 +1,6 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-use crate::geo_tree::GeoNode;
-use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::{
     eval_output_with_diff, map_atomic, snapshot_atoms,
@@ -20,6 +18,8 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

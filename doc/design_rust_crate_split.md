@@ -1322,6 +1322,102 @@ individual warnings across the lib and 8 test binaries (one of which is now
 
 *Estimate: 0.5 day.*
 
+#### Phase 2 — landed 2026-08-17
+
+**Changes.** `rust/src/geo_tree/` → `rust/crates/atomcad-geo-tree/src/`
+(9 files, `mod.rs` → `lib.rs`, plus the module's `AGENTS.md`/`CLAUDE.md`), and
+`rust/tests/geo_tree.rs` + `rust/tests/geo_tree/` →
+`crates/atomcad-geo-tree/tests/`, keeping the D5.1 directory-name rule. The
+crate takes `atomcad-util` plus `blake3`, `csgrs`, `geo`, `glam`, `nalgebra`
+and `rayon` from `[workspace.dependencies]`; the root package gains
+`atomcad-geo-tree = { path = "crates/atomcad-geo-tree" }` and loses
+`pub mod geo_tree;` from `lib.rs`. `csgrs` resolved correctly from
+`[workspace.dependencies]` exactly as D4 predicts — the member manifest writes
+only `csgrs = { workspace = true }` and `../csgrs` stayed anchored to the
+workspace root.
+
+The prefix rewrite was again purely mechanical: `crate::geo_tree::` →
+`atomcad_geo_tree::` in 41 source files, `crate::geo_tree::` → `crate::` inside
+the 4 moved files that self-reference, and `rust_lib_flutter_cad::geo_tree::` →
+`atomcad_geo_tree::` in the 19 test files under other harnesses. **`cargo build`
+succeeded on the first attempt**; `geo_tree` contributed zero of the 15
+`pub(crate)` items, so again no visibility escalation. Phase 1's doc-test trap
+did not bite: `src/geo_tree/` contained no `///` examples and no
+`rust_lib_flutter_cad` mentions at all (checked before moving, not after).
+
+**Only `rayon` actually left the root manifest, not the three deps the phase
+description names.** `csgrs`, `geo` and `nalgebra` are named *directly* by
+`src/display/csg_to_poly_mesh.rs:7-11`, which stays in the root crate until
+Phase 5 extracts `atomcad-display`. `blake3` likewise stays, for
+`structure_designer/nodes/export_atoms.rs:261`. So the "Moves `csgrs`, `geo`,
+`nalgebra` out of the root manifest" line above is a **Phase 5** outcome; Phase
+2 only makes them *shared*. `rayon`, whose only user in the whole tree was
+`geo_tree`, was removed from the root `[dependencies]` — the one genuine
+manifest shrink here. A comment in `rust/Cargo.toml` records why the other
+three stayed, so a later reader does not take their presence for an oversight.
+
+**One non-relocation edit was unavoidable.** `mod.rs:3` carried `use blake3;`,
+which is inert inside a module but is a redundant single-component import at a
+*crate root* — clippy's `single_component_path_imports` fires on it, and the
+line had to go for the lint baseline to hold. `blake3::` still resolves from the
+extern prelude, so nothing else changed. This is the first case of the
+mod.rs → lib.rs promotion changing what a lint sees; expect the same class of
+warning in later phases and treat it as part of the move rather than as new
+debt.
+
+**The `#[path]` back-reference D5 warns about was incidental here.**
+`tests/geo_tree/batched_implicit_evaluator_test.rs:4` imported `BATCH_SIZE`,
+`ImplicitGeometry2D` and `ImplicitGeometry3D` from
+`rust_lib_flutter_cad::structure_designer::implicit_eval::implicit_geometry`.
+That module is a one-line `pub use` of `crate::geo_tree::implicit_geometry`, so
+the up-reach was pure re-export and the fix was to import from
+`atomcad_geo_tree::implicit_geometry` directly. This is the "the dependency is
+incidental and gets dropped" branch of D5; no geo_tree test had to be left
+behind at the root.
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo clippy -j 4`, `cargo clippy --all-targets -j 4`, `cargo fmt -- --check`,
+`flutter_rust_bridge_codegen generate` + `git diff lib/src/rust/`,
+`flutter analyze`, `cargo build --release`, and cargokit (`flutter build windows
+--debug` rebuilt `rust_lib_flutter_cad.dll` and linked `atomCAD.exe`). No
+`.snap.new` files. `git status` shows `../csgrs` untouched.
+**Pending manual step for the maintainer:** launch the app (`flutter run`,
+release DLL) and the Flutter smoke test.
+
+**Test count: 5,054 — identical to Phases 0 and 1**, under both `cargo test
+-j 4` and `cargo test --workspace -j 4`. `tests/geo_tree.rs`'s **66** tests
+moved intact and are now reported under `atomcad-geo-tree`:
+
+| binary | Phase 1 | Phase 2 |
+|---|---|---|
+| `tests/geo_tree.rs` (root package) | 66 | — |
+| `atomcad-geo-tree` `tests/geo_tree.rs` | — | **66** |
+
+Every other binary's count is unchanged. Unlike Phase 1, no lib unittests or
+doc-tests moved: `geo_tree` had neither.
+
+**Lint baselines held exactly:** `cargo clippy -j 4` → **36** warnings in the
+root lib, **0** in `atomcad-geo-tree` and `atomcad-util`;
+`cargo clippy --all-targets -j 4` → **112** individual warnings (36 lib + 61
+`structure_designer` + 5 `crystolecule` + 4 `expr` + 4 `geo_tree` + 1 `display`
++ 1 `util`); `flutter analyze` → **139** issues.
+
+**Generated bindings: zero content change** — `git diff --numstat lib/src/rust
+rust/src/frb_generated.rs` is empty, `lib/src/rust/crystolecule/` is untouched
+(Phase 4's problem), and no directory appeared or disappeared under
+`lib/src/rust/`. `geo_tree` was never FRB-reachable: no `api/` file names it.
+
+**A regeneration artefact worth knowing before Phase 4's gate.**
+`flutter_rust_bridge_codegen generate` runs its own `rustfmt` over
+`frb_generated.rs` *without* the 2024 style edition, so it rewrites three
+`use flutter_rust_bridge::for_generated::{…}` lines into 2015 import order and
+leaves the file dirty even when nothing semantic changed. Plain `cargo fmt`
+puts them back. **Run `cargo fmt` after codegen and before reading the diff**,
+or the gate reports a spurious three-line change every time. Separately, all
+six generated files always show as ` M` in `git status` after codegen because
+it writes LF where the index holds CRLF; `git diff --numstat` (which normalises)
+is the check to trust, not `git status`.
+
 ### Phase 3 — `atomcad-renderer`
 
 5,473 lines, depends on `util` only. ~87 call sites. Moves `wgpu`,

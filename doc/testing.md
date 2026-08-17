@@ -34,7 +34,7 @@ rust && cargo test -j 4` still runs everything — the `default-members` entry i
 |--------|----------|
 | `expr/` | Lexer, parser, evaluation, validation |
 | `crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill |
-| `geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) |
+| `geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) — now at `rust/crates/atomcad-geo-tree/tests/geo_tree/`, run with `cargo test -p atomcad-geo-tree` |
 | `structure_designer/` | Network validator, node network operations, network evaluator |
 | `util/` | DAA box, LRU cache — now at `rust/crates/atomcad-util/tests/util/`, run with `cargo test -p atomcad-util` |
 

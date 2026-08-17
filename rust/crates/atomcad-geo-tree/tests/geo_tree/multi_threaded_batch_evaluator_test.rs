@@ -1,6 +1,6 @@
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 
 #[test]
 fn test_multi_threaded_evaluation() {

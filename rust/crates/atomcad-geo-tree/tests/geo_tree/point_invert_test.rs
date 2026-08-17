@@ -8,9 +8,9 @@
 //! that the resulting mesh is *not* inside-out (positive signed volume, plane
 //! normals agreeing with winding and vertex normals).
 
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::ImplicitGeometry3D;
 
 const EPS: f64 = 1e-9;
 
@@ -94,7 +94,7 @@ fn double_inversion_is_identity() {
 
 #[test]
 fn batch_eval_matches_single_eval() {
-    use rust_lib_flutter_cad::geo_tree::implicit_geometry::BATCH_SIZE;
+    use atomcad_geo_tree::implicit_geometry::BATCH_SIZE;
 
     let shape = GeoNode::point_invert(
         DVec3::new(1.0, 2.0, 3.0),
@@ -137,7 +137,7 @@ fn hash_depends_on_center_and_child() {
 
 /// Signed volume of a CSG mesh via the divergence theorem over fan-triangulated
 /// polygons. Positive iff the winding is consistently outward.
-fn signed_volume(mesh: &rust_lib_flutter_cad::geo_tree::csg_types::CSGMesh) -> f64 {
+fn signed_volume(mesh: &atomcad_geo_tree::csg_types::CSGMesh) -> f64 {
     let mut vol = 0.0;
     for poly in &mesh.polygons {
         for tri in poly.triangulate() {

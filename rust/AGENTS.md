@@ -14,6 +14,8 @@ Dependencies flow downward (no circular dependencies):
 ├──────────────────────────┴──────────────────────────┤
 │  crystolecule  │  geo_tree   │  renderer  │  expr   │
 │  (Atoms/bonds) │  (CSG/SDF)  │  (wgpu)    │ (Lang)  │
+│                │  extracted: │            │         │
+│                │ atomcad-geo-tree         │         │
 ├─────────────────────────────────────────────────────┤
 │         util  →  crate `atomcad-util` (extracted)    │
 └─────────────────────────────────────────────────────┘
@@ -23,7 +25,6 @@ Dependencies flow downward (no circular dependencies):
 
 - **structure_designer/** - Node network, evaluator, serialization (.cnnd) (see `src/structure_designer/AGENTS.md`)
 - **crystolecule/** - Atomic structures, unit cells, motifs, lattice operations (see `src/crystolecule/AGENTS.md`)
-- **geo_tree/** - CSG types, SDF evaluation, geometry caching (see `src/geo_tree/AGENTS.md`)
 - **renderer/** - wgpu rendering, shaders (*.wgsl), mesh management
 - **display/** - Tessellates domain objects (atoms, geometry) into meshes
 - **expr/** - Expression language (lexer, parser, validation)
@@ -33,6 +34,14 @@ Dependencies flow downward (no circular dependencies):
   from tests, which use `atomcad_util::daabox::DAABox` rather than
   `rust_lib_flutter_cad::util::…`. Its own tests live in
   `crates/atomcad-util/tests/`.
+- **`crates/atomcad-geo-tree/`** - was `src/geo_tree/`; CSG types, SDF
+  evaluation, geometry caching (see `crates/atomcad-geo-tree/src/AGENTS.md`).
+  Depends on `atomcad-util` only. Imported as `atomcad_geo_tree::…` (**not**
+  `crate::geo_tree::…`), including from tests. Its own tests live in
+  `crates/atomcad-geo-tree/tests/`. It owns `csgrs`, `geo`, `nalgebra`, `rayon`
+  and `blake3`; note `src/display/csg_to_poly_mesh.rs` still names `csgrs` /
+  `geo` / `nalgebra` directly, so those three also stay in the root manifest
+  until `atomcad-display` is extracted.
 
 ## Cargo workspace
 
@@ -41,8 +50,8 @@ builds) **and** the workspace root. Extracted crates live in `rust/crates/` and
 are picked up by the `members = ["crates/*"]` glob. This is step 0 of
 `doc/design_rust_crate_split.md`, which converts the top-level modules into
 crates so the dependency DAG above becomes compiler-enforced rather than
-convention-enforced. `atomcad-util` is extracted (Phase 1); the remaining
-modules follow in Phases 2-6.
+convention-enforced. `atomcad-util` (Phase 1) and `atomcad-geo-tree` (Phase 2)
+are extracted; the remaining modules follow in Phases 3-6.
 
 Rules that follow from that layout:
 
@@ -116,7 +125,8 @@ See `src/structure_designer/AGENTS.md` (Zones) for the body model and `walk_all_
 When adding new functionality to the Rust codebase:
 
 1. **Write tests for new core logic** - especially for functions in `structure_designer/`, `crystolecule/`, `geo_tree/`, `expr/`, etc.
-2. **Tests go in `rust/tests/`**, NOT inline in source files
+2. **Tests go in `rust/tests/`** (or, for an extracted crate, in that crate's
+   own `crates/<crate>/tests/`), NOT inline in source files
 3. **Mirror the source file hierarchy** in the test directory:
    - Source: `src/structure_designer/text_format/`
    - Test: `tests/structure_designer/text_format_test.rs`
@@ -128,9 +138,16 @@ When adding new functionality to the Rust codebase:
 5. Follow the existing folder structure:
    - `rust/tests/structure_designer/` - Structure designer tests
    - `rust/tests/crystolecule/` - Atomic structure tests
-   - `rust/tests/geo_tree/` - Geometry tests
+   - `rust/crates/atomcad-geo-tree/tests/geo_tree/` - Geometry tests
+   - `rust/crates/atomcad-util/tests/util/` - Utility tests
    - `rust/tests/expr/` - Expression language tests
    - `rust/tests/integration/` - Integration/roundtrip tests
+
+   An extracted crate keeps the module's original directory name inside its
+   `tests/` (`atomcad-geo-tree/tests/geo_tree/`, beside `tests/geo_tree.rs`).
+   The apparent redundancy is load-bearing: it keeps every `#[path]` string and
+   every `CARGO_MANIFEST_DIR`-relative test-data path valid across the move
+   (design doc D5.1). Do not tidy it.
 
 **When tests may be skipped:**
 - **API wrapper functions** (`rust/src/api/`) - these are thin wrappers; test the underlying core function instead

@@ -1,4 +1,4 @@
-use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec3;
 
 // traces a ray into the given implicit geometries and returns the distance of the closest intersection if any.

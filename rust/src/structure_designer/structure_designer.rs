@@ -30,7 +30,6 @@ use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::gadget::GadgetPickContext;
-use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::displayed_node_refs::collect_displayed_node_refs;
 use crate::structure_designer::implicit_eval::ray_tracing::{
@@ -44,6 +43,7 @@ use crate::structure_designer::node_type::{generic_node_data_loader, generic_nod
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::collections::{HashMap, HashSet};

@@ -1,7 +1,7 @@
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::geo_tree::GeoNode;
-use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec3;
 use std::collections::HashMap;
 

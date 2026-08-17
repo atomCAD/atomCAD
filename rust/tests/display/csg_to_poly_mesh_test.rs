@@ -5,12 +5,12 @@
 // onto the drawing plane. Solid mode (triangulate_2d = true) always mapped
 // correctly. After the fix, both modes place the geometry on the drawing plane.
 
+use atomcad_geo_tree::GeoNode;
 use glam::f64::DVec2;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 
 /// A drawing plane tilted off the world XY plane: the (1,1,1) Miller plane
 /// through the origin. Its normal has a non-trivial component on every axis, so
@@ -33,7 +33,7 @@ fn tilted_plane_normal(plane: &DrawingPlane) -> glam::f64::DVec3 {
     u_real.cross(v_real).normalize()
 }
 
-fn circle_sketch() -> rust_lib_flutter_cad::geo_tree::csg_types::CSGSketch {
+fn circle_sketch() -> atomcad_geo_tree::csg_types::CSGSketch {
     GeoNode::circle(DVec2::new(0.0, 0.0), 5.0)
         .to_csg_sketch()
         .expect("circle should convert to a CSG sketch")

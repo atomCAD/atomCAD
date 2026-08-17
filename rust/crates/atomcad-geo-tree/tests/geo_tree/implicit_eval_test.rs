@@ -1,6 +1,6 @@
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::{ImplicitGeometry2D, ImplicitGeometry3D};
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::{ImplicitGeometry2D, ImplicitGeometry3D};
 
 const EPSILON: f64 = 0.0001;
 

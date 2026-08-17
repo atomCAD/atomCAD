@@ -8,10 +8,10 @@
 //! `atom_union` integration exercising the node-level `add_atomic_structure`
 //! path.
 
+use atomcad_geo_tree::GeoNode;
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };

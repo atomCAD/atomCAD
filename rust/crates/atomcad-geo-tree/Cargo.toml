@@ -1,0 +1,20 @@
+[package]
+name = "atomcad-geo-tree"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# Depends on `atomcad-util` only (doc/design_rust_crate_split.md, Phase 2).
+# Versions come from [workspace.dependencies] in ../../Cargo.toml (D4) — in
+# particular `csgrs`, whose `../csgrs` path is anchored to the workspace root
+# and would point at `rust/crates/csgrs` if inlined here.
+[dependencies]
+atomcad-util = { path = "../atomcad-util" }
+blake3 = { workspace = true }
+csgrs = { workspace = true }
+geo = { workspace = true }
+glam = { workspace = true }
+nalgebra = { workspace = true }
+rayon = { workspace = true }

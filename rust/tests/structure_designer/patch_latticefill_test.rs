@@ -8,13 +8,13 @@
 //! the asymmetric periodic/non-periodic containment rule, and the
 //! welded/orphaned/over-coordination compatibility stats.
 
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::Atom;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::nodes::patch_latticefill::{
     CompatibilityReport, apply_patch, region_center_depths, select_patch_cells,
 };

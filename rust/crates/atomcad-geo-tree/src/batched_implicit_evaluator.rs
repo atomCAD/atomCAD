@@ -1,5 +1,5 @@
-use crate::geo_tree::GeoNode;
-use crate::geo_tree::implicit_geometry::{BATCH_SIZE, ImplicitGeometry3D};
+use crate::GeoNode;
+use crate::implicit_geometry::{BATCH_SIZE, ImplicitGeometry3D};
 use glam::f64::DVec3;
 use rayon::prelude::*;
 

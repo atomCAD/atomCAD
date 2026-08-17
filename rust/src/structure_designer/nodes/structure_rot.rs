@@ -5,7 +5,6 @@ use crate::crystolecule::motif_symmetry::rotation_preserves_motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::unit_cell_symmetries::{RotationalSymmetry, analyze_unit_cell_symmetries};
 use crate::display::gadget::{Gadget, GadgetPickContext};
-use crate::geo_tree::GeoNode;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use crate::structure_designer::data_type::DataType;
@@ -25,6 +24,7 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::serialization_utils::ivec3_serializer;
 use atomcad_util::transform::Transform;
 use glam::DQuat;

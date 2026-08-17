@@ -6,9 +6,9 @@
 //! `subdivision = 1`. These tests probe the emitted geo_tree SDF to confirm both
 //! the corner and the extent scale (mechadense's clarification on the issue).
 
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::IVec3;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };

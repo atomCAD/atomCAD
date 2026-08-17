@@ -1,6 +1,8 @@
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use atomcad_util::transform::Transform;
-use blake3;
+// (`use blake3;` was here; harmless inside the old `mod.rs`, but at a crate root
+// it is a redundant single-component import and clippy flags it. `blake3::` still
+// resolves from the extern prelude.)
 use glam::f64::DMat2;
 use glam::f64::DMat3;
 use glam::f64::DVec2;

@@ -12,7 +12,6 @@ use crate::crystolecule::atomic_structure_diff::{
 use crate::crystolecule::motif::{Motif, MotifBond, Site, SiteSpecifier};
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::geo_tree::GeoNode;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -24,6 +23,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
 use rustc_hash::FxHashMap;

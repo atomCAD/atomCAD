@@ -1,6 +1,6 @@
+use atomcad_geo_tree::csg_cache::CsgConversionCache;
+use atomcad_geo_tree::csg_types::CSGMesh;
 use csgrs::traits::CSG;
-use rust_lib_flutter_cad::geo_tree::csg_cache::CsgConversionCache;
-use rust_lib_flutter_cad::geo_tree::csg_types::CSGMesh;
 
 #[test]
 fn test_cache_creation() {

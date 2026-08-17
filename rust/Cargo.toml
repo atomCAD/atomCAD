@@ -95,6 +95,7 @@ lto = "thin"
 [dependencies]
 flutter_rust_bridge = "=2.10.0"
 # Extracted backend crates (doc/design_rust_crate_split.md)
+atomcad-geo-tree = { path = "crates/atomcad-geo-tree" }
 atomcad-util = { path = "crates/atomcad-util" }
 dlopen = { workspace = true }
 lazy_static = { workspace = true }
@@ -103,7 +104,6 @@ tokio = { workspace = true }
 bytemuck = { workspace = true }
 glam = { workspace = true }
 lru = { workspace = true }
-rayon = { workspace = true }
 thiserror = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
@@ -113,6 +113,9 @@ toml = { workspace = true }
 indexmap = { workspace = true }
 smallvec = { workspace = true }
 rustc-hash = { workspace = true }
+# csgrs / nalgebra / geo: Phase 2 moved geo_tree out, but `display/csg_to_poly_mesh.rs`
+# still names these three directly, so they cannot leave the root until Phase 5
+# extracts `atomcad-display`. (`rayon` did leave here — geo_tree was its only user.)
 csgrs = { workspace = true }
 nalgebra = { workspace = true }
 image = { workspace = true }

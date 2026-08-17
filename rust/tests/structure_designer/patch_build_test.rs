@@ -8,11 +8,11 @@
 //! (`validate_tiling_vectors`) are plain functions, tested here without the
 //! node-network machinery.
 
+use atomcad_geo_tree::GeoNode;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     Alignment, CrystalData, MoleculeData, NetworkResult,
 };

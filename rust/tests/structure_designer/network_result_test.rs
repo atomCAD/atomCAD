@@ -1,9 +1,9 @@
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::transform::Transform2D;
 use glam::{DVec2, IVec3};
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     CrystalData, GeometrySummary2D, MoleculeData, NetworkResult,

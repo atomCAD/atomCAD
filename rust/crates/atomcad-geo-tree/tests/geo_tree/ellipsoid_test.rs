@@ -7,11 +7,9 @@
 //! `hash()` (the spherical/circular-basis fast path snaps to `Sphere`/`Circle`,
 //! giving hash equality with a directly constructed sphere/circle).
 
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::{BATCH_SIZE, ImplicitGeometry2D, ImplicitGeometry3D};
 use glam::f64::{DMat2, DMat3, DVec2, DVec3};
-use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::{
-    BATCH_SIZE, ImplicitGeometry2D, ImplicitGeometry3D,
-};
 
 /// A generic skewed (non-orthogonal, unequal-length) basis used across tests.
 fn skewed_basis() -> DMat3 {
@@ -703,7 +701,7 @@ fn test_ellipse_csg_vertices_lie_on_boundary() {
     let unit_circle = GeoNode::circle(center, 1.0)
         .to_csg_sketch()
         .expect("unit circle should convert");
-    let count_verts = |s: &rust_lib_flutter_cad::geo_tree::csg_types::CSGSketch| -> usize {
+    let count_verts = |s: &atomcad_geo_tree::csg_types::CSGSketch| -> usize {
         s.geometry
             .0
             .iter()

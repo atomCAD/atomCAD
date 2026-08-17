@@ -12,13 +12,13 @@
 //! name) and through `hash()` (the spherical-basis fast path snaps cubic cells
 //! to `Sphere`, giving hash equality with a directly constructed sphere).
 
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::{ImplicitGeometry2D, ImplicitGeometry3D};
 use glam::f64::{DMat3, DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
 use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::implicit_geometry::{ImplicitGeometry2D, ImplicitGeometry3D};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };

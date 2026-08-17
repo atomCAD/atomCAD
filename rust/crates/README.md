@@ -9,6 +9,7 @@ it.
 | crate | was | phase |
 |---|---|---|
 | `atomcad-util` | `rust/src/util/` | 1 |
+| `atomcad-geo-tree` | `rust/src/geo_tree/` | 2 |
 
 Conventions for anything added here:
 

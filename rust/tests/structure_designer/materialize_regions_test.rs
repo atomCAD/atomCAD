@@ -15,9 +15,9 @@
 //!     (a region setting only `passivate` leaves the root's other settings).
 //!   - Parse errors: missing `volume` / wrong-typed `volume` → indexed Error.
 
+use atomcad_geo_tree::GeoNode;
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::crystolecule::structure::Structure;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,

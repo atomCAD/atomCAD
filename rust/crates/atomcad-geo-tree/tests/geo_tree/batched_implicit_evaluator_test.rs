@@ -1,9 +1,7 @@
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
+use atomcad_geo_tree::implicit_geometry::{BATCH_SIZE, ImplicitGeometry2D, ImplicitGeometry3D};
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
-use rust_lib_flutter_cad::structure_designer::implicit_eval::implicit_geometry::{
-    BATCH_SIZE, ImplicitGeometry2D, ImplicitGeometry3D,
-};
 
 #[test]
 fn test_batched_evaluator_basic() {

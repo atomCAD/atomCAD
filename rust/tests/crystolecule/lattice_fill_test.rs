@@ -1,3 +1,4 @@
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
@@ -10,7 +11,6 @@ use rust_lib_flutter_cad::crystolecule::lattice_fill::{
 use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::crystolecule::motif_parser::parse_motif;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
-use rust_lib_flutter_cad::geo_tree::GeoNode;
 use std::collections::HashMap;
 
 // =============================================================================

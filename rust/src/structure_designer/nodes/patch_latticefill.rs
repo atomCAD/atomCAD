@@ -59,8 +59,6 @@ use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydroge
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::crystolecule::weld::weld_coincident_atoms;
-use crate::geo_tree::GeoNode;
-use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
 };
@@ -77,6 +75,8 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use atomcad_util::daabox::DAABox;
 use glam::f64::{DQuat, DVec3};
 use glam::i32::IVec3;

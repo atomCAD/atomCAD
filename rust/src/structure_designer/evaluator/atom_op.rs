@@ -68,10 +68,10 @@
 
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::crystolecule::atomic_structure_diff::extract_diff;
-use crate::geo_tree::GeoNode;
-use crate::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::EvalOutput;
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use std::collections::HashSet;
 
 /// Applies a transformation to the `AtomicStructure` inside a `Crystal` or `Molecule`

@@ -1,9 +1,9 @@
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::display::surface_point_cloud::SurfacePoint2D;
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
-use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
+use atomcad_geo_tree::implicit_geometry::ImplicitGeometry2D;
 use atomcad_util::box_subdivision::subdivide_rect;
 use glam::Vec3Swizzles;
 use glam::i32::IVec2;

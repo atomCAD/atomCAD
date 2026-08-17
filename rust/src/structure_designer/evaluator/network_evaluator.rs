@@ -8,8 +8,6 @@ use crate::api::structure_designer::structure_designer_preferences::GeometryVisu
 use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
-use crate::geo_tree::GeoNode;
-use crate::geo_tree::csg_cache::CsgConversionCache;
 use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::eval_errors::{ErrorAddress, ErrorOrigin};
@@ -31,6 +29,8 @@ use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,
 };
+use atomcad_geo_tree::GeoNode;
+use atomcad_geo_tree::csg_cache::CsgConversionCache;
 
 use super::network_result::input_missing_error;
 use super::network_result::{
@@ -592,7 +592,7 @@ impl NetworkEvaluator {
     }
 
     /// Get cache statistics
-    pub fn get_csg_cache_stats(&self) -> crate::geo_tree::csg_cache::CacheStats {
+    pub fn get_csg_cache_stats(&self) -> atomcad_geo_tree::csg_cache::CacheStats {
         self.csg_conversion_cache.stats()
     }
 

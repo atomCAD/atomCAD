@@ -1,12 +1,12 @@
-# geo_tree Module - Agent Instructions
+# atomcad-geo-tree Crate - Agent Instructions
 
-The geo_tree module is a high-performance 3D geometry library. It represents geometry as an immutable expression tree (`GeoNode`) that supports two evaluation modes: **CSG** (polygon mesh conversion via `csgrs`) and **SDF** (signed distance field / implicit evaluation). Used by the node network for geometry representation and by `crystolecule/lattice_fill` for determining which lattice points lie inside a shape.
+The `atomcad-geo-tree` crate (was `rust/src/geo_tree/`) is a high-performance 3D geometry library. It represents geometry as an immutable expression tree (`GeoNode`) that supports two evaluation modes: **CSG** (polygon mesh conversion via `csgrs`) and **SDF** (signed distance field / implicit evaluation). Used by the node network for geometry representation and by `crystolecule/lattice_fill` for determining which lattice points lie inside a shape.
 
 ## Module Structure
 
 ```
-geo_tree/
-├── mod.rs                          # GeoNode struct, GeoNodeKind enum, constructors, hashing
+crates/atomcad-geo-tree/src/
+├── lib.rs                          # GeoNode struct, GeoNodeKind enum, constructors, hashing
 ├── csg_types.rs                    # Type aliases: CSGMesh, CSGSketch (wraps csgrs)
 ├── csg_utils.rs                    # Coordinate scaling, glam↔nalgebra conversions
 ├── csg_conversion.rs               # GeoNode → CSGMesh/CSGSketch polygon conversion
@@ -20,8 +20,8 @@ geo_tree/
 
 | Type | Location | Purpose |
 |------|----------|---------|
-| `GeoNode` | `mod.rs` | Core type: immutable tree of geometric operations with pre-computed BLAKE3 hash |
-| `GeoNodeKind` | `mod.rs` | Enum: primitives (HalfSpace, Sphere, Circle, Ellipsoid, Ellipse, HalfPlane, Polygon) + operations (Union, Intersection, Difference, Transform, Extrude) |
+| `GeoNode` | `lib.rs` | Core type: immutable tree of geometric operations with pre-computed BLAKE3 hash |
+| `GeoNodeKind` | `lib.rs` | Enum: primitives (HalfSpace, Sphere, Circle, Ellipsoid, Ellipse, HalfPlane, Polygon) + operations (Union, Intersection, Difference, Transform, Extrude) |
 | `ImplicitGeometry3D` | `implicit_geometry.rs` | Trait: `implicit_eval_3d`, `implicit_eval_3d_batch`, `get_gradient`, `is3d` |
 | `ImplicitGeometry2D` | `implicit_geometry.rs` | Trait: `implicit_eval_2d`, `implicit_eval_2d_batch`, `get_gradient_2d`, `is2d` |
 | `BatchedImplicitEvaluator` | `batched_implicit_evaluator.rs` | Accumulates points, evaluates in 1024-point batches, optional rayon parallelism |
@@ -42,24 +42,24 @@ geo_tree/
 ## Dependencies
 
 ```
-geo_tree depends on:
+atomcad-geo-tree depends on:
 ├── glam          (DVec2, DVec3, DMat4 - math)
 ├── blake3        (content hashing)
 ├── csgrs         (polygon CSG operations)
 ├── rayon         (parallel batch evaluation)
 ├── nalgebra      (Point3/Vector3 for csgrs interop)
 ├── geo           (2D geometry types from csgrs)
-└── util          (Transform, MemorySizeEstimator, MemoryBoundedLruCache)
+└── atomcad-util  (Transform, MemorySizeEstimator, MemoryBoundedLruCache)
 ```
 
-**Architectural constraint:** This module is independent of `renderer`, `display`, `crystolecule`, and `structure_designer`. The `display` module converts geo_tree output into renderable meshes. Never add upstream dependencies here.
+**Architectural constraint:** This crate is independent of `renderer`, `display`, `crystolecule`, and `structure_designer` — and since Phase 2 of `doc/design_rust_crate_split.md` that is *compiler*-enforced, not convention-enforced: it depends on `atomcad-util` only, and adding an upstream dependency would be a cargo cycle. The `display` module converts geo-tree output into renderable meshes. Never add upstream dependencies here.
 
 ## Testing
 
-Tests live in `rust/tests/geo_tree/` (never inline `#[cfg(test)]`). Test modules are registered in `rust/tests/geo_tree.rs`.
+Tests live in `rust/crates/atomcad-geo-tree/tests/geo_tree/` (never inline `#[cfg(test)]`). Test modules are registered in the sibling `tests/geo_tree.rs`. The repeated directory name is deliberate — it keeps the `#[path]` strings valid across the crate move (design doc D5.1); do not flatten it. Tests import through the crate's own name, `atomcad_geo_tree::…`, never `rust_lib_flutter_cad::…`.
 
 ```
-tests/geo_tree/
+crates/atomcad-geo-tree/tests/geo_tree/
 ├── implicit_eval_test.rs                   # SDF evaluation correctness
 ├── ellipsoid_test.rs                       # Ellipsoid/Ellipse: sign/zero-set, conservativeness, sphere/circle snap, hash, CSG verts
 ├── csg_cache_test.rs                       # Cache hit/miss, eviction, statistics
@@ -67,11 +67,11 @@ tests/geo_tree/
 └── multi_threaded_batch_evaluator_test.rs  # Parallel evaluation correctness
 ```
 
-**Running:** `cd rust && cargo test geo_tree`
+**Running:** `cd rust && cargo test -p atomcad-geo-tree`
 
 ## Modifying This Module
 
-**Adding a new primitive**: Add variant to `GeoNodeKind` in `mod.rs` with a unique tag byte (next: 0x10). Add constructor, Display match arm, MemorySizeEstimator match arm. Implement SDF evaluation in `implicit_eval.rs` (both 2D/3D trait as appropriate). Implement CSG conversion in `csg_conversion.rs`. Add tests.
+**Adding a new primitive**: Add variant to `GeoNodeKind` in `lib.rs` with a unique tag byte (next: 0x10). Add constructor, Display match arm, MemorySizeEstimator match arm. Implement SDF evaluation in `implicit_eval.rs` (both 2D/3D trait as appropriate). Implement CSG conversion in `csg_conversion.rs`. Add tests.
 
 **Adding a new CSG operation**: Same as primitive but the operation must compose child results (e.g., min/max for union/intersection).
 
