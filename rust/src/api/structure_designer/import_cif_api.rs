@@ -2,7 +2,7 @@ use crate::api::api_common::{refresh_structure_designer_auto, with_mut_cad_insta
 use crate::api::common_api_types::APIResult;
 use crate::crystolecule::io::cif::load_cif_extended;
 use crate::structure_designer::nodes::import_cif::{ImportCifData, build_cif_import_result};
-use crate::util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn import_cif(scope_path: Vec<u64>, node_id: u64) -> APIResult {

@@ -214,6 +214,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-util"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "lru",
+ "serde",
+]
+
+[[package]]
 name = "atomic"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3001,6 +3010,7 @@ name = "rust_lib_flutter_cad"
 version = "0.1.0"
 dependencies = [
  "ab_glyph",
+ "atomcad-util",
  "blake3",
  "bytemuck",
  "csgrs",

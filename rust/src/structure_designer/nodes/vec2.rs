@@ -13,7 +13,7 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::serialization_utils::dvec2_serializer;
+use atomcad_util::serialization_utils::dvec2_serializer;
 use glam::f64::DVec2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

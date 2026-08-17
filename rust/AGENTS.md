@@ -15,7 +15,7 @@ Dependencies flow downward (no circular dependencies):
 │  crystolecule  │  geo_tree   │  renderer  │  expr   │
 │  (Atoms/bonds) │  (CSG/SDF)  │  (wgpu)    │ (Lang)  │
 ├─────────────────────────────────────────────────────┤
-│                       util                           │
+│         util  →  crate `atomcad-util` (extracted)    │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -28,6 +28,11 @@ Dependencies flow downward (no circular dependencies):
 - **display/** - Tessellates domain objects (atoms, geometry) into meshes
 - **expr/** - Expression language (lexer, parser, validation)
 - **api/** - Flutter Rust Bridge API layer
+- **`crates/atomcad-util/`** - was `src/util/`; the bottom of the DAG, now its
+  own crate. Imported as `atomcad_util::…` (**not** `crate::util::…`), including
+  from tests, which use `atomcad_util::daabox::DAABox` rather than
+  `rust_lib_flutter_cad::util::…`. Its own tests live in
+  `crates/atomcad-util/tests/`.
 
 ## Cargo workspace
 
@@ -36,9 +41,10 @@ builds) **and** the workspace root. Extracted crates live in `rust/crates/` and
 are picked up by the `members = ["crates/*"]` glob. This is step 0 of
 `doc/design_rust_crate_split.md`, which converts the top-level modules into
 crates so the dependency DAG above becomes compiler-enforced rather than
-convention-enforced. `rust/crates/` is empty until Phase 1.
+convention-enforced. `atomcad-util` is extracted (Phase 1); the remaining
+modules follow in Phases 2-6.
 
-Three rules follow from that layout:
+Rules that follow from that layout:
 
 - **Dependency versions go in `[workspace.dependencies]`,** and every package —
   the root included — writes `foo = { workspace = true }`. Two packages on two
@@ -55,6 +61,15 @@ Three rules follow from that layout:
 - `[profile.*]` is only honoured in the workspace root manifest (this is why
   csgrs's own `lto = true` has never applied). `[profile.release] lto = "thin"`
   is there to restore cross-crate inlining lost to the split; see D13.
+- **Use `cargo fmt`, never `cargo fmt --all`.** Plain `cargo fmt` honours
+  `default-members`, so it already covers `crates/*`. `--all` additionally
+  reaches into the *vendored* `../csgrs` path dependency and reformats it,
+  clobbering the local EPSILON patch's comment layout — a spurious diff in a
+  directory this refactor must not touch.
+- A doc-test in an extracted crate must import through that crate's own name
+  (`use atomcad_util::…`), not `rust_lib_flutter_cad::…`. Doc-tests are compiled
+  as external users of the crate that defines them, so a stale prefix here fails
+  the run even though `cargo build` is green.
 
 ## Adding a New Node Type
 

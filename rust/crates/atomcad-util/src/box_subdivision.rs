@@ -1,4 +1,4 @@
-use crate::util::daabox::DAABox;
+use crate::daabox::DAABox;
 use glam::f64::DVec3;
 use glam::i32::IVec2;
 use glam::i32::IVec3;

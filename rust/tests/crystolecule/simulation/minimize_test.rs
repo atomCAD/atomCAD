@@ -5,6 +5,7 @@
 // - Frozen dimensions (gradient zeroing)
 // - UFF force field with reference molecules (energy reduction, convergence)
 
+use atomcad_util::daabox::DAABox;
 use glam::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
@@ -22,7 +23,6 @@ use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
 use rust_lib_flutter_cad::crystolecule::simulation::uff::{UffForceField, VdwMode};
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::util::daabox::DAABox;
 use std::collections::HashMap;
 
 // ============================================================================

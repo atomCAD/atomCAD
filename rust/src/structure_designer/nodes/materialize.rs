@@ -19,7 +19,7 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::daabox::DAABox;
+use atomcad_util::daabox::DAABox;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;

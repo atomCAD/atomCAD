@@ -9,7 +9,7 @@ use crate::structure_designer::node_type::NodeType;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::as_any::AsAny;
+use atomcad_util::as_any::AsAny;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};

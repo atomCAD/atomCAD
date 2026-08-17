@@ -1,6 +1,6 @@
-use crate::util::serialization_utils::dquat_serializer;
-use crate::util::serialization_utils::dvec2_serializer;
-use crate::util::serialization_utils::dvec3_serializer;
+use crate::serialization_utils::dquat_serializer;
+use crate::serialization_utils::dvec2_serializer;
+use crate::serialization_utils::dvec3_serializer;
 use glam::f64::DQuat;
 use glam::f64::DVec2;
 use glam::f64::DVec3;

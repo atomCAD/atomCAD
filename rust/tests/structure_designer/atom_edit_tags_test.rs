@@ -282,7 +282,7 @@ fn replace_promotes_unchanged_marker_carrying_base_tags() {
 
 #[test]
 fn transform_promotes_base_atom_carrying_tags() {
-    use rust_lib_flutter_cad::util::transform::Transform;
+    use atomcad_util::transform::Transform;
 
     let mut data = AtomEditData::new();
     data.selection.selected_base_atoms.insert(7);

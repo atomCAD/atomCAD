@@ -22,9 +22,9 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::hit_test_utils::get_closest_point_on_first_ray;
-use crate::util::serialization_utils::dvec3_serializer;
-use crate::util::transform::Transform;
+use atomcad_util::hit_test_utils::get_closest_point_on_first_ray;
+use atomcad_util::serialization_utils::dvec3_serializer;
+use atomcad_util::transform::Transform;
 use glam::f64::DQuat;
 use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};

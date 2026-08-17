@@ -1,4 +1,4 @@
-use crate::util::memory_size_estimator::MemorySizeEstimator;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::DVec3;
 use std::collections::{HashMap, HashSet};
 

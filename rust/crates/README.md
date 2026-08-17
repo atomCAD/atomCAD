@@ -2,9 +2,13 @@
 
 Home of the extracted backend crates from `doc/design_rust_crate_split.md`.
 
-Empty until Phase 1 (`atomcad-util`). The workspace in `rust/Cargo.toml` picks
-crates up here with `members = ["crates/*"]`; this README is not a package and
-the glob tolerates it.
+The workspace in `rust/Cargo.toml` picks crates up here with
+`members = ["crates/*"]`; this README is not a package and the glob tolerates
+it.
+
+| crate | was | phase |
+|---|---|---|
+| `atomcad-util` | `rust/src/util/` | 1 |
 
 Conventions for anything added here:
 

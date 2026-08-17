@@ -94,6 +94,8 @@ lto = "thin"
 
 [dependencies]
 flutter_rust_bridge = "=2.10.0"
+# Extracted backend crates (doc/design_rust_crate_split.md)
+atomcad-util = { path = "crates/atomcad-util" }
 dlopen = { workspace = true }
 lazy_static = { workspace = true }
 wgpu = { workspace = true }

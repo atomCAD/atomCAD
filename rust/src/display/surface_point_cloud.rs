@@ -1,6 +1,6 @@
-use crate::util::memory_size_estimator::MemorySizeEstimator;
-use crate::util::transform::Transform;
-use crate::util::transform::Transform2D;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
+use atomcad_util::transform::Transform;
+use atomcad_util::transform::Transform2D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 

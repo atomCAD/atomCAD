@@ -16,7 +16,7 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::serialization_utils::ivec3_serializer;
+use atomcad_util::serialization_utils::ivec3_serializer;
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

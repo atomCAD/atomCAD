@@ -9,8 +9,8 @@ use crate::renderer::tessellator::tessellator::Tessellatable;
 use crate::structure_designer::eval_errors::ErrorOrigin;
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::node_network::NodeRef;
-use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
-use crate::util::memory_size_estimator::MemorySizeEstimator;
+use atomcad_util::memory_bounded_lru_cache::MemoryBoundedLruCache;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 

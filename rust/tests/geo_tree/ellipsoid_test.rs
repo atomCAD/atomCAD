@@ -760,7 +760,7 @@ fn test_ellipse_degenerate_batch_is_empty() {
 
 #[test]
 fn test_extrude_of_ellipse_signs() {
-    use rust_lib_flutter_cad::util::transform::Transform;
+    use atomcad_util::transform::Transform;
 
     // An extruded elliptic cylinder: the ellipse in the XY plane, extruded along
     // +Z from z=0 to z=height with an identity plane-to-world transform.

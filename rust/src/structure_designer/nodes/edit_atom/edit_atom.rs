@@ -28,7 +28,7 @@ use crate::structure_designer::serialization::edit_atom_data_serialization::{
     SerializableEditAtomData, edit_atom_data_to_serializable, serializable_to_edit_atom_data,
 };
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 use std::io;
 

@@ -16,7 +16,7 @@ use crate::crystolecule::guided_placement::{
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::hit_test_utils;
+use atomcad_util::hit_test_utils;
 use glam::f64::DVec3;
 
 /// Convert an `Option<Hybridization>` (from the toolbar/API) to the `u8` flag value

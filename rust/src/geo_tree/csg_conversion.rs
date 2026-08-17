@@ -8,7 +8,7 @@ use crate::geo_tree::csg_utils::dvec3_to_point3;
 use crate::geo_tree::csg_utils::dvec3_to_vector3;
 use crate::geo_tree::csg_utils::point_inversion_csg_matrix4;
 use crate::geo_tree::csg_utils::scale_to_csg;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use csgrs::mesh::polygon::Polygon;
 use csgrs::mesh::vertex::Vertex;
 use csgrs::traits::CSG;

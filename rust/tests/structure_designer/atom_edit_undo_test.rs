@@ -2392,10 +2392,10 @@ fn undo_atom_edit_sequence_restores_initial_state() {
 // Frozen atoms and drag
 // =============================================================================
 
+use atomcad_util::transform::Transform;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::drag_selected_by_delta;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::transform_selected;
-use rust_lib_flutter_cad::util::transform::Transform;
 
 #[test]
 fn drag_frozen_diff_atom_not_moved() {
@@ -2907,8 +2907,8 @@ fn hybridization_override_migrated_on_base_atom_promotion() {
     // Promote the base atom via apply_transform (simulates a user drag).
     // The flags field carries the hybridization override from the base atom.
     {
+        use atomcad_util::transform::Transform;
         use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::BaseAtomPromotionInfo;
-        use rust_lib_flutter_cad::util::transform::Transform;
 
         let data = get_data_mut(&mut designer);
         let base_atoms = vec![BaseAtomPromotionInfo {
@@ -2989,8 +2989,8 @@ fn frozen_flag_migrated_on_base_atom_promotion() {
 
     // Promote via apply_transform with frozen flag in BaseAtomPromotionInfo
     {
+        use atomcad_util::transform::Transform;
         use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::BaseAtomPromotionInfo;
-        use rust_lib_flutter_cad::util::transform::Transform;
 
         let data = get_data_mut(&mut designer);
         let base_atoms = vec![BaseAtomPromotionInfo {

@@ -1,5 +1,5 @@
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::util::as_any::AsAny;
+use atomcad_util::as_any::AsAny;
 use std::fmt::Debug;
 
 pub trait EditAtomCommand: AsAny + Debug {

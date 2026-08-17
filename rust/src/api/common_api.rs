@@ -24,7 +24,7 @@ use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::renderer::renderer::Renderer;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use dlopen::{
     Error as LibError,
     symbor::{Library, Symbol},

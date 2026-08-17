@@ -4,7 +4,7 @@ use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
 use crate::structure_designer::common_constants;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
-use crate::util::box_subdivision::subdivide_rect;
+use atomcad_util::box_subdivision::subdivide_rect;
 use glam::Vec3Swizzles;
 use glam::i32::IVec2;
 use lru::LruCache;

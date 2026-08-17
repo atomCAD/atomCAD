@@ -1,5 +1,5 @@
 use crate::geo_tree::csg_types::{CSGMesh, CSGSketch};
-use crate::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
+use atomcad_util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 use std::mem;
 use std::sync::Arc;
 

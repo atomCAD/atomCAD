@@ -1,7 +1,7 @@
 use super::{GeoNode, GeoNodeKind};
 use crate::geo_tree::implicit_geometry::ImplicitGeometry2D;
 use crate::geo_tree::implicit_geometry::{BATCH_SIZE, ImplicitGeometry3D};
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::f64::{DMat2, DMat3, DVec2, DVec3};
 
 impl ImplicitGeometry2D for GeoNode {

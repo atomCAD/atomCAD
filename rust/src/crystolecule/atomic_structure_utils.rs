@@ -1,7 +1,7 @@
 use crate::crystolecule::atomic_constants::ATOM_INFO;
 use crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO;
 use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 
 use glam::f64::{DQuat, DVec3};
 use std::collections::HashSet;

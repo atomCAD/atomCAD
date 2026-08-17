@@ -29,7 +29,7 @@ impl ModelUniform {
         }
     }
 
-    pub fn update_from_transform(&mut self, transform: &crate::util::transform::Transform) {
+    pub fn update_from_transform(&mut self, transform: &atomcad_util::transform::Transform) {
         // Convert the transform to a model matrix
         let translation = transform.translation.as_vec3();
         let rotation = transform.rotation.as_quat();
@@ -435,7 +435,7 @@ impl GPUMesh {
     pub fn update_transform(
         &self,
         queue: &wgpu::Queue,
-        transform: &crate::util::transform::Transform,
+        transform: &atomcad_util::transform::Transform,
     ) {
         // Create and update a model uniform with the transform
         let mut model_uniform = ModelUniform::new();

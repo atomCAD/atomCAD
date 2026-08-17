@@ -12,7 +12,7 @@ use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::zone_closure::ZoneClosure;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
-use crate::util::transform::Transform2D;
+use atomcad_util::transform::Transform2D;
 use glam::f64::DMat3;
 use glam::f64::DVec2;
 use glam::f64::DVec3;

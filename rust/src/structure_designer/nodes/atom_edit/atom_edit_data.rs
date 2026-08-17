@@ -24,7 +24,7 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
 use rustc_hash::FxHashMap;
 use std::collections::{HashMap, HashSet};

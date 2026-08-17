@@ -2,7 +2,7 @@ use crate::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF;
 use crate::crystolecule::motif::Motif;
 use crate::crystolecule::structure::Structure;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::DQuat;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};

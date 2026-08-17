@@ -3,7 +3,7 @@ use crate::display::poly_mesh::PolyMesh;
 use crate::geo_tree::csg_types::CSGMesh;
 use crate::geo_tree::csg_types::CSGSketch;
 use crate::geo_tree::csg_utils::{scale_to_csg, unscale_from_csg};
-use crate::util::unique_3d_points::Unique3DPoints;
+use atomcad_util::unique_3d_points::Unique3DPoints;
 use csgrs::{float_types::Real, mesh::polygon::Polygon, mesh::vertex::Vertex};
 use geo::{Geometry, Polygon as GeoPolygon, TriangulateEarcut};
 use glam::DVec3;

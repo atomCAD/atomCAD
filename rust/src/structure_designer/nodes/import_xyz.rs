@@ -11,7 +11,7 @@ use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parame
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

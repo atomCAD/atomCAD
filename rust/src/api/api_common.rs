@@ -5,7 +5,7 @@ use crate::renderer::renderer::Renderer;
 use crate::structure_designer::camera_settings::CameraSettings;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::DQuat;
 use glam::f64::DVec2;
 use glam::f64::DVec3;

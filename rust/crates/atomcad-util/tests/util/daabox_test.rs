@@ -1,5 +1,5 @@
+use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::util::daabox::DAABox;
 
 #[test]
 fn test_new_with_unordered_corners() {

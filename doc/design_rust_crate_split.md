@@ -1238,6 +1238,83 @@ on the smallest possible target.
 
 *Estimate: 0.5 day.*
 
+#### Phase 1 — landed 2026-08-17
+
+**Changes.** `rust/src/util/` → `rust/crates/atomcad-util/src/` (14 files,
+`mod.rs` → `lib.rs`), and `rust/tests/util.rs` + `rust/tests/util/` →
+`crates/atomcad-util/tests/`, keeping the D5.1 directory-name rule
+(`tests/util.rs` beside `tests/util/`) even though this crate's two `#[path]`
+lines would have been cheap to rewrite — the convention is worth more than the
+two lines. The crate takes `glam`, `lru` and `serde` from
+`[workspace.dependencies]`; the root package gains
+`atomcad-util = { path = "crates/atomcad-util" }` and loses `pub mod util;`
+from `lib.rs`.
+
+The prefix rewrite was exactly as mechanical as D3 predicts: `crate::util::` →
+`atomcad_util::` in 72 source files, `crate::util::` → `crate::` inside the 14
+moved files, and `rust_lib_flutter_cad::util::` → `atomcad_util::` in the 12
+test files under other harnesses that reach into `util`. **`cargo build`
+succeeded on the first attempt** — no visibility escalation was needed, which
+confirms the "visibility is already crate-external-ready" measurement in
+Current state (`util` contributed zero of the 15 `pub(crate)` items).
+
+**No FRB exposure, confirmed rather than assumed.** `util` looked like it might
+be a Dart-facing risk, because `api/api_common.rs` and `api/common_api.rs` both
+import `util::transform::Transform`. It is not: `crate::api::api_common` is
+*not* in `rust_input`, so its `to_api_transform` / `from_api_transform` are
+never exported, and `common_api.rs` names `Transform` only in a function *body*.
+The Dart-facing shape is the existing `APITransform` twin — i.e. D9a's pattern
+was already in place for the one type that mattered. Regenerating bindings
+produced a **byte-identical** `lib/src/rust/` and `frb_generated.rs`, and
+`lib/src/rust/crystolecule/` is untouched (it is Phase 4's problem).
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo clippy -j 4`, `cargo clippy --all-targets -j 4`, `cargo fmt -- --check`,
+`flutter_rust_bridge_codegen generate` + `git diff lib/src/rust/`,
+`cargo build --release`. No `.snap.new` files.
+**Pending manual step for the maintainer:** launch the app (`flutter run`,
+release DLL) and the Flutter smoke test.
+
+**Test count: 5,054 — identical to Phase 0**, and the `default-members`
+tripwire held: `tests/util.rs`'s **15** tests are now reported under
+`atomcad-util` rather than `rust_lib_flutter_cad` and did not vanish. Two other
+counts moved between binaries without changing the total, which is worth
+knowing before reading a future phase's table as a regression:
+
+| binary | Phase 0 | Phase 1 |
+|---|---|---|
+| `rust_lib_flutter_cad` (lib unittests) | 11 | 5 |
+| `atomcad-util` (lib unittests) | — | **6** |
+| `tests/util.rs` (root package) | 15 | — |
+| `atomcad-util` `tests/util.rs` | — | **15** |
+| doc-tests `rust_lib_flutter_cad` | 18 (8 run) | 16 (6 run) |
+| doc-tests `atomcad_util` | — | **2** |
+
+(The 6 lib unittests are inline `#[cfg(test)]` modules in `util`, which
+predate the `rust/AGENTS.md` "tests go in `tests/`" rule; they were moved as-is
+rather than converted, so that this phase stays a pure relocation.)
+
+**Lint baselines held exactly:** `cargo clippy -j 4` → **36** warnings in the
+root lib and **0** in `atomcad-util`; `cargo clippy --all-targets -j 4` → **112**
+individual warnings across the lib and 8 test binaries (one of which is now
+`atomcad-util`'s); `flutter analyze` → **139**.
+
+**Two traps worth recording for Phases 2–6.**
+
+1. **Doc-tests are compiled as external users of their own crate.** The two
+   examples in `memory_bounded_lru_cache.rs` said
+   `use rust_lib_flutter_cad::util::…`; after the move that crate is not a
+   dependency of `atomcad-util`, so they failed to compile — and they failed
+   *last*, after `cargo build` and all 5,036 non-doc tests had already gone
+   green, which is the worst moment to discover it. Any move of a
+   module carrying `///` examples needs its doc-comment prefixes rewritten too;
+   grep the moved files for the old crate name, not just for `crate::`.
+2. **Never run `cargo fmt --all` in this workspace.** It walks into the
+   vendored `../csgrs` path dependency (which is *not* a workspace member, but
+   cargo-fmt reaches it anyway) and reformats it, producing a spurious diff over
+   the local EPSILON patch. Plain `cargo fmt` honours `default-members`, so it
+   already covers `crates/*` — use that. Recorded in `rust/AGENTS.md`.
+
 ### Phase 2 — `atomcad-geo-tree`
 
 2,806 lines, depends on `util` only. ~52 call sites. Moves `csgrs`,

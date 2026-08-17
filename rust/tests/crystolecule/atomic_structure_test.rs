@@ -520,7 +520,7 @@ fn test_decorator_selection_transform() {
 
     assert!(structure.decorator().selection_transform.is_none());
 
-    use rust_lib_flutter_cad::util::transform::Transform;
+    use atomcad_util::transform::Transform;
 
     let transform = Transform::new(DVec3::new(1.0, 2.0, 3.0), DQuat::IDENTITY);
     structure.decorator_mut().selection_transform = Some(transform.clone());

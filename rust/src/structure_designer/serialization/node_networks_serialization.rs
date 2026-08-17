@@ -12,7 +12,7 @@ use super::super::node_type_registry::{
 };
 use super::super::nodes::atom_edit::atom_edit::AtomEditData;
 use crate::structure_designer::data_type::DataType;
-use crate::util::serialization_utils::{dvec2_serializer, dvec3_serializer};
+use atomcad_util::serialization_utils::{dvec2_serializer, dvec3_serializer};
 use glam::f64::{DVec2, DVec3};
 use serde::{Deserialize, Serialize};
 use serde_json;

@@ -6,7 +6,7 @@ use crate::api::structure_designer::structure_designer_api_types::DragFrozenStat
 use crate::crystolecule::atomic_structure::{BondReference, UNCHANGED_ATOMIC_NUMBER};
 use crate::crystolecule::atomic_structure_diff::{AtomSource, apply_diff};
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 
 /// Delete all selected atoms and bonds.

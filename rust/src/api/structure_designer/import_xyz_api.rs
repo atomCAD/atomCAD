@@ -2,7 +2,7 @@ use crate::api::api_common::{refresh_structure_designer_auto, with_mut_cad_insta
 use crate::api::common_api_types::APIResult;
 use crate::crystolecule::io::xyz_loader::load_xyz;
 use crate::structure_designer::nodes::import_xyz::ImportXYZData;
-use crate::util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
+use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn import_xyz(scope_path: Vec<u64>, node_id: u64) -> APIResult {

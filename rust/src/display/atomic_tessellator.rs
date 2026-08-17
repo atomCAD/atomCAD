@@ -14,7 +14,7 @@ use crate::renderer::label_atlas::layout_label;
 use crate::renderer::label_mesh::LabelMesh;
 use crate::renderer::mesh::{Material, Mesh};
 use crate::renderer::transparent_impostor_mesh::TransparentImpostorMesh;
-use crate::util::timer::Timer;
+use atomcad_util::timer::Timer;
 use glam::f32::Vec3;
 use glam::f64::DVec3;
 

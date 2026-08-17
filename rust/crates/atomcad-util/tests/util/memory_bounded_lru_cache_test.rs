@@ -1,4 +1,4 @@
-use rust_lib_flutter_cad::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
+use atomcad_util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 
 fn string_size_estimator(s: &String) -> usize {
     s.len()

@@ -5,8 +5,8 @@ use crate::crystolecule::motif::Motif;
 use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::geo_tree::GeoNode;
 use crate::geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
-use crate::util::box_subdivision::subdivide_daabox;
-use crate::util::daabox::DAABox;
+use atomcad_util::box_subdivision::subdivide_daabox;
+use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ use crate::crystolecule::atomic_structure_utils::{
     remove_lone_atoms_filtered, remove_single_bond_atoms_filtered,
 };
 use crate::geo_tree::implicit_geometry::ImplicitGeometry3D;
-use crate::util::timer::Timer;
+use atomcad_util::timer::Timer;
 
 // Import configuration types
 use super::config::{

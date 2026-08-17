@@ -1334,8 +1334,8 @@ impl Renderer {
     /// - translation corresponds to the camera eye position
     /// - rotation orients from the identity orientation (looking down -Z with up as +Y)
     ///   to the current camera orientation
-    pub fn get_camera_transform(&self) -> crate::util::transform::Transform {
-        use crate::util::transform::Transform;
+    pub fn get_camera_transform(&self) -> atomcad_util::transform::Transform {
+        use atomcad_util::transform::Transform;
 
         // For the camera transform, translation is just the eye position
         let translation = self.camera.eye;
@@ -1374,7 +1374,7 @@ impl Renderer {
     /// - translation becomes the camera eye position
     /// - rotation orients from the identity view (looking down Y with up as +Z)
     ///   to the desired camera orientation
-    pub fn set_camera_transform(&mut self, transform: &crate::util::transform::Transform) {
+    pub fn set_camera_transform(&mut self, transform: &atomcad_util::transform::Transform) {
         // Set eye position directly from translation
         self.camera.eye = transform.translation;
 

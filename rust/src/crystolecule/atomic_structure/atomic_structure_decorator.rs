@@ -1,6 +1,6 @@
 use crate::crystolecule::atomic_structure::bond_reference::BondReference;
 use crate::crystolecule::guided_placement::GuideDot;
-use crate::util::transform::Transform;
+use atomcad_util::transform::Transform;
 use glam::IVec3;
 use glam::Vec3;
 use glam::f64::DVec3;

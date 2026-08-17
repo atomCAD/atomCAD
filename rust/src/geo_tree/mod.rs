@@ -1,5 +1,5 @@
-use crate::util::memory_size_estimator::MemorySizeEstimator;
-use crate::util::transform::Transform;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
+use atomcad_util::transform::Transform;
 use blake3;
 use glam::f64::DMat2;
 use glam::f64::DMat3;

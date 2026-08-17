@@ -11,6 +11,7 @@
 //! 4. Text-format parser/serializer: `((a,b),(c,d))` literal recognition.
 //! 5. `util::imat2::IMat2` value struct.
 
+use atomcad_util::imat2::IMat2;
 use glam::IVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
@@ -18,7 +19,6 @@ use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegist
 use rust_lib_flutter_cad::structure_designer::text_format::{
     Parser, PropertyValue, Statement, TextValue,
 };
-use rust_lib_flutter_cad::util::imat2::IMat2;
 
 // ---------------------------------------------------------------------------
 // DataType

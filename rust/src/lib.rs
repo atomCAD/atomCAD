@@ -7,4 +7,3 @@ pub mod geo_tree;
 pub mod renderer;
 #[cfg(not(frb_expand))]
 pub mod structure_designer;
-pub mod util;

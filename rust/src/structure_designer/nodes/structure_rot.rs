@@ -25,8 +25,8 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
-use crate::util::serialization_utils::ivec3_serializer;
-use crate::util::transform::Transform;
+use atomcad_util::serialization_utils::ivec3_serializer;
+use atomcad_util::transform::Transform;
 use glam::DQuat;
 use glam::f64::DVec3;
 use glam::i32::IVec3;

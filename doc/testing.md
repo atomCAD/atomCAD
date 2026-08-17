@@ -23,6 +23,12 @@ flutter test integration_test/ # Flutter smoke test — HUMAN-ONLY (see note)
 
 Tests mirror `rust/src/` structure for easy gap identification.
 
+As the backend is split into workspace crates
+(`doc/design_rust_crate_split.md`), each extracted module's tests move with it
+into `rust/crates/<crate>/tests/`, keeping their original directory name. `cd
+rust && cargo test -j 4` still runs everything — the `default-members` entry in
+`rust/Cargo.toml` is what makes that true, so do not remove it.
+
 ### Unit Tests
 | Module | Coverage |
 |--------|----------|
@@ -30,7 +36,7 @@ Tests mirror `rust/src/` structure for easy gap identification.
 | `crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill |
 | `geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) |
 | `structure_designer/` | Network validator, node network operations, network evaluator |
-| `util/` | DAA box, LRU cache |
+| `util/` | DAA box, LRU cache — now at `rust/crates/atomcad-util/tests/util/`, run with `cargo test -p atomcad-util` |
 
 ### Snapshot Tests (insta)
 Evaluate sample CNND files and compare against golden files:

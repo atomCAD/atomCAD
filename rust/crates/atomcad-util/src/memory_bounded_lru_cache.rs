@@ -13,7 +13,7 @@ use std::hash::Hash;
 ///
 /// # Example
 /// ```
-/// use rust_lib_flutter_cad::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
+/// use atomcad_util::memory_bounded_lru_cache::MemoryBoundedLruCache;
 ///
 /// fn estimate_string_size(s: &String) -> usize {
 ///     s.len()
@@ -49,7 +49,7 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
     ///
     /// # Example
     /// ```
-    /// use rust_lib_flutter_cad::util::memory_bounded_lru_cache::MemoryBoundedLruCache;
+    /// use atomcad_util::memory_bounded_lru_cache::MemoryBoundedLruCache;
     ///
     /// let cache: MemoryBoundedLruCache<String, String> = MemoryBoundedLruCache::new(
     ///     256 * 1024 * 1024,  // 256 MB

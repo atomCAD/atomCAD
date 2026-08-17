@@ -37,7 +37,7 @@ use super::network_result::{
     Alignment, BlueprintData, GeometrySummary2D, propagate_alignment_with_reason,
 };
 use crate::crystolecule::structure::Structure;
-use crate::util::transform::Transform2D;
+use atomcad_util::transform::Transform2D;
 use glam::f64::DVec2;
 
 #[derive(Clone)]

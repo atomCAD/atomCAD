@@ -18,7 +18,7 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::util::transform::Transform2D;
+use atomcad_util::transform::Transform2D;
 use glam::f64::DVec2;
 use serde::{Deserialize, Serialize};
 

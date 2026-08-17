@@ -2,7 +2,7 @@ use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, CrossCellBondInfo, DEFAULT_TOLERANCE,
 };
-use crate::util::serialization_utils::dvec3_serializer;
+use atomcad_util::serialization_utils::dvec3_serializer;
 use glam::IVec3;
 use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};

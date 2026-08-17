@@ -1,0 +1,14 @@
+[package]
+name = "atomcad-util"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# Bottom of the dependency DAG: nothing in the workspace may be added here.
+# Versions come from [workspace.dependencies] in ../../Cargo.toml (D4).
+[dependencies]
+glam = { workspace = true }
+lru = { workspace = true }
+serde = { workspace = true }

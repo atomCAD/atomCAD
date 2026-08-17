@@ -1,3 +1,4 @@
+use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
     BOND_DELETED, BOND_SINGLE,
@@ -8,7 +9,6 @@ use rust_lib_flutter_cad::crystolecule::atomic_structure::{
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, BaseAtomPromotionInfo, BondDeletionInfo, DiffAtomKind, classify_diff_atom,
 };
-use rust_lib_flutter_cad::util::transform::Transform;
 
 // =============================================================================
 // classify_diff_atom tests

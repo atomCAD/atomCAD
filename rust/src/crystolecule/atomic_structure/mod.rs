@@ -25,8 +25,8 @@
 
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::util::hit_test_utils;
-use crate::util::memory_size_estimator::MemorySizeEstimator;
+use atomcad_util::hit_test_utils;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::Vec3;
 use glam::f64::DQuat;
 use glam::f64::DVec3;

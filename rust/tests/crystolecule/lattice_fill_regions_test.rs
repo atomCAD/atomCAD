@@ -5,6 +5,7 @@
 //! directly (no node network), so they exercise `RegionSpec` / `SettingsResolver`
 //! and the per-position gates wired into cleanup, reconstruction, and passivation.
 
+use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::crystolecule::crystolecule_constants::{
@@ -17,7 +18,6 @@ use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::crystolecule::motif_parser::parse_motif;
 use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::geo_tree::GeoNode;
-use rust_lib_flutter_cad::util::daabox::DAABox;
 use std::collections::HashMap;
 
 const A: f64 = DIAMOND_UNIT_CELL_SIZE_ANGSTROM; // 3.567 Å, axis-aligned cubic diamond

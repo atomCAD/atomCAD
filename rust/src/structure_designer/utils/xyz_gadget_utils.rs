@@ -3,7 +3,7 @@ use crate::display::gadget::GadgetPickContext;
 use crate::renderer::mesh::Material;
 use crate::renderer::mesh::Mesh;
 use crate::renderer::tessellator::tessellator;
-use crate::util::hit_test_utils::{
+use atomcad_util::hit_test_utils::{
     arrow_hit_test, cylinder_hit_test, get_closest_point_on_first_ray,
 };
 use glam::Vec3;
