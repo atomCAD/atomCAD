@@ -22,7 +22,12 @@
 /// How atoms and bonds are drawn — and, for `hit_test`, whether bonds are
 /// pickable (space-filling atoms touch, so their bonds are hidden and, absent a
 /// per-atom render-style override, unpickable).
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+/// `Serialize`/`Deserialize` are here because this enum is a *persisted user
+/// preference* (`structure_designer::preferences`, written to
+/// `preferences.json`) as well as a `hit_test` input. The variant names are
+/// therefore load-bearing: renaming one silently invalidates the field in every
+/// existing preferences file.
+#[derive(Clone, Debug, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum AtomicStructureVisualization {
     #[default]
     BallAndStick,

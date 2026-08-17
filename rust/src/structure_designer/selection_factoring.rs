@@ -15,7 +15,7 @@ use super::node_type::{
 };
 use super::node_type_registry::NodeTypeRegistry;
 use super::nodes::parameter::ParameterData;
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::node_type::NodeTypeCategory;
 
 /// Information about an external input wire (wire coming INTO the selection from OUTSIDE)
 #[derive(Debug, Clone)]

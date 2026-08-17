@@ -1,4 +1,3 @@
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::data_type::FunctionType;
 use crate::structure_designer::node_data::NodeData;
@@ -6,6 +5,52 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
 use std::io;
+
+/// Palette group a node type belongs to.
+///
+/// This is **domain metadata** — every `NodeType` descriptor names one — that
+/// `api/` merely happened to declare, and that declaration was the single
+/// largest contributor (113 of 145 sites) to the `structure_designer → api`
+/// back-edge. D9.1 of `doc/design_rust_crate_split.md` moves the authoritative
+/// definition here; a same-named Dart-facing twin stays in
+/// `api/structure_designer/structure_designer_api_types.rs` with `From` impls
+/// both ways (D9a). Do **not** rename either side.
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum NodeTypeCategory {
+    Annotation,
+    MathAndProgramming,
+    Geometry2D,
+    Geometry3D,
+    AtomicStructure,
+    OtherBuiltin,
+    Custom,
+}
+
+impl NodeTypeCategory {
+    pub fn order(&self) -> u8 {
+        match self {
+            Self::Annotation => 0,
+            Self::MathAndProgramming => 1,
+            Self::Geometry2D => 2,
+            Self::Geometry3D => 3,
+            Self::AtomicStructure => 4,
+            Self::OtherBuiltin => 5,
+            Self::Custom => 6,
+        }
+    }
+
+    pub fn display_name(&self) -> &str {
+        match self {
+            Self::Annotation => "Annotation",
+            Self::MathAndProgramming => "Math and Programming",
+            Self::Geometry2D => "2D Blueprint",
+            Self::Geometry3D => "3D Blueprint",
+            Self::AtomicStructure => "Atomic Structure",
+            Self::OtherBuiltin => "Other",
+            Self::Custom => "Custom",
+        }
+    }
+}
 
 #[derive(Clone, PartialEq)]
 pub struct Parameter {

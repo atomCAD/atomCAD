@@ -2,7 +2,6 @@ use super::atom_edit_data::{
     get_active_atom_edit_data, get_atom_edit_data_mut_transient, get_selected_atom_edit_data_mut,
 };
 use super::types::*;
-use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::atom::{
     HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
@@ -15,7 +14,6 @@ use atomcad_crystolecule::guided_placement::{
     ray_ring_nearest_point, ray_sphere_nearest_point,
 };
 use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use atomcad_display::preferences as display_prefs;
 use atomcad_util::hit_test_utils;
 use glam::f64::DVec3;
 
@@ -133,18 +131,11 @@ pub fn start_guided_placement(
             None => return GuidedPlacementStartResult::NoAtomHit,
         };
 
-        let visualization = &structure_designer
+        let display_visualization = structure_designer
             .preferences
             .atomic_structure_visualization_preferences
-            .visualization;
-        let display_visualization = match visualization {
-            AtomicStructureVisualization::BallAndStick => {
-                display_prefs::AtomicStructureVisualization::BallAndStick
-            }
-            AtomicStructureVisualization::SpaceFilling => {
-                display_prefs::AtomicStructureVisualization::SpaceFilling
-            }
-        };
+            .visualization
+            .clone();
 
         let result_atom_id = match result_structure.hit_test(
             ray_start,

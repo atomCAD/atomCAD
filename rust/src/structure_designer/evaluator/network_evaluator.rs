@@ -3,8 +3,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
-use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
 use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::eval_errors::{ErrorAddress, ErrorOrigin};
@@ -23,6 +21,8 @@ use crate::structure_designer::node_network::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::facet_shell::FacetShellData;
+use crate::structure_designer::preferences::GeometryVisualization;
+use crate::structure_designer::preferences::GeometryVisualizationPreferences;
 use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,
 };

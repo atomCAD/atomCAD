@@ -1,11 +1,11 @@
 use glam::f64::DVec2;
 use glam::i32::IVec3;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::sphere::SphereData;

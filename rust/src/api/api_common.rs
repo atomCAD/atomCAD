@@ -1,6 +1,6 @@
 use super::common_api_types::{APIIVec2, APIIVec3, APITransform, APIVec2, APIVec3};
-use crate::api::structure_designer::structure_designer_preferences as api_prefs;
 use crate::structure_designer::camera_settings::CameraSettings;
+use crate::structure_designer::preferences as domain_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
 use atomcad_display::preferences as display_prefs;
@@ -20,44 +20,38 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     }
 }
 
-fn to_display_mesh_smoothing(smoothing: &api_prefs::MeshSmoothing) -> display_prefs::MeshSmoothing {
+fn to_display_mesh_smoothing(
+    smoothing: &domain_prefs::MeshSmoothing,
+) -> display_prefs::MeshSmoothing {
     match smoothing {
-        api_prefs::MeshSmoothing::Smooth => display_prefs::MeshSmoothing::Smooth,
-        api_prefs::MeshSmoothing::Sharp => display_prefs::MeshSmoothing::Sharp,
-        api_prefs::MeshSmoothing::SmoothingGroupBased => {
+        domain_prefs::MeshSmoothing::Smooth => display_prefs::MeshSmoothing::Smooth,
+        domain_prefs::MeshSmoothing::Sharp => display_prefs::MeshSmoothing::Sharp,
+        domain_prefs::MeshSmoothing::SmoothingGroupBased => {
             display_prefs::MeshSmoothing::SmoothingGroupBased
         }
     }
 }
 
-fn to_display_atomic_structure_visualization(
-    v: &api_prefs::AtomicStructureVisualization,
-) -> display_prefs::AtomicStructureVisualization {
-    match v {
-        api_prefs::AtomicStructureVisualization::BallAndStick => {
-            display_prefs::AtomicStructureVisualization::BallAndStick
-        }
-        api_prefs::AtomicStructureVisualization::SpaceFilling => {
-            display_prefs::AtomicStructureVisualization::SpaceFilling
-        }
-    }
-}
+// `to_display_atomic_structure_visualization` is gone: since D6 moved the enum
+// down into `atomcad-crystolecule` and `display::preferences` re-exports it, the
+// domain preference already holds the display type and the conversion was an
+// identity match.
 
 fn to_display_atomic_rendering_method(
-    m: &api_prefs::AtomicRenderingMethod,
+    m: &domain_prefs::AtomicRenderingMethod,
 ) -> display_prefs::AtomicRenderingMethod {
     match m {
-        api_prefs::AtomicRenderingMethod::TriangleMesh => {
+        domain_prefs::AtomicRenderingMethod::TriangleMesh => {
             display_prefs::AtomicRenderingMethod::TriangleMesh
         }
-        api_prefs::AtomicRenderingMethod::Impostors => {
+        domain_prefs::AtomicRenderingMethod::Impostors => {
             display_prefs::AtomicRenderingMethod::Impostors
         }
     }
 }
 
 pub fn to_display_preferences(
-    preferences: &api_prefs::StructureDesignerPreferences,
+    preferences: &domain_prefs::StructureDesignerPreferences,
 ) -> display_prefs::DisplayPreferences {
     display_prefs::DisplayPreferences {
         geometry_visualization: display_prefs::GeometryVisualizationPreferences {
@@ -111,11 +105,10 @@ pub fn to_display_preferences(
                 .hide_coplanar_wireframe_edges,
         },
         atomic_structure_visualization: display_prefs::AtomicStructureVisualizationPreferences {
-            visualization: to_display_atomic_structure_visualization(
-                &preferences
-                    .atomic_structure_visualization_preferences
-                    .visualization,
-            ),
+            visualization: preferences
+                .atomic_structure_visualization_preferences
+                .visualization
+                .clone(),
             rendering_method: to_display_atomic_rendering_method(
                 &preferences
                     .atomic_structure_visualization_preferences

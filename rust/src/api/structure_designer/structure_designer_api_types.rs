@@ -7,6 +7,9 @@ use crate::structure_designer::evaluator::network_evaluator::PrintLogEntry;
 use crate::structure_designer::node_network::CollapseMode;
 use crate::structure_designer::node_network::FunctionPinDisposition;
 use crate::structure_designer::node_network::FunctionPinRole;
+// Path-qualified rather than imported bare: the api-side twin deliberately keeps
+// the same identifier (D9a).
+use crate::structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
 use flutter_rust_bridge::frb;
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
@@ -1254,6 +1257,14 @@ pub struct APICanvasViewport {
     pub zoom_level: i32,
 }
 
+/// Dart-facing twin of [`crate::structure_designer::node_type::NodeTypeCategory`].
+///
+/// The authoritative definition moved down into the domain (D9.1) — every
+/// `NodeType` descriptor names one, and that import was 113 of the 145 sites
+/// making up the `structure_designer → api` back-edge. This declaration stays
+/// here under its **existing** name and in its existing file, so the generated
+/// Dart symbol and path are both unchanged (D9a). Convert at the boundary with
+/// the `From` impls below; never rename this to `APINodeTypeCategory`.
 #[frb]
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum NodeTypeCategory {
@@ -1266,17 +1277,12 @@ pub enum NodeTypeCategory {
     Custom,
 }
 
+// `order` and `display_name` are **exported to Dart** (they appear in
+// `frb_generated.rs`), so the twin must keep them even though the domain type
+// carries the same two methods for its own use. Keep the two copies in step.
 impl NodeTypeCategory {
     pub fn order(&self) -> u8 {
-        match self {
-            Self::Annotation => 0,
-            Self::MathAndProgramming => 1,
-            Self::Geometry2D => 2,
-            Self::Geometry3D => 3,
-            Self::AtomicStructure => 4,
-            Self::OtherBuiltin => 5,
-            Self::Custom => 6,
-        }
+        DomainNodeTypeCategory::from(self).order()
     }
 
     pub fn display_name(&self) -> &str {
@@ -1289,6 +1295,46 @@ impl NodeTypeCategory {
             Self::OtherBuiltin => "Other",
             Self::Custom => "Custom",
         }
+    }
+}
+
+impl From<&DomainNodeTypeCategory> for NodeTypeCategory {
+    fn from(c: &DomainNodeTypeCategory) -> Self {
+        match c {
+            DomainNodeTypeCategory::Annotation => NodeTypeCategory::Annotation,
+            DomainNodeTypeCategory::MathAndProgramming => NodeTypeCategory::MathAndProgramming,
+            DomainNodeTypeCategory::Geometry2D => NodeTypeCategory::Geometry2D,
+            DomainNodeTypeCategory::Geometry3D => NodeTypeCategory::Geometry3D,
+            DomainNodeTypeCategory::AtomicStructure => NodeTypeCategory::AtomicStructure,
+            DomainNodeTypeCategory::OtherBuiltin => NodeTypeCategory::OtherBuiltin,
+            DomainNodeTypeCategory::Custom => NodeTypeCategory::Custom,
+        }
+    }
+}
+
+impl From<DomainNodeTypeCategory> for NodeTypeCategory {
+    fn from(c: DomainNodeTypeCategory) -> Self {
+        (&c).into()
+    }
+}
+
+impl From<&NodeTypeCategory> for DomainNodeTypeCategory {
+    fn from(c: &NodeTypeCategory) -> Self {
+        match c {
+            NodeTypeCategory::Annotation => DomainNodeTypeCategory::Annotation,
+            NodeTypeCategory::MathAndProgramming => DomainNodeTypeCategory::MathAndProgramming,
+            NodeTypeCategory::Geometry2D => DomainNodeTypeCategory::Geometry2D,
+            NodeTypeCategory::Geometry3D => DomainNodeTypeCategory::Geometry3D,
+            NodeTypeCategory::AtomicStructure => DomainNodeTypeCategory::AtomicStructure,
+            NodeTypeCategory::OtherBuiltin => DomainNodeTypeCategory::OtherBuiltin,
+            NodeTypeCategory::Custom => DomainNodeTypeCategory::Custom,
+        }
+    }
+}
+
+impl From<NodeTypeCategory> for DomainNodeTypeCategory {
+    fn from(c: NodeTypeCategory) -> Self {
+        (&c).into()
     }
 }
 

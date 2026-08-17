@@ -1,4 +1,3 @@
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -11,6 +10,7 @@ use crate::structure_designer::evaluator::network_result::propagate_alignment_wi
 use crate::structure_designer::evaluator::network_result::structure_mismatch_error;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };

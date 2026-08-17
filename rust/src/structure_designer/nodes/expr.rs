@@ -1,4 +1,3 @@
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::expr::expr::Expr;
 use crate::expr::parser::parse;
 use crate::expr::validation::{get_function_implementations, get_function_signatures};
@@ -10,6 +9,7 @@ use crate::structure_designer::evaluator::network_result::{NetworkResult, input_
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_saver,
 };

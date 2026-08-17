@@ -1,8 +1,6 @@
-use crate::api::structure_designer::structure_designer_preferences::{
-    NodeDisplayPolicy, NodeDisplayPreferences,
-};
 use crate::structure_designer::node_network::NodeDisplayType;
 use crate::structure_designer::node_network::NodeNetwork;
+use crate::structure_designer::preferences::{NodeDisplayPolicy, NodeDisplayPreferences};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;

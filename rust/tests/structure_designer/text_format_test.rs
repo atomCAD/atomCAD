@@ -455,8 +455,8 @@ output sphere1
 mod network_serializer_tests {
     use super::*;
     use glam::f64::DVec2;
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 
@@ -652,8 +652,8 @@ mod network_serializer_tests {
 
 mod network_editor_tests {
     use super::*;
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
@@ -1576,9 +1576,9 @@ It can include:
 mod auto_layout_tests {
     use super::*;
     use glam::f64::DVec2;
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_layout;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{auto_layout, edit_network};
@@ -2171,9 +2171,9 @@ mod node_type_introspection_tests {
 // ============================================================================
 
 mod custom_name_tests {
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::data_type::DataType;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};

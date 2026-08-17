@@ -53,7 +53,6 @@
 //! (Int/String selector dropdown + `DataTypeInput` value type + per-case text
 //! field with Add/delete + inline `APIResult` error).
 
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -61,6 +60,7 @@ use crate::structure_designer::evaluator::network_evaluator::{
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_saver,
 };

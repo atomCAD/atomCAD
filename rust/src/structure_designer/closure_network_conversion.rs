@@ -43,7 +43,7 @@ use super::node_type::{
 use super::node_type_registry::NodeTypeRegistry;
 use super::nodes::closure::{ClosureData, ClosureKind};
 use super::nodes::parameter::ParameterData;
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+use crate::structure_designer::node_type::NodeTypeCategory;
 
 /// How a parameter node of `N` maps into the closure body after conversion.
 enum ParamClass {

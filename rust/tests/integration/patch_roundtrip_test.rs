@@ -131,9 +131,9 @@ fn patch_nodes_text_format_roundtrip() {
 
 /// Builds an empty custom network to author test nodes into.
 fn make_empty_network() -> rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork {
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::data_type::DataType;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 
     let node_type = NodeType {

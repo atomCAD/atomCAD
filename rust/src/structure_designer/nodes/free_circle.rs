@@ -13,7 +13,6 @@
 //! whole-number `IVec2` from the parser. Editor:
 //! `lib/structure_designer/node_data/free_circle_editor.dart`.
 
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -22,6 +21,7 @@ use crate::structure_designer::evaluator::network_result::GeometrySummary2D;
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };

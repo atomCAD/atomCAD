@@ -1,5 +1,4 @@
 // Materialize: carves atoms out of a Blueprint's structure using the blueprint's geometry.
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
 };
@@ -11,6 +10,7 @@ use crate::structure_designer::evaluator::network_result::{CrystalData, NetworkR
 use crate::structure_designer::node_data::{EvalOutput, NodeData, NodeDataError};
 use crate::structure_designer::node_network::ValidationError;
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
 };

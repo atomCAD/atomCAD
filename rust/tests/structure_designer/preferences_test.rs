@@ -1,11 +1,11 @@
 //! Tests for preferences persistence (load/save to config file).
 
-use rust_lib_flutter_cad::api::common_api_types::APIIVec3;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
-    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
-    BackgroundPreferences, GeometryVisualization, GeometryVisualizationPreferences,
-    LayoutAlgorithmPreference, LayoutPreferences, MeshSmoothing, NodeDisplayPolicy,
-    NodeDisplayPreferences, SimulationPreferences, StructureDesignerPreferences,
+use atomcad_crystolecule::visualization::AtomicStructureVisualization;
+use rust_lib_flutter_cad::structure_designer::preferences::{
+    AtomicRenderingMethod, AtomicStructureVisualizationPreferences, BackgroundPreferences,
+    GeometryVisualization, GeometryVisualizationPreferences, LayoutAlgorithmPreference,
+    LayoutPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences, PrefColor,
+    SimulationPreferences, StructureDesignerPreferences,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -306,7 +306,7 @@ fn test_default_values_match_documentation() {
     // Background defaults
     assert_eq!(
         prefs.background_preferences.background_color,
-        APIIVec3 { x: 0, y: 0, z: 0 }
+        PrefColor { x: 0, y: 0, z: 0 }
     );
     assert!(prefs.background_preferences.show_grid);
     assert_eq!(prefs.background_preferences.grid_size, 200);
@@ -348,12 +348,12 @@ fn test_non_default_values_roundtrip() {
             mesh_smoothing: MeshSmoothing::Sharp,
             display_camera_target: true,
             show_geometry_shell_for_atomic: false,
-            wireframe_active_color: APIIVec3 {
+            wireframe_active_color: PrefColor {
                 x: 10,
                 y: 20,
                 z: 30,
             },
-            wireframe_inactive_color: APIIVec3 {
+            wireframe_inactive_color: PrefColor {
                 x: 40,
                 y: 50,
                 z: 60,
@@ -373,7 +373,7 @@ fn test_non_default_values_roundtrip() {
             label_scale: 1.25,
         },
         background_preferences: BackgroundPreferences {
-            background_color: APIIVec3 {
+            background_color: PrefColor {
                 x: 255,
                 y: 128,
                 z: 64,
@@ -381,39 +381,39 @@ fn test_non_default_values_roundtrip() {
             show_axes: false,
             show_grid: false,
             grid_size: 100,
-            grid_color: APIIVec3 {
+            grid_color: PrefColor {
                 x: 50,
                 y: 50,
                 z: 50,
             },
-            grid_strong_color: APIIVec3 {
+            grid_strong_color: PrefColor {
                 x: 100,
                 y: 100,
                 z: 100,
             },
             show_lattice_axes: false,
             show_lattice_grid: true,
-            lattice_grid_color: APIIVec3 {
+            lattice_grid_color: PrefColor {
                 x: 30,
                 y: 60,
                 z: 60,
             },
-            lattice_grid_strong_color: APIIVec3 {
+            lattice_grid_strong_color: PrefColor {
                 x: 80,
                 y: 120,
                 z: 120,
             },
-            drawing_plane_grid_color: APIIVec3 {
+            drawing_plane_grid_color: PrefColor {
                 x: 50,
                 y: 50,
                 z: 80,
             },
-            drawing_plane_grid_strong_color: APIIVec3 {
+            drawing_plane_grid_strong_color: PrefColor {
                 x: 90,
                 y: 90,
                 z: 130,
             },
-            unit_cell_wireframe_color: APIIVec3 {
+            unit_cell_wireframe_color: PrefColor {
                 x: 0,
                 y: 200,
                 z: 200,
@@ -469,7 +469,7 @@ fn test_non_default_values_roundtrip() {
         loaded
             .geometry_visualization_preferences
             .wireframe_active_color,
-        APIIVec3 {
+        PrefColor {
             x: 10,
             y: 20,
             z: 30,
@@ -479,7 +479,7 @@ fn test_non_default_values_roundtrip() {
         loaded
             .geometry_visualization_preferences
             .wireframe_inactive_color,
-        APIIVec3 {
+        PrefColor {
             x: 40,
             y: 50,
             z: 60,
@@ -540,7 +540,7 @@ fn test_non_default_values_roundtrip() {
 
     assert_eq!(
         loaded.background_preferences.background_color,
-        APIIVec3 {
+        PrefColor {
             x: 255,
             y: 128,
             z: 64

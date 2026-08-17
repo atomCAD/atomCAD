@@ -8039,21 +8039,28 @@ pub fn get_api_data_type_display_name(api_data_type: APIDataType) -> String {
     }
 }
 
+// The two functions below are the *only* place the preferences twin and its
+// domain original meet (D9a): `StructureDesigner` holds the domain type and
+// `preferences.json` stores it, while Dart sees the twin.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_structure_designer_preferences() -> Option<StructureDesignerPreferences> {
-    unsafe { with_cad_instance(|cad_instance| cad_instance.structure_designer.preferences.clone()) }
+    unsafe {
+        with_cad_instance(|cad_instance| (&cad_instance.structure_designer.preferences).into())
+    }
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferences) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            let domain_preferences: crate::structure_designer::preferences::StructureDesignerPreferences =
+                (&preferences).into();
             cad_instance
                 .structure_designer
-                .set_preferences(preferences.clone());
+                .set_preferences(domain_preferences.clone());
             refresh_structure_designer_auto(cad_instance);
             // Persist preferences to config file (non-blocking, logs errors)
-            crate::structure_designer::preferences::save_preferences(&preferences);
+            crate::structure_designer::preferences::save_preferences(&domain_preferences);
         });
     }
 }
@@ -9289,7 +9296,7 @@ pub fn query_hovered_atom_info(
                 let per_node_hits = cad_instance.structure_designer.raytrace_per_node(
                     &ray_origin,
                     &ray_direction,
-                    &visualization.into(),
+                    visualization,
                 );
                 let overlapping_node_names: Vec<String> = per_node_hits
                     .iter()
@@ -9380,7 +9387,7 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                 let mut hits = cad_instance.structure_designer.raytrace_per_node(
                     &ray_origin,
                     &ray_direction,
-                    &visualization.into(),
+                    visualization,
                 );
 
                 // Click-to-activate is a **top-level-node** surface: its result

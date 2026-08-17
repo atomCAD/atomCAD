@@ -39,7 +39,6 @@
 //! + Add Input + delete; the Output Type row swaps to the shared
 //! `DerivedOutputTypeDisplay` when `f` is wired.
 
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::{DataType, FunctionType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::network_evaluator::{
@@ -50,6 +49,7 @@ use crate::structure_designer::evaluator::zone_closure::obtain_closure;
 use crate::structure_designer::node_data::{DragDirection, EvalOutput, NodeData};
 use crate::structure_designer::node_network::{Argument, Node, NodeNetwork, SourcePin};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{
     NodeType, OutputPinDefinition, Parameter, generic_node_data_saver,
 };

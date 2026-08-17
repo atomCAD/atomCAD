@@ -13,7 +13,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use glam::f64::DVec2;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -21,6 +20,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
 use rust_lib_flutter_cad::structure_designer::node_data::{EvalOutput, NodeData};
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::node_type::{
     NodeType, OutputPinDefinition, no_data_loader, no_data_saver,
 };

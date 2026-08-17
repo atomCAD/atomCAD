@@ -71,8 +71,7 @@ fn add_record_type_def_rejects_collision_with_node_network() {
         name: "Point".to_string(),
         description: String::new(),
         summary: None,
-        category:
-            rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
+        category: rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory::Custom,
         parameters: Vec::new(),
         output_pins: OutputPinDefinition::single(DataType::None),
         node_data_creator: || {

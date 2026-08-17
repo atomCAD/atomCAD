@@ -3,11 +3,11 @@
 //! These tests verify that layout is correctly applied after network edit
 //! operations, which is the Phase 2 integration of the layout module.
 
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::layout::{LayoutAlgorithm, layout_network};
 use rust_lib_flutter_cad::structure_designer::node_layout;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::text_format::edit_network;

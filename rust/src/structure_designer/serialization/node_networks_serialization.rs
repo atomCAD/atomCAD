@@ -136,10 +136,8 @@ fn default_category() -> String {
 }
 
 /// Converts NodeTypeCategory enum to string for serialization
-fn category_to_string(
-    category: &crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory,
-) -> String {
-    use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+fn category_to_string(category: &crate::structure_designer::node_type::NodeTypeCategory) -> String {
+    use crate::structure_designer::node_type::NodeTypeCategory;
     match category {
         NodeTypeCategory::Annotation => "Annotation".to_string(),
         NodeTypeCategory::MathAndProgramming => "MathAndProgramming".to_string(),
@@ -155,8 +153,8 @@ fn category_to_string(
 /// Defaults to Custom if the string is not recognized for backward compatibility
 fn category_from_string(
     category_str: &str,
-) -> crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory {
-    use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+) -> crate::structure_designer::node_type::NodeTypeCategory {
+    use crate::structure_designer::node_type::NodeTypeCategory;
     match category_str {
         "Annotation" => NodeTypeCategory::Annotation,
         "MathAndProgramming" => NodeTypeCategory::MathAndProgramming,

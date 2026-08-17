@@ -551,8 +551,8 @@ fn test_array_concat_clone_box() {
 
 #[test]
 fn test_array_concat_text_format_roundtrip() {
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
 

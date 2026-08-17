@@ -108,7 +108,6 @@ use crate::api::structure_designer::structure_designer_api_types::APINetworkWith
 use crate::api::structure_designer::structure_designer_api_types::APINodeCategoryView;
 use crate::api::structure_designer::structure_designer_api_types::APINodeTypeView;
 use crate::api::structure_designer::structure_designer_api_types::APIValidationError;
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::{
     DataType, FunctionType, RecordType, walk_data_type_record_names,
     walk_data_type_record_names_mut,
@@ -119,6 +118,7 @@ use crate::structure_designer::node_network::Node;
 use crate::structure_designer::node_network::NodeNetwork;
 use crate::structure_designer::node_network::SourcePin;
 use crate::structure_designer::node_network::{FunctionPinDisposition, function_pin_dispositions};
+use crate::structure_designer::node_type::NodeTypeCategory;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
@@ -981,7 +981,7 @@ impl NodeTypeRegistry {
         //    broadcast. Adapter-shapeshifted collection pins therefore do
         //    not surface when the user dragged a scalar — see
         //    `doc/design_drag_aware_add_node.md` §"Asymmetric verification".
-        let all_views: Vec<APINodeTypeView> = built_in_iter
+        let all_views: Vec<(NodeTypeCategory, APINodeTypeView)> = built_in_iter
             .chain(custom_iter)
             .filter(|(node_type, _)| {
                 if static_match(node_type, source_type, direction, self) {
@@ -996,22 +996,24 @@ impl NodeTypeRegistry {
                 let resolved = self.resolve_drag_candidate_type(node_type, adapted.as_ref());
                 static_match_strict(&resolved, source_type, direction, self)
             })
-            .map(|(node_type, category)| APINodeTypeView {
-                name: node_type.name.clone(),
-                description: node_type.description.clone(),
-                summary: node_type.summary.clone(),
-                category,
-                allowed_in_zone_body: allowed_in_zone_body(&node_type.name),
+            .map(|(node_type, category)| {
+                (
+                    category.clone(),
+                    APINodeTypeView {
+                        name: node_type.name.clone(),
+                        description: node_type.description.clone(),
+                        summary: node_type.summary.clone(),
+                        category: category.into(),
+                        allowed_in_zone_body: allowed_in_zone_body(&node_type.name),
+                    },
+                )
             })
             .collect();
 
         // Group by category
         let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
-        for view in all_views {
-            category_map
-                .entry(view.category.clone())
-                .or_default()
-                .push(view);
+        for (category, view) in all_views {
+            category_map.entry(category).or_default().push(view);
         }
 
         // Sort nodes within each category alphabetically
@@ -1036,7 +1038,7 @@ impl NodeTypeRegistry {
                 && !nodes.is_empty()
             {
                 result.push(APINodeCategoryView {
-                    category: category.clone(),
+                    category: category.clone().into(),
                     nodes: nodes.clone(),
                 });
             }
@@ -1050,39 +1052,46 @@ impl NodeTypeRegistry {
     pub fn get_node_type_views(&self) -> Vec<APINodeCategoryView> {
         use std::collections::HashMap;
 
-        // Collect all node views with their categories
-        let mut all_views: Vec<APINodeTypeView> = Vec::new();
+        // Collect all node views with their (domain) categories
+        let mut all_views: Vec<(NodeTypeCategory, APINodeTypeView)> = Vec::new();
 
         // Add built-in node types
         all_views.extend(
             self.built_in_node_types
                 .values()
                 .filter(|node| node.public)
-                .map(|node| APINodeTypeView {
-                    name: node.name.clone(),
-                    description: node.description.clone(),
-                    summary: node.summary.clone(),
-                    category: node.category.clone(),
-                    allowed_in_zone_body: allowed_in_zone_body(&node.name),
+                .map(|node| {
+                    (
+                        node.category.clone(),
+                        APINodeTypeView {
+                            name: node.name.clone(),
+                            description: node.description.clone(),
+                            summary: node.summary.clone(),
+                            category: node.category.clone().into(),
+                            allowed_in_zone_body: allowed_in_zone_body(&node.name),
+                        },
+                    )
                 }),
         );
 
         // Add custom node networks (all have Custom category)
-        all_views.extend(self.node_networks.values().map(|network| APINodeTypeView {
-            name: network.node_type.name.clone(),
-            description: network.node_type.description.clone(),
-            summary: network.node_type.summary.clone(),
-            category: NodeTypeCategory::Custom,
-            allowed_in_zone_body: allowed_in_zone_body(&network.node_type.name),
+        all_views.extend(self.node_networks.values().map(|network| {
+            (
+                NodeTypeCategory::Custom,
+                APINodeTypeView {
+                    name: network.node_type.name.clone(),
+                    description: network.node_type.description.clone(),
+                    summary: network.node_type.summary.clone(),
+                    category: NodeTypeCategory::Custom.into(),
+                    allowed_in_zone_body: allowed_in_zone_body(&network.node_type.name),
+                },
+            )
         }));
 
         // Group by category
         let mut category_map: HashMap<NodeTypeCategory, Vec<APINodeTypeView>> = HashMap::new();
-        for view in all_views {
-            category_map
-                .entry(view.category.clone())
-                .or_default()
-                .push(view);
+        for (category, view) in all_views {
+            category_map.entry(category).or_default().push(view);
         }
 
         // Sort nodes within each category alphabetically by name
@@ -1107,7 +1116,7 @@ impl NodeTypeRegistry {
                 && !nodes.is_empty()
             {
                 result.push(APINodeCategoryView {
-                    category: category.clone(),
+                    category: category.clone().into(),
                     nodes: nodes.clone(),
                 });
             }

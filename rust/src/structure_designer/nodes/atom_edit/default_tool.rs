@@ -7,13 +7,11 @@ use crate::api::structure_designer::structure_designer_api_types::{
     DragFrozenStatus, PointerDownResult, PointerDownResultKind, PointerMoveResult,
     PointerMoveResultKind, PointerUpResult,
 };
-use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::HitTestResult;
 use atomcad_crystolecule::atomic_structure::SelectModifier;
 use atomcad_crystolecule::atomic_structure_diff::AtomSource;
 use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use atomcad_display::preferences as display_prefs;
 use glam::f64::{DMat4, DVec2, DVec3};
 
 // =============================================================================
@@ -163,18 +161,11 @@ pub fn default_tool_pointer_down(
 
         let is_diff = structure_designer.is_selected_node_in_diff_view();
 
-        let visualization = &structure_designer
+        let display_visualization = structure_designer
             .preferences
             .atomic_structure_visualization_preferences
-            .visualization;
-        let display_visualization = match visualization {
-            AtomicStructureVisualization::BallAndStick => {
-                display_prefs::AtomicStructureVisualization::BallAndStick
-            }
-            AtomicStructureVisualization::SpaceFilling => {
-                display_prefs::AtomicStructureVisualization::SpaceFilling
-            }
-        };
+            .visualization
+            .clone();
 
         let hit = result_structure.hit_test(
             ray_origin,

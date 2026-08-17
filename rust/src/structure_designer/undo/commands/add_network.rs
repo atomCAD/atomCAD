@@ -44,10 +44,11 @@ impl UndoCommand for AddNetworkCommand {
             name: self.network_name.clone(),
             description: "".to_string(),
             summary: None,
-            category:
-                crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
+            category: crate::structure_designer::node_type::NodeTypeCategory::Custom,
             parameters: Vec::new(),
-            output_pins: crate::structure_designer::node_type::OutputPinDefinition::single(crate::structure_designer::data_type::DataType::None),
+            output_pins: crate::structure_designer::node_type::OutputPinDefinition::single(
+                crate::structure_designer::data_type::DataType::None,
+            ),
             node_data_creator: || Box::new(CustomNodeData::default()),
             node_data_saver: generic_node_data_saver::<CustomNodeData>,
             node_data_loader: generic_node_data_loader::<CustomNodeData>,

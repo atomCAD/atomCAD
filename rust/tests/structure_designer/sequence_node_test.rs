@@ -360,8 +360,8 @@ fn test_sequence_data_json_format() {
 
 #[test]
 fn test_sequence_text_format_roundtrip() {
-    use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
     use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
     use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
     use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};

@@ -10,9 +10,6 @@
 //! straight onto the consumer's `f` argument.
 
 use glam::f64::DVec2;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
-    GeometryVisualization, GeometryVisualizationPreferences,
-};
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -31,6 +28,9 @@ use rust_lib_flutter_cad::structure_designer::nodes::fold::FoldData;
 use rust_lib_flutter_cad::structure_designer::nodes::int::IntData;
 use rust_lib_flutter_cad::structure_designer::nodes::map::MapData;
 use rust_lib_flutter_cad::structure_designer::nodes::parameter::ParameterData;
+use rust_lib_flutter_cad::structure_designer::preferences::{
+    GeometryVisualization, GeometryVisualizationPreferences,
+};
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::NodeOutput;
 
@@ -1292,9 +1292,6 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api::build
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
     APIFunctionPinDisposition, APIFunctionPinRole,
 };
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
-    NodeDisplayPolicy, NodeDisplayPreferences, StructureDesignerPreferences,
-};
 use rust_lib_flutter_cad::structure_designer::node_network::{
     FunctionPinDisposition, FunctionPinRole, function_pin_dispositions,
 };
@@ -1302,6 +1299,9 @@ use rust_lib_flutter_cad::structure_designer::nodes::array_concat::ArrayConcatDa
 use rust_lib_flutter_cad::structure_designer::nodes::cuboid::CuboidData;
 use rust_lib_flutter_cad::structure_designer::nodes::structure_move::{
     StructureMoveData, StructureMoveEvalCache,
+};
+use rust_lib_flutter_cad::structure_designer::preferences::{
+    NodeDisplayPolicy, NodeDisplayPreferences, StructureDesignerPreferences,
 };
 
 use crate::structure_equivalence::assert_structures_equivalent;

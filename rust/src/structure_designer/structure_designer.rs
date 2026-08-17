@@ -21,15 +21,6 @@ use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
 use crate::api::structure_designer::structure_designer_api_types::APIExecuteResult;
 use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
-use crate::api::structure_designer::structure_designer_preferences::{
-    AtomicStructureVisualization, StructureDesignerPreferences,
-};
-use atomcad_crystolecule::atomic_structure::AtomicStructure;
-// The `raytrace*` entry points take the *domain* visualization mode (D6): they
-// only ever forward it to `AtomicStructure::hit_test`, so making the api layer
-// convert at its own boundary keeps one more `structure_designer -> api`
-// reference out of the tree. Path-qualified because the api twin in
-// `structure_designer_preferences` keeps the same identifier (D9a).
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::displayed_node_refs::collect_displayed_node_refs;
 use crate::structure_designer::implicit_eval::ray_tracing::{
@@ -41,8 +32,10 @@ use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::node_dependency_analysis::compute_downstream_dependents;
 use crate::structure_designer::node_type::{generic_node_data_loader, generic_node_data_saver};
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
+use crate::structure_designer::preferences::StructureDesignerPreferences;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure_utils::calc_selection_transform;
 use atomcad_crystolecule::io::atom_export::AtomExportFormat;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -1874,22 +1867,21 @@ impl StructureDesigner {
     }
 
     pub fn add_node_network(&mut self, node_network_name: &str) {
-        self.node_type_registry.add_node_network(NodeNetwork::new(
-      NodeType {
-        name: node_network_name.to_string(),
-        description: "".to_string(),
-        summary: None,
-        category: crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory::Custom,
-        parameters: Vec::new(),
-        output_pins: OutputPinDefinition::single(DataType::None),
-        node_data_creator: || Box::new(CustomNodeData::default()),
-        node_data_saver: generic_node_data_saver::<CustomNodeData>,
-        node_data_loader: generic_node_data_loader::<CustomNodeData>,
-        zone_input_pins: vec![],
-        zone_output_pins: vec![],
-        public: true,
-      }
-    ));
+        self.node_type_registry
+            .add_node_network(NodeNetwork::new(NodeType {
+                name: node_network_name.to_string(),
+                description: "".to_string(),
+                summary: None,
+                category: crate::structure_designer::node_type::NodeTypeCategory::Custom,
+                parameters: Vec::new(),
+                output_pins: OutputPinDefinition::single(DataType::None),
+                node_data_creator: || Box::new(CustomNodeData::default()),
+                node_data_saver: generic_node_data_saver::<CustomNodeData>,
+                node_data_loader: generic_node_data_loader::<CustomNodeData>,
+                zone_input_pins: vec![],
+                zone_output_pins: vec![],
+                public: true,
+            }));
     }
 
     pub fn rename_node_network(&mut self, old_name: &str, new_name: &str) -> bool {
@@ -6968,20 +6960,12 @@ impl StructureDesigner {
     ) -> Option<(u32, &AtomicStructure)> {
         use crate::structure_designer::structure_designer_scene::NodeOutput;
         use atomcad_crystolecule::atomic_structure::HitTestResult;
-        use atomcad_display::preferences as display_prefs;
 
-        let visualization = &self
+        let display_visualization = self
             .preferences
             .atomic_structure_visualization_preferences
-            .visualization;
-        let display_visualization = match visualization {
-            AtomicStructureVisualization::BallAndStick => {
-                display_prefs::AtomicStructureVisualization::BallAndStick
-            }
-            AtomicStructureVisualization::SpaceFilling => {
-                display_prefs::AtomicStructureVisualization::SpaceFilling
-            }
-        };
+            .visualization
+            .clone();
 
         let mut closest: Option<(u32, &AtomicStructure, f64)> = None;
 
@@ -7025,20 +7009,12 @@ impl StructureDesigner {
     ) -> Option<(u32, &AtomicStructure, NodeRef, f64)> {
         use crate::structure_designer::structure_designer_scene::NodeOutput;
         use atomcad_crystolecule::atomic_structure::HitTestResult;
-        use atomcad_display::preferences as display_prefs;
 
-        let visualization = &self
+        let display_visualization = self
             .preferences
             .atomic_structure_visualization_preferences
-            .visualization;
-        let display_visualization = match visualization {
-            AtomicStructureVisualization::BallAndStick => {
-                display_prefs::AtomicStructureVisualization::BallAndStick
-            }
-            AtomicStructureVisualization::SpaceFilling => {
-                display_prefs::AtomicStructureVisualization::SpaceFilling
-            }
-        };
+            .visualization
+            .clone();
 
         let mut closest: Option<(u32, &AtomicStructure, NodeRef, f64)> = None;
 

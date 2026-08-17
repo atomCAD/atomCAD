@@ -1,20 +1,33 @@
-//! User preferences for the structure designer.
+//! Dart-facing twins of the structure designer's user preferences.
 //!
-//! # Versioning Strategy (Tolerant Reader Pattern)
+//! **The authoritative definitions live in
+//! [`crate::structure_designer::preferences`]**, which is also what
+//! `StructureDesigner` holds and what is persisted to
+//! `<config_dir>/atomCAD/preferences.json`. These are transport copies: D9.2 of
+//! `doc/design_rust_crate_split.md` moved the settings down into the domain (they
+//! are persisted domain state, not DTOs) and D9a keeps a same-named twin here so
+//! the generated Dart symbols and file path do not move. Each twin converts with
+//! the `From` impls at the bottom of this file, and conversion happens **only** at
+//! the api boundary — `get_structure_designer_preferences` /
+//! `set_structure_designer_preferences`.
 //!
-//! These preferences are persisted to `<config_dir>/atomCAD/preferences.json`.
-//! We use a tolerant reader pattern for forward/backward compatibility:
+//! Two rules when editing this file:
 //!
-//! - All struct fields have `#[serde(default)]` so missing fields get defaults
-//! - Extra fields in JSON are silently ignored (forward compatibility)
-//! - Use `#[serde(alias = "old_name")]` when renaming fields (backward compatibility)
+//! - **Never rename a twin to `API…`.** These identifiers *are* the generated
+//!   Dart symbols; renaming one breaks every Flutter reference.
+//! - **A field added on one side must be added on the other**, together with its
+//!   line in the `From` impls — the compiler enforces that for struct twins
+//!   (exhaustive struct literals) and for enum twins (exhaustive `match`), which
+//!   is why the impls are written out longhand rather than with a wildcard arm.
 //!
-//! This approach avoids explicit version numbers while maintaining compatibility.
+//! `AtomicStructureVisualization` is the odd one out: its authoritative
+//! definition is one level further down, in `atomcad_crystolecule`, because
+//! `AtomicStructure::hit_test` needs it (D6, Phase 4).
 
 use crate::api::common_api_types::APIIVec3;
-use crate::structure_designer::layout::LayoutAlgorithm;
-// Path-qualified rather than imported bare: the api-side twin deliberately keeps
-// the same identifier (D9a).
+// Path-qualified rather than imported bare: every api-side twin below
+// deliberately keeps the same identifier as the domain type it mirrors (D9a).
+use crate::structure_designer::preferences as domain;
 use atomcad_crystolecule::visualization::AtomicStructureVisualization as DomainAtomicStructureVisualization;
 use flutter_rust_bridge::frb;
 use serde::{Deserialize, Serialize};
@@ -150,8 +163,10 @@ pub struct NodeDisplayPreferences {
 /// it is what the generated Dart declares (D9a) — and it stays in *this* file so
 /// the generated Dart path does not move either.
 ///
-/// D6 splits the preferences module deliberately: only this one enum leaves in
-/// Phase 4; the other 12 `pub` types here follow in Phase 6 (D9.2).
+/// It is the only twin here whose original is *not* in
+/// `structure_designer::preferences`: D6 sent this one enum down to
+/// `atomcad-crystolecule` in Phase 4, one level below the other 12, which
+/// followed in Phase 6 (D9.2).
 #[frb]
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
 pub enum AtomicStructureVisualization {
@@ -419,15 +434,6 @@ pub enum LayoutAlgorithmPreference {
     Sugiyama,
 }
 
-impl From<LayoutAlgorithmPreference> for LayoutAlgorithm {
-    fn from(pref: LayoutAlgorithmPreference) -> Self {
-        match pref {
-            LayoutAlgorithmPreference::TopologicalGrid => LayoutAlgorithm::TopologicalGrid,
-            LayoutAlgorithmPreference::Sugiyama => LayoutAlgorithm::Sugiyama,
-        }
-    }
-}
-
 /// Preferences for energy minimization simulation.
 #[frb]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -543,5 +549,341 @@ impl StructureDesignerPreferences {
     #[flutter_rust_bridge::frb(sync)]
     pub fn clone_self(&self) -> StructureDesignerPreferences {
         self.clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Twin conversions (D9a)
+//
+// One `From<&Twin> for Domain` and one `From<&Domain> for Twin` per type, plus
+// owned wrappers on the top-level `StructureDesignerPreferences` (the only pair
+// the api actually calls). Declared here rather than in the domain module
+// because the orphan rule needs the *local* type on one side, and the twins are
+// the local ones.
+// ---------------------------------------------------------------------------
+
+impl From<&APIIVec3> for domain::PrefColor {
+    fn from(v: &APIIVec3) -> Self {
+        domain::PrefColor {
+            x: v.x,
+            y: v.y,
+            z: v.z,
+        }
+    }
+}
+
+impl From<&domain::PrefColor> for APIIVec3 {
+    fn from(v: &domain::PrefColor) -> Self {
+        APIIVec3 {
+            x: v.x,
+            y: v.y,
+            z: v.z,
+        }
+    }
+}
+
+impl From<&GeometryVisualization> for domain::GeometryVisualization {
+    fn from(v: &GeometryVisualization) -> Self {
+        match v {
+            GeometryVisualization::SurfaceSplatting => {
+                domain::GeometryVisualization::SurfaceSplatting
+            }
+            GeometryVisualization::ExplicitMesh => domain::GeometryVisualization::ExplicitMesh,
+        }
+    }
+}
+
+impl From<&domain::GeometryVisualization> for GeometryVisualization {
+    fn from(v: &domain::GeometryVisualization) -> Self {
+        match v {
+            domain::GeometryVisualization::SurfaceSplatting => {
+                GeometryVisualization::SurfaceSplatting
+            }
+            domain::GeometryVisualization::ExplicitMesh => GeometryVisualization::ExplicitMesh,
+        }
+    }
+}
+
+impl From<&MeshSmoothing> for domain::MeshSmoothing {
+    fn from(v: &MeshSmoothing) -> Self {
+        match v {
+            MeshSmoothing::Smooth => domain::MeshSmoothing::Smooth,
+            MeshSmoothing::Sharp => domain::MeshSmoothing::Sharp,
+            MeshSmoothing::SmoothingGroupBased => domain::MeshSmoothing::SmoothingGroupBased,
+        }
+    }
+}
+
+impl From<&domain::MeshSmoothing> for MeshSmoothing {
+    fn from(v: &domain::MeshSmoothing) -> Self {
+        match v {
+            domain::MeshSmoothing::Smooth => MeshSmoothing::Smooth,
+            domain::MeshSmoothing::Sharp => MeshSmoothing::Sharp,
+            domain::MeshSmoothing::SmoothingGroupBased => MeshSmoothing::SmoothingGroupBased,
+        }
+    }
+}
+
+impl From<&GeometryVisualizationPreferences> for domain::GeometryVisualizationPreferences {
+    fn from(p: &GeometryVisualizationPreferences) -> Self {
+        domain::GeometryVisualizationPreferences {
+            geometry_visualization: (&p.geometry_visualization).into(),
+            wireframe_geometry: p.wireframe_geometry,
+            samples_per_unit_cell: p.samples_per_unit_cell,
+            sharpness_angle_threshold_degree: p.sharpness_angle_threshold_degree,
+            mesh_smoothing: (&p.mesh_smoothing).into(),
+            display_camera_target: p.display_camera_target,
+            show_geometry_shell_for_atomic: p.show_geometry_shell_for_atomic,
+            wireframe_active_color: (&p.wireframe_active_color).into(),
+            wireframe_inactive_color: (&p.wireframe_inactive_color).into(),
+            hide_coplanar_wireframe_edges: p.hide_coplanar_wireframe_edges,
+        }
+    }
+}
+
+impl From<&domain::GeometryVisualizationPreferences> for GeometryVisualizationPreferences {
+    fn from(p: &domain::GeometryVisualizationPreferences) -> Self {
+        GeometryVisualizationPreferences {
+            geometry_visualization: (&p.geometry_visualization).into(),
+            wireframe_geometry: p.wireframe_geometry,
+            samples_per_unit_cell: p.samples_per_unit_cell,
+            sharpness_angle_threshold_degree: p.sharpness_angle_threshold_degree,
+            mesh_smoothing: (&p.mesh_smoothing).into(),
+            display_camera_target: p.display_camera_target,
+            show_geometry_shell_for_atomic: p.show_geometry_shell_for_atomic,
+            wireframe_active_color: (&p.wireframe_active_color).into(),
+            wireframe_inactive_color: (&p.wireframe_inactive_color).into(),
+            hide_coplanar_wireframe_edges: p.hide_coplanar_wireframe_edges,
+        }
+    }
+}
+
+impl From<&NodeDisplayPolicy> for domain::NodeDisplayPolicy {
+    fn from(v: &NodeDisplayPolicy) -> Self {
+        match v {
+            NodeDisplayPolicy::Manual => domain::NodeDisplayPolicy::Manual,
+            NodeDisplayPolicy::PreferSelected => domain::NodeDisplayPolicy::PreferSelected,
+            NodeDisplayPolicy::PreferFrontier => domain::NodeDisplayPolicy::PreferFrontier,
+        }
+    }
+}
+
+impl From<&domain::NodeDisplayPolicy> for NodeDisplayPolicy {
+    fn from(v: &domain::NodeDisplayPolicy) -> Self {
+        match v {
+            domain::NodeDisplayPolicy::Manual => NodeDisplayPolicy::Manual,
+            domain::NodeDisplayPolicy::PreferSelected => NodeDisplayPolicy::PreferSelected,
+            domain::NodeDisplayPolicy::PreferFrontier => NodeDisplayPolicy::PreferFrontier,
+        }
+    }
+}
+
+impl From<&NodeDisplayPreferences> for domain::NodeDisplayPreferences {
+    fn from(p: &NodeDisplayPreferences) -> Self {
+        domain::NodeDisplayPreferences {
+            display_policy: (&p.display_policy).into(),
+        }
+    }
+}
+
+impl From<&domain::NodeDisplayPreferences> for NodeDisplayPreferences {
+    fn from(p: &domain::NodeDisplayPreferences) -> Self {
+        NodeDisplayPreferences {
+            display_policy: (&p.display_policy).into(),
+        }
+    }
+}
+
+impl From<&AtomicRenderingMethod> for domain::AtomicRenderingMethod {
+    fn from(v: &AtomicRenderingMethod) -> Self {
+        match v {
+            AtomicRenderingMethod::TriangleMesh => domain::AtomicRenderingMethod::TriangleMesh,
+            AtomicRenderingMethod::Impostors => domain::AtomicRenderingMethod::Impostors,
+        }
+    }
+}
+
+impl From<&domain::AtomicRenderingMethod> for AtomicRenderingMethod {
+    fn from(v: &domain::AtomicRenderingMethod) -> Self {
+        match v {
+            domain::AtomicRenderingMethod::TriangleMesh => AtomicRenderingMethod::TriangleMesh,
+            domain::AtomicRenderingMethod::Impostors => AtomicRenderingMethod::Impostors,
+        }
+    }
+}
+
+impl From<&AtomicStructureVisualizationPreferences>
+    for domain::AtomicStructureVisualizationPreferences
+{
+    fn from(p: &AtomicStructureVisualizationPreferences) -> Self {
+        domain::AtomicStructureVisualizationPreferences {
+            visualization: (&p.visualization).into(),
+            rendering_method: (&p.rendering_method).into(),
+            ball_and_stick_cull_depth: p.ball_and_stick_cull_depth,
+            space_filling_cull_depth: p.space_filling_cull_depth,
+            scene_transparency_enabled: p.scene_transparency_enabled,
+            scene_alpha: p.scene_alpha,
+            label_scale: p.label_scale,
+        }
+    }
+}
+
+impl From<&domain::AtomicStructureVisualizationPreferences>
+    for AtomicStructureVisualizationPreferences
+{
+    fn from(p: &domain::AtomicStructureVisualizationPreferences) -> Self {
+        AtomicStructureVisualizationPreferences {
+            visualization: (&p.visualization).into(),
+            rendering_method: (&p.rendering_method).into(),
+            ball_and_stick_cull_depth: p.ball_and_stick_cull_depth,
+            space_filling_cull_depth: p.space_filling_cull_depth,
+            scene_transparency_enabled: p.scene_transparency_enabled,
+            scene_alpha: p.scene_alpha,
+            label_scale: p.label_scale,
+        }
+    }
+}
+
+impl From<&BackgroundPreferences> for domain::BackgroundPreferences {
+    fn from(p: &BackgroundPreferences) -> Self {
+        domain::BackgroundPreferences {
+            background_color: (&p.background_color).into(),
+            show_axes: p.show_axes,
+            show_grid: p.show_grid,
+            grid_size: p.grid_size,
+            grid_color: (&p.grid_color).into(),
+            grid_strong_color: (&p.grid_strong_color).into(),
+            show_lattice_axes: p.show_lattice_axes,
+            show_lattice_grid: p.show_lattice_grid,
+            lattice_grid_color: (&p.lattice_grid_color).into(),
+            lattice_grid_strong_color: (&p.lattice_grid_strong_color).into(),
+            drawing_plane_grid_color: (&p.drawing_plane_grid_color).into(),
+            drawing_plane_grid_strong_color: (&p.drawing_plane_grid_strong_color).into(),
+            unit_cell_wireframe_color: (&p.unit_cell_wireframe_color).into(),
+        }
+    }
+}
+
+impl From<&domain::BackgroundPreferences> for BackgroundPreferences {
+    fn from(p: &domain::BackgroundPreferences) -> Self {
+        BackgroundPreferences {
+            background_color: (&p.background_color).into(),
+            show_axes: p.show_axes,
+            show_grid: p.show_grid,
+            grid_size: p.grid_size,
+            grid_color: (&p.grid_color).into(),
+            grid_strong_color: (&p.grid_strong_color).into(),
+            show_lattice_axes: p.show_lattice_axes,
+            show_lattice_grid: p.show_lattice_grid,
+            lattice_grid_color: (&p.lattice_grid_color).into(),
+            lattice_grid_strong_color: (&p.lattice_grid_strong_color).into(),
+            drawing_plane_grid_color: (&p.drawing_plane_grid_color).into(),
+            drawing_plane_grid_strong_color: (&p.drawing_plane_grid_strong_color).into(),
+            unit_cell_wireframe_color: (&p.unit_cell_wireframe_color).into(),
+        }
+    }
+}
+
+impl From<&LayoutAlgorithmPreference> for domain::LayoutAlgorithmPreference {
+    fn from(v: &LayoutAlgorithmPreference) -> Self {
+        match v {
+            LayoutAlgorithmPreference::TopologicalGrid => {
+                domain::LayoutAlgorithmPreference::TopologicalGrid
+            }
+            LayoutAlgorithmPreference::Sugiyama => domain::LayoutAlgorithmPreference::Sugiyama,
+        }
+    }
+}
+
+impl From<&domain::LayoutAlgorithmPreference> for LayoutAlgorithmPreference {
+    fn from(v: &domain::LayoutAlgorithmPreference) -> Self {
+        match v {
+            domain::LayoutAlgorithmPreference::TopologicalGrid => {
+                LayoutAlgorithmPreference::TopologicalGrid
+            }
+            domain::LayoutAlgorithmPreference::Sugiyama => LayoutAlgorithmPreference::Sugiyama,
+        }
+    }
+}
+
+impl From<&SimulationPreferences> for domain::SimulationPreferences {
+    fn from(p: &SimulationPreferences) -> Self {
+        domain::SimulationPreferences {
+            use_vdw_cutoff: p.use_vdw_cutoff,
+            continuous_minimization_steps_per_frame: p.continuous_minimization_steps_per_frame,
+            continuous_minimization_settle_steps: p.continuous_minimization_settle_steps,
+            continuous_minimization_max_displacement: p.continuous_minimization_max_displacement,
+        }
+    }
+}
+
+impl From<&domain::SimulationPreferences> for SimulationPreferences {
+    fn from(p: &domain::SimulationPreferences) -> Self {
+        SimulationPreferences {
+            use_vdw_cutoff: p.use_vdw_cutoff,
+            continuous_minimization_steps_per_frame: p.continuous_minimization_steps_per_frame,
+            continuous_minimization_settle_steps: p.continuous_minimization_settle_steps,
+            continuous_minimization_max_displacement: p.continuous_minimization_max_displacement,
+        }
+    }
+}
+
+impl From<&LayoutPreferences> for domain::LayoutPreferences {
+    fn from(p: &LayoutPreferences) -> Self {
+        domain::LayoutPreferences {
+            layout_algorithm: (&p.layout_algorithm).into(),
+            auto_layout_after_edit: p.auto_layout_after_edit,
+        }
+    }
+}
+
+impl From<&domain::LayoutPreferences> for LayoutPreferences {
+    fn from(p: &domain::LayoutPreferences) -> Self {
+        LayoutPreferences {
+            layout_algorithm: (&p.layout_algorithm).into(),
+            auto_layout_after_edit: p.auto_layout_after_edit,
+        }
+    }
+}
+
+impl From<&StructureDesignerPreferences> for domain::StructureDesignerPreferences {
+    fn from(p: &StructureDesignerPreferences) -> Self {
+        domain::StructureDesignerPreferences {
+            geometry_visualization_preferences: (&p.geometry_visualization_preferences).into(),
+            node_display_preferences: (&p.node_display_preferences).into(),
+            atomic_structure_visualization_preferences: (&p
+                .atomic_structure_visualization_preferences)
+                .into(),
+            background_preferences: (&p.background_preferences).into(),
+            layout_preferences: (&p.layout_preferences).into(),
+            simulation_preferences: (&p.simulation_preferences).into(),
+        }
+    }
+}
+
+impl From<StructureDesignerPreferences> for domain::StructureDesignerPreferences {
+    fn from(p: StructureDesignerPreferences) -> Self {
+        (&p).into()
+    }
+}
+
+impl From<&domain::StructureDesignerPreferences> for StructureDesignerPreferences {
+    fn from(p: &domain::StructureDesignerPreferences) -> Self {
+        StructureDesignerPreferences {
+            geometry_visualization_preferences: (&p.geometry_visualization_preferences).into(),
+            node_display_preferences: (&p.node_display_preferences).into(),
+            atomic_structure_visualization_preferences: (&p
+                .atomic_structure_visualization_preferences)
+                .into(),
+            background_preferences: (&p.background_preferences).into(),
+            layout_preferences: (&p.layout_preferences).into(),
+            simulation_preferences: (&p.simulation_preferences).into(),
+        }
+    }
+}
+
+impl From<domain::StructureDesignerPreferences> for StructureDesignerPreferences {
+    fn from(p: domain::StructureDesignerPreferences) -> Self {
+        (&p).into()
     }
 }

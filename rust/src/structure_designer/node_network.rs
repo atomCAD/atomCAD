@@ -1245,9 +1245,9 @@ impl NodeNetwork {
     /// Creates an empty NodeNetwork with a placeholder node type.
     /// Used for clipboard and other transient networks.
     pub fn new_empty() -> Self {
-        use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
         use crate::structure_designer::data_type::DataType;
         use crate::structure_designer::node_data::NoData;
+        use crate::structure_designer::node_type::NodeTypeCategory;
         use crate::structure_designer::node_type::{NodeType, no_data_loader, no_data_saver};
 
         let placeholder_type = NodeType {

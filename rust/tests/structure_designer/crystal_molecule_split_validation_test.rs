@@ -1,4 +1,4 @@
-﻿//! Tests for step 6.4 of the Crystal / Molecule split: wire validation,
+//! Tests for step 6.4 of the Crystal / Molecule split: wire validation,
 //! polymorphic-output resolution, and output-type propagation into custom
 //! network types.
 //!
@@ -23,7 +23,8 @@ fn toy_node_type(
         name: name.to_string(),
         description: String::new(),
         summary: None,
-        category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
+        category:
+            rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory::OtherBuiltin,
         parameters,
         output_pins,
         zone_input_pins: vec![],
@@ -109,7 +110,8 @@ fn empty_network(name: &str) -> NodeNetwork {
         name: name.to_string(),
         description: String::new(),
         summary: None,
-        category: rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory::OtherBuiltin,
+        category:
+            rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory::OtherBuiltin,
         parameters: vec![],
         output_pins: OutputPinDefinition::single(DataType::None),
         zone_input_pins: vec![],

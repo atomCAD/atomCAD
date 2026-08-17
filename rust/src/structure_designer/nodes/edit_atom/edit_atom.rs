@@ -1,7 +1,4 @@
-use crate::api::structure_designer::structure_designer_api_types::{
-    APIEditAtomTool, NodeTypeCategory,
-};
-use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
+use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -9,6 +6,7 @@ use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement
 use crate::structure_designer::evaluator::network_result::NetworkResult;
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::edit_atom::commands::add_atom_command::AddAtomCommand;
@@ -27,7 +25,6 @@ use atomcad_crystolecule::atomic_structure::HitTestResult;
 use atomcad_crystolecule::atomic_structure::SelectModifier;
 use atomcad_crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use atomcad_display::preferences as display_prefs;
 use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 use std::io;
@@ -249,18 +246,11 @@ pub fn select_atom_or_bond_by_ray(
     let atomic_structure = atomic_structure.unwrap();
 
     // Use the unified hit_test function instead of separate atom and bond tests
-    let visualization = &structure_designer
+    let display_visualization = structure_designer
         .preferences
         .atomic_structure_visualization_preferences
-        .visualization;
-    let display_visualization = match visualization {
-        AtomicStructureVisualization::BallAndStick => {
-            display_prefs::AtomicStructureVisualization::BallAndStick
-        }
-        AtomicStructureVisualization::SpaceFilling => {
-            display_prefs::AtomicStructureVisualization::SpaceFilling
-        }
-    };
+        .visualization
+        .clone();
     match atomic_structure.hit_test(
         ray_start,
         ray_dir,
@@ -351,18 +341,11 @@ pub fn draw_bond_by_ray(
     };
 
     // Find the atom along the ray, ignoring bond hits
-    let visualization = &structure_designer
+    let display_visualization = structure_designer
         .preferences
         .atomic_structure_visualization_preferences
-        .visualization;
-    let display_visualization = match visualization {
-        AtomicStructureVisualization::BallAndStick => {
-            display_prefs::AtomicStructureVisualization::BallAndStick
-        }
-        AtomicStructureVisualization::SpaceFilling => {
-            display_prefs::AtomicStructureVisualization::SpaceFilling
-        }
-    };
+        .visualization
+        .clone();
     let atom_id = match atomic_structure.hit_test(
         ray_start,
         ray_dir,

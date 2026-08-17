@@ -1,7 +1,12 @@
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
+// This file needs both sides of the D9a twin: the domain enum to build a
+// `NodeType`, and the api enum because the view-builders it exercises return
+// `APINodeCategoryView`. That is also why it stays in the root-package harness
+// (D5.1a) rather than travelling with `atomcad-structure-designer`.
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory as ApiNodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_data::NoData;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
+use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
 use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
 use rust_lib_flutter_cad::structure_designer::node_type::{no_data_loader, no_data_saver};
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -369,28 +374,28 @@ fn test_get_node_type_views_returns_categories_in_order() {
     assert!(categories.len() >= 5, "Should have at least 5 categories");
 
     // First category should be Annotation
-    assert_eq!(categories[0].category, NodeTypeCategory::Annotation);
+    assert_eq!(categories[0].category, ApiNodeTypeCategory::Annotation);
 
     // Categories should be in semantic order
-    let category_order: Vec<NodeTypeCategory> =
+    let category_order: Vec<ApiNodeTypeCategory> =
         categories.iter().map(|c| c.category.clone()).collect();
 
     // Check expected order (only categories that have nodes)
     let annotation_idx = category_order
         .iter()
-        .position(|c| *c == NodeTypeCategory::Annotation);
+        .position(|c| *c == ApiNodeTypeCategory::Annotation);
     let math_idx = category_order
         .iter()
-        .position(|c| *c == NodeTypeCategory::MathAndProgramming);
+        .position(|c| *c == ApiNodeTypeCategory::MathAndProgramming);
     let geo2d_idx = category_order
         .iter()
-        .position(|c| *c == NodeTypeCategory::Geometry2D);
+        .position(|c| *c == ApiNodeTypeCategory::Geometry2D);
     let geo3d_idx = category_order
         .iter()
-        .position(|c| *c == NodeTypeCategory::Geometry3D);
+        .position(|c| *c == ApiNodeTypeCategory::Geometry3D);
     let atomic_idx = category_order
         .iter()
-        .position(|c| *c == NodeTypeCategory::AtomicStructure);
+        .position(|c| *c == ApiNodeTypeCategory::AtomicStructure);
 
     assert!(
         annotation_idx < math_idx,
@@ -440,7 +445,7 @@ fn test_get_node_type_views_includes_custom_networks() {
     // Should have a Custom category
     let custom_category = categories
         .iter()
-        .find(|c| c.category == NodeTypeCategory::Custom);
+        .find(|c| c.category == ApiNodeTypeCategory::Custom);
     assert!(custom_category.is_some(), "Should have Custom category");
 
     let custom_nodes: Vec<&str> = custom_category

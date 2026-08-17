@@ -1,10 +1,10 @@
-use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::{EvalOutput, NodeData};
 use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
+use crate::structure_designer::node_type::NodeTypeCategory;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
