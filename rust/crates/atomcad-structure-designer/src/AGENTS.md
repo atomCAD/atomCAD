@@ -1,6 +1,31 @@
-# Structure Designer - Agent Instructions
+# `atomcad-structure-designer` - Agent Instructions
 
 The bulk of atomCAD's Rust backend. Contains the node network system, built-in nodes, evaluator, and application logic. If anything can be factored out into an independent lower-level module, it should be (Stable Dependencies Principle).
+
+It was `rust/src/structure_designer/` (plus `rust/src/expr/`) until Phase 6 of
+`doc/design_rust_crate_split.md` made it its own crate. Consequences for
+anything you write here:
+
+- It is imported as **`atomcad_structure_designer::…`**, never
+  `crate::structure_designer::…`, from the root crate *and* from every test
+  outside this crate. Inside the crate, use `crate::…`.
+- **`expr/` is a submodule of this crate, not a peer** (D8): the expression
+  language needs `NetworkResult` → `NodeTypeRegistry` → `node_network` → the
+  whole `nodes/` tree, so there is no thin seam to cut.
+- **Nothing here may reference `api/`.** That edge (145 sites at its peak) is
+  what Phase 6 deleted, and the compiler now enforces it — the root crate is
+  not in this crate's `Cargo.toml`. When something has to be visible to Dart:
+  keep the authoritative definition here and a same-named twin in `api/` with
+  `From` impls declared on the api side (D9a); or, if it is presentation logic
+  that merely reads domain state, put the *function* in
+  `src/api/structure_designer/view_builders.rs` (D10). See `rust/AGENTS.md`
+  for the down-vs-up test.
+- Its tests live in `crates/atomcad-structure-designer/tests/structure_designer/`
+  and `…/tests/expr/`; the eleven that name something in
+  `rust_lib_flutter_cad::api` sit in the root package's
+  `rust/tests/structure_designer_api/` instead, because a member crate cannot
+  depend on the root. **A test's home is decided by what it imports, not by
+  what it is about.**
 
 ## Subdirectory Instructions
 
@@ -248,7 +273,8 @@ Design doc: `doc/design_zero_ary_closure_body_display.md` (issue #409).
 
 ## Testing
 
-Tests go in `rust/tests/structure_designer/`. Key test files:
+Tests go in `crates/atomcad-structure-designer/tests/structure_designer/` (see
+the api-harness caveat at the top of this file). Key test files:
 - `structure_designer_test.rs` - Core operations
 - `text_format_test.rs` - Text format parsing/serialization
 - `cnnd_roundtrip_test.rs` - File format roundtrips
@@ -256,4 +282,5 @@ Tests go in `rust/tests/structure_designer/`. Key test files:
 - `undo_test.rs` - Global undo/redo tests
 - `atom_edit_undo_test.rs` - atom_edit undo/redo tests
 
-Run: `cd rust && cargo test --test structure_designer`
+Run: `cd rust && cargo test -p atomcad-structure-designer -j 4`, or
+`cargo test --test structure_designer -j 4` for just that binary.

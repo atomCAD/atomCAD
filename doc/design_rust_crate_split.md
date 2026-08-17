@@ -2110,6 +2110,206 @@ The largest phase, split into four commits:
 
 *Estimate: 4.5–5 days.*
 
+#### Phase 6 — landed 2026-08-17
+
+Four commits, as planned. The `structure_designer → api` back-edge measured
+**145 sites across 123 files** at the start and is **0** at the end; all four
+back-edges named in Current state are now closed, and every one of them is a
+build failure to reintroduce.
+
+**6.1 — D9.1 + D9.2 (types down).** `NodeTypeCategory` moved to
+`structure_designer::node_type` (109 files) and the 12 remaining preferences
+types to `structure_designer::preferences`, which now holds the settings
+themselves as well as their load/save. `StructureDesigner::preferences` and
+`preferences.json` are the domain type from here on; the api converts in exactly
+one place (`get`/`set_structure_designer_preferences`). Each type keeps a
+same-named twin in the `api/` file it already occupied, with `From` impls both
+ways — 26 impls, written longhand so the compiler catches a field added on only
+one side. Three things worth carrying forward:
+
+- **A twin's *methods* can be Dart-facing too.** `NodeTypeCategory::order` and
+  `::display_name` are exported (they appear in `frb_generated.rs`), so deleting
+  them from the api side broke the build. The twin keeps both; `order` delegates
+  to the domain, `display_name` cannot (it returns `&str` borrowed from `self`).
+- **`APIIVec3` does not move down, so the colour fields needed a domain
+  counterpart.** `glam::IVec3` is not an option: glam's `serde` feature is off,
+  and its impl serializes a vector as a *sequence*, which would silently
+  invalidate the colour fields in every user's existing `preferences.json`. The
+  new `preferences::PrefColor { x, y, z }` keeps the JSON byte-compatible; the
+  field names are `x`/`y`/`z` rather than `r`/`g`/`b` for exactly that reason.
+- **Nine api→display `match` blocks became identity and were deleted.** Once the
+  preferences hold `atomcad_crystolecule`'s `AtomicStructureVisualization` (which
+  `display::preferences` re-exports), `let display_visualization = match … {}`
+  is a clone. The same collapse hit `to_display_atomic_structure_visualization`
+  in `api_common.rs` and two `raytrace_per_node` call sites. This is the tail of
+  the Phase 4 note about three copies of that enum; there are now two (domain +
+  Dart twin).
+
+`AtomicStructureVisualization` gained `Serialize`/`Deserialize` in
+`atomcad-crystolecule`: it is a persisted preference now, not only a `hit_test`
+input, which also makes its variant names load-bearing.
+
+**6.2 — D10 + D10.1 (view-builders up).** Two new modules under
+`api/structure_designer/`, both deliberately **absent from
+`flutter_rust_bridge.yaml`'s `rust_input`** exactly like `api_common` — their
+`pub fn`s take domain types, and every `pub fn` in a scanned namespace becomes a
+Dart API, which would drag `NodeTypeRegistry` into codegen as an opaque handle:
+
+- `view_builders.rs` — the five methods D10 names plus `get_node_root_cause`,
+  which the design's table missed (it also returns `APIErrorRootCause`). They
+  take `&NodeTypeRegistry` / `&StructureDesigner`. **No accessors were needed**:
+  the design budgeted "~3 new public accessors" and the answer was zero, because
+  every field they touch is already `pub`.
+- `tool_adapters.rs` — `get`/`set_active_tool` for `AtomEditData` **and**
+  `EditAtomData` (the design named only the former).
+- `cli_runner.rs` moved whole, as D10.1 says.
+
+Three groups of types the design's tables do not list turned up, and all three
+resolve by D9a/D10.1's own rule rather than by improvisation — *the producing
+code is domain logic, so the type is twinned instead of the function moved*:
+
+- **The five `default_tool` pointer-result types travel with
+  `DragFrozenStatus`.** D10.1 mandates twinning `DragFrozenStatus` (it is
+  consumed inside `operations.rs`), and `PointerMoveResult` has a
+  `DragFrozenStatus` *field* — so twinning one forces the other. They are also
+  the return shapes of a 400-line state machine that reads and writes
+  `AtomEditData` throughout, which is the opposite of a view-builder. Domain
+  copies live in `nodes/atom_edit/types.rs`; conversion is one-way
+  (`Domain → twin`) at three `atom_edit_api` call sites.
+- **`APINodeEvaluationResult` / `APIExecuteResult` gained domain originals**
+  (`NodeEvaluationResult` / `ExecuteResult`). `evaluate_node_for_cli` and
+  `execute_node` run real evaluation passes through `with_eval_context`; moving
+  them up would have been treatment (A) applied to genuine domain behaviour, and
+  would additionally have dragged six large test files (`evaluate_node_test`,
+  `motif_edit_test`, `execute_node_test`, …) into the root harness. This is the
+  `PrintLogEntry` / `APIPrintLogEntry` precedent the codebase already had.
+- `APIEditAtomTool`, alongside `APIAtomEditTool`, in `tool_adapters.rs`.
+
+**6.3 — cut the crate.** `rust/src/structure_designer/` →
+`crates/atomcad-structure-designer/src/` (`mod.rs` → `lib.rs`) with `rust/src/expr/`
+in beside it as a submodule (D8). `rust/src/` is now `api/` + `frb_generated.rs`
+and `lib.rs` is two lines. The prefix rewrite was as mechanical as D3 predicts —
+`crate::structure_designer::` → `crate::` inside the crate, →
+`atomcad_structure_designer::` outside — and **every relative `super::` path
+survived untouched**, because extracting a module tree shifts them all by
+exactly one level in the same direction. `cargo build` failed on precisely two
+things, both listed below.
+
+Test partition per D5.1a, driven by compiling rather than grepping: **11** files
+stay at the root, not ten. `preferences_test.rs` self-resolved in 6.1 (its
+`APIIVec3` uses were incidental, as D5.1a's judgement call anticipated), while
+`scoped_validation_errors_test.rs` and `parameter_in_zone_body_test.rs` joined
+because 6.2 moved the view-builders they call — precisely the "ten is a floor"
+case the design warns about, and precisely the reason it says to cut first and
+let the compiler decide. Two files were **split** rather than moved:
+`function_pin_test.rs` (as D5.1a predicts — though the api-touching part is one
+test near the end, not the whole trailing block from `:1290`) and
+`parameter_in_zone_body_test.rs`. `tests/expr.rs` + `tests/expr/` moved with the
+crate untouched.
+
+**D5.4 turned out not to bite at all.** Every `.snap` under
+`tests/structure_designer/snapshots/` is written by `record_types_phase8_test`
+or `text_format_snapshot_test`, both of which stayed with the crate; none of the
+11 root-side files uses `insta`. No snapshot moved and none needed
+`cargo insta review`.
+
+Two problems the design did not anticipate:
+
+- **`"../samples/…"` breaks exactly the way `tests/fixtures/` did — and D5.3
+  does not cover it.** 32 sites across three files address the committed `.cnnd`
+  demos relative to `cargo test`'s working directory, i.e. the *package* root,
+  which is no longer `rust/`. `atomcad-test-support` gains `sample_path` /
+  `sample_path_str` beside `fixture_path`, so the `../` hop lives in one line.
+  The failure was loud (19 file-not-found panics), which is the property D5.3
+  claims for its own class — but note the failure surfaced only when the tests
+  *ran*, well after `cargo build` and `cargo check --all-targets` were both
+  green. **When extracting a crate, grep its tests for every relative path, not
+  just for `CARGO_MANIFEST_DIR`.**
+- **Two `#[flutter_rust_bridge::frb(ignore)]` attributes existed in
+  `structure_designer`,** on `AtomEditData` and `EditAtomData`. Current state
+  measured *zero* FRB annotations outside `api/`; they were added later. They
+  are deleted rather than carried: the crate is not scanned by codegen at all,
+  so there is nothing to opt out of (D11). This is the one place the "no
+  extracted crate has to carry codegen annotations" claim needed enforcing
+  rather than merely observing.
+
+**6.4 — cleanup.** The cross-layer test files D5 lists needed nothing: all six
+were resolved in Phases 2–5 as those phases record. The
+`#[cfg(not(frb_expand))]` guard went with the module it hid.
+
+**The `check-cfg = ['cfg(frb_expand)']` entry, however, must stay — the design
+is wrong about it.** Phase 6.4's instruction to delete it "with" the attribute
+assumes `lib.rs:8` was its only user. It was not: the
+`#[flutter_rust_bridge::frb(...)]` proc macro *expands to*
+`#[cfg(not(frb_expand))]`, once per annotated item — **489** of them across
+`src/api/`. Deleting the line turns 489 `unexpected_cfgs` warnings back on and
+removes no workaround. `rust/Cargo.toml` now carries a comment saying so.
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo test -p <crate> -j 4` for all six crates, `cargo clippy -j 4`,
+`cargo clippy --all-targets -j 4`, `cargo fmt -- --check`,
+`flutter_rust_bridge_codegen generate` + `cargo fmt` +
+`git diff --numstat lib/src/rust rust/src/frb_generated.rs`, `flutter analyze`,
+`cargo build --release`, the D13 harness (below), and cargokit
+(`flutter build windows --debug` rebuilt `rust_lib_flutter_cad.dll` and linked
+`atomCAD.exe`). No `.snap.new` files; `git status` shows `csgrs/` untouched.
+**Pending manual step for the maintainer:** launch the app (`flutter run`,
+release DLL) and the Flutter smoke test.
+
+**Test count: 5,054 — identical to Phases 0–5** (5,040 passed, 14 ignored). The
+`structure_designer` binary split across the package boundary; nothing else
+moved:
+
+| binary | Phase 5 | Phase 6 |
+|---|---|---|
+| `tests/structure_designer.rs` (root package) | 3,113 | — |
+| `atomcad-structure-designer` `tests/structure_designer.rs` | — | **2,871** |
+| `tests/structure_designer_api.rs` (root package) | — | **242** |
+| `tests/expr.rs` (root package) | 477 | — |
+| `atomcad-structure-designer` `tests/expr.rs` | — | **477** |
+| `rust_lib_flutter_cad` (lib unittests) | 4 | 0 |
+| `atomcad-structure-designer` (lib unittests) | — | **4** |
+| doc-tests `rust_lib_flutter_cad` | 15 (5 run) | 11 (1 run) |
+| doc-tests `atomcad_structure_designer` | — | **4** |
+
+**Lint baselines held exactly:** `cargo clippy -j 4` → **36** warnings
+(16 `atomcad-crystolecule` + 15 `atomcad-structure-designer` + 4
+`atomcad-display` + 1 root lib — the root's 16 moved out with the code, and one
+of `structure_designer`'s was *fixed* rather than carried, see below);
+`cargo clippy --all-targets -j 4` → **112**; `flutter analyze` → **139**.
+
+The fixed one is worth recording as a recurring class: shortening
+`crate::structure_designer::network_validator::dedupe_param_ids_in_network` to
+`crate::network_validator::…` let the call fit on one line, at which point
+clippy's `redundant_closure` fired on a closure it had been silently tolerating
+across a line break. Phase 2 saw the same shape with
+`single_component_path_imports` on the `mod.rs` → `lib.rs` promotion: **a
+purely mechanical rewrite can change what a lint sees**; treat it as part of the
+move, not as new debt.
+
+**Generated Dart: three comment-only diffs across the four commits, and nothing
+else.** `rust/src/frb_generated.rs` is **byte-identical** throughout. Under
+`lib/src/rust/` the only changes are (a) the doc comments written on the two
+`NodeTypeCategory` / `AtomicStructureVisualization` twins, which FRB propagates
+into the Dart, and (b) new `from` entries in each file's "these functions are
+ignored because they are on traits not defined in current crate" header comment
+— the direct trace of the `From` impls. No `abstract class … implements
+RustOpaqueInterface` appeared, no directory appeared or disappeared, and the
+Dart symbol set is unchanged. **The 14 twins D9a asks for came out to 26 types
+across four files, and not one generated symbol moved** — which is the whole
+point of the pattern.
+
+**D13 — no re-gate needed, and a note on why.** Phase 5 is the D13 gate (all
+five lower crates out, inlining exposure at maximum); Phase 6 adds one more
+boundary, `api → structure_designer`, which is **not on a hot path** — the
+per-atom loops live entirely inside `structure_designer` / `display` /
+`crystolecule`, whose mutual boundaries this phase did not touch. The harness
+was run anyway, same fixture and protocol as Phase 5 (1,075,748-atom nanobeam,
+5 reps, `-j 4`, minima): **evaluate 2,197.5 ms / impostors 457.2 ms** against
+Phase 5's **2,143.4 / 443.9** — +2.5 % / +3.0 %, inside the session-drift band
+both Phase 4 and Phase 5 measured and documented. `[profile.release] lto =
+"thin"` remains load-bearing for the reasons Phase 5 established.
+
 ### Phase 7 — Documentation
 
 - `doc/architecture_overview.md`: describe crates rather than modules;

@@ -45,7 +45,7 @@ undo/
    - Capture before-state
    - Perform the mutation (existing code)
    - Push the command via `self.push_command(MyCommand { ... })`
-4. Add tests in `rust/tests/structure_designer/undo_test.rs`
+4. Add tests in `crates/atomcad-structure-designer/tests/structure_designer/undo_test.rs`
 
 ## Key Patterns
 

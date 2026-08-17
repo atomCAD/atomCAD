@@ -4,13 +4,13 @@
 
 **IMPORTANT:** When working on files in these directories (or any of their subdirectories), always read the corresponding AGENTS.md file first:
 
-- Working in `rust/` or any descendant (e.g., `rust/src/`, `rust/src/structure_designer/`, etc.) → Read `rust/AGENTS.md`
+- Working in `rust/` or any descendant (e.g., `rust/src/`, `rust/crates/`, etc.) → Read `rust/AGENTS.md`
 - Working in `rust/crates/atomcad-crystolecule/` or any descendant → Also read `rust/crates/atomcad-crystolecule/src/AGENTS.md`
 - Working in `rust/crates/atomcad-crystolecule/src/simulation/` or any descendant → Also read `rust/crates/atomcad-crystolecule/src/simulation/AGENTS.md`
 - Working in `rust/crates/atomcad-crystolecule/src/simulation/uff/` → Also read `rust/crates/atomcad-crystolecule/src/simulation/uff/AGENTS.md`
 - Working in `rust/crates/atomcad-geo-tree/` or any descendant → Also read `rust/crates/atomcad-geo-tree/src/AGENTS.md`
-- Working in `rust/src/structure_designer/` or any descendant → Also read `rust/src/structure_designer/AGENTS.md`
-- Working in `rust/src/structure_designer/undo/` or any descendant → Also read `rust/src/structure_designer/undo/AGENTS.md`
+- Working in `rust/crates/atomcad-structure-designer/` or any descendant → Also read `rust/crates/atomcad-structure-designer/src/AGENTS.md`
+- Working in `rust/crates/atomcad-structure-designer/src/undo/` or any descendant → Also read `rust/crates/atomcad-structure-designer/src/undo/AGENTS.md`
 - Working in `lib/` or any descendant (e.g., `lib/common/`, `lib/structure_designer/`, etc.) → Read `lib/AGENTS.md`
 - Working in `lib/structure_designer/` or any descendant → Also read `lib/structure_designer/AGENTS.md`
 
@@ -37,15 +37,16 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 ├─────────────────────────────────────────────────────────────┤
 │              Flutter Rust Bridge (FFI Layer)                 │
 ├─────────────────────────────────────────────────────────────┤
-│                      Rust Backend                            │
-│  rust/src/                                                   │
-│  ├── api/                # Public API exposed to Flutter    │
-│  ├── structure_designer/ # Node network system, evaluator   │
-│  ├── (crystolecule → rust/crates/atomcad-crystolecule)      │
-│  ├── (geo_tree → rust/crates/atomcad-geo-tree: CSG, SDF)    │
-│  ├── (renderer → rust/crates/atomcad-renderer: wgpu)        │
-│  ├── (display → rust/crates/atomcad-display: adapter)       │
-│  └── expr/               # Expression language              │
+│           Rust Backend (a cargo workspace)                   │
+│  rust/src/api/            # Public API exposed to Flutter   │
+│  rust/crates/                                                │
+│  ├── atomcad-structure-designer/  # Node network, evaluator, │
+│  │                                # nodes, expr             │
+│  ├── atomcad-display/     # domain → renderer adapter       │
+│  ├── atomcad-crystolecule/# atoms, lattices, UFF            │
+│  ├── atomcad-geo-tree/    # CSG, SDF                        │
+│  ├── atomcad-renderer/    # wgpu                            │
+│  └── atomcad-util/        # math helpers                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -120,7 +121,7 @@ See `doc/testing.md` for test coverage details.
 ## Adding Features
 
 ### New Node Type
-1. Create `rust/src/structure_designer/nodes/my_node.rs`
+1. Create `rust/crates/atomcad-structure-designer/src/nodes/my_node.rs`
 2. Register in `nodes/mod.rs` and `node_type_registry.rs`
 
 ### New API Method
@@ -179,7 +180,8 @@ it when you:
   directory's list
 
 Update the **most specific** file that covers the change (e.g. a nodes-only
-convention belongs in `rust/src/structure_designer/nodes/AGENTS.md`, not here).
+convention belongs in `rust/crates/atomcad-structure-designer/src/nodes/AGENTS.md`,
+not here).
 Routine changes that merely follow the documented conventions — a new node that
 looks like its siblings, a bug fix, a refactor that preserves the invariants —
 need **no** `AGENTS.md` update. These files are guidance, not a changelog: keep

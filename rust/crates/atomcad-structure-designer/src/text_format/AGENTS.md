@@ -77,4 +77,4 @@ Supports type coercion (Int→Float, IVec→Vec, IMat3→Mat3) and conversion to
 
 ## Testing
 
-Tests in `rust/tests/structure_designer/text_format_test.rs`.
+Tests in `crates/atomcad-structure-designer/tests/structure_designer/text_format_test.rs`.

@@ -4,31 +4,42 @@
 
 Dependencies flow downward (no circular dependencies):
 
+Since Phase 6 of `doc/design_rust_crate_split.md` **every layer is its own
+crate**, so the DAG below is compiler-enforced rather than convention-enforced:
+adding a back-edge is now a build failure, not a review comment.
+
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  structure_designer                  │
-│  (Node network, evaluator, application logic)       │
+│  rust/src/api/  (the root crate, rust_lib_flutter_cad)
+│  Flutter Rust Bridge API layer + frb_generated.rs   │
 ├─────────────────────────────────────────────────────┤
-│        display           │          api             │
-│   (Tessellation)         │   (Flutter API layer)    │
-│   extracted:             │                          │
-│   atomcad-display        │                          │
+│  atomcad-structure-designer                          │
+│  (node network, evaluator, nodes/, undo, expr)      │
+├─────────────────────────────────────────────────────┤
+│  atomcad-display        (domain → renderer adapter) │
+├──────────────────────────┬──────────────────────────┤
+│  atomcad-crystolecule    │  atomcad-renderer        │
+│  atomcad-geo-tree        │  (wgpu)                  │
 ├──────────────────────────┴──────────────────────────┤
-│  crystolecule  │  geo_tree   │  renderer  │   expr  │
-│  (Atoms/bonds) │  (CSG/SDF)  │   (wgpu)   │  (Lang) │
-│   extracted    │  extracted  │  extracted │         │
-│   atomcad-     │ atomcad-    │ atomcad-   │         │
-│  crystolecule  │  geo-tree   │  renderer  │         │
-├─────────────────────────────────────────────────────┤
-│         util  →  crate `atomcad-util` (extracted)    │
+│  atomcad-util                                        │
 └─────────────────────────────────────────────────────┘
 ```
 
 ## Key Modules
 
-- **structure_designer/** - Node network, evaluator, serialization (.cnnd) (see `src/structure_designer/AGENTS.md`)
-- **expr/** - Expression language (lexer, parser, validation)
-- **api/** - Flutter Rust Bridge API layer
+- **`src/api/`** - Flutter Rust Bridge API layer. Together with the generated
+  `src/frb_generated.rs` this is *all* that is left in the root crate; `src/`
+  has no other subdirectory.
+- **`crates/atomcad-structure-designer/`** - was `src/structure_designer/` plus
+  `src/expr/`; the node network, evaluator, serialization (.cnnd), text format,
+  layout, undo and the built-in nodes (see
+  `crates/atomcad-structure-designer/src/AGENTS.md`). Imported as
+  `atomcad_structure_designer::…` (**not** `crate::structure_designer::…`),
+  including from tests. `expr` is a **submodule** of it, not a peer: the
+  expression language needs `NetworkResult`, which needs `NodeTypeRegistry`,
+  which needs the whole `nodes/` tree (D8). Its tests live in
+  `crates/atomcad-structure-designer/tests/{structure_designer,expr}/`; the
+  api-touching ones are at `rust/tests/structure_designer_api/` (see Testing).
 - **`crates/atomcad-util/`** - was `src/util/`; the bottom of the DAG, now its
   own crate. Imported as `atomcad_util::…` (**not** `crate::util::…`), including
   from tests, which use `atomcad_util::daabox::DAABox` rather than
@@ -85,7 +96,7 @@ Dependencies flow downward (no circular dependencies):
 
   It must not depend on `structure_designer`. Phase 5 deleted the two edges that
   did: `scene_tessellator.rs` moved **up** to
-  `src/structure_designer/scene_tessellator.rs` (it adapts the *scene graph*, a
+  `atomcad-structure-designer`'s `scene_tessellator.rs` (it adapts the *scene graph*, a
   `structure_designer` concept, not the domain), and the parameter-element
   helpers (`param_atomic_number_to_index` and family) moved **down** into
   `atomcad_crystolecule::atomic_constants`, beside the element table whose
@@ -100,8 +111,10 @@ are picked up by the `members = ["crates/*"]` glob. This is step 0 of
 crates so the dependency DAG above becomes compiler-enforced rather than
 convention-enforced. `atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2),
 `atomcad-renderer` (Phase 3), `atomcad-crystolecule` (Phase 4, together with
-the `atomcad-test-support` dev-only helper crate) and `atomcad-display`
-(Phase 5) are extracted; `structure_designer` (with `expr`) follows in Phase 6.
+the `atomcad-test-support` dev-only helper crate), `atomcad-display` (Phase 5)
+and `atomcad-structure-designer` (Phase 6, with `expr` inside it) are all
+extracted. **The root crate is now `api/` + `frb_generated.rs` and nothing
+else**, and all four back-edges the design set out to delete are gone.
 
 Rules that follow from that layout:
 
@@ -162,19 +175,33 @@ Rules that follow from that layout:
   `git diff --numstat lib/src/rust rust/src/frb_generated.rs` — `git status`
   always shows all six generated files as modified because codegen writes LF
   where the index holds CRLF.
-- **Fixtures: use the resolver.** `rust/tests/fixtures/` is read from three
-  packages and stays where it is. Address it only through
-  `atomcad_test_support::fixture_path` / `fixture_path_str` / `fixtures_root`.
-  A local `env!("CARGO_MANIFEST_DIR")` join or a bare
-  `"tests/fixtures/…"` string is anchored to the *package* root and means
-  something different in every member crate. These failures are loud
-  (file-not-found panics), but they are also entirely avoidable.
+- **Fixtures and samples: use the resolvers.** `rust/tests/fixtures/` is read
+  from three packages and stays where it is; the repository's `samples/`
+  (committed `.cnnd` demos) is read by the snapshot and round-trip tests.
+  Address them only through `atomcad_test_support::fixture_path` /
+  `fixture_path_str` / `fixtures_root` and `sample_path` / `sample_path_str`.
+  A local `env!("CARGO_MANIFEST_DIR")` join or a bare `"tests/fixtures/…"` /
+  `"../samples/…"` string is anchored to the *package* root and means something
+  different in every member crate. These failures are loud (file-not-found
+  panics), but they are also entirely avoidable.
+- **Which side of the boundary a thing belongs on** (D9/D10, the rule the
+  `structure_designer -> api` edge was untangled with): a **domain concept**
+  moves *down* and leaves a same-named twin in `api/` if it is Dart-facing
+  (`NodeTypeCategory`, the preferences module, `DragFrozenStatus`); a
+  **transport shape** stays *up*, and the code that constructs it moves up to
+  join it (the node-type / error view-builders, `cli_runner`, the
+  `get_active_tool` projections). The test is what the type *means*, not which
+  direction removes more references. Presentation helpers that take domain
+  types live in `api/structure_designer/{view_builders,tool_adapters}.rs`,
+  which are deliberately **absent from `flutter_rust_bridge.yaml`'s
+  `rust_input`** — every `pub fn` in a scanned namespace becomes a Dart API,
+  which would drag `NodeTypeRegistry` into codegen as an opaque handle.
 
 ## Adding a New Node Type
 
-1. Create `src/structure_designer/nodes/my_node.rs`
-2. Add to `src/structure_designer/nodes/mod.rs`
-3. Register in `src/structure_designer/node_type_registry.rs`
+1. Create `crates/atomcad-structure-designer/src/nodes/my_node.rs`
+2. Add to `crates/atomcad-structure-designer/src/nodes/mod.rs`
+3. Register in `crates/atomcad-structure-designer/src/node_type_registry.rs`
 
 ## Addressing Nodes Across Scopes (zones)
 
@@ -186,7 +213,7 @@ Rules — do not regress these:
 - Anything that can target a node in **any** scope — every `get_*_data` / `set_*_data` property API, `execute_node`, comment ops, `facet_shell`/`import_xyz`/`import_cif` actions, etc. — **must take a `scope_path: Vec<u64>` parameter** and resolve through `StructureDesigner::get_scope_network(&scope_path)`: reads via `get_node_network_data_scoped(&scope_path, node_id)`, in-place mutations via `get_node_network_data_mut_scoped(&scope_path, node_id)`, whole-data replacement via `set_node_network_data_scoped(&scope_path, node_id, …)`. `scope_path` empty = top-level active network; non-empty = the chain of HOF node ids down to the body.
 - **When you add a new node property getter/setter in `src/api/structure_designer/`, it must take `scope_path` like its siblings.** A bare-`node_id` getter is exactly the mistake to avoid; the Flutter property panel always has the selected node's scope and passes it.
 
-See `src/structure_designer/AGENTS.md` (Zones) for the body model and `walk_all_nodes` (the parallel "bare iteration skips body nodes" lesson).
+See `crates/atomcad-structure-designer/src/AGENTS.md` (Zones) for the body model and `walk_all_nodes` (the parallel "bare iteration skips body nodes" lesson).
 
 ## Code Conventions
 
@@ -218,15 +245,16 @@ When adding new functionality to the Rust codebase:
 2. **Tests go in `rust/tests/`** (or, for an extracted crate, in that crate's
    own `crates/<crate>/tests/`), NOT inline in source files
 3. **Mirror the source file hierarchy** in the test directory:
-   - Source: `src/structure_designer/text_format/`
-   - Test: `tests/structure_designer/text_format_test.rs`
+   - Source: `crates/atomcad-structure-designer/src/text_format/`
+   - Test: `crates/atomcad-structure-designer/tests/structure_designer/text_format_test.rs`
 4. **Register test modules** in the parent test file (e.g., add to `tests/structure_designer.rs`):
    ```rust
    #[path = "structure_designer/text_format_test.rs"]
    mod text_format_test;
    ```
 5. Follow the existing folder structure:
-   - `rust/tests/structure_designer/` - Structure designer tests
+   - `rust/crates/atomcad-structure-designer/tests/structure_designer/` -
+     Structure designer tests
    - `rust/crates/atomcad-crystolecule/tests/crystolecule/` - Atomic structure tests
    - `rust/crates/atomcad-geo-tree/tests/geo_tree/` - Geometry tests
    - `rust/crates/atomcad-renderer/tests/renderer/` - GPU-free renderer tests
@@ -234,13 +262,15 @@ When adding new functionality to the Rust codebase:
    - `rust/crates/atomcad-display/tests/display/` - tessellation tests. The two
      that drive `tessellate_scene_content` are **not** here: that function is a
      `structure_designer` module now, so they sit in
-     `rust/tests/structure_designer/` (`atomic_impostor_alpha_test.rs`,
+     `rust/crates/atomcad-structure-designer/tests/structure_designer/`
+     (`atomic_impostor_alpha_test.rs`,
      `atom_label_test.rs`)
    - `rust/crates/atomcad-util/tests/util/` - Utility tests
-   - `rust/tests/expr/` - Expression language tests
+   - `rust/crates/atomcad-structure-designer/tests/expr/` - Expression language tests
    - `rust/tests/integration/` - Integration/roundtrip tests
-   - `rust/tests/renderer_api/` - the renderer-adjacent tests that reach *up*
-     into `api` / `crystolecule` and so cannot live in `atomcad-renderer`
+   - `rust/tests/renderer_api/` and `rust/tests/structure_designer_api/` - the
+     tests that reach *up* into `api` and so cannot live in the crate that owns
+     their subject
 
    An extracted crate keeps the module's original directory name inside its
    `tests/` (`atomcad-crystolecule/tests/crystolecule/`, beside

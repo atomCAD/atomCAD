@@ -149,5 +149,15 @@ atomcad-test-support = { path = "crates/atomcad-test-support" }
 insta = { workspace = true }
 tempfile = { workspace = true }
 
+# Phase 6 of doc/design_rust_crate_split.md deleted the hand-written
+# `#[cfg(not(frb_expand))] pub mod structure_designer;` from `lib.rs` — the module
+# is in its own crate now, which `frb_expand` never sees.
+#
+# This entry, however, STAYS. The design's Phase 6.4 expected it to go with the
+# attribute; it cannot. `frb_expand` is emitted by the
+# `#[flutter_rust_bridge::frb(...)]` proc macro itself, once per annotated item —
+# 489 expansions across `src/api/`. Removing the line does not remove a
+# workaround, it just turns 489 `unexpected_cfgs` warnings back on.
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
