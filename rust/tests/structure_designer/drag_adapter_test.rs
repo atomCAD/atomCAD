@@ -280,10 +280,12 @@ fn iter_int_from_output_surfaces_map_via_adapter() {
     // adapter, map should surface — proof that the slow path runs and that
     // the verification step accepts the adapted node type.
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(
-        &DataType::Iterator(Box::new(DataType::Int)),
-        true, // dragging_from_output
-    );
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Iterator(Box::new(DataType::Int)),
+            true, // dragging_from_output
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -741,7 +743,11 @@ fn array_int_from_output_surfaces_all_array_nodes_via_adapter() {
     // the popup for an `Array[Int]` drag from an output pin.
     let registry = NodeTypeRegistry::new();
     let categories =
-        registry.get_compatible_node_types(&DataType::Array(Box::new(DataType::Int)), true);
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Array(Box::new(DataType::Int)),
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -954,7 +960,12 @@ fn scalar_blueprint_from_output_keeps_union_and_intersect() {
     // `static_match`, which still allows `Blueprint → Array[Blueprint]`
     // broadcast.
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -980,7 +991,12 @@ fn scalar_blueprint_from_output_suppresses_broadcast_only_adapter_nodes() {
     // collection-shaped (`Array[T]` / `Iter[T]`) and only match via the
     // scalar broadcast rule are dropped at Stage-2 verification.
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1019,7 +1035,12 @@ fn scalar_blueprint_from_output_keeps_array_append_via_element_pin() {
     // surfacing. The auto-connect pin-picker disambiguates which pin gets
     // wired.
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1037,7 +1058,12 @@ fn scalar_int_from_output_keeps_parameter_via_identity() {
     // peel), so the resolved input pin equals the source — identity match,
     // strict passes.
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Int, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Int,
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1057,7 +1083,11 @@ fn iter_int_from_output_still_surfaces_iterator_consumers() {
     // identity with the source, no broadcast involved, strict passes.
     let registry = NodeTypeRegistry::new();
     let categories =
-        registry.get_compatible_node_types(&DataType::Iterator(Box::new(DataType::Int)), true);
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Iterator(Box::new(DataType::Int)),
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1079,7 +1109,11 @@ fn array_blueprint_from_output_still_surfaces_array_and_iter_consumers() {
     // `Array[S] → Iter[T]` eager-wrap rule survives the strict predicate).
     let registry = NodeTypeRegistry::new();
     let categories =
-        registry.get_compatible_node_types(&DataType::Array(Box::new(DataType::Blueprint)), true);
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Array(Box::new(DataType::Blueprint)),
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1265,7 +1299,12 @@ fn expr_adapter_rejects_unit() {
 #[test]
 fn int_from_output_surfaces_expr_via_adapter() {
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Int, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Int,
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1280,7 +1319,12 @@ fn int_from_output_surfaces_expr_via_adapter() {
 #[test]
 fn float_from_output_surfaces_expr_via_adapter() {
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Float, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1297,7 +1341,11 @@ fn iter_int_from_output_does_not_surface_expr() {
     // surface `expr` for an iterator drag source.
     let registry = NodeTypeRegistry::new();
     let categories =
-        registry.get_compatible_node_types(&DataType::Iterator(Box::new(DataType::Int)), true);
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Iterator(Box::new(DataType::Int)),
+            true,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1314,7 +1362,12 @@ fn crystal_from_input_surfaces_expr_via_adapter() {
     // FromInput direction: dragging from a Crystal-typed consumer pin
     // should surface `expr` (with x: Crystal, output Crystal).
     let registry = NodeTypeRegistry::new();
-    let categories = registry.get_compatible_node_types(&DataType::Crystal, false);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Crystal,
+            false,
+        );
     let names: Vec<&str> = categories
         .iter()
         .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
@@ -1683,9 +1736,12 @@ fn get_record_destructure_data(
 #[test]
 fn record_destructure_surfaces_for_record_output_drag() {
     let designer = setup_designer_with_point();
-    let categories = designer
-        .node_type_registry
-        .get_compatible_node_types(&point_type(), true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &designer.node_type_registry,
+            &point_type(),
+            true,
+        );
     let names = names_of(&categories);
     assert!(
         names.contains(&"record_destructure"),
@@ -1696,9 +1752,12 @@ fn record_destructure_surfaces_for_record_output_drag() {
 #[test]
 fn record_construct_surfaces_for_record_input_drag() {
     let designer = setup_designer_with_point();
-    let categories = designer
-        .node_type_registry
-        .get_compatible_node_types(&point_type(), false);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &designer.node_type_registry,
+            &point_type(),
+            false,
+        );
     let names = names_of(&categories);
     assert!(
         names.contains(&"record_construct"),
@@ -1710,12 +1769,18 @@ fn record_construct_surfaces_for_record_input_drag() {
 fn record_nodes_respect_drag_direction_in_popup() {
     // construct only adapts FromInput; destructure only adapts FromOutput.
     let designer = setup_designer_with_point();
-    let from_output_cats = designer
-        .node_type_registry
-        .get_compatible_node_types(&point_type(), true);
-    let from_input_cats = designer
-        .node_type_registry
-        .get_compatible_node_types(&point_type(), false);
+    let from_output_cats =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &designer.node_type_registry,
+            &point_type(),
+            true,
+        );
+    let from_input_cats =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &designer.node_type_registry,
+            &point_type(),
+            false,
+        );
     let from_output = names_of(&from_output_cats);
     let from_input = names_of(&from_input_cats);
     assert!(
@@ -1734,12 +1799,18 @@ fn unknown_record_name_surfaces_no_record_nodes() {
     // so neither record node should appear.
     let designer = setup_designer_with_point();
     let missing = DataType::Record(RecordType::Named("Nope".to_string()));
-    let from_output_cats = designer
-        .node_type_registry
-        .get_compatible_node_types(&missing, true);
-    let from_input_cats = designer
-        .node_type_registry
-        .get_compatible_node_types(&missing, false);
+    let from_output_cats =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &designer.node_type_registry,
+            &missing,
+            true,
+        );
+    let from_input_cats =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &designer.node_type_registry,
+            &missing,
+            false,
+        );
     let from_output = names_of(&from_output_cats);
     let from_input = names_of(&from_input_cats);
     assert!(!from_output.contains(&"record_destructure"));

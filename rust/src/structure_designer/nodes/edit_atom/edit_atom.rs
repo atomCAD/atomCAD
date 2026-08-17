@@ -1,4 +1,3 @@
-use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -128,24 +127,6 @@ impl EditAtomData {
 
     pub fn can_redo(&self) -> bool {
         self.next_history_index < self.history.len()
-    }
-
-    pub fn set_active_tool(&mut self, api_tool: APIEditAtomTool) {
-        self.active_tool = match api_tool {
-            APIEditAtomTool::Default => EditAtomTool::Default(DefaultToolState {}),
-            APIEditAtomTool::AddAtom => EditAtomTool::AddAtom(AddAtomToolState {}),
-            APIEditAtomTool::AddBond => {
-                EditAtomTool::AddBond(AddBondToolState { last_atom_id: None })
-            }
-        }
-    }
-
-    pub fn get_active_tool(&self) -> APIEditAtomTool {
-        match &self.active_tool {
-            EditAtomTool::Default(_) => APIEditAtomTool::Default,
-            EditAtomTool::AddAtom(_) => APIEditAtomTool::AddAtom,
-            EditAtomTool::AddBond(_) => APIEditAtomTool::AddBond,
-        }
     }
 
     /// Set the shared element selection.

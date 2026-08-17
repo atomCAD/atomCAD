@@ -163,7 +163,10 @@ fn eval_entry_is_tagged_with_source_and_severity() {
     let expr_id = add_displayed_expr_with_unwired_param(&mut designer);
     validate_and_refresh(&mut designer);
 
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let main = network_entry(&networks, "main");
     let evals = eval_entries(main);
     assert_eq!(
@@ -206,7 +209,10 @@ fn poisoned_node_contributes_exactly_one_entry() {
     );
 
     // ...but the unified list shows one row: the validation error.
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let main = network_entry(&networks, "main");
     let relax_rows: Vec<_> = main
         .validation_errors
@@ -236,7 +242,10 @@ fn warning_plus_eval_error_contributes_two_entries() {
     let node_id = add_displayed_motif_sub_with_bad_definition(&mut designer);
     validate_and_refresh(&mut designer);
 
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let main = network_entry(&networks, "main");
     let rows: Vec<_> = main
         .validation_errors
@@ -281,14 +290,20 @@ fn refresh_replaces_snapshot_wholesale() {
 
     // A second refresh must not duplicate the entry.
     full_refresh(&mut designer);
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert_eq!(eval_entries(network_entry(&networks, "main")).len(), 1);
 
     // Fix the expr → the entry disappears on the next refresh (replace, not
     // accumulate).
     fix_expr(&mut designer, expr_id);
     validate_and_refresh(&mut designer);
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert!(
         eval_entries(network_entry(&networks, "main")).is_empty(),
         "fixed failure must vanish from the list"
@@ -308,7 +323,10 @@ fn switching_networks_preserves_snapshot_dimmed() {
     designer.set_active_node_network_name(Some("other".to_string()));
     validate_and_refresh(&mut designer);
 
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let main = network_entry(&networks, "main");
     let evals = eval_entries(main);
     assert_eq!(evals.len(), 1, "inactive network keeps its snapshot");
@@ -322,7 +340,10 @@ fn switching_networks_preserves_snapshot_dimmed() {
     designer.set_active_node_network_name(Some("main".to_string()));
     fix_expr(&mut designer, expr_id);
     validate_and_refresh(&mut designer);
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert!(
         eval_entries(network_entry(&networks, "main")).is_empty(),
         "re-activating and refreshing replaces the stale snapshot"
@@ -342,7 +363,7 @@ fn deleted_node_entry_is_dropped() {
     validate_and_refresh(&mut designer);
     assert_eq!(
         eval_entries(network_entry(
-            &designer.get_node_networks_with_errors(),
+            &rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(&designer),
             "main"
         ))
         .len(),
@@ -359,7 +380,10 @@ fn deleted_node_entry_is_dropped() {
         .nodes
         .remove(&expr_id);
 
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert!(
         eval_entries(network_entry(&networks, "main")).is_empty(),
         "an entry whose node vanished must be dropped, not returned"
@@ -380,7 +404,10 @@ fn rename_rekeys_snapshot() {
     validate_and_refresh(&mut designer);
 
     assert!(designer.rename_node_network("main", "renamed"));
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let renamed = network_entry(&networks, "renamed");
     assert_eq!(
         eval_entries(renamed).len(),
@@ -390,7 +417,10 @@ fn rename_rekeys_snapshot() {
 
     // Undo the rename → the entries follow it back.
     assert!(designer.undo());
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert_eq!(
         eval_entries(network_entry(&networks, "main")).len(),
         1,
@@ -399,7 +429,10 @@ fn rename_rekeys_snapshot() {
 
     // Redo → forward again.
     assert!(designer.redo());
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert_eq!(eval_entries(network_entry(&networks, "renamed")).len(), 1);
 }
 
@@ -424,7 +457,10 @@ fn delete_drops_snapshot_no_ghost_on_recreate() {
 
     // A newcomer under the deleted name reports no eval entries.
     designer.add_node_network("main");
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     assert!(
         eval_entries(network_entry(&networks, "main")).is_empty(),
         "a re-created network must not inherit the deleted network's errors"
@@ -440,7 +476,10 @@ fn eval_only_design_has_no_validation_entries() {
     add_displayed_expr_with_unwired_param(&mut designer);
     validate_and_refresh(&mut designer);
 
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let main = network_entry(&networks, "main");
     assert!(
         !main.validation_errors.is_empty(),

@@ -2393,7 +2393,7 @@ fn undo_atom_edit_sequence_restores_initial_state() {
 // =============================================================================
 
 use atomcad_util::transform::Transform;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
+use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::DragFrozenStatus;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::drag_selected_by_delta;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::transform_selected;
 

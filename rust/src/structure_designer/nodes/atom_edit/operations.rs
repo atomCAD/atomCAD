@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::atom_edit_data::*;
 use super::types::*;
-use crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
+use crate::structure_designer::nodes::atom_edit::types::DragFrozenStatus;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::{BondReference, UNCHANGED_ATOMIC_NUMBER};
 use atomcad_crystolecule::atomic_structure_diff::{AtomSource, apply_diff};

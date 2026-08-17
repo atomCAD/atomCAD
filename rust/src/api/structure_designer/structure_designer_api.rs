@@ -91,6 +91,7 @@ use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIResult;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
+use crate::api::structure_designer::cli_runner;
 use crate::api::structure_designer::structure_designer_api_types::APIApplyDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomComposeDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
@@ -141,8 +142,8 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APILatticeSymopData, APIRotationalSymmetry, APIStructureInvertData, APIStructureMoveData,
     APIStructureRotData,
 };
+use crate::api::structure_designer::view_builders;
 use crate::structure_designer::canvas_viewport::CanvasViewport;
-use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_result::{
     Alignment, NetworkResult, dmat3_to_rows,
@@ -1316,12 +1317,9 @@ pub fn get_node_type_views() -> Option<Vec<APINodeCategoryView>> {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                Some(
-                    cad_instance
-                        .structure_designer
-                        .node_type_registry
-                        .get_node_type_views(),
-                )
+                Some(view_builders::get_node_type_views(
+                    &cad_instance.structure_designer.node_type_registry,
+                ))
             },
             None,
         )
@@ -1344,12 +1342,11 @@ pub fn get_compatible_node_types(
         with_cad_instance_or(
             |cad_instance| {
                 let source_type = DataType::from_string(&source_type_str).ok()?;
-                Some(
-                    cad_instance
-                        .structure_designer
-                        .node_type_registry
-                        .get_compatible_node_types(&source_type, dragging_from_output),
-                )
+                Some(view_builders::get_compatible_node_types(
+                    &cad_instance.structure_designer.node_type_registry,
+                    &source_type,
+                    dragging_from_output,
+                ))
             },
             None,
         )
@@ -1753,11 +1750,9 @@ pub fn get_node_networks_with_validation() -> Option<Vec<APINetworkWithValidatio
                 // each network's last-known evaluation errors (live for the
                 // active network, dimmed snapshot for inactive ones). See
                 // `doc/design_error_management.md` D1/D6.
-                Some(
-                    cad_instance
-                        .structure_designer
-                        .get_node_networks_with_errors(),
-                )
+                Some(view_builders::get_node_networks_with_errors(
+                    &cad_instance.structure_designer,
+                ))
             },
             None,
         )
@@ -1778,9 +1773,11 @@ pub fn get_node_root_cause(scope_path: Vec<u64>, node_id: u64) -> Option<APIErro
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                cad_instance
-                    .structure_designer
-                    .get_node_root_cause(&scope_path, node_id)
+                view_builders::get_node_root_cause(
+                    &cad_instance.structure_designer,
+                    &scope_path,
+                    node_id,
+                )
             },
             None,
         )
@@ -4220,7 +4217,10 @@ pub fn get_edit_atom_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIEditA
                     atomic_structure.map_or(false, |structure| structure.has_selection());
 
                 Some(APIEditAtomData {
-                    active_tool: edit_atom_data.get_active_tool(),
+                    active_tool:
+                        crate::api::structure_designer::tool_adapters::edit_atom_active_tool(
+                            edit_atom_data,
+                        ),
                     can_undo: edit_atom_data.can_undo(),
                     can_redo: edit_atom_data.can_redo(),
                     bond_tool_last_atom_id,
@@ -4365,7 +4365,9 @@ pub fn get_atom_edit_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomE
                 );
 
                 Some(APIAtomEditData {
-                    active_tool: atom_edit_data.get_active_tool(),
+                    active_tool: crate::api::structure_designer::tool_adapters::atom_edit_active_tool(
+                        atom_edit_data,
+                    ),
                     bond_tool_last_atom_id,
                     bond_tool_bond_order,
                     selected_atomic_number: atom_edit_data.selected_atomic_number,
@@ -8502,7 +8504,9 @@ pub fn evaluate_node(
                     .or_else(|| designer.find_node_id_by_name(&node_identifier))
                     .ok_or_else(|| format!("Node not found: {}", node_identifier))?;
 
-                designer.evaluate_node_for_cli(node_id, verbose)
+                designer
+                    .evaluate_node_for_cli(node_id, verbose)
+                    .map(Into::into)
             },
             Err("CAD instance not available".to_string()),
         )
@@ -8536,6 +8540,7 @@ pub fn execute_node(
                 cad_instance
                     .structure_designer
                     .execute_node(&network_name, &scope_path, node_id)
+                    .map(Into::into)
             },
             Err("CAD instance not available".to_string()),
         )

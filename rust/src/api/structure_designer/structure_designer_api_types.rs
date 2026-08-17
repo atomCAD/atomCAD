@@ -10,6 +10,15 @@ use crate::structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
 use crate::structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
+use crate::structure_designer::nodes::atom_edit::atom_edit::{
+    DragFrozenStatus as DomainDragFrozenStatus, PointerDownResult as DomainPointerDownResult,
+    PointerDownResultKind as DomainPointerDownResultKind,
+    PointerMoveResult as DomainPointerMoveResult,
+    PointerMoveResultKind as DomainPointerMoveResultKind, PointerUpResult as DomainPointerUpResult,
+};
+use crate::structure_designer::structure_designer::{
+    ExecuteResult as DomainExecuteResult, NodeEvaluationResult as DomainNodeEvaluationResult,
+};
 use flutter_rust_bridge::frb;
 use std::collections::HashMap;
 use std::time::UNIX_EPOCH;
@@ -2066,4 +2075,112 @@ pub struct APIArrayNodeData {
     /// rather than `value`.
     pub is_record: bool,
     pub elements: Vec<APIArrayElement>,
+}
+
+// ---------------------------------------------------------------------------
+// Default-tool pointer result twins (D9a / D10.1)
+//
+// The authoritative definitions are in
+// `structure_designer::nodes::atom_edit::types`, beside the state machine that
+// produces them; these stay here so the generated Dart keeps its symbols and
+// file. Conversion is one-way — the domain builds them, `atom_edit_api` hands
+// them to Dart — so only `Domain -> twin` impls exist.
+// ---------------------------------------------------------------------------
+
+impl From<DomainPointerDownResultKind> for PointerDownResultKind {
+    fn from(k: DomainPointerDownResultKind) -> Self {
+        match k {
+            DomainPointerDownResultKind::GadgetHit => PointerDownResultKind::GadgetHit,
+            DomainPointerDownResultKind::StartedOnAtom => PointerDownResultKind::StartedOnAtom,
+            DomainPointerDownResultKind::StartedOnBond => PointerDownResultKind::StartedOnBond,
+            DomainPointerDownResultKind::StartedOnEmpty => PointerDownResultKind::StartedOnEmpty,
+        }
+    }
+}
+
+impl From<DomainPointerDownResult> for PointerDownResult {
+    fn from(r: DomainPointerDownResult) -> Self {
+        PointerDownResult {
+            kind: r.kind.into(),
+            gadget_handle_index: r.gadget_handle_index,
+        }
+    }
+}
+
+impl From<DomainDragFrozenStatus> for DragFrozenStatus {
+    fn from(s: DomainDragFrozenStatus) -> Self {
+        match s {
+            DomainDragFrozenStatus::NoneFrozen => DragFrozenStatus::NoneFrozen,
+            DomainDragFrozenStatus::SomeFrozen => DragFrozenStatus::SomeFrozen,
+            DomainDragFrozenStatus::AllFrozen => DragFrozenStatus::AllFrozen,
+        }
+    }
+}
+
+impl From<DomainPointerMoveResultKind> for PointerMoveResultKind {
+    fn from(k: DomainPointerMoveResultKind) -> Self {
+        match k {
+            DomainPointerMoveResultKind::StillPending => PointerMoveResultKind::StillPending,
+            DomainPointerMoveResultKind::Dragging => PointerMoveResultKind::Dragging,
+            DomainPointerMoveResultKind::MarqueeUpdated => PointerMoveResultKind::MarqueeUpdated,
+        }
+    }
+}
+
+impl From<DomainPointerMoveResult> for PointerMoveResult {
+    fn from(r: DomainPointerMoveResult) -> Self {
+        PointerMoveResult {
+            kind: r.kind.into(),
+            marquee_rect_x: r.marquee_rect_x,
+            marquee_rect_y: r.marquee_rect_y,
+            marquee_rect_w: r.marquee_rect_w,
+            marquee_rect_h: r.marquee_rect_h,
+            frozen_drag_status: r.frozen_drag_status.into(),
+        }
+    }
+}
+
+impl From<DomainPointerUpResult> for PointerUpResult {
+    fn from(r: DomainPointerUpResult) -> Self {
+        match r {
+            DomainPointerUpResult::SelectionChanged => PointerUpResult::SelectionChanged,
+            DomainPointerUpResult::DragCommitted => PointerUpResult::DragCommitted,
+            DomainPointerUpResult::MarqueeCommitted => PointerUpResult::MarqueeCommitted,
+            DomainPointerUpResult::NothingHappened => PointerUpResult::NothingHappened,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI-evaluation / Execute result twins (D9a)
+//
+// `StructureDesigner::evaluate_node_for_cli` and `execute_node` run real
+// evaluation passes, so unlike the D10 view-builders they stay in the domain;
+// only their result *shapes* are Dart-facing. The domain originals are
+// `structure_designer::NodeEvaluationResult` / `ExecuteResult`.
+// ---------------------------------------------------------------------------
+
+impl From<DomainNodeEvaluationResult> for APINodeEvaluationResult {
+    fn from(r: DomainNodeEvaluationResult) -> Self {
+        APINodeEvaluationResult {
+            node_id: r.node_id,
+            node_type_name: r.node_type_name,
+            custom_name: r.custom_name,
+            output_type: r.output_type,
+            display_string: r.display_string,
+            detailed_string: r.detailed_string,
+            success: r.success,
+            error_message: r.error_message,
+        }
+    }
+}
+
+impl From<DomainExecuteResult> for APIExecuteResult {
+    fn from(r: DomainExecuteResult) -> Self {
+        APIExecuteResult {
+            ok: r.ok,
+            error: r.error,
+            logs: r.logs.iter().map(Into::into).collect(),
+        }
+    }
 }

@@ -218,7 +218,10 @@ fn only_parameter_is_disallowed_in_zone_body() {
 #[test]
 fn node_type_views_expose_allowed_in_zone_body() {
     let designer = setup_designer_with_network("main");
-    let categories = designer.node_type_registry.get_node_type_views();
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &designer.node_type_registry,
+        );
 
     let mut saw_parameter = false;
     for category in &categories {

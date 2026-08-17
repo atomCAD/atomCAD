@@ -2,7 +2,6 @@ use super::diff_recorder::{AtomDelta, AtomState, BondDelta, DiffRecorder};
 use super::guideline::{Guideline, GuidelineError};
 use super::text_format::{parse_diff_text, serialize_diff};
 use super::types::*;
-use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -1193,15 +1192,6 @@ impl AtomEditData {
 
     // --- Tool management ---
 
-    pub fn get_active_tool(&self) -> APIAtomEditTool {
-        match &self.active_tool {
-            AtomEditTool::Default(_) => APIAtomEditTool::Default,
-            AtomEditTool::AddAtom(_) => APIAtomEditTool::AddAtom,
-            AtomEditTool::AddBond(_) => APIAtomEditTool::AddBond,
-            AtomEditTool::Guideline(_) => APIAtomEditTool::Guideline,
-        }
-    }
-
     /// Reset the active tool to the Default tool. Used by the node-deselect hook
     /// to drop the transient Guideline tool state (issue #368).
     pub fn reset_to_default_tool(&mut self) {
@@ -1209,34 +1199,6 @@ impl AtomEditData {
             interaction_state: DefaultToolInteractionState::default(),
             show_gadget: false,
         });
-    }
-
-    pub fn set_active_tool(&mut self, api_tool: APIAtomEditTool) {
-        // Reset interaction state if switching away from Default tool mid-interaction
-        if let AtomEditTool::Default(ref mut state) = self.active_tool {
-            state.interaction_state = DefaultToolInteractionState::Idle;
-        }
-        // Cancel guided placement if switching away from AddAtom tool
-        // (no special action needed — the new tool state replaces the old one)
-        self.active_tool = match api_tool {
-            APIAtomEditTool::Default => AtomEditTool::Default(DefaultToolState {
-                interaction_state: DefaultToolInteractionState::default(),
-                show_gadget: false,
-            }),
-            APIAtomEditTool::AddAtom => AtomEditTool::AddAtom(AddAtomToolState::Idle),
-            APIAtomEditTool::AddBond => AtomEditTool::AddBond(AddBondToolState {
-                bond_order: atomcad_crystolecule::atomic_structure::BOND_SINGLE,
-                interaction_state: AddBondInteractionState::default(),
-                last_atom_id: None,
-            }),
-            APIAtomEditTool::Guideline => {
-                // Enter the Guideline tool in `Define` with an empty defining set.
-                // Clear the shared selection so no stale highlight leaks in — the
-                // tool drives its own tool-local highlight (issue #368).
-                self.selection.clear();
-                AtomEditTool::Guideline(GuidelineTool::new())
-            }
-        }
     }
 
     /// Set the shared element selection. Updates the active tool's state as well:

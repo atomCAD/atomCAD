@@ -185,7 +185,10 @@ fn add_atom_on_base_anchor_records_unchanged_marker() {
     base.add_atom(6, DVec3::ZERO); // a lone (bare) carbon anchor
     let mut designer = setup_atom_edit_with_base(base);
 
-    get_data_mut(&mut designer).set_active_tool(APIAtomEditTool::AddAtom);
+    rust_lib_flutter_cad::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+        get_data_mut(&mut designer),
+        APIAtomEditTool::AddAtom,
+    );
 
     // Ray straight down the -Z axis onto the carbon at the origin.
     let ray_start = DVec3::new(0.0, 0.0, 10.0);
@@ -230,7 +233,10 @@ fn add_atom_on_base_anchor_with_hybridization_override_promotes_fully() {
     base.add_atom(6, DVec3::ZERO);
     let mut designer = setup_atom_edit_with_base(base);
 
-    get_data_mut(&mut designer).set_active_tool(APIAtomEditTool::AddAtom);
+    rust_lib_flutter_cad::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+        get_data_mut(&mut designer),
+        APIAtomEditTool::AddAtom,
+    );
 
     let ray_start = DVec3::new(0.0, 0.0, 10.0);
     let ray_dir = DVec3::new(0.0, 0.0, -1.0);

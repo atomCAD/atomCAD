@@ -3,7 +3,7 @@ use super::minimization::{continuous_minimize_during_drag, continuous_minimize_s
 use super::operations::{change_bond_order, cycle_bond_order, drag_selected_by_delta};
 use super::selection::*;
 use super::types::*;
-use crate::api::structure_designer::structure_designer_api_types::{
+use crate::structure_designer::nodes::atom_edit::types::{
     DragFrozenStatus, PointerDownResult, PointerDownResultKind, PointerMoveResult,
     PointerMoveResultKind, PointerUpResult,
 };

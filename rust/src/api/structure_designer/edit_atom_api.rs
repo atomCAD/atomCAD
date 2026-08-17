@@ -136,7 +136,11 @@ pub fn get_active_edit_atom_tool() -> Option<APIEditAtomTool> {
             |cad_instance| {
                 // Get the edit atom data and return its active tool
                 match edit_atom::get_active_edit_atom_data(&cad_instance.structure_designer) {
-                    Some(edit_atom_data) => Some(edit_atom_data.get_active_tool()),
+                    Some(edit_atom_data) => Some(
+                        crate::api::structure_designer::tool_adapters::edit_atom_active_tool(
+                            edit_atom_data,
+                        ),
+                    ),
                     None => None,
                 }
             },
@@ -154,7 +158,10 @@ pub fn set_active_edit_atom_tool(tool: APIEditAtomTool) -> bool {
                 if let Some(edit_atom_data) =
                     edit_atom::get_selected_edit_atom_data_mut(&mut cad_instance.structure_designer)
                 {
-                    edit_atom_data.set_active_tool(tool);
+                    crate::api::structure_designer::tool_adapters::set_edit_atom_active_tool(
+                        edit_atom_data,
+                        tool,
+                    );
                     // Edit atom operations modify the edit_atom node's internal state
                     refresh_structure_designer_auto(cad_instance);
                     true

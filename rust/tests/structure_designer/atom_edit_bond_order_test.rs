@@ -590,7 +590,10 @@ fn test_add_bond_interaction_state_default_is_idle() {
 fn test_add_bond_tool_state_default_bond_order() {
     // When switching to the AddBond tool, bond_order should default to BOND_SINGLE
     let mut data = AtomEditData::new();
-    data.set_active_tool(APIAtomEditTool::AddBond);
+    rust_lib_flutter_cad::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+        &mut data,
+        APIAtomEditTool::AddBond,
+    );
 
     match &data.active_tool {
         AtomEditTool::AddBond(state) => {
@@ -617,7 +620,10 @@ fn test_set_add_bond_order_valid() {
     // Switch to AddBond tool
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.set_active_tool(APIAtomEditTool::AddBond);
+        rust_lib_flutter_cad::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+            data,
+            APIAtomEditTool::AddBond,
+        );
     }
 
     for order in 1u8..=7 {
@@ -641,7 +647,10 @@ fn test_set_add_bond_order_rejects_zero() {
 
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.set_active_tool(APIAtomEditTool::AddBond);
+        rust_lib_flutter_cad::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+            data,
+            APIAtomEditTool::AddBond,
+        );
     }
 
     // Set to a valid order first
@@ -667,7 +676,10 @@ fn test_set_add_bond_order_rejects_above_7() {
 
     {
         let data = get_atom_edit_data_mut(&mut designer);
-        data.set_active_tool(APIAtomEditTool::AddBond);
+        rust_lib_flutter_cad::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+            data,
+            APIAtomEditTool::AddBond,
+        );
     }
 
     set_add_bond_order(&mut designer, BOND_TRIPLE);

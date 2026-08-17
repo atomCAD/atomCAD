@@ -84,7 +84,10 @@ fn set_expr_data(
 /// The unified error list of one network (`APIValidationError` is not `Clone`,
 /// so the entry is taken by value out of the freshly built list).
 fn errors_of(designer: &StructureDesigner, network_name: &str) -> Vec<APIValidationError> {
-    let networks: Vec<APINetworkWithValidationErrors> = designer.get_node_networks_with_errors();
+    let networks: Vec<APINetworkWithValidationErrors> =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            designer,
+        );
     networks
         .into_iter()
         .find(|n| n.name == network_name)
@@ -461,9 +464,12 @@ fn cross_network_root_cause_is_addressed_in_the_child() {
     );
 
     // "Go to root cause" on the instance resolves to the same address.
-    let jump = designer
-        .get_node_root_cause(&[], instance)
-        .expect("the instance has a navigable root cause");
+    let jump = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_root_cause(
+        &designer,
+        &[],
+        instance,
+    )
+    .expect("the instance has a navigable root cause");
     assert_eq!(jump.host_network, "child");
     assert_eq!(jump.node_id, child_expr);
     assert!(!jump.node_label.is_empty());

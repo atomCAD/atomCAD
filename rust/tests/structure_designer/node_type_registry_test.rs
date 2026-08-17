@@ -33,7 +33,12 @@ fn test_get_compatible_node_types_from_geometry_output() {
     let registry = NodeTypeRegistry::new();
 
     // Dragging from a Blueprint output pin
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
 
     // Should find nodes with Blueprint input pins
     let all_node_names: Vec<&str> = categories
@@ -71,7 +76,12 @@ fn test_get_compatible_node_types_from_float_output() {
     let registry = NodeTypeRegistry::new();
 
     // Dragging from a Float output pin
-    let categories = registry.get_compatible_node_types(&DataType::Float, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            true,
+        );
 
     let all_node_names: Vec<&str> = categories
         .iter()
@@ -93,7 +103,12 @@ fn test_get_compatible_node_types_to_geometry_input() {
     let registry = NodeTypeRegistry::new();
 
     // Dragging from a Blueprint INPUT pin (looking for nodes that OUTPUT Blueprint)
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, false);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            false,
+        );
 
     let all_node_names: Vec<&str> = categories
         .iter()
@@ -127,7 +142,12 @@ fn test_get_compatible_node_types_to_float_input() {
     let registry = NodeTypeRegistry::new();
 
     // Dragging from a Float INPUT pin (looking for nodes that OUTPUT Float)
-    let categories = registry.get_compatible_node_types(&DataType::Float, false);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            false,
+        );
 
     let all_node_names: Vec<&str> = categories
         .iter()
@@ -156,7 +176,12 @@ fn test_get_compatible_node_types_array_compatibility() {
 
     // Dragging single Blueprint - should match nodes with [Blueprint] array inputs
     // because DataType::can_be_converted_to allows T -> [T] conversion
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
 
     let all_node_names: Vec<&str> = categories
         .iter()
@@ -174,7 +199,12 @@ fn test_get_compatible_node_types_array_compatibility() {
 fn test_get_compatible_node_types_returns_grouped_categories() {
     let registry = NodeTypeRegistry::new();
 
-    let categories = registry.get_compatible_node_types(&DataType::Blueprint, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
 
     // Should have categories, not just a flat list
     assert!(
@@ -194,7 +224,12 @@ fn test_get_compatible_node_types_no_matches() {
 
     // LatticeVecs is a specialized type - few nodes output it
     // When dragging FROM LatticeVecs output, looking for nodes with LatticeVecs input
-    let categories = registry.get_compatible_node_types(&DataType::LatticeVecs, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::LatticeVecs,
+            true,
+        );
 
     // Should still return valid result (possibly with matches like atom_fill, drawing_plane)
     let all_node_names: Vec<&str> = categories
@@ -214,7 +249,12 @@ fn test_get_compatible_node_types_excludes_non_public_nodes() {
     let registry = NodeTypeRegistry::new();
 
     // Value node is not public (internal helper node)
-    let categories = registry.get_compatible_node_types(&DataType::Float, true);
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            true,
+        );
 
     let all_node_names: Vec<&str> = categories
         .iter()
@@ -368,7 +408,10 @@ fn test_get_node_network_names_returns_sorted() {
 fn test_get_node_type_views_returns_categories_in_order() {
     let registry = NodeTypeRegistry::new();
 
-    let categories = registry.get_node_type_views();
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
 
     // Should have multiple categories
     assert!(categories.len() >= 5, "Should have at least 5 categories");
@@ -419,7 +462,10 @@ fn test_get_node_type_views_returns_categories_in_order() {
 fn test_get_node_type_views_nodes_sorted_alphabetically() {
     let registry = NodeTypeRegistry::new();
 
-    let categories = registry.get_node_type_views();
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
 
     // For each category, nodes should be sorted alphabetically
     for category in &categories {
@@ -440,7 +486,10 @@ fn test_get_node_type_views_includes_custom_networks() {
 
     registry.add_node_network(create_test_network("my_custom_node"));
 
-    let categories = registry.get_node_type_views();
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
 
     // Should have a Custom category
     let custom_category = categories
@@ -461,7 +510,10 @@ fn test_get_node_type_views_includes_custom_networks() {
 fn test_get_node_type_views_excludes_non_public_nodes() {
     let registry = NodeTypeRegistry::new();
 
-    let categories = registry.get_node_type_views();
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
 
     let all_node_names: Vec<&str> = categories
         .iter()
@@ -494,7 +546,7 @@ fn test_get_node_type_finds_custom_network_type() {
 fn test_get_node_networks_with_validation_empty() {
     let registry = NodeTypeRegistry::new();
 
-    let networks = registry.get_node_networks_with_validation();
+    let networks = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_validation(&registry);
     assert!(networks.is_empty());
 }
 
@@ -505,7 +557,7 @@ fn test_get_node_networks_with_validation_returns_sorted() {
     registry.add_node_network(create_test_network("zebra_net"));
     registry.add_node_network(create_test_network("alpha_net"));
 
-    let networks = registry.get_node_networks_with_validation();
+    let networks = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_validation(&registry);
 
     assert_eq!(networks.len(), 2);
     assert_eq!(networks[0].name, "alpha_net");

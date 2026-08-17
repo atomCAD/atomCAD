@@ -138,9 +138,7 @@ fn api_getter_resolves_label_and_body_qualifier() {
         Some(body_int_id),
     ));
 
-    let networks = designer
-        .node_type_registry
-        .get_node_networks_with_validation();
+    let networks = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_validation(&designer.node_type_registry);
     let main_entry = networks
         .iter()
         .find(|n| n.name == "main")
@@ -189,9 +187,7 @@ fn valid_network_has_no_errors() {
         .set_return_node(sphere_id);
     designer.validate_active_network();
 
-    let networks = designer
-        .node_type_registry
-        .get_node_networks_with_validation();
+    let networks = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_validation(&designer.node_type_registry);
     let main_entry = networks.iter().find(|n| n.name == "main").unwrap();
     assert!(main_entry.validation_errors.is_empty());
 }

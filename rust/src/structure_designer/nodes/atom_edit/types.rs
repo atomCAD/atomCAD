@@ -467,3 +467,86 @@ pub(super) enum PendingClickInfo {
     },
     DragCompleted,
 }
+
+// =============================================================================
+// Default-tool pointer event results
+// =============================================================================
+//
+// These are the return shapes of the `default_tool` pointer state machine
+// (`default_tool.rs`). They used to be declared in
+// `api/structure_designer/structure_designer_api_types.rs`, which made a
+// 400-line domain state machine import from `api/` — part of the
+// `structure_designer -> api` back-edge D9/D10 delete.
+//
+// D10.1 settles `DragFrozenStatus` explicitly: it is *consumed inside* the
+// domain (`operations.rs`), so the producing code cannot move up and the type is
+// twinned instead. The five pointer types come along for the same two reasons —
+// `PointerMoveResult` has a `DragFrozenStatus` field, and the state machine that
+// builds them reads and writes `AtomEditData` throughout, so it is domain logic
+// rather than a view-builder. Each keeps a same-named Dart-facing twin in
+// `structure_designer_api_types.rs`, which is also where the `From` impls live
+// (the orphan rule wants the local type on one side). Do not rename either side.
+
+/// Discriminant for default_tool_pointer_down result.
+pub enum PointerDownResultKind {
+    /// A gadget handle was hit. Flutter should start existing gadget drag.
+    /// See `PointerDownResult.gadget_handle_index` for the handle.
+    GadgetHit,
+    /// Mouse-down on an atom. Entered PendingAtom state.
+    StartedOnAtom,
+    /// Mouse-down on a bond. Entered PendingBond state.
+    StartedOnBond,
+    /// Mouse-down on empty space. Entered PendingMarquee state.
+    StartedOnEmpty,
+}
+
+/// Result of default_tool_pointer_down.
+pub struct PointerDownResult {
+    pub kind: PointerDownResultKind,
+    /// Only valid when kind == GadgetHit.
+    pub gadget_handle_index: i32,
+}
+
+/// Status of frozen atoms during a drag operation.
+pub enum DragFrozenStatus {
+    /// No frozen atoms in selection — all atoms moved normally.
+    NoneFrozen,
+    /// Some selected atoms were frozen and skipped; others moved.
+    SomeFrozen,
+    /// All selected atoms were frozen — nothing moved.
+    AllFrozen,
+}
+
+/// Discriminant for default_tool_pointer_move result.
+pub enum PointerMoveResultKind {
+    /// Threshold not exceeded yet.
+    StillPending,
+    /// Screen-plane drag in progress (atoms moved).
+    Dragging,
+    /// Marquee rectangle updated.
+    MarqueeUpdated,
+}
+
+/// Result of default_tool_pointer_move.
+pub struct PointerMoveResult {
+    pub kind: PointerMoveResultKind,
+    /// Marquee rectangle in screen coords [x, y, w, h]. Only valid when kind == MarqueeUpdated.
+    pub marquee_rect_x: f64,
+    pub marquee_rect_y: f64,
+    pub marquee_rect_w: f64,
+    pub marquee_rect_h: f64,
+    /// Status of frozen atoms during drag. Only meaningful when kind == Dragging.
+    pub frozen_drag_status: DragFrozenStatus,
+}
+
+/// Result of default_tool_pointer_up.
+pub enum PointerUpResult {
+    /// Click-select happened.
+    SelectionChanged,
+    /// Screen-plane drag finished.
+    DragCommitted,
+    /// Marquee selection applied.
+    MarqueeCommitted,
+    /// No-op (e.g., click on empty with no prior selection).
+    NothingHappened,
+}

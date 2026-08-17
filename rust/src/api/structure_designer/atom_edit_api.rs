@@ -538,7 +538,11 @@ pub fn get_active_atom_edit_tool() -> Option<APIAtomEditTool> {
             |cad_instance| match atom_edit::get_active_atom_edit_data(
                 &cad_instance.structure_designer,
             ) {
-                Some(atom_edit_data) => Some(atom_edit_data.get_active_tool()),
+                Some(atom_edit_data) => Some(
+                    crate::api::structure_designer::tool_adapters::atom_edit_active_tool(
+                        atom_edit_data,
+                    ),
+                ),
                 None => None,
             },
             None,
@@ -554,7 +558,10 @@ pub fn set_active_atom_edit_tool(tool: APIAtomEditTool) -> bool {
                 if let Some(atom_edit_data) =
                     atom_edit::get_selected_atom_edit_data_mut(&mut cad_instance.structure_designer)
                 {
-                    atom_edit_data.set_active_tool(tool);
+                    crate::api::structure_designer::tool_adapters::set_atom_edit_active_tool(
+                        atom_edit_data,
+                        tool,
+                    );
                     refresh_structure_designer_auto(cad_instance);
                     true
                 } else {
@@ -927,6 +934,7 @@ pub fn default_tool_pointer_down(
                     &from_api_vec3(&ray_direction),
                     (&select_modifier).into(),
                 )
+                .into()
             },
             PointerDownResult {
                 kind: PointerDownResultKind::StartedOnEmpty,
@@ -960,6 +968,7 @@ pub fn default_tool_pointer_move(
                 );
                 // During drag, re-evaluate the atom_edit node so atom positions
                 // update visually, but skip downstream dependents for performance.
+                let result: PointerMoveResult = result.into();
                 if matches!(result.kind, PointerMoveResultKind::Dragging) {
                     cad_instance.structure_designer.mark_skip_downstream();
                     refresh_structure_designer_auto(cad_instance);
@@ -1001,6 +1010,7 @@ pub fn default_tool_pointer_up(
                     viewport_height,
                     &view_proj,
                 );
+                let result: PointerUpResult = result.into();
                 // Refresh after selection change (re-evaluates decorations)
                 if !matches!(result, PointerUpResult::NothingHappened) {
                     refresh_structure_designer_auto(cad_instance);

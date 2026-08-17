@@ -365,10 +365,10 @@ pub fn ai_list_node_types(category: Option<String>, verbose: bool) -> String {
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
-                let category_views = cad_instance
-                    .structure_designer
-                    .node_type_registry
-                    .get_node_type_views();
+                let category_views =
+                    crate::api::structure_designer::view_builders::get_node_type_views(
+                        &cad_instance.structure_designer.node_type_registry,
+                    );
 
                 format_node_type_list(&category_views, category.as_deref(), verbose)
             },

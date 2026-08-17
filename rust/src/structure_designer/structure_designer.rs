@@ -19,8 +19,6 @@ use super::preferences::load_preferences;
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
 use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
-use crate::api::structure_designer::structure_designer_api_types::APIExecuteResult;
-use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluationResult;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::displayed_node_refs::collect_displayed_node_refs;
 use crate::structure_designer::implicit_eval::ray_tracing::{
@@ -125,6 +123,48 @@ impl NamespaceRenamePlan {
     pub fn is_applicable(&self) -> bool {
         !self.is_empty() && self.valid_names && !self.has_conflicts()
     }
+}
+
+/// Result of [`StructureDesigner::evaluate_node_for_cli`].
+///
+/// This is the *domain* shape; `APINodeEvaluationResult` is its Dart-facing
+/// twin, with the `From` impl in `structure_designer_api_types.rs` (D9a). The
+/// method used to return the api type directly, which is why this 85k-line
+/// module imported from `api/` — but unlike the D10 view-builders it is not
+/// presentation logic (it runs a real evaluation pass through
+/// `with_eval_context`), so the *type* moves down rather than the method up.
+#[derive(Debug)]
+pub struct NodeEvaluationResult {
+    /// The node ID that was evaluated
+    pub node_id: u64,
+    /// The node type name (e.g., "cuboid", "materialize")
+    pub node_type_name: String,
+    /// The custom name if assigned, otherwise None
+    pub custom_name: Option<String>,
+    /// The output data type name (e.g., "Blueprint", "HasAtoms", "Float")
+    pub output_type: String,
+    /// Brief display string (from to_display_string())
+    pub display_string: String,
+    /// Detailed string (from to_detailed_string()), only populated if verbose=true
+    pub detailed_string: Option<String>,
+    /// Whether the evaluation succeeded (no errors in this node's chain)
+    pub success: bool,
+    /// Error message if the node itself produced an error
+    pub error_message: Option<String>,
+}
+
+/// Result of [`StructureDesigner::execute_node`]. Domain twin of
+/// `APIExecuteResult` — see [`NodeEvaluationResult`] for why it lives here.
+pub struct ExecuteResult {
+    /// True when the Execute pass completed without surfacing a top-level
+    /// `NetworkResult::Error` from the targeted node.
+    pub ok: bool,
+    /// Populated with the error message when `ok == false`; None otherwise.
+    pub error: Option<String>,
+    /// Print entries emitted by `print` nodes evaluated during this pass.
+    /// Sliced from `StructureDesigner.print_log` so the Console panel does
+    /// not double-display entries already pulled via `take_print_log`.
+    pub logs: Vec<PrintLogEntry>,
 }
 
 pub struct StructureDesigner {
@@ -1319,144 +1359,6 @@ impl StructureDesigner {
         let entries = harvest_eval_errors(network, &all_node_errors, &all_origins);
         self.eval_error_snapshots
             .insert(network_name.to_string(), entries);
-    }
-
-    /// The unified per-network error list for the user-types panel
-    /// (`doc/design_error_management.md` D1): the registry's validation
-    /// entries plus each network's last-known evaluation errors — live for
-    /// the active network (its snapshot was harvested by the latest refresh),
-    /// dimmed (`stale == true`) for inactive ones.
-    ///
-    /// Snapshot entries are re-validated against the current network here:
-    /// an entry whose node vanished is dropped rather than returned (a jump
-    /// must never target a dead node), and an entry whose node has since
-    /// gained a blocking validation error is deduped away (D8 — the predicate
-    /// state can change after harvest, e.g. a cross-network cascade stamping
-    /// "References invalid node network" on an instance in an inactive
-    /// network).
-    pub fn get_node_networks_with_errors(
-        &self,
-    ) -> Vec<crate::api::structure_designer::structure_designer_api_types::APINetworkWithValidationErrors>
-    {
-        use crate::api::structure_designer::structure_designer_api_types::{
-            APIErrorSource, APIValidationError,
-        };
-        use crate::structure_designer::eval_errors::has_blocking_validation_error;
-        use crate::structure_designer::network_usages::{
-            node_label, resolve_scope_labels, resolve_scope_network,
-        };
-
-        let mut networks = self.node_type_registry.get_node_networks_with_validation();
-        for entry in &mut networks {
-            let Some(snapshot) = self.eval_error_snapshots.get(&entry.name) else {
-                continue;
-            };
-            let stale = self.active_node_network_name.as_deref() != Some(entry.name.as_str());
-            for eval_error in snapshot {
-                // The offending node lives either in this network or — for a
-                // root cause reached across a custom-network boundary (D7) — in
-                // the network the entry names.
-                let host_name = eval_error.host_network.as_deref().unwrap_or(&entry.name);
-                let Some(host) = self.node_type_registry.node_networks.get(host_name) else {
-                    continue;
-                };
-                let Some(scope) = resolve_scope_network(host, &eval_error.scope_path) else {
-                    continue;
-                };
-                let Some(node) = scope.nodes.get(&eval_error.node_id) else {
-                    continue;
-                };
-                // The D8 dedupe applies to rows of *this* network: a poisoned
-                // node is represented by its blocking validation row here. A
-                // cross-network row is exempt — that validation row lives in the
-                // other network's list, so dropping it here would leave the
-                // derived entries with no collapse parent.
-                if eval_error.host_network.is_none()
-                    && has_blocking_validation_error(scope, eval_error.node_id)
-                {
-                    continue;
-                }
-                // Label + qualifier resolve exactly like a validation row's
-                // (`get_node_networks_with_validation`), so the two entry
-                // kinds render consistently in the picker; a cross-network row
-                // additionally names its host network as provenance.
-                let body_labels = if eval_error.scope_path.is_empty() {
-                    None
-                } else {
-                    let labels = resolve_scope_labels(host, &eval_error.scope_path);
-                    (!labels.is_empty()).then(|| labels.join(" > "))
-                };
-                let body_qualifier = match (eval_error.host_network.as_deref(), body_labels) {
-                    (None, None) => None,
-                    (None, Some(labels)) => Some(format!("in {} body", labels)),
-                    (Some(host_name), None) => Some(format!("in {}", host_name)),
-                    (Some(host_name), Some(labels)) => {
-                        Some(format!("in {} > {} body", host_name, labels))
-                    }
-                };
-                entry.validation_errors.push(APIValidationError {
-                    error_text: eval_error.error_text.clone(),
-                    // An evaluation error always means "this node's output is
-                    // unavailable" — Error severity (red), never advisory.
-                    blocking: true,
-                    source: APIErrorSource::Evaluation,
-                    stale,
-                    scope_path: eval_error.scope_path.clone(),
-                    node_id: Some(eval_error.node_id),
-                    node_label: Some(node_label(node)),
-                    body_qualifier,
-                    host_network: eval_error.host_network.clone(),
-                    root_cause: self.resolve_api_root_cause(eval_error.root.as_ref()),
-                });
-            }
-        }
-        networks
-    }
-
-    /// Resolve a stored [`RootCauseRef`] into the API shape, dropping it when
-    /// the target no longer exists (a vanished root makes its derived entries
-    /// plain top-level rows rather than rows pointing at a dead node).
-    fn resolve_api_root_cause(
-        &self,
-        root: Option<&crate::structure_designer::eval_errors::RootCauseRef>,
-    ) -> Option<crate::api::structure_designer::structure_designer_api_types::APIErrorRootCause>
-    {
-        use crate::api::structure_designer::structure_designer_api_types::APIErrorRootCause;
-        use crate::structure_designer::network_usages::{node_label, resolve_scope_network};
-
-        let root = root?;
-        let network = self
-            .node_type_registry
-            .node_networks
-            .get(&root.address.host_network)?;
-        let scope = resolve_scope_network(network, &root.address.scope_path)?;
-        let node = scope.nodes.get(&root.address.node_id)?;
-        Some(APIErrorRootCause {
-            host_network: root.address.host_network.clone(),
-            scope_path: root.address.scope_path.clone(),
-            node_id: root.address.node_id,
-            node_label: node_label(node),
-            error_text: root.error_text.clone(),
-        })
-    }
-
-    /// "Go to root cause" for one node of the **active** network
-    /// (`doc/design_error_management.md` D7): the terminal of its origin-link
-    /// walk, or `None` when the node is itself a root cause (or carries no
-    /// evaluation error at all). Backs the node context-menu action; the picker
-    /// rows read the same address off `APIValidationError::root_cause`.
-    pub fn get_node_root_cause(
-        &self,
-        scope_path: &[u64],
-        node_id: u64,
-    ) -> Option<crate::api::structure_designer::structure_designer_api_types::APIErrorRootCause>
-    {
-        let network_name = self.active_node_network_name.as_deref()?;
-        let snapshot = self.eval_error_snapshots.get(network_name)?;
-        let entry = snapshot.iter().find(|e| {
-            e.host_network.is_none() && e.node_id == node_id && e.scope_path == scope_path
-        })?;
-        self.resolve_api_root_cause(entry.root.as_ref())
     }
 
     // Full refresh implementation - re-evaluates all displayed nodes
@@ -7937,13 +7839,13 @@ impl StructureDesigner {
     /// * `verbose` - If true, include detailed output for complex types
     ///
     /// # Returns
-    /// * `Ok(APINodeEvaluationResult)` - The evaluation result
+    /// * `Ok(NodeEvaluationResult)` - The evaluation result
     /// * `Err(String)` - If node not found or network not active
     pub fn evaluate_node_for_cli(
         &mut self,
         node_id: u64,
         verbose: bool,
-    ) -> Result<APINodeEvaluationResult, String> {
+    ) -> Result<NodeEvaluationResult, String> {
         // Check that an active network is set
         let network_name = self
             .active_node_network_name
@@ -8019,7 +7921,7 @@ impl StructureDesigner {
             _ => (true, None),
         };
 
-        Ok(APINodeEvaluationResult {
+        Ok(NodeEvaluationResult {
             node_id,
             node_type_name,
             custom_name,
@@ -8042,14 +7944,14 @@ impl StructureDesigner {
     /// One-shot: no subscription, no recurring trigger — the user must invoke
     /// it again to re-fire. See `doc/design_node_execution.md` (Phase 3).
     ///
-    /// Errors during the pass surface as `APIExecuteResult::error`; structural
+    /// Errors during the pass surface as `ExecuteResult::error`; structural
     /// problems (missing network, missing node) surface as `Err(String)`.
     pub fn execute_node(
         &mut self,
         network_name: &str,
         scope_path: &[u64],
         node_id: u64,
-    ) -> Result<APIExecuteResult, String> {
+    ) -> Result<ExecuteResult, String> {
         // Verify the network and node exist before launching the pass — keeps
         // the orchestrator honest about what an empty `Ok(_)` means.
         let network = self
@@ -8092,7 +7994,7 @@ impl StructureDesigner {
         // display-pass prints already in `print_log` are left alone for the
         // Console panel's normal `take_print_log` polling cadence to pick up.
         // Without this slicing the panel would re-receive prior entries via
-        // `APIExecuteResult.logs` and double-display them. See
+        // `ExecuteResult.logs` and double-display them. See
         // `doc/design_node_execution.md` (Centralized drain).
         let pass_start = self.print_log.len();
         // Run the pass with `execute = true`. The central skip rule in the
@@ -8121,14 +8023,9 @@ impl StructureDesigner {
             _ => (true, None),
         };
 
-        let logs: Vec<
-            crate::api::structure_designer::structure_designer_api_types::APIPrintLogEntry,
-        > = self.print_log[pass_start..]
-            .iter()
-            .map(Into::into)
-            .collect();
+        let logs: Vec<PrintLogEntry> = self.print_log[pass_start..].to_vec();
 
-        Ok(APIExecuteResult { ok, error, logs })
+        Ok(ExecuteResult { ok, error, logs })
     }
 
     /// Best-effort: evaluate the `default` input pin of the parameter node

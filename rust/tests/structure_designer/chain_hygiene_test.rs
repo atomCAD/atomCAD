@@ -253,7 +253,10 @@ fn motif_parse_error_is_blocking_and_shows_exactly_one_entry() {
 
     // Exactly one row on the unified panel list — the eval entry is the
     // deduped synthesized vehicle, not a second sentence.
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let rows: Vec<_> = networks
         .iter()
         .find(|n| n.name == "main")
@@ -342,7 +345,10 @@ fn unwired_zone_output_is_blocking_and_deduped_and_chains_downstream() {
     );
 
     // D8 dedupe: one fact, one panel row (previously amber + red).
-    let networks = designer.get_node_networks_with_errors();
+    let networks =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_errors(
+            &designer,
+        );
     let rows: Vec<_> = networks
         .iter()
         .find(|n| n.name == "main")
