@@ -1049,7 +1049,9 @@ existing suites stay green and the app still builds and runs:
   `#[path]`. `cargo test --workspace -j 4` is the belt-and-braces form
   and is worth using at least once per phase.
 - `cargo clippy` warning count must not exceed the ~14 baseline;
-  `flutter analyze` must not exceed its ~68 baseline. The same
+  `flutter analyze` must not exceed its ~68 baseline. (Both estimates
+  turned out to be stale — the measured Phase 0 values are 36 and 139;
+  see "Phase 0 — landed" and use those.) The same
   `default-members` caveat applies to clippy: a *falling* warning count
   is as suspicious as a rising one.
 - `cargo build --release` followed by launching the app must work
@@ -1126,6 +1128,107 @@ so the post-Phase-5 comparison is meaningful. Record the numbers in
 this document.
 
 *Estimate: 0.5 day, plus benchmark setup.*
+
+#### Phase 0 — landed 2026-08-17
+
+**Changes.** `rust/Cargo.toml` is now `[package]` + `[workspace]` +
+`[workspace.dependencies]` + `[profile.release]`. All 22 third-party runtime
+dependencies plus `insta` and `tempfile` moved to `[workspace.dependencies]`,
+and the root package's own `[dependencies]` were converted to
+`foo = { workspace = true }` so the convention is exercised from day one.
+`flutter_rust_bridge`, `flutter_rust_bridge_codegen`, `serde_with` and
+`ab_glyph` stay inlined in the root: FRB is confined to the root crate by D11,
+and `ab_glyph` is used by one example. `Cargo.lock` is **byte-identical** after
+the change, which is the cheapest available proof that no version resolution
+moved. New files: `rust/crates/README.md` (placeholder + the conventions a new
+crate must follow) and `rust/examples/crate_split_bench.rs` (the D13 harness).
+`rust/AGENTS.md` gained a "Cargo workspace" section.
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo clippy`, `cargo clippy --all-targets`, `cargo build --release`, and
+cargokit (`flutter build windows --debug` rebuilt
+`build/windows/x64/plugins/rust_lib_flutter_cad/…/rust_lib_flutter_cad.dll`
+against the new manifest — cargokit reads `[package] name` with a plain TOML
+parse and passes `--manifest-path rust/Cargo.toml -p rust_lib_flutter_cad`, so
+the workspace is invisible to it). No `.snap.new` files were produced.
+**Pending manual step for the maintainer:** launch the app
+(`flutter run`, release DLL) and the Flutter smoke test.
+
+**Test count — the Phase 1 tripwire.** `cd rust && cargo test -j 4`:
+**5,054 tests** (5,040 passed, 0 failed, 14 ignored) across 10 binaries.
+`cargo test --workspace -j 4` returns the identical count.
+
+| binary | tests |
+|---|---|
+| `rust_lib_flutter_cad` (lib unittests) | 11 |
+| `tests/crystolecule.rs` | 1,171 |
+| `tests/display.rs` | 59 |
+| `tests/expr.rs` | 477 |
+| `tests/geo_tree.rs` | 66 |
+| `tests/integration.rs` | 113 |
+| `tests/renderer.rs` | 42 |
+| `tests/structure_designer.rs` | 3,082 (4 ignored) |
+| `tests/util.rs` | **15** |
+| doc-tests | 18 (8 run, 10 ignored) |
+
+Phase 1 must still report 5,054. **15** is the number to recognise: a drop to
+5,039 means `atomcad-util` stopped being selected (a `default-members`
+problem), not that a `#[path]` was lost.
+
+**Lint baselines (measured — the estimates in Regression strategy were
+stale).** `cargo clippy -j 4` → **36** warnings (lib);
+`cargo clippy --all-targets -j 4` → **112** warning lines across the lib and 8
+test binaries; `flutter analyze` → **139** issues, of which 133 are outside the
+vendored `packages/` tree. Use these, not the "~14 / ~68" figures above.
+
+**D13 runtime baseline.** Harness: `rust/examples/crate_split_bench.rs` — a
+fresh `StructureDesigner` per repetition (so evaluation is always cold and the
+geometry cache never carries a result between reps), reporting min and mean.
+Machine: the Windows dev box, `-j 4`, `lto = "thin"` in effect.
+
+```text
+cd rust
+cargo run --release --example crate_split_bench -- \
+    C:\machine_phase_systems\t_center_showcase\t_center_showcase.cnnd Main 5
+cargo run --release --example crate_split_bench -- ../samples/nut-bolt.cnnd "nut bolt" 10
+```
+
+The nanobeam is the fixture D13 asks for, but it lives **outside the
+repository** (the showcase was deliberately not committed), so `nut-bolt.cnnd`
+is included as the in-repo fallback anyone can reproduce.
+
+| step | nanobeam `Main` — 1,075,748 atoms / 1,951,386 bonds | `nut bolt` — 8,374 / 12,725 |
+|---|---|---|
+| load (`.cnnd` parse + validate) | 2.6 ms (mean 2.8) | 2.5 ms (mean 2.6) |
+| evaluate (SDF/CSG + materialise) | **2,089.2 ms** (mean 2,163.6) | **11.5 ms** (mean 12.1) |
+| impostor tessellation | **433.3 ms** (mean 453.7) | 1.7 ms (mean 1.8) |
+| triangle-mesh tessellation | skipped¹ | **25.7 ms** (mean 26.0) |
+
+¹ The harness skips the triangle path above 250,000 atoms: at 12×6 sphere
+divisions a ball-and-stick mesh costs ~62 vertices per atom, so a million-atom
+mesh measures the allocator rather than the tessellator.
+
+**What `lto = "thin"` costs and buys, measured *before* any code moves.** D13
+called this unmeasured; it no longer is. Same harness, same machine,
+`CARGO_PROFILE_RELEASE_LTO=false` (i.e. cargo's pre-Phase-0 default) into a
+separate target directory:
+
+| | `lto = "thin"` | LTO off (pre-Phase-0) | delta |
+|---|---|---|---|
+| nanobeam evaluate (min) | 2,089.2 ms | 2,183.3 ms | **−4.3 %** |
+| nanobeam impostor tessellation (min) | 433.3 ms | 525.4 ms | **−17.5 %** |
+| nut-bolt evaluate (min) | 11.5 ms | 11.4 ms | noise |
+| nut-bolt triangle tessellation (min) | 25.7 ms | 25.7 ms | noise |
+| cold release build, lib + example | 24 m 06 s | 6 m 18 s | **3.8×** |
+| warm release rebuild (touch `src/lib.rs`) | 1 m 58 s | 2 m 19 s | −15 % |
+
+Two conclusions worth carrying into Phase 5. First, thin LTO already pays for
+itself with the code still in one crate — 17.5 % off the per-atom impostor loop
+— so the post-split comparison must be made against the thin-LTO column above,
+never against the pre-Phase-0 build. Second, its cost is concentrated entirely
+in **from-scratch** release builds; the edit-one-file-and-rebuild loop that
+actually dominates development is, if anything, slightly faster. Thin LTO
+stays.
 
 ### Phase 1 — `atomcad-util`
 

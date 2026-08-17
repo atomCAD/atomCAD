@@ -29,6 +29,33 @@ Dependencies flow downward (no circular dependencies):
 - **expr/** - Expression language (lexer, parser, validation)
 - **api/** - Flutter Rust Bridge API layer
 
+## Cargo workspace
+
+`rust/` is **both** the cdylib package (`rust_lib_flutter_cad`, the one cargokit
+builds) **and** the workspace root. Extracted crates live in `rust/crates/` and
+are picked up by the `members = ["crates/*"]` glob. This is step 0 of
+`doc/design_rust_crate_split.md`, which converts the top-level modules into
+crates so the dependency DAG above becomes compiler-enforced rather than
+convention-enforced. `rust/crates/` is empty until Phase 1.
+
+Three rules follow from that layout:
+
+- **Dependency versions go in `[workspace.dependencies]`,** and every package —
+  the root included — writes `foo = { workspace = true }`. Two packages on two
+  `glam` versions would make `DVec3` two different types.
+- **`csgrs` must stay in `[workspace.dependencies]`.** It is a path dependency,
+  and a relative path resolves against the manifest that declares it: `../csgrs`
+  is correct only from `rust/Cargo.toml`. Inlined into a member manifest it
+  would point at `rust/crates/csgrs`.
+- **Do not remove `default-members` from `[workspace]`.** In a workspace that
+  has a root package, cargo's default selection is the root package *alone*, so
+  a bare `cargo test` / `cargo clippy` in `rust/` would silently skip every
+  extracted crate — tests would vanish from the run with no error. `cargo test
+  --workspace -j 4` is the belt-and-braces form.
+- `[profile.*]` is only honoured in the workspace root manifest (this is why
+  csgrs's own `lto = true` has never applied). `[profile.release] lto = "thin"`
+  is there to restore cross-crate inlining lost to the split; see D13.
+
 ## Adding a New Node Type
 
 1. Create `src/structure_designer/nodes/my_node.rs`

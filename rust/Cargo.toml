@@ -9,37 +9,115 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib", "staticlib", "rlib"]
 
-[dependencies]
-flutter_rust_bridge = "=2.10.0"
-dlopen = "0.1.8"
-lazy_static = "1.4.0"
-wgpu = "23.0.1"
-tokio = { version = "1", features = ["full"] }
-bytemuck = { version = "1.16", features = [ "derive" ] }
-glam = "0.29.2"
-lru = "0.12.1"
-rayon = "1.7"
-thiserror = "2.0.12"
-regex = "1.5.4"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-dirs = "5.0"
-toml = "0.8"
-indexmap = "2.0"
-smallvec = "1.13"
-rustc-hash = "2.1"
+# ---------------------------------------------------------------------------
+# Workspace (doc/design_rust_crate_split.md, D1)
+#
+# `rust/` is BOTH the cdylib package cargokit builds (`-p rust_lib_flutter_cad`
+# against `rust/Cargo.toml`) and the workspace root. Extracted crates live in
+# `crates/` and are picked up by the glob.
+#
+# `default-members` is MANDATORY, not polish: in a workspace that has a root
+# package, cargo's default package selection is *the root package alone*. Left
+# implicit, `cargo test -j 4` / `cargo clippy` run in `rust/` would silently
+# skip every extracted crate — precisely the "a test file stops being compiled
+# and disappears from the run" failure the regression gate exists to catch.
+# Keep "." in the list so the root package stays covered too.
+# ---------------------------------------------------------------------------
+[workspace]
+members = ["crates/*"]
+default-members = [".", "crates/*"]
+
+# ---------------------------------------------------------------------------
+# Shared dependency versions (D4)
+#
+# Member crates write `glam = { workspace = true }` so that two crates can
+# never end up on different `glam` versions (at which point `DVec3` stops
+# being the same type). Heavy dependencies are *declared* here but pulled in
+# only by the crate that needs them: `wgpu`/`bytemuck`/`image` by the renderer,
+# `csgrs`/`geo`/`nalgebra` by geo_tree.
+#
+# `csgrs` MUST be declared here rather than inlined in a member manifest: it is
+# a path dependency, and a relative path is resolved against the manifest that
+# declares it. `../csgrs` is correct only from the workspace root; copied into
+# `crates/atomcad-geo-tree/Cargo.toml` it would point at `rust/crates/csgrs`.
+# (`../csgrs` sits outside the workspace directory, so it does not become a
+# workspace member — unchanged from before the workspace existed.)
+#
+# `flutter_rust_bridge` is deliberately absent: FRB stays confined to the root
+# crate (D11), so nothing else may depend on it.
+# ---------------------------------------------------------------------------
+[workspace.dependencies]
+bytemuck = { version = "1.16", features = ["derive"] }
+blake3 = "1.5"
 # csgrs: Using local copy with increased EPSILON for precision fix
 # Base commit: bbd5a7a (2024-11-12) - "Merge pull request #105 from ArchiyouApp/main"
 # Modification: Changed EPSILON from 1e-8 to 1e-6 in src/float_types.rs (line 23)
 # Reason: Fixes CSG intersection bug with near-unit vectors (0.9999999999999999)
 # Issue: https://github.com/timschmidt/csgrs/issues/107
 csgrs = { path = "../csgrs" }
-nalgebra = "^0.33"
-image = { version = "0.25", default-features = false, features = ["png"] }
+dirs = "5.0"
+dlopen = "0.1.8"
 geo = "^0.29.3"
+glam = "0.29.2"
+image = { version = "0.25", default-features = false, features = ["png"] }
+indexmap = "2.0"
+lazy_static = "1.4.0"
+lru = "0.12.1"
+nalgebra = "^0.33"
+rayon = "1.7"
+regex = "1.5.4"
+rustc-hash = "2.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+smallvec = "1.13"
+thiserror = "2.0.12"
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"
+wgpu = "23.0.1"
+# dev-dependencies shared by the extracted crates' test harnesses
+insta = { version = "1.41", features = ["json"] }
+tempfile = "3.14"
+
+# ---------------------------------------------------------------------------
+# Release profile (D13)
+#
+# Cargo ignores `[profile.*]` in non-root manifests, so this is the only place
+# it can live (and it is why csgrs's own `lto = true` has never applied).
+# Before the split there was no `[profile.release]` at all, i.e. LTO off and
+# `codegen-units = 16`. Crate boundaries turn hot intra-crate calls into
+# cross-crate ones, so thin LTO is enabled here to restore most cross-crate
+# inlining; `lto = "fat"` + `codegen-units = 1` is the escalation if the
+# post-Phase-5 benchmark shows a regression.
+# ---------------------------------------------------------------------------
+[profile.release]
+lto = "thin"
+
+[dependencies]
+flutter_rust_bridge = "=2.10.0"
+dlopen = { workspace = true }
+lazy_static = { workspace = true }
+wgpu = { workspace = true }
+tokio = { workspace = true }
+bytemuck = { workspace = true }
+glam = { workspace = true }
+lru = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+toml = { workspace = true }
+indexmap = { workspace = true }
+smallvec = { workspace = true }
+rustc-hash = { workspace = true }
+csgrs = { workspace = true }
+nalgebra = { workspace = true }
+image = { workspace = true }
+geo = { workspace = true }
 # pyo3 = { version = "0.22", features = ["auto-initialize"] }
 
- blake3 = "1.5"
+blake3 = { workspace = true }
 
 [build-dependencies]
 flutter_rust_bridge_codegen = "2.10.0"
@@ -47,8 +125,8 @@ serde_with = "3.5.1"
 
 [dev-dependencies]
 ab_glyph = "0.2.32"
-insta = { version = "1.41", features = ["json"] }
-tempfile = "3.14"
+insta = { workspace = true }
+tempfile = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
