@@ -2344,6 +2344,64 @@ both Phase 4 and Phase 5 measured and documented. `[profile.release] lto =
 
 *Estimate: 0.5 day.*
 
+#### Phase 7 — landed 2026-08-17
+
+One commit, documentation only: no `.rs`, `.dart` or `.toml` file was touched,
+so the 5,054-test / clippy-36 / analyze-139 baselines are untouched by
+construction.
+
+Two of the five bullets were already done. `AGENTS.md` (root) had its paths
+rewritten by commit 6.4, and `rust/AGENTS.md` had accumulated the workspace
+rules phase by phase as each was learned — which is the right way round, since
+a rule written at the moment it cost someone an afternoon is more accurate than
+one written from the design doc at the end. What was missing from them was
+found by re-reading this section as a checklist rather than by grepping:
+`rust/AGENTS.md` had the twin pattern and the two FRB gotchas but never stated
+**D11 itself** (the confinement invariant, and specifically "do not add a member
+crate to `rust_input`" — the escape hatch D9a leaves open and Phase 6 declined
+to take); the root `AGENTS.md` still said "Tests go in `rust/tests/`" and
+"Keep modules independent". Both are now explicit.
+
+**The diagram is generated, and that is what "redraw to match" actually meant.**
+`doc/architecture_diagram.svg` is the output of
+`scripts/architecture_diagram/{count_loc,generate_architecture_diagram}.py`,
+whose module table pointed at `rust/src/<module>/` — every path stale, so the
+next person to run it would have got seven `Warning: Module path does not
+exist` lines and a diagram of nothing. Hand-editing the SVG would have left that
+trap armed. The scripts now read `rust/crates/<crate>/src/` plus `rust/src/api/`,
+and three substantive things changed in the picture:
+
+- **`expr` is gone as a circle** (D8) and `api` gained one. The old diagram
+  folded `api` into `structure_designer`; now that they are separate *packages*
+  with a compiler-enforced boundary, showing the FFI layer as its own node is
+  what makes the diagram match the workspace.
+- **`DEPENDENCIES` is now a transcription of the manifests**, with the arrows
+  that would clutter the picture listed separately in `ELIDED_ARROWS` rather
+  than omitted from the data. The previous version hard-coded a
+  "skip `util` edges except from domain modules" rule inline, which is the same
+  elision but indistinguishable from a missing dependency.
+- **`LOC_SCALE` had to drop from 3.0 to 0.7.** The committed `loc_counts.json`
+  was badly stale (`structure_designer` 14,508 versus the 63,985 it measures
+  today), and at the old scale the two largest circles overlapped their
+  neighbouring layers. Circle *area* is proportional to LOC, so this constant is
+  a growth-sensitive layout parameter, not a style choice — it is now commented
+  as such.
+
+`doc/architecture_overview.md` was rewritten around the crate table, with `expr`
+recorded as a component rather than a peer and the two rules a newcomer needs
+before adding code (the down-vs-up test, FRB confinement) stated inline with a
+pointer to `rust/AGENTS.md` for the detail. `doc/testing.md` gained the
+`cargo test -p <crate>` forms and a "where a new test goes" table — the
+two-harness split is not intuitive, and the rule that decides it (*what the test
+imports, not what it is about*) is worth stating in the place someone looks when
+writing a test rather than only here.
+
+Also folded in, being the same class of staleness: `rust/crates/README.md` was
+missing its own Phase 6 row.
+
+**This closes the design.** All seven phases are landed; the four back-edges of
+Current state are gone and are build failures to reintroduce.
+
 **Total: roughly 10.5–11.5 working days** (0.5 + 0.5 + 0.5 + 1 + 2–2.5 +
 1 + 4.5–5 + 0.5), of which **Phases 0–5 (~5.5–6 days)** deliver the
 clean lower half and are useful on their own if Phase 6 is deferred.

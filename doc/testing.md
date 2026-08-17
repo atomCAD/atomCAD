@@ -19,26 +19,58 @@ flutter test integration_test/ # Flutter smoke test — HUMAN-ONLY (see note)
 > wastes minutes per attempt. Agents cover their changes with the Rust suite
 > and `flutter analyze`, and list the smoke test as a pending manual step.
 
-## Rust Tests (rust/tests/)
+## Rust Tests
 
-Tests mirror `rust/src/` structure for easy gap identification.
+Tests mirror the source structure for easy gap identification.
 
-As the backend is split into workspace crates
-(`doc/design_rust_crate_split.md`), each extracted module's tests move with it
-into `rust/crates/<crate>/tests/`, keeping their original directory name. `cd
-rust && cargo test -j 4` still runs everything — the `default-members` entry in
-`rust/Cargo.toml` is what makes that true, so do not remove it.
+The backend is a cargo workspace (`doc/design_rust_crate_split.md`), so tests
+live in **two places**: each extracted crate's own
+`rust/crates/<crate>/tests/`, keeping the module's original directory name, and
+`rust/tests/` for the root package. `cd rust && cargo test -j 4` still runs
+everything — the `default-members` entry in `rust/Cargo.toml` is what makes that
+true, so do not remove it. To run one crate's tests alone:
+
+```bash
+cd rust && cargo test -p atomcad-crystolecule -j 4   # one crate, no api, no frb_generated
+cd rust && cargo test -p rust_lib_flutter_cad -j 4   # the root package's harnesses only
+```
+
+### Where a new test goes
+
+**Decided by what the test imports, not by what it is about.** A member crate
+cannot depend on the root crate, so a test that names anything in
+`rust_lib_flutter_cad::api` has to sit in a root-package harness even when its
+subject lives in an extracted crate. That is why two subjects have two harnesses
+each:
+
+| Subject | Domain tests (in the crate) | Tests that reach up into `api` |
+|---|---|---|
+| structure_designer | `rust/crates/atomcad-structure-designer/tests/structure_designer/` | `rust/tests/structure_designer_api/` |
+| renderer | `rust/crates/atomcad-renderer/tests/renderer/` | `rust/tests/renderer_api/` |
+
+The api-side harnesses hold the tests that consume transport types
+(`APIValidationError`, `APIAtomEditTool`, `APIDataType`, …) or call the
+view-builders in `api/structure_designer/`. Prefer splitting a file at that seam
+over dragging its whole subject upward. Everything cross-layer — the `.cnnd`
+migration corpus, roundtrips — stays in `rust/tests/integration/`.
+
+Fixtures are shared by three packages and stay at `rust/tests/fixtures/`.
+Address them only through `atomcad_test_support::fixture_path` /
+`fixture_path_str`; a local `CARGO_MANIFEST_DIR` join or a bare
+`"tests/fixtures/…"` string is anchored to the *package* root and means
+something different in every crate.
 
 ### Unit Tests
-| Module | Coverage |
-|--------|----------|
-| `expr/` | Lexer, parser, evaluation, validation |
-| `crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill — now at `rust/crates/atomcad-crystolecule/tests/crystolecule/`, run with `cargo test -p atomcad-crystolecule` |
-| `display/` | Poly-mesh tessellation, CSG→poly-mesh, atom color/render style — now at `rust/crates/atomcad-display/tests/display/`, run with `cargo test -p atomcad-display`. The two scene-tessellation tests moved to `rust/tests/structure_designer/` (`atomic_impostor_alpha_test.rs`, `atom_label_test.rs`), because `tessellate_scene_content` is a `structure_designer` module. |
-| `geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) — now at `rust/crates/atomcad-geo-tree/tests/geo_tree/`, run with `cargo test -p atomcad-geo-tree` |
-| `renderer/` | Camera math, label atlas layout, impostor meshes, transparent sort — now at `rust/crates/atomcad-renderer/tests/renderer/`, run with `cargo test -p atomcad-renderer`. The four `api`-level axis-resolution tests stay at `rust/tests/renderer_api/` (`cargo test --test renderer_api`), because a member crate cannot depend on the root crate. |
-| `structure_designer/` | Network validator, node network operations, network evaluator |
-| `util/` | DAA box, LRU cache — now at `rust/crates/atomcad-util/tests/util/`, run with `cargo test -p atomcad-util` |
+| Crate | Location | Coverage |
+|--------|----------|----------|
+| `atomcad-structure-designer` | `crates/atomcad-structure-designer/tests/structure_designer/` | Network validator, node network operations, network evaluator, nodes, undo, text format, serialization. Also the two scene-tessellation tests (`atomic_impostor_alpha_test.rs`, `atom_label_test.rs`) — `tessellate_scene_content` is a `structure_designer` module, not a `display` one. |
+| `atomcad-structure-designer` (`expr`) | `crates/atomcad-structure-designer/tests/expr/` | Lexer, parser, evaluation, validation. `expr` is a submodule of the crate (design doc D8), so its tests ride along with it. |
+| `atomcad-crystolecule` | `crates/atomcad-crystolecule/tests/crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill, UFF simulation |
+| `atomcad-display` | `crates/atomcad-display/tests/display/` | Poly-mesh tessellation, CSG→poly-mesh, atom color/render style |
+| `atomcad-geo-tree` | `crates/atomcad-geo-tree/tests/geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) |
+| `atomcad-renderer` | `crates/atomcad-renderer/tests/renderer/` | Camera math, label atlas layout, impostor meshes, transparent sort |
+| `atomcad-util` | `crates/atomcad-util/tests/util/` | DAA box, LRU cache |
+| `rust_lib_flutter_cad` | `rust/tests/structure_designer_api/`, `rust/tests/renderer_api/` | The api-level tests of those two subjects: error/validation transport types, `APIDataType` conversion, function-pin role views, atom-edit tool adapters, node-type views; the four axis-resolution tests. |
 
 ### Snapshot Tests (insta)
 Evaluate sample CNND files and compare against golden files:
@@ -110,4 +142,4 @@ The HTML report shows:
 
 - GPU rendering (wgpu)
 - Visual appearance
-- `renderer/`, `display/` modules
+- the GPU-bound parts of `atomcad-renderer` and `atomcad-display`

@@ -1,6 +1,6 @@
 # Rust Backend - Agent Instructions
 
-## Module Architecture
+## Crate Architecture
 
 Dependencies flow downward (no circular dependencies):
 
@@ -25,7 +25,12 @@ adding a back-edge is now a build failure, not a review comment.
 └─────────────────────────────────────────────────────┘
 ```
 
-## Key Modules
+`doc/architecture_overview.md` has the same picture for a non-contributor
+audience, with `doc/architecture_diagram.svg` (regenerate it with
+`scripts/architecture_diagram/`, do not hand-edit the SVG) — keep the two in
+sync when a crate is added or an edge changes.
+
+## Key Crates
 
 - **`src/api/`** - Flutter Rust Bridge API layer. Together with the generated
   `src/frb_generated.rs` this is *all* that is left in the root crate; `src/`
@@ -106,10 +111,13 @@ adding a back-edge is now a build failure, not a review comment.
 
 `rust/` is **both** the cdylib package (`rust_lib_flutter_cad`, the one cargokit
 builds) **and** the workspace root. Extracted crates live in `rust/crates/` and
-are picked up by the `members = ["crates/*"]` glob. This is step 0 of
-`doc/design_rust_crate_split.md`, which converts the top-level modules into
-crates so the dependency DAG above becomes compiler-enforced rather than
-convention-enforced. `atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2),
+are picked up by the `members = ["crates/*"]` glob. `doc/design_rust_crate_split.md`
+records the whole conversion — it is **complete**, and the dependency DAG above
+is compiler-enforced rather than convention-enforced from here on. Read that
+document before moving a type or a file across a crate boundary; the decisions
+below are its conclusions, not preferences.
+
+`atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2),
 `atomcad-renderer` (Phase 3), `atomcad-crystolecule` (Phase 4, together with
 the `atomcad-test-support` dev-only helper crate), `atomcad-display` (Phase 5)
 and `atomcad-structure-designer` (Phase 6, with `expr` inside it) are all
@@ -154,6 +162,13 @@ Rules that follow from that layout:
 - Committed generated artifacts should be regenerable *in place* after a move:
   re-run the generator and confirm a byte-identical diff. That is the only real
   proof both the read path and the write path survived.
+- **flutter_rust_bridge stays confined to the root crate (D11).** No
+  `#[frb(...)]` attribute exists outside `rust/src/api/`, and
+  `flutter_rust_bridge.yaml` keeps `rust_root: rust/` with `crate::api::…`
+  inputs only. Do not add a member crate to `rust_input` to make a type
+  visible — that is the problem the twin pattern below exists to avoid, and it
+  would additionally auto-export every `pub fn` in the scanned namespace as a
+  Dart API and add a full `cargo expand` pass to codegen.
 - **A Dart-facing type that moves down keeps a same-named twin in `api/`, and the
   twin is *not* renamed to `API…`.** A `pub use` re-export does **not** make a
   type visible to flutter_rust_bridge (its `pub_use_transformer` returns early
@@ -241,9 +256,10 @@ See `crates/atomcad-structure-designer/src/AGENTS.md` (Zones) for the body model
 
 When adding new functionality to the Rust codebase:
 
-1. **Write tests for new core logic** - especially for functions in `structure_designer/`, `expr/`, and the extracted crates (`atomcad-crystolecule`, `atomcad-geo-tree`, …)
-2. **Tests go in `rust/tests/`** (or, for an extracted crate, in that crate's
-   own `crates/<crate>/tests/`), NOT inline in source files
+1. **Write tests for new core logic** - especially for the node network,
+   `expr`, and the domain crates (`atomcad-crystolecule`, `atomcad-geo-tree`, …)
+2. **Tests go in the owning crate's `crates/<crate>/tests/`** (or in
+   `rust/tests/` for the root package), NOT inline in source files
 3. **Mirror the source file hierarchy** in the test directory:
    - Source: `crates/atomcad-structure-designer/src/text_format/`
    - Test: `crates/atomcad-structure-designer/tests/structure_designer/text_format_test.rs`
@@ -298,8 +314,10 @@ When adding new functionality to the Rust codebase:
 ```bash
 cd rust && cargo test                    # Run all tests
 cd rust && cargo test <test_name>        # Run specific test
-cd rust && cargo test --test structure_designer  # Run tests in a specific test crate
+cd rust && cargo test --test structure_designer  # Run one harness (resolves across the workspace)
+cd rust && cargo test --test structure_designer_api  # …and its api-side counterpart
 cd rust && cargo test -p atomcad-crystolecule    # Run one crate's tests (no api, no frb_generated)
+cd rust && cargo test --workspace                # Belt and braces; `default-members` already covers it
 ```
 
 Never `cargo test` with full parallelism on the Windows dev box — use `-j 4`.

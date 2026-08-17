@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="720" viewBox="0 0 1700 720">
   <defs>
     <style>
       .module-circle {
@@ -50,87 +50,88 @@
     </marker>
   </defs>
   
-  <rect width="1600" height="900" fill="#F8FAFC"/>
+  <rect width="1700" height="720" fill="#F8FAFC"/>
   
-  <text x="800.0" y="40" class="title">atomCAD Architecture</text>
-  <text x="800.0" y="65" class="subtitle">Circle area proportional to lines of code • Arrows point to dependencies (some dependencies to util are cut for clarity)</text>
-  
+  <text x="850.0" y="40" class="title">atomCAD Architecture</text>
+  <text x="850.0" y="65" class="subtitle">Every Rust circle is a cargo crate: atomcad-&lt;name&gt;, except api = the root package rust_lib_flutter_cad. The DAG is compiler-enforced.</text>
+  <text x="850.0" y="86" class="subtitle">Circle area proportional to lines of code in src/ • Arrows point to dependencies (some are cut for clarity)</text>
+
   <g id="arrows">
-    <path class="dependency-arrow" d="M 1088.4444322278266,253.98321128944394 Q 1185.2266207158102,364.0040780600276 1317.9911975255006,426.01174111886223"/>
-    <path class="dependency-arrow" d="M 1088.7508185803076,383.1326128210639 Q 1192.5612226550459,440.67023544912655 1311.2491814196924,440.08163020672794"/>
-    <path class="dependency-arrow" d="M 1103.0620280509324,514.2387114816818 Q 1214.7280813840075,516.1882679785567 1311.2884301550569,460.07046970801713"/>
-    <path class="dependency-arrow" d="M 1081.5977029791336,658.3431736738868 Q 1218.3954248693494,590.13348065086 1318.4022970208664,474.5272331591325"/>
-    <path class="dependency-arrow" d="M 782.0088024744994,426.01174111886223 Q 914.7733792841897,364.0040780600276 1011.5555677721733,253.98321128944394"/>
-    <path class="dependency-arrow" d="M 788.7115698449431,460.07046970801713 Q 885.2719186159926,516.1882679785567 996.9379719490677,514.2387114816818"/>
-    <path class="dependency-arrow" d="M 788.7508185803075,440.08163020672794 Q 907.438777344954,440.67023544912655 1011.2491814196925,383.1326128210639"/>
-    <path class="dependency-arrow" d="M 567.7035236781945,450.0 Q 638.8517618390972,480.0 710.0,450.0"/>
-    <path class="dependency-arrow" d="M 566.7203075723089,465.1818736158917 Q 777.3055907120133,522.8255262439611 995.6299150332202,520.9703785346203"/>
-    <path class="dependency-arrow" d="M 566.751334351845,435.05860069046366 Q 792.3456907674902,436.4325494341963 1010.3235890639784,378.29188177389653"/>
-    <path class="dependency-arrow" d="M 559.7288077701988,492.5876535112473 Q 775.364813284613,608.4600251893459 1012.7101026915044,668.3975509047011"/>
-    <path class="dependency-arrow" d="M 300.9995213808014,450.0 Q 316.64799885130344,480.0 332.29647632180547,450.0"/>
+    <path class="dependency-arrow" d="M 1324.1589184991399,216.30433305159573 Q 1409.390478501244,303.3650077343153 1525.8410815008601,339.18730466832517"/>
+    <path class="dependency-arrow" d="M 1329.836221324648,339.10763973508347 Q 1422.287998488628,377.62298485344644 1520.163778675352,356.38399798483744"/>
+    <path class="dependency-arrow" d="M 1347.2675909304894,470.3056935915981 Q 1449.688219769916,450.991826028367 1524.4898187420429,378.4126865782"/>
+    <path class="dependency-arrow" d="M 1290.0,435.4916377199209 Q 1320.0,405.4916377199209 1290.0,375.4916377199209"/>
+    <path class="dependency-arrow" d="M 1054.1589184991399,339.18730466832517 Q 1170.609521498756,303.3650077343153 1255.8410815008601,216.30433305159573"/>
+    <path class="dependency-arrow" d="M 1055.5101812579571,378.4126865782 Q 1130.311780230084,450.991826028367 1232.7324090695106,470.3056935915981"/>
+    <path class="dependency-arrow" d="M 1059.836221324648,356.38399798483744 Q 1157.712001511372,377.62298485344644 1250.163778675352,339.10763973508347"/>
+    <path class="dependency-arrow" d="M 869.4024314963011,360.0 Q 924.7012157481506,390.0 980.0,360.0"/>
+    <path class="dependency-arrow" d="M 865.581183321874,389.9654919723377 Q 1039.039779600989,465.9280740024372 1227.5561054071277,483.8108421425887"/>
+    <path class="dependency-arrow" d="M 869.2796440615272,354.58639124203927 Q 1061.0205645279498,375.9149476659692 1250.0411339813554,337.30520506193216"/>
+    <path class="dependency-arrow" d="M 536.9090848369307,360.0 Q 583.7533266703148,390.0 630.5975685036989,360.0"/>
+    <path class="dependency-arrow" d="M 340.3961624829486,360.0 Q 381.743538823009,390.0 423.09091516306927,360.0"/>
   </g>
   <g id="modules">
   <g id="module-ui">
-    <circle class="module-circle" cx="150" cy="450.0" r="150.99952138080144" fill="#EC4899"/>
-    <text class="module-label" x="150" y="440.0" style="font-size: 20px">ui</text>
-    <text class="module-loc" x="150" y="465.0">
-      <tspan style="font-size: 18px; font-weight: bold">23,877</tspan>
+    <circle class="module-circle" cx="210" cy="360.0" r="130.39616248294865" fill="#EC4899"/>
+    <text class="module-label" x="210" y="350.0" style="font-size: 20px">ui</text>
+    <text class="module-loc" x="210" y="375.0">
+      <tspan style="font-size: 18px; font-weight: bold">76,310</tspan>
       <tspan style="font-size: 12.6px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
+  <g id="module-api">
+    <circle class="module-circle" cx="480" cy="360.0" r="56.909084836930724" fill="#7C3AED"/>
+    <text class="module-label" x="480" y="350.0" style="font-size: 18.969694945643575px">api</text>
+    <text class="module-loc" x="480" y="375.0">
+      <tspan style="font-size: 14.227271209232681px; font-weight: bold">14,535</tspan>
+      <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
+    </text>
+  </g>
   <g id="module-structure_designer">
-    <circle class="module-circle" cx="450" cy="450.0" r="117.70352367819456" fill="#EF4444"/>
-    <text class="module-label" x="450" y="440.0" style="font-size: 20px">structure_designer</text>
-    <text class="module-loc" x="450" y="465.0">
-      <tspan style="font-size: 18px; font-weight: bold">14,508</tspan>
+    <circle class="module-circle" cx="750" cy="360.0" r="119.40243149630116" fill="#EF4444"/>
+    <text class="module-label" x="750" y="350.0" style="font-size: 20px">structure_designer</text>
+    <text class="module-loc" x="750" y="375.0">
+      <tspan style="font-size: 18px; font-weight: bold">63,985</tspan>
       <tspan style="font-size: 12.6px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-display">
-    <circle class="module-circle" cx="750" cy="450.0" r="40" fill="#F59E0B"/>
-    <text class="module-label" x="750" y="440.0" style="font-size: 16px">display</text>
-    <text class="module-loc" x="750" y="465.0">
-      <tspan style="font-size: 14px; font-weight: bold">1,225</tspan>
+    <circle class="module-circle" cx="1020" cy="360.0" r="40" fill="#F59E0B"/>
+    <text class="module-label" x="1020" y="350.0" style="font-size: 16px">display</text>
+    <text class="module-loc" x="1020" y="375.0">
+      <tspan style="font-size: 14px; font-weight: bold">2,583</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-renderer">
-    <circle class="module-circle" cx="1050" cy="225.17191809738628" r="48.04232493040555" fill="#10B981"/>
-    <text class="module-label" x="1050" y="215.17191809738628" style="font-size: 16.01410831013518px">renderer</text>
-    <text class="module-loc" x="1050" y="240.17191809738628">
-      <tspan style="font-size: 14px; font-weight: bold">2,417</tspan>
+    <circle class="module-circle" cx="1290" cy="195.4916377199209" r="40" fill="#10B981"/>
+    <text class="module-label" x="1290" y="185.4916377199209" style="font-size: 16px">renderer</text>
+    <text class="module-loc" x="1290" y="210.4916377199209">
+      <tspan style="font-size: 14px; font-weight: bold">4,180</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-geo_tree">
-    <circle class="module-circle" cx="1050" cy="373.21424302779184" r="40" fill="#3B82F6"/>
-    <text class="module-label" x="1050" y="363.21424302779184" style="font-size: 16px">geo_tree</text>
-    <text class="module-loc" x="1050" y="388.21424302779184">
-      <tspan style="font-size: 14px; font-weight: bold">1,418</tspan>
+    <circle class="module-circle" cx="1290" cy="335.4916377199209" r="40" fill="#3B82F6"/>
+    <text class="module-label" x="1290" y="325.4916377199209" style="font-size: 16px">geo_tree</text>
+    <text class="module-loc" x="1290" y="350.4916377199209">
+      <tspan style="font-size: 14px; font-weight: bold">2,101</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-crystolecule">
-    <circle class="module-circle" cx="1050" cy="528.0423249304056" r="54.82808190261373" fill="#8B5CF6"/>
-    <text class="module-label" x="1050" y="518.0423249304056" style="font-size: 18.276027300871245px">crystolecule</text>
-    <text class="module-loc" x="1050" y="543.0423249304056">
-      <tspan style="font-size: 14px; font-weight: bold">3,148</tspan>
-      <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
-    </text>
-  </g>
-  <g id="module-expr">
-    <circle class="module-circle" cx="1050" cy="682.8704068330193" r="40" fill="#06B6D4"/>
-    <text class="module-label" x="1050" y="672.8704068330193" style="font-size: 16px">expr</text>
-    <text class="module-loc" x="1050" y="697.8704068330193">
-      <tspan style="font-size: 14px; font-weight: bold">1,205</tspan>
+    <circle class="module-circle" cx="1290" cy="500.0" r="64.5083622800791" fill="#8B5CF6"/>
+    <text class="module-label" x="1290" y="490.0" style="font-size: 20px">crystolecule</text>
+    <text class="module-loc" x="1290" y="515.0">
+      <tspan style="font-size: 16.127090570019774px; font-weight: bold">18,676</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-util">
-    <circle class="module-circle" cx="1350" cy="450.0" r="40" fill="#94A3B8"/>
-    <text class="module-label" x="1350" y="440.0" style="font-size: 16px">util</text>
-    <text class="module-loc" x="1350" y="465.0">
-      <tspan style="font-size: 14px; font-weight: bold">1,199</tspan>
+    <circle class="module-circle" cx="1560" cy="360.0" r="40" fill="#94A3B8"/>
+    <text class="module-label" x="1560" y="350.0" style="font-size: 16px">util</text>
+    <text class="module-loc" x="1560" y="375.0">
+      <tspan style="font-size: 14px; font-weight: bold">1,348</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>

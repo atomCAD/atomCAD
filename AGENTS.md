@@ -111,18 +111,29 @@ See `doc/testing.md` for test coverage details.
 ### Rust
 - Edition 2024 (Rust 1.85+), stable toolchain only
 - Use `thiserror` for errors, `glam` for math
-- Keep modules independent; dependencies form a DAG
-- **Tests go in `rust/tests/`, never inline with `#[cfg(test)]`**
+- Keep crates independent; dependencies form a DAG — and since the workspace
+  split (`doc/design_rust_crate_split.md`) the compiler enforces it, so a
+  back-edge is a build failure
+- Third-party versions come from `[workspace.dependencies]`:
+  `glam = { workspace = true }`, never an inline version
+- **Tests go in the owning crate's `tests/` directory** (`rust/tests/` for the
+  root package), never inline with `#[cfg(test)]`
 
 ### Flutter Rust Bridge
 - API types in `rust/src/api/`, config in `flutter_rust_bridge.yaml`
 - Generated code in `lib/src/rust/` — **do not edit**
+- FRB stays **confined to the root crate**: no `#[frb(...)]` attribute outside
+  `rust/src/api/`, and `rust_input` lists only `crate::api::…` paths. A
+  Dart-facing type defined in a lower crate keeps a same-named twin in `api/`
+  with `From` impls — a `pub use` re-export does *not* make it visible to
+  codegen, and an unresolvable type silently degrades to an opaque handle. See
+  `rust/AGENTS.md`.
 
 ## Adding Features
 
 ### New Node Type
 1. Create `rust/crates/atomcad-structure-designer/src/nodes/my_node.rs`
-2. Register in `nodes/mod.rs` and `node_type_registry.rs`
+2. Register in the same crate's `src/nodes/mod.rs` and `src/node_type_registry.rs`
 
 ### New API Method
 1. Add function in `rust/src/api/structure_designer/`

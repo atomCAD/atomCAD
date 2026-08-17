@@ -1,6 +1,8 @@
 # `rust/crates/`
 
 Home of the extracted backend crates from `doc/design_rust_crate_split.md`.
+The split is complete: the root package is `src/api/` + `frb_generated.rs`, and
+everything below the FFI boundary lives here.
 
 The workspace in `rust/Cargo.toml` picks crates up here with
 `members = ["crates/*"]`; this README is not a package and the glob tolerates
@@ -14,6 +16,7 @@ it.
 | `atomcad-crystolecule` | `rust/src/crystolecule/` | 4 |
 | `atomcad-test-support` | `rust/tests/test_support/` | 4 |
 | `atomcad-display` | `rust/src/display/` | 5 |
+| `atomcad-structure-designer` | `rust/src/structure_designer/` + `rust/src/expr/` | 6 |
 
 Conventions for anything added here:
 

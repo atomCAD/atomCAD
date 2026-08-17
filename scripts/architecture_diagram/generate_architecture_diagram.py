@@ -1,8 +1,14 @@
 """
 Generate architecture diagram SVG for atomCAD.
 
-Creates an SVG visualization showing modules as circles (sized by LOC)
+Creates an SVG visualization showing crates as circles (sized by LOC)
 and dependencies as arrows.
+
+Every Rust circle except `api` is a crate under `rust/crates/`, named
+`atomcad-<label>`; `api` is the root cdylib package `rust_lib_flutter_cad`.
+The arrows are therefore not a convention any more — they are the
+`[dependencies]` sections of the workspace manifests, and the compiler rejects
+an edge that is not drawn here (`doc/design_rust_crate_split.md`).
 """
 
 import json
@@ -11,13 +17,19 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 # Circle sizing parameters
-LOC_SCALE = 3.0   # Scale factor for area calculation (area = LOC * scale)
+#
+# `area = LOC * LOC_SCALE`, so LOC_SCALE trades legibility against overlap: the
+# largest circle's diameter must stay under LAYER_SPACING or neighbouring
+# layers collide. Re-tune it if the counts grow a lot (at 0.7 the largest,
+# `ui`, comes out at r ~= 130 against a 270 px spacing).
+LOC_SCALE = 0.7   # Scale factor for area calculation (area = LOC * scale)
 MIN_RADIUS = 40   # Minimum circle radius in pixels
 
 # Layout parameters (horizontal layout)
-CANVAS_WIDTH = 1600
-CANVAS_HEIGHT = 900
-LAYER_SPACING = 300  # Horizontal spacing between layers
+CANVAS_WIDTH = 1700
+CANVAS_HEIGHT = 720
+LAYER_SPACING = 270  # Horizontal spacing between layers
+FIRST_LAYER_X = 210  # Centre of the leftmost layer
 
 # Colors (modern, professional palette)
 COLORS = {
@@ -26,43 +38,68 @@ COLORS = {
     'geo_tree': '#3B82F6',     # Blue - geometry
     'crystolecule': '#8B5CF6', # Purple - atoms
     'display': '#F59E0B',      # Orange - visualization
-    'expr': '#06B6D4',         # Cyan - expression
     'structure_designer': '#EF4444',  # Red - application
+    'api': '#7C3AED',          # Violet - FFI boundary (root crate)
     'ui': '#EC4899',           # Pink - user interface
 }
 
-# Module dependencies (from -> to)
+# Crate dependencies (from -> to). These mirror the `[dependencies]` sections
+# of the workspace manifests one for one — keep them in sync.
 DEPENDENCIES = [
     # Bottom layer dependencies
     ('renderer', 'util'),
     ('geo_tree', 'util'),
     ('crystolecule', 'util'),
-    ('expr', 'util'),
-    
+    ('crystolecule', 'geo_tree'),
+
     # Middle layer dependencies
     ('display', 'renderer'),
     ('display', 'crystolecule'),
     ('display', 'geo_tree'),
-    
+    ('display', 'util'),
+
     # Top layer dependencies
     ('structure_designer', 'display'),
     ('structure_designer', 'crystolecule'),
     ('structure_designer', 'geo_tree'),
-    ('structure_designer', 'expr'),
+    ('structure_designer', 'renderer'),
     ('structure_designer', 'util'),
-    
+
+    # The root crate (rust_lib_flutter_cad): the FFI boundary
+    ('api', 'structure_designer'),
+    ('api', 'display'),
+    ('api', 'crystolecule'),
+    ('api', 'geo_tree'),
+    ('api', 'renderer'),
+    ('api', 'util'),
+
     # UI dependencies
-    ('ui', 'structure_designer'),
+    ('ui', 'api'),
 ]
 
 # Layer definitions (horizontal positioning, left to right)
 # Dependencies point rightward: if A depends on B, B is to the right of A
 LAYERS = {
     0: ['ui'],
-    1: ['structure_designer'],
-    2: ['display'],
-    3: ['renderer', 'geo_tree', 'crystolecule', 'expr'],
-    4: ['util'],
+    1: ['api'],
+    2: ['structure_designer'],
+    3: ['display'],
+    4: ['renderer', 'geo_tree', 'crystolecule'],
+    5: ['util'],
+}
+
+# Arrows that would only add clutter: the ones every layer draws to the two
+# widely-used bottom crates. Skipping them is cosmetic, and the subtitle says
+# so — do not read the rendered SVG as the whole dependency list.
+ELIDED_ARROWS = {
+    ('display', 'util'),
+    ('structure_designer', 'util'),
+    ('structure_designer', 'renderer'),
+    ('api', 'display'),
+    ('api', 'crystolecule'),
+    ('api', 'geo_tree'),
+    ('api', 'renderer'),
+    ('api', 'util'),
 }
 
 def calculate_radius(loc: int) -> float:
@@ -95,7 +132,7 @@ def calculate_positions(modules: Dict[str, int]) -> Dict[str, Tuple[float, float
         total_height += spacing * (len(layer_modules) - 1)
         
         # Calculate X position for this layer (left to right)
-        x = 150 + layer_idx * LAYER_SPACING
+        x = FIRST_LAYER_X + layer_idx * LAYER_SPACING
         
         # Calculate Y positions (centered vertically)
         start_y = (CANVAS_HEIGHT - total_height) / 2
@@ -165,8 +202,9 @@ def create_svg_header() -> str:
   <rect width="{CANVAS_WIDTH}" height="{CANVAS_HEIGHT}" fill="#F8FAFC"/>
   
   <text x="{CANVAS_WIDTH/2}" y="40" class="title">atomCAD Architecture</text>
-  <text x="{CANVAS_WIDTH/2}" y="65" class="subtitle">Circle area proportional to lines of code • Arrows point to dependencies (some dependencies to util are cut for clarity)</text>
-  
+  <text x="{CANVAS_WIDTH/2}" y="65" class="subtitle">Every Rust circle is a cargo crate: atomcad-&lt;name&gt;, except api = the root package rust_lib_flutter_cad. The DAG is compiler-enforced.</text>
+  <text x="{CANVAS_WIDTH/2}" y="86" class="subtitle">Circle area proportional to lines of code in src/ • Arrows point to dependencies (some are cut for clarity)</text>
+
   <g id="arrows">
 '''
 
@@ -236,13 +274,8 @@ def generate_diagram(modules: Dict[str, int]) -> str:
     svg = create_svg_header()
     
     # Add arrows first (so they appear behind circles)
-    # Show util dependencies only from domain modules (renderer, geo_tree, crystolecule, expr)
-    # to indicate it's a foundation without cluttering the diagram
-    domain_modules = {'renderer', 'geo_tree', 'crystolecule', 'expr'}
-    
     for from_module, to_module in DEPENDENCIES:
-        # Skip util dependencies except from domain modules
-        if to_module == 'util' and from_module not in domain_modules:
+        if (from_module, to_module) in ELIDED_ARROWS:
             continue
         if from_module in positions and to_module in positions:
             svg += create_arrow(positions[from_module], positions[to_module])
@@ -283,7 +316,7 @@ def main():
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(svg_content)
     
-    print(f"✓ Generated: {output_file}")
+    print(f"Generated: {output_file}")
 
 if __name__ == '__main__':
     main()

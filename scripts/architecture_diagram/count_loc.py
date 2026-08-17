@@ -1,8 +1,13 @@
 """
-Count Lines of Code (LOC) for atomCAD modules.
+Count Lines of Code (LOC) for atomCAD crates.
 
 This script counts non-empty, non-comment lines in Rust and Dart files,
 excluding generated files.
+
+Since `doc/design_rust_crate_split.md` the Rust backend is a cargo workspace,
+so a "module" here is a crate under `rust/crates/` (plus the root crate's
+`rust/src/api/`). Only each crate's `src/` is counted: `tests/` is much larger
+than `src/` in this tree and would dominate the circle areas.
 """
 
 import os
@@ -82,23 +87,24 @@ def count_flutter_ui() -> int:
     return total
 
 def count_all_modules() -> Dict[str, int]:
-    """Count LOC for all atomCAD modules."""
+    """Count LOC for all atomCAD crates."""
     rust_src = PROJECT_ROOT / 'rust' / 'src'
+    crates = PROJECT_ROOT / 'rust' / 'crates'
     
     modules = {}
     
-    # Rust modules
+    # Rust crates. Pointing at `src/api/` rather than `rust/src/` keeps the
+    # generated `frb_generated.rs` out of the count; `expr` is a submodule of
+    # atomcad-structure-designer (design doc D8), not a peer, so it is counted
+    # inside it.
     rust_modules = {
-        'structure_designer': [
-            rust_src / 'structure_designer',
-            rust_src / 'api'  # Include API in structure_designer
-        ],
-        'crystolecule': [rust_src / 'crystolecule'],
-        'renderer': [rust_src / 'renderer'],
-        'display': [rust_src / 'display'],
-        'expr': [rust_src / 'expr'],
-        'geo_tree': [rust_src / 'geo_tree'],
-        'util': [rust_src / 'util'],
+        'api': [rust_src / 'api'],
+        'structure_designer': [crates / 'atomcad-structure-designer' / 'src'],
+        'crystolecule': [crates / 'atomcad-crystolecule' / 'src'],
+        'renderer': [crates / 'atomcad-renderer' / 'src'],
+        'display': [crates / 'atomcad-display' / 'src'],
+        'geo_tree': [crates / 'atomcad-geo-tree' / 'src'],
+        'util': [crates / 'atomcad-util' / 'src'],
     }
     
     for module_name, paths in rust_modules.items():
