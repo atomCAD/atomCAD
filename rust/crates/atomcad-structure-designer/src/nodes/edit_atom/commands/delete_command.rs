@@ -1,0 +1,52 @@
+use crate::nodes::edit_atom::edit_atom_command::EditAtomCommand;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure_utils::calc_selection_transform;
+use serde::{Deserialize, Serialize};
+
+/*
+ * Delete command: deletes the current selection
+ */
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteCommand {}
+
+impl Default for DeleteCommand {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DeleteCommand {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl EditAtomCommand for DeleteCommand {
+    fn execute(&self, model: &mut AtomicStructure) {
+        // Collect all selected bond references from decorator
+        let selected_bond_refs: Vec<_> = model.decorator().iter_selected_bonds().cloned().collect();
+
+        // Delete all selected bonds
+        for bond_ref in &selected_bond_refs {
+            model.delete_bond(bond_ref);
+        }
+
+        // Now collect all selected atom IDs
+        let selected_atom_ids: Vec<u32> = model
+            .iter_atoms()
+            .filter(|(_, atom)| atom.is_selected())
+            .map(|(id, _)| *id)
+            .collect();
+
+        // Delete all selected atoms
+        for atom_id in selected_atom_ids {
+            model.delete_atom(atom_id);
+        }
+
+        model.decorator_mut().selection_transform = calc_selection_transform(model);
+    }
+
+    fn clone_box(&self) -> Box<dyn EditAtomCommand> {
+        Box::new(self.clone())
+    }
+}

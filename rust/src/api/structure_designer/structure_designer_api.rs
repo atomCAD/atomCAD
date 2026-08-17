@@ -143,103 +143,103 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIStructureRotData,
 };
 use crate::api::structure_designer::view_builders;
-use crate::structure_designer::canvas_viewport::CanvasViewport;
-use crate::structure_designer::data_type::{DataType, RecordType};
-use crate::structure_designer::evaluator::network_result::{
-    Alignment, NetworkResult, dmat3_to_rows,
-};
-use crate::structure_designer::layout;
-use crate::structure_designer::node_data::CustomNodeData;
-use crate::structure_designer::nodes::apply::ApplyData;
-use crate::structure_designer::nodes::apply_diff::ApplyDiffData;
-use crate::structure_designer::nodes::array::ArrayData;
-use crate::structure_designer::nodes::array_append::ArrayAppendData;
-use crate::structure_designer::nodes::array_at::ArrayAtData;
-use crate::structure_designer::nodes::array_concat::ArrayConcatData;
-use crate::structure_designer::nodes::array_len::ArrayLenData;
-use crate::structure_designer::nodes::atom_composediff::AtomComposeDiffData;
-use crate::structure_designer::nodes::atom_cut::AtomCutData;
-use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
-use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
-use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
-use crate::structure_designer::nodes::atom_replace::AtomReplaceData;
-use crate::structure_designer::nodes::bool::BoolData;
-use crate::structure_designer::nodes::circle::CircleData;
-use crate::structure_designer::nodes::closure::{ClosureData, ClosureKind};
-use crate::structure_designer::nodes::collect::CollectData;
-use crate::structure_designer::nodes::comment::CommentData;
-use crate::structure_designer::nodes::cuboid::CuboidData;
-use crate::structure_designer::nodes::drawing_plane::DrawingPlaneData;
-use crate::structure_designer::nodes::drawing_plane::DrawingPlaneEvalCache;
-use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
-use crate::structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
-use crate::structure_designer::nodes::export_atoms::ExportAtomsData;
-use crate::structure_designer::nodes::expr::ExprData;
-use crate::structure_designer::nodes::extrude::ExtrudeData;
-use crate::structure_designer::nodes::extrude::ExtrudeEvalCache;
-use crate::structure_designer::nodes::filter::FilterData;
-use crate::structure_designer::nodes::float::FloatData;
-use crate::structure_designer::nodes::fold::FoldData;
-use crate::structure_designer::nodes::foreach::ForeachData;
-use crate::structure_designer::nodes::free_circle::FreeCircleData;
-use crate::structure_designer::nodes::free_move::FreeMoveData;
-use crate::structure_designer::nodes::free_rot::FreeRotData;
-use crate::structure_designer::nodes::free_sphere::FreeSphereData;
-use crate::structure_designer::nodes::geo_trans::GeoTransData;
-use crate::structure_designer::nodes::half_plane::HalfPlaneData;
-use crate::structure_designer::nodes::half_space::HalfSpaceData;
-use crate::structure_designer::nodes::if_else::IfData;
-use crate::structure_designer::nodes::imat2_cols::IMat2ColsData;
-use crate::structure_designer::nodes::imat2_diag::IMat2DiagData;
-use crate::structure_designer::nodes::imat2_rows::IMat2RowsData;
-use crate::structure_designer::nodes::imat3_cols::IMat3ColsData;
-use crate::structure_designer::nodes::imat3_diag::IMat3DiagData;
-use crate::structure_designer::nodes::imat3_rows::IMat3RowsData;
-use crate::structure_designer::nodes::import_cif::ImportCifData;
-use crate::structure_designer::nodes::import_xyz::ImportXYZData;
-use crate::structure_designer::nodes::infer_bonds::InferBondsData;
-use crate::structure_designer::nodes::int::IntData;
-use crate::structure_designer::nodes::ivec2::IVec2Data;
-use crate::structure_designer::nodes::ivec3::IVec3Data;
-use crate::structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
-use crate::structure_designer::nodes::lattice_vecs::LatticeVecsData;
-use crate::structure_designer::nodes::map::MapData;
-use crate::structure_designer::nodes::mat3_cols::Mat3ColsData;
-use crate::structure_designer::nodes::mat3_diag::Mat3DiagData;
-use crate::structure_designer::nodes::mat3_rows::Mat3RowsData;
-use crate::structure_designer::nodes::materialize::MaterializeData;
-use crate::structure_designer::nodes::motif::MotifData;
-use crate::structure_designer::nodes::motif_sub::MotifSubData;
-use crate::structure_designer::nodes::parameter::ParameterData;
-use crate::structure_designer::nodes::passivate::PassivateData;
-use crate::structure_designer::nodes::patch_build::PatchBuildData;
-use crate::structure_designer::nodes::patch_latticefill::{
-    CompatibilityReport, PatchLatticeFillData,
-};
-use crate::structure_designer::nodes::plane_tiling_vectors::PlaneTilingVectorsData;
-use crate::structure_designer::nodes::print::PrintData;
-use crate::structure_designer::nodes::product::ProductData;
-use crate::structure_designer::nodes::range::RangeData;
-use crate::structure_designer::nodes::record_construct::RecordConstructData;
-use crate::structure_designer::nodes::record_destructure::RecordDestructureData;
-use crate::structure_designer::nodes::rect::RectData;
-use crate::structure_designer::nodes::reg_poly::RegPolyData;
-use crate::structure_designer::nodes::sequence::SequenceData;
-use crate::structure_designer::nodes::sphere::SphereData;
-use crate::structure_designer::nodes::string::StringData;
-use crate::structure_designer::nodes::structure_invert::StructureInvertData;
-use crate::structure_designer::nodes::structure_move::StructureMoveData;
-use crate::structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
-use crate::structure_designer::nodes::supercell::SupercellData;
-use crate::structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
-use crate::structure_designer::nodes::vec2::Vec2Data;
-use crate::structure_designer::nodes::vec3::Vec3Data;
-use crate::structure_designer::nodes::zip_with::ZipWithData;
-use crate::structure_designer::text_format::TextValue;
 use atomcad_crystolecule::io::atom_export::AtomExportFormat;
 use atomcad_crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
 };
+use atomcad_structure_designer::canvas_viewport::CanvasViewport;
+use atomcad_structure_designer::data_type::{DataType, RecordType};
+use atomcad_structure_designer::evaluator::network_result::{
+    Alignment, NetworkResult, dmat3_to_rows,
+};
+use atomcad_structure_designer::layout;
+use atomcad_structure_designer::node_data::CustomNodeData;
+use atomcad_structure_designer::nodes::apply::ApplyData;
+use atomcad_structure_designer::nodes::apply_diff::ApplyDiffData;
+use atomcad_structure_designer::nodes::array::ArrayData;
+use atomcad_structure_designer::nodes::array_append::ArrayAppendData;
+use atomcad_structure_designer::nodes::array_at::ArrayAtData;
+use atomcad_structure_designer::nodes::array_concat::ArrayConcatData;
+use atomcad_structure_designer::nodes::array_len::ArrayLenData;
+use atomcad_structure_designer::nodes::atom_composediff::AtomComposeDiffData;
+use atomcad_structure_designer::nodes::atom_cut::AtomCutData;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditTool;
+use atomcad_structure_designer::nodes::atom_replace::AtomReplaceData;
+use atomcad_structure_designer::nodes::bool::BoolData;
+use atomcad_structure_designer::nodes::circle::CircleData;
+use atomcad_structure_designer::nodes::closure::{ClosureData, ClosureKind};
+use atomcad_structure_designer::nodes::collect::CollectData;
+use atomcad_structure_designer::nodes::comment::CommentData;
+use atomcad_structure_designer::nodes::cuboid::CuboidData;
+use atomcad_structure_designer::nodes::drawing_plane::DrawingPlaneData;
+use atomcad_structure_designer::nodes::drawing_plane::DrawingPlaneEvalCache;
+use atomcad_structure_designer::nodes::edit_atom::edit_atom::EditAtomData;
+use atomcad_structure_designer::nodes::edit_atom::edit_atom::EditAtomTool;
+use atomcad_structure_designer::nodes::export_atoms::ExportAtomsData;
+use atomcad_structure_designer::nodes::expr::ExprData;
+use atomcad_structure_designer::nodes::extrude::ExtrudeData;
+use atomcad_structure_designer::nodes::extrude::ExtrudeEvalCache;
+use atomcad_structure_designer::nodes::filter::FilterData;
+use atomcad_structure_designer::nodes::float::FloatData;
+use atomcad_structure_designer::nodes::fold::FoldData;
+use atomcad_structure_designer::nodes::foreach::ForeachData;
+use atomcad_structure_designer::nodes::free_circle::FreeCircleData;
+use atomcad_structure_designer::nodes::free_move::FreeMoveData;
+use atomcad_structure_designer::nodes::free_rot::FreeRotData;
+use atomcad_structure_designer::nodes::free_sphere::FreeSphereData;
+use atomcad_structure_designer::nodes::geo_trans::GeoTransData;
+use atomcad_structure_designer::nodes::half_plane::HalfPlaneData;
+use atomcad_structure_designer::nodes::half_space::HalfSpaceData;
+use atomcad_structure_designer::nodes::if_else::IfData;
+use atomcad_structure_designer::nodes::imat2_cols::IMat2ColsData;
+use atomcad_structure_designer::nodes::imat2_diag::IMat2DiagData;
+use atomcad_structure_designer::nodes::imat2_rows::IMat2RowsData;
+use atomcad_structure_designer::nodes::imat3_cols::IMat3ColsData;
+use atomcad_structure_designer::nodes::imat3_diag::IMat3DiagData;
+use atomcad_structure_designer::nodes::imat3_rows::IMat3RowsData;
+use atomcad_structure_designer::nodes::import_cif::ImportCifData;
+use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
+use atomcad_structure_designer::nodes::infer_bonds::InferBondsData;
+use atomcad_structure_designer::nodes::int::IntData;
+use atomcad_structure_designer::nodes::ivec2::IVec2Data;
+use atomcad_structure_designer::nodes::ivec3::IVec3Data;
+use atomcad_structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
+use atomcad_structure_designer::nodes::lattice_vecs::LatticeVecsData;
+use atomcad_structure_designer::nodes::map::MapData;
+use atomcad_structure_designer::nodes::mat3_cols::Mat3ColsData;
+use atomcad_structure_designer::nodes::mat3_diag::Mat3DiagData;
+use atomcad_structure_designer::nodes::mat3_rows::Mat3RowsData;
+use atomcad_structure_designer::nodes::materialize::MaterializeData;
+use atomcad_structure_designer::nodes::motif::MotifData;
+use atomcad_structure_designer::nodes::motif_sub::MotifSubData;
+use atomcad_structure_designer::nodes::parameter::ParameterData;
+use atomcad_structure_designer::nodes::passivate::PassivateData;
+use atomcad_structure_designer::nodes::patch_build::PatchBuildData;
+use atomcad_structure_designer::nodes::patch_latticefill::{
+    CompatibilityReport, PatchLatticeFillData,
+};
+use atomcad_structure_designer::nodes::plane_tiling_vectors::PlaneTilingVectorsData;
+use atomcad_structure_designer::nodes::print::PrintData;
+use atomcad_structure_designer::nodes::product::ProductData;
+use atomcad_structure_designer::nodes::range::RangeData;
+use atomcad_structure_designer::nodes::record_construct::RecordConstructData;
+use atomcad_structure_designer::nodes::record_destructure::RecordDestructureData;
+use atomcad_structure_designer::nodes::rect::RectData;
+use atomcad_structure_designer::nodes::reg_poly::RegPolyData;
+use atomcad_structure_designer::nodes::sequence::SequenceData;
+use atomcad_structure_designer::nodes::sphere::SphereData;
+use atomcad_structure_designer::nodes::string::StringData;
+use atomcad_structure_designer::nodes::structure_invert::StructureInvertData;
+use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
+use atomcad_structure_designer::nodes::structure_rot::{StructureRotData, StructureRotEvalCache};
+use atomcad_structure_designer::nodes::supercell::SupercellData;
+use atomcad_structure_designer::nodes::switch::{SwitchCaseValue, SwitchData};
+use atomcad_structure_designer::nodes::vec2::Vec2Data;
+use atomcad_structure_designer::nodes::vec3::Vec3Data;
+use atomcad_structure_designer::nodes::zip_with::ZipWithData;
+use atomcad_structure_designer::text_format::TextValue;
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::collections::HashMap;
 
@@ -316,7 +316,7 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
             // Reject the ill-formed shapes (Optional[Optional]/Iter/Unit/None)
             // at this construction site, mirroring the text parser and registry
             // validation. See `doc/design_optional_type.md` §3.
-            crate::structure_designer::data_type::validate_optional_inner(&inner)?;
+            atomcad_structure_designer::data_type::validate_optional_inner(&inner)?;
             let base = DataType::Optional(Box::new(inner));
             return Ok(if api_data_type.array {
                 DataType::Array(Box::new(base))
@@ -334,10 +334,11 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
                 .map(api_data_type_to_data_type)
                 .collect();
             let output_type = api_data_type_to_data_type(&api_data_type.children[n])?;
-            let base = DataType::Function(crate::structure_designer::data_type::FunctionType::new(
-                parameter_types?,
-                output_type,
-            ));
+            let base =
+                DataType::Function(atomcad_structure_designer::data_type::FunctionType::new(
+                    parameter_types?,
+                    output_type,
+                ));
             return Ok(if api_data_type.array {
                 DataType::Array(Box::new(base))
             } else {
@@ -508,8 +509,8 @@ fn api_to_type_args(type_args: &[APIDataType]) -> Vec<DataType> {
 /// `chain_scene_evaluable` is the *enclosing* chain's eligibility (see
 /// [`build_node_view`]); this body's own flag folds in one more hop.
 fn build_zone_view(
-    node: &crate::structure_designer::node_network::Node,
-    node_type: &crate::structure_designer::node_type::NodeType,
+    node: &atomcad_structure_designer::node_network::Node,
+    node_type: &atomcad_structure_designer::node_type::NodeType,
     cad_instance: &crate::api::api_common::CADInstance,
     scope_path: &[u64],
     chain_scene_evaluable: bool,
@@ -527,7 +528,7 @@ fn build_zone_view(
     // with, so the eyes Flutter renders can't drift from the bodies the scene
     // actually evaluates. See `doc/design_zero_ary_closure_body_display.md`.
     let body_scene_evaluable =
-        crate::structure_designer::displayed_node_refs::is_body_scene_evaluable(
+        atomcad_structure_designer::displayed_node_refs::is_body_scene_evaluable(
             chain_scene_evaluable,
             node,
             &cad_instance.structure_designer.node_type_registry,
@@ -617,8 +618,10 @@ fn build_zone_view(
         stored_width: node.body_width,
         stored_height: node.body_height,
         collapse_mode: node.collapse_mode.into(),
-        collapsed: crate::structure_designer::node_network::resolve_body_collapsed(node, node_type),
-        collapsable: crate::structure_designer::node_network::collapsable_type_name(
+        collapsed: atomcad_structure_designer::node_network::resolve_body_collapsed(
+            node, node_type,
+        ),
+        collapsable: atomcad_structure_designer::node_network::collapsable_type_name(
             &node.node_type_name,
         ),
         body_scene_evaluable,
@@ -638,8 +641,8 @@ fn build_zone_view(
 /// node's body's; the body's own flag is derived one level deeper and surfaces
 /// on `ZoneView::body_scene_evaluable`.
 fn build_node_view(
-    node: &crate::structure_designer::node_network::Node,
-    node_network: &crate::structure_designer::node_network::NodeNetwork,
+    node: &atomcad_structure_designer::node_network::Node,
+    node_network: &atomcad_structure_designer::node_network::NodeNetwork,
     cad_instance: &crate::api::api_common::CADInstance,
     scope_path: &[u64],
     chain_scene_evaluable: bool,
@@ -675,7 +678,7 @@ fn build_node_view(
     // `doc/design_error_management.md`): a validation error elsewhere in the
     // network — or a mere warning on this node — must not hide this node's
     // runtime error badge.
-    let error_messages = crate::structure_designer::node_network::collect_node_error_messages(
+    let error_messages = atomcad_structure_designer::node_network::collect_node_error_messages(
         &node_network.validation_errors,
         node.id,
         cad_instance
@@ -751,7 +754,7 @@ fn build_node_view(
         .structure_designer
         .last_generated_structure_designer_scene
         .node_data
-        .get(&crate::structure_designer::node_network::NodeRef::scoped(
+        .get(&atomcad_structure_designer::node_network::NodeRef::scoped(
             scope_path, node.id,
         ));
 
@@ -765,7 +768,7 @@ fn build_node_view(
             // resolution is informative solely for polymorphic pins.
             let needs_resolution = !matches!(
                 &pin_def.data_type,
-                crate::structure_designer::node_type::PinOutputType::Fixed(_)
+                atomcad_structure_designer::node_type::PinOutputType::Fixed(_)
             );
             let (resolved_data_type, resolved_via_fallback) = if needs_resolution {
                 match cad_instance
@@ -857,11 +860,11 @@ fn build_node_view(
 /// map / zip_with). See `doc/design_function_pin_unification.md` (Phase D)
 /// and `doc/design_zip_with.md` (Phase 2).
 fn build_derived_shape_view(
-    node: &crate::structure_designer::node_network::Node,
-    node_network: &crate::structure_designer::node_network::NodeNetwork,
+    node: &atomcad_structure_designer::node_network::Node,
+    node_network: &atomcad_structure_designer::node_network::NodeNetwork,
     cad_instance: &crate::api::api_common::CADInstance,
 ) -> Option<APIDerivedShapeView> {
-    use crate::structure_designer::data_type::DataType;
+    use atomcad_structure_designer::data_type::DataType;
     let registry = &cad_instance.structure_designer.node_type_registry;
     match node.node_type_name.as_str() {
         "apply" => {
@@ -932,9 +935,9 @@ fn build_derived_shape_view(
 /// `source_scope_depth` or [`SourcePin`] kind, so phase U5's captures and
 /// iteration-value references are visible to the Flutter painter.
 fn build_wires_for_network(
-    node_network: &crate::structure_designer::node_network::NodeNetwork,
+    node_network: &atomcad_structure_designer::node_network::NodeNetwork,
 ) -> Vec<WireView> {
-    use crate::structure_designer::node_network::SourcePin;
+    use atomcad_structure_designer::node_network::SourcePin;
     let mut wires = Vec::new();
     for (_id, node) in node_network.nodes.iter() {
         for (index, argument) in node.arguments.iter().enumerate() {
@@ -1057,11 +1060,11 @@ pub fn add_node(
                     // `doc/design_drag_aware_add_node.md` "Known limitation".
                     let parsed = DataType::from_string(&ds.source_pin_type).ok()?;
                     let direction = if ds.dragging_from_output {
-                        crate::structure_designer::node_data::DragDirection::FromOutput
+                        atomcad_structure_designer::node_data::DragDirection::FromOutput
                     } else {
-                        crate::structure_designer::node_data::DragDirection::FromInput
+                        atomcad_structure_designer::node_data::DragDirection::FromInput
                     };
-                    Some(crate::structure_designer::structure_designer::DragSource {
+                    Some(atomcad_structure_designer::structure_designer::DragSource {
                         source_type: parsed,
                         direction,
                     })
@@ -1162,7 +1165,7 @@ pub fn connect_wire(
     dest_node_id: u64,
     dest_param_index: usize,
 ) {
-    use crate::structure_designer::node_network::SourcePin;
+    use atomcad_structure_designer::node_network::SourcePin;
     let source_pin = match source_pin {
         APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
         APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
@@ -1195,7 +1198,7 @@ pub fn can_connect_wire(
     dest_node_id: u64,
     dest_param_index: usize,
 ) -> bool {
-    use crate::structure_designer::node_network::SourcePin;
+    use atomcad_structure_designer::node_network::SourcePin;
     let source_pin = match source_pin {
         APISourcePin::NodeOutput { pin_index } => SourcePin::NodeOutput { pin_index },
         APISourcePin::ZoneInput { pin_index } => SourcePin::ZoneInput {
@@ -1503,8 +1506,9 @@ pub fn add_record_type_def(name: String) -> APIResult {
     unsafe {
         with_mut_cad_instance_or(
             |instance| {
-                let def =
-                    crate::structure_designer::node_type_registry::RecordTypeDef::new(name.clone());
+                let def = atomcad_structure_designer::node_type_registry::RecordTypeDef::new(
+                    name.clone(),
+                );
                 let result = instance.structure_designer.add_record_type_def(def);
                 refresh_structure_designer_auto(instance);
                 match result {
@@ -1600,7 +1604,7 @@ pub fn update_record_type_def(name: String, fields: Vec<APIRecordTypeField>) -> 
                 // existing field (preserves wires by `FieldId`); `id == None` is
                 // a newly added row. Bail with a clear error if any field's
                 // APIDataType cannot be parsed (e.g. a malformed Custom string).
-                use crate::structure_designer::node_type_registry::{FieldId, RecordFieldEdit};
+                use atomcad_structure_designer::node_type_registry::{FieldId, RecordFieldEdit};
                 // The rows carry their own hints (Phase 2 of
                 // `doc/design_array_node_and_field_hints.md`), so the UI's list is
                 // authoritative — what it omits is genuinely a cleared hint, not a
@@ -1810,17 +1814,17 @@ pub fn get_network_usages(network_name: String) -> Vec<APINetworkUsage> {
                             .get(&usage.host_network);
                         let node_label = host
                             .and_then(|network| {
-                                crate::structure_designer::network_usages::resolve_scope_network(
+                                atomcad_structure_designer::network_usages::resolve_scope_network(
                                     network,
                                     &usage.scope_path,
                                 )
                                 .and_then(|scope| scope.nodes.get(&usage.node_id))
                             })
-                            .map(crate::structure_designer::network_usages::node_label)
+                            .map(atomcad_structure_designer::network_usages::node_label)
                             .unwrap_or_else(|| network_name.clone());
                         let body_qualifier = host.and_then(|network| {
                             let labels =
-                                crate::structure_designer::network_usages::resolve_scope_labels(
+                                atomcad_structure_designer::network_usages::resolve_scope_labels(
                                     network,
                                     &usage.scope_path,
                                 );
@@ -2720,10 +2724,10 @@ pub fn add_nodes_to_selection(scope_path: Vec<u64>, node_ids: Vec<u64>) {
 pub fn select_wires(wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+            let wire_structs: Vec<atomcad_structure_designer::node_network::Wire> = wires
                 .into_iter()
                 .map(|w| {
-                    crate::structure_designer::node_network::Wire::node_output(
+                    atomcad_structure_designer::node_network::Wire::node_output(
                         w.source_node_id,
                         w.source_output_pin_index,
                         w.destination_node_id,
@@ -2741,10 +2745,10 @@ pub fn select_wires(wires: Vec<super::structure_designer_api_types::WireIdentifi
 pub fn add_wires_to_selection(wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+            let wire_structs: Vec<atomcad_structure_designer::node_network::Wire> = wires
                 .into_iter()
                 .map(|w| {
-                    crate::structure_designer::node_network::Wire::node_output(
+                    atomcad_structure_designer::node_network::Wire::node_output(
                         w.source_node_id,
                         w.source_output_pin_index,
                         w.destination_node_id,
@@ -2764,10 +2768,10 @@ pub fn add_wires_to_selection(wires: Vec<super::structure_designer_api_types::Wi
 pub fn toggle_wires_selection(wires: Vec<super::structure_designer_api_types::WireIdentifier>) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+            let wire_structs: Vec<atomcad_structure_designer::node_network::Wire> = wires
                 .into_iter()
                 .map(|w| {
-                    crate::structure_designer::node_network::Wire::node_output(
+                    atomcad_structure_designer::node_network::Wire::node_output(
                         w.source_node_id,
                         w.source_output_pin_index,
                         w.destination_node_id,
@@ -2791,10 +2795,10 @@ pub fn select_nodes_and_wires(
 ) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+            let wire_structs: Vec<atomcad_structure_designer::node_network::Wire> = wires
                 .into_iter()
                 .map(|w| {
-                    crate::structure_designer::node_network::Wire::node_output(
+                    atomcad_structure_designer::node_network::Wire::node_output(
                         w.source_node_id,
                         w.source_output_pin_index,
                         w.destination_node_id,
@@ -2820,10 +2824,10 @@ pub fn add_nodes_and_wires_to_selection(
 ) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+            let wire_structs: Vec<atomcad_structure_designer::node_network::Wire> = wires
                 .into_iter()
                 .map(|w| {
-                    crate::structure_designer::node_network::Wire::node_output(
+                    atomcad_structure_designer::node_network::Wire::node_output(
                         w.source_node_id,
                         w.source_output_pin_index,
                         w.destination_node_id,
@@ -2847,10 +2851,10 @@ pub fn toggle_nodes_and_wires_selection(
 ) {
     unsafe {
         with_mut_cad_instance(|instance| {
-            let wire_structs: Vec<crate::structure_designer::node_network::Wire> = wires
+            let wire_structs: Vec<atomcad_structure_designer::node_network::Wire> = wires
                 .into_iter()
                 .map(|w| {
-                    crate::structure_designer::node_network::Wire::node_output(
+                    atomcad_structure_designer::node_network::Wire::node_output(
                         w.source_node_id,
                         w.source_output_pin_index,
                         w.destination_node_id,
@@ -4356,11 +4360,11 @@ pub fn get_atom_edit_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomE
                 let is_in_guided_placement = matches!(
                     &atom_edit_data.active_tool,
                     AtomEditTool::AddAtom(
-                        crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedPlacement { .. }
+                        atomcad_structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedPlacement { .. }
                     ) | AtomEditTool::AddAtom(
-                        crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedFreeSphere { .. }
+                        atomcad_structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedFreeSphere { .. }
                     ) | AtomEditTool::AddAtom(
-                        crate::structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedFreeRing { .. }
+                        atomcad_structure_designer::nodes::atom_edit::atom_edit::AddAtomToolState::GuidedFreeRing { .. }
                     )
                 );
 
@@ -4465,7 +4469,7 @@ fn compute_selection_measurement(
     eval_cache: Option<&AtomEditEvalCache>,
     is_diff_view: bool,
 ) -> Option<APIMeasurement> {
-    use crate::structure_designer::nodes::atom_edit::measurement::{
+    use atomcad_structure_designer::nodes::atom_edit::measurement::{
         MeasurementResult, SelectedAtomInfo, compute_measurement,
     };
 
@@ -4482,7 +4486,7 @@ fn compute_selection_measurement(
     // gather_measurement_data() in modify_measurement.rs. This ensures that
     // atom1_id/arm_a_id/chain_a_id reported here correspond to the same atoms
     // that DistanceMoveChoice::First / AngleMoveChoice::ArmA / etc. will move.
-    use crate::structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
 
     let mut selected_atoms: Vec<SelectedAtomInfo> = Vec::with_capacity(total_selected);
 
@@ -4633,7 +4637,7 @@ fn compute_last_selected_result_atom_id(
     eval_cache: Option<&AtomEditEvalCache>,
     is_diff_view: bool,
 ) -> Option<u32> {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::SelectionProvenance;
 
     let last = atom_edit_data.selection.selection_order.last()?;
     let (prov, id) = *last;
@@ -6400,9 +6404,9 @@ pub fn clear_custom_node_literal(scope_path: Vec<u64>, node_id: u64, param_name:
 /// hints, and the load path dropped them). See
 /// `doc/design_array_node_and_field_hints.md` Part A.
 fn field_editor_hint_to_api(
-    hint: &crate::structure_designer::node_type_registry::FieldEditorHint,
+    hint: &atomcad_structure_designer::node_type_registry::FieldEditorHint,
 ) -> APIFieldEditorHint {
-    use crate::structure_designer::node_type_registry::FieldEditorHint;
+    use atomcad_structure_designer::node_type_registry::FieldEditorHint;
     match hint {
         FieldEditorHint::Element => APIFieldEditorHint::Element,
         FieldEditorHint::Color => APIFieldEditorHint::Color,
@@ -6421,8 +6425,8 @@ fn field_editor_hint_to_api(
 /// here can commit an ill-formed hint.
 fn api_field_editor_hint_to_core(
     hint: &APIFieldEditorHint,
-) -> crate::structure_designer::node_type_registry::FieldEditorHint {
-    use crate::structure_designer::node_type_registry::FieldEditorHint;
+) -> atomcad_structure_designer::node_type_registry::FieldEditorHint {
+    use atomcad_structure_designer::node_type_registry::FieldEditorHint;
     match hint {
         APIFieldEditorHint::Element => FieldEditorHint::Element,
         APIFieldEditorHint::Color => FieldEditorHint::Color,
@@ -6578,7 +6582,7 @@ unsafe fn with_array_data<F>(scope_path: &[u64], node_id: u64, mutate: F) -> API
 where
     F: FnOnce(
         &mut ArrayData,
-        &crate::structure_designer::node_type_registry::NodeTypeRegistry,
+        &atomcad_structure_designer::node_type_registry::NodeTypeRegistry,
     ) -> Result<(), String>,
 {
     unsafe {
@@ -6631,7 +6635,7 @@ where
 /// Pure read; safe to call on every panel rebuild.
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_array_element_type_options() -> Vec<APIDataType> {
-    use crate::structure_designer::nodes::array::is_literal_capable;
+    use atomcad_structure_designer::nodes::array::is_literal_capable;
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -6766,7 +6770,7 @@ fn simple_element_row(element: &TextValue, element_type: &DataType) -> APIArrayE
 /// of a `literal_values` map, and in `is_wired` being unconditionally false
 /// (the `array` node has no input pins).
 fn record_element_fields(
-    def: &crate::structure_designer::node_type_registry::RecordTypeDef,
+    def: &atomcad_structure_designer::node_type_registry::RecordTypeDef,
     entries: &[(String, TextValue)],
 ) -> Vec<APILiteralField> {
     let mut fields = Vec::new();
@@ -7392,7 +7396,7 @@ pub fn set_expr_data(scope_path: Vec<u64>, node_id: u64, data: APIExprData) -> A
         with_mut_cad_instance_or(
             |cad_instance| {
                 // Get existing expr data to preserve parameter IDs for wire preservation
-                let existing_params: Vec<crate::structure_designer::nodes::expr::ExprParameter> =
+                let existing_params: Vec<atomcad_structure_designer::nodes::expr::ExprParameter> =
                     cad_instance
                         .structure_designer
                         .get_scope_network(&scope_path)
@@ -7462,7 +7466,7 @@ pub fn set_expr_data(scope_path: Vec<u64>, node_id: u64, data: APIExprData) -> A
                     match api_data_type_to_data_type(&api_param.data_type) {
                         Ok(dt) => {
                             parameters.push(
-                                crate::structure_designer::nodes::expr::ExprParameter {
+                                atomcad_structure_designer::nodes::expr::ExprParameter {
                                     id,
                                     name: api_param.name,
                                     data_type: dt,
@@ -7475,7 +7479,7 @@ pub fn set_expr_data(scope_path: Vec<u64>, node_id: u64, data: APIExprData) -> A
                                 first_error = Some(e.clone());
                             }
                             parameters.push(
-                                crate::structure_designer::nodes::expr::ExprParameter {
+                                atomcad_structure_designer::nodes::expr::ExprParameter {
                                     id,
                                     name: api_param.name,
                                     data_type: DataType::None, // Set to None on error
@@ -7792,7 +7796,7 @@ pub fn save_node_networks_as(file_path: String) -> APIResult {
                     .save_node_networks_as(&file_path)
                 {
                     Ok(_) => {
-                        crate::structure_designer::recent_files::add_recent_file(&file_path);
+                        atomcad_structure_designer::recent_files::add_recent_file(&file_path);
                         APIResult {
                             success: true,
                             error_message: String::new(),
@@ -7863,7 +7867,7 @@ pub fn get_design_file_path() -> Option<String> {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_recent_files() -> Vec<String> {
-    crate::structure_designer::recent_files::load_recent_files()
+    atomcad_structure_designer::recent_files::load_recent_files()
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -7888,7 +7892,7 @@ pub fn load_node_networks(file_path: String) -> APIResult {
 
                 match result {
                     Ok(_) => {
-                        crate::structure_designer::recent_files::add_recent_file(&file_path);
+                        atomcad_structure_designer::recent_files::add_recent_file(&file_path);
                         APIResult {
                             success: true,
                             error_message: String::new(),
@@ -7980,7 +7984,7 @@ pub fn can_switch_to_direct_editing_mode() -> bool {
 /// Returns an empty string on success, or an error message on failure.
 #[flutter_rust_bridge::frb(sync)]
 pub fn import_xyz_into_atom_edit(file_path: String) -> String {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -8055,14 +8059,14 @@ pub fn get_structure_designer_preferences() -> Option<StructureDesignerPreferenc
 pub fn set_structure_designer_preferences(preferences: StructureDesignerPreferences) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let domain_preferences: crate::structure_designer::preferences::StructureDesignerPreferences =
+            let domain_preferences: atomcad_structure_designer::preferences::StructureDesignerPreferences =
                 (&preferences).into();
             cad_instance
                 .structure_designer
                 .set_preferences(domain_preferences.clone());
             refresh_structure_designer_auto(cad_instance);
             // Persist preferences to config file (non-blocking, logs errors)
-            crate::structure_designer::preferences::save_preferences(&domain_preferences);
+            atomcad_structure_designer::preferences::save_preferences(&domain_preferences);
         });
     }
 }
@@ -8274,10 +8278,10 @@ pub fn end_zone_resize() {
 /// UI renders it verbatim.
 #[flutter_rust_bridge::frb(ignore)]
 pub fn build_function_pin_role_views(
-    node: &crate::structure_designer::node_network::Node,
-    node_type: &crate::structure_designer::node_type::NodeType,
+    node: &atomcad_structure_designer::node_network::Node,
+    node_type: &atomcad_structure_designer::node_type::NodeType,
 ) -> Vec<APIFunctionPinRoleView> {
-    use crate::structure_designer::node_network::{FunctionPinRole, function_pin_dispositions};
+    use atomcad_structure_designer::node_network::{FunctionPinRole, function_pin_dispositions};
 
     node_type
         .parameters
@@ -8625,7 +8629,7 @@ pub fn layout_active_network() {
 
             // Get a const pointer to the registry for layout computation
             let registry_ptr = &structure_designer.node_type_registry
-                as *const crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                as *const atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
 
             // Apply layout to the network
             if let Some(network) = structure_designer
@@ -8988,7 +8992,7 @@ pub fn has_clipboard_content() -> bool {
 /// Serialize the active node network to text format for the text editor tab.
 #[flutter_rust_bridge::frb(sync)]
 pub fn serialize_active_network_to_text() -> String {
-    use crate::structure_designer::text_format::serialize_network;
+    use atomcad_structure_designer::text_format::serialize_network;
     unsafe {
         with_cad_instance_or(
             |cad_instance| {
@@ -9019,8 +9023,8 @@ pub fn serialize_active_network_to_text() -> String {
 /// Apply text format edits to the active node network (replace mode with position preservation).
 #[flutter_rust_bridge::frb(sync)]
 pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
-    use crate::structure_designer::network_validator::validate_network;
-    use crate::structure_designer::text_format::{Parser, edit_network as text_edit_network};
+    use atomcad_structure_designer::network_validator::validate_network;
+    use atomcad_structure_designer::text_format::{Parser, edit_network as text_edit_network};
     use glam::DVec2;
     use std::collections::HashMap;
 
@@ -9105,7 +9109,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                 }
 
                 // Snapshot network BEFORE text edit (for undo)
-                use crate::structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
+                use atomcad_structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
                 let before_snapshot = node_network_to_serializable(
                     &mut network,
                     &structure_designer.node_type_registry.built_in_node_types,
@@ -9159,7 +9163,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                 // Validate network
                 {
                     let registry_ptr = &mut structure_designer.node_type_registry
-                        as *mut crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                        as *mut atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
                     if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name) {
                         validate_network(network, &mut *registry_ptr, None);
                     }
@@ -9176,7 +9180,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                         || result.output_set.is_some());
                 if made_changes {
                     if let (Some(before), Some(after)) = (before_snapshot, after_snapshot) {
-                        use crate::structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
+                        use atomcad_structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
                         cad_instance
                             .structure_designer
                             .push_command(TextEditNetworkCommand {
@@ -9434,7 +9438,7 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
 
                 // Collect all hits within OVERLAP_EPSILON of the closest hit.
                 let overlapping: Vec<
-                    &crate::structure_designer::structure_designer::PerNodeRayHit,
+                    &atomcad_structure_designer::structure_designer::PerNodeRayHit,
                 > = hits
                     .iter()
                     .filter(|hit| (hit.distance - closest.distance).abs() < OVERLAP_EPSILON)

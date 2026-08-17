@@ -1,0 +1,565 @@
+// This file needs both sides of the D9a twin: the domain enum to build a
+// `NodeType`, and the api enum because the view-builders it exercises return
+// `APINodeCategoryView`. That is also why it stays in the root-package harness
+// (D5.1a) rather than travelling with `atomcad-structure-designer`.
+use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::node_data::NoData;
+use atomcad_structure_designer::node_network::NodeNetwork;
+use atomcad_structure_designer::node_type::NodeTypeCategory;
+use atomcad_structure_designer::node_type::{NodeType, OutputPinDefinition};
+use atomcad_structure_designer::node_type::{no_data_loader, no_data_saver};
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory as ApiNodeTypeCategory;
+
+fn create_test_network(name: &str) -> NodeNetwork {
+    NodeNetwork::new(NodeType {
+        name: name.to_string(),
+        description: "".to_string(),
+        summary: None,
+        category: NodeTypeCategory::Custom,
+        parameters: Vec::new(),
+        output_pins: OutputPinDefinition::single(DataType::None),
+        node_data_creator: || Box::new(NoData {}),
+        node_data_saver: no_data_saver,
+        node_data_loader: no_data_loader,
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
+        public: true,
+    })
+}
+
+#[test]
+fn test_get_compatible_node_types_from_geometry_output() {
+    let registry = NodeTypeRegistry::new();
+
+    // Dragging from a Blueprint output pin
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
+
+    // Should find nodes with Blueprint input pins
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // Union, Intersect, Diff all accept Blueprint inputs
+    assert!(
+        all_node_names.contains(&"union"),
+        "union should accept Blueprint"
+    );
+    assert!(
+        all_node_names.contains(&"intersect"),
+        "intersect should accept Blueprint"
+    );
+    assert!(
+        all_node_names.contains(&"diff"),
+        "diff should accept Blueprint"
+    );
+    assert!(
+        all_node_names.contains(&"materialize"),
+        "materialize should accept Blueprint"
+    );
+
+    // Float node should NOT be in the list (no Blueprint input)
+    assert!(
+        !all_node_names.contains(&"float"),
+        "float should not accept Blueprint"
+    );
+}
+
+#[test]
+fn test_get_compatible_node_types_from_float_output() {
+    let registry = NodeTypeRegistry::new();
+
+    // Dragging from a Float output pin
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            true,
+        );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // Sphere has Int radius input, and Float converts to Int
+    assert!(
+        all_node_names.contains(&"sphere"),
+        "sphere should accept Float (converts to Int)"
+    );
+
+    // vec3 node accepts Float inputs
+    assert!(all_node_names.contains(&"vec3"), "vec3 should accept Float");
+}
+
+#[test]
+fn test_get_compatible_node_types_to_geometry_input() {
+    let registry = NodeTypeRegistry::new();
+
+    // Dragging from a Blueprint INPUT pin (looking for nodes that OUTPUT Blueprint)
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            false,
+        );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // These nodes output Blueprint
+    assert!(
+        all_node_names.contains(&"sphere"),
+        "sphere outputs Blueprint"
+    );
+    assert!(
+        all_node_names.contains(&"cuboid"),
+        "cuboid outputs Blueprint"
+    );
+    assert!(all_node_names.contains(&"union"), "union outputs Blueprint");
+    assert!(
+        all_node_names.contains(&"extrude"),
+        "extrude outputs Blueprint"
+    );
+
+    // Float node outputs Float, not Blueprint
+    assert!(
+        !all_node_names.contains(&"float"),
+        "float does not output Blueprint"
+    );
+}
+
+#[test]
+fn test_get_compatible_node_types_to_float_input() {
+    let registry = NodeTypeRegistry::new();
+
+    // Dragging from a Float INPUT pin (looking for nodes that OUTPUT Float)
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            false,
+        );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // Float node outputs Float
+    assert!(all_node_names.contains(&"float"), "float outputs Float");
+
+    // Int converts to Float
+    assert!(
+        all_node_names.contains(&"int"),
+        "int output converts to Float"
+    );
+
+    // Sphere outputs Blueprint, not Float
+    assert!(
+        !all_node_names.contains(&"sphere"),
+        "sphere does not output Float"
+    );
+}
+
+#[test]
+fn test_get_compatible_node_types_array_compatibility() {
+    let registry = NodeTypeRegistry::new();
+
+    // Dragging single Blueprint - should match nodes with [Blueprint] array inputs
+    // because DataType::can_be_converted_to allows T -> [T] conversion
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // Union accepts [Blueprint] array, and single Blueprint can convert to [Blueprint]
+    assert!(
+        all_node_names.contains(&"union"),
+        "union should accept single Blueprint (converts to array)"
+    );
+}
+
+#[test]
+fn test_get_compatible_node_types_returns_grouped_categories() {
+    let registry = NodeTypeRegistry::new();
+
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Blueprint,
+            true,
+        );
+
+    // Should have categories, not just a flat list
+    assert!(
+        !categories.is_empty(),
+        "Should return at least one category"
+    );
+
+    // Each category should have nodes
+    for category in &categories {
+        assert!(!category.nodes.is_empty(), "Category should have nodes");
+    }
+}
+
+#[test]
+fn test_get_compatible_node_types_no_matches() {
+    let registry = NodeTypeRegistry::new();
+
+    // LatticeVecs is a specialized type - few nodes output it
+    // When dragging FROM LatticeVecs output, looking for nodes with LatticeVecs input
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::LatticeVecs,
+            true,
+        );
+
+    // Should still return valid result (possibly with matches like atom_fill, drawing_plane)
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // structure accepts LatticeVecs as input
+    assert!(
+        all_node_names.contains(&"structure"),
+        "Should find nodes that accept LatticeVecs"
+    );
+}
+
+#[test]
+fn test_get_compatible_node_types_excludes_non_public_nodes() {
+    let registry = NodeTypeRegistry::new();
+
+    // Value node is not public (internal helper node)
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_compatible_node_types(
+            &registry,
+            &DataType::Float,
+            true,
+        );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // Value node should not appear (it's not public)
+    assert!(
+        !all_node_names.contains(&"value"),
+        "value node should not be in results (not public)"
+    );
+}
+
+// ===== BASIC REGISTRY TESTS =====
+
+#[test]
+fn test_new_registry_has_built_in_node_types() {
+    let registry = NodeTypeRegistry::new();
+
+    // Should have many built-in node types
+    assert!(
+        registry.built_in_node_types.len() > 20,
+        "Should have many built-in node types"
+    );
+
+    // Should have no node networks initially
+    assert!(
+        registry.node_networks.is_empty(),
+        "Should have no custom networks initially"
+    );
+
+    // Should have no design file name
+    assert!(registry.design_file_name.is_none());
+}
+
+#[test]
+fn test_get_node_type_returns_built_in_types() {
+    let registry = NodeTypeRegistry::new();
+
+    // Should find common built-in types
+    assert!(
+        registry.get_node_type("float").is_some(),
+        "Should find float node type"
+    );
+    assert!(
+        registry.get_node_type("int").is_some(),
+        "Should find int node type"
+    );
+    assert!(
+        registry.get_node_type("sphere").is_some(),
+        "Should find sphere node type"
+    );
+    assert!(
+        registry.get_node_type("union").is_some(),
+        "Should find union node type"
+    );
+
+    // Should return None for non-existent types
+    assert!(registry.get_node_type("nonexistent_type").is_none());
+}
+
+#[test]
+fn test_get_node_type_returns_correct_properties() {
+    let registry = NodeTypeRegistry::new();
+
+    let float_type = registry.get_node_type("float").unwrap();
+    assert_eq!(float_type.name, "float");
+    assert_eq!(*float_type.output_type(), DataType::Float);
+
+    let sphere_type = registry.get_node_type("sphere").unwrap();
+    assert_eq!(sphere_type.name, "sphere");
+    assert_eq!(*sphere_type.output_type(), DataType::Blueprint);
+}
+
+#[test]
+fn test_is_custom_node_type_returns_false_for_built_in() {
+    let registry = NodeTypeRegistry::new();
+
+    assert!(
+        !registry.is_custom_node_type("float"),
+        "float is not custom"
+    );
+    assert!(
+        !registry.is_custom_node_type("sphere"),
+        "sphere is not custom"
+    );
+    assert!(
+        !registry.is_custom_node_type("union"),
+        "union is not custom"
+    );
+    assert!(
+        !registry.is_custom_node_type("nonexistent"),
+        "nonexistent is not custom"
+    );
+}
+
+#[test]
+fn test_is_custom_node_type_returns_true_for_custom() {
+    let mut registry = NodeTypeRegistry::new();
+
+    registry.add_node_network(create_test_network("my_custom_network"));
+
+    assert!(
+        registry.is_custom_node_type("my_custom_network"),
+        "my_custom_network is custom"
+    );
+    assert!(
+        !registry.is_custom_node_type("float"),
+        "float is still not custom"
+    );
+}
+
+#[test]
+fn test_add_node_network() {
+    let mut registry = NodeTypeRegistry::new();
+
+    assert!(registry.node_networks.is_empty());
+
+    registry.add_node_network(create_test_network("test_network"));
+
+    assert_eq!(registry.node_networks.len(), 1);
+    assert!(registry.node_networks.contains_key("test_network"));
+}
+
+#[test]
+fn test_get_node_network_names_empty() {
+    let registry = NodeTypeRegistry::new();
+
+    let names = registry.get_node_network_names();
+    assert!(names.is_empty());
+}
+
+#[test]
+fn test_get_node_network_names_returns_sorted() {
+    let mut registry = NodeTypeRegistry::new();
+
+    // Add networks in non-alphabetical order
+    registry.add_node_network(create_test_network("zebra"));
+    registry.add_node_network(create_test_network("alpha"));
+    registry.add_node_network(create_test_network("middle"));
+
+    let names = registry.get_node_network_names();
+
+    assert_eq!(names.len(), 3);
+    assert_eq!(names[0], "alpha");
+    assert_eq!(names[1], "middle");
+    assert_eq!(names[2], "zebra");
+}
+
+#[test]
+fn test_get_node_type_views_returns_categories_in_order() {
+    let registry = NodeTypeRegistry::new();
+
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
+
+    // Should have multiple categories
+    assert!(categories.len() >= 5, "Should have at least 5 categories");
+
+    // First category should be Annotation
+    assert_eq!(categories[0].category, ApiNodeTypeCategory::Annotation);
+
+    // Categories should be in semantic order
+    let category_order: Vec<ApiNodeTypeCategory> =
+        categories.iter().map(|c| c.category.clone()).collect();
+
+    // Check expected order (only categories that have nodes)
+    let annotation_idx = category_order
+        .iter()
+        .position(|c| *c == ApiNodeTypeCategory::Annotation);
+    let math_idx = category_order
+        .iter()
+        .position(|c| *c == ApiNodeTypeCategory::MathAndProgramming);
+    let geo2d_idx = category_order
+        .iter()
+        .position(|c| *c == ApiNodeTypeCategory::Geometry2D);
+    let geo3d_idx = category_order
+        .iter()
+        .position(|c| *c == ApiNodeTypeCategory::Geometry3D);
+    let atomic_idx = category_order
+        .iter()
+        .position(|c| *c == ApiNodeTypeCategory::AtomicStructure);
+
+    assert!(
+        annotation_idx < math_idx,
+        "Annotation should come before MathAndProgramming"
+    );
+    assert!(
+        math_idx < geo2d_idx,
+        "MathAndProgramming should come before Geometry2D"
+    );
+    assert!(
+        geo2d_idx < geo3d_idx,
+        "Geometry2D should come before Geometry3D"
+    );
+    assert!(
+        geo3d_idx < atomic_idx,
+        "Geometry3D should come before AtomicStructure"
+    );
+}
+
+#[test]
+fn test_get_node_type_views_nodes_sorted_alphabetically() {
+    let registry = NodeTypeRegistry::new();
+
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
+
+    // For each category, nodes should be sorted alphabetically
+    for category in &categories {
+        let names: Vec<&str> = category.nodes.iter().map(|n| n.name.as_str()).collect();
+        let mut sorted_names = names.clone();
+        sorted_names.sort();
+        assert_eq!(
+            names, sorted_names,
+            "Nodes in {:?} should be sorted",
+            category.category
+        );
+    }
+}
+
+#[test]
+fn test_get_node_type_views_includes_custom_networks() {
+    let mut registry = NodeTypeRegistry::new();
+
+    registry.add_node_network(create_test_network("my_custom_node"));
+
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
+
+    // Should have a Custom category
+    let custom_category = categories
+        .iter()
+        .find(|c| c.category == ApiNodeTypeCategory::Custom);
+    assert!(custom_category.is_some(), "Should have Custom category");
+
+    let custom_nodes: Vec<&str> = custom_category
+        .unwrap()
+        .nodes
+        .iter()
+        .map(|n| n.name.as_str())
+        .collect();
+    assert!(custom_nodes.contains(&"my_custom_node"));
+}
+
+#[test]
+fn test_get_node_type_views_excludes_non_public_nodes() {
+    let registry = NodeTypeRegistry::new();
+
+    let categories =
+        rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_type_views(
+            &registry,
+        );
+
+    let all_node_names: Vec<&str> = categories
+        .iter()
+        .flat_map(|c| c.nodes.iter().map(|n| n.name.as_str()))
+        .collect();
+
+    // value node is not public, should not appear
+    assert!(
+        !all_node_names.contains(&"value"),
+        "value node should not appear (not public)"
+    );
+}
+
+#[test]
+fn test_get_node_type_finds_custom_network_type() {
+    let mut registry = NodeTypeRegistry::new();
+
+    registry.add_node_network(create_test_network("custom_geo"));
+
+    // Should find the custom network as a node type
+    let node_type = registry.get_node_type("custom_geo");
+    assert!(
+        node_type.is_some(),
+        "Should find custom network as node type"
+    );
+    assert_eq!(node_type.unwrap().name, "custom_geo");
+}
+
+#[test]
+fn test_get_node_networks_with_validation_empty() {
+    let registry = NodeTypeRegistry::new();
+
+    let networks = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_validation(&registry);
+    assert!(networks.is_empty());
+}
+
+#[test]
+fn test_get_node_networks_with_validation_returns_sorted() {
+    let mut registry = NodeTypeRegistry::new();
+
+    registry.add_node_network(create_test_network("zebra_net"));
+    registry.add_node_network(create_test_network("alpha_net"));
+
+    let networks = rust_lib_flutter_cad::api::structure_designer::view_builders::get_node_networks_with_validation(&registry);
+
+    assert_eq!(networks.len(), 2);
+    assert_eq!(networks[0].name, "alpha_net");
+    assert_eq!(networks[1].name, "zebra_net");
+}

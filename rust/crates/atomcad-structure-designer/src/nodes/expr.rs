@@ -1,0 +1,631 @@
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::{NetworkResult, input_missing_error};
+use crate::expr::expr::Expr;
+use crate::expr::parser::parse;
+use crate::expr::validation::{get_function_implementations, get_function_signatures};
+use crate::node_data::{DragDirection, EvalOutput, NodeData};
+use crate::node_network::ValidationError;
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{NodeType, OutputPinDefinition, Parameter, generic_node_data_saver};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use crate::text_format::TextValue;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::io;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExprParameter {
+    #[serde(default)] // For backwards compatibility with old files without IDs
+    pub id: Option<u64>, // Persistent identifier for wire preservation across renames
+    pub name: String,
+    pub data_type: DataType,
+    pub data_type_str: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExprData {
+    pub parameters: Vec<ExprParameter>,
+    pub expression: String,
+    #[serde(skip)]
+    pub expr: Option<Expr>,
+    #[serde(skip)]
+    pub error: Option<String>,
+    #[serde(skip)]
+    pub output_type: Option<DataType>,
+}
+
+impl ExprData {
+    /// Parses and validates the expression and returns any validation errors
+    pub fn parse_and_validate(&mut self, node_id: u64) -> Vec<ValidationError> {
+        let mut errors = Vec::new();
+
+        // Clear previous state
+        self.expr = None;
+        self.output_type = None;
+
+        // Skip validation if expression is empty
+        if self.expression.trim().is_empty() {
+            return errors;
+        }
+
+        // Parse the expression
+        let parsed_expr = match parse(&self.expression) {
+            Ok(expr) => {
+                self.expr = Some(expr.clone());
+                expr
+            }
+            Err(parse_error) => {
+                let error_msg = format!("Parse error: {}", parse_error);
+                self.error = Some(error_msg.clone());
+                errors.push(ValidationError::new(error_msg, Some(node_id)));
+                return errors;
+            }
+        };
+
+        // Create variables map for validation
+        let mut variables = HashMap::new();
+
+        // Add parameters as variables
+        for param in &self.parameters {
+            variables.insert(param.name.clone(), param.data_type.clone());
+        }
+
+        // Validate the parsed expression using global function registry
+        match parsed_expr.validate(&variables, get_function_signatures()) {
+            Ok(output_type) => {
+                // Expression is valid - set the output type
+                self.output_type = Some(output_type);
+            }
+            Err(validation_error) => {
+                let error_msg = format!("Validation error: {}", validation_error);
+                self.error = Some(error_msg.clone());
+                errors.push(ValidationError::new(error_msg, Some(node_id)));
+            }
+        }
+
+        errors
+    }
+}
+
+impl NodeData for ExprData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
+        let mut custom_node_type = base_node_type.clone();
+
+        // Update the output type - use DataType::None if self.output_type is None
+        custom_node_type.output_pins =
+            OutputPinDefinition::single(self.output_type.clone().unwrap_or(DataType::None));
+
+        // Convert ExprParameter to Parameter, propagating the ID for wire preservation
+        custom_node_type.parameters = self
+            .parameters
+            .iter()
+            .map(|expr_param| Parameter {
+                id: expr_param.id, // Propagate ID for wire preservation across renames
+                name: expr_param.name.clone(),
+                data_type: expr_param.data_type.clone(),
+            })
+            .collect();
+
+        Some(custom_node_type)
+    }
+
+    fn adapt_for_drag_source(
+        &self,
+        source_type: &DataType,
+        _direction: DragDirection,
+        _registry: &NodeTypeRegistry,
+    ) -> Option<Box<dyn NodeData>> {
+        // Adapt the default expr template (one parameter `x` of the drag
+        // source's type, identity body `x`) so the resulting node passes the
+        // source value through unchanged. Both drag directions adapt
+        // identically: the identity body means input type == output type, so
+        // a `FromInput` drag (where the popup wants `node.output → source`)
+        // is satisfied automatically. See
+        // `doc/design_drag_aware_add_node.md` (per-node adapter table).
+        //
+        // Reject types that can't sensibly be variables in the expression
+        // language: abstract supertypes (no concrete representation),
+        // function-typed values (callable, not data), iterators (lazy
+        // walkers can't be re-read like values), and `Unit` (no value to
+        // pass through).
+        if source_type.is_abstract()
+            || matches!(
+                source_type,
+                DataType::Function(_) | DataType::Iterator(_) | DataType::Unit
+            )
+        {
+            return None;
+        }
+        let mut adapted = ExprData {
+            parameters: vec![ExprParameter {
+                id: Some(1),
+                name: "x".to_string(),
+                data_type: source_type.clone(),
+                data_type_str: None,
+            }],
+            expression: "x".to_string(),
+            expr: None,
+            error: None,
+            output_type: None,
+        };
+        // Parse the body up front so the new node arrives with `expr`
+        // populated and `output_type` derived — otherwise `eval` would
+        // return "Expression not parsed" until the user opens the
+        // property panel and re-saves. node_id `0` is a stand-in (the
+        // validation errors aren't propagated from here).
+        adapted.parse_and_validate(0);
+        Some(Box::new(adapted))
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        // Collect variable values for evaluation
+        let mut variables: HashMap<String, NetworkResult> = HashMap::new();
+
+        // Go through all parameter indices and evaluate them
+        for (param_index, param) in self.parameters.iter().enumerate() {
+            let result = network_evaluator.evaluate_arg(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                param_index,
+            );
+
+            // Check if the result is None (input not connected)
+            if let NetworkResult::None = result {
+                return EvalOutput::single(input_missing_error(&param.name));
+            }
+
+            // Propagate an input error as-is: `evaluate_arg` already wrapped
+            // it with this parameter's name ("error in x input: ..."), so
+            // re-wrapping here would just duplicate the pin name in the chain.
+            if let NetworkResult::Error(_) = &result {
+                return EvalOutput::single(result);
+            }
+
+            // Add the variable to our collection
+            variables.insert(param.name.clone(), result);
+        }
+
+        // If we have a parsed expression, evaluate it
+        if let Some(ref expr) = self.expr {
+            let function_implementations = get_function_implementations();
+            EvalOutput::single(expr.evaluate(&variables, function_implementations))
+        } else {
+            EvalOutput::single(NetworkResult::Error("Expression not parsed".to_string()))
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        if self.expression.is_empty() {
+            None
+        } else {
+            Some(self.expression.clone())
+        }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        // Serialize parameters as an array of objects
+        let params: Vec<TextValue> = self
+            .parameters
+            .iter()
+            .map(|p| {
+                let mut obj = vec![
+                    ("name".to_string(), TextValue::String(p.name.clone())),
+                    (
+                        "data_type".to_string(),
+                        TextValue::DataType(p.data_type.clone()),
+                    ),
+                ];
+                if let Some(ref dt_str) = p.data_type_str {
+                    obj.push((
+                        "data_type_str".to_string(),
+                        TextValue::String(dt_str.clone()),
+                    ));
+                }
+                TextValue::Object(obj)
+            })
+            .collect();
+
+        vec![
+            (
+                "expression".to_string(),
+                TextValue::String(self.expression.clone()),
+            ),
+            ("parameters".to_string(), TextValue::Array(params)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("expression") {
+            self.expression = v
+                .as_string()
+                .ok_or_else(|| "expression must be a string".to_string())?
+                .to_string();
+        }
+        if let Some(TextValue::Array(params_arr)) = props.get("parameters") {
+            // Find the next available ID for new parameters
+            let mut next_id = self
+                .parameters
+                .iter()
+                .filter_map(|p| p.id)
+                .max()
+                .unwrap_or(0)
+                + 1;
+
+            // Track which IDs have been assigned to avoid duplicates
+            let mut used_ids = std::collections::HashSet::new();
+
+            let mut new_params = Vec::new();
+            for (new_index, param_val) in params_arr.iter().enumerate() {
+                if let TextValue::Object(obj) = param_val {
+                    let name = obj
+                        .iter()
+                        .find(|(k, _)| k == "name")
+                        .and_then(|(_, v)| v.as_string())
+                        .ok_or_else(|| "parameter name must be a string".to_string())?
+                        .to_string();
+                    let data_type = obj
+                        .iter()
+                        .find(|(k, _)| k == "data_type")
+                        .and_then(|(_, v)| v.as_data_type())
+                        .ok_or_else(|| "parameter data_type must be a DataType".to_string())?
+                        .clone();
+                    let data_type_str = obj
+                        .iter()
+                        .find(|(k, _)| k == "data_type_str")
+                        .and_then(|(_, v)| v.as_string())
+                        .map(|s| s.to_string());
+
+                    // Try to preserve ID: first check if parameter with same name exists (handles reordering),
+                    // then check if parameter at same index exists with an ID (handles renames).
+                    // Also check that the ID hasn't already been used (prevents duplicates when reordering + adding).
+                    let id = if let Some(existing) = self.parameters.iter().find(|p| p.name == name)
+                    {
+                        // Match by name first (handles reordering)
+                        if let Some(existing_id) = existing.id {
+                            if !used_ids.contains(&existing_id) {
+                                existing.id
+                            } else {
+                                let id = next_id;
+                                next_id += 1;
+                                Some(id)
+                            }
+                        } else {
+                            existing.id
+                        }
+                    } else if new_index < self.parameters.len()
+                        && self.parameters[new_index].id.is_some()
+                    {
+                        // Fall back to position (handles renames - name changed but position same)
+                        let pos_id = self.parameters[new_index].id.unwrap();
+                        if !used_ids.contains(&pos_id) {
+                            self.parameters[new_index].id
+                        } else {
+                            let id = next_id;
+                            next_id += 1;
+                            Some(id)
+                        }
+                    } else {
+                        // New parameter - generate new ID
+                        let id = next_id;
+                        next_id += 1;
+                        Some(id)
+                    };
+
+                    // Track the assigned ID
+                    if let Some(assigned_id) = id {
+                        used_ids.insert(assigned_id);
+                    }
+
+                    new_params.push(ExprParameter {
+                        id,
+                        name,
+                        data_type,
+                        data_type_str,
+                    });
+                }
+            }
+            self.parameters = new_params;
+        }
+        // Parse and validate expression after properties are set
+        // (matches what expr_data_loader does after deserializing)
+        let _validation_errors = self.parse_and_validate(0);
+        Ok(())
+    }
+}
+
+/// Special loader for ExprData that parses and validates the expression after deserializing
+pub fn expr_data_loader(value: &Value, _design_dir: Option<&str>) -> io::Result<Box<dyn NodeData>> {
+    // First deserialize the basic data
+    let mut data: ExprData = serde_json::from_value(value.clone())
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+    // Use the existing parse_and_validate method to handle expression parsing and validation
+    // We pass a dummy node_id (0) since validation errors aren't used in the loader context
+    let _validation_errors = data.parse_and_validate(0);
+
+    Ok(Box::new(data))
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "expr".to_string(),
+      description: r#"Evaluates a mathematical expression with configurable input parameters.
+
+## Defining Input Parameters
+
+The `parameters` property defines which variables can be used in the expression. Each parameter becomes an input pin on the node. In the node editor UI, input pins can be added dynamically via the node's property panel.
+
+**Available data types:** Int, Float, Bool, Vec2, Vec3, IVec2, IVec3
+
+## Expression Language Features
+
+The expr node supports scalar arithmetic, vector operations, conditional expressions, and a comprehensive set of built-in mathematical functions.
+
+### Literals
+- Integer literals (e.g., `42`, `-10`) — digits with no decimal point or exponent are Int.
+- Floating point literals (e.g., `3.14`, `1.5e-3`, `.5`) — a decimal point or exponent makes it a Float, including whole-number forms: `2.0` is a Float, `2` is an Int (so `2.0 / 4` is `0.5`, but `2 / 4` is `0`). Int args promote to Float, so `sqrt(4)` works.
+- Boolean values (`true`, `false`)
+
+### Arithmetic Operators
+- `+` - Addition
+- `-` - Subtraction
+- `*` - Multiplication
+- `/` - Division
+- `%` - Modulo (integer remainder, only works on integers)
+- `^` - Exponentiation
+- `+x`, `-x` - Unary plus/minus
+
+### Comparison Operators
+- `==` - Equality
+- `!=` - Inequality
+- `<` - Less than
+- `<=` - Less than or equal
+- `>` - Greater than
+- `>=` - Greater than or equal
+
+### Logical Operators
+- `&&` - Logical AND
+- `||` - Logical OR
+- `!` - Logical NOT
+
+### Conditional Expressions
+```
+if condition then value1 else value2
+```
+Example: `if x > 0 then 1 else -1`
+
+### Vector Operations
+
+**Vector Constructors:**
+- `vec2(x, y)` - Create 2D float vector
+- `vec3(x, y, z)` - Create 3D float vector
+- `ivec2(x, y)` - Create 2D integer vector
+- `ivec3(x, y, z)` - Create 3D integer vector
+
+**Member Access:**
+- `vector.x`, `vector.y`, `vector.z` - Access vector components
+
+**Vector Arithmetic:**
+- Vector + Vector (component-wise)
+- Vector - Vector (component-wise)
+- Vector * Vector (component-wise)
+- Vector * Scalar (scaling)
+- Scalar * Vector (scaling)
+- Vector / Scalar (scaling)
+
+**Type Promotion:**
+Integers and integer vectors automatically promote to floats and float vectors when mixed with floats.
+
+### Array Literals
+
+- `[expr1, expr2, ...]` — non-empty array literal; element type inferred via
+  existing promotion rules; recursive nesting supported.
+- `[]TypeExpr` — empty array of given element type. TypeExpr is a primitive or
+  domain type name (e.g. Int, IVec3, Structure), or `[TypeExpr]` for nested
+  array types.
+
+Examples:
+```
+[1, 2, 3]                          // Array[Int]
+[1, 2.0]                           // Array[Float] (Int promoted)
+[ivec3(1,2,3), ivec3(4,5,6)]       // Array[IVec3]
+[]IVec3                            // empty Array[IVec3]
+[]Structure                        // empty Array[Structure]
+[][IVec3]                          // empty Array[Array[IVec3]]
+[][[Int]]                          // empty Array[Array[Array[Int]]]
+[[]Int]                            // 1-element Array[Array[Int]] containing one empty Array[Int]
+```
+
+The leading `[]` marks an empty-array literal; the trailing TypeExpr declares the
+element type. The abstract supertypes HasAtoms, HasStructure, HasFreeLinOps are
+not accepted as element types. Type-name identifiers are only interpreted as
+types in the position immediately after `[]`, so naming a parameter after a type
+(e.g. `structure: Structure`) is safe.
+
+### String Template Literals
+
+Build a String value with optional interpolation:
+```
+`text-only literal`                      // String
+`${x}`                                   // stringification of x
+`prefix-${x}-suffix`                     // mixed
+`${a.species}_${a.size}.xyz`             // record-field interpolation
+```
+
+Interpolation `${expr}` accepts String, Int, Float, or Bool. Anything else
+is a validation error.
+
+Stringification:
+```
+String → passthrough
+Int    → decimal (e.g. -7, 42)
+Float  → Rust default Display (e.g. 0.1, 3.14, 1)
+Bool   → true / false
+```
+
+Non-finite Float values (NaN, +inf, -inf) are rejected at evaluation time.
+
+Supported escapes (inside a `` ` ``-delimited template):
+```
+\`  \\  \$  \n  \t  \r
+```
+A bare `$` not followed by `{` is literal, so `` `cost: $5` `` works without
+escaping. To write a literal `${...}`, escape the dollar as `\${...}`.
+
+### Array Access
+
+- `arr[i]` — element access; `i` is an Int expression. Out-of-bounds is an
+  evaluation error. For nested arrays, chain: `arr[i][j]`.
+- `len(arr)` — number of elements in `arr`. Returns Int. Works on arrays of
+  any element type, including empty arrays (`len([]Int)` is 0).
+- `concat(a, b)` — concatenate two arrays. The result element type is the
+  unification of the two element types under the standard promotion rules
+  (e.g. `concat([]Int, [1,2,3])` is `[1,2,3]`; `concat([1,2], [3.0])` is
+  `Array[Float]`).
+- `append(arr, elem)` — return a new array with `elem` appended at the end.
+  The result element type is the unification of `arr`'s element type and
+  `elem`'s type under standard promotion rules (so `append([1,2], 3.0)` is
+  `Array[Float]`).
+
+### Vector Math Functions
+- `length2(vec2)` - Calculate 2D vector magnitude
+- `length3(vec3)` - Calculate 3D vector magnitude
+- `normalize2(vec2)` - Normalize 2D vector to unit length
+- `normalize3(vec3)` - Normalize 3D vector to unit length
+- `dot2(vec2, vec2)` - 2D dot product
+- `dot3(vec3, vec3)` - 3D dot product
+- `cross(vec3, vec3)` - 3D cross product
+- `distance2(vec2, vec2)` - Distance between 2D points
+- `distance3(vec3, vec3)` - Distance between 3D points
+
+### Integer Vector Math Functions
+- `idot2(ivec2, ivec2)` - 2D integer dot product (returns int)
+- `idot3(ivec3, ivec3)` - 3D integer dot product (returns int)
+- `icross(ivec3, ivec3)` - 3D integer cross product (returns ivec3)
+
+### Mathematical Functions
+- `sin(x)`, `cos(x)`, `tan(x)` - Trigonometric functions (argument in radians)
+- `asin(x)`, `acos(x)`, `atan(x)` - Inverse trigonometric functions (result in radians; `asin`/`acos` reject arguments outside `[-1, 1]`)
+- `atan2(y, x)` - Quadrant-aware arc tangent of `y / x` (result in radians)
+- `sindeg(x)`, `cosdeg(x)`, `tandeg(x)` - Trigonometric functions with the argument in degrees
+- `asindeg(x)`, `acosdeg(x)`, `atandeg(x)` - Inverse trigonometric functions returning degrees (`asindeg`/`acosdeg` reject arguments outside `[-1, 1]`)
+- `atan2deg(y, x)` - Quadrant-aware arc tangent of `y / x`, result in degrees
+- `degrees(x)` - Convert radians to degrees; `radians(x)` - Convert degrees to radians
+- `sqrt(x)` - Square root
+- `exp(x)` - Exponential e^x
+- `log(x)` - Natural logarithm (ln); rejects x <= 0
+- `abs(x)` - Absolute value; type-preserving (Int->Int, Float->Float)
+- `abs_int(x)` - Deprecated Int-only alias of `abs`
+- `floor(x)`, `ceil(x)`, `round(x)` - Rounding functions
+- `min(a, b, ...)`, `max(a, b, ...)` - Variadic min/max; type-preserving
+- `clamp(x, lo, hi)` - Constrain x to [lo, hi]; type-preserving
+- `sign(x)` - Three-way sign (-1, 0, +1); type-preserving
+- `lerp(a, b, t)` - Linear interpolation a + (b - a) * t (unclamped, Float)
+
+### Constants
+- `pi` - The constant π as a Float. A parameter of the same name shadows it.
+
+### Operator Precedence (highest to lowest)
+1. Function calls, member access, parentheses
+2. Unary operators (`+`, `-`, `!`)
+3. Exponentiation (`^`) - right associative
+4. Multiplication, division, modulo (`*`, `/`, `%`)
+5. Addition, subtraction (`+`, `-`)
+6. Comparison operators (`<`, `<=`, `>`, `>=`)
+7. Equality operators (`==`, `!=`)
+8. Logical AND (`&&`)
+9. Logical OR (`||`)
+10. Conditional expressions (`if-then-else`)
+
+### Example Expressions
+```
+2 * x + 1                           // Simple arithmetic
+x % 2 == 0                          // Check if x is even (modulo)
+if x % 2 > 0 then -1 else 1         // Conditional with modulo
+vec3(1, 2, 3) * 2.0                 // Vector scaling
+length3(vec3(3, 4, 0))              // Vector length (returns 5.0)
+if x > 0 then sqrt(x) else 0        // Conditional with function
+dot3(normalize3(a), normalize3(b))  // Normalized dot product
+sin(3.14159 / 4) * 2                // Trigonometry
+vec2(x, y).x + vec2(z, w).y         // Member access
+distance3(vec3(0,0,0), vec3(1,1,1)) // 3D distance
+```
+
+## Text Format
+
+Most users define parameters and the expression through the property panel. When
+editing the node network as text instead, they are given inline:
+```
+# Default: single parameter 'x' of type Int
+result = expr { expression: "x * 2", x: some_int_node }
+
+# Multiple parameters: must specify the parameters array
+result = expr {
+  expression: "a + b",
+  parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }],
+  a: node1,
+  b: node2
+}
+```"#.to_string(),
+      summary: None,
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![],
+      output_pins: OutputPinDefinition::single(DataType::None), // will change based on the expression
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
+      public: true,
+      node_data_creator: || {
+        // Parse the default expression up front so the new node arrives with
+        // `expr` populated. Otherwise `eval` returns "Expression not parsed"
+        // until the user opens the property panel and saves — and for nodes
+        // added inside an HOF body there is no scope-aware
+        // `set_node_network_data` path today, so the parse would never run.
+        let mut data = ExprData {
+          parameters: vec![ExprParameter {
+            id: Some(1),
+            name: "x".to_string(),
+            data_type: DataType::Int,
+            data_type_str: None,
+          }],
+          expression: "x".to_string(),
+          expr: None,
+          error: None,
+          output_type: None,
+        };
+        let _ = data.parse_and_validate(0);
+        Box::new(data)
+      },
+      node_data_saver: generic_node_data_saver::<ExprData>,
+      node_data_loader: expr_data_loader,
+    }
+}

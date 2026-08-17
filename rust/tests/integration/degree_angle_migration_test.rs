@@ -9,21 +9,21 @@ use glam::f64::DVec2;
 use std::collections::HashMap;
 use std::f64::consts::FRAC_PI_2;
 
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
-use rust_lib_flutter_cad::structure_designer::network_validator::validate_network;
-use rust_lib_flutter_cad::structure_designer::node_data::NodeData;
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::float::FloatData;
-use rust_lib_flutter_cad::structure_designer::serialization::migrate_v5_to_v6::{
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::network_validator::validate_network;
+use atomcad_structure_designer::node_data::NodeData;
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::float::FloatData;
+use atomcad_structure_designer::serialization::migrate_v5_to_v6::{
     migrate_v5_to_v6, migration_call_count, reset_migration_call_count,
 };
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
 use serde_json::{Value, json};
 use tempfile::tempdir;
 

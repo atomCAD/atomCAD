@@ -1,0 +1,344 @@
+use crate::nodes::atom_edit::atom_edit::{AtomEditData, CrossCellBondInfo, DEFAULT_TOLERANCE};
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use atomcad_util::serialization_utils::dvec3_serializer;
+use glam::IVec3;
+use glam::f64::DVec3;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::io;
+
+/// Serializable representation of an atom in a diff structure.
+#[derive(Serialize, Deserialize)]
+pub struct SerializableAtom {
+    pub id: u32,
+    pub atomic_number: i16,
+    #[serde(with = "dvec3_serializer")]
+    pub position: DVec3,
+    /// Atom flags (frozen, hybridization, passivation). Absent in old files → defaults to 0.
+    #[serde(default, skip_serializing_if = "is_zero_u16")]
+    pub flags: u16,
+    /// Tag names carried by the atom, in bit order. Stored as *names* (not raw
+    /// `tag_bits`) so the file is self-describing and table-order-independent;
+    /// the diff structure's tag table is rebuilt by interning on load. Absent in
+    /// old files → no tags. A tagless save is byte-identical to the pre-feature
+    /// format (`doc/design_atom_tags.md` §Serialization).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+}
+
+fn is_zero_u16(v: &u16) -> bool {
+    *v == 0
+}
+
+/// Serializable representation of a bond in a diff structure.
+#[derive(Serialize, Deserialize)]
+pub struct SerializableBond {
+    pub atom_id1: u32,
+    pub atom_id2: u32,
+    pub bond_order: u8,
+}
+
+/// Serializable representation of an anchor position (for moved atoms).
+#[derive(Serialize, Deserialize)]
+pub struct SerializableAnchor {
+    pub atom_id: u32,
+    #[serde(with = "dvec3_serializer")]
+    pub position: DVec3,
+}
+
+/// Serializable representation of the diff AtomicStructure.
+#[derive(Serialize, Deserialize)]
+pub struct SerializableDiff {
+    pub atoms: Vec<SerializableAtom>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bonds: Vec<SerializableBond>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub anchor_positions: Vec<SerializableAnchor>,
+}
+
+/// Serializable representation of a per-atom hybridization override.
+#[derive(Serialize, Deserialize)]
+pub struct HybridizationOverrideEntry {
+    pub atom_id: u32,
+    /// 1=Sp3, 2=Sp2, 3=Sp1
+    pub hybridization: u8,
+}
+
+/// Serializable version of AtomEditData for JSON persistence.
+#[derive(Serialize, Deserialize)]
+pub struct SerializableAtomEditData {
+    pub diff: SerializableDiff,
+    #[serde(default)]
+    pub output_diff: bool,
+    #[serde(default)]
+    pub show_anchor_arrows: bool,
+    #[serde(default = "default_include_base_bonds_in_diff")]
+    pub include_base_bonds_in_diff: bool,
+    #[serde(default = "default_tolerance")]
+    pub tolerance: f64,
+    #[serde(default)]
+    pub error_on_stale_entries: bool,
+    #[serde(default)]
+    pub continuous_minimization: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frozen_base_atoms: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub frozen_diff_atoms: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hybridization_override_base_atoms: Vec<HybridizationOverrideEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hybridization_override_diff_atoms: Vec<HybridizationOverrideEntry>,
+    #[serde(default)]
+    pub is_motif_mode: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parameter_elements: Vec<SerializableParameterElement>,
+    #[serde(default = "default_neighbor_depth")]
+    pub neighbor_depth: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cross_cell_bonds: Vec<SerializableCrossCellBond>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SerializableParameterElement {
+    pub name: String,
+    pub default_atomic_number: i16,
+}
+
+/// Serializable representation of a cross-cell bond metadata entry.
+#[derive(Serialize, Deserialize)]
+pub struct SerializableCrossCellBond {
+    pub atom_id_1: u32,
+    pub atom_id_2: u32,
+    /// Relative cell offset [dx, dy, dz]. Convention: offset of max(id1,id2) relative to min(id1,id2).
+    pub relative_cell: [i32; 3],
+    /// Bond order (1-7). Defaults to 1 for backward compatibility.
+    #[serde(default = "default_cross_cell_bond_order")]
+    pub bond_order: u8,
+}
+
+fn default_cross_cell_bond_order() -> u8 {
+    1
+}
+
+fn default_include_base_bonds_in_diff() -> bool {
+    true
+}
+
+fn default_tolerance() -> f64 {
+    DEFAULT_TOLERANCE
+}
+
+fn default_neighbor_depth() -> f64 {
+    0.3
+}
+
+/// Converts an AtomEditData to its serializable representation.
+pub fn atom_edit_data_to_serializable(data: &AtomEditData) -> io::Result<SerializableAtomEditData> {
+    let diff = &data.diff;
+
+    // Serialize atoms
+    let mut atoms: Vec<SerializableAtom> = Vec::new();
+    for (_, atom) in diff.iter_atoms() {
+        atoms.push(SerializableAtom {
+            id: atom.id,
+            atomic_number: atom.atomic_number,
+            position: atom.position,
+            flags: atom.flags & !0x1, // strip selection bit
+            tags: diff
+                .atom_tags(atom.id)
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        });
+    }
+    // Sort by ID for deterministic output
+    atoms.sort_by_key(|a| a.id);
+
+    // Serialize bonds (each bond once: atom_id1 < atom_id2)
+    let mut bonds: Vec<SerializableBond> = Vec::new();
+    for (_, atom) in diff.iter_atoms() {
+        for bond in &atom.bonds {
+            let other_id = bond.other_atom_id();
+            if atom.id < other_id {
+                bonds.push(SerializableBond {
+                    atom_id1: atom.id,
+                    atom_id2: other_id,
+                    bond_order: bond.bond_order(),
+                });
+            }
+        }
+    }
+    bonds.sort_by_key(|a| (a.atom_id1, a.atom_id2));
+
+    // Serialize anchor positions
+    let mut anchor_positions: Vec<SerializableAnchor> = diff
+        .anchor_positions()
+        .iter()
+        .map(|(&atom_id, &position)| SerializableAnchor { atom_id, position })
+        .collect();
+    anchor_positions.sort_by_key(|a| a.atom_id);
+
+    // Frozen/hybridization data is now stored inline on diff atom flags.
+    // Old map fields are written empty for forward compatibility with old readers.
+    Ok(SerializableAtomEditData {
+        diff: SerializableDiff {
+            atoms,
+            bonds,
+            anchor_positions,
+        },
+        output_diff: false, // Deprecated: display state now tracked via displayed_pins
+        show_anchor_arrows: data.show_anchor_arrows,
+        include_base_bonds_in_diff: data.include_base_bonds_in_diff,
+        tolerance: data.tolerance,
+        error_on_stale_entries: data.error_on_stale_entries,
+        continuous_minimization: data.continuous_minimization,
+        frozen_base_atoms: Vec::new(),
+        frozen_diff_atoms: Vec::new(),
+        hybridization_override_base_atoms: Vec::new(),
+        hybridization_override_diff_atoms: Vec::new(),
+        is_motif_mode: data.is_motif_mode,
+        parameter_elements: data
+            .parameter_elements
+            .iter()
+            .map(|(name, default_z)| SerializableParameterElement {
+                name: name.clone(),
+                default_atomic_number: *default_z,
+            })
+            .collect(),
+        neighbor_depth: data.neighbor_depth,
+        cross_cell_bonds: {
+            let mut ccb: Vec<SerializableCrossCellBond> = data
+                .cross_cell_bonds
+                .iter()
+                .map(|(bond_ref, info)| {
+                    let (a, b) = if bond_ref.atom_id1 < bond_ref.atom_id2 {
+                        (bond_ref.atom_id1, bond_ref.atom_id2)
+                    } else {
+                        (bond_ref.atom_id2, bond_ref.atom_id1)
+                    };
+                    SerializableCrossCellBond {
+                        atom_id_1: a,
+                        atom_id_2: b,
+                        relative_cell: [info.offset.x, info.offset.y, info.offset.z],
+                        bond_order: info.bond_order,
+                    }
+                })
+                .collect();
+            ccb.sort_by_key(|a| (a.atom_id_1, a.atom_id_2));
+            ccb
+        },
+    })
+}
+
+/// Converts a SerializableAtomEditData back to AtomEditData.
+pub fn serializable_to_atom_edit_data(
+    serializable: &SerializableAtomEditData,
+) -> io::Result<AtomEditData> {
+    let mut diff = AtomicStructure::new_diff();
+
+    // We need to add atoms with the exact IDs from the serialized data.
+    // AtomicStructure assigns sequential IDs (1, 2, 3, ...) on add_atom().
+    // To restore exact IDs, we add atoms in order and verify IDs match.
+    // If they don't (due to gaps from deleted atoms), we use padding slots.
+
+    // Sort atoms by ID to add in order
+    let mut sorted_indices: Vec<usize> = (0..serializable.diff.atoms.len()).collect();
+    sorted_indices.sort_by_key(|&i| serializable.diff.atoms[i].id);
+
+    for &idx in &sorted_indices {
+        let atom = &serializable.diff.atoms[idx];
+        // The next ID that add_atom will assign
+        let mut expected_next_id = (diff.get_num_of_atoms_including_deleted() + 1) as u32;
+
+        // Pad with None slots if there are gaps
+        while expected_next_id < atom.id {
+            diff.add_padding_slot();
+            expected_next_id = (diff.get_num_of_atoms_including_deleted() + 1) as u32;
+        }
+
+        let actual_id = diff.add_atom(atom.atomic_number, atom.position);
+        if actual_id != atom.id {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Atom ID mismatch during deserialization: expected {}, got {}",
+                    atom.id, actual_id
+                ),
+            ));
+        }
+        // Restore inline flags (frozen, hybridization, passivation) from serialized data
+        if atom.flags != 0 {
+            let flags = atom.flags & !0x1; // strip selection bit just in case
+            diff.set_atom_frozen(actual_id, (flags & (1 << 2)) != 0);
+            diff.set_atom_hydrogen_passivation(actual_id, (flags & (1 << 1)) != 0);
+            diff.set_atom_hybridization_override(actual_id, ((flags >> 3) & 0b11) as u8);
+        }
+        // Restore tags by re-interning each name into the diff's own table. The
+        // file stores names, so the table order need not match the saved order.
+        for name in &atom.tags {
+            let _ = diff.add_atom_tag(actual_id, name);
+        }
+    }
+
+    // Restore bonds (use add_bond_checked to silently deduplicate any legacy duplicates)
+    for bond in &serializable.diff.bonds {
+        diff.add_bond_checked(bond.atom_id1, bond.atom_id2, bond.bond_order);
+    }
+
+    // Restore anchor positions
+    for anchor in &serializable.diff.anchor_positions {
+        diff.set_anchor_position(anchor.atom_id, anchor.position);
+    }
+
+    // Backward-compat migration: apply old-format frozen/hybridization map entries
+    // onto diff atoms. Base-provenance entries are ignored (they would need promotion
+    // which requires the base structure, unavailable at load time — these are rare in
+    // practice since overrides on base atoms were uncommon).
+    for &diff_id in &serializable.frozen_diff_atoms {
+        diff.set_atom_frozen(diff_id, true);
+    }
+    for entry in &serializable.hybridization_override_diff_atoms {
+        diff.set_atom_hybridization_override(entry.atom_id, entry.hybridization);
+    }
+
+    let parameter_elements: Vec<(String, i16)> = serializable
+        .parameter_elements
+        .iter()
+        .map(|pe| (pe.name.clone(), pe.default_atomic_number))
+        .collect();
+
+    let cross_cell_bonds: HashMap<BondReference, CrossCellBondInfo> = serializable
+        .cross_cell_bonds
+        .iter()
+        .map(|ccb| {
+            (
+                BondReference {
+                    atom_id1: ccb.atom_id_1,
+                    atom_id2: ccb.atom_id_2,
+                },
+                CrossCellBondInfo {
+                    offset: IVec3::new(
+                        ccb.relative_cell[0],
+                        ccb.relative_cell[1],
+                        ccb.relative_cell[2],
+                    ),
+                    bond_order: ccb.bond_order,
+                },
+            )
+        })
+        .collect();
+
+    Ok(AtomEditData::from_deserialized(
+        diff,
+        serializable.output_diff,
+        serializable.show_anchor_arrows,
+        serializable.include_base_bonds_in_diff,
+        serializable.tolerance,
+        serializable.error_on_stale_entries,
+        serializable.continuous_minimization,
+        serializable.is_motif_mode,
+        parameter_elements,
+        serializable.neighbor_depth,
+        cross_cell_bonds,
+    ))
+}

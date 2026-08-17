@@ -4394,7 +4394,7 @@ class NodeNetworkView {
           wires == other.wires;
 }
 
-/// Dart-facing twin of [`crate::structure_designer::node_type::NodeTypeCategory`].
+/// Dart-facing twin of [`atomcad_structure_designer::node_type::NodeTypeCategory`].
 ///
 /// The authoritative definition moved down into the domain (D9.1) — every
 /// `NodeType` descriptor names one, and that import was 113 of the 145 sites

@@ -27,12 +27,12 @@
 // the reported row flipped between runs. Phase 2's accumulation (with
 // sorted-node-id iteration) is what made this snapshot deterministic.
 
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
-use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::node_network::NodeNetwork;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
 use std::path::{Path, PathBuf};
 
 fn fixtures_root() -> PathBuf {

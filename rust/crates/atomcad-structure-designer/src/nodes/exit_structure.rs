@@ -1,0 +1,100 @@
+// ExitStructure: Crystal -> Molecule. Drops the structure association so the
+// object becomes free-floating. Atoms and any geometry shell pass through
+// unchanged.
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::{MoleculeData, NetworkResult, runtime_type_error_in_input};
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExitStructureData {}
+
+impl NodeData for ExitStructureData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        let input_val =
+            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+        if let NetworkResult::Error(_) = input_val {
+            return EvalOutput::single(input_val);
+        }
+
+        match input_val {
+            NetworkResult::Crystal(crystal) => {
+                EvalOutput::single(NetworkResult::Molecule(MoleculeData {
+                    atoms: crystal.atoms,
+                    geo_tree_root: crystal.geo_tree_root,
+                }))
+            }
+            _ => EvalOutput::single(runtime_type_error_in_input(0)),
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
+        let mut m = std::collections::HashMap::new();
+        m.insert("input".to_string(), (true, None));
+        m
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+        name: "exit_structure".to_string(),
+        description: "Converts a Crystal to a Molecule by dropping its structure association. \
+                      Atoms and any geometry shell pass through unchanged; \
+                      the resulting Molecule is free-floating and moves under free_move / free_rot."
+            .to_string(),
+        summary: None,
+        category: NodeTypeCategory::AtomicStructure,
+        parameters: vec![Parameter {
+            id: None,
+            name: "input".to_string(),
+            data_type: DataType::Crystal,
+        }],
+        output_pins: OutputPinDefinition::single_fixed(DataType::Molecule),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
+        public: true,
+        node_data_creator: || Box::new(ExitStructureData::default()),
+        node_data_saver: generic_node_data_saver::<ExitStructureData>,
+        node_data_loader: generic_node_data_loader::<ExitStructureData>,
+    }
+}

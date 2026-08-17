@@ -1,0 +1,358 @@
+//! The `apply` node: calls a function value on a single argument set, with
+//! support for **partial application** (wiring only a contiguous prefix of the
+//! function's arg pins) and **recursive consumption** (a body that returns
+//! another `Function` value continues to absorb remaining args).
+//!
+//! `apply` shares the `{ kind, type_args }` data model with the `closure` node
+//! (`nodes/closure.rs`), but with one critical asymmetry: when its `f` pin is
+//! wired, the wired source's **declared (canonical, flat) function type** —
+//! not the stored `ApplyData` — drives the arg-pin enumeration and the
+//! output-pin type. The pin layout is updated by a post-pass in
+//! `NodeTypeRegistry::repair_node_network` after the wire connects/disconnects
+//! and validation runs. When `f` is disconnected, `ApplyData.kind` /
+//! `type_args` drive the default layout exactly as today (the user-set
+//! kind-picker default — Open Question 2 in `doc/design_currying.md`).
+//!
+//! `apply.eval` consumes the underlying closure's **body** arity per step
+//! (`ZoneClosure.param_types.len()`), which is *decoupled* from the closure's
+//! declared (flat) function type when the body returns a `Function` value. The
+//! loop recurses on the returned `Function` until either the args run out
+//! (returning a partial closure or the final result) or the body returns a
+//! non-function. See `doc/design_currying.md` §"`apply` semantics".
+//!
+//! # The derived layout is unserialized state
+//!
+//! **Preserve it positionally on any non-derivable pass.**
+//! `ApplyData::calculate_custom_node_type` only ever emits the bare `[f]` pin;
+//! the real `[f, arg0, …]` layout is *derived* from the wired `f` source by the
+//! post-pass, **not** by `calculate_custom_node_type` (the
+//! `doc/design_currying.md` Phase 3 plan that put it there is stale). Because
+//! the layout is unserialized and the `f`-source can live in a not-yet-loaded
+//! network, it often can't be derived at the moment a node is first processed —
+//! yet the `arg0…` wires are already present (positionally) in the deserialized
+//! `arguments`. Two operations drop those wires if they run against the
+//! under-derived `[f]` layout: a **by-name `arguments` rebuild**
+//! (`set_custom_node_type(.., refresh_args = true)` — there is no name for the
+//! `arg0` slot yet) and **`repair_network_arguments` truncation** (cuts to the
+//! `[f]` count).
+//!
+//! The rule: any pass that touches an `apply` before its layout is derived must
+//! preserve `arguments` **positionally** — use
+//! `update_apply_pin_layouts_for_network_preserving_args` (not the by-name
+//! variant) and run it **before** `repair_network_arguments`. Current
+//! preserving call sites: `.cnnd` load (`validate_network` ordering +
+//! `repair_node_network`'s `apply`-special-cased `refresh_args = false`),
+//! closure⇄network conversion, and body-undo restore
+//! (`undo/commands/edit_zone_body.rs`, `extract_closure_body.rs`). By-name and
+//! positional coincide on an already-consistent graph (arg pins are named
+//! `arg0, arg1, …` by index), so preserving is safe everywhere; they diverge
+//! *only* in the freshly-loaded / under-derived state, which is exactly where
+//! by-name is lossy. The end-to-end load reasoning lives in
+//! `serialization/AGENTS.md` ("Load pipeline & derived state"); the bug class is
+//! the same shape as `walk_all_nodes` skipping body nodes. Regression coverage:
+//! `tests/structure_designer/apply_function_pin_iter_test.rs` (load) and
+//! `currying_test.rs::apply_phase3_rewire_f_to_lower_arity_shrinks_arg_pins`
+//! (arity shrink).
+
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::{
+    NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
+};
+use crate::evaluator::network_result::NetworkResult;
+use crate::evaluator::zone_closure::{ZoneClosure, run_closure_once};
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::nodes::closure::ClosureKind;
+use crate::structure_designer::StructureDesigner;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+/// Stored state for an `apply` node. Identical in shape to `ClosureData`: the
+/// shape template (which fixes arity and which slots are free) plus the free
+/// type arguments and authored parameter names (used only by the `Custom`
+/// kind). See `nodes/closure.rs` for the kind semantics.
+///
+/// **Currying Phase 3 semantic shift**: when `f` is wired, `ApplyData` is
+/// ignored by `calculate_custom_node_type` (the registry's repair post-pass
+/// overrides the node's `custom_node_type` from the wired source). When `f` is
+/// disconnected, `ApplyData` drives the default pin layout exactly as today.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApplyData {
+    pub kind: ClosureKind,
+    pub type_args: Vec<DataType>,
+    /// Authored parameter names. **Empty for preset kinds** and length-N
+    /// for `Custom`. `#[serde(default)]` keeps older `.cnnd` files loadable.
+    #[serde(default)]
+    pub param_names: Vec<String>,
+}
+
+impl Default for ApplyData {
+    fn default() -> Self {
+        // Default to the map-like `(T) -> U` shape with `Float` slots.
+        Self {
+            kind: ClosureKind::Map,
+            type_args: vec![DataType::Float, DataType::Float],
+            param_names: vec![],
+        }
+    }
+}
+
+impl NodeData for ApplyData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, base_node_type: &NodeType) -> Option<NodeType> {
+        // Disconnected-`f` default: render only the `f` pin. No arg pins, no
+        // kind-derived output type. When `f` is wired,
+        // `NodeTypeRegistry::repair_node_network` runs a post-pass that
+        // overrides this with arg pins + output pin derived from the wired
+        // source's declared (canonical, flat) function type and the count of
+        // wired arg pins. The f-pin's declared type is permanently
+        // `AnyFunction { leading_params: vec![] }` — any function value flows
+        // in via the AnyFunction compatibility rule.
+        //
+        // `ApplyData.kind` / `type_args` / `param_names` remain on disk for
+        // `.cnnd` back-compat but are structurally irrelevant: neither the
+        // disconnected-`f` UX nor the wired-`f` UX consults them to render
+        // pins. Deprecation deferred — see
+        // `doc/design_function_pin_unification.md` (Phase D).
+        let mut custom = base_node_type.clone();
+
+        custom.parameters = vec![Parameter {
+            id: None,
+            name: "f".to_string(),
+            data_type: DataType::AnyFunction {
+                leading_params: vec![],
+            },
+        }];
+        // Output type is unknown until `f` is wired — use `DataType::None`
+        // as a stable placeholder. The post-pass installs the real output
+        // type as soon as `f` resolves to a `Function(_)`. With `f`
+        // disconnected the apply node's evaluation errors with "f not
+        // connected", so this output type is never observed in a healthy
+        // network.
+        custom.output_pins = OutputPinDefinition::single_fixed(DataType::None);
+
+        Some(custom)
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        // 1. Resolve `f`. Required — no inline body fallback.
+        let mut f_current: ZoneClosure =
+            match network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 0) {
+                NetworkResult::Function(zc) => zc,
+                NetworkResult::None => {
+                    return EvalOutput::single(NetworkResult::Error(
+                        "apply: f not connected".to_string(),
+                    ));
+                }
+                e @ NetworkResult::Error(_) => return EvalOutput::single(e),
+                other => {
+                    return EvalOutput::single(NetworkResult::Error(format!(
+                        "apply: f is not a function (got {})",
+                        other.to_display_string()
+                    )));
+                }
+            };
+
+        // 2. Count the contiguous prefix of wired arg pins, and resolve their
+        // values against the outer context. The validator enforces prefix-only
+        // wiring (a wired pin past an unwired one is an error attributed to
+        // this `apply` node); at eval we simply stop at the first unwired pin.
+        let node = NetworkStackElement::get_top_node(network_stack, node_id);
+        let arg_pin_count = node.arguments.len().saturating_sub(1);
+
+        let mut remaining: std::collections::VecDeque<NetworkResult> =
+            std::collections::VecDeque::with_capacity(arg_pin_count);
+        let mut k: usize = 0;
+        for i in 0..arg_pin_count {
+            // `f` lives at index 0; arg pins are 1..1+N.
+            if node.arguments[1 + i].incoming_wires.is_empty() {
+                break; // First unwired pin terminates the prefix.
+            }
+            let v = network_evaluator.evaluate_arg_required(
+                network_stack,
+                node_id,
+                registry,
+                context,
+                1 + i,
+            );
+            if let NetworkResult::Error(_) = v {
+                return EvalOutput::single(v);
+            }
+            remaining.push_back(v);
+            k += 1;
+        }
+
+        // 3. Identity-partial guard. With k=0 and a non-thunk `f`, `apply` is
+        // the identity: return `f` unchanged. Thunks (declared flat arity 0)
+        // fall through to the loop and run their body below.
+        if k == 0 && !f_current.function_type().parameter_types.is_empty() {
+            return EvalOutput::single(NetworkResult::Function(f_current));
+        }
+
+        // 4. Walk the closure step-by-step, consuming body-arity args per
+        // iteration. The recursive branch fires only when the wired closure's
+        // body returns another `Function` and there are still args to consume.
+        loop {
+            let n_body = f_current.param_types.len();
+
+            // Partial step: not enough args left to fill this body invocation.
+            // Bind whatever args remain into `pre_supplied_args` and return a
+            // shorter `ZoneClosure`.
+            if remaining.len() < n_body {
+                let drained: Vec<NetworkResult> = remaining.drain(..).collect();
+                let drained_len = drained.len();
+                #[allow(clippy::arc_with_non_send_sync)]
+                let extended = {
+                    let mut v = (*f_current.pre_supplied_args).clone();
+                    v.extend(drained);
+                    Arc::new(v)
+                };
+                let partial = ZoneClosure {
+                    body: Arc::clone(&f_current.body),
+                    captures: Arc::clone(&f_current.captures),
+                    zone_output_wires: Arc::clone(&f_current.zone_output_wires),
+                    owner_node_id: f_current.owner_node_id,
+                    param_types: f_current.param_types[drained_len..].to_vec(),
+                    return_type: f_current.return_type.clone(),
+                    pre_supplied_args: extended,
+                };
+                return EvalOutput::single(NetworkResult::Function(partial));
+            }
+
+            // Defensive guard against a pathological 0-arity body that returns
+            // a non-Function while more args remain. In that case the loop
+            // would spin forever consuming no args; surface as an error.
+            if n_body == 0 && remaining.is_empty() {
+                // No work this iteration AND no args to consume — must be a
+                // thunk-force. Run the body and return its result below.
+            }
+
+            // Full body step: consume n_body args, run the body.
+            let step_args: Vec<NetworkResult> = remaining.drain(..n_body).collect();
+            let mut inner_ctx = context.fresh_inner_for_eager_body();
+            let result = run_closure_once(
+                network_evaluator,
+                network_stack,
+                registry,
+                &mut inner_ctx,
+                &f_current,
+                step_args,
+            );
+            context.drain_inner_context(inner_ctx);
+
+            if remaining.is_empty() {
+                return EvalOutput::single(result);
+            }
+
+            // More args to go — the body must have returned another Function.
+            match result {
+                NetworkResult::Function(next) => {
+                    if n_body == 0 && Arc::ptr_eq(&next.body, &f_current.body) {
+                        // Pathological: a 0-arity thunk returned itself. Each
+                        // iteration with `n_body == 0` must advance `f_current`
+                        // or the loop never terminates.
+                        return EvalOutput::single(NetworkResult::Error(
+                            "apply: 0-arity body returned itself with args still remaining"
+                                .to_string(),
+                        ));
+                    }
+                    f_current = next;
+                }
+                NetworkResult::Error(_) => return EvalOutput::single(result),
+                other => {
+                    return EvalOutput::single(NetworkResult::Error(format!(
+                        "apply: expected Function for further application, got {}",
+                        other.to_display_string()
+                    )));
+                }
+            }
+        }
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn get_parameter_metadata(&self) -> HashMap<String, (bool, Option<String>)> {
+        // `f` is the only required pin. Arg pins (materialised by the post-
+        // pass once `f` is wired) are optional so that wiring only a
+        // contiguous prefix is valid (the unwired tail rolls into the
+        // resulting function's remaining parameter list). The prefix-only
+        // rule is enforced by the validator.
+        //
+        // Phase D of function-pin unification: with no kind-derived arg pins
+        // before `f` is wired and source-derived names afterward, we can't
+        // enumerate the post-pass-installed arg-pin names from `ApplyData`.
+        // The registry's repair post-pass uses generic `argN` names by
+        // default (and inherits OLD names at overlapping indices), so we
+        // mark a generous range of `argN` slots optional belt-and-braces.
+        // The lookup is by exact pin name; extra entries are harmless.
+        let mut m = HashMap::new();
+        m.insert("f".to_string(), (true, None));
+        for i in 0..16 {
+            m.insert(format!("arg{}", i), (false, None));
+        }
+        m
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+        name: "apply".to_string(),
+        description: "Calls a function value on a single argument set and returns the result, with support for partial application (wire only a contiguous prefix of the arg pins to get back a function of the remaining parameters). Wire a `Function` source — a `closure` output, a node's function pin, or a subnetwork's `Function` output — into the required `f` pin; the arg-pin layout is derived from `f`'s declared (canonical, flat) function type. With every arg wired, `apply` produces the return value; with k of N wired, it produces a `Function` carrying the k bound values and the remaining N-k parameters. A node returning a function (a 1-arg closure whose body returns a 1-arg closure) is consumed recursively against further wired args.".to_string(),
+        summary: None,
+        category: NodeTypeCategory::MathAndProgramming,
+        // External interface is filled in by `calculate_custom_node_type`; the
+        // default is the map-like one-arg Float shape with the unified
+        // `f: Function*` pin (AnyFunction with no leading-param constraints).
+        // See `doc/design_function_pin_unification.md` (Phase B).
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "f".to_string(),
+                data_type: DataType::AnyFunction {
+                    leading_params: vec![],
+                },
+            },
+            Parameter {
+                id: None,
+                name: "element".to_string(),
+                data_type: DataType::Float,
+            },
+        ],
+        output_pins: OutputPinDefinition::single_fixed(DataType::Float),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
+        public: true,
+        node_data_creator: || Box::new(ApplyData::default()),
+        node_data_saver: generic_node_data_saver::<ApplyData>,
+        node_data_loader: generic_node_data_loader::<ApplyData>,
+    }
+}

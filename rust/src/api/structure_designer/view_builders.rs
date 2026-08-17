@@ -25,13 +25,13 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIErrorRootCause, APIErrorSource, APINetworkWithValidationErrors, APINodeCategoryView,
     APINodeTypeView, APIValidationError,
 };
-use crate::structure_designer::data_type::DataType;
-use crate::structure_designer::eval_errors::RootCauseRef;
-use crate::structure_designer::node_type::NodeTypeCategory;
-use crate::structure_designer::node_type_registry::{
+use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::eval_errors::RootCauseRef;
+use atomcad_structure_designer::node_type::NodeTypeCategory;
+use atomcad_structure_designer::node_type_registry::{
     NodeTypeRegistry, allowed_in_zone_body, static_match, static_match_strict,
 };
-use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
 use std::collections::HashMap;
 
 /// The palette's category order. Shared by both node-type view builders so the
@@ -81,9 +81,9 @@ pub fn get_compatible_node_types(
     dragging_from_output: bool,
 ) -> Vec<APINodeCategoryView> {
     let direction = if dragging_from_output {
-        crate::structure_designer::node_data::DragDirection::FromOutput
+        atomcad_structure_designer::node_data::DragDirection::FromOutput
     } else {
-        crate::structure_designer::node_data::DragDirection::FromInput
+        atomcad_structure_designer::node_data::DragDirection::FromInput
     };
 
     // Create iterator of (node_type, category) for all public nodes
@@ -201,10 +201,10 @@ pub fn get_node_type_views(registry: &NodeTypeRegistry) -> Vec<APINodeCategoryVi
 pub fn get_node_networks_with_validation(
     registry: &NodeTypeRegistry,
 ) -> Vec<APINetworkWithValidationErrors> {
-    use crate::structure_designer::network_usages::{
+    use atomcad_structure_designer::network_usages::{
         node_label, resolve_scope_labels, resolve_scope_network,
     };
-    use crate::structure_designer::scoped_validation_errors::collect_scoped_validation_errors;
+    use atomcad_structure_designer::scoped_validation_errors::collect_scoped_validation_errors;
 
     let mut networks: Vec<APINetworkWithValidationErrors> = registry
         .node_networks
@@ -283,8 +283,8 @@ pub fn get_node_networks_with_validation(
 pub fn get_node_networks_with_errors(
     designer: &StructureDesigner,
 ) -> Vec<APINetworkWithValidationErrors> {
-    use crate::structure_designer::eval_errors::has_blocking_validation_error;
-    use crate::structure_designer::network_usages::{
+    use atomcad_structure_designer::eval_errors::has_blocking_validation_error;
+    use atomcad_structure_designer::network_usages::{
         node_label, resolve_scope_labels, resolve_scope_network,
     };
 
@@ -362,7 +362,7 @@ fn resolve_api_root_cause(
     designer: &StructureDesigner,
     root: Option<&RootCauseRef>,
 ) -> Option<APIErrorRootCause> {
-    use crate::structure_designer::network_usages::{node_label, resolve_scope_network};
+    use atomcad_structure_designer::network_usages::{node_label, resolve_scope_network};
 
     let root = root?;
     let network = designer

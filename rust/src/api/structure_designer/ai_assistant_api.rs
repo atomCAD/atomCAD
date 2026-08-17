@@ -26,8 +26,8 @@
 use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance_or,
 };
-use crate::structure_designer::layout;
-use crate::structure_designer::text_format::{
+use atomcad_structure_designer::layout;
+use atomcad_structure_designer::text_format::{
     EditResult, describe_node_type, edit_network as text_edit_network, get_display_summary,
     serialize_network,
 };
@@ -214,9 +214,9 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 // when the return node is set via "output <node>" statement.
                 // Without this, custom nodes using this network won't render correctly.
                 {
-                    use crate::structure_designer::network_validator::validate_network;
+                    use atomcad_structure_designer::network_validator::validate_network;
                     let registry_ptr = &mut structure_designer.node_type_registry
-                        as *mut crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                        as *mut atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
                     unsafe {
                         if let Some(network) = (*registry_ptr).node_networks.get_mut(&network_name)
                         {
@@ -239,7 +239,7 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                         .layout_algorithm
                         .into();
                     let registry_ptr = &structure_designer.node_type_registry
-                        as *const crate::structure_designer::node_type_registry::NodeTypeRegistry;
+                        as *const atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
                     unsafe {
                         if let Some(network) = structure_designer
                             .node_type_registry

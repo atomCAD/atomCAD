@@ -5,14 +5,14 @@
 // 2. Flags roundtrip: serialize atom_edit with flags, deserialize, verify flags survived.
 // 3. Atom flags persist in diff structure: bare serializable atom flags round-trip.
 
-use atomcad_test_support::fixture_path_str;
-use glam::f64::DVec3;
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
-use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+use atomcad_structure_designer::serialization::atom_edit_data_serialization::{
     SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,
 };
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
+use atomcad_structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
+use atomcad_test_support::fixture_path_str;
+use glam::f64::DVec3;
 
 const FIXTURE_DIR: &str = "inline_metadata_migration";
 /// `tests/fixtures/inline_metadata_migration/<name>`, resolved through the shared

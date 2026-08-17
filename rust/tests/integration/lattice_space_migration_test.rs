@@ -4,20 +4,20 @@
 // `doc/design_cnnd_migration_v2_to_v3.md` adds new fixtures here.
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
-use atomcad_test_support::fixture_path_str;
-use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+use atomcad_structure_designer::data_type::{DataType, FunctionType};
+use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
-use rust_lib_flutter_cad::structure_designer::network_validator::validate_network;
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::serialization::migrate_v2_to_v3::{
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::network_validator::validate_network;
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::serialization::migrate_v2_to_v3::{
     migrate_v2_to_v3, migration_call_count, reset_migration_call_count,
 };
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
+use atomcad_test_support::fixture_path_str;
 use tempfile::tempdir;
 
 const FIXTURE_DIR: &str = "lattice_space_migration";
@@ -667,12 +667,11 @@ fn test_load_primitive_with_lattice_adapter_synthesised() {
     );
 
     // `unit_cell` renamed; exactly one synthesized `structure` adapter.
-    let structure_adapters: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
-        network
-            .nodes
-            .values()
-            .filter(|n| n.node_type_name == "structure")
-            .collect();
+    let structure_adapters: Vec<&atomcad_structure_designer::node_network::Node> = network
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .collect();
     assert_eq!(
         structure_adapters.len(),
         1,
@@ -840,7 +839,7 @@ fn test_roundtrip_primitive_with_lattice() {
 ///   primitive-adaptation adapter on cuboid, three for the W/G/S triplet).
 #[test]
 fn test_load_atom_fill_split() {
-    use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
+    use atomcad_structure_designer::nodes::materialize::MaterializeData;
 
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(&mut registry, &fixture("atom_fill_split.cnnd"))
@@ -862,12 +861,11 @@ fn test_load_atom_fill_split() {
         "atom_fill must be renamed; got {:?}",
         type_names
     );
-    let materialize_nodes: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
-        network
-            .nodes
-            .values()
-            .filter(|n| n.node_type_name == "materialize")
-            .collect();
+    let materialize_nodes: Vec<&atomcad_structure_designer::node_network::Node> = network
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "materialize")
+        .collect();
     assert_eq!(materialize_nodes.len(), 1, "expected one materialize");
     let materialize = materialize_nodes[0];
     // The renamed node keeps its original id (9).
@@ -879,12 +877,11 @@ fn test_load_atom_fill_split() {
     //   - exactly two `structure` nodes (the cuboid adapter + the override S),
     //   - exactly one `get_structure` node (G),
     //   - exactly one `with_structure` node (W).
-    let structure_nodes: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
-        network
-            .nodes
-            .values()
-            .filter(|n| n.node_type_name == "structure")
-            .collect();
+    let structure_nodes: Vec<&atomcad_structure_designer::node_network::Node> = network
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .collect();
     assert_eq!(
         structure_nodes.len(),
         2,
@@ -1134,12 +1131,11 @@ fn test_load_shared_unit_cell_composes_passes() {
         network.nodes.len()
     );
 
-    let structure_nodes: Vec<&rust_lib_flutter_cad::structure_designer::node_network::Node> =
-        network
-            .nodes
-            .values()
-            .filter(|n| n.node_type_name == "structure")
-            .collect();
+    let structure_nodes: Vec<&atomcad_structure_designer::node_network::Node> = network
+        .nodes
+        .values()
+        .filter(|n| n.node_type_name == "structure")
+        .collect();
     assert_eq!(
         structure_nodes.len(),
         2,

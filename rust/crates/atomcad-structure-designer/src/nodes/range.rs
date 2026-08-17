@@ -1,0 +1,193 @@
+use crate::common_constants::CONNECTED_PIN_SYMBOL;
+use crate::data_type::DataType;
+use crate::evaluator::iterator_walker::Walker;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::NetworkResult;
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use crate::text_format::TextValue;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RangeData {
+    pub start: i32,
+    pub step: i32,
+    pub count: i32,
+}
+
+impl NodeData for RangeData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        let node = NetworkStackElement::get_top_node(network_stack, node_id);
+        let range_data = &node.data.as_any_ref().downcast_ref::<RangeData>().unwrap();
+
+        let start = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            0,
+            range_data.start,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let step = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            range_data.step,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let count = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            2,
+            range_data.count,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        EvalOutput::single(NetworkResult::Iterator(Walker::range(start, step, count)))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        let start_connected = connected_input_pins.contains("start");
+        let step_connected = connected_input_pins.contains("step");
+        let count_connected = connected_input_pins.contains("count");
+
+        if start_connected && step_connected && count_connected {
+            None
+        } else {
+            let start_display = if start_connected {
+                CONNECTED_PIN_SYMBOL
+            } else {
+                &self.start.to_string()
+            };
+            let step_display = if step_connected {
+                CONNECTED_PIN_SYMBOL
+            } else {
+                &self.step.to_string()
+            };
+            let count_display = if count_connected {
+                CONNECTED_PIN_SYMBOL
+            } else {
+                &self.count.to_string()
+            };
+            Some(format!(
+                "[{}:{}:{}]",
+                start_display, step_display, count_display
+            ))
+        }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("start".to_string(), TextValue::Int(self.start)),
+            ("step".to_string(), TextValue::Int(self.step)),
+            ("count".to_string(), TextValue::Int(self.count)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("start") {
+            self.start = v
+                .as_int()
+                .ok_or_else(|| "start must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("step") {
+            self.step = v
+                .as_int()
+                .ok_or_else(|| "step must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("count") {
+            self.count = v
+                .as_int()
+                .ok_or_else(|| "count must be an integer".to_string())?;
+        }
+        Ok(())
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "range".to_string(),
+      description: "Creates an array of integers starting from an integer value and having a specified step between them. The number of integers in the array can also be specified (count).".to_string(),
+      summary: None,
+      category: NodeTypeCategory::MathAndProgramming,
+      parameters: vec![
+        Parameter {
+            id: None,
+            name: "start".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            id: None,
+            name: "step".to_string(),
+            data_type: DataType::Int,
+        },
+        Parameter {
+            id: None,
+            name: "count".to_string(),
+            data_type: DataType::Int,
+        },
+      ],
+      output_pins: OutputPinDefinition::single(DataType::Iterator(Box::new(DataType::Int))),
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
+      public: true,
+      node_data_creator: || Box::new(RangeData {
+        start: 0,
+        step: 1,
+        count: 1,
+      }),
+      node_data_saver: generic_node_data_saver::<RangeData>,
+      node_data_loader: generic_node_data_loader::<RangeData>,
+    }
+}

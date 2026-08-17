@@ -114,6 +114,7 @@ atomcad-crystolecule = { path = "crates/atomcad-crystolecule" }
 atomcad-display = { path = "crates/atomcad-display" }
 atomcad-geo-tree = { path = "crates/atomcad-geo-tree" }
 atomcad-renderer = { path = "crates/atomcad-renderer" }
+atomcad-structure-designer = { path = "crates/atomcad-structure-designer" }
 atomcad-util = { path = "crates/atomcad-util" }
 dlopen = { workspace = true }
 lazy_static = { workspace = true }

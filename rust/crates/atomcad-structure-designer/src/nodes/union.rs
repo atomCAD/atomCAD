@@ -1,0 +1,159 @@
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::Alignment;
+use crate::evaluator::network_result::BlueprintData;
+use crate::evaluator::network_result::NetworkResult;
+use crate::evaluator::network_result::first_array_element_error;
+use crate::evaluator::network_result::propagate_alignment_with_reason;
+use crate::evaluator::network_result::structure_mismatch_error;
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use atomcad_geo_tree::GeoNode;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnionData {}
+
+impl NodeData for UnionData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        //let _timer = Timer::new("eval_union");
+
+        let mut shapes: Vec<GeoNode> = Vec::new();
+
+        let shapes_val =
+            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+
+        if let NetworkResult::Error(_) = shapes_val {
+            return EvalOutput::single(shapes_val);
+        }
+
+        // Extract the array elements from shapes_val
+        let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
+            array_elements
+        } else {
+            return EvalOutput::single(NetworkResult::Error(
+                "Expected array of geometry shapes".to_string(),
+            ));
+        };
+
+        // Chain hygiene (`doc/design_error_management.md` Phase 6): an element
+        // that is itself an `Error` must forward its own text — falling through
+        // to the "All inputs must be geometry objects" arm below would replace
+        // the upstream root cause with a misleading type complaint.
+        if let Some(err) = first_array_element_error("shapes", &shape_results) {
+            return EvalOutput::single(err);
+        }
+
+        let shape_count = shape_results.len();
+
+        if shape_count == 0 {
+            return EvalOutput::single(NetworkResult::Error(
+                "Union requires at least one input geometry".to_string(),
+            ));
+        }
+
+        // Extract geometries and check lattice vector compatibility
+        let mut blueprints: Vec<BlueprintData> = Vec::new();
+        for shape_val in shape_results {
+            if let NetworkResult::Blueprint(shape) = shape_val {
+                blueprints.push(shape);
+            } else {
+                return EvalOutput::single(NetworkResult::Error(
+                    "All inputs must be geometry objects".to_string(),
+                ));
+            }
+        }
+
+        // Require full Structure equality across all inputs (same crystal field)
+        if !BlueprintData::all_have_same_structure(&blueprints) {
+            return EvalOutput::single(structure_mismatch_error());
+        }
+
+        let output_structure = blueprints[0].structure.clone();
+        let mut alignment = Alignment::Aligned;
+        let mut alignment_reason: Option<String> = None;
+        for bp in blueprints.into_iter() {
+            propagate_alignment_with_reason(
+                &mut alignment,
+                &mut alignment_reason,
+                bp.alignment,
+                &bp.alignment_reason,
+            );
+            shapes.push(bp.geo_tree_root);
+        }
+
+        EvalOutput::single(NetworkResult::Blueprint(BlueprintData {
+            structure: output_structure,
+            geo_tree_root: GeoNode::union_3d(shapes),
+            alignment,
+            alignment_reason,
+        }))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
+        let mut m = std::collections::HashMap::new();
+        m.insert("shapes".to_string(), (true, None)); // required
+        m
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "union".to_string(),
+      description: "Computes the Boolean union of any number of 3D geometries. The `shapes` input accepts an array of `Blueprint` values (array-typed input; you can connect multiple wires and they will be concatenated).".to_string(),
+      summary: None,
+      category: NodeTypeCategory::Geometry3D,
+      parameters: vec![
+          Parameter {
+              id: None,
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Blueprint)),
+          },
+      ],
+      output_pins: OutputPinDefinition::single(DataType::Blueprint),
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
+      public: true,
+      node_data_creator: || Box::new(UnionData {}),
+      node_data_saver: generic_node_data_saver::<UnionData>,
+      node_data_loader: generic_node_data_loader::<UnionData>,
+    }
+}

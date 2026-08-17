@@ -1,10 +1,10 @@
 use super::common_api_types::{APIIVec2, APIIVec3, APITransform, APIVec2, APIVec3};
-use crate::structure_designer::camera_settings::CameraSettings;
-use crate::structure_designer::preferences as domain_prefs;
-use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
 use atomcad_display::preferences as display_prefs;
 use atomcad_renderer::renderer::Renderer;
+use atomcad_structure_designer::camera_settings::CameraSettings;
+use atomcad_structure_designer::preferences as domain_prefs;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer_changes::StructureDesignerChanges;
 use atomcad_util::transform::Transform;
 use glam::DQuat;
 use glam::f64::DVec2;
@@ -470,7 +470,7 @@ pub fn refresh_structure_designer(
         label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
-    ) = crate::structure_designer::scene_tessellator::tessellate_scene_content(
+    ) = atomcad_structure_designer::scene_tessellator::tessellate_scene_content(
         &cad_instance
             .structure_designer
             .last_generated_structure_designer_scene,

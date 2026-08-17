@@ -1,7 +1,7 @@
 //! Dart-facing twins of the structure designer's user preferences.
 //!
 //! **The authoritative definitions live in
-//! [`crate::structure_designer::preferences`]**, which is also what
+//! [`atomcad_structure_designer::preferences`]**, which is also what
 //! `StructureDesigner` holds and what is persisted to
 //! `<config_dir>/atomCAD/preferences.json`. These are transport copies: D9.2 of
 //! `doc/design_rust_crate_split.md` moved the settings down into the domain (they
@@ -27,8 +27,8 @@
 use crate::api::common_api_types::APIIVec3;
 // Path-qualified rather than imported bare: every api-side twin below
 // deliberately keeps the same identifier as the domain type it mirrors (D9a).
-use crate::structure_designer::preferences as domain;
 use atomcad_crystolecule::visualization::AtomicStructureVisualization as DomainAtomicStructureVisualization;
+use atomcad_structure_designer::preferences as domain;
 use flutter_rust_bridge::frb;
 use serde::{Deserialize, Serialize};
 

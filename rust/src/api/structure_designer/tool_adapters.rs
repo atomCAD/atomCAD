@@ -16,11 +16,11 @@
 use crate::api::structure_designer::structure_designer_api_types::{
     APIAtomEditTool, APIEditAtomTool,
 };
-use crate::structure_designer::nodes::atom_edit::atom_edit::{
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     AddAtomToolState, AddBondInteractionState, AddBondToolState, AtomEditData, AtomEditTool,
     DefaultToolInteractionState, DefaultToolState, GuidelineTool,
 };
-use crate::structure_designer::nodes::edit_atom::edit_atom::{
+use atomcad_structure_designer::nodes::edit_atom::edit_atom::{
     AddAtomToolState as EditAtomAddAtomToolState, AddBondToolState as EditAtomAddBondToolState,
     DefaultToolState as EditAtomDefaultToolState, EditAtomData, EditAtomTool,
 };

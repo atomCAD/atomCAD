@@ -1,7 +1,8 @@
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
+use atomcad_test_support::sample_path_str;
 use tempfile::tempdir;
 
 fn roundtrip_cnnd_file(file_path: &str) {
@@ -146,62 +147,62 @@ fn roundtrip_cnnd_file(file_path: &str) {
 
 #[test]
 fn test_diamond_roundtrip() {
-    roundtrip_cnnd_file("../samples/diamond.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("diamond.cnnd"));
 }
 
 #[test]
 fn test_hexagem_roundtrip() {
-    roundtrip_cnnd_file("../samples/hexagem.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("hexagem.cnnd"));
 }
 
 #[test]
 fn test_extrude_demo_roundtrip() {
-    roundtrip_cnnd_file("../samples/extrude-demo.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("extrude-demo.cnnd"));
 }
 
 #[test]
 fn test_mof5_motif_roundtrip() {
-    roundtrip_cnnd_file("../samples/MOF5-motif.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("MOF5-motif.cnnd"));
 }
 
 #[test]
 fn test_rutile_motif_roundtrip() {
-    roundtrip_cnnd_file("../samples/rutile-motif.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("rutile-motif.cnnd"));
 }
 
 #[test]
 fn test_halfspace_demo_roundtrip() {
-    roundtrip_cnnd_file("../samples/half-space-and-miller-index-demo.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("half-space-and-miller-index-demo.cnnd"));
 }
 
 #[test]
 fn test_rotation_demo_roundtrip() {
-    roundtrip_cnnd_file("../samples/rotation-demo.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("rotation-demo.cnnd"));
 }
 
 #[test]
 fn test_pattern_roundtrip() {
-    roundtrip_cnnd_file("../samples/pattern.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("pattern.cnnd"));
 }
 
 #[test]
 fn test_nut_bolt_roundtrip() {
-    roundtrip_cnnd_file("../samples/nut-bolt.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("nut-bolt.cnnd"));
 }
 
 #[test]
 fn test_truss_roundtrip() {
-    roundtrip_cnnd_file("../samples/truss-011.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("truss-011.cnnd"));
 }
 
 #[test]
 fn test_flexure_delta_robot_roundtrip() {
-    roundtrip_cnnd_file("../samples/flexure-delta-robot.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("flexure-delta-robot.cnnd"));
 }
 
 #[test]
 fn test_demolib_proxy_roundtrip() {
-    roundtrip_cnnd_file("../samples/demolib+(111)-proxy-generator.cnnd");
+    roundtrip_cnnd_file(&sample_path_str("demolib+(111)-proxy-generator.cnnd"));
 }
 
 /// Phase 4 (unpack nodes): a network wiring all three stateless destructure
@@ -212,9 +213,9 @@ fn test_demolib_proxy_roundtrip() {
 /// not new plumbing — see `doc/design_structure_lattice_unpack_nodes.md`.
 #[test]
 fn unpack_nodes_cnnd_roundtrip() {
+    use atomcad_structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
     use glam::f64::DVec2;
-    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
     // Build: structure → structure_unpack → { lattice_vecs_unpack, lattice_vecs_params }.
     let mut designer = StructureDesigner::new();
@@ -304,12 +305,12 @@ fn unpack_nodes_cnnd_roundtrip() {
 /// See `doc/design_hierarchical_records.md` (Testing → Phase 1).
 #[test]
 fn dotted_record_def_cnnd_roundtrip() {
+    use atomcad_structure_designer::data_type::{DataType, RecordType};
+    use atomcad_structure_designer::node_type_registry::RecordTypeDef;
+    use atomcad_structure_designer::nodes::record_construct::RecordConstructData;
+    use atomcad_structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
     use glam::f64::DVec2;
-    use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
-    use rust_lib_flutter_cad::structure_designer::node_type_registry::RecordTypeDef;
-    use rust_lib_flutter_cad::structure_designer::nodes::record_construct::RecordConstructData;
-    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
     // Build a designer with a dotted record def + a record_construct referencing it.
     let mut designer = StructureDesigner::new();
@@ -419,11 +420,11 @@ fn dotted_record_def_cnnd_roundtrip() {
 /// `dvec2_serializer` + `f64`), so this is greenfield coverage of that path.
 #[test]
 fn free_geometry_nodes_cnnd_roundtrip() {
+    use atomcad_structure_designer::nodes::free_circle::FreeCircleData;
+    use atomcad_structure_designer::nodes::free_sphere::FreeSphereData;
+    use atomcad_structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
     use glam::f64::{DVec2, DVec3};
-    use rust_lib_flutter_cad::structure_designer::nodes::free_circle::FreeCircleData;
-    use rust_lib_flutter_cad::structure_designer::nodes::free_sphere::FreeSphereData;
-    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
     let mut designer = StructureDesigner::new();
     designer.add_node_network("Main");
@@ -532,10 +533,10 @@ fn free_geometry_nodes_cnnd_roundtrip() {
 /// skipped), which is what keeps the existing fixtures and node snapshots green.
 #[test]
 fn function_pin_roles_cnnd_roundtrip() {
+    use atomcad_structure_designer::node_network::FunctionPinRole;
+    use atomcad_structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
     use glam::f64::DVec2;
-    use rust_lib_flutter_cad::structure_designer::node_network::FunctionPinRole;
-    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
     let mut designer = StructureDesigner::new();
     designer.add_node_network("Main");
@@ -612,10 +613,10 @@ fn function_pin_roles_cnnd_roundtrip() {
 /// presence).
 #[test]
 fn function_pin_roles_loader_prunes_explicit_auto() {
+    use atomcad_structure_designer::node_network::FunctionPinRole;
+    use atomcad_structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
     use glam::f64::DVec2;
-    use rust_lib_flutter_cad::structure_designer::node_network::FunctionPinRole;
-    use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::save_node_networks_to_file;
-    use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
     let mut designer = StructureDesigner::new();
     designer.add_node_network("Main");

@@ -5,14 +5,14 @@
 // They establish a baseline so that after Phase 1+ changes, we can verify
 // the old format still loads correctly (migration).
 
-use atomcad_test_support::fixture_path_str;
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::node_network::NodeDisplayType;
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::node_network::NodeDisplayType;
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
+use atomcad_test_support::fixture_path_str;
 use tempfile::tempdir;
 
 const FIXTURE_DIR: &str = "multi_output_migration";

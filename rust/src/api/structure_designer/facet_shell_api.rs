@@ -9,9 +9,9 @@ use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APIVec3;
 use crate::api::structure_designer::structure_designer_api_types::APIFacet;
 use crate::api::structure_designer::structure_designer_api_types::APIFacetShellData;
-use crate::structure_designer::nodes::facet_shell;
-use crate::structure_designer::nodes::facet_shell::Facet;
-use crate::structure_designer::nodes::facet_shell::FacetShellData;
+use atomcad_structure_designer::nodes::facet_shell;
+use atomcad_structure_designer::nodes::facet_shell::Facet;
+use atomcad_structure_designer::nodes::facet_shell::FacetShellData;
 
 /// Gets the facet shell data for a node
 #[flutter_rust_bridge::frb(sync)]

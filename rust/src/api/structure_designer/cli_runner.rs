@@ -1,7 +1,7 @@
 use crate::api::structure_designer::structure_designer_api_types::{BatchCliConfig, CliConfig};
-use crate::structure_designer::data_type::contains_iterator;
-use crate::structure_designer::evaluator::network_result::NetworkResult;
-use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::data_type::contains_iterator;
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
 use std::collections::HashMap;
 use std::io::{self, Write};
 

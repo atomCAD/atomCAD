@@ -272,6 +272,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-structure-designer"
+version = "0.1.0"
+dependencies = [
+ "atomcad-crystolecule",
+ "atomcad-display",
+ "atomcad-geo-tree",
+ "atomcad-renderer",
+ "atomcad-test-support",
+ "atomcad-util",
+ "blake3",
+ "dirs",
+ "glam",
+ "insta",
+ "lru",
+ "rustc-hash 2.1.1",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "atomcad-test-support"
 version = "0.1.0"
 dependencies = [
@@ -3078,6 +3100,7 @@ dependencies = [
  "atomcad-display",
  "atomcad-geo-tree",
  "atomcad-renderer",
+ "atomcad-structure-designer",
  "atomcad-test-support",
  "atomcad-util",
  "blake3",

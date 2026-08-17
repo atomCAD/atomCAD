@@ -1,0 +1,92 @@
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::NetworkResult;
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use crate::text_format::TextValue;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StringData {
+    pub value: String,
+}
+
+impl NodeData for StringData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        _network_evaluator: &NetworkEvaluator,
+        _network_stack: &[NetworkStackElement<'a>],
+        _node_id: u64,
+        _registry: &NodeTypeRegistry,
+        _decorate: bool,
+        _context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        EvalOutput::single(NetworkResult::String(self.value.to_string()))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        Some(self.value.clone())
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![("value".to_string(), TextValue::String(self.value.clone()))]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("value") {
+            self.value = v
+                .as_string()
+                .ok_or_else(|| "value must be a string".to_string())?
+                .to_string();
+        }
+        Ok(())
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+        name: "string".to_string(),
+        description: "Outputs a string value.".to_string(),
+        summary: None,
+        category: NodeTypeCategory::MathAndProgramming,
+        parameters: vec![],
+        output_pins: OutputPinDefinition::single(DataType::String),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
+        public: true,
+        node_data_creator: || {
+            Box::new(StringData {
+                value: "".to_string(),
+            })
+        },
+        node_data_saver: generic_node_data_saver::<StringData>,
+        node_data_loader: generic_node_data_loader::<StringData>,
+    }
+}

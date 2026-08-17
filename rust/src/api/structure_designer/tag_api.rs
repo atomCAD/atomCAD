@@ -2,7 +2,7 @@ use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
 };
 use crate::api::structure_designer::structure_designer_api_types::{APITagData, APIUntagData};
-use crate::structure_designer::nodes::tag::{TagData, UntagData};
+use atomcad_structure_designer::nodes::tag::{TagData, UntagData};
 use std::cell::RefCell;
 
 /// Reads the stored data of a `tag` node: the stored `name` plus the input

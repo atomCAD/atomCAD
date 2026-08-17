@@ -1,0 +1,155 @@
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::GeometrySummary2D;
+use crate::evaluator::network_result::NetworkResult;
+use crate::evaluator::network_result::first_array_element_error;
+use crate::evaluator::network_result::unit_cell_mismatch_error;
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use atomcad_geo_tree::GeoNode;
+use atomcad_util::transform::Transform2D;
+use glam::f64::DVec2;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Intersect2DData {}
+
+impl NodeData for Intersect2DData {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        //let _timer = Timer::new("eval_intersect");
+        let mut shapes: Vec<GeoNode> = Vec::new();
+        let mut frame_translation = DVec2::ZERO;
+
+        let shapes_val =
+            network_evaluator.evaluate_arg_required(network_stack, node_id, registry, context, 0);
+
+        if let NetworkResult::Error(_) = shapes_val {
+            return EvalOutput::single(shapes_val);
+        }
+
+        // Extract the array elements from shapes_val
+        let shape_results = if let NetworkResult::Array(array_elements) = shapes_val {
+            array_elements
+        } else {
+            return EvalOutput::single(NetworkResult::Error(
+                "Expected array of geometry shapes".to_string(),
+            ));
+        };
+
+        // Chain hygiene (`doc/design_error_management.md` Phase 6): an element
+        // that is itself an `Error` must forward its own text — falling through
+        // to the "All inputs must be geometry objects" arm below would replace
+        // the upstream root cause with a misleading type complaint.
+        if let Some(err) = first_array_element_error("shapes", &shape_results) {
+            return EvalOutput::single(err);
+        }
+
+        let shape_count = shape_results.len();
+
+        if shape_count == 0 {
+            return EvalOutput::single(NetworkResult::Error(
+                "Intersect requires at least one input geometry".to_string(),
+            ));
+        }
+
+        // Extract geometries and check unit cell compatibility
+        let mut geometries: Vec<GeometrySummary2D> = Vec::new();
+        for shape_val in shape_results {
+            if let NetworkResult::Geometry2D(shape) = shape_val {
+                geometries.push(shape);
+            } else {
+                return EvalOutput::single(NetworkResult::Error(
+                    "All inputs must be geometry objects".to_string(),
+                ));
+            }
+        }
+
+        // Check drawing plane compatibility - compare all to the first geometry
+        if !GeometrySummary2D::all_have_compatible_drawing_planes(&geometries) {
+            return EvalOutput::single(unit_cell_mismatch_error());
+        }
+
+        // All drawing planes are compatible, proceed with intersection
+        // Take the first drawing plane by value before consuming the geometries vector
+        let first_drawing_plane = geometries[0].drawing_plane.clone();
+        for geometry in geometries.into_iter() {
+            shapes.push(geometry.geo_tree_root);
+            frame_translation += geometry.frame_transform.translation;
+        }
+
+        frame_translation /= shape_count as f64;
+
+        EvalOutput::single(NetworkResult::Geometry2D(GeometrySummary2D {
+            drawing_plane: first_drawing_plane,
+            frame_transform: Transform2D::new(frame_translation, 0.0),
+            geo_tree_root: GeoNode::intersection_2d(shapes),
+        }))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        None
+    }
+
+    fn get_parameter_metadata(&self) -> std::collections::HashMap<String, (bool, Option<String>)> {
+        let mut m = std::collections::HashMap::new();
+        m.insert("shapes".to_string(), (true, None)); // required
+        m
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+      name: "intersect_2d".to_string(),
+      description: "Computes the Boolean intersection of any number of 2D geometries. The `shapes` input pin accepts an array of `Geometry2D` values.".to_string(),
+      summary: None,
+      category: NodeTypeCategory::Geometry2D,
+      parameters: vec![
+          Parameter {
+              id: None,
+              name: "shapes".to_string(),
+              data_type: DataType::Array(Box::new(DataType::Geometry2D)),
+          },
+      ],
+      output_pins: OutputPinDefinition::single(DataType::Geometry2D),
+      zone_input_pins: vec![],
+      zone_output_pins: vec![],
+      public: true,
+      node_data_creator: || Box::new(Intersect2DData {}),
+      node_data_saver: generic_node_data_saver::<Intersect2DData>,
+      node_data_loader: generic_node_data_loader::<Intersect2DData>,
+    }
+}

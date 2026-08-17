@@ -19,11 +19,11 @@ use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::APIViewUpInfo;
 use crate::api::common_api_types::ElementSummary;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_constants::ATOM_INFO;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_renderer::renderer::Renderer;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_util::transform::Transform;
 use dlopen::{
     Error as LibError,
@@ -655,7 +655,7 @@ pub fn set_view_up_from_active_drawing_plane() -> Option<String> {
                     Some(id) => id,
                     None => return Some("No active node to read a drawing plane from".to_string()),
                 };
-                let active_ref = crate::structure_designer::node_network::NodeRef::top(active_id);
+                let active_ref = atomcad_structure_designer::node_network::NodeRef::top(active_id);
                 let node_data = match scene.node_data.get(&active_ref) {
                     Some(nd) => nd,
                     None => return Some("The active node has no displayed output".to_string()),
@@ -769,5 +769,5 @@ pub fn init_app() {
     */
 
     // Initialize expression function registries for better performance
-    crate::expr::validation::init_function_registries();
+    atomcad_structure_designer::expr::validation::init_function_registries();
 }

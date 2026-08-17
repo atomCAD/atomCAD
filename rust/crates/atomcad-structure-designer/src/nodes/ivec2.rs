@@ -1,0 +1,157 @@
+use crate::common_constants::CONNECTED_PIN_SYMBOL;
+use crate::data_type::DataType;
+use crate::evaluator::network_evaluator::NetworkEvaluationContext;
+use crate::evaluator::network_evaluator::NetworkEvaluator;
+use crate::evaluator::network_evaluator::NetworkStackElement;
+use crate::evaluator::network_result::NetworkResult;
+use crate::node_data::{EvalOutput, NodeData};
+use crate::node_network_gadget::NodeNetworkGadget;
+use crate::node_type::NodeTypeCategory;
+use crate::node_type::{
+    NodeType, OutputPinDefinition, Parameter, generic_node_data_loader, generic_node_data_saver,
+};
+use crate::node_type_registry::NodeTypeRegistry;
+use crate::structure_designer::StructureDesigner;
+use crate::text_format::TextValue;
+use atomcad_util::serialization_utils::ivec2_serializer;
+use glam::i32::IVec2;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IVec2Data {
+    #[serde(with = "ivec2_serializer")]
+    pub value: IVec2,
+}
+
+impl NodeData for IVec2Data {
+    fn provide_gadget(
+        &self,
+        _structure_designer: &StructureDesigner,
+    ) -> Option<Box<dyn NodeNetworkGadget>> {
+        None
+    }
+
+    fn calculate_custom_node_type(&self, _base_node_type: &NodeType) -> Option<NodeType> {
+        None
+    }
+
+    fn eval<'a>(
+        &self,
+        network_evaluator: &NetworkEvaluator,
+        network_stack: &[NetworkStackElement<'a>],
+        node_id: u64,
+        registry: &NodeTypeRegistry,
+        _decorate: bool,
+        context: &mut NetworkEvaluationContext,
+    ) -> EvalOutput {
+        let x = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            0,
+            self.value.x,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        let y = match network_evaluator.evaluate_or_default(
+            network_stack,
+            node_id,
+            registry,
+            context,
+            1,
+            self.value.y,
+            NetworkResult::extract_int,
+        ) {
+            Ok(value) => value,
+            Err(error) => return EvalOutput::single(error),
+        };
+
+        EvalOutput::single(NetworkResult::IVec2(IVec2 { x, y }))
+    }
+
+    fn clone_box(&self) -> Box<dyn NodeData> {
+        Box::new(self.clone())
+    }
+
+    fn get_subtitle(
+        &self,
+        connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<String> {
+        let x_connected = connected_input_pins.contains("x");
+        let y_connected = connected_input_pins.contains("y");
+
+        if x_connected && y_connected {
+            None
+        } else {
+            let x_display = if x_connected {
+                CONNECTED_PIN_SYMBOL
+            } else {
+                &self.value.x.to_string()
+            };
+            let y_display = if y_connected {
+                CONNECTED_PIN_SYMBOL
+            } else {
+                &self.value.y.to_string()
+            };
+            Some(format!("({},{})", x_display, y_display))
+        }
+    }
+
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            ("x".to_string(), TextValue::Int(self.value.x)),
+            ("y".to_string(), TextValue::Int(self.value.y)),
+        ]
+    }
+
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("x") {
+            self.value.x = v
+                .as_int()
+                .ok_or_else(|| "x must be an integer".to_string())?;
+        }
+        if let Some(v) = props.get("y") {
+            self.value.y = v
+                .as_int()
+                .ok_or_else(|| "y must be an integer".to_string())?;
+        }
+        Ok(())
+    }
+}
+
+pub fn get_node_type() -> NodeType {
+    NodeType {
+        name: "ivec2".to_string(),
+        description: "Outputs an IVec2 value.".to_string(),
+        summary: None,
+        category: NodeTypeCategory::MathAndProgramming,
+        parameters: vec![
+            Parameter {
+                id: None,
+                name: "x".to_string(),
+                data_type: DataType::Int,
+            },
+            Parameter {
+                id: None,
+                name: "y".to_string(),
+                data_type: DataType::Int,
+            },
+        ],
+        output_pins: OutputPinDefinition::single(DataType::IVec2),
+        zone_input_pins: vec![],
+        zone_output_pins: vec![],
+        public: true,
+        node_data_creator: || {
+            Box::new(IVec2Data {
+                value: IVec2::new(0, 0),
+            })
+        },
+        node_data_saver: generic_node_data_saver::<IVec2Data>,
+        node_data_loader: generic_node_data_loader::<IVec2Data>,
+    }
+}

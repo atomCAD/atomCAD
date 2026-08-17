@@ -18,14 +18,14 @@ use crate::api::structure_designer::structure_designer_api_types::PointerDownRes
 use crate::api::structure_designer::structure_designer_api_types::PointerMoveResult;
 use crate::api::structure_designer::structure_designer_api_types::PointerMoveResultKind;
 use crate::api::structure_designer::structure_designer_api_types::PointerUpResult;
-use crate::structure_designer::nodes::atom_edit::atom_edit;
-use crate::structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, MinimizeFreezeMode};
-use crate::structure_designer::nodes::atom_edit::operations::BaseAtomPromotionInfo;
-use crate::structure_designer::structure_designer::StructureDesigner;
-use crate::structure_designer::undo::commands::atom_edit_toggle_flag::{
+use atomcad_structure_designer::nodes::atom_edit::atom_edit;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::{AtomEditData, MinimizeFreezeMode};
+use atomcad_structure_designer::nodes::atom_edit::operations::BaseAtomPromotionInfo;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::undo::commands::atom_edit_toggle_flag::{
     AtomEditFlag, AtomEditToggleFlagCommand,
 };
-use crate::structure_designer::undo::commands::motif_edit_property::{
+use atomcad_structure_designer::undo::commands::motif_edit_property::{
     MotifEditSetNeighborDepthCommand, MotifEditSetParameterElementsCommand,
 };
 
@@ -494,7 +494,7 @@ pub fn atom_edit_toggle_continuous_minimization() -> bool {
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_set_tolerance(value: f64) -> bool {
-    use crate::structure_designer::undo::commands::atom_edit_set_tolerance::AtomEditSetToleranceCommand;
+    use atomcad_structure_designer::undo::commands::atom_edit_set_tolerance::AtomEditSetToleranceCommand;
     unsafe {
         with_mut_cad_instance_or(
             |cad_instance| {
@@ -1033,7 +1033,7 @@ pub fn atom_edit_modify_distance(
     move_first: bool,
     move_fragment: bool,
 ) -> String {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::{
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
         DistanceMoveChoice, modify_distance,
     };
 
@@ -1073,7 +1073,7 @@ pub fn atom_edit_modify_angle(
     move_arm_a: bool,
     move_fragment: bool,
 ) -> String {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::{AngleMoveChoice, modify_angle};
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::{AngleMoveChoice, modify_angle};
 
     unsafe {
         with_mut_cad_instance_or(
@@ -1111,7 +1111,7 @@ pub fn atom_edit_modify_dihedral(
     move_a_side: bool,
     move_fragment: bool,
 ) -> String {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::{
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
         DihedralMoveChoice, modify_dihedral,
     };
 
@@ -1185,8 +1185,8 @@ pub fn atom_edit_get_default_bond_length(
 ) -> Option<f64> {
     use crate::api::api_common::with_cad_instance_or;
     use crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode;
-    use crate::structure_designer::nodes::atom_edit::atom_edit::compute_default_bond_length;
     use atomcad_crystolecule::guided_placement::BondLengthMode;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::compute_default_bond_length;
 
     unsafe {
         with_cad_instance_or(
@@ -1207,7 +1207,7 @@ pub fn atom_edit_get_default_bond_length(
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_get_default_angle() -> Option<f64> {
     use crate::api::api_common::with_cad_instance_or;
-    use crate::structure_designer::nodes::atom_edit::atom_edit::compute_default_angle;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::compute_default_angle;
 
     unsafe {
         with_cad_instance_or(
@@ -1222,7 +1222,7 @@ pub fn atom_edit_get_default_angle() -> Option<f64> {
 /// Gather promotion info for selected base atoms (Phase 1 of borrow split).
 /// Skips frozen atoms (for freeze/drag/transform operations).
 fn gather_selected_base_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPromotionInfo> {
-    use crate::structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info;
+    use atomcad_structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info;
     let data = match atom_edit::get_active_atom_edit_data(sd) {
         Some(d) => d,
         None => return Vec::new(),
@@ -1238,7 +1238,7 @@ fn gather_selected_base_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPr
 fn gather_selected_base_promotion_info_including_frozen(
     sd: &StructureDesigner,
 ) -> Vec<BaseAtomPromotionInfo> {
-    use crate::structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info_including_frozen;
+    use atomcad_structure_designer::nodes::atom_edit::operations::gather_base_atom_promotion_info_including_frozen;
     let data = match atom_edit::get_active_atom_edit_data(sd) {
         Some(d) => d,
         None => return Vec::new(),
@@ -1252,8 +1252,8 @@ fn gather_selected_base_promotion_info_including_frozen(
 /// Gather promotion info for ALL frozen base atoms (not just selected ones).
 /// Used by `atom_edit_clear_frozen` and `atom_edit_frozen_to_selection`.
 fn gather_frozen_base_atoms_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPromotionInfo> {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
     use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 
     if sd.is_selected_node_in_diff_view() {
         return Vec::new();
@@ -1311,8 +1311,8 @@ fn gather_frozen_base_atoms_promotion_info(sd: &StructureDesigner) -> Vec<BaseAt
 
 /// Collect base atom IDs that are frozen in the result (for frozen_to_selection).
 fn collect_frozen_base_atom_ids(sd: &StructureDesigner) -> std::collections::HashSet<u32> {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
     use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 
     let mut result = std::collections::HashSet::new();
     if sd.is_selected_node_in_diff_view() {
@@ -1807,10 +1807,10 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
     use crate::api::api_common::with_cad_instance_or;
-    use crate::structure_designer::nodes::atom_edit::atom_edit::{
+    use atomcad_crystolecule::guided_placement::{Hybridization, detect_hybridization};
+    use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
         AtomEditEvalCache, SelectionProvenance,
     };
-    use atomcad_crystolecule::guided_placement::{Hybridization, detect_hybridization};
 
     unsafe {
         with_cad_instance_or(

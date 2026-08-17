@@ -2,7 +2,7 @@ use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
 };
 use crate::api::structure_designer::structure_designer_api_types::APIXrayData;
-use crate::structure_designer::nodes::xray::XrayData;
+use atomcad_structure_designer::nodes::xray::XrayData;
 
 /// Reads the stored data of an `xray` node (`alpha` + `fade_depth`).
 /// Takes a `scope_path` like every sibling node-data accessor.

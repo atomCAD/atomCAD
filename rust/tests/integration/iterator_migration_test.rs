@@ -9,20 +9,20 @@
 // Tests in this file follow the pattern established by
 // `lattice_space_migration_test.rs`.
 
-use atomcad_test_support::fixture_path_str;
-use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
+use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
-use rust_lib_flutter_cad::structure_designer::evaluator::network_result::NetworkResult;
-use rust_lib_flutter_cad::structure_designer::network_validator::validate_network;
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::serialization::migrate_v3_to_v4::{
+use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::network_validator::validate_network;
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::serialization::migrate_v3_to_v4::{
     migrate_v3_to_v4, migration_call_count, reset_migration_call_count,
 };
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
+use atomcad_test_support::fixture_path_str;
 use std::collections::HashMap;
 use tempfile::tempdir;
 
@@ -437,7 +437,7 @@ fn test_load_old_double_fanout_inserts_one_collect_per_consumer() {
 }
 
 fn array_at_node_array_target<'a>(
-    network: &'a rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+    network: &'a atomcad_structure_designer::node_network::NodeNetwork,
     array_at_id: u64,
     collect_ids: &'a [u64],
 ) -> &'a u64 {
@@ -450,7 +450,7 @@ fn array_at_node_array_target<'a>(
 }
 
 fn array_len_node_array_target<'a>(
-    network: &'a rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork,
+    network: &'a atomcad_structure_designer::node_network::NodeNetwork,
     array_len_id: u64,
     collect_ids: &'a [u64],
 ) -> &'a u64 {
@@ -625,9 +625,9 @@ fn test_load_old_product_to_array_at_inserts_collect() {
 
 #[test]
 fn test_product_output_type_is_iter_record() {
-    use rust_lib_flutter_cad::structure_designer::data_type::RecordType;
-    use rust_lib_flutter_cad::structure_designer::node_type_registry::RecordTypeDef;
-    use rust_lib_flutter_cad::structure_designer::nodes::product::build_node_type_for_target;
+    use atomcad_structure_designer::data_type::RecordType;
+    use atomcad_structure_designer::node_type_registry::RecordTypeDef;
+    use atomcad_structure_designer::nodes::product::build_node_type_for_target;
 
     let mut registry = NodeTypeRegistry::new();
     registry

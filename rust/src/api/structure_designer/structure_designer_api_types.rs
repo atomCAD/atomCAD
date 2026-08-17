@@ -3,20 +3,20 @@ use crate::api::common_api_types::APIIVec3;
 use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
-use crate::structure_designer::evaluator::network_evaluator::PrintLogEntry;
-use crate::structure_designer::node_network::CollapseMode;
-use crate::structure_designer::node_network::FunctionPinDisposition;
-use crate::structure_designer::node_network::FunctionPinRole;
+use atomcad_structure_designer::evaluator::network_evaluator::PrintLogEntry;
+use atomcad_structure_designer::node_network::CollapseMode;
+use atomcad_structure_designer::node_network::FunctionPinDisposition;
+use atomcad_structure_designer::node_network::FunctionPinRole;
 // Path-qualified rather than imported bare: the api-side twin deliberately keeps
 // the same identifier (D9a).
-use crate::structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
-use crate::structure_designer::nodes::atom_edit::atom_edit::{
+use atomcad_structure_designer::node_type::NodeTypeCategory as DomainNodeTypeCategory;
+use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     DragFrozenStatus as DomainDragFrozenStatus, PointerDownResult as DomainPointerDownResult,
     PointerDownResultKind as DomainPointerDownResultKind,
     PointerMoveResult as DomainPointerMoveResult,
     PointerMoveResultKind as DomainPointerMoveResultKind, PointerUpResult as DomainPointerUpResult,
 };
-use crate::structure_designer::structure_designer::{
+use atomcad_structure_designer::structure_designer::{
     ExecuteResult as DomainExecuteResult, NodeEvaluationResult as DomainNodeEvaluationResult,
 };
 use flutter_rust_bridge::frb;
@@ -1266,7 +1266,7 @@ pub struct APICanvasViewport {
     pub zoom_level: i32,
 }
 
-/// Dart-facing twin of [`crate::structure_designer::node_type::NodeTypeCategory`].
+/// Dart-facing twin of [`atomcad_structure_designer::node_type::NodeTypeCategory`].
 ///
 /// The authoritative definition moved down into the domain (D9.1) — every
 /// `NodeType` descriptor names one, and that import was 113 of the 145 sites
@@ -1903,10 +1903,10 @@ pub struct APINamespaceRenamePreview {
     pub applicable: bool,
 }
 
-impl From<crate::structure_designer::structure_designer::NamespaceRenamePlan>
+impl From<atomcad_structure_designer::structure_designer::NamespaceRenamePlan>
     for APINamespaceRenamePreview
 {
-    fn from(plan: crate::structure_designer::structure_designer::NamespaceRenamePlan) -> Self {
+    fn from(plan: atomcad_structure_designer::structure_designer::NamespaceRenamePlan) -> Self {
         let is_empty = plan.is_empty();
         let has_conflicts = plan.has_conflicts();
         let has_invalid_names = !plan.valid_names;

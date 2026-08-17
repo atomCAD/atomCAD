@@ -12,15 +12,15 @@
 use glam::f64::DVec2;
 use std::collections::HashMap;
 
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::passivate::PassivateData;
-use rust_lib_flutter_cad::structure_designer::serialization::migrate_v7_to_v8::{
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::passivate::PassivateData;
+use atomcad_structure_designer::serialization::migrate_v7_to_v8::{
     migrate_v7_to_v8, migration_call_count, reset_migration_call_count,
 };
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
 use serde_json::{Value, json};
 use tempfile::tempdir;
 

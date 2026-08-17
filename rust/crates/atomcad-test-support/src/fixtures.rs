@@ -41,3 +41,22 @@ pub fn fixture_path_str(rel: &str) -> String {
 pub fn fixtures_root() -> PathBuf {
     fixture_path("")
 }
+
+/// Absolute path of the repository's `samples/<rel>` — the committed `.cnnd`
+/// demo designs (`diamond.cnnd`, `nut-bolt.cnnd`, …).
+///
+/// Same problem and same fix as [`fixture_path`], one directory level further
+/// out: the snapshot and round-trip tests used to spell this `"../samples/…"`,
+/// which is resolved against `cargo test`'s working directory — the *package*
+/// root. That was `rust/` while everything lived in one crate; it is
+/// `rust/crates/<crate>/` for an extracted crate, and the file silently is not
+/// there. Anchoring on this crate's `CARGO_MANIFEST_DIR` makes the answer the
+/// same for every caller.
+pub fn sample_path(rel: &str) -> PathBuf {
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples")).join(rel)
+}
+
+/// [`sample_path`] as a `String`, for loaders that take `&str`.
+pub fn sample_path_str(rel: &str) -> String {
+    sample_path(rel).to_string_lossy().into_owned()
+}

@@ -1,0 +1,38 @@
+[package]
+name = "atomcad-structure-designer"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# The top of the extracted stack (doc/design_rust_crate_split.md, Phase 6):
+# node network, evaluator, serialization, text format, layout, undo, the
+# built-in nodes — and `expr`, which is a *component* of the node network
+# rather than a peer module (D8).
+#
+# It must NOT depend on `rust_lib_flutter_cad` (the root crate). Deleting that
+# edge — 145 sites across 123 files at its peak — is what this phase is for,
+# and cargo now enforces it. A Dart-facing type defined here keeps a same-named
+# twin in the root crate's `api/`, with `From` impls on the api side (D9a).
+#
+# Versions come from [workspace.dependencies] in ../../Cargo.toml (D4).
+[dependencies]
+atomcad-crystolecule = { path = "../atomcad-crystolecule" }
+atomcad-display = { path = "../atomcad-display" }
+atomcad-geo-tree = { path = "../atomcad-geo-tree" }
+atomcad-renderer = { path = "../atomcad-renderer" }
+atomcad-util = { path = "../atomcad-util" }
+blake3 = { workspace = true }
+dirs = { workspace = true }
+glam = { workspace = true }
+lru = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+atomcad-test-support = { path = "../atomcad-test-support" }
+insta = { workspace = true }
+tempfile = { workspace = true }

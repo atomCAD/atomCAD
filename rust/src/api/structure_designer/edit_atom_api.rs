@@ -8,7 +8,7 @@ use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIEditAtomTool;
-use crate::structure_designer::nodes::edit_atom::edit_atom;
+use atomcad_structure_designer::nodes::edit_atom::edit_atom;
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn select_atom_or_bond_by_ray(

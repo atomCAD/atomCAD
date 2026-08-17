@@ -50,8 +50,8 @@ use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
-use rust_lib_flutter_cad::structure_designer::structure_designer_scene::NodeOutput;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer_scene::NodeOutput;
 
 /// Above this atom count the triangle-mesh tessellation is skipped: at 12x6
 /// sphere divisions a ball-and-stick mesh costs ~62 vertices per atom, so a

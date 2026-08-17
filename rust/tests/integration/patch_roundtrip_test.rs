@@ -7,14 +7,14 @@
 //! through the text format, and the durable patch-ghost atom flag (bit 6)
 //! survives the atom serialization format.
 
-use glam::f64::DVec2;
-use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
-use rust_lib_flutter_cad::structure_designer::nodes::patch_build::PatchBuildData;
-use rust_lib_flutter_cad::structure_designer::nodes::patch_latticefill::PatchLatticeFillData;
-use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::{
+use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::patch_build::PatchBuildData;
+use atomcad_structure_designer::nodes::patch_latticefill::PatchLatticeFillData;
+use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
-use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer::StructureDesigner;
+use glam::f64::DVec2;
 use std::collections::HashMap;
 use tempfile::tempdir;
 
@@ -96,7 +96,7 @@ fn patch_nodes_cnnd_roundtrip() {
 
 #[test]
 fn patch_nodes_text_format_roundtrip() {
-    use rust_lib_flutter_cad::structure_designer::text_format::{edit_network, serialize_network};
+    use atomcad_structure_designer::text_format::{edit_network, serialize_network};
 
     let registry = NodeTypeRegistry::new();
 
@@ -130,11 +130,11 @@ fn patch_nodes_text_format_roundtrip() {
 }
 
 /// Builds an empty custom network to author test nodes into.
-fn make_empty_network() -> rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork {
-    use rust_lib_flutter_cad::structure_designer::data_type::DataType;
-    use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
-    use rust_lib_flutter_cad::structure_designer::node_type::NodeTypeCategory;
-    use rust_lib_flutter_cad::structure_designer::node_type::{NodeType, OutputPinDefinition};
+fn make_empty_network() -> atomcad_structure_designer::node_network::NodeNetwork {
+    use atomcad_structure_designer::data_type::DataType;
+    use atomcad_structure_designer::node_network::NodeNetwork;
+    use atomcad_structure_designer::node_type::NodeTypeCategory;
+    use atomcad_structure_designer::node_type::{NodeType, OutputPinDefinition};
 
     let node_type = NodeType {
         name: "test".to_string(),
@@ -146,11 +146,9 @@ fn make_empty_network() -> rust_lib_flutter_cad::structure_designer::node_networ
         zone_input_pins: vec![],
         zone_output_pins: vec![],
         public: true,
-        node_data_creator: || {
-            Box::new(rust_lib_flutter_cad::structure_designer::node_data::NoData {})
-        },
-        node_data_saver: rust_lib_flutter_cad::structure_designer::node_type::no_data_saver,
-        node_data_loader: rust_lib_flutter_cad::structure_designer::node_type::no_data_loader,
+        node_data_creator: || Box::new(atomcad_structure_designer::node_data::NoData {}),
+        node_data_saver: atomcad_structure_designer::node_type::no_data_saver,
+        node_data_loader: atomcad_structure_designer::node_type::no_data_loader,
     };
     NodeNetwork::new(node_type)
 }
@@ -164,7 +162,7 @@ fn make_empty_network() -> rust_lib_flutter_cad::structure_designer::node_networ
 fn patch_ghost_flag_survives_atom_serialization() {
     use atomcad_crystolecule::atomic_structure::AtomicStructure;
     use atomcad_crystolecule::atomic_structure::atom::ATOM_FLAG_PATCH_GHOST;
-    use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::SerializableAtom;
+    use atomcad_structure_designer::serialization::atom_edit_data_serialization::SerializableAtom;
 
     // A tile atom flagged as a patch-ghost (as patch_build emits).
     let mut tile = AtomicStructure::new();
