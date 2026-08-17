@@ -7,10 +7,10 @@
 //! literals are **preserved, never silently dropped** — mismatches surface as
 //! localized per-element eval errors.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::{IVec2, IVec3};
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,

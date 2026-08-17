@@ -1,6 +1,6 @@
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::visualization::AtomicStructureVisualization;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeRef;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
@@ -180,7 +180,7 @@ fn test_get_node_display_name_unknown_node() {
 /// Build a designer whose scene holds one carbon at the origin, optionally
 /// carrying a render-style override (as `apply_style` would set).
 fn setup_designer_with_styled_carbon(
-    style: Option<rust_lib_flutter_cad::crystolecule::atomic_structure::AtomRenderStyle>,
+    style: Option<atomcad_crystolecule::atomic_structure::AtomRenderStyle>,
 ) -> StructureDesigner {
     let mut designer = StructureDesigner::new();
     designer.add_node_network("test");
@@ -207,7 +207,7 @@ const BETWEEN_BAS_AND_VDW: f64 = 1.0;
 
 #[test]
 fn test_space_filling_styled_atom_picks_at_vdw_radius_in_bas_scene() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomRenderStyle;
+    use atomcad_crystolecule::atomic_structure::AtomRenderStyle;
 
     let designer = setup_designer_with_styled_carbon(Some(AtomRenderStyle::SpaceFilling));
     let ray_origin = DVec3::new(BETWEEN_BAS_AND_VDW, 0.0, -50.0);
@@ -228,7 +228,7 @@ fn test_space_filling_styled_atom_picks_at_vdw_radius_in_bas_scene() {
 
 #[test]
 fn test_bas_styled_atom_does_not_pick_at_vdw_radius_in_space_filling_scene() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomRenderStyle;
+    use atomcad_crystolecule::atomic_structure::AtomRenderStyle;
 
     let designer = setup_designer_with_styled_carbon(Some(AtomRenderStyle::BallAndStick));
     let ray_origin = DVec3::new(BETWEEN_BAS_AND_VDW, 0.0, -50.0);

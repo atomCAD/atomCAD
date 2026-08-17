@@ -1,5 +1,5 @@
 use super::types::CrossCellBondInfo;
-use crate::crystolecule::atomic_structure::BondReference;
+use atomcad_crystolecule::atomic_structure::BondReference;
 use glam::f64::DVec3;
 
 /// State of an atom in the diff at a point in time.

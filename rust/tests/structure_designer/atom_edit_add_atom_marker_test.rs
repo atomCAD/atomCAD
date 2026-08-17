@@ -10,16 +10,12 @@
 //! to a real anchored diff atom rather than having its stored position moved
 //! (which would break its base match and drop it as an orphan).
 
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, UNCHANGED_ATOMIC_NUMBER};
+use atomcad_crystolecule::atomic_structure_diff::apply_diff;
+use atomcad_crystolecule::guided_placement::{BondLengthMode, BondMode, Hybridization};
 use glam::f64::{DVec2, DVec3};
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, UNCHANGED_ATOMIC_NUMBER,
-};
-use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
-use rust_lib_flutter_cad::crystolecule::guided_placement::{
-    BondLengthMode, BondMode, Hybridization,
-};
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, GuidedPlacementStartResult, MinimizeFreezeMode, minimize_atom_edit,
     start_guided_placement,

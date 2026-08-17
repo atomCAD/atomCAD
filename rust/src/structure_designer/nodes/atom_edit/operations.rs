@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use super::atom_edit_data::*;
 use super::types::*;
 use crate::api::structure_designer::structure_designer_api_types::DragFrozenStatus;
-use crate::crystolecule::atomic_structure::{BondReference, UNCHANGED_ATOMIC_NUMBER};
-use crate::crystolecule::atomic_structure_diff::{AtomSource, apply_diff};
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::{BondReference, UNCHANGED_ATOMIC_NUMBER};
+use atomcad_crystolecule::atomic_structure_diff::{AtomSource, apply_diff};
 use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 
@@ -146,7 +146,7 @@ fn delete_selected_in_diff_view(structure_designer: &mut StructureDesigner) {
             })
             .collect();
 
-        let bonds: Vec<crate::crystolecule::atomic_structure::BondReference> = atom_edit_data
+        let bonds: Vec<atomcad_crystolecule::atomic_structure::BondReference> = atom_edit_data
             .selection
             .selected_bonds
             .iter()
@@ -774,7 +774,7 @@ fn change_selected_bonds_order_diff_view(
 /// Cycle bond order through common types: single → double → triple → single.
 /// If the current order is a specialized type, enters the cycle at single.
 pub fn cycle_bond_order(current_order: u8) -> u8 {
-    use crate::crystolecule::atomic_structure::{BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE};
+    use atomcad_crystolecule::atomic_structure::{BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE};
     match current_order {
         BOND_SINGLE => BOND_DOUBLE,
         BOND_DOUBLE => BOND_TRIPLE,

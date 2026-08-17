@@ -3,17 +3,17 @@ use super::minimization::{continuous_minimize_during_drag, continuous_minimize_s
 use super::operations::{change_bond_order, cycle_bond_order, drag_selected_by_delta};
 use super::selection::*;
 use super::types::*;
-use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::{
     DragFrozenStatus, PointerDownResult, PointerDownResultKind, PointerMoveResult,
     PointerMoveResultKind, PointerUpResult,
 };
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_structure::HitTestResult;
-use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::HitTestResult;
+use atomcad_crystolecule::atomic_structure::SelectModifier;
+use atomcad_crystolecule::atomic_structure_diff::AtomSource;
 use glam::f64::{DMat4, DVec2, DVec3};
 
 // =============================================================================
@@ -179,7 +179,7 @@ pub fn default_tool_pointer_down(
         let hit = result_structure.hit_test(
             ray_origin,
             ray_direction,
-            visualization,
+            &display_visualization,
             |atom| effective_displayed_atom_radius(result_structure, atom, &display_visualization),
             BAS_STICK_RADIUS,
         );

@@ -8,7 +8,7 @@ import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
@@ -19,6 +19,17 @@ enum AtomicRenderingMethod {
       .crateApiStructureDesignerStructureDesignerPreferencesAtomicRenderingMethodDefault();
 }
 
+/// Dart-facing twin of [`atomcad_crystolecule::visualization::AtomicStructureVisualization`].
+///
+/// The authoritative definition moved down into `atomcad-crystolecule` (D6),
+/// because `AtomicStructure::hit_test` needs it and the old
+/// `crystolecule → api` import was one of the four back-edges this refactor
+/// exists to delete. This declaration stays here under its **existing** name —
+/// it is what the generated Dart declares (D9a) — and it stays in *this* file so
+/// the generated Dart path does not move either.
+///
+/// D6 splits the preferences module deliberately: only this one enum leaves in
+/// Phase 4; the other 12 `pub` types here follow in Phase 6 (D9.2).
 enum AtomicStructureVisualization {
   ballAndStick,
   spaceFilling,

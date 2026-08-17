@@ -1,5 +1,5 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use serde::{Deserialize, Serialize};
 
 /*

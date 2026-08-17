@@ -2,16 +2,8 @@ use super::diff_recorder::{AtomDelta, AtomState, BondDelta, DiffRecorder};
 use super::guideline::{Guideline, GuidelineError};
 use super::text_format::{parse_diff_text, serialize_diff};
 use super::types::*;
-use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference, TagError};
-use crate::crystolecule::atomic_structure_diff::{
-    AtomSource, DiffProvenance, apply_diff, enrich_diff_with_base_bonds,
-};
-use crate::crystolecule::motif::{Motif, MotifBond, Site, SiteSpecifier};
-use crate::crystolecule::structure::Structure;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -23,6 +15,14 @@ use crate::structure_designer::node_network_gadget::NodeNetworkGadget;
 use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parameter};
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::atomic_structure::SelectModifier;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference, TagError};
+use atomcad_crystolecule::atomic_structure_diff::{
+    AtomSource, DiffProvenance, apply_diff, enrich_diff_with_base_bonds,
+};
+use atomcad_crystolecule::motif::{Motif, MotifBond, Site, SiteSpecifier};
+use atomcad_crystolecule::structure::Structure;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
 use atomcad_util::transform::Transform;
 use glam::f64::{DQuat, DVec3};
@@ -104,7 +104,7 @@ pub struct AtomEditData {
     /// Survives tool switches — set once, used everywhere.
     pub selected_atomic_number: i16,
     /// Last known diff stats (updated during eval, used by get_subtitle)
-    last_stats: Option<crate::crystolecule::atomic_structure_diff::DiffStats>,
+    last_stats: Option<atomcad_crystolecule::atomic_structure_diff::DiffStats>,
     /// Cached input molecule for interactive editing performance.
     /// When present, reused instead of re-evaluating upstream.
     /// Cleared by `clear_input_cache()` when upstream may have changed.
@@ -373,7 +373,7 @@ impl AtomEditData {
             if let Some(mark_id) = self.measurement_marked_atom_id {
                 diff_clone.decorator_mut().set_atom_display_state(
                     mark_id,
-                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                    atomcad_crystolecule::atomic_structure::AtomDisplayState::Marked,
                 );
             }
             self.apply_guided_placement_decoration(&mut diff_clone, None);
@@ -412,14 +412,14 @@ impl AtomEditData {
                 {
                     result.decorator_mut().set_atom_display_state(
                         result_id,
-                        crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                        atomcad_crystolecule::atomic_structure::AtomDisplayState::Marked,
                     );
                 }
             }
             if let Some(mark_id) = self.measurement_marked_atom_id {
                 result.decorator_mut().set_atom_display_state(
                     mark_id,
-                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                    atomcad_crystolecule::atomic_structure::AtomDisplayState::Marked,
                 );
             }
             self.apply_guided_placement_decoration(&mut result, Some(&diff_result.provenance));
@@ -966,7 +966,7 @@ impl AtomEditData {
     /// Returns the delete marker's ID in the diff.
     pub fn mark_for_deletion(&mut self, match_position: DVec3) -> u32 {
         self.selection.clear_bonds();
-        let atomic_number = crate::crystolecule::atomic_structure::DELETED_SITE_ATOMIC_NUMBER;
+        let atomic_number = atomcad_crystolecule::atomic_structure::DELETED_SITE_ATOMIC_NUMBER;
         let id = self.diff.add_atom(atomic_number, match_position);
         if let Some(ref mut rec) = self.recorder {
             rec.atom_deltas.push(AtomDelta {
@@ -1096,7 +1096,7 @@ impl AtomEditData {
         };
 
         self.selection.clear_bonds();
-        let order = crate::crystolecule::atomic_structure::BOND_DELETED;
+        let order = atomcad_crystolecule::atomic_structure::BOND_DELETED;
         self.diff.add_bond(atom_id1, atom_id2, order);
 
         if let Some(ref mut rec) = self.recorder {
@@ -1221,7 +1221,7 @@ impl AtomEditData {
             }),
             APIAtomEditTool::AddAtom => AtomEditTool::AddAtom(AddAtomToolState::Idle),
             APIAtomEditTool::AddBond => AtomEditTool::AddBond(AddBondToolState {
-                bond_order: crate::crystolecule::atomic_structure::BOND_SINGLE,
+                bond_order: atomcad_crystolecule::atomic_structure::BOND_SINGLE,
                 interaction_state: AddBondInteractionState::default(),
                 last_atom_id: None,
             }),
@@ -1255,10 +1255,10 @@ impl AtomEditData {
     fn apply_guided_placement_decoration(
         &self,
         output: &mut AtomicStructure,
-        provenance: Option<&crate::crystolecule::atomic_structure_diff::DiffProvenance>,
+        provenance: Option<&atomcad_crystolecule::atomic_structure_diff::DiffProvenance>,
     ) {
-        use crate::crystolecule::atomic_structure::AtomDisplayState;
-        use crate::crystolecule::atomic_structure::atomic_structure_decorator::{
+        use atomcad_crystolecule::atomic_structure::AtomDisplayState;
+        use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::{
             GuidePlacementVisuals, WireframeRingVisuals, WireframeSphereVisuals,
         };
 
@@ -1320,13 +1320,13 @@ impl AtomEditData {
                         .set_atom_display_state(output_id, AtomDisplayState::Marked);
                     if let Some(anchor_atom) = output.get_atom(output_id) {
                         // Build guide dots from preview position (if cursor is on sphere)
-                        let preview_dots: Vec<crate::crystolecule::guided_placement::GuideDot> =
+                        let preview_dots: Vec<atomcad_crystolecule::guided_placement::GuideDot> =
                             preview_position
                                 .iter()
-                                .map(|pos| crate::crystolecule::guided_placement::GuideDot {
+                                .map(|pos| atomcad_crystolecule::guided_placement::GuideDot {
                                     position: *pos,
                                     dot_type:
-                                        crate::crystolecule::guided_placement::GuideDotType::Primary,
+                                        atomcad_crystolecule::guided_placement::GuideDotType::Primary,
                                 })
                                 .collect();
 
@@ -1360,14 +1360,14 @@ impl AtomEditData {
                         .set_atom_display_state(output_id, AtomDisplayState::Marked);
                     if let Some(anchor_atom) = output.get_atom(output_id) {
                         // Build guide dots from preview positions (sp3: 3 dots, sp2: 2 dots)
-                        let preview_dots: Vec<crate::crystolecule::guided_placement::GuideDot> =
+                        let preview_dots: Vec<atomcad_crystolecule::guided_placement::GuideDot> =
                             preview_positions
                                 .iter()
                                 .flat_map(|positions| positions.iter())
-                                .map(|pos| crate::crystolecule::guided_placement::GuideDot {
+                                .map(|pos| atomcad_crystolecule::guided_placement::GuideDot {
                                     position: *pos,
                                     dot_type:
-                                        crate::crystolecule::guided_placement::GuideDotType::Primary,
+                                        atomcad_crystolecule::guided_placement::GuideDotType::Primary,
                                 })
                                 .collect();
 
@@ -1398,7 +1398,7 @@ impl AtomEditData {
     /// The visual is a read-only snapshot of the active tool's `Guideline` — no
     /// atom display state is touched, so it is independent of any provenance map.
     fn apply_guideline_decoration(&self, output: &mut AtomicStructure) {
-        use crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals;
+        use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals;
 
         // Only the Guideline tool's `Active` phase has a line. In `Define` there is
         // no line yet, so nothing is drawn.
@@ -1427,7 +1427,7 @@ impl AtomEditData {
     /// Highlight the Guideline tool's defining / picked atoms on the **diff**
     /// output (diff atom ids are output ids directly; base refs aren't shown).
     fn apply_guideline_tool_highlight_diff(&self, output: &mut AtomicStructure) {
-        use crate::crystolecule::atomic_structure::AtomDisplayState;
+        use atomcad_crystolecule::atomic_structure::AtomDisplayState;
         for r in self.guideline_tool_highlight_refs() {
             if let AtomRef::Diff(id) = r {
                 output
@@ -1444,7 +1444,7 @@ impl AtomEditData {
         output: &mut AtomicStructure,
         provenance: &DiffProvenance,
     ) {
-        use crate::crystolecule::atomic_structure::AtomDisplayState;
+        use atomcad_crystolecule::atomic_structure::AtomDisplayState;
         for r in self.guideline_tool_highlight_refs() {
             let result_id = match r {
                 AtomRef::Base(id) => provenance.base_to_result.get(&id).copied(),
@@ -1514,7 +1514,7 @@ impl AtomEditData {
                 Some(id) => id,
                 None => match info.identity_a {
                     Some((_an, pos)) => self.add_atom_recorded(
-                        crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
+                        atomcad_crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
                         pos,
                     ),
                     None => continue,
@@ -1524,7 +1524,7 @@ impl AtomEditData {
                 Some(id) => id,
                 None => match info.identity_b {
                     Some((_an, pos)) => self.add_atom_recorded(
-                        crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
+                        atomcad_crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER,
                         pos,
                     ),
                     None => continue,
@@ -2063,7 +2063,7 @@ impl NodeData for AtomEditData {
                                         .get(&result_id)
                                     {
                                         Some(
-                                            crate::crystolecule::atomic_structure_diff::AtomSource::DiffMatchedBase {
+                                            atomcad_crystolecule::atomic_structure_diff::AtomSource::DiffMatchedBase {
                                                 diff_id,
                                                 ..
                                             },
@@ -2267,7 +2267,7 @@ impl NodeData for AtomEditData {
             if let Some(mark_id) = self.measurement_marked_atom_id {
                 diff_clone.decorator_mut().set_atom_display_state(
                     mark_id,
-                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                    atomcad_crystolecule::atomic_structure::AtomDisplayState::Marked,
                 );
             }
 
@@ -2323,7 +2323,7 @@ impl NodeData for AtomEditData {
                     if let Some(&result_id) = diff_result.provenance.diff_to_result.get(&diff_id) {
                         result.decorator_mut().set_atom_display_state(
                             result_id,
-                            crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                            atomcad_crystolecule::atomic_structure::AtomDisplayState::Marked,
                         );
                     }
                 }
@@ -2333,7 +2333,7 @@ impl NodeData for AtomEditData {
             if let Some(mark_id) = self.measurement_marked_atom_id {
                 result.decorator_mut().set_atom_display_state(
                     mark_id,
-                    crate::crystolecule::atomic_structure::AtomDisplayState::Marked,
+                    atomcad_crystolecule::atomic_structure::AtomDisplayState::Marked,
                 );
             }
 
@@ -2709,7 +2709,7 @@ pub fn atomic_structure_to_motif(
     cross_cell_bonds: &HashMap<BondReference, CrossCellBondInfo>,
 ) -> Motif {
     use super::types::{is_param_element, param_atomic_number_to_motif};
-    use crate::crystolecule::motif::ParameterElement;
+    use atomcad_crystolecule::motif::ParameterElement;
 
     // Build parameters list
     let parameters: Vec<ParameterElement> = parameter_elements

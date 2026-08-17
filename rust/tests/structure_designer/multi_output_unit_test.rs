@@ -1,11 +1,11 @@
 // Unit tests for multi-output pin data structures (Phase 1 + Phase 2 + Phase 6)
 // and EvalOutput display overrides.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::motif::Motif;
 use glam::DVec2;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::motif::Motif;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -991,7 +991,7 @@ fn test_custom_network_shrink_output_pins_disconnects_wires() {
 /// is always `Fixed(Molecule)`.
 #[test]
 fn test_atom_edit_preserves_crystal_variant_on_pin0() {
-    use rust_lib_flutter_cad::crystolecule::structure::Structure;
+    use atomcad_crystolecule::structure::Structure;
     use rust_lib_flutter_cad::structure_designer::evaluator::network_result::CrystalData;
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 

@@ -1,5 +1,5 @@
-use crate::crystolecule::drawing_plane::DrawingPlane;
 use crate::display::poly_mesh::PolyMesh;
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_geo_tree::csg_types::CSGMesh;
 use atomcad_geo_tree::csg_types::CSGSketch;
 use atomcad_geo_tree::csg_utils::{scale_to_csg, unscale_from_csg};

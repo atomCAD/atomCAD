@@ -1,10 +1,10 @@
 use glam::f32::Vec3;
 use glam::f64::DVec3;
 
-use crate::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-use crate::crystolecule::drawing_plane::DrawingPlane;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::preferences::BackgroundPreferences;
+use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_renderer::line_mesh::LineMesh;
 
 // Constants for coordinate system visualization

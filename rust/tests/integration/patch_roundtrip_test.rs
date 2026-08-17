@@ -162,8 +162,8 @@ fn make_empty_network() -> rust_lib_flutter_cad::structure_designer::node_networ
 
 #[test]
 fn patch_ghost_flag_survives_atom_serialization() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::ATOM_FLAG_PATCH_GHOST;
+    use atomcad_crystolecule::atomic_structure::AtomicStructure;
+    use atomcad_crystolecule::atomic_structure::atom::ATOM_FLAG_PATCH_GHOST;
     use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::SerializableAtom;
 
     // A tile atom flagged as a patch-ghost (as patch_build emits).

@@ -12,7 +12,6 @@
 //! holds frozen atoms fixed (see `crystolecule/simulation/mod.rs`).
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::map_atomic_in_region;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -26,6 +25,7 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use serde::{Deserialize, Serialize};
 
 /// Shared `eval` body for both nodes. Reads the required atomic input (pin 0)

@@ -69,7 +69,17 @@ regex = "1.5.4"
 rustc-hash = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-smallvec = "1.13"
+# `union` is NOT optional polish: it is what makes `SmallVec<[InlineBond; 4]>`
+# store its inline buffer in a union, which is what keeps `crystolecule`'s `Atom`
+# at 64 bytes — one cache line, asserted by
+# `atom_tags_test::atom_is_still_one_cache_line`. Until Phase 4 that feature was
+# switched on *by accident*, by `wgpu-hal` (the only crate in the tree that asks
+# for it), and every build happened to include the GPU stack. `cargo test -p
+# atomcad-crystolecule` does not, so `Atom` grew to 72 bytes and the invariant
+# failed. Declaring it here makes the layout a property of our own manifest
+# rather than of the graphics driver's dependency list. It changes nothing about
+# the shipped binary — the feature was already on.
+smallvec = { version = "1.13", features = ["union"] }
 thiserror = "2.0.12"
 tokio = { version = "1", features = ["full"] }
 toml = "0.8"
@@ -95,6 +105,7 @@ lto = "thin"
 [dependencies]
 flutter_rust_bridge = "=2.10.0"
 # Extracted backend crates (doc/design_rust_crate_split.md)
+atomcad-crystolecule = { path = "crates/atomcad-crystolecule" }
 atomcad-geo-tree = { path = "crates/atomcad-geo-tree" }
 atomcad-renderer = { path = "crates/atomcad-renderer" }
 atomcad-util = { path = "crates/atomcad-util" }
@@ -133,6 +144,8 @@ serde_with = "3.5.1"
 
 [dev-dependencies]
 # ab_glyph moved to `crates/atomcad-renderer` with `examples/gen_font_atlas.rs`.
+# Shared test helpers + the `tests/fixtures/` resolver (D5.2, D5.3).
+atomcad-test-support = { path = "crates/atomcad-test-support" }
 insta = { workspace = true }
 tempfile = { workspace = true }
 

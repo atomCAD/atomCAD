@@ -1,8 +1,5 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
 use crate::api::structure_designer::structure_designer_preferences::BackgroundPreferences;
-use crate::crystolecule::drawing_plane::DrawingPlane;
-use crate::crystolecule::structure::Structure;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -19,6 +16,9 @@ use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::structure::Structure;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use atomcad_util::serialization_utils::{ivec3_serializer, option_ivec3_serializer};

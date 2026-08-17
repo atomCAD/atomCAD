@@ -53,12 +53,6 @@
 //! `flutter_rust_bridge_codegen generate`** — `frb_generated.rs` constructs it.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::{AtomicStructure, TagError};
-use crate::crystolecule::guided_placement::{Hybridization, covalent_max_neighbors};
-use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
-use crate::crystolecule::structure::Structure;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
-use crate::crystolecule::weld::weld_coincident_atoms;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
 };
@@ -75,6 +69,12 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, TagError};
+use atomcad_crystolecule::guided_placement::{Hybridization, covalent_max_neighbors};
+use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
+use atomcad_crystolecule::structure::Structure;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_crystolecule::weld::weld_coincident_atoms;
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use atomcad_util::daabox::DAABox;

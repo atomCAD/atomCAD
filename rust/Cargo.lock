@@ -214,6 +214,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-crystolecule"
+version = "0.1.0"
+dependencies = [
+ "atomcad-geo-tree",
+ "atomcad-test-support",
+ "atomcad-util",
+ "glam",
+ "indexmap 2.7.0",
+ "lazy_static",
+ "nalgebra",
+ "rustc-hash 2.1.1",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "tempfile",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "atomcad-geo-tree"
 version = "0.1.0"
 dependencies = [
@@ -236,6 +255,13 @@ dependencies = [
  "glam",
  "image",
  "wgpu",
+]
+
+[[package]]
+name = "atomcad-test-support"
+version = "0.1.0"
+dependencies = [
+ "atomcad-crystolecule",
 ]
 
 [[package]]
@@ -3034,8 +3060,10 @@ dependencies = [
 name = "rust_lib_flutter_cad"
 version = "0.1.0"
 dependencies = [
+ "atomcad-crystolecule",
  "atomcad-geo-tree",
  "atomcad-renderer",
+ "atomcad-test-support",
  "atomcad-util",
  "blake3",
  "csgrs",

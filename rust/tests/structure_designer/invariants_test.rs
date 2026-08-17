@@ -8,6 +8,7 @@
 //!   `check_document_invariants` stays fatal-free.
 //! - §6.3: the lint entry point + a committed healthy fixture.
 
+use atomcad_test_support::{fixture_path, fixture_path_str};
 use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
 use rust_lib_flutter_cad::structure_designer::invariants::{
@@ -713,7 +714,7 @@ fn property_structure_preserving_mutations_preserve_wire_oracle() {
 // §6.3 — lint entry point + committed healthy fixture.
 // ---------------------------------------------------------------------------
 
-const HEALTHY_FIXTURE: &str = "tests/fixtures/invariants/healthy.cnnd";
+const HEALTHY_FIXTURE: &str = "invariants/healthy.cnnd";
 
 /// Regenerate the committed healthy fixture. Run once with
 /// `cargo test --test structure_designer generate_healthy_fixture -- --ignored`,
@@ -722,14 +723,15 @@ const HEALTHY_FIXTURE: &str = "tests/fixtures/invariants/healthy.cnnd";
 #[ignore]
 fn generate_healthy_fixture() {
     let (mut d, _sub, _p0, _p1) = build_base();
-    std::fs::create_dir_all("tests/fixtures/invariants").unwrap();
-    d.save_node_networks_as(HEALTHY_FIXTURE).unwrap();
+    std::fs::create_dir_all(fixture_path("invariants")).unwrap();
+    d.save_node_networks_as(&fixture_path_str(HEALTHY_FIXTURE))
+        .unwrap();
 }
 
 #[test]
 fn healthy_fixture_has_no_fatal_violations() {
     let mut d = StructureDesigner::new();
-    d.load_node_networks(HEALTHY_FIXTURE)
+    d.load_node_networks(&fixture_path_str(HEALTHY_FIXTURE))
         .unwrap_or_else(|e| panic!("healthy fixture failed to load: {}", e));
     let v = check_document_invariants(&d.node_type_registry);
     let fatal: Vec<&InvariantViolation> = v.iter().filter(|x| x.is_fatal()).collect();

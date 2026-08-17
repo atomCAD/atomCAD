@@ -1,4 +1,4 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_util::as_any::AsAny;
 use std::fmt::Debug;
 

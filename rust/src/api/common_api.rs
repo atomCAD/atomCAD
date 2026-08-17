@@ -19,10 +19,10 @@ use crate::api::common_api_types::APIVec3;
 use crate::api::common_api_types::APIViewUpInfo;
 use crate::api::common_api_types::ElementSummary;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_constants::ATOM_INFO;
-use crate::crystolecule::drawing_plane::DrawingPlane;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_constants::ATOM_INFO;
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_renderer::renderer::Renderer;
 use atomcad_util::transform::Transform;
 use dlopen::{
@@ -353,7 +353,7 @@ pub fn adjust_camera_target(ray_origin: APIVec3, ray_direction: APIVec3) {
             let mut hit_distance = cad_instance.structure_designer.raytrace(
                 &ray_origin,
                 &ray_direction,
-                &AtomicStructureVisualization::SpaceFilling,
+                &AtomicStructureVisualization::SpaceFilling.into(),
             );
 
             // Fallback: Calculate where input ray intersects XY plane

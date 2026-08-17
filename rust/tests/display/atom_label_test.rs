@@ -12,10 +12,10 @@
 //! `TriangleMesh` mode — which they only do because the call sits outside the
 //! rendering-method match.
 
+use atomcad_crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::label_mesh::LabelMesh;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use rust_lib_flutter_cad::display::atomic_tessellator::{
     get_displayed_atom_radius, tessellate_atom_labels,
 };

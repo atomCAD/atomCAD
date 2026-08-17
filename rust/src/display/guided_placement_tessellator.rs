@@ -1,4 +1,4 @@
-use crate::crystolecule::atomic_structure::atomic_structure_decorator::{
+use atomcad_crystolecule::atomic_structure::atomic_structure_decorator::{
     WireframeRingVisuals, WireframeSphereVisuals,
 };
 use atomcad_renderer::line_mesh::LineMesh;

@@ -187,8 +187,8 @@ fn with_structure_identical_structure_preserves_alignment() {
 /// motif no longer maps to itself.
 #[test]
 fn with_structure_motif_only_difference_is_motif_unaligned() {
-    use rust_lib_flutter_cad::crystolecule::motif::Motif;
-    use rust_lib_flutter_cad::crystolecule::structure::Structure;
+    use atomcad_crystolecule::motif::Motif;
+    use atomcad_crystolecule::structure::Structure;
     use rust_lib_flutter_cad::structure_designer::evaluator::network_result::BlueprintData;
     use rust_lib_flutter_cad::structure_designer::nodes::value::ValueData;
 

@@ -17,8 +17,8 @@
 //! `structure_equivalence` (which provides `≡`).
 #![allow(dead_code)]
 
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure_diff::apply_diff;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };

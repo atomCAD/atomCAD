@@ -1,5 +1,5 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_util::serialization_utils::dvec3_serializer;
 use glam::f64::DVec3;
 use serde::{Deserialize, Serialize};

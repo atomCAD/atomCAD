@@ -1,10 +1,10 @@
 // Tests for the motif_edit node (Phase 2 + Phase 3: parameter elements + Phase 5: ghost atoms + Phase 6: cross-cell bonds + Phase 7: undo)
 
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use atomcad_crystolecule::motif::Motif;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use glam::IVec3;
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
-use rust_lib_flutter_cad::crystolecule::motif::Motif;
-use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     MoleculeData, NetworkResult,
@@ -1648,7 +1648,7 @@ fn test_effective_atomic_numbers_with_overrides() {
 
 #[test]
 fn test_effective_atomic_numbers_flow_through_topology() {
-    use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
+    use atomcad_crystolecule::simulation::topology::MolecularTopology;
     use rustc_hash::FxHashMap;
 
     let mut s = AtomicStructure::new();
@@ -1721,8 +1721,8 @@ fn test_motif_edit_eval_populates_effective_atomic_numbers() {
     // The pin 0 wire value is a Motif, but the display override is AtomicStructure
     // We can't easily access the display override from CLI eval, so instead
     // verify by building a topology from a structure with the same overrides
-    use rust_lib_flutter_cad::crystolecule::simulation::topology::MolecularTopology;
-    use rust_lib_flutter_cad::crystolecule::simulation::uff::UffForceField;
+    use atomcad_crystolecule::simulation::topology::MolecularTopology;
+    use atomcad_crystolecule::simulation::uff::UffForceField;
     use rustc_hash::FxHashMap;
 
     let mut s = AtomicStructure::new();

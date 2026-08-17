@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::io::atom_export::AtomExportFormat;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -10,6 +9,7 @@ use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parame
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::io::atom_export::AtomExportFormat;
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

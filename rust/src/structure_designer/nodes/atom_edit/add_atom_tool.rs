@@ -3,19 +3,19 @@ use super::atom_edit_data::{
 };
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_structure::atom::{
+use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
+use crate::display::preferences as display_prefs;
+use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::atom::{
     HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
 };
-use crate::crystolecule::atomic_structure::{HitTestResult, UNCHANGED_ATOMIC_NUMBER};
-use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::crystolecule::guided_placement::{
+use atomcad_crystolecule::atomic_structure::{HitTestResult, UNCHANGED_ATOMIC_NUMBER};
+use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+use atomcad_crystolecule::guided_placement::{
     BondLengthMode, BondMode, GuideDot, GuidedPlacementMode, Hybridization,
     compute_guided_placement, compute_ring_preview_positions, cone_half_angle_for_ring,
     ray_ring_nearest_point, ray_sphere_nearest_point,
 };
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use crate::display::preferences as display_prefs;
-use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_util::hit_test_utils;
 use glam::f64::DVec3;
 
@@ -149,7 +149,7 @@ pub fn start_guided_placement(
         let result_atom_id = match result_structure.hit_test(
             ray_start,
             ray_dir,
-            visualization,
+            &display_visualization,
             |atom| effective_displayed_atom_radius(result_structure, atom, &display_visualization),
             BAS_STICK_RADIUS,
         ) {
@@ -509,9 +509,9 @@ pub fn place_guided_atom(
 
     let atomic_number = atom_edit_data.selected_atomic_number;
     let bond_order = if is_dative_bond {
-        crate::crystolecule::atomic_structure::inline_bond::BOND_DATIVE
+        atomcad_crystolecule::atomic_structure::inline_bond::BOND_DATIVE
     } else {
-        crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE
+        atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE
     };
 
     if let Some(target) = merge_target {
@@ -564,7 +564,7 @@ fn resolve_to_diff_id(
 /// Compute merge targets for each guide dot in FixedDots mode.
 /// Returns a Vec parallel to guide_dots: `Some(target)` if overlapping, `None` otherwise.
 fn compute_merge_targets(
-    result_structure: &crate::crystolecule::atomic_structure::AtomicStructure,
+    result_structure: &atomcad_crystolecule::atomic_structure::AtomicStructure,
     guide_dots: &[GuideDot],
     anchor_result_atom_id: u32,
     is_diff_view: bool,
@@ -587,7 +587,7 @@ fn compute_merge_targets(
 /// Check if an existing atom overlaps a given position within MERGE_TOLERANCE.
 /// Excludes the anchor atom. Returns the closest overlapping atom as a MergeTarget.
 fn find_merge_target_at_position(
-    result_structure: &crate::crystolecule::atomic_structure::AtomicStructure,
+    result_structure: &atomcad_crystolecule::atomic_structure::AtomicStructure,
     position: &DVec3,
     anchor_result_atom_id: u32,
     is_diff_view: bool,

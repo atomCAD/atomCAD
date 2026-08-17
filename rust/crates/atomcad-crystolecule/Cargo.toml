@@ -1,0 +1,36 @@
+[package]
+name = "atomcad-crystolecule"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# Depends on `atomcad-util` and `atomcad-geo-tree` only
+# (doc/design_rust_crate_split.md, Phase 4). `GeoNode` is the SDF geometry input
+# to `fill_lattice()`; nothing here may depend on `renderer` or `display` — this
+# crate is independent of rendering concerns (see src/AGENTS.md).
+# Versions come from [workspace.dependencies] in ../../Cargo.toml (D4).
+[dependencies]
+atomcad-geo-tree = { path = "../atomcad-geo-tree" }
+atomcad-util = { path = "../atomcad-util" }
+glam = { workspace = true }
+indexmap = { workspace = true }
+lazy_static = { workspace = true }
+rustc-hash = { workspace = true }
+serde = { workspace = true }
+smallvec = { workspace = true }
+thiserror = { workspace = true }
+
+# `atomcad-test-support` depends on this crate, so this is a dev-dependency
+# cycle. Cargo permits a cycle that passes through a [dev-dependencies] edge
+# (it builds the lib target without dev-deps first); `cargo metadata` shows the
+# loop and it is not an error. Do not "fix" it by inlining the helper (D5.2).
+[dev-dependencies]
+atomcad-test-support = { path = "../atomcad-test-support" }
+# Test-only: the UFF suite deserializes `tests/crystolecule/simulation/test_data/
+# uff_reference.json` (serde_json) and one minimize test does an SVD (nalgebra);
+# the io roundtrips write into a temp dir (tempfile).
+nalgebra = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }

@@ -49,9 +49,7 @@ fn eval_guideline_visuals(
     node_id: u64,
     output_pin_index: i32,
     decorate: bool,
-) -> Option<
-    rust_lib_flutter_cad::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
->{
+) -> Option<atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals> {
     let registry = &designer.node_type_registry;
     let network = registry.node_networks.get("test").unwrap();
     let evaluator = NetworkEvaluator::new();
@@ -189,7 +187,7 @@ fn tool_picked_atom_is_highlighted_in_diff_view() {
     assert!(
         !matches!(
             state,
-            rust_lib_flutter_cad::crystolecule::atomic_structure::AtomDisplayState::Normal
+            atomcad_crystolecule::atomic_structure::AtomDisplayState::Normal
         ),
         "picked atom should be highlighted, got {:?}",
         state

@@ -7,15 +7,13 @@
 //! `quad_centers` bookkeeping, and that delete-marker / space-filling filtering
 //! survive the refactor.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::inline_bond::{BOND_DELETED, BOND_SINGLE};
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
-    BOND_DELETED, BOND_SINGLE,
-};
 use rust_lib_flutter_cad::display::atomic_tessellator::tessellate_atomic_structure_impostors;
 use rust_lib_flutter_cad::display::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,

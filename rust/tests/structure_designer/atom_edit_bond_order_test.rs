@@ -1,11 +1,11 @@
-use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
+use atomcad_crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
     BOND_SINGLE, BOND_TRIPLE,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{AtomicStructure, BondReference};
-use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use atomcad_crystolecule::atomic_structure_diff::apply_diff;
+use glam::f64::{DVec2, DVec3};
+use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::APIAtomEditTool;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AddBondInteractionState, AddBondMoveResult, AddBondToolState, AtomEditData, AtomEditTool,
     cycle_bond_order,

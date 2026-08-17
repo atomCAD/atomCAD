@@ -1,3 +1,4 @@
+use atomcad_test_support::fixture_path_str;
 use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -9,8 +10,8 @@ use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesig
 use rust_lib_flutter_cad::structure_designer::text_format::TextValue;
 use std::collections::HashMap;
 
-fn fixture_path(name: &str) -> String {
-    format!("{}/tests/fixtures/cif/{}", env!("CARGO_MANIFEST_DIR"), name)
+fn cif_fixture(name: &str) -> String {
+    fixture_path_str(&format!("cif/{}", name))
 }
 
 fn setup_designer() -> StructureDesigner {
@@ -81,7 +82,7 @@ fn add_import_cif_node_with_params(
 #[test]
 fn import_cif_diamond_unit_cell_output() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("diamond.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("diamond.cif"));
 
     let result = evaluate_pin(&designer, node_id, 0);
     match result {
@@ -101,7 +102,7 @@ fn import_cif_diamond_unit_cell_output() {
 #[test]
 fn import_cif_nacl_unit_cell_output() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("nacl.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("nacl.cif"));
 
     let result = evaluate_pin(&designer, node_id, 0);
     match result {
@@ -117,7 +118,7 @@ fn import_cif_nacl_unit_cell_output() {
 #[test]
 fn import_cif_hexagonal_unit_cell_output() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("hexagonal.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("hexagonal.cif"));
 
     let result = evaluate_pin(&designer, node_id, 0);
     match result {
@@ -143,7 +144,7 @@ fn import_cif_hexagonal_unit_cell_output() {
 #[test]
 fn import_cif_diamond_atomic_output() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("diamond.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("diamond.cif"));
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
@@ -166,7 +167,7 @@ fn import_cif_diamond_atomic_output() {
 #[test]
 fn import_cif_diamond_atomic_has_bonds() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("diamond.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("diamond.cif"));
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
@@ -185,7 +186,7 @@ fn import_cif_diamond_atomic_has_bonds() {
 #[test]
 fn import_cif_nacl_atomic_output() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("nacl.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("nacl.cif"));
 
     let result = evaluate_pin(&designer, node_id, 1);
     if let Some(structure) = result.clone().extract_atomic() {
@@ -218,7 +219,7 @@ fn import_cif_nacl_atomic_output() {
 #[test]
 fn import_cif_diamond_motif_output() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("diamond.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("diamond.cif"));
 
     let result = evaluate_pin(&designer, node_id, 2);
     match result {
@@ -244,7 +245,7 @@ fn import_cif_diamond_motif_no_bonds() {
     let mut designer = setup_designer();
     let node_id = add_import_cif_node_with_params(
         &mut designer,
-        &fixture_path("diamond.cif"),
+        &cif_fixture("diamond.cif"),
         false,
         false,
         1.15,
@@ -274,7 +275,7 @@ fn import_cif_diamond_very_low_tolerance_no_bonds() {
     let mut designer = setup_designer();
     let node_id = add_import_cif_node_with_params(
         &mut designer,
-        &fixture_path("diamond.cif"),
+        &cif_fixture("diamond.cif"),
         false,
         true,
         0.1,
@@ -330,7 +331,7 @@ fn import_cif_nonexistent_file_error() {
 #[test]
 fn import_cif_multi_block_first_block_default() {
     let mut designer = setup_designer();
-    let node_id = add_import_cif_node(&mut designer, &fixture_path("multi_block.cif"));
+    let node_id = add_import_cif_node(&mut designer, &cif_fixture("multi_block.cif"));
 
     let result = evaluate_pin(&designer, node_id, 0);
     assert!(
@@ -351,7 +352,7 @@ fn import_cif_multi_block_select_by_name() {
         .unwrap();
     let node = network.nodes.get_mut(&node_id).unwrap();
     if let Some(data) = node.data.as_any_mut().downcast_mut::<ImportCifData>() {
-        data.file_name = Some(fixture_path("multi_block.cif"));
+        data.file_name = Some(cif_fixture("multi_block.cif"));
         data.block_name = Some("nacl".to_string());
     }
 
@@ -491,7 +492,7 @@ fn import_cif_with_bonds_file_uses_cif_bonds() {
     let mut designer = setup_designer();
     let node_id = add_import_cif_node_with_params(
         &mut designer,
-        &fixture_path("with_bonds.cif"),
+        &cif_fixture("with_bonds.cif"),
         true,
         false,
         1.15,
@@ -517,10 +518,10 @@ fn import_cif_with_bonds_file_uses_cif_bonds() {
 /// these wrap into [0,1), and the motif bond relative_cell must account for this.
 #[test]
 fn import_cif_with_bonds_no_spurious_long_bonds() {
-    use rust_lib_flutter_cad::crystolecule::io::cif::load_cif_extended;
+    use atomcad_crystolecule::io::cif::load_cif_extended;
     use rust_lib_flutter_cad::structure_designer::nodes::import_cif::build_cif_import_result;
 
-    let cif_result = load_cif_extended(&fixture_path("with_bonds.cif"), None).unwrap();
+    let cif_result = load_cif_extended(&cif_fixture("with_bonds.cif"), None).unwrap();
 
     let count_long_bonds =
         |import: &rust_lib_flutter_cad::structure_designer::nodes::import_cif::CifImportResult| {

@@ -9,6 +9,7 @@
 // Tests in this file follow the pattern established by
 // `lattice_space_migration_test.rs`.
 
+use atomcad_test_support::fixture_path_str;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -25,7 +26,13 @@ use rust_lib_flutter_cad::structure_designer::serialization::node_networks_seria
 use std::collections::HashMap;
 use tempfile::tempdir;
 
-const FIXTURE_DIR: &str = "tests/fixtures/iterator_migration";
+const FIXTURE_DIR: &str = "iterator_migration";
+/// `tests/fixtures/iterator_migration/<name>`, resolved through the shared
+/// `atomcad-test-support` resolver rather than `CARGO_MANIFEST_DIR` or a
+/// working-directory-relative string (doc/design_rust_crate_split.md, D5.3).
+fn fixture(name: &str) -> String {
+    fixture_path_str(&format!("{FIXTURE_DIR}/{name}"))
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -94,7 +101,7 @@ fn find_node_id_by_type(
 
 #[test]
 fn test_load_old_range_to_array_len_inserts_collect() {
-    let registry = load_and_validate(&format!("{}/old_range_to_array_len.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_range_to_array_len.cnnd"));
 
     let network = registry
         .node_networks
@@ -176,11 +183,8 @@ fn test_v4_file_skips_migration() {
     // Round-trip the migrated v3 fixture through save â†’ load. The saved file
     // should be v4, and reloading it must not invoke `migrate_v3_to_v4`.
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_range_to_array_len.cnnd", FIXTURE_DIR),
-    )
-    .expect("initial v3 load failed");
+    load_node_networks_from_file(&mut registry, &fixture("old_range_to_array_len.cnnd"))
+        .expect("initial v3 load failed");
 
     let dir = tempdir().unwrap();
     let out = dir.path().join("roundtrip_v4.cnnd");
@@ -204,8 +208,8 @@ fn test_v4_file_skips_migration() {
 
 #[test]
 fn test_migrate_v3_to_v4_is_idempotent() {
-    let raw = std::fs::read_to_string(format!("{}/old_range_to_array_len.cnnd", FIXTURE_DIR))
-        .expect("fixture missing");
+    let raw =
+        std::fs::read_to_string(fixture("old_range_to_array_len.cnnd")).expect("fixture missing");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
 
     migrate_v3_to_v4(&mut value).expect("first migration failed");
@@ -246,7 +250,7 @@ fn test_range_output_type_is_iter_int() {
 
 #[test]
 fn test_load_old_map_to_array_at_inserts_collect() {
-    let registry = load_and_validate(&format!("{}/old_map_to_array_at.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_map_to_array_at.cnnd"));
 
     let network = registry
         .node_networks
@@ -319,7 +323,7 @@ fn test_load_old_map_to_array_at_inserts_collect() {
 
 #[test]
 fn test_load_old_filter_to_array_concat_inserts_collect() {
-    let registry = load_and_validate(&format!("{}/old_filter_to_array_concat.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_filter_to_array_concat.cnnd"));
 
     let network = registry
         .node_networks
@@ -371,7 +375,7 @@ fn test_load_old_filter_to_array_concat_inserts_collect() {
 
 #[test]
 fn test_load_old_double_fanout_inserts_one_collect_per_consumer() {
-    let registry = load_and_validate(&format!("{}/old_double_fanout.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_double_fanout.cnnd"));
 
     let network = registry
         .node_networks
@@ -470,7 +474,7 @@ fn test_iter_to_iter_xs_pin_skips_collect_insertion() {
     // which has a `range â†’ map.xs` wire in it. Because `map.xs` is in
     // `ITERATOR_PINS_V4` after Phase 4, no collect should sit between range
     // and map.
-    let registry = load_and_validate(&format!("{}/old_map_to_array_at.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_map_to_array_at.cnnd"));
     let network = registry.node_networks.get("Main").unwrap();
 
     // No collect feeds map.xs; map.xs feeds direct from range.
@@ -492,8 +496,7 @@ fn test_iter_to_iter_xs_pin_skips_collect_insertion() {
 
 #[test]
 fn test_migrate_v3_to_v4_idempotent_on_map_fanout() {
-    let raw = std::fs::read_to_string(format!("{}/old_double_fanout.cnnd", FIXTURE_DIR))
-        .expect("fixture missing");
+    let raw = std::fs::read_to_string(fixture("old_double_fanout.cnnd")).expect("fixture missing");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
 
     migrate_v3_to_v4(&mut value).expect("first migration failed");
@@ -545,7 +548,7 @@ fn test_filter_output_type_is_iter() {
 
 #[test]
 fn test_load_old_product_to_array_at_inserts_collect() {
-    let registry = load_and_validate(&format!("{}/old_product_to_array_at.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_product_to_array_at.cnnd"));
 
     let network = registry
         .node_networks
@@ -659,8 +662,8 @@ fn test_product_output_type_is_iter_record() {
 
 #[test]
 fn test_migrate_v3_to_v4_idempotent_on_product_fixture() {
-    let raw = std::fs::read_to_string(format!("{}/old_product_to_array_at.cnnd", FIXTURE_DIR))
-        .expect("fixture missing");
+    let raw =
+        std::fs::read_to_string(fixture("old_product_to_array_at.cnnd")).expect("fixture missing");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
 
     migrate_v3_to_v4(&mut value).expect("first migration failed");
@@ -688,7 +691,7 @@ fn test_chained_v2_v3_v4_dispatch() {
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
-        "tests/fixtures/lattice_space_migration/pure_rename.cnnd",
+        &fixture_path_str("lattice_space_migration/pure_rename.cnnd"),
     )
     .expect("v2 file failed to chain through v2â†’v3 then v3â†’v4");
 
@@ -709,10 +712,7 @@ fn test_chained_v2_v3_v4_dispatch() {
 
 #[test]
 fn test_load_old_custom_iter_producer_to_array_at_inserts_collect() {
-    let registry = load_and_validate(&format!(
-        "{}/old_custom_iter_producer_to_array_at.cnnd",
-        FIXTURE_DIR
-    ));
+    let registry = load_and_validate(&fixture("old_custom_iter_producer_to_array_at.cnnd"));
 
     let main = registry
         .node_networks
@@ -776,11 +776,8 @@ fn test_load_old_custom_iter_producer_to_array_at_inserts_collect() {
 
 #[test]
 fn test_migrate_v3_to_v4_idempotent_on_custom_iter_fixture() {
-    let raw = std::fs::read_to_string(format!(
-        "{}/old_custom_iter_producer_to_array_at.cnnd",
-        FIXTURE_DIR
-    ))
-    .expect("fixture missing");
+    let raw = std::fs::read_to_string(fixture("old_custom_iter_producer_to_array_at.cnnd"))
+        .expect("fixture missing");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
 
     migrate_v3_to_v4(&mut value).expect("first migration failed");
@@ -802,7 +799,7 @@ fn test_migrate_v3_to_v4_idempotent_on_custom_iter_fixture() {
 
 #[test]
 fn test_chained_v2_v3_v4_dispatch_with_iterator_chain() {
-    let registry = load_and_validate(&format!("{}/old_v2_with_iterator_chain.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("old_v2_with_iterator_chain.cnnd"));
 
     let main = registry
         .node_networks
@@ -848,11 +845,8 @@ fn test_chained_v2_v3_v4_dispatch_with_iterator_chain() {
 
 #[test]
 fn test_migrate_v3_to_v4_defensive_on_malformed_map_output_type() {
-    let raw = std::fs::read_to_string(format!(
-        "{}/old_malformed_map_output_type.cnnd",
-        FIXTURE_DIR
-    ))
-    .expect("fixture missing");
+    let raw = std::fs::read_to_string(fixture("old_malformed_map_output_type.cnnd"))
+        .expect("fixture missing");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("invalid JSON");
 
     migrate_v3_to_v4(&mut value).expect("migration failed on malformed fixture");
@@ -909,11 +903,8 @@ fn test_migrate_v3_to_v4_skips_malformed_arguments() {
     let mut registry = NodeTypeRegistry::new();
     // The fixture has a `range â†’ array_at.array` wire whose `arguments`
     // shape is malformed. Migration must not panic; the file must load.
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_malformed_arguments.cnnd", FIXTURE_DIR),
-    )
-    .expect("malformed-arguments v3 file failed to load through migration");
+    load_node_networks_from_file(&mut registry, &fixture("old_malformed_arguments.cnnd"))
+        .expect("malformed-arguments v3 file failed to load through migration");
 
     assert!(registry.node_networks.contains_key("Main"));
 }
@@ -949,7 +940,7 @@ fn test_v3_fixtures_chain_through_to_current_version() {
     ];
 
     for fixture_name in fixtures {
-        let path = format!("{}/{}", FIXTURE_DIR, fixture_name);
+        let path = fixture(fixture_name);
         let mut registry = NodeTypeRegistry::new();
         load_node_networks_from_file(&mut registry, &path).unwrap_or_else(|e| {
             panic!(

@@ -1,6 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_constants::ATOM_INFO;
-use crate::crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::atom_op::{
     eval_output_with_diff, map_atomic_in_region, snapshot_atoms,
@@ -17,6 +15,8 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::atomic_constants::ATOM_INFO;
+use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use glam::IVec2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

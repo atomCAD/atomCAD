@@ -1,10 +1,11 @@
-﻿// Phase 0: Backward-compatibility fixture tests for multi-output pin migration.
+// Phase 0: Backward-compatibility fixture tests for multi-output pin migration.
 //
 // These tests load frozen .cnnd files created with the old serialization format
 // (before any multi-output changes) and verify they load correctly.
 // They establish a baseline so that after Phase 1+ changes, we can verify
 // the old format still loads correctly (migration).
 
+use atomcad_test_support::fixture_path_str;
 use rust_lib_flutter_cad::structure_designer::data_type::DataType;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeDisplayType;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
@@ -14,7 +15,13 @@ use rust_lib_flutter_cad::structure_designer::serialization::node_networks_seria
 };
 use tempfile::tempdir;
 
-const FIXTURE_DIR: &str = "tests/fixtures/multi_output_migration";
+const FIXTURE_DIR: &str = "multi_output_migration";
+/// `tests/fixtures/multi_output_migration/<name>`, resolved through the shared
+/// `atomcad-test-support` resolver rather than `CARGO_MANIFEST_DIR` or a
+/// working-directory-relative string (doc/design_rust_crate_split.md, D5.3).
+fn fixture(name: &str) -> String {
+    fixture_path_str(&format!("{FIXTURE_DIR}/{name}"))
+}
 
 // ---------------------------------------------------------------------------
 // Fixture 1: old_builtin_only.cnnd
@@ -26,11 +33,9 @@ const FIXTURE_DIR: &str = "tests/fixtures/multi_output_migration";
 #[test]
 fn test_load_old_builtin_only() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_builtin_only.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load old_builtin_only.cnnd");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("old_builtin_only.cnnd"))
+            .expect("Failed to load old_builtin_only.cnnd");
 
     assert_eq!(load_result.first_network_name, "Main");
 
@@ -100,11 +105,9 @@ fn test_load_old_builtin_only() {
 #[test]
 fn test_roundtrip_old_builtin_only() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_builtin_only.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("old_builtin_only.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -139,11 +142,9 @@ fn test_roundtrip_old_builtin_only() {
 #[test]
 fn test_load_old_custom_network() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_custom_network.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load old_custom_network.cnnd");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("old_custom_network.cnnd"))
+            .expect("Failed to load old_custom_network.cnnd");
 
     assert_eq!(load_result.first_network_name, "Main");
 
@@ -191,11 +192,9 @@ fn test_load_old_custom_network() {
 #[test]
 fn test_roundtrip_old_custom_network() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_custom_network.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("old_custom_network.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -239,7 +238,7 @@ fn test_load_old_atom_edit_output_diff_false() {
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
-        &format!("{}/old_atom_edit_output_diff_false.cnnd", FIXTURE_DIR),
+        &fixture("old_atom_edit_output_diff_false.cnnd"),
     )
     .expect("Failed to load old_atom_edit_output_diff_false.cnnd");
 
@@ -298,7 +297,7 @@ fn test_load_old_atom_edit_output_diff_true() {
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
-        &format!("{}/old_atom_edit_output_diff_true.cnnd", FIXTURE_DIR),
+        &fixture("old_atom_edit_output_diff_true.cnnd"),
     )
     .expect("Failed to load old_atom_edit_output_diff_true.cnnd");
 
@@ -342,7 +341,7 @@ fn test_migrate_atom_edit_output_diff_true_to_displayed_pins() {
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
-        &format!("{}/old_atom_edit_output_diff_true.cnnd", FIXTURE_DIR),
+        &fixture("old_atom_edit_output_diff_true.cnnd"),
     )
     .expect("Failed to load");
 
@@ -368,7 +367,7 @@ fn test_migrate_atom_edit_output_diff_false_to_displayed_pins() {
     let mut registry = NodeTypeRegistry::new();
     load_node_networks_from_file(
         &mut registry,
-        &format!("{}/old_atom_edit_output_diff_false.cnnd", FIXTURE_DIR),
+        &fixture("old_atom_edit_output_diff_false.cnnd"),
     )
     .expect("Failed to load");
 

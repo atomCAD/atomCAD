@@ -721,6 +721,15 @@ and record which of the two outcomes occurred here. If the files simply
 vanish, prefer that: deleting dead generated code is an improvement, and
 `lib/src/rust/crystolecule/` going away is the expected end state.
 
+**Outcome (Phase 4, 2026-08-17): they vanish** — the preferred branch.
+`lib/src/rust/crystolecule/` is deleted and codegen does not recreate it.
+One procedural note for anyone re-deriving this: **codegen does not remove
+stale output**, so the first regeneration leaves both files sitting there
+looking unchanged, and `git diff` reports nothing. The check that actually
+answers the question is to delete them and re-run codegen — if they come
+back, the type relocated its Dart output; if they do not, it is gone. They
+did not come back, and nothing under `lib/` ever imported them.
+
 ### D7. `display → structure_designer`: move one file up
 
 `display/scene_tessellator.rs` consumes `StructureDesignerScene` and
@@ -1048,6 +1057,15 @@ existing suites stay green and the app still builds and runs:
   drop in test count, check that first, before hunting for a lost
   `#[path]`. `cargo test --workspace -j 4` is the belt-and-braces form
   and is worth using at least once per phase.
+- **`cargo test -p <crate>` must pass for each extracted crate**, not only
+  `cargo test -j 4`. Added after Phase 4, where the workspace-wide run was
+  green while the per-crate run failed: extracting a crate is the first time
+  its *feature* graph is exercised in isolation, and `atomcad-crystolecule`'s
+  documented 64-byte `Atom` turned out to depend on `smallvec/union`, a
+  feature enabled only by `wgpu-hal`. Any invariant resting on a cargo
+  feature — layout, `no_std`-ness, a numeric backend — can have been
+  satisfied transitively by a dependency the new crate no longer pulls in,
+  and the workspace-wide command cannot see it.
 - `cargo clippy` warning count must not exceed the ~14 baseline;
   `flutter analyze` must not exceed its ~68 baseline. (Both estimates
   turned out to be stale — the measured Phase 0 values are 36 and 139;
@@ -1610,6 +1628,260 @@ of the two happened.
 *Estimate: 2–2.5 days* — the largest of Phases 1–5, because it carries
 the test-support crate, the 31 fixture conversions, and the D9a
 validation in addition to the move itself.
+
+#### Phase 4 — landed 2026-08-17
+
+**Changes.** `rust/src/crystolecule/` → `rust/crates/atomcad-crystolecule/src/`
+(53 files, `mod.rs` → `lib.rs`, plus the three `AGENTS.md`/`CLAUDE.md` pairs), and
+`rust/tests/crystolecule.rs` + `rust/tests/crystolecule/` →
+`crates/atomcad-crystolecule/tests/`, keeping the D5.1 directory-name rule. The
+crate takes `atomcad-util` and `atomcad-geo-tree` plus `glam`, `indexmap`,
+`lazy_static`, `rustc-hash`, `serde`, `smallvec` and `thiserror` from
+`[workspace.dependencies]`, with `nalgebra` / `serde_json` / `tempfile` as
+test-only dev-deps; the root package gains
+`atomcad-crystolecule = { path = "crates/atomcad-crystolecule" }` and loses
+`pub mod crystolecule;` from `lib.rs`. `rust/tests/test_support/` became
+`crates/atomcad-test-support/` (D5.2), and all 31 fixture sites across 15 files
+now go through its resolver (D5.3). No dependency left the root manifest this
+phase — `crystolecule` shared everything it used.
+
+`~250 call sites` was close: of the 364 `crate::crystolecule::` occurrences, 96
+were internal self-references (rewritten to `crate::`) and **268** were external
+(rewritten to `atomcad_crystolecule::`) across 30 source files; another 153
+occurrences of `rust_lib_flutter_cad::crystolecule::` were rewritten across 64
+test files and `examples/crate_split_bench.rs`. `crystolecule` held 10 of the 15
+`pub(crate)` items measured in Current state, and **not one of them needed
+escalating** — they were all `pub(crate)` *within* what is now the crate, so the
+boundary landed outside them. `cargo build` succeeded on the first attempt after
+the two down-moves were in place.
+
+**Phase 1's doc-test trap bit, and was caught before it could.**
+`unit_cell_symmetries.rs:458` carries a ```` ```rust ```` example importing
+`rust_lib_flutter_cad::crystolecule::…`, which after the move is not a dependency
+of the crate that defines it. Grepping the moved files for the old crate name
+*before* moving (as Phase 1 advises) found it in seconds; discovered the other
+way round it would have failed last, after 5,000 green tests.
+
+**D6 — the two down-moves.** `SelectModifier` now lives in
+`atomic_structure/mod.rs` (beside `apply_select_modifier`, its only in-crate
+consumer) and `AtomicStructureVisualization` in a new `visualization.rs`. Both
+keep a same-named twin in the `api/` file they occupied before, with four `From`
+impls each (owned + borrowed, both directions) declared **in the api file**,
+where both types are in scope — the orphan rule allows
+`impl From<&LocalApiType> for ForeignDomainType` because the parameter type is
+local. Conversion happens at the `api/` boundary and nowhere else: **seven** call
+sites, which is exactly what the compiler asked for and the whole cost of the
+back-edge deletion.
+
+Three consequences worth carrying forward:
+
+- **`display::preferences` had a *third* copy of
+  `AtomicStructureVisualization`,** which D6 does not mention. The tree therefore
+  held two identical two-variant enums (`api/` and `display/`) and none in the
+  domain — which is precisely *why* `crystolecule` reached up into `api/`: the
+  copy it needed was above it and the other was beside it. Rather than add a
+  fourth, `display::preferences` now re-exports the domain one
+  (`pub use atomcad_crystolecule::visualization::AtomicStructureVisualization;`).
+  This is a deliberate deviation from a literal reading of D6/D9a — the design
+  says "declare a twin", and here one of the would-be twins already existed and
+  was redundant. Net effect: 3 copies → 2 (domain + Dart-facing twin), the ~8
+  `api → display_prefs` match blocks in `structure_designer` keep compiling
+  unchanged because their target type is now the domain type, and one of FRB's
+  silent "multiple objects with same key … randomly pick one" collisions
+  disappeared from the codegen log. Five such collisions remain, all pre-existing
+  `api/`-vs-`display/` preference-struct duplicates; they are Phase 5/6's to
+  resolve.
+- **Every `hit_test` call site already had the converted value in hand.** All 11
+  computed a `display_visualization` local one line earlier and then passed the
+  *api*-typed `visualization` to `hit_test`; the edit was uniformly
+  `visualization,` → `&display_visualization,`. No new conversion code.
+- **`raytrace` / `raytrace_per_node` now take the domain type.** Both only ever
+  forward it to `hit_test`, so their internal api→display match blocks became
+  identity and were deleted, and their three api callers convert instead. That is
+  what lets `tests/structure_designer/raytrace_per_node_test.rs` drop its `api`
+  import onto the domain path — one of the 21 files D5.1a expects to
+  self-resolve, resolved a phase early and verified by the compiler rather than
+  predicted.
+
+**D5's "cannot move down" list came out at zero for this phase.** Of the six
+files D5 names, `crystolecule/atomic_structure_test.rs` and
+`display/atomic_render_style_test.rs` were live here, and **both** turned out to
+be the "dependency is incidental and gets dropped" branch — each reached up only
+for a type this phase moved down. `atomic_structure_test.rs` switched its one
+import and travelled with the crate; `atomic_render_style_test.rs` had imported
+*both* the api enum (for `hit_test`) and the display enum (for prefs), and since
+those are now the same type its `AtomicStructureVisualization as ApiVisualization`
+alias was deleted outright. So the whole `tests/crystolecule/` harness moved
+intact — no `crystolecule_api.rs` counterpart to `renderer_api.rs` was needed,
+and the D5.1 "zero edits" claim held for all 42 test files and all six UFF
+`CARGO_MANIFEST_DIR` test-data paths.
+
+**The one genuinely serious problem: a memory-layout invariant was riding on the
+GPU driver's dependency list.** `cargo test -p atomcad-crystolecule` — the
+capability D12 advertises as a headline gain — failed one test:
+
+```text
+atom_tags_test::atom_is_still_one_cache_line
+  assertion `left == right` failed: tag_bits must fit in Atom's existing
+  padding — Atom stays 64 bytes
+  left: 72   right: 64
+```
+
+`Atom` holds `bonds: SmallVec<[InlineBond; 4]>`, and `smallvec`'s **`union`**
+feature is what stores that inline buffer in a union and keeps `Atom` at one
+cache line. `cargo tree -p smallvec --invert -e features` shows exactly one crate
+in the entire tree asking for it: **`wgpu-hal`**. The invariant the test guards —
+documented in `AGENTS.md` and in the module's own header — has therefore been
+enabled *by accident*, by the graphics backend, and it held only because until
+Phase 4 there was no way to build `crystolecule` without the GPU stack in the
+graph. The fix is to declare it where it belongs:
+
+```toml
+smallvec = { version = "1.13", features = ["union"] }
+```
+
+This changes nothing about the shipped binary (the feature was already on in
+every real build; `Cargo.lock` is unchanged apart from the two new package nodes,
+with **zero** removed lines) and makes the layout a property of our own manifest.
+Two lessons generalize past this phase:
+
+1. **Extracting a crate is the first time its feature graph is tested in
+   isolation.** Any invariant that depends on a cargo feature — layout,
+   `no_std`-ness, a numeric backend — may have been satisfied transitively.
+   Phases 5 and 6 should run `cargo test -p <crate>` explicitly, not just
+   `cargo test -j 4`: the workspace-wide run **passed** while the per-crate run
+   failed, so the regression gate as written would not have caught this.
+2. A test asserting a layout is worth its weight. Without
+   `atom_is_still_one_cache_line`, `Atom` would silently have become 72 bytes for
+   anyone building the crate standalone — a 12 % memory regression on the
+   1M-atom path, reported by nothing.
+
+**D13 interim reading — do not carry the numbers into Phase 5, but do carry the
+method.** The benchmark is Phase 5's gate, not this phase's, but the harness was
+smoke-run to prove it survived the move (`examples/crate_split_bench.rs` needed
+only the prefix rewrite). On `nut-bolt.cnnd`, 10 reps, `lto = "thin"`, it reports
+**evaluate 13.5 ms / impostors 2.0 ms / triangles 32.7 ms** against Phase 0's
+**11.5 / 1.7 / 25.7** — a uniform ~20 % worse, which looks alarming and is not
+what it appears to be. Two independent arguments say so:
+
+- **Turning LTO off changes nothing.** `CARGO_PROFILE_RELEASE_LTO=false` into a
+  scratch target dir gives **13.3 / 2.2 / 32.1** — within noise of the thin-LTO
+  run. Cross-crate inlining loss is *precisely* what thin LTO claws back, so if
+  the split were the cause, removing LTO would have made it markedly worse. It
+  did not. Whatever moved, it is not inlining across the four new crate
+  boundaries.
+- **The most-regressed path has the least Phase 4 exposure.** `triangles`
+  (+27 %) runs `display::atomic_tessellator` → `atomcad_renderer::tessellator`, a
+  boundary that has existed since Phase 3 and that this phase did not touch;
+  `evaluate` (+17 %) is the path that actually crosses the new
+  `atomcad-crystolecule` boundary. A regression caused by the split would be
+  ordered the other way round.
+
+The conclusion is that the machine is simply ~20 % slower than during the Phase 0
+session, and that `nut-bolt` — 8 k atoms, sub-35 ms steps — is too small to
+separate a real effect from that, exactly as Phase 0 already found when it labeled
+the nut-bolt LTO deltas "noise". **Phase 5 must run its gate on the 1.07 M-atom
+nanobeam and re-baseline Phase 0's own numbers on the same machine session**,
+rather than comparing against a table measured months earlier; otherwise the gate
+will fire on drift. The LTO-on/LTO-off pair is the cheap sanity check to run
+first — it costs one build and it separates "inlining" from "everything else"
+without needing a pre-split control build at all.
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo test -p atomcad-crystolecule -j 4`, `cargo clippy -j 4`,
+`cargo clippy --all-targets -j 4`, `cargo fmt -- --check`, `cargo metadata` (the
+D5.2 dev-dependency cycle resolves without error, as predicted),
+`flutter_rust_bridge_codegen generate` + `git diff --numstat lib/src/rust
+rust/src/frb_generated.rs`, `flutter analyze`, `cargo build --release`, and
+cargokit (`flutter build windows --debug` rebuilt `rust_lib_flutter_cad.dll` and
+linked `atomCAD.exe`). No `.snap.new` files; `git status` shows `../csgrs`
+untouched.
+**Pending manual step for the maintainer:** launch the app (`flutter run`,
+release DLL) and the Flutter smoke test.
+
+**Test count: 5,054 — identical to Phases 0–3** (5,040 passed, 14 ignored), under
+both `cargo test -j 4` and `cargo test --workspace -j 4`. The 1,171 crystolecule
+tests and one inline lib unittest moved intact:
+
+| binary | Phase 3 | Phase 4 |
+|---|---|---|
+| `tests/crystolecule.rs` (root package) | 1,171 | — |
+| `atomcad-crystolecule` `tests/crystolecule.rs` | — | **1,171** |
+| `rust_lib_flutter_cad` (lib unittests) | 5 | 4 |
+| `atomcad-crystolecule` (lib unittests) | — | **1** |
+| doc-tests `rust_lib_flutter_cad` | 16 (6 run) | 15 (5 run) |
+| doc-tests `atomcad_crystolecule` | — | **1** |
+
+Every other binary is unchanged. One near-miss worth recording, because it makes
+the tripwire slightly sharper than the design describes: the `fixture_path`
+doc-comment example was first written as a ```` ```ignore ```` fence, which
+rustdoc counts as an **ignored doc-test** and pushed the total to 5,055. A
+*rising* count is as much a signal as a falling one — the example is a ```` ```text ````
+block now, and the number is 5,054 on the nose.
+
+**Lint baselines held exactly:** `cargo clippy -j 4` → **36** warnings
+(20 root lib + 16 `atomcad-crystolecule`, which is where those 16 have always
+lived — they simply had a different owner before), **0** in the other three
+crates; `cargo clippy --all-targets -j 4` → **112** individual warnings
+(20 lib + 61 `structure_designer` + 16 `crystolecule` lib + 5 `crystolecule`
+tests + 4 `expr` + 4 `geo_tree` + 1 `display` + 1 `util`); `flutter analyze` →
+**139** issues. Unlike Phase 2, the `mod.rs` → `lib.rs` promotion introduced no
+new lint.
+
+**Generated Dart: the D9a gate passes, and D6a's preferred outcome occurred.**
+`git diff --numstat lib/src/rust rust/src/frb_generated.rs` touches exactly two
+files, `+8/-1` and `+12/-1`:
+
+- `enum SelectModifier` is still a Dart `enum`, still named `SelectModifier`,
+  still in `lib/src/rust/api/common_api_types.dart`. Same for
+  `enum AtomicStructureVisualization` in
+  `.../structure_designer_preferences.dart`. No
+  `abstract class … implements RustOpaqueInterface` anywhere, no new directory
+  under `lib/src/rust/`, no renamed symbol, and the Dart symbol *set* is
+  unchanged.
+- The entire content of those diffs is (a) the doc comments written on the two
+  twins, which FRB propagates into the generated Dart, and (b) four/five new
+  `from` entries in the "these functions are ignored because they are on traits
+  not defined in current crate" header comment — the direct, benign trace of the
+  `From` impls. **`rust/src/frb_generated.rs` is byte-identical.**
+- **D6a: the files vanish.** `lib/src/rust/crystolecule/drawing_plane.dart` and
+  `unit_cell_struct.dart` are deleted. This was confirmed rather than assumed:
+  codegen does not remove stale output, so the first regeneration left them
+  in place looking unchanged; deleting them and re-running codegen confirmed they
+  are **not** re-emitted. They were already dead — each held a bare
+  `abstract class … implements RustOpaqueInterface {}`, nothing under `lib/`
+  imported them, and no generated Dart file referenced the classes (they date
+  from `0d45d315`, "view up axis phase 2"). `lib/src/rust/crystolecule/` is gone,
+  which D6a names as the expected end state.
+
+**Back-edge audit.** `crystolecule → api` is **0** references (the only remaining
+mention of `crate::api` under the crate is a sentence in its `AGENTS.md`
+explaining why it used to be there) — and it is now a *build failure* to
+reintroduce, since the root crate is not in `atomcad-crystolecule`'s manifest.
+Two of the four back-edges in Current state are closed (`geo_tree`'s incidental
+one in Phase 2, `crystolecule`'s here); `display → structure_designer` is
+Phase 5's and `structure_designer → api` is Phase 6's.
+
+That last edge now measures **145 sites across 123 files** — *higher* than the
+131/125 in Current state, which is worth stating plainly so a Phase 6 implementor
+does not read it as this phase having made things worse. The design's figure
+predates several intervening features; nothing here added an api reference. The
+composition is what matters and it is unchanged in shape:
+
+| type | sites | handled by |
+|---|---|---|
+| `NodeTypeCategory` | 113 | D9.1 |
+| `AtomicStructureVisualization` | 6 | D9.2 (the preferences *reads* — the type itself already moved) |
+| other preferences types | 7 | D9.2 |
+| the genuine DTOs (`APINodeTypeView`, `APIValidationError`, `DragFrozenStatus`, …) | 13 | D10 / D10.1 |
+| bare-module imports | 6 | — |
+
+The 6 `SelectModifier` references D9's table counted are **gone**, absorbed by D6
+exactly as the design predicted. Note the 6 remaining
+`AtomicStructureVisualization` sites are *not* a failure of D6: the type is now
+domain-owned, and what those files still reach up for is
+`preferences.atomic_structure_visualization_preferences`, i.e. the containing
+preferences struct, which D9.2 moves in Phase 6.
 
 ### Phase 5 — `atomcad-display`
 

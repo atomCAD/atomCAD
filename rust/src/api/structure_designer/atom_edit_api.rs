@@ -44,7 +44,7 @@ pub fn atom_edit_select_by_ray(
                     &mut cad_instance.structure_designer,
                     &ray_start_vec3,
                     &ray_dir_vec3,
-                    select_modifier,
+                    (&select_modifier).into(),
                 );
                 refresh_structure_designer_auto(cad_instance);
                 result
@@ -63,7 +63,7 @@ pub fn atom_edit_add_atom_by_ray(
     hybridization_override: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
 ) {
     use crate::api::structure_designer::structure_designer_api_types::APIHybridization;
-    use crate::crystolecule::guided_placement::Hybridization;
+    use atomcad_crystolecule::guided_placement::Hybridization;
 
     unsafe {
         with_mut_cad_instance(|cad_instance| {
@@ -103,10 +103,10 @@ pub fn atom_edit_add_atom_at_position(
     hybridization_override: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
 ) {
     use crate::api::structure_designer::structure_designer_api_types::APIHybridization;
-    use crate::crystolecule::atomic_structure::atom::{
+    use atomcad_crystolecule::atomic_structure::atom::{
         HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
     };
-    use crate::crystolecule::guided_placement::Hybridization;
+    use atomcad_crystolecule::guided_placement::Hybridization;
 
     unsafe {
         with_mut_cad_instance(|cad_instance| {
@@ -774,7 +774,7 @@ pub fn atom_edit_start_guided_placement(
     use crate::api::structure_designer::structure_designer_api_types::{
         APIBondLengthMode, APIBondMode, APIHybridization, GuidedPlacementApiResult,
     };
-    use crate::crystolecule::guided_placement::{BondLengthMode, BondMode, Hybridization};
+    use atomcad_crystolecule::guided_placement::{BondLengthMode, BondMode, Hybridization};
 
     unsafe {
         with_mut_cad_instance_or(
@@ -925,7 +925,7 @@ pub fn default_tool_pointer_down(
                     from_api_vec2(&screen_pos),
                     &from_api_vec3(&ray_origin),
                     &from_api_vec3(&ray_direction),
-                    select_modifier,
+                    (&select_modifier).into(),
                 )
             },
             PointerDownResult {
@@ -996,7 +996,7 @@ pub fn default_tool_pointer_up(
                     from_api_vec2(&screen_pos),
                     &from_api_vec3(&ray_origin),
                     &from_api_vec3(&ray_direction),
-                    select_modifier,
+                    (&select_modifier).into(),
                     viewport_width,
                     viewport_height,
                     &view_proj,
@@ -1175,8 +1175,8 @@ pub fn atom_edit_get_default_bond_length(
 ) -> Option<f64> {
     use crate::api::api_common::with_cad_instance_or;
     use crate::api::structure_designer::structure_designer_api_types::APIBondLengthMode;
-    use crate::crystolecule::guided_placement::BondLengthMode;
     use crate::structure_designer::nodes::atom_edit::atom_edit::compute_default_bond_length;
+    use atomcad_crystolecule::guided_placement::BondLengthMode;
 
     unsafe {
         with_cad_instance_or(
@@ -1242,8 +1242,8 @@ fn gather_selected_base_promotion_info_including_frozen(
 /// Gather promotion info for ALL frozen base atoms (not just selected ones).
 /// Used by `atom_edit_clear_frozen` and `atom_edit_frozen_to_selection`.
 fn gather_frozen_base_atoms_promotion_info(sd: &StructureDesigner) -> Vec<BaseAtomPromotionInfo> {
-    use crate::crystolecule::atomic_structure_diff::AtomSource;
     use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+    use atomcad_crystolecule::atomic_structure_diff::AtomSource;
 
     if sd.is_selected_node_in_diff_view() {
         return Vec::new();
@@ -1301,8 +1301,8 @@ fn gather_frozen_base_atoms_promotion_info(sd: &StructureDesigner) -> Vec<BaseAt
 
 /// Collect base atom IDs that are frozen in the result (for frozen_to_selection).
 fn collect_frozen_base_atom_ids(sd: &StructureDesigner) -> std::collections::HashSet<u32> {
-    use crate::crystolecule::atomic_structure_diff::AtomSource;
     use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
+    use atomcad_crystolecule::atomic_structure_diff::AtomSource;
 
     let mut result = std::collections::HashSet::new();
     if sd.is_selected_node_in_diff_view() {
@@ -1678,7 +1678,7 @@ pub fn atom_edit_set_hybridization_override(
     hybridization: crate::api::structure_designer::structure_designer_api_types::APIHybridization,
 ) {
     use crate::api::structure_designer::structure_designer_api_types::APIHybridization;
-    use crate::crystolecule::atomic_structure::atom::{
+    use atomcad_crystolecule::atomic_structure::atom::{
         HYBRIDIZATION_AUTO, HYBRIDIZATION_SP1, HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
     };
 
@@ -1736,7 +1736,7 @@ pub fn atom_edit_set_hybridization_override(
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_get_selected_hybridization() -> i8 {
     use crate::api::api_common::with_cad_instance_or;
-    use crate::crystolecule::atomic_structure::atom::HYBRIDIZATION_AUTO;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_AUTO;
 
     unsafe {
         with_cad_instance_or(
@@ -1797,10 +1797,10 @@ pub fn atom_edit_get_selected_hybridization() -> i8 {
 #[flutter_rust_bridge::frb(sync)]
 pub fn atom_edit_get_selected_inferred_hybridization() -> i8 {
     use crate::api::api_common::with_cad_instance_or;
-    use crate::crystolecule::guided_placement::{Hybridization, detect_hybridization};
     use crate::structure_designer::nodes::atom_edit::atom_edit::{
         AtomEditEvalCache, SelectionProvenance,
     };
+    use atomcad_crystolecule::guided_placement::{Hybridization, detect_hybridization};
 
     unsafe {
         with_cad_instance_or(

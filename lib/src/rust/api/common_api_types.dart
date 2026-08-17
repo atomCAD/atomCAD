@@ -7,7 +7,7 @@ import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `APIIMat2`, `APIIMat3`, `APIMat3`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
 
 class APICamera {
   final APIVec3 eye;
@@ -282,6 +282,13 @@ class ElementSummary {
           elementName == other.elementName;
 }
 
+/// Dart-facing twin of [`atomcad_crystolecule::atomic_structure::SelectModifier`].
+///
+/// The authoritative definition moved down into `atomcad-crystolecule` (D6);
+/// this declaration stays here, under its **existing** name, because that is the
+/// symbol the generated Dart already declares and Flutter already calls — see
+/// `doc/design_rust_crate_split.md` D9a, which is explicit that a down-moved
+/// type's twin must *not* be renamed to `API…`.
 enum SelectModifier {
   replace,
   toggle,

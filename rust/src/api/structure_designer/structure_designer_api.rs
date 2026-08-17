@@ -141,10 +141,6 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APILatticeSymopData, APIRotationalSymmetry, APIStructureInvertData, APIStructureMoveData,
     APIStructureRotData,
 };
-use crate::crystolecule::io::atom_export::AtomExportFormat;
-use crate::crystolecule::unit_cell_symmetries::{
-    CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
-};
 use crate::structure_designer::canvas_viewport::CanvasViewport;
 use crate::structure_designer::cli_runner;
 use crate::structure_designer::data_type::{DataType, RecordType};
@@ -239,6 +235,10 @@ use crate::structure_designer::nodes::vec2::Vec2Data;
 use crate::structure_designer::nodes::vec3::Vec3Data;
 use crate::structure_designer::nodes::zip_with::ZipWithData;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::io::atom_export::AtomExportFormat;
+use atomcad_crystolecule::unit_cell_symmetries::{
+    CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
+};
 use glam::{DVec2, DVec3, IVec2, IVec3};
 use std::collections::HashMap;
 
@@ -4421,11 +4421,11 @@ pub fn get_atom_edit_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIAtomE
 
 /// Look up the element symbol for a result-space atom.
 fn atom_symbol(
-    structure: &crate::crystolecule::atomic_structure::AtomicStructure,
+    structure: &atomcad_crystolecule::atomic_structure::AtomicStructure,
     result_id: u32,
 ) -> String {
-    use crate::crystolecule::atomic_constants::ATOM_INFO;
     use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+    use atomcad_crystolecule::atomic_constants::ATOM_INFO;
     structure
         .get_atom(result_id)
         .map(|a| {
@@ -4459,7 +4459,7 @@ fn param_element_color_u32(index: usize) -> u32 {
 /// Resolve selected atom positions and compute measurement.
 fn compute_selection_measurement(
     atom_edit_data: &AtomEditData,
-    result_structure: Option<&crate::crystolecule::atomic_structure::AtomicStructure>,
+    result_structure: Option<&atomcad_crystolecule::atomic_structure::AtomicStructure>,
     eval_cache: Option<&AtomEditEvalCache>,
     is_diff_view: bool,
 ) -> Option<APIMeasurement> {
@@ -4533,7 +4533,7 @@ fn compute_selection_measurement(
 
     // Single atom: return element info instead of a geometric measurement.
     if selected_atoms.len() == 1 {
-        use crate::crystolecule::atomic_constants::ATOM_INFO;
+        use atomcad_crystolecule::atomic_constants::ATOM_INFO;
         let atom_id = selected_atoms[0].result_atom_id;
         if let Some(atom) = result_structure.get_atom(atom_id) {
             let info = ATOM_INFO.get(&(atom.atomic_number as i32));
@@ -4544,7 +4544,7 @@ fn compute_selection_measurement(
                 .map(|i| i.element_name.clone())
                 .unwrap_or_else(|| "Unknown".to_string());
             let inferred_hybridization = {
-                use crate::crystolecule::guided_placement::{Hybridization, detect_hybridization};
+                use atomcad_crystolecule::guided_placement::{Hybridization, detect_hybridization};
                 match detect_hybridization(result_structure, atom_id, None) {
                     Hybridization::Sp3 => 1,
                     Hybridization::Sp2 => 2,
@@ -7556,7 +7556,7 @@ pub fn get_materialize_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMat
                     .get_node_network_data_scoped(&scope_path, node_id)?;
                 let materialize_data = node_data.as_any_ref().downcast_ref::<MaterializeData>()?;
 
-                use crate::crystolecule::atomic_constants::ATOM_INFO;
+                use atomcad_crystolecule::atomic_constants::ATOM_INFO;
 
                 let available_parameters = materialize_data
                     .available_parameters
@@ -7684,7 +7684,7 @@ pub fn get_motif_sub_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIMotif
                     .get_node_network_data_scoped(&scope_path, node_id)?;
                 let data = node_data.as_any_ref().downcast_ref::<MotifSubData>()?;
 
-                use crate::crystolecule::atomic_constants::ATOM_INFO;
+                use atomcad_crystolecule::atomic_constants::ATOM_INFO;
 
                 let available_parameters = data
                     .available_parameters
@@ -9253,9 +9253,9 @@ pub fn query_hovered_atom_info(
                     // Resolve effective element for display
                     let eff_z = structure.effective_atomic_number(atom);
                     let eff_str = if eff_z != atom.atomic_number {
-                        let eff_info = crate::crystolecule::atomic_constants::ATOM_INFO
+                        let eff_info = atomcad_crystolecule::atomic_constants::ATOM_INFO
                             .get(&(eff_z as i32))
-                            .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+                            .unwrap_or(&atomcad_crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
                         format!("{} ({})", eff_info.symbol, eff_info.element_name)
                     } else {
                         String::new()
@@ -9263,9 +9263,9 @@ pub fn query_hovered_atom_info(
 
                     (sym, name.clone(), atom.atomic_number as i32, eff_str)
                 } else {
-                    let atom_info = crate::crystolecule::atomic_constants::ATOM_INFO
+                    let atom_info = atomcad_crystolecule::atomic_constants::ATOM_INFO
                         .get(&(atom.atomic_number as i32))
-                        .unwrap_or(&crate::crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
+                        .unwrap_or(&atomcad_crystolecule::atomic_constants::DEFAULT_ATOM_INFO);
                     (
                         atom_info.symbol.clone(),
                         atom_info.element_name.clone(),
@@ -9289,7 +9289,7 @@ pub fn query_hovered_atom_info(
                 let per_node_hits = cad_instance.structure_designer.raytrace_per_node(
                     &ray_origin,
                     &ray_direction,
-                    visualization,
+                    &visualization.into(),
                 );
                 let overlapping_node_names: Vec<String> = per_node_hits
                     .iter()
@@ -9305,7 +9305,7 @@ pub fn query_hovered_atom_info(
                     .collect();
 
                 let inferred_hybridization = {
-                    use crate::crystolecule::guided_placement::{
+                    use atomcad_crystolecule::guided_placement::{
                         Hybridization, detect_hybridization,
                     };
                     match detect_hybridization(structure, atom_id, None) {
@@ -9380,7 +9380,7 @@ pub fn viewport_pick(ray_origin: APIVec3, ray_direction: APIVec3) -> APIViewport
                 let mut hits = cad_instance.structure_designer.raytrace_per_node(
                     &ray_origin,
                     &ray_direction,
-                    visualization,
+                    &visualization.into(),
                 );
 
                 // Click-to-activate is a **top-level-node** surface: its result

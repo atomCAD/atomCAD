@@ -1,10 +1,10 @@
 use super::atom_edit_data::*;
 use super::types::*;
-use crate::crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
-use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::UNCHANGED_ATOMIC_NUMBER;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+use atomcad_crystolecule::hydrogen_passivation::{AddHydrogensOptions, add_hydrogens};
 use glam::f64::DVec3;
 use std::collections::HashMap;
 

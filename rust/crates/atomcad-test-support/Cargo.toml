@@ -1,0 +1,20 @@
+[package]
+name = "atomcad-test-support"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# Shared test helpers (doc/design_rust_crate_split.md, D5.2 + D5.3).
+#
+# Before the crate split, `tests/test_support/structure_equivalence.rs` was
+# `#[path]`-included as a module by two separate test binaries. After the split
+# those binaries live in separate *packages*, so `#[path]` inclusion would need
+# `../../..` traversal across package boundaries; this crate replaces it with an
+# ordinary `use`.
+#
+# It is used only as a [dev-dependencies] entry, which is what makes the cycle
+# with `atomcad-crystolecule` legal.
+[dependencies]
+atomcad-crystolecule = { path = "../atomcad-crystolecule" }

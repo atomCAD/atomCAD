@@ -3,7 +3,8 @@
 // Per-fixture tests for each migration change-class. Each phase of
 // `doc/design_cnnd_migration_v2_to_v3.md` adds new fixtures here.
 
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_test_support::fixture_path_str;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, FunctionType};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -19,7 +20,13 @@ use rust_lib_flutter_cad::structure_designer::serialization::node_networks_seria
 };
 use tempfile::tempdir;
 
-const FIXTURE_DIR: &str = "tests/fixtures/lattice_space_migration";
+const FIXTURE_DIR: &str = "lattice_space_migration";
+/// `tests/fixtures/lattice_space_migration/<name>`, resolved through the shared
+/// `atomcad-test-support` resolver rather than `CARGO_MANIFEST_DIR` or a
+/// working-directory-relative string (doc/design_rust_crate_split.md, D5.3).
+fn fixture(name: &str) -> String {
+    fixture_path_str(&format!("{FIXTURE_DIR}/{name}"))
+}
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -113,9 +120,8 @@ fn materialize_node_id(registry: &NodeTypeRegistry, network_name: &str) -> u64 {
 #[test]
 fn test_load_trivial_v3_no_op() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result =
-        load_node_networks_from_file(&mut registry, &format!("{}/trivial_v3.cnnd", FIXTURE_DIR))
-            .expect("Failed to load trivial_v3.cnnd");
+    let load_result = load_node_networks_from_file(&mut registry, &fixture("trivial_v3.cnnd"))
+        .expect("Failed to load trivial_v3.cnnd");
 
     assert_eq!(load_result.first_network_name, "Main");
 
@@ -144,7 +150,7 @@ fn test_load_trivial_v3_no_op() {
 #[test]
 fn test_load_pure_rename() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(&mut registry, &format!("{}/pure_rename.cnnd", FIXTURE_DIR))
+    load_node_networks_from_file(&mut registry, &fixture("pure_rename.cnnd"))
         .expect("Failed to load pure_rename.cnnd");
 
     let network = registry
@@ -195,9 +201,8 @@ fn test_load_pure_rename() {
 #[test]
 fn test_roundtrip_pure_rename() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result =
-        load_node_networks_from_file(&mut registry, &format!("{}/pure_rename.cnnd", FIXTURE_DIR))
-            .expect("Failed to load");
+    let load_result = load_node_networks_from_file(&mut registry, &fixture("pure_rename.cnnd"))
+        .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -242,11 +247,8 @@ fn test_roundtrip_pure_rename() {
 #[test]
 fn test_load_custom_network_rename() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/custom_network.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load custom_network.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("custom_network.cnnd"))
+        .expect("Failed to load custom_network.cnnd");
 
     let my_custom = registry
         .node_networks
@@ -286,11 +288,8 @@ fn test_load_custom_network_rename() {
 #[test]
 fn test_roundtrip_custom_network_rename() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/custom_network.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result = load_node_networks_from_file(&mut registry, &fixture("custom_network.cnnd"))
+        .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -339,11 +338,8 @@ fn test_roundtrip_custom_network_rename() {
 #[test]
 fn test_load_function_type_parameter_rename() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/function_type_parameter.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load function_type_parameter.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("function_type_parameter.cnnd"))
+        .expect("Failed to load function_type_parameter.cnnd");
 
     let net = registry
         .node_networks
@@ -399,11 +395,9 @@ fn test_load_function_type_parameter_rename() {
 #[test]
 fn test_roundtrip_function_type_parameter_rename() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/function_type_parameter.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("function_type_parameter.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -470,11 +464,8 @@ fn test_roundtrip_function_type_parameter_rename() {
 #[test]
 fn test_load_atom_trans_and_lattice_symop_dropped() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/atom_trans_present.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load atom_trans_present.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("atom_trans_present.cnnd"))
+        .expect("Failed to load atom_trans_present.cnnd");
 
     let network = registry
         .node_networks
@@ -588,11 +579,9 @@ fn test_load_atom_trans_and_lattice_symop_dropped() {
 #[test]
 fn test_roundtrip_atom_trans_and_lattice_symop_dropped() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/atom_trans_present.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("atom_trans_present.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -661,11 +650,8 @@ fn test_roundtrip_atom_trans_and_lattice_symop_dropped() {
 #[test]
 fn test_load_primitive_with_lattice_adapter_synthesised() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/primitive_with_lattice.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load primitive_with_lattice.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("primitive_with_lattice.cnnd"))
+        .expect("Failed to load primitive_with_lattice.cnnd");
 
     let network = registry
         .node_networks
@@ -769,11 +755,9 @@ fn test_load_primitive_with_lattice_adapter_synthesised() {
 #[test]
 fn test_roundtrip_primitive_with_lattice() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/primitive_with_lattice.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("primitive_with_lattice.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -859,11 +843,8 @@ fn test_load_atom_fill_split() {
     use rust_lib_flutter_cad::structure_designer::nodes::materialize::MaterializeData;
 
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/atom_fill_split.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load atom_fill_split.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("atom_fill_split.cnnd"))
+        .expect("Failed to load atom_fill_split.cnnd");
 
     let network = registry
         .node_networks
@@ -1049,11 +1030,8 @@ fn test_load_atom_fill_split() {
 #[test]
 fn test_roundtrip_atom_fill_split() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/atom_fill_split.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result = load_node_networks_from_file(&mut registry, &fixture("atom_fill_split.cnnd"))
+        .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -1139,11 +1117,8 @@ fn test_roundtrip_atom_fill_split() {
 #[test]
 fn test_load_shared_unit_cell_composes_passes() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/shared_unit_cell.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load shared_unit_cell.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("shared_unit_cell.cnnd"))
+        .expect("Failed to load shared_unit_cell.cnnd");
 
     let network = registry
         .node_networks
@@ -1279,11 +1254,9 @@ fn test_load_shared_unit_cell_composes_passes() {
 #[test]
 fn test_roundtrip_shared_unit_cell() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/shared_unit_cell.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("shared_unit_cell.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -1341,11 +1314,8 @@ fn test_roundtrip_shared_unit_cell() {
 #[test]
 fn test_load_frame_transform_dropped_silently() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/frame_transform_present.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load frame_transform_present.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("frame_transform_present.cnnd"))
+        .expect("Failed to load frame_transform_present.cnnd");
 
     let network = registry
         .node_networks
@@ -1372,11 +1342,9 @@ fn test_load_frame_transform_dropped_silently() {
 #[test]
 fn test_roundtrip_frame_transform_dropped() {
     let mut registry = NodeTypeRegistry::new();
-    let load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/frame_transform_present.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load");
+    let load_result =
+        load_node_networks_from_file(&mut registry, &fixture("frame_transform_present.cnnd"))
+            .expect("Failed to load");
 
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let temp_path = temp_dir.path().join("roundtrip.cnnd");
@@ -1406,7 +1374,7 @@ fn test_roundtrip_frame_transform_dropped() {
 /// migration is accidentally re-invoked on its own output.
 #[test]
 fn test_double_migration_is_idempotent() {
-    let raw = std::fs::read_to_string(format!("{}/atom_fill_split.cnnd", FIXTURE_DIR))
+    let raw = std::fs::read_to_string(fixture("atom_fill_split.cnnd"))
         .expect("read atom_fill_split fixture");
     let mut value: serde_json::Value = serde_json::from_str(&raw).expect("parse fixture");
 
@@ -1429,7 +1397,7 @@ fn test_v3_file_skips_migration_pre_pass() {
     reset_migration_call_count();
 
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(&mut registry, &format!("{}/trivial_v3.cnnd", FIXTURE_DIR))
+    load_node_networks_from_file(&mut registry, &fixture("trivial_v3.cnnd"))
         .expect("Failed to load trivial_v3.cnnd");
 
     assert_eq!(
@@ -1446,7 +1414,7 @@ fn test_v2_file_invokes_migration_pre_pass() {
     reset_migration_call_count();
 
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(&mut registry, &format!("{}/pure_rename.cnnd", FIXTURE_DIR))
+    load_node_networks_from_file(&mut registry, &fixture("pure_rename.cnnd"))
         .expect("Failed to load pure_rename.cnnd");
 
     assert_eq!(
@@ -1464,8 +1432,7 @@ fn test_v2_file_invokes_migration_pre_pass() {
 #[test]
 fn test_corrupt_v2_produces_clear_error() {
     let mut registry = NodeTypeRegistry::new();
-    let result =
-        load_node_networks_from_file(&mut registry, &format!("{}/corrupt_v2.cnnd", FIXTURE_DIR));
+    let result = load_node_networks_from_file(&mut registry, &fixture("corrupt_v2.cnnd"));
 
     // Can't use `expect_err` here â€” `LoadResult` doesn't implement `Debug`. Match
     // explicitly and panic with the message we do have.
@@ -1524,7 +1491,7 @@ fn test_real_extrude_demo_roundtrip_smoke() {
 /// checks that survive that constraint. Reload-skips-migration is also
 /// verified via the process-wide call counter.
 fn real_sample_roundtrip_smoke(fixture_name: &str) {
-    let path = format!("{}/{}", FIXTURE_DIR, fixture_name);
+    let path = fixture(fixture_name);
 
     let mut registry = NodeTypeRegistry::new();
     let load_result = load_node_networks_from_file(&mut registry, &path)
@@ -1617,11 +1584,8 @@ fn real_sample_roundtrip_smoke(fixture_name: &str) {
 #[test]
 fn test_load_atom_fill_unwired_shape_case_c() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/atom_fill_unwired_shape.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load atom_fill_unwired_shape.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("atom_fill_unwired_shape.cnnd"))
+        .expect("Failed to load atom_fill_unwired_shape.cnnd");
 
     let network = registry
         .node_networks
@@ -1696,7 +1660,7 @@ fn test_load_atom_fill_unwired_shape_case_c() {
     // `network_validator.rs`), so the v3 network passes static validation
     // just as the v2 file did. The user-visible signal comes at evaluation
     // time: materialize.eval() returns an Error for the missing shape input.
-    let registry = load_and_validate(&format!("{}/atom_fill_unwired_shape.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("atom_fill_unwired_shape.cnnd"));
     let network = registry.node_networks.get("Main").unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
@@ -1734,11 +1698,8 @@ fn test_load_atom_fill_unwired_shape_case_c() {
 #[test]
 fn test_load_motif_offset_only_chained_case_a() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/motif_offset_only_chained.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load motif_offset_only_chained.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("motif_offset_only_chained.cnnd"))
+        .expect("Failed to load motif_offset_only_chained.cnnd");
 
     let network = registry
         .node_networks
@@ -1823,11 +1784,8 @@ fn test_load_motif_offset_only_chained_case_a() {
 #[test]
 fn test_load_motif_offset_only_unchained_case_c() {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/motif_offset_only_unchained.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load motif_offset_only_unchained.cnnd");
+    load_node_networks_from_file(&mut registry, &fixture("motif_offset_only_unchained.cnnd"))
+        .expect("Failed to load motif_offset_only_unchained.cnnd");
 
     let network = registry
         .node_networks
@@ -1900,7 +1858,7 @@ fn test_load_motif_offset_only_unchained_case_c() {
 /// motif-fix design: failure means we are silently back to diamond.
 #[test]
 fn test_load_motif_mof5_evaluation_preserves_motif() {
-    let registry = load_and_validate(&format!("{}/motif_mof5.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("motif_mof5.cnnd"));
 
     let network = registry.node_networks.get("Main").unwrap();
     assert!(
@@ -1945,7 +1903,7 @@ fn test_load_motif_mof5_evaluation_preserves_motif() {
 /// C-only (which would indicate diamond output).
 #[test]
 fn test_real_mof5_motif_survives_migration() {
-    let registry = load_and_validate(&format!("{}/real_mof5.cnnd", FIXTURE_DIR));
+    let registry = load_and_validate(&fixture("real_mof5.cnnd"));
 
     // The motif_MOF5 network is the one that owns the motif wired into its
     // atom_fill â€” that's the case-A site under test.
@@ -2050,7 +2008,7 @@ fn test_resave_roundtrip_semantically_identical_after_first_v3_save() {
 
     let temp_dir = tempdir().expect("tempdir");
     let first = save_then_normalize(
-        &format!("{}/atom_fill_split.cnnd", FIXTURE_DIR),
+        &fixture("atom_fill_split.cnnd"),
         &temp_dir.path().join("first.cnnd"),
     );
     // For the second save we have to feed the v3 output back in, not the v2

@@ -1,5 +1,5 @@
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::measurement::{
     MeasurementResult, SelectedAtomInfo, compute_measurement,
 };

@@ -1,3 +1,5 @@
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 /// Tests for continuous minimization during atom dragging (Phase 3).
 ///
 /// Verifies that:
@@ -10,8 +12,6 @@
 /// - Undo reverts the entire drag + relaxation + settle
 /// - Base atom promotion works correctly during continuous minimize
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     MoleculeData, NetworkResult,
 };
@@ -133,7 +133,7 @@ fn snapshot_positions(designer: &StructureDesigner) -> Vec<(u32, DVec3)> {
 
 /// Select a result atom by its ID (converts to base selection via provenance).
 fn select_result_atom(designer: &mut StructureDesigner, result_atom_id: u32) {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::AtomSource;
+    use atomcad_crystolecule::atomic_structure_diff::AtomSource;
     use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditEvalCache;
 
     let source = {

@@ -143,7 +143,7 @@ fn higher_subdivision_shrinks_cuboid() {
 
     // Real-space point corresponding to lattice coord (1,1,1): well inside the
     // whole cuboid (extent 2), but outside the quarter-scale one (extent 0.5).
-    let structure = rust_lib_flutter_cad::crystolecule::structure::Structure::diamond();
+    let structure = atomcad_crystolecule::structure::Structure::diamond();
     let inside_pt = structure
         .lattice_vecs
         .dvec3_lattice_to_real(&DVec3::new(1.0, 1.0, 1.0));

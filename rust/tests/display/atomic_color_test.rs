@@ -8,13 +8,13 @@
 //! selection albedo/rim stay above it, and a styled + ghosted atom routes into
 //! the transparent mesh carrying the override color.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::Vec3;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::display::atomic_tessellator::{
     AtomicTessellatorParams, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
 };

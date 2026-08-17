@@ -1,4 +1,4 @@
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_renderer::mesh::Material;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator;

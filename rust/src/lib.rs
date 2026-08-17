@@ -1,5 +1,4 @@
 pub mod api;
-pub mod crystolecule;
 pub mod display;
 pub mod expr;
 mod frb_generated;

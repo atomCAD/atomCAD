@@ -7,13 +7,13 @@
 //! `Camera` at all, so they cannot live in a crate that sits below `api`. The
 //! camera math itself moved with the crate.
 
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::api::common_api::{
     drawing_plane_up, resolve_lattice_direction_up, resolve_miller_plane_up,
 };
-use rust_lib_flutter_cad::crystolecule::drawing_plane::DrawingPlane;
-use rust_lib_flutter_cad::crystolecule::unit_cell_struct::UnitCellStruct;
 
 fn vec_approx_eq(a: DVec3, b: DVec3) -> bool {
     (a - b).length() < 1e-6

@@ -1,13 +1,13 @@
 use super::atom_edit_data::*;
 use super::types::*;
-use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::crystolecule::simulation::minimize::MinimizationConfig;
-use crate::crystolecule::simulation::minimize::{
+use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+use atomcad_crystolecule::simulation::minimize::MinimizationConfig;
+use atomcad_crystolecule::simulation::minimize::{
     minimize_with_force_field, steepest_descent_steps,
 };
-use crate::crystolecule::simulation::topology::MolecularTopology;
-use crate::crystolecule::simulation::uff::{UffForceField, VdwMode};
-use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::simulation::topology::MolecularTopology;
+use atomcad_crystolecule::simulation::uff::{UffForceField, VdwMode};
 use glam::f64::DVec3;
 use std::collections::{HashMap, HashSet};
 

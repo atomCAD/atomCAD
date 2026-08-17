@@ -1286,6 +1286,7 @@ fn function_pin_capture_propagation_survives_undo_redo() {
 // (doc/design_function_pin_roles.md, issue #408)
 // ============================================================================
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use glam::i32::IVec3;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api::build_function_pin_role_views;
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types::{
@@ -1294,7 +1295,6 @@ use rust_lib_flutter_cad::api::structure_designer::structure_designer_api_types:
 use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::{
     NodeDisplayPolicy, NodeDisplayPreferences, StructureDesignerPreferences,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::structure_designer::node_network::{
     FunctionPinDisposition, FunctionPinRole, function_pin_dispositions,
 };

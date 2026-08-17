@@ -20,7 +20,6 @@
 //! absent ⇒ the rule matches every atom.
 
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -35,6 +34,7 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::nodes::xray::depth_faded_alpha;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -357,8 +357,8 @@ fn expand_label(
 /// and a label does not use. What a param element renders as is `P1` / `P2`,
 /// matching the popup's symbol.
 fn element_symbol(structure: &AtomicStructure, atomic_number: i16) -> String {
-    use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
     use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+    use atomcad_crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 
     if structure
         .decorator()

@@ -24,10 +24,12 @@ use crate::api::structure_designer::structure_designer_api_types::APINodeEvaluat
 use crate::api::structure_designer::structure_designer_preferences::{
     AtomicStructureVisualization, StructureDesignerPreferences,
 };
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
-use crate::crystolecule::io::atom_export::AtomExportFormat;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+// The `raytrace*` entry points take the *domain* visualization mode (D6): they
+// only ever forward it to `AtomicStructure::hit_test`, so making the api layer
+// convert at its own boundary keeps one more `structure_designer -> api`
+// reference out of the tree. Path-qualified because the api twin in
+// `structure_designer_preferences` keeps the same identifier (D9a).
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::gadget::GadgetPickContext;
 use crate::structure_designer::data_type::DataType;
@@ -43,6 +45,10 @@ use crate::structure_designer::node_type::{generic_node_data_loader, generic_nod
 use crate::structure_designer::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::structure_designer::serialization::node_networks_serialization;
 use crate::structure_designer::structure_designer_scene::StructureDesignerScene;
+use atomcad_crystolecule::atomic_structure_utils::calc_selection_transform;
+use atomcad_crystolecule::io::atom_export::AtomExportFormat;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_crystolecule::visualization::AtomicStructureVisualization as DomainAtomicStructureVisualization;
 use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -5461,8 +5467,8 @@ impl StructureDesigner {
     /// This is used by direct editing mode for incremental imports.
     /// Must be called inside `with_atom_edit_undo` for undo support.
     pub fn import_xyz_into_atom_edit(&mut self, file_path: &str) -> Result<(), String> {
-        use crate::crystolecule::io::xyz_loader::load_xyz;
         use crate::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
+        use atomcad_crystolecule::io::xyz_loader::load_xyz;
 
         let atomic_structure =
             load_xyz(file_path, true).map_err(|e| format!("Failed to load XYZ file: {}", e))?;
@@ -6878,17 +6884,10 @@ impl StructureDesigner {
         &self,
         ray_origin: &DVec3,
         ray_direction: &DVec3,
-        visualization: &AtomicStructureVisualization,
+        visualization: &DomainAtomicStructureVisualization,
     ) -> Option<f64> {
         let mut min_distance: Option<f64> = None;
-        let display_visualization = match visualization {
-            AtomicStructureVisualization::BallAndStick => {
-                crate::display::preferences::AtomicStructureVisualization::BallAndStick
-            }
-            AtomicStructureVisualization::SpaceFilling => {
-                crate::display::preferences::AtomicStructureVisualization::SpaceFilling
-            }
-        };
+        let display_visualization = visualization.clone();
 
         use crate::structure_designer::structure_designer_scene::NodeOutput;
         // First, check all atomic structures in the scene
@@ -6902,7 +6901,7 @@ impl StructureDesigner {
                     match atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
-                        visualization,
+                        &display_visualization,
                         |atom| {
                             effective_displayed_atom_radius(
                                 atomic_structure,
@@ -6912,9 +6911,14 @@ impl StructureDesigner {
                         },
                         BAS_STICK_RADIUS,
                     ) {
-                        crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
-                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) =>
-                        {
+                        atomcad_crystolecule::atomic_structure::HitTestResult::Atom(
+                            _,
+                            distance,
+                        )
+                        | atomcad_crystolecule::atomic_structure::HitTestResult::Bond(
+                            _,
+                            distance,
+                        ) => {
                             // Update minimum distance if this hit is closer
                             min_distance = match min_distance {
                                 None => Some(distance),
@@ -6922,7 +6926,7 @@ impl StructureDesigner {
                                 _ => min_distance,
                             };
                         }
-                        crate::crystolecule::atomic_structure::HitTestResult::None => {}
+                        atomcad_crystolecule::atomic_structure::HitTestResult::None => {}
                     }
                 }
             }
@@ -6962,9 +6966,9 @@ impl StructureDesigner {
         ray_origin: &DVec3,
         ray_direction: &DVec3,
     ) -> Option<(u32, &AtomicStructure)> {
-        use crate::crystolecule::atomic_structure::HitTestResult;
         use crate::display::preferences as display_prefs;
         use crate::structure_designer::structure_designer_scene::NodeOutput;
+        use atomcad_crystolecule::atomic_structure::HitTestResult;
 
         let visualization = &self
             .preferences
@@ -6991,7 +6995,7 @@ impl StructureDesigner {
                     && let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
-                        visualization,
+                        &display_visualization,
                         |atom| {
                             effective_displayed_atom_radius(
                                 atomic_structure,
@@ -7019,9 +7023,9 @@ impl StructureDesigner {
         ray_origin: &DVec3,
         ray_direction: &DVec3,
     ) -> Option<(u32, &AtomicStructure, NodeRef, f64)> {
-        use crate::crystolecule::atomic_structure::HitTestResult;
         use crate::display::preferences as display_prefs;
         use crate::structure_designer::structure_designer_scene::NodeOutput;
+        use atomcad_crystolecule::atomic_structure::HitTestResult;
 
         let visualization = &self
             .preferences
@@ -7048,7 +7052,7 @@ impl StructureDesigner {
                     && let HitTestResult::Atom(atom_id, distance) = atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
-                        visualization,
+                        &display_visualization,
                         |atom| {
                             effective_displayed_atom_radius(
                                 atomic_structure,
@@ -7081,16 +7085,9 @@ impl StructureDesigner {
         &self,
         ray_origin: &DVec3,
         ray_direction: &DVec3,
-        visualization: &AtomicStructureVisualization,
+        visualization: &DomainAtomicStructureVisualization,
     ) -> Vec<PerNodeRayHit> {
-        let display_visualization = match visualization {
-            AtomicStructureVisualization::BallAndStick => {
-                crate::display::preferences::AtomicStructureVisualization::BallAndStick
-            }
-            AtomicStructureVisualization::SpaceFilling => {
-                crate::display::preferences::AtomicStructureVisualization::SpaceFilling
-            }
-        };
+        let display_visualization = visualization.clone();
 
         use crate::structure_designer::structure_designer_scene::NodeOutput;
 
@@ -7109,7 +7106,7 @@ impl StructureDesigner {
                     match atomic_structure.hit_test(
                         ray_origin,
                         ray_direction,
-                        visualization,
+                        &display_visualization,
                         |atom| {
                             effective_displayed_atom_radius(
                                 atomic_structure,
@@ -7119,16 +7116,21 @@ impl StructureDesigner {
                         },
                         BAS_STICK_RADIUS,
                     ) {
-                        crate::crystolecule::atomic_structure::HitTestResult::Atom(_, distance)
-                        | crate::crystolecule::atomic_structure::HitTestResult::Bond(_, distance) =>
-                        {
+                        atomcad_crystolecule::atomic_structure::HitTestResult::Atom(
+                            _,
+                            distance,
+                        )
+                        | atomcad_crystolecule::atomic_structure::HitTestResult::Bond(
+                            _,
+                            distance,
+                        ) => {
                             min_distance = match min_distance {
                                 None => Some(distance),
                                 Some(current_min) if distance < current_min => Some(distance),
                                 _ => min_distance,
                             };
                         }
-                        crate::crystolecule::atomic_structure::HitTestResult::None => {}
+                        atomcad_crystolecule::atomic_structure::HitTestResult::None => {}
                     }
                 }
 

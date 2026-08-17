@@ -1,7 +1,7 @@
 use crate::api::api_common::{refresh_structure_designer_auto, with_mut_cad_instance};
 use crate::api::common_api_types::APIResult;
-use crate::crystolecule::io::cif::load_cif_extended;
 use crate::structure_designer::nodes::import_cif::{ImportCifData, build_cif_import_result};
+use atomcad_crystolecule::io::cif::load_cif_extended;
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 
 #[flutter_rust_bridge::frb(sync)]

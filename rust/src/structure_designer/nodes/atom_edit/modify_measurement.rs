@@ -5,14 +5,14 @@ use glam::f64::{DQuat, DVec3};
 use super::atom_edit_data::*;
 use super::measurement::{MeasurementResult, SelectedAtomInfo, compute_measurement};
 use super::types::*;
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::atomic_structure::fragment::compute_moving_fragment;
-use crate::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use crate::crystolecule::atomic_structure_diff::AtomSource;
-use crate::crystolecule::guided_placement::{BondLengthMode, crystal_bond_length};
-use crate::crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
-use crate::crystolecule::simulation::uff::typer::{assign_uff_type, bond_order_to_f64};
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::fragment::compute_moving_fragment;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+use atomcad_crystolecule::guided_placement::{BondLengthMode, crystal_bond_length};
+use atomcad_crystolecule::simulation::uff::params::{calc_bond_rest_length, get_uff_params};
+use atomcad_crystolecule::simulation::uff::typer::{assign_uff_type, bond_order_to_f64};
 
 // =============================================================================
 // Public enums for move choice
@@ -383,8 +383,8 @@ pub fn compute_default_angle(structure_designer: &StructureDesigner) -> Option<f
 
 /// Compute UFF equilibrium bond length for two specific atoms using the actual bond order.
 fn uff_bond_length_for_atoms(
-    atom1: &crate::crystolecule::atomic_structure::Atom,
-    atom2: &crate::crystolecule::atomic_structure::Atom,
+    atom1: &atomcad_crystolecule::atomic_structure::Atom,
+    atom2: &atomcad_crystolecule::atomic_structure::Atom,
     bond_order: f64,
 ) -> Option<f64> {
     let label1 = assign_uff_type(atom1.atomic_number, atom1.bonds.as_slice()).ok()?;

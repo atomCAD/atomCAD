@@ -5,13 +5,13 @@
 //! helper from `diff_test_support.rs` (same pattern as
 //! `movement_diff_output_test.rs`).
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::IVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, MoleculeData, NetworkResult,
 };

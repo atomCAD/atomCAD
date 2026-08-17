@@ -1,6 +1,6 @@
-use crate::crystolecule::crystolecule_constants;
 use crate::display::poly_mesh::PolyMesh;
 use crate::display::preferences::MeshSmoothing;
+use atomcad_crystolecule::crystolecule_constants;
 use atomcad_renderer::line_mesh::LineMesh;
 use atomcad_renderer::mesh::{Material, Mesh, Vertex};
 use glam::DVec3;

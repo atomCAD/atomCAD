@@ -1,8 +1,8 @@
-use crate::api::common_api_types::SelectModifier;
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::atomic_structure::BondReference;
-use crate::crystolecule::atomic_structure_utils::calc_selection_transform;
 use crate::structure_designer::nodes::edit_atom::edit_atom_command::EditAtomCommand;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::BondReference;
+use atomcad_crystolecule::atomic_structure::SelectModifier;
+use atomcad_crystolecule::atomic_structure_utils::calc_selection_transform;
 use serde::{Deserialize, Serialize};
 
 /*

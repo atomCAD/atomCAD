@@ -1,8 +1,6 @@
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, DELETED_SITE_ATOMIC_NUMBER};
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
-};
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };

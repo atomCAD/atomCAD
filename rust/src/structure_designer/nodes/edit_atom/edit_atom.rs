@@ -1,11 +1,7 @@
-use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_api_types::{
     APIEditAtomTool, NodeTypeCategory,
 };
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_structure::BondReference;
-use crate::crystolecule::atomic_structure::HitTestResult;
-use crate::crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::data_type::DataType;
@@ -28,6 +24,10 @@ use crate::structure_designer::serialization::edit_atom_data_serialization::{
     SerializableEditAtomData, edit_atom_data_to_serializable, serializable_to_edit_atom_data,
 };
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::BondReference;
+use atomcad_crystolecule::atomic_structure::HitTestResult;
+use atomcad_crystolecule::atomic_structure::SelectModifier;
+use atomcad_crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
 use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 use std::io;
@@ -264,7 +264,7 @@ pub fn select_atom_or_bond_by_ray(
     match atomic_structure.hit_test(
         ray_start,
         ray_dir,
-        visualization,
+        &display_visualization,
         |atom| effective_displayed_atom_radius(atomic_structure, atom, &display_visualization),
         BAS_STICK_RADIUS,
     ) {
@@ -366,7 +366,7 @@ pub fn draw_bond_by_ray(
     let atom_id = match atomic_structure.hit_test(
         ray_start,
         ray_dir,
-        visualization,
+        &display_visualization,
         |atom| effective_displayed_atom_radius(atomic_structure, atom, &display_visualization),
         BAS_STICK_RADIUS,
     ) {

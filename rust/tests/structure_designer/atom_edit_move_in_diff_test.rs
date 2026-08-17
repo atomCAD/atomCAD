@@ -1,3 +1,6 @@
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure_diff::apply_diff;
 /// Tests for the anchor invariant in atom_edit's diff system.
 ///
 /// The critical invariant: anchors are set ONLY at promotion time (when a base
@@ -8,9 +11,6 @@
 ///
 /// See "Anchor Invariant" in atom_edit/AGENTS.md.
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 

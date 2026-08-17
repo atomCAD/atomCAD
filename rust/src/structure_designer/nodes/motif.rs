@@ -1,7 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF_TEXT;
-use crate::crystolecule::motif::Motif;
-use crate::crystolecule::motif_parser::parse_motif;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -16,6 +13,9 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::crystolecule_constants::DEFAULT_ZINCBLENDE_MOTIF_TEXT;
+use atomcad_crystolecule::motif::Motif;
+use atomcad_crystolecule::motif_parser::parse_motif;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;

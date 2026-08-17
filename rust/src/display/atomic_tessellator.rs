@@ -1,8 +1,8 @@
-use crate::crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
-use crate::crystolecule::atomic_structure::{
+use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+use atomcad_crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
+use atomcad_crystolecule::atomic_structure::{
     Atom, AtomDisplayState, AtomRenderStyle, AtomicStructure, BondReference,
 };
-use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
 use atomcad_renderer::tessellator::tessellator::{self, OccluderSphere};
 // Scene trait removed - is_atom_marked was deprecated and always returned false
 use crate::display::preferences::{
@@ -556,7 +556,7 @@ fn get_bond_color_inline(
     bond_order: u8,
     atomic_structure: &AtomicStructure,
 ) -> Vec3 {
-    use crate::crystolecule::atomic_structure::inline_bond::{
+    use atomcad_crystolecule::atomic_structure::inline_bond::{
         BOND_AROMATIC, BOND_DATIVE, BOND_METALLIC,
     };
     let base_color = match bond_order {
@@ -843,7 +843,7 @@ struct MultiBondLayout {
 
 /// Compute the cylinder offsets for multi-bond rendering.
 fn compute_multi_bond_layout(bond_order: u8, perp: DVec3, bond_axis: DVec3) -> MultiBondLayout {
-    use crate::crystolecule::atomic_structure::inline_bond::*;
+    use atomcad_crystolecule::atomic_structure::inline_bond::*;
 
     let zero = (DVec3::ZERO, 0.0);
 
@@ -1383,7 +1383,7 @@ const GUIDELINE_MARKER_MARGIN: f64 = 2.0;
 /// default half-length: the line is centered on `origin` and grown if needed so
 /// the marker is always on the drawn segment.
 fn guideline_segment_endpoints(
-    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
+    visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
 ) -> (DVec3, DVec3) {
     let half = GUIDELINE_HALF_LENGTH.max(visuals.marker_t.abs() + GUIDELINE_MARKER_MARGIN);
     let start = visuals.origin - half * visuals.direction;
@@ -1395,10 +1395,10 @@ fn guideline_segment_endpoints(
 /// into the triangle mesh. Called after atom/bond tessellation.
 pub fn tessellate_guide_placement(
     output_mesh: &mut Mesh,
-    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals,
+    visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals,
     params: &AtomicTessellatorParams,
 ) {
-    use crate::crystolecule::guided_placement::GuideDotType;
+    use atomcad_crystolecule::guided_placement::GuideDotType;
 
     for dot in &visuals.guide_dots {
         let radius = match dot.dot_type {
@@ -1436,9 +1436,9 @@ pub fn tessellate_guide_placement(
 pub fn tessellate_guide_placement_impostors(
     atom_impostor_mesh: &mut AtomImpostorMesh,
     bond_impostor_mesh: &mut BondImpostorMesh,
-    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals,
+    visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidePlacementVisuals,
 ) {
-    use crate::crystolecule::guided_placement::GuideDotType;
+    use atomcad_crystolecule::guided_placement::GuideDotType;
 
     for dot in &visuals.guide_dots {
         let radius = match dot.dot_type {
@@ -1470,7 +1470,7 @@ pub fn tessellate_guide_placement_impostors(
 /// a distinct guide color. Called after atom/bond tessellation.
 pub fn tessellate_guideline(
     output_mesh: &mut Mesh,
-    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
+    visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
     params: &AtomicTessellatorParams,
 ) {
     let (start, end) = guideline_segment_endpoints(visuals);
@@ -1505,7 +1505,7 @@ pub fn tessellate_guideline(
 pub fn tessellate_guideline_impostors(
     atom_impostor_mesh: &mut AtomImpostorMesh,
     bond_impostor_mesh: &mut BondImpostorMesh,
-    visuals: &crate::crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
+    visuals: &atomcad_crystolecule::atomic_structure::atomic_structure_decorator::GuidelineVisuals,
 ) {
     let (start, end) = guideline_segment_endpoints(visuals);
 

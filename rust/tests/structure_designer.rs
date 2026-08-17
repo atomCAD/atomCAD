@@ -131,9 +131,11 @@ mod atom_edit_move_in_diff_test;
 mod apply_diff_node_test;
 
 // Shared support for the per-node diff-output roundtrip (issue #295 Phase 2+).
-// `structure_equivalence` provides the `≡` used by `diff_test_support`.
-#[path = "test_support/structure_equivalence.rs"]
-mod structure_equivalence;
+// `structure_equivalence` provides the `≡` used by `diff_test_support`. It lives
+// in the `atomcad-test-support` crate rather than a `#[path]` include: the two
+// harnesses that need it are now in separate packages
+// (doc/design_rust_crate_split.md, D5.2).
+use atomcad_test_support::structure_equivalence;
 
 #[path = "structure_designer/diff_test_support.rs"]
 mod diff_test_support;

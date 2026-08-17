@@ -5,9 +5,9 @@
 **IMPORTANT:** When working on files in these directories (or any of their subdirectories), always read the corresponding AGENTS.md file first:
 
 - Working in `rust/` or any descendant (e.g., `rust/src/`, `rust/src/structure_designer/`, etc.) → Read `rust/AGENTS.md`
-- Working in `rust/src/crystolecule/` or any descendant → Also read `rust/src/crystolecule/AGENTS.md`
-- Working in `rust/src/crystolecule/simulation/` or any descendant → Also read `rust/src/crystolecule/simulation/AGENTS.md`
-- Working in `rust/src/crystolecule/simulation/uff/` → Also read `rust/src/crystolecule/simulation/uff/AGENTS.md`
+- Working in `rust/crates/atomcad-crystolecule/` or any descendant → Also read `rust/crates/atomcad-crystolecule/src/AGENTS.md`
+- Working in `rust/crates/atomcad-crystolecule/src/simulation/` or any descendant → Also read `rust/crates/atomcad-crystolecule/src/simulation/AGENTS.md`
+- Working in `rust/crates/atomcad-crystolecule/src/simulation/uff/` → Also read `rust/crates/atomcad-crystolecule/src/simulation/uff/AGENTS.md`
 - Working in `rust/crates/atomcad-geo-tree/` or any descendant → Also read `rust/crates/atomcad-geo-tree/src/AGENTS.md`
 - Working in `rust/src/structure_designer/` or any descendant → Also read `rust/src/structure_designer/AGENTS.md`
 - Working in `rust/src/structure_designer/undo/` or any descendant → Also read `rust/src/structure_designer/undo/AGENTS.md`
@@ -41,7 +41,7 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 │  rust/src/                                                   │
 │  ├── api/                # Public API exposed to Flutter    │
 │  ├── structure_designer/ # Node network system, evaluator   │
-│  ├── crystolecule/       # Atomic structures library        │
+│  ├── (crystolecule → rust/crates/atomcad-crystolecule)      │
 │  ├── (geo_tree → rust/crates/atomcad-geo-tree: CSG, SDF)    │
 │  ├── (renderer → rust/crates/atomcad-renderer: wgpu)        │
 │  ├── display/            # Domain→renderer adapter          │

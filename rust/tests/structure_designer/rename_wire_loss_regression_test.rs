@@ -37,6 +37,7 @@
 //!
 //! These assertions are expected to FAIL until the bug is fixed.
 
+use atomcad_test_support::fixture_path_str;
 use glam::DVec2;
 use rust_lib_flutter_cad::structure_designer::canonicalize;
 use rust_lib_flutter_cad::structure_designer::data_type::{DataType, RecordType};
@@ -47,12 +48,12 @@ use rust_lib_flutter_cad::structure_designer::nodes::closure::ClosureData;
 use rust_lib_flutter_cad::structure_designer::nodes::collect::CollectData;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
-const FIXTURE: &str = "tests/fixtures/rename_wire_loss/before.cnnd";
+const FIXTURE: &str = "rename_wire_loss/before.cnnd";
 
 fn load_designer() -> StructureDesigner {
     let mut designer = StructureDesigner::new();
     designer
-        .load_node_networks(FIXTURE)
+        .load_node_networks(&fixture_path_str(FIXTURE))
         .unwrap_or_else(|e| panic!("fixture failed to load: {}", e));
     designer
 }
@@ -184,12 +185,12 @@ fn record_def_rename_does_not_drop_unrelated_wires() {
 // fold, foreach, collect, product, record_construct, record_destructure) are
 // affected.
 
-const MINIMAL_FIXTURE: &str = "tests/fixtures/rename_wire_loss/minimal.cnnd";
+const MINIMAL_FIXTURE: &str = "rename_wire_loss/minimal.cnnd";
 
 fn load_minimal() -> StructureDesigner {
     let mut designer = StructureDesigner::new();
     designer
-        .load_node_networks(MINIMAL_FIXTURE)
+        .load_node_networks(&fixture_path_str(MINIMAL_FIXTURE))
         .unwrap_or_else(|e| panic!("minimal fixture failed to load: {}", e));
     designer
 }

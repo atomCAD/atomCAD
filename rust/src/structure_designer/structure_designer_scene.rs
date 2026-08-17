@@ -1,12 +1,12 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::drawing_plane::DrawingPlane;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::display::poly_mesh::PolyMesh;
 use crate::display::surface_point_cloud::SurfacePointCloud;
 use crate::display::surface_point_cloud::SurfacePointCloud2D;
 use crate::structure_designer::eval_errors::ErrorOrigin;
 use crate::structure_designer::evaluator::network_result::Alignment;
 use crate::structure_designer::node_network::NodeRef;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
 use atomcad_renderer::tessellator::tessellator::Tessellatable;
 use atomcad_util::memory_bounded_lru_cache::MemoryBoundedLruCache;

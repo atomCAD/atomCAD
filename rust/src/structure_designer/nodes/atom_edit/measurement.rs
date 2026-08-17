@@ -1,4 +1,4 @@
-use crate::crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use glam::f64::DVec3;
 
 /// Result of a selection-based measurement.

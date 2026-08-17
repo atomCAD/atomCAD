@@ -1,7 +1,5 @@
 // Materialize: carves atoms out of a Blueprint's structure using the blueprint's geometry.
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_constants::{ALLOWED_PASSIVANTS, is_allowed_passivant};
-use crate::crystolecule::motif_parser::parse_parameter_element_values;
 use crate::structure_designer::common_constants::{
     REAL_IMPLICIT_VOLUME_MAX, REAL_IMPLICIT_VOLUME_MIN,
 };
@@ -19,6 +17,8 @@ use crate::structure_designer::node_type::{
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::atomic_constants::{ALLOWED_PASSIVANTS, is_allowed_passivant};
+use atomcad_crystolecule::motif_parser::parse_parameter_element_values;
 use atomcad_util::daabox::DAABox;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 // Import the lattice fill algorithm
-use crate::crystolecule::lattice_fill::{
+use atomcad_crystolecule::lattice_fill::{
     DEFAULT_REGION_MARGIN, LatticeFillConfig, LatticeFillOptions, RegionSpec, fill_lattice,
 };
 

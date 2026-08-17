@@ -17,8 +17,8 @@
 //! The end-to-end behavior-preservation gate lives in `refresh_pipeline_test.rs`
 //! (Phase 0), which is driven through `StructureDesigner::refresh`.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
 use rust_lib_flutter_cad::structure_designer::node_network::NodeRef;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
     NodeOutput, NodeSceneData, StructureDesignerScene,

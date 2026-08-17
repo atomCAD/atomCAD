@@ -13,6 +13,9 @@
 
 use crate::api::common_api_types::APIIVec3;
 use crate::structure_designer::layout::LayoutAlgorithm;
+// Path-qualified rather than imported bare: the api-side twin deliberately keeps
+// the same identifier (D9a).
+use atomcad_crystolecule::visualization::AtomicStructureVisualization as DomainAtomicStructureVisualization;
 use flutter_rust_bridge::frb;
 use serde::{Deserialize, Serialize};
 
@@ -138,12 +141,61 @@ pub struct NodeDisplayPreferences {
     pub display_policy: NodeDisplayPolicy,
 }
 
+/// Dart-facing twin of [`atomcad_crystolecule::visualization::AtomicStructureVisualization`].
+///
+/// The authoritative definition moved down into `atomcad-crystolecule` (D6),
+/// because `AtomicStructure::hit_test` needs it and the old
+/// `crystolecule → api` import was one of the four back-edges this refactor
+/// exists to delete. This declaration stays here under its **existing** name —
+/// it is what the generated Dart declares (D9a) — and it stays in *this* file so
+/// the generated Dart path does not move either.
+///
+/// D6 splits the preferences module deliberately: only this one enum leaves in
+/// Phase 4; the other 12 `pub` types here follow in Phase 6 (D9.2).
 #[frb]
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize, Default)]
 pub enum AtomicStructureVisualization {
     #[default]
     BallAndStick,
     SpaceFilling,
+}
+
+impl From<&AtomicStructureVisualization> for DomainAtomicStructureVisualization {
+    fn from(v: &AtomicStructureVisualization) -> Self {
+        match v {
+            AtomicStructureVisualization::BallAndStick => {
+                DomainAtomicStructureVisualization::BallAndStick
+            }
+            AtomicStructureVisualization::SpaceFilling => {
+                DomainAtomicStructureVisualization::SpaceFilling
+            }
+        }
+    }
+}
+
+impl From<AtomicStructureVisualization> for DomainAtomicStructureVisualization {
+    fn from(v: AtomicStructureVisualization) -> Self {
+        (&v).into()
+    }
+}
+
+impl From<&DomainAtomicStructureVisualization> for AtomicStructureVisualization {
+    fn from(v: &DomainAtomicStructureVisualization) -> Self {
+        match v {
+            DomainAtomicStructureVisualization::BallAndStick => {
+                AtomicStructureVisualization::BallAndStick
+            }
+            DomainAtomicStructureVisualization::SpaceFilling => {
+                AtomicStructureVisualization::SpaceFilling
+            }
+        }
+    }
+}
+
+impl From<DomainAtomicStructureVisualization> for AtomicStructureVisualization {
+    fn from(v: DomainAtomicStructureVisualization) -> Self {
+        (&v).into()
+    }
 }
 
 #[frb]

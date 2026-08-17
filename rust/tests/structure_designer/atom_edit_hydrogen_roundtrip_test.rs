@@ -1,3 +1,5 @@
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 /// Regression test for hydrogen depassivation → passivation in the same atom_edit node.
 ///
 /// Bug: `add_hydrogen_atom_edit` stored base parent info keyed by result_id but
@@ -8,8 +10,6 @@
 /// The bug only manifested when both operations happened in the same atom_edit
 /// node because separate nodes produce fresh structures with contiguous IDs.
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     MoleculeData, NetworkResult,
 };

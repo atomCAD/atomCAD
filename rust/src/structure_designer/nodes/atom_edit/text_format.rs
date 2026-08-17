@@ -9,15 +9,15 @@
 //! - `bond A-B order_name` — bond
 //! - `unbond A-B` — bond delete marker
 
-use crate::crystolecule::atomic_constants::{ATOM_INFO, CHEMICAL_ELEMENTS, DEFAULT_ATOM_INFO};
-use crate::crystolecule::atomic_structure::inline_bond::{
+use crate::structure_designer::text_format::format_float;
+use atomcad_crystolecule::atomic_constants::{ATOM_INFO, CHEMICAL_ELEMENTS, DEFAULT_ATOM_INFO};
+use atomcad_crystolecule::atomic_structure::inline_bond::{
     BOND_AROMATIC, BOND_DATIVE, BOND_DELETED, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
     BOND_SINGLE, BOND_TRIPLE,
 };
-use crate::crystolecule::atomic_structure::{
+use atomcad_crystolecule::atomic_structure::{
     AtomicStructure, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
 };
-use crate::structure_designer::text_format::format_float;
 use glam::f64::DVec3;
 use std::collections::HashMap;
 

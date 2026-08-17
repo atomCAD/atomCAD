@@ -26,6 +26,7 @@
 //! applied through `mynet` (which maps `x + val`, `val = 4`) and `collect`ed,
 //! expecting `[4, 5, …, 13]`.
 
+use atomcad_test_support::fixture_path_str;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -33,7 +34,7 @@ use rust_lib_flutter_cad::structure_designer::evaluator::network_result::Network
 use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 
-const FIXTURE: &str = "tests/fixtures/apply_function_pin/apply_over_custom_network_iter.cnnd";
+const FIXTURE: &str = "apply_function_pin/apply_over_custom_network_iter.cnnd";
 
 fn only_node_id(network: &NodeNetwork, node_type_name: &str) -> u64 {
     let ids: Vec<u64> = network
@@ -55,7 +56,7 @@ fn only_node_id(network: &NodeNetwork, node_type_name: &str) -> u64 {
 fn load_designer() -> StructureDesigner {
     let mut designer = StructureDesigner::new();
     designer
-        .load_node_networks(FIXTURE)
+        .load_node_networks(&fixture_path_str(FIXTURE))
         .unwrap_or_else(|e| panic!("fixture failed to load: {}", e));
     designer
 }

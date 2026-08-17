@@ -1,9 +1,9 @@
-use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use crate::structure_designer::node_data::NodeData;
 use crate::structure_designer::nodes::atom_edit::diff_recorder::{
     AtomDelta, BondDelta, CrossCellBondDelta,
 };
 use crate::structure_designer::undo::{UndoCommand, UndoContext, UndoRefreshMode};
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
 
 /// Command for undoing/redoing atom_edit diff mutations.
 ///

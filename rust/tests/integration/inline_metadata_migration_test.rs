@@ -5,6 +5,7 @@
 // 2. Flags roundtrip: serialize atom_edit with flags, deserialize, verify flags survived.
 // 3. Atom flags persist in diff structure: bare serializable atom flags round-trip.
 
+use atomcad_test_support::fixture_path_str;
 use glam::f64::DVec3;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::AtomEditData;
@@ -13,7 +14,13 @@ use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_seri
 };
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
 
-const FIXTURE_DIR: &str = "tests/fixtures/inline_metadata_migration";
+const FIXTURE_DIR: &str = "inline_metadata_migration";
+/// `tests/fixtures/inline_metadata_migration/<name>`, resolved through the shared
+/// `atomcad-test-support` resolver rather than `CARGO_MANIFEST_DIR` or a
+/// working-directory-relative string (doc/design_rust_crate_split.md, D5.3).
+fn fixture(name: &str) -> String {
+    fixture_path_str(&format!("{FIXTURE_DIR}/{name}"))
+}
 
 /// Load the old-format fixture and verify that the backward-compat migration
 /// applies old map entries to inline diff atom flags.
@@ -31,11 +38,9 @@ const FIXTURE_DIR: &str = "tests/fixtures/inline_metadata_migration";
 #[test]
 fn load_old_format_metadata_maps() {
     let mut registry = NodeTypeRegistry::new();
-    let _load_result = load_node_networks_from_file(
-        &mut registry,
-        &format!("{}/old_format_metadata.cnnd", FIXTURE_DIR),
-    )
-    .expect("Failed to load old_format_metadata.cnnd");
+    let _load_result =
+        load_node_networks_from_file(&mut registry, &fixture("old_format_metadata.cnnd"))
+            .expect("Failed to load old_format_metadata.cnnd");
 
     let network = registry
         .node_networks

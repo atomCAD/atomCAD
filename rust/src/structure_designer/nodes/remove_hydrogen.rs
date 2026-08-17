@@ -1,8 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::hydrogen_passivation::{
-    RemoveHydrogensOptions, remove_hydrogens_filtered,
-};
-use crate::crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::map_atomic_in_region;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -16,6 +12,10 @@ use crate::structure_designer::node_type::{
 };
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::hydrogen_passivation::{
+    RemoveHydrogensOptions, remove_hydrogens_filtered,
+};
+use atomcad_crystolecule::lattice_fill::DEFAULT_REGION_MARGIN;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

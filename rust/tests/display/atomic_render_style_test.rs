@@ -8,15 +8,14 @@
 //! and `hit_test`'s per-atom bond pickability. No-override scenes stay
 //! byte-identical to the legacy single-global-mode behavior.
 
+use atomcad_crystolecule::atomic_structure::{
+    Atom, AtomRenderStyle, AtomicStructure, HitTestResult,
+};
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization as ApiVisualization;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    Atom, AtomRenderStyle, AtomicStructure, HitTestResult,
-};
 use rust_lib_flutter_cad::display::atomic_tessellator::{
     AtomicTessellatorParams, BAS_STICK_RADIUS, effective_displayed_atom_radius,
     get_displayed_atom_radius, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
@@ -383,7 +382,7 @@ fn hit_test_styled_space_filling_atom_picked_at_vdw_radius() {
     let hit = s.hit_test(
         &DVec3::new(offset, 0.0, 10.0),
         &DVec3::new(0.0, 0.0, -1.0),
-        &ApiVisualization::BallAndStick,
+        &BS,
         effective_radius(&s, BS),
         BAS_STICK_RADIUS,
     );
@@ -406,7 +405,7 @@ fn hit_test_mixed_bond_is_pickable() {
     let hit = s.hit_test(
         &DVec3::new(2.5, 0.0, 10.0),
         &DVec3::new(0.0, 0.0, -1.0),
-        &ApiVisualization::SpaceFilling,
+        &SF,
         effective_radius(&s, SF),
         BAS_STICK_RADIUS,
     );
@@ -428,7 +427,7 @@ fn hit_test_overstretched_space_filling_bond_not_pickable() {
     let hit = s.hit_test(
         &DVec3::new(2.5, 0.0, 10.0),
         &DVec3::new(0.0, 0.0, -1.0),
-        &ApiVisualization::SpaceFilling,
+        &SF,
         effective_radius(&s, SF),
         BAS_STICK_RADIUS,
     );
@@ -451,7 +450,7 @@ fn hit_test_no_overrides_ball_and_stick_bond_pickable() {
     let hit = s.hit_test(
         &DVec3::new(1.5, 0.0, 10.0),
         &DVec3::new(0.0, 0.0, -1.0),
-        &ApiVisualization::BallAndStick,
+        &BS,
         radius_fn,
         BAS_STICK_RADIUS,
     );

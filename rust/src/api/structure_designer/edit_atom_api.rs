@@ -25,7 +25,7 @@ pub fn select_atom_or_bond_by_ray(
                     &mut cad_instance.structure_designer,
                     &ray_start_vec3,
                     &ray_dir_vec3,
-                    select_modifier,
+                    (&select_modifier).into(),
                 );
                 // Edit atom operations modify the edit_atom node's internal state
                 refresh_structure_designer_auto(cad_instance);

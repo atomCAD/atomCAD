@@ -14,9 +14,9 @@ Dependencies flow downward (no circular dependencies):
 ├──────────────────────────┴──────────────────────────┤
 │  crystolecule  │  geo_tree   │  renderer  │   expr  │
 │  (Atoms/bonds) │  (CSG/SDF)  │   (wgpu)   │  (Lang) │
-│                │  extracted  │  extracted │         │
-│                │ atomcad-    │ atomcad-   │         │
-│                │  geo-tree   │  renderer  │         │
+│   extracted    │  extracted  │  extracted │         │
+│   atomcad-     │ atomcad-    │ atomcad-   │         │
+│  crystolecule  │  geo-tree   │  renderer  │         │
 ├─────────────────────────────────────────────────────┤
 │         util  →  crate `atomcad-util` (extracted)    │
 └─────────────────────────────────────────────────────┘
@@ -25,7 +25,6 @@ Dependencies flow downward (no circular dependencies):
 ## Key Modules
 
 - **structure_designer/** - Node network, evaluator, serialization (.cnnd) (see `src/structure_designer/AGENTS.md`)
-- **crystolecule/** - Atomic structures, unit cells, motifs, lattice operations (see `src/crystolecule/AGENTS.md`)
 - **display/** - Tessellates domain objects (atoms, geometry) into meshes
 - **expr/** - Expression language (lexer, parser, validation)
 - **api/** - Flutter Rust Bridge API layer
@@ -42,6 +41,26 @@ Dependencies flow downward (no circular dependencies):
   and `blake3`; note `src/display/csg_to_poly_mesh.rs` still names `csgrs` /
   `geo` / `nalgebra` directly, so those three also stay in the root manifest
   until `atomcad-display` is extracted.
+- **`crates/atomcad-crystolecule/`** - was `src/crystolecule/`; atomic
+  structures, unit cells, motifs, lattice operations, CIF/XYZ/MOL I/O, UFF
+  simulation (see `crates/atomcad-crystolecule/src/AGENTS.md`). Depends on
+  `atomcad-util` and `atomcad-geo-tree` — `GeoNode` is the SDF input to
+  `fill_lattice()` — and on nothing above it: the "never depend on `renderer` or
+  `display` here" constraint is now enforced by the compiler rather than by
+  review. Imported as `atomcad_crystolecule::…` (**not**
+  `crate::crystolecule::…`), including from tests. Its own tests live in
+  `crates/atomcad-crystolecule/tests/crystolecule/`.
+
+  Phase 4 also moved two Dart-facing types **down** into it (the old
+  `crystolecule → api` back-edge): `SelectModifier`
+  (`atomic_structure`) and `AtomicStructureVisualization` (`visualization`).
+  Each keeps a same-named twin in `api/` with `From` impls both ways — see the
+  twin-pattern bullet below. `display::preferences` no longer declares its own
+  third copy of `AtomicStructureVisualization`; it re-exports this crate's.
+- **`crates/atomcad-test-support/`** - shared test helpers, never a runtime
+  dependency: `assert_structures_equivalent` (the `≡` used by two harnesses that
+  are now in different packages) and `fixture_path` / `fixture_path_str` /
+  `fixtures_root`, the **only** correct way to address `rust/tests/fixtures/`.
 - **`crates/atomcad-renderer/`** - was `src/renderer/`; wgpu rendering, shaders
   (`*.wgsl`), mesh management, camera math. Depends on `atomcad-util` only.
   Imported as `atomcad_renderer::…` (**not** `crate::renderer::…`), including
@@ -63,9 +82,10 @@ builds) **and** the workspace root. Extracted crates live in `rust/crates/` and
 are picked up by the `members = ["crates/*"]` glob. This is step 0 of
 `doc/design_rust_crate_split.md`, which converts the top-level modules into
 crates so the dependency DAG above becomes compiler-enforced rather than
-convention-enforced. `atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2) and
-`atomcad-renderer` (Phase 3) are extracted; the remaining modules follow in
-Phases 4-6.
+convention-enforced. `atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2),
+`atomcad-renderer` (Phase 3) and `atomcad-crystolecule` (Phase 4, together with
+the `atomcad-test-support` dev-only helper crate) are extracted; `display` and
+`structure_designer` (with `expr`) follow in Phases 5-6.
 
 Rules that follow from that layout:
 
@@ -102,6 +122,34 @@ Rules that follow from that layout:
 - Committed generated artifacts should be regenerable *in place* after a move:
   re-run the generator and confirm a byte-identical diff. That is the only real
   proof both the read path and the write path survived.
+- **A Dart-facing type that moves down keeps a same-named twin in `api/`, and the
+  twin is *not* renamed to `API…`.** A `pub use` re-export does **not** make a
+  type visible to flutter_rust_bridge (its `pub_use_transformer` returns early
+  for the self crate), and an unresolvable type degrades to
+  `abstract class X implements RustOpaqueInterface {}` **silently** — codegen
+  exits 0. So the authoritative definition goes to the lower crate, the
+  declaration in `api/` stays where and as it is, and `From` impls (declared in
+  the `api/` file, where both types are in scope) convert at the boundary. Where
+  a file needs both in scope, path-qualify the domain one
+  (`… as DomainSelectModifier`) rather than renaming the api one — renaming it
+  would rename the generated Dart symbol and break Flutter. `SelectModifier` and
+  `AtomicStructureVisualization` are the worked examples.
+- **Two flutter_rust_bridge facts worth knowing before they cost you a day:** a
+  bare `#[frb]` on a type is a **no-op** (it parses to `Noop` and is never read),
+  and regenerating without an error proves nothing. After any phase that moves a
+  type, run `flutter_rust_bridge_codegen generate`, then `cargo fmt` (codegen
+  runs its own rustfmt without the 2024 style edition and leaves
+  `frb_generated.rs` spuriously dirty), then read
+  `git diff --numstat lib/src/rust rust/src/frb_generated.rs` — `git status`
+  always shows all six generated files as modified because codegen writes LF
+  where the index holds CRLF.
+- **Fixtures: use the resolver.** `rust/tests/fixtures/` is read from three
+  packages and stays where it is. Address it only through
+  `atomcad_test_support::fixture_path` / `fixture_path_str` / `fixtures_root`.
+  A local `env!("CARGO_MANIFEST_DIR")` join or a bare
+  `"tests/fixtures/…"` string is anchored to the *package* root and means
+  something different in every member crate. These failures are loud
+  (file-not-found panics), but they are also entirely avoidable.
 
 ## Adding a New Node Type
 
@@ -147,7 +195,7 @@ See `src/structure_designer/AGENTS.md` (Zones) for the body model and `walk_all_
 
 When adding new functionality to the Rust codebase:
 
-1. **Write tests for new core logic** - especially for functions in `structure_designer/`, `crystolecule/`, `geo_tree/`, `expr/`, etc.
+1. **Write tests for new core logic** - especially for functions in `structure_designer/`, `expr/`, and the extracted crates (`atomcad-crystolecule`, `atomcad-geo-tree`, …)
 2. **Tests go in `rust/tests/`** (or, for an extracted crate, in that crate's
    own `crates/<crate>/tests/`), NOT inline in source files
 3. **Mirror the source file hierarchy** in the test directory:
@@ -160,7 +208,7 @@ When adding new functionality to the Rust codebase:
    ```
 5. Follow the existing folder structure:
    - `rust/tests/structure_designer/` - Structure designer tests
-   - `rust/tests/crystolecule/` - Atomic structure tests
+   - `rust/crates/atomcad-crystolecule/tests/crystolecule/` - Atomic structure tests
    - `rust/crates/atomcad-geo-tree/tests/geo_tree/` - Geometry tests
    - `rust/crates/atomcad-renderer/tests/renderer/` - GPU-free renderer tests
      (camera math, label layout, impostor meshes, transparent sort)
@@ -171,7 +219,8 @@ When adding new functionality to the Rust codebase:
      into `api` / `crystolecule` and so cannot live in `atomcad-renderer`
 
    An extracted crate keeps the module's original directory name inside its
-   `tests/` (`atomcad-geo-tree/tests/geo_tree/`, beside `tests/geo_tree.rs`).
+   `tests/` (`atomcad-crystolecule/tests/crystolecule/`, beside
+   `tests/crystolecule.rs`).
    The apparent redundancy is load-bearing: it keeps every `#[path]` string and
    every `CARGO_MANIFEST_DIR`-relative test-data path valid across the move
    (design doc D5.1). Do not tidy it.
@@ -196,7 +245,10 @@ When adding new functionality to the Rust codebase:
 cd rust && cargo test                    # Run all tests
 cd rust && cargo test <test_name>        # Run specific test
 cd rust && cargo test --test structure_designer  # Run tests in a specific test crate
+cd rust && cargo test -p atomcad-crystolecule    # Run one crate's tests (no api, no frb_generated)
 ```
+
+Never `cargo test` with full parallelism on the Windows dev box — use `-j 4`.
 
 ## Debugging
 

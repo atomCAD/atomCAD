@@ -1,16 +1,16 @@
 use super::atom_edit_data::*;
 use super::types::*;
-use crate::api::common_api_types::SelectModifier;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::crystolecule::atomic_structure::HitTestResult;
-use crate::crystolecule::atomic_structure_diff::AtomSource;
 use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
 use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
+use atomcad_crystolecule::atomic_structure::HitTestResult;
+use atomcad_crystolecule::atomic_structure::SelectModifier;
+use atomcad_crystolecule::atomic_structure_diff::AtomSource;
 use glam::f64::{DMat4, DVec2, DVec3, DVec4};
 use std::collections::{HashMap, HashSet};
 
-use crate::crystolecule::atomic_structure::BondReference;
+use atomcad_crystolecule::atomic_structure::BondReference;
 
 /// Select an atom or bond by ray hit test.
 ///
@@ -44,7 +44,7 @@ pub fn select_atom_or_bond_by_ray(
         result_structure.hit_test(
             ray_start,
             ray_dir,
-            visualization,
+            &display_visualization,
             |atom| effective_displayed_atom_radius(result_structure, atom, &display_visualization),
             BAS_STICK_RADIUS,
         )

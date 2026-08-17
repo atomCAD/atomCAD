@@ -1,5 +1,5 @@
+use atomcad_crystolecule::guided_placement::BondLengthMode;
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::guided_placement::BondLengthMode;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AngleMoveChoice, AtomEditData, DihedralMoveChoice, DistanceMoveChoice, SelectionProvenance,
     compute_default_angle, compute_default_bond_length, modify_angle, modify_dihedral,

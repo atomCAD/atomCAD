@@ -5,7 +5,6 @@ use std::time::SystemTime;
 
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
-use crate::crystolecule::atomic_structure::AtomicStructure;
 use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
 use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
@@ -29,6 +28,7 @@ use crate::structure_designer::nodes::facet_shell::FacetShellData;
 use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,
 };
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::csg_cache::CsgConversionCache;
 
@@ -36,7 +36,7 @@ use super::network_result::input_missing_error;
 use super::network_result::{
     Alignment, BlueprintData, GeometrySummary2D, propagate_alignment_with_reason,
 };
-use crate::crystolecule::structure::Structure;
+use atomcad_crystolecule::structure::Structure;
 use atomcad_util::transform::Transform2D;
 use glam::f64::DVec2;
 

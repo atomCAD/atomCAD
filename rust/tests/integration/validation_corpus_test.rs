@@ -36,7 +36,10 @@ use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesig
 use std::path::{Path, PathBuf};
 
 fn fixtures_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
+    // The shared resolver, not a local `CARGO_MANIFEST_DIR` join: the fixture
+    // tree is read from three packages now and only one of them is this one
+    // (doc/design_rust_crate_split.md, D5.3).
+    atomcad_test_support::fixtures_root()
 }
 
 /// All `.cnnd` files under `tests/fixtures`, recursively, sorted by their

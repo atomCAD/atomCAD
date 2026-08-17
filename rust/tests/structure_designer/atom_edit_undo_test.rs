@@ -1,13 +1,13 @@
+use atomcad_crystolecule::atomic_structure::inline_bond::{BOND_DOUBLE, BOND_SINGLE};
+use atomcad_crystolecule::atomic_structure::{
+    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
+};
 /// Tests for the atom_edit undo/redo system (Phases A-E).
 ///
 /// Verifies that the DiffRecorder captures deltas correctly and that
 /// AtomEditMutationCommand can undo/redo atom and bond operations,
 /// including drag coalescing (Phase C) and complex operations (Phase D).
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{BOND_DOUBLE, BOND_SINGLE};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, BondReference, DELETED_SITE_ATOMIC_NUMBER, UNCHANGED_ATOMIC_NUMBER,
-};
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
     AtomEditData, begin_atom_edit_drag, end_atom_edit_drag, get_atom_edit_node_info_pub,
     with_atom_edit_undo,
@@ -2801,7 +2801,7 @@ fn evaluate_atom_edit_output(designer: &StructureDesigner) -> AtomicStructure {
 
 #[test]
 fn hybridization_override_appears_on_diff_view_output_atoms() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
 
     let mut designer = setup_atom_edit();
 
@@ -2834,7 +2834,7 @@ fn hybridization_override_appears_on_diff_view_output_atoms() {
 
 #[test]
 fn hybridization_override_appears_on_pin1_diff_output() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
 
     let mut designer = setup_atom_edit();
 
@@ -2867,7 +2867,7 @@ fn hybridization_override_appears_on_pin1_diff_output() {
 /// `flags` field on `BaseAtomPromotionInfo`.
 #[test]
 fn hybridization_override_migrated_on_base_atom_promotion() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
     use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
         MoleculeData, NetworkResult,
     };
@@ -3145,9 +3145,7 @@ fn copy_not_merge_unfreezes_base_atom() {
 /// not Sp1 (which OR-merge would produce: 01 | 10 = 11).
 #[test]
 fn copy_not_merge_hybridization_no_corruption() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
-        HYBRIDIZATION_SP2, HYBRIDIZATION_SP3,
-    };
+    use atomcad_crystolecule::atomic_structure::atom::{HYBRIDIZATION_SP2, HYBRIDIZATION_SP3};
 
     let mut base = AtomicStructure::new();
     let base_id = base.add_atom(6, DVec3::ZERO);
@@ -3176,9 +3174,7 @@ fn copy_not_merge_hybridization_no_corruption() {
 /// (Impossible under OR-merge.)
 #[test]
 fn clearing_hybridization_to_auto_works() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
-        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3,
-    };
+    use atomcad_crystolecule::atomic_structure::atom::{HYBRIDIZATION_AUTO, HYBRIDIZATION_SP3};
 
     let mut base = AtomicStructure::new();
     let base_id = base.add_atom(6, DVec3::ZERO);
@@ -3207,7 +3203,7 @@ fn clearing_hybridization_to_auto_works() {
 /// Verify no new diff atom is created; existing atom's flags are updated.
 #[test]
 fn override_on_existing_diff_atom_no_promotion() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
 
     let mut designer = setup_atom_edit();
 
@@ -3241,7 +3237,7 @@ fn override_on_existing_diff_atom_no_promotion() {
 /// Verify both flags appear on the result atom.
 #[test]
 fn eval_pin0_flags_flow_through() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
 
     let mut designer = setup_atom_edit();
 
@@ -3266,7 +3262,7 @@ fn eval_pin0_flags_flow_through() {
 /// Flags should already be on the cloned diff atoms.
 #[test]
 fn eval_pin1_flags_flow_through() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP2;
 
     let mut designer = setup_atom_edit();
 
@@ -3337,9 +3333,7 @@ fn undo_freeze_via_mutation_command() {
 /// Set hybridization via recorded method + undo wrapper. Undo. Verify restored.
 #[test]
 fn undo_hybridization_via_mutation_command() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::{
-        HYBRIDIZATION_AUTO, HYBRIDIZATION_SP2,
-    };
+    use atomcad_crystolecule::atomic_structure::atom::{HYBRIDIZATION_AUTO, HYBRIDIZATION_SP2};
 
     let mut designer = setup_atom_edit();
 
@@ -3425,7 +3419,7 @@ fn undo_promotion_for_override() {
 /// Full undo→redo cycle for a flag-only operation. Verify flags match after redo.
 #[test]
 fn redo_flag_override_after_undo() {
-    use rust_lib_flutter_cad::crystolecule::atomic_structure::atom::HYBRIDIZATION_SP3;
+    use atomcad_crystolecule::atomic_structure::atom::HYBRIDIZATION_SP3;
 
     let mut designer = setup_atom_edit();
 

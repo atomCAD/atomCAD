@@ -1,0 +1,220 @@
+# `atomcad-crystolecule` - Agent Instructions
+
+`atomcad-crystolecule` implements atomic structure representation, crystal lattice geometry, lattice-filling algorithms, and energy minimization for atomically precise manufacturing (APM).
+
+It was `rust/src/crystolecule/` until Phase 4 of `doc/design_rust_crate_split.md`
+made it its own crate. Consequences for anything you write here:
+
+- It is imported as **`atomcad_crystolecule::…`**, never `crate::crystolecule::…`,
+  from every other package *and* from every test outside this crate. Inside the
+  crate, use `crate::…`.
+- Its dependencies are `atomcad-util` and `atomcad-geo-tree` and nothing else.
+  The "never depend on `renderer` or `display`" constraint below is now a **build
+  failure**, not a review comment — which is the point of the split.
+- Its tests live in `crates/atomcad-crystolecule/tests/crystolecule/`, beside
+  `tests/crystolecule.rs`. The repeated directory name is load-bearing (it keeps
+  every `#[path]` string and the UFF `CARGO_MANIFEST_DIR` test-data paths valid);
+  do not tidy it.
+- Shared test fixtures stay at `rust/tests/fixtures/` and are addressed through
+  `atomcad_test_support::fixture_path` — never a local `CARGO_MANIFEST_DIR` join.
+- No `#[frb(...)]` attribute belongs here. flutter_rust_bridge stays confined to
+  the root crate's `src/api/`; a Dart-facing type living here keeps a same-named
+  twin in `api/` with `From` impls (`visualization::AtomicStructureVisualization`
+  and `atomic_structure::SelectModifier` are the two worked examples).
+
+## Subdirectory Instructions
+
+- Working in `simulation/` or any descendant → Read `simulation/AGENTS.md`
+- Working in `simulation/uff/` → Also read `simulation/uff/AGENTS.md`
+
+## Module Structure
+
+```
+crates/atomcad-crystolecule/src/
+├── lib.rs                          # Crate root: module declarations (all submodules pub)
+├── atomic_constants.rs             # Element database (symbol, radius, color)
+├── atomic_structure_utils.rs       # Auto-bonding, selection, cleanup helpers
+├── crystolecule_constants.rs       # Diamond unit cell size, default motif text
+├── drawing_plane.rs                # 2D drawing plane embedded in 3D crystal
+├── motif.rs                        # Motif struct (sites, bonds, parameters)
+├── motif_parser.rs                 # Text format parser for motifs
+├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
+├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
+├── weld.rs                         # weld_coincident_atoms(): fuse atoms at the same position (surface patches)
+├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
+├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
+├── unit_cell_symmetries.rs         # Crystal system classification (7 systems)
+├── visualization.rs                # AtomicStructureVisualization (hit_test pickability)
+├── atomic_structure/
+│   ├── mod.rs                      # AtomicStructure container
+│   ├── atom.rs                     # Atom struct (position, element, bonds)
+│   ├── bond_reference.rs           # Order-insensitive bond pair ID
+│   ├── inline_bond.rs              # 4-byte compact bond (29-bit id + 3-bit order)
+│   └── atomic_structure_decorator.rs  # Display/selection metadata
+├── motif_bond_inference.rs          # Bond inference on motif fractional coords (cross-cell)
+├── io/
+│   ├── mol_exporter.rs             # MOL V3000 export
+│   ├── xyz_loader.rs               # XYZ import
+│   ├── xyz_saver.rs                # XYZ export
+│   └── cif/
+│       ├── mod.rs                  # Public API: load_cif() → CifLoadResult
+│       ├── parser.rs               # CIF text format parser (data blocks, tags, loops)
+│       ├── structure.rs            # Extract crystallographic data from parsed CIF
+│       ├── symmetry.rs             # Symmetry operation parsing and expansion
+│       └── space_groups.rs         # Lookup table for 230 space groups (symmetry ops)
+├── lattice_fill/
+│   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
+│   ├── fill_algorithm.rs           # Recursive lattice filling (SDF sampling)
+│   ├── hydrogen_passivation.rs     # H termination of dangling bonds
+│   ├── placed_atom_tracker.rs      # CrystallographicAddress → atom ID map
+│   └── surface_reconstruction.rs   # Diamond (100) 2×1 dimer reconstruction
+└── simulation/
+    ├── mod.rs                      # Public API: minimize_energy(), MinimizationResult
+    ├── force_field.rs              # ForceField trait (energy_and_gradients)
+    ├── topology.rs                 # Interaction list enumeration from bond graph
+    ├── minimize.rs                 # L-BFGS optimizer wrapper, frozen atom support
+    └── uff/
+        ├── mod.rs                  # UffForceField: implements ForceField trait
+        ├── params.rs               # Static UFF parameter table (126 atom types)
+        ├── typer.rs                # Atom type assignment from connectivity
+        └── energy.rs               # Energy terms + analytical gradients
+```
+
+## Key Types
+
+| Type | Location | Purpose |
+|------|----------|---------|
+| `AtomicStructure` | `atomic_structure/mod.rs` | Main container: atoms (Vec with optional slots), spatial grid, bonds |
+| `SelectModifier` | `atomic_structure/mod.rs` | Replace / Toggle / Expand — how a new selection combines with the old one. Serialized (`edit_atom`'s `SelectCommand` persists in `.cnnd`), so variant names are load-bearing. Dart-facing twin in `api/common_api_types.rs` |
+| `AtomicStructureVisualization` | `visualization.rs` | BallAndStick / SpaceFilling. Needed here only so `hit_test` can decide bond pickability; `display::preferences` re-exports it and `api/` keeps the Dart-facing twin |
+| `Atom` | `atomic_structure/atom.rs` | id(u32), position(DVec3), atomic_number(i16), bonds(SmallVec<[InlineBond;4]>), flags(u16). Flags layout: bit 0 selected, bit 1 hydrogen_passivation, bit 2 frozen, bits 3-4 hybridization override (0=Auto, 1=Sp3, 2=Sp2, 3=Sp1), bit 5 display-ghost (`is_ghost`/`set_ghost` — transient motif_edit neighbour-cell render state), bit 6 patch-ghost (`is_patch_ghost`/`set_patch_ghost` — durable surface-patch flag; survives serialization, drives weld survivorship; distinct from bit 5) |
+| `InlineBond` | `atomic_structure/inline_bond.rs` | 4-byte bond: 29-bit atom_id + 3-bit order. Supports 7 bond types |
+| `BondReference` | `atomic_structure/bond_reference.rs` | Unordered (atom_id1, atom_id2) pair, hashable |
+| `UnitCellStruct` | `unit_cell_struct.rs` | Basis vectors (a,b,c), lattice↔real coordinate conversion |
+| `Structure` | `structure.rs` | Bundles `lattice_vecs: UnitCellStruct` + `motif: Motif` + `motif_offset: DVec3`. Factories: `Structure::diamond()` (cubic diamond + zincblende motif + zero offset), `Structure::from_lattice_vecs(...)` (default motif + zero offset). Carried by `BlueprintData` and `CrystalData` as a first-class value |
+| `Motif` | `motif.rs` | Sites (fractional coords), bonds (with cell offsets), parameter elements |
+| `SiteSpecifier` | `motif.rs` | Site index + IVec3 relative cell offset |
+| `DrawingPlane` | `drawing_plane.rs` | Miller-indexed 2D plane with 2D↔3D transforms. Built via `from_spec(miller, u, v, …)` (the case matrix in `doc/design_drawing_plane_explicit_axes.md`): auto-pick both in-plane axes from the Miller index, or pin one/both in-plane lattice directions `[u v w]` explicitly, or derive the Miller index from `u × v`. `DrawingPlane::new` is a thin `from_spec` wrapper. `is_compatible` compares the resolved `u_axis`/`v_axis`, not just the Miller index |
+| `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
+| `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
+| `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
+| `GuidedPlacementResult` | `guided_placement.rs` | Computed guide dot positions for bonded atom placement |
+| `Hybridization` | `guided_placement.rs` | Sp3 / Sp2 / Sp1 orbital hybridization |
+| `BondMode` | `guided_placement.rs` | Covalent (element-specific max) vs Dative (geometric max) |
+| `BondLengthMode` | `guided_placement.rs` | Crystal (lattice-derived table) vs Uff (force field formula) |
+| `CifDocument` | `io/cif/parser.rs` | Parsed CIF file: list of data blocks |
+| `CifDataBlock` | `io/cif/parser.rs` | Single data block with tags and loops |
+| `CifLoop` | `io/cif/parser.rs` | Loop section: column headers + rows |
+| `SymmetryOperation` | `io/cif/symmetry.rs` | Parsed affine transform (3×4 matrix) from Jones notation |
+| `CifAtomSite` | `io/cif/symmetry.rs` | Atom label, element, fractional coords, occupancy |
+| `CifCrystalData` | `io/cif/structure.rs` | Extracted unit cell, atoms, symmetry ops, bonds from CIF block |
+| `CifBond` | `io/cif/structure.rs` | Explicit bond from `_geom_bond_*` with symmetry codes |
+| `CifLoadResult` | `io/cif/mod.rs` | Unit cell + expanded atom sites (fractional coords) |
+| `ExpandedAtomSite` | `io/cif/mod.rs` | Label, atomic number, fractional position |
+
+## Core Concepts
+
+**Crystal Lattice**: Unit cell basis vectors define a periodic 3D grid. Atoms sit at fractional coordinates within cells. `UnitCellStruct` handles lattice↔real-space conversion via matrix math (Cramer's rule).
+
+**Motif**: A template of atom sites and bonds that repeats at every lattice point. Sites use fractional coordinates; bonds reference sites with relative cell offsets (e.g., `SiteSpecifier { site_index: 0, relative_cell: IVec3(1,0,0) }` means site 0 in the +x neighboring cell). Parameter elements allow substitutional flexibility (e.g., PRIMARY=Carbon).
+
+**Lattice Filling**: `fill_lattice()` recursively subdivides a bounding box, evaluates an SDF geometry at motif sites, places atoms where SDF ≤ 0.01, creates bonds from the motif template, then applies cleanup → surface reconstruction → hydrogen passivation.
+
+**Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
+
+**Guided Placement** (`guided_placement.rs`): Computes chemically valid candidate positions for bonded atom placement. Given an anchor atom, determines hybridization (sp3/sp2/sp1 via UFF type assignment or manual override), checks saturation, computes bond distance, and returns guide dot positions at correct bond angles. Three placement modes: `FixedDots` (deterministic positions), `FreeSphere` (bare atom, click anywhere), `FreeRing` (single bond without dihedral reference, rotating dots on cone). Includes a crystal bond length table for ~20 semiconductor compounds (diamond cubic / zinc blende lattice parameters) with UFF fallback. Dative bond mode unlocks lone pair / empty orbital positions but does not persist any bond kind distinction — dative is a placement-time consideration only. Design doc: `doc/atom_edit/guided_atom_placement.md`.
+
+## Important Constants (`crystolecule_constants.rs`)
+
+- `DIAMOND_UNIT_CELL_SIZE_ANGSTROM`: 3.567 Å
+- `DEFAULT_ZINCBLENDE_MOTIF`: 8-site diamond motif text (CORNER, FACE_X/Y/Z, INTERIOR1-4)
+- Bond distance multiplier: 1.15× covalent radii (auto-bonding)
+- C-H bond length: 1.09 Å (passivation)
+
+## Error Types
+
+- `ParseError` (motif_parser) — line number + message
+- `XyzError` (io/xyz_loader) — Io / Parse / FloatParse variants
+- `XyzSaveError` (io/xyz_saver) — Io / ElementNotFound variants
+- `MolSaveError` (io/mol_exporter) — Io / ElementNotFound variants
+- `CifParseError` (io/cif/parser) — syntax errors in CIF text
+- `CifError` (io/cif/symmetry, structure) — symmetry operation or crystal data extraction errors
+- `CifLoadError` (io/cif/mod) — top-level load errors (wraps parse/extraction/IO)
+
+All use `thiserror` derive macros.
+
+## Internal Dependencies
+
+```
+lattice_fill  →  AtomicStructure, UnitCellStruct, Motif, GeoNode (from geo_tree)
+drawing_plane →  UnitCellStruct
+motif_parser  →  Motif, atomic_constants
+atomic_structure_utils → AtomicStructure, atomic_constants
+io/cif/*      →  UnitCellStruct, Motif, AtomicStructure, atomic_constants
+io/*          →  AtomicStructure, atomic_constants
+motif_bond_inference → Motif, UnitCellStruct, atomic_constants
+guided_placement → AtomicStructure, simulation/uff (typer, params)
+hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
+```
+
+`GeoNode` (from `geo_tree`) is the only external module dependency — used as the SDF geometry input to `fill_lattice()`.
+
+**Architectural constraint:** This crate is independent of rendering concerns. Never add dependencies on `atomcad-renderer` or `display` here — `display` is the adapter that converts crystolecule types into renderable meshes. Since Phase 4 the compiler enforces this: those crates are simply not in `Cargo.toml`, and adding them would also create a cycle.
+
+The single deliberate exception is `visualization::AtomicStructureVisualization`, and it is not really one: `AtomicStructure::hit_test` has to know whether bonds are pickable, and space-filling atoms have no visible bonds. The enum carries no rendering code, and it used to be *worse* — `atomic_structure/mod.rs` reached up into `crate::api::…` for it, one of the four back-edges this refactor exists to delete.
+
+## Testing
+
+Tests live in `crates/atomcad-crystolecule/tests/crystolecule/` (never inline `#[cfg(test)]`). Test modules are registered in `crates/atomcad-crystolecule/tests/crystolecule.rs`.
+
+```
+tests/crystolecule/
+├── guided_placement_test.rs       # Guided placement geometry, saturation, bond distances
+├── atomic_structure_test.rs       # CRUD, grid, bonds, selection, transforms
+├── drawing_plane_test.rs          # Plane axes, Miller indices, 2D↔3D mappings
+├── lattice_fill_test.rs           # Tracker, statistics, integration with sphere geometry
+├── unit_cell_test.rs              # Round-trip conversions, multiple cell types
+├── unit_cell_symmetries_test.rs   # All 7 crystal systems, symmetry preservation
+├── hydrogen_passivation_test.rs   # General-purpose H passivation tests
+├── motif_parser_test.rs           # Tokenization, all commands, error cases
+├── motif_bond_inference_test.rs   # Bond inference on fractional coords, cross-cell bonds
+├── io/
+│   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
+│   ├── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
+│   ├── cif_parser_test.rs         # CIF syntax: tags, loops, quotes, uncertainties
+│   ├── cif_symmetry_test.rs       # Symmetry operation parsing, expansion, dedup
+│   ├── cif_structure_test.rs      # Crystal data extraction, old/new tags, bonds
+│   ├── cif_load_test.rs           # End-to-end load_cif() with fixture files
+│   └── cif_space_groups_test.rs   # Space group lookup table tests
+└── simulation/                    # Energy minimization tests (~300+ tests)
+    ├── uff_params_test.rs         # Parameter table spot-checks
+    ├── uff_energy_test.rs         # Bond stretch energy + gradient
+    ├── uff_angle_test.rs          # Angle bend energy + gradient
+    ├── uff_torsion_test.rs        # Torsion energy + gradient
+    ├── uff_inversion_test.rs      # Inversion energy + gradient
+    ├── uff_typer_test.rs          # Atom type assignment
+    ├── topology_test.rs           # Interaction enumeration
+    ├── uff_force_field_test.rs    # Full force field validation
+    ├── uff_vdw_test.rs            # Van der Waals tests
+    ├── minimize_test.rs           # L-BFGS + end-to-end minimization
+    ├── steepest_descent_test.rs   # Steepest descent (continuous minimization)
+    └── test_data/                 # Reference data from RDKit
+```
+
+**Running:** `cd rust && cargo test -p atomcad-crystolecule -j 4` (builds without
+`wgpu` and without `frb_generated.rs`), or `cargo test crystolecule -j 4` to filter
+by name across the workspace.
+
+**Tolerances:** Round-trip conversions use 1e-10; spatial/angle checks use 1e-6; I/O roundtrips use 1e-5. Simulation energy tolerances: 0.01-0.5 kcal/mol depending on molecule size; gradient numerical tests use <1% relative error.
+
+## Modifying This Module
+
+**Adding an element property**: Update `atomic_constants.rs` lazy-static maps (`ATOM_INFO`, `CHEMICAL_ELEMENTS`).
+
+**Adding a new I/O format**: Create `io/format_name.rs`, add `pub mod` in `io/mod.rs`, define an error type with `thiserror`. For complex formats, use a subdirectory (see `io/cif/` as an example).
+
+**CIF-related changes**: The CIF parser (`io/cif/parser.rs`) is a generic STAR/CIF parser. Symmetry operations are in `io/cif/symmetry.rs`, crystal data extraction in `io/cif/structure.rs`, and the 230 space group lookup table in `io/cif/space_groups.rs`. Test fixtures are in `rust/tests/fixtures/cif/` (diamond, nacl, hexagonal, multi_block, with_bonds) — outside this crate, reached via `atomcad_test_support::fixture_path("cif/…")`, because the same fixture tree is read from three packages.
+
+**Changing the motif format**: Update `motif_parser.rs` parse functions and `motif.rs` structs. Update `DEFAULT_ZINCBLENDE_MOTIF` if the syntax changes.
+
+**New lattice fill feature**: Add to `lattice_fill/` as a separate file, wire into `fill_algorithm.rs` pipeline. The pipeline order is: place atoms → create bonds → remove lone atoms → surface reconstruction → hydrogen passivation.

@@ -5,11 +5,14 @@ pub enum MeshSmoothing {
     SmoothingGroupBased,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AtomicStructureVisualization {
-    BallAndStick,
-    SpaceFilling,
-}
+// `AtomicStructureVisualization` used to be declared here as a third copy of the
+// same two-variant enum (one in `api/`, one here, and none in the domain, which
+// is why `crystolecule` reached *up* into `api/` for it). Phase 4 of
+// `doc/design_rust_crate_split.md` gives the domain the authoritative
+// definition — `AtomicStructure::hit_test` takes it — and this module re-exports
+// it rather than duplicating it. Only the Dart-facing twin in `api/` remains
+// separate (D9a).
+pub use atomcad_crystolecule::visualization::AtomicStructureVisualization;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AtomicRenderingMethod {

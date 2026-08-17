@@ -1,6 +1,6 @@
-use crate::api::common_api_types::SelectModifier;
-use crate::crystolecule::atomic_structure::{AtomicStructure, BondReference};
-use crate::crystolecule::atomic_structure_diff::{AtomSource, DiffProvenance, DiffStats};
+use atomcad_crystolecule::atomic_structure::SelectModifier;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
+use atomcad_crystolecule::atomic_structure_diff::{AtomSource, DiffProvenance, DiffStats};
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::collections::HashSet;
@@ -136,7 +136,7 @@ pub enum AddAtomToolState {
     Idle,
     GuidedPlacement {
         anchor_atom_id: u32,
-        guide_dots: Vec<crate::crystolecule::guided_placement::GuideDot>,
+        guide_dots: Vec<atomcad_crystolecule::guided_placement::GuideDot>,
         bond_distance: f64,
         /// If true, the bond created should be BOND_DATIVE instead of BOND_SINGLE.
         is_dative_bond: bool,

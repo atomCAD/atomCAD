@@ -1,16 +1,16 @@
-use crate::crystolecule::atomic_constants::ATOM_INFO;
-use crate::crystolecule::atomic_structure::{
-    AtomicStructure, BOND_AROMATIC, BOND_DATIVE, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
-    BOND_SINGLE, BOND_TRIPLE,
-};
-use crate::crystolecule::drawing_plane::DrawingPlane;
-use crate::crystolecule::motif::Motif;
-use crate::crystolecule::structure::Structure;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::{DataType, RecordType};
 use crate::structure_designer::evaluator::iterator_walker::Walker;
 use crate::structure_designer::evaluator::zone_closure::ZoneClosure;
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_crystolecule::atomic_constants::ATOM_INFO;
+use atomcad_crystolecule::atomic_structure::{
+    AtomicStructure, BOND_AROMATIC, BOND_DATIVE, BOND_DOUBLE, BOND_METALLIC, BOND_QUADRUPLE,
+    BOND_SINGLE, BOND_TRIPLE,
+};
+use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::motif::Motif;
+use atomcad_crystolecule::structure::Structure;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
 use atomcad_util::transform::Transform2D;
 use glam::f64::DMat3;

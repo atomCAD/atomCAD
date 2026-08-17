@@ -1,10 +1,8 @@
-use glam::f64::DVec3;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::{
+use atomcad_crystolecule::atomic_structure::inline_bond::{
     BOND_DELETED, BOND_DOUBLE, BOND_SINGLE, BOND_TRIPLE,
 };
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
-};
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, DELETED_SITE_ATOMIC_NUMBER};
+use glam::f64::DVec3;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::text_format::{
     parse_diff_text, serialize_diff,
 };

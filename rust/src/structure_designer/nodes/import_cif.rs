@@ -1,12 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::atomic_structure_utils::auto_create_bonds_with_tolerance;
-use crate::crystolecule::io::cif::structure::CifBond;
-use crate::crystolecule::io::cif::symmetry::{CifAtomSite, SymmetryOperation};
-use crate::crystolecule::io::cif::{CifLoadResultExtended, load_cif_extended};
-use crate::crystolecule::motif::{Motif, MotifBond, ParameterElement, Site, SiteSpecifier};
-use crate::crystolecule::motif_bond_inference::infer_motif_bonds;
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
@@ -17,6 +9,14 @@ use crate::structure_designer::node_type::{NodeType, OutputPinDefinition, Parame
 use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure_utils::auto_create_bonds_with_tolerance;
+use atomcad_crystolecule::io::cif::structure::CifBond;
+use atomcad_crystolecule::io::cif::symmetry::{CifAtomSite, SymmetryOperation};
+use atomcad_crystolecule::io::cif::{CifLoadResultExtended, load_cif_extended};
+use atomcad_crystolecule::motif::{Motif, MotifBond, ParameterElement, Site, SiteSpecifier};
+use atomcad_crystolecule::motif_bond_inference::infer_motif_bonds;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_util::path_utils::{get_parent_directory, resolve_path, try_make_relative};
 use glam::DVec3;
 use serde::{Deserialize, Serialize};
@@ -369,7 +369,7 @@ fn build_motif_bonds_from_cif(
     cif_bonds: &[CifBond],
     asymmetric_atoms: &[CifAtomSite],
     symmetry_operations: &[SymmetryOperation],
-    expanded_atoms: &[crate::crystolecule::io::cif::ExpandedAtomSite],
+    expanded_atoms: &[atomcad_crystolecule::io::cif::ExpandedAtomSite],
     tolerance: f64,
 ) -> Vec<MotifBond> {
     let mut motif_bonds = Vec::new();
@@ -423,7 +423,7 @@ fn resolve_cif_bond_atom(
     symmetry_code: &Option<String>,
     asymmetric_atoms: &[CifAtomSite],
     symmetry_operations: &[SymmetryOperation],
-    expanded_atoms: &[crate::crystolecule::io::cif::ExpandedAtomSite],
+    expanded_atoms: &[atomcad_crystolecule::io::cif::ExpandedAtomSite],
     tolerance: f64,
 ) -> Option<(usize, glam::IVec3)> {
     // Parse the symmetry code (e.g., "2_655" → symop 2, translation (+1,0,0))
@@ -431,7 +431,7 @@ fn resolve_cif_bond_atom(
         if code == "." {
             None
         } else {
-            crate::crystolecule::io::cif::structure::parse_symmetry_code(code)
+            atomcad_crystolecule::io::cif::structure::parse_symmetry_code(code)
         }
     });
 
@@ -490,7 +490,7 @@ fn add_cif_bonds_to_structure(
     cif_bonds: &[CifBond],
     asymmetric_atoms: &[CifAtomSite],
     symmetry_operations: &[SymmetryOperation],
-    expanded_atoms: &[crate::crystolecule::io::cif::ExpandedAtomSite],
+    expanded_atoms: &[atomcad_crystolecule::io::cif::ExpandedAtomSite],
     _unit_cell: &UnitCellStruct,
     tolerance: f64,
 ) {

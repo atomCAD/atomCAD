@@ -17,6 +17,7 @@
 //
 // Pattern modelled after `tests/integration/iterator_migration_test.rs`.
 
+use atomcad_test_support::fixture_path_str;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -25,7 +26,14 @@ use rust_lib_flutter_cad::structure_designer::node_network::NodeNetwork;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::serialization::node_networks_serialization::load_node_networks_from_file;
 
-const FIXTURE_DIR: &str = "tests/fixtures/zones_migration";
+const FIXTURE_DIR: &str = "zones_migration";
+
+/// `tests/fixtures/zones_migration/<name>`, resolved through the shared
+/// `atomcad-test-support` resolver rather than `CARGO_MANIFEST_DIR` or a
+/// working-directory-relative string (doc/design_rust_crate_split.md, D5.3).
+fn fixture_file(name: &str) -> String {
+    fixture_path_str(&format!("{FIXTURE_DIR}/{name}"))
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,7 +41,7 @@ const FIXTURE_DIR: &str = "tests/fixtures/zones_migration";
 
 fn load(fixture: &str) -> NodeTypeRegistry {
     let mut registry = NodeTypeRegistry::new();
-    load_node_networks_from_file(&mut registry, &format!("{}/{}", FIXTURE_DIR, fixture))
+    load_node_networks_from_file(&mut registry, &fixture_file(fixture))
         .unwrap_or_else(|e| panic!("fixture {} failed to load: {}", fixture, e));
     registry
 }

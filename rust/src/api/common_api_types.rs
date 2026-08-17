@@ -1,3 +1,6 @@
+// The domain twin is path-qualified rather than imported bare, because the
+// api-side type deliberately keeps the same identifier (D9a).
+use atomcad_crystolecule::atomic_structure::SelectModifier as DomainSelectModifier;
 use serde::{Deserialize, Serialize};
 
 pub struct APIVec2 {
@@ -88,11 +91,50 @@ pub enum APICameraCanonicalView {
     Right,
 }
 
+/// Dart-facing twin of [`atomcad_crystolecule::atomic_structure::SelectModifier`].
+///
+/// The authoritative definition moved down into `atomcad-crystolecule` (D6);
+/// this declaration stays here, under its **existing** name, because that is the
+/// symbol the generated Dart already declares and Flutter already calls — see
+/// `doc/design_rust_crate_split.md` D9a, which is explicit that a down-moved
+/// type's twin must *not* be renamed to `API…`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SelectModifier {
     Replace,
     Toggle,
     Expand,
+}
+
+impl From<&SelectModifier> for DomainSelectModifier {
+    fn from(m: &SelectModifier) -> Self {
+        match m {
+            SelectModifier::Replace => DomainSelectModifier::Replace,
+            SelectModifier::Toggle => DomainSelectModifier::Toggle,
+            SelectModifier::Expand => DomainSelectModifier::Expand,
+        }
+    }
+}
+
+impl From<SelectModifier> for DomainSelectModifier {
+    fn from(m: SelectModifier) -> Self {
+        (&m).into()
+    }
+}
+
+impl From<&DomainSelectModifier> for SelectModifier {
+    fn from(m: &DomainSelectModifier) -> Self {
+        match m {
+            DomainSelectModifier::Replace => SelectModifier::Replace,
+            DomainSelectModifier::Toggle => SelectModifier::Toggle,
+            DomainSelectModifier::Expand => SelectModifier::Expand,
+        }
+    }
+}
+
+impl From<DomainSelectModifier> for SelectModifier {
+    fn from(m: DomainSelectModifier) -> Self {
+        (&m).into()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

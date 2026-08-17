@@ -1,4 +1,4 @@
-use crate::crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_renderer::line_mesh::LineMesh;
 use glam::f32::Vec3;
 

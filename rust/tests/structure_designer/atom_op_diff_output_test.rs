@@ -4,15 +4,13 @@
 //! Uses the `value`-node harness and the shared `assert_node_diff_roundtrip`
 //! helper from `diff_test_support.rs`.
 
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure::{AtomicStructure, DELETED_SITE_ATOMIC_NUMBER};
+use atomcad_crystolecule::atomic_structure_diff::apply_diff;
+use atomcad_crystolecule::structure::Structure;
 use atomcad_geo_tree::GeoNode;
 use glam::f64::{DVec2, DVec3};
 use glam::i32::IVec2;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::{
-    AtomicStructure, DELETED_SITE_ATOMIC_NUMBER,
-};
-use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
-use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     Alignment, BlueprintData, CrystalData, MoleculeData, NetworkResult,
 };

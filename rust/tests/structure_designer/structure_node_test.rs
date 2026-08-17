@@ -1,6 +1,6 @@
+use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
+use atomcad_crystolecule::structure::Structure;
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
-use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };

@@ -66,10 +66,10 @@
 //! scope: `passivate`, `remove_hydrogen`, `infer_bonds`, `freeze` / `unfreeze`,
 //! `atom_union`.
 
-use crate::crystolecule::atomic_structure::AtomicStructure;
-use crate::crystolecule::atomic_structure_diff::extract_diff;
 use crate::structure_designer::evaluator::network_result::{MoleculeData, NetworkResult};
 use crate::structure_designer::node_data::EvalOutput;
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure_diff::extract_diff;
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::batched_implicit_evaluator::BatchedImplicitEvaluator;
 use std::collections::HashSet;

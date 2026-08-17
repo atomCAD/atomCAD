@@ -11,6 +11,8 @@ it.
 | `atomcad-util` | `rust/src/util/` | 1 |
 | `atomcad-geo-tree` | `rust/src/geo_tree/` | 2 |
 | `atomcad-renderer` | `rust/src/renderer/` | 3 |
+| `atomcad-crystolecule` | `rust/src/crystolecule/` | 4 |
+| `atomcad-test-support` | `rust/tests/test_support/` | 4 |
 
 Conventions for anything added here:
 
@@ -34,3 +36,15 @@ Conventions for anything added here:
   the crate (`atomcad-renderer/assets/`), together with any example that
   generates them — a relative `include_*!` path is resolved against the *source
   file*, so it silently changes meaning when the file moves
+- a test that reads `rust/tests/fixtures/` must address it through
+  `atomcad_test_support::fixture_path` (or `fixture_path_str`), never through its
+  own `CARGO_MANIFEST_DIR` or a working-directory-relative `"tests/fixtures/…"`
+  string — both are anchored to the *package* root and silently mean something
+  different in a member crate (D5.3). The fixture tree itself stays put; it is
+  shared by three packages and duplicating it would fork the migration corpus.
+
+`atomcad-test-support` is the odd one out: it is a helper crate rather than an
+extracted module, it is only ever a `[dev-dependencies]` entry, and it depends on
+`atomcad-crystolecule`, which dev-depends back on it. That cycle is legal
+precisely because the return edge is a dev edge — `cargo metadata` shows the loop
+and it is not an error (D5.2).

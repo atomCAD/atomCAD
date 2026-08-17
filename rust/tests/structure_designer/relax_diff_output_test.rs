@@ -4,12 +4,12 @@
 //! Uses the `value`-node harness pattern from `apply_diff_node_test.rs` and the
 //! shared `assert_node_diff_roundtrip` helper from `diff_test_support.rs`.
 
+use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
+use atomcad_crystolecule::atomic_structure_diff::apply_diff;
+use atomcad_crystolecule::simulation::MAX_MINIMIZE_FREE_ATOMS;
+use atomcad_crystolecule::structure::Structure;
 use glam::f64::{DVec2, DVec3};
-use rust_lib_flutter_cad::crystolecule::atomic_structure::AtomicStructure;
-use rust_lib_flutter_cad::crystolecule::atomic_structure::inline_bond::BOND_SINGLE;
-use rust_lib_flutter_cad::crystolecule::atomic_structure_diff::apply_diff;
-use rust_lib_flutter_cad::crystolecule::simulation::MAX_MINIMIZE_FREE_ATOMS;
-use rust_lib_flutter_cad::crystolecule::structure::Structure;
 use rust_lib_flutter_cad::structure_designer::evaluator::network_result::{
     Alignment, CrystalData, MoleculeData, NetworkResult,
 };
