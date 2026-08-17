@@ -2,10 +2,11 @@
 
 ## Overview
 
-~450+ Rust tests + Flutter tests. Run with:
+~5,000 Rust tests plus Dart unit tests and the Flutter smoke test. Run with:
 
 ```bash
 cd rust && cargo test          # All Rust tests
+flutter test                   # Dart unit tests (test/) — fast, no Rust library
 flutter test integration_test/ # Flutter smoke test — HUMAN-ONLY (see note)
 
 # Coverage report (requires cargo-llvm-cov)
@@ -48,6 +49,27 @@ cargo insta review           # Review changes interactively
 | CNND roundtrip (12 tests) | Load → modify → save → reload → compare |
 | XYZ roundtrip (6 tests) | Import/export atomic structures |
 | Lattice fill (2 tests) | Fill geometry with atoms |
+
+## Dart Unit Tests (test/)
+
+Pure-Dart tests for Flutter-side logic that does **not** need the Rust library —
+formatters, view-model transforms, anything touching only the generated FRB
+*data classes*. They open no DLL, so a whole file runs in well under a second,
+and unlike the smoke test below **agents may run them**.
+
+```bash
+flutter test                              # every Dart unit test
+flutter test test/error_report_test.dart  # one file
+```
+
+| Test | Coverage |
+|------|----------|
+| `error_report_test.dart` | Problem-report formatter (#359): root-cause grouping, per-entry formatting, report headline |
+
+Anything needing a live `StructureDesigner` does not belong here. Prefer the
+Rust suite, where the logic can be tested without driving the UI at all; fall
+back to `integration_test/` only when the behaviour genuinely is the widget
+tree.
 
 ## Flutter Tests (integration_test/)
 
