@@ -1,5 +1,5 @@
-use crate::display::gadget::Gadget;
 use crate::structure_designer::node_data::NodeData;
+use atomcad_display::gadget::Gadget;
 
 pub trait NodeNetworkGadget: Gadget {
     // Syncs the gadget's state into the node data

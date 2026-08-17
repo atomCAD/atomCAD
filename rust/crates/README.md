@@ -13,6 +13,7 @@ it.
 | `atomcad-renderer` | `rust/src/renderer/` | 3 |
 | `atomcad-crystolecule` | `rust/src/crystolecule/` | 4 |
 | `atomcad-test-support` | `rust/tests/test_support/` | 4 |
+| `atomcad-display` | `rust/src/display/` | 5 |
 
 Conventions for anything added here:
 

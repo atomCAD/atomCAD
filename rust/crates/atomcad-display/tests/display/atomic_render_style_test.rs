@@ -11,18 +11,18 @@
 use atomcad_crystolecule::atomic_structure::{
     Atom, AtomRenderStyle, AtomicStructure, HitTestResult,
 };
+use atomcad_display::atomic_tessellator::{
+    AtomicTessellatorParams, BAS_STICK_RADIUS, effective_displayed_atom_radius,
+    get_displayed_atom_radius, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
+};
+use atomcad_display::preferences::{
+    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
+};
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::display::atomic_tessellator::{
-    AtomicTessellatorParams, BAS_STICK_RADIUS, effective_displayed_atom_radius,
-    get_displayed_atom_radius, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
-};
-use rust_lib_flutter_cad::display::preferences::{
-    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
-};
 
 // ============================================================================
 // Helpers

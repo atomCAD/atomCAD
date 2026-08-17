@@ -51,7 +51,9 @@ is wrong — are these:
    Phase 4, the other 12 types in Phase 6.** D6 and D9.2 touch the
    same file; read both before editing it. **D6**
 10. **Crate boundaries can cost runtime performance.** Benchmark before
-    Phase 1 and after Phase 5. **D13**
+    Phase 1 and after Phase 5. **D13** — *measured, Phase 5:* with
+    `lto = "thin"` the six-crate build is at parity with the monolith;
+    **with LTO off it is 2.1× slower**. Never delete that profile line.
 
 Where this document fixes a choice (D5.3 fixtures, D9a twins, D10.1),
 that choice is deliberate and alternatives were considered — prefer
@@ -1894,6 +1896,181 @@ left the root, so cross-crate inlining exposure is at its maximum —
 this is the measurement that decides whether `lto = "thin"` suffices.
 
 *Estimate: 1 day.*
+
+#### Phase 5 — landed 2026-08-17
+
+**Changes.** `rust/src/display/` → `rust/crates/atomcad-display/src/` (11 files,
+`mod.rs` → `lib.rs`), and `rust/tests/display.rs` + `rust/tests/display/` →
+`crates/atomcad-display/tests/`, keeping the D5.1 directory-name rule. The crate
+takes `atomcad-crystolecule`, `atomcad-geo-tree`, `atomcad-renderer` and
+`atomcad-util` plus `csgrs`, `geo`, `glam` and `nalgebra` from
+`[workspace.dependencies]`; the root package gains
+`atomcad-display = { path = "crates/atomcad-display" }` and loses
+`pub mod display;` from `lib.rs`. `rust/src/` is now `api/` + `expr/` +
+`structure_designer/` + `frb_generated.rs`.
+
+The prefix rewrite was again purely mechanical: `crate::display::` →
+`atomcad_display::` in 53 sites across 29 source files, `crate::display::` →
+`crate::` for the 10 internal self-references, and
+`rust_lib_flutter_cad::display::` → `atomcad_display::` in 17 sites across 8
+test/example files. **`cargo build` succeeded on the first attempt** once the two
+D7 moves were in place; `display` held 2 of the 15 `pub(crate)` items measured in
+Current state and neither needed escalating. Phase 1's doc-test trap did not
+bite — the moved files contain no `///` examples and no `rust_lib_flutter_cad`
+mentions (checked *before* moving, as Phase 1 advises), and Phase 3's
+`include_bytes!` trap is gone for good.
+
+**Three dependencies finally left the root manifest, and a fourth turned out not
+to belong there at all.** `csgrs`, `geo` and `nalgebra` are named directly by
+`csg_to_poly_mesh.rs` and moved with it — this is the Phase 5 outcome Phase 2's
+entry predicted. The surprise is **`wgpu`**: Phase 3's note claimed
+`api/screenshot_api.rs` "reads the rendered texture back with `wgpu`", but the
+root crate names no `wgpu` type anywhere (the single occurrence is a comment;
+the readback goes through `atomcad-renderer`). `wgpu` was removed from the root
+`[dependencies]` here and the stale comment corrected. Only `image` — which
+`screenshot_api.rs` really does use for PNG encoding — and `blake3`
+(`export_atoms.rs`) remain as non-workspace-crate root dependencies.
+
+**D7, up-move: `scene_tessellator.rs` → `src/structure_designer/`.** It consumes
+`StructureDesignerScene` / `NodeOutput` and continues to call *down* into
+`atomcad_display` for per-object tessellation. Its one caller
+(`api/api_common.rs:480`) changed path; nothing else. Registered in
+`structure_designer/mod.rs`, so it travels into `atomcad-structure-designer`
+with the rest of the module in Phase 6 at no extra cost.
+
+**D7, down-move: the parameter-element helpers → `atomcad_crystolecule::atomic_constants`.**
+D7 names only `param_atomic_number_to_index`, but the constants it reads
+(`PARAM_ELEMENT_BASE`, `MAX_PARAM_ELEMENTS`) have to move for it to compile, and
+once they have, leaving `param_index_to_atomic_number` (its exact inverse),
+`param_atomic_number_to_motif` and `is_param_element` behind buys nothing. All
+five moved as a block, out of
+`structure_designer/nodes/atom_edit/types.rs`. They are a property of the
+atomic-number encoding, so `atomic_constants.rs` is the right home; a comment at
+each end records the widening. **No re-export was left behind** — D7 says
+"`structure_designer` updated to use it from there", so all nine call sites
+(2 in `api/`, 3 in `structure_designer/`, 2 test files) now name the crystolecule
+path. That is deliberate: a `pub use` in `types.rs` would have made the phase a
+one-line diff, but it would also have left a phantom
+`atom_edit::atom_edit::param_*` path that reads as if the encoding still belonged
+to the node.
+
+**Two test files had to move *up*, and they went into `tests/structure_designer/`
+rather than into a new root harness.** D5 lists `display/atom_label_test.rs` and
+`display/atomic_impostor_alpha_test.rs` among the six files that "cannot travel
+downward"; both call `tessellate_scene_content`, which this phase moved up, so
+neither D5 branch (drop an incidental dependency / move to the root tree beside
+`tests/integration/`) applies literally. Phase 3's rule decided it: **a test's
+home is what it imports**, and what these import is `structure_designer`. They
+were appended to `tests/structure_designer.rs` with `#[path]` lines rather than
+given a `display_api.rs` counterpart to `renderer_api.rs` — that name would have
+been wrong twice over (they touch no `api`, and in Phase 6 they belong in the
+crate-side harness, which is where they now already sit). The other four
+`tests/display/` files reach no further than `atomcad_display` and moved intact.
+
+**Verified.** `cargo build`, `cargo test -j 4`, `cargo test --workspace -j 4`,
+`cargo test -p atomcad-display -j 4` (the Phase 4 lesson — no feature-graph
+surprise this time), `cargo clippy -j 4`, `cargo clippy --all-targets -j 4`,
+`cargo fmt -- --check`, `flutter_rust_bridge_codegen generate` + `cargo fmt` +
+`git diff --numstat lib/src/rust rust/src/frb_generated.rs`, `flutter analyze`,
+`cargo build --release`, the D13 benchmark (below), and cargokit
+(`flutter build windows --debug` rebuilt `rust_lib_flutter_cad.dll` and linked
+`atomCAD.exe`). No `.snap.new` files; `git status` shows `csgrs/` untouched.
+**Pending manual step for the maintainer:** launch the app (`flutter run`,
+release DLL) and the Flutter smoke test.
+
+**Test count: 5,054 — identical to Phases 0–4** (5,040 passed, 14 ignored), under
+both `cargo test -j 4` and `cargo test --workspace -j 4`. The 59 display tests
+split across the harness boundary:
+
+| binary | Phase 4 | Phase 5 |
+|---|---|---|
+| `tests/display.rs` (root package) | 59 | — |
+| `atomcad-display` `tests/display.rs` | — | **28** |
+| `tests/structure_designer.rs` (root package) | 3,082 | **3,113** |
+
+Every other binary is unchanged. `display` had no lib unittests and no
+doc-tests, so nothing moved between those buckets.
+
+**Lint baselines held exactly:** `cargo clippy -j 4` → **36** warnings
+(16 root lib + 16 `atomcad-crystolecule` + **4** `atomcad-display`, the four
+`unused_variables`/`unused_assignments` in `atomic_tessellator.rs`'s
+cull-counter debug code, which have simply changed owner);
+`cargo clippy --all-targets -j 4` → **112** individual warnings (16 lib + 62
+`structure_designer` + 16 `crystolecule` lib + 5 `crystolecule` tests + 4
+`atomcad-display` lib + 4 `expr` + 4 `geo_tree` + 1 `util`); `flutter analyze` →
+**139** issues. Note the two redistributions, so a future phase does not read
+either as a regression: the root lib's 20 → 16 + 4 (display's warnings moved with
+display), and `structure_designer`'s 61 → 62 with the display test binary's 1 →
+0 (the warning rode along with the two relocated test files).
+
+**Generated Dart: zero content change.**
+`git diff --numstat lib/src/rust rust/src/frb_generated.rs` is empty, no
+directory appeared or disappeared under `lib/src/rust/`, and no Dart symbol
+changed. This phase moved no Dart-facing type, so that is the expected result —
+but it also settles the loose end Phase 4 left. Phase 4 recorded that five FRB
+"multiple objects with same key … randomly pick one" collisions remained, all of
+them `api/`-vs-`display/` preference-struct duplicates (`MeshSmoothing`,
+`AtomicRenderingMethod`, `GeometryVisualizationPreferences`,
+`AtomicStructureVisualizationPreferences`, `BackgroundPreferences`). Moving
+`display` out of the expanded self-crate **removes all five from the codegen log
+with no output change**, which proves FRB had been picking the `api/` side every
+time. That was luck, not design — had it picked the `display` copy for any of
+them, this phase's diff would have been a silent Dart break — and it is worth
+knowing that `git diff` was the check that could confirm it, not the absence of
+an error.
+
+**Back-edge audit.** `display → structure_designer` is **0** references (the only
+remaining mentions under the crate are two lines of `lib.rs`'s module doc
+explaining why they used to be there), and reintroducing one is now a build
+failure: the root crate is not in `atomcad-display`'s manifest. Three of the four
+back-edges in Current state are closed. Only `structure_designer → api` remains,
+still measuring **145 sites across 123 files** — unchanged from Phase 4's
+recount, since nothing here touched it. It is Phase 6's.
+
+**D13 — the gate. Thin LTO fully absorbs the split; without it the split would
+have cost 2.1×.**
+
+All five lower crates have now left the root, so cross-crate inlining exposure is
+at its maximum. Phase 4 warned that this machine drifts between sessions and that
+comparing against Phase 0's recorded table would make the gate fire on drift, so
+the control was **rebuilt and re-measured in the same session**: a `git worktree`
+at commit `19086690` (Phase 0 — the workspace scaffolding, thin LTO and the bench
+harness all in place, but *no code moved*), built into its own target directory.
+Fixture: the 1,075,748-atom / 1,951,386-bond nanobeam, 5 reps, `-j 4`, minima.
+
+| nanobeam, `lto = "thin"` | Phase 0 monolith (re-measured today) | post-Phase-5 split | delta |
+|---|---|---|---|
+| load | 2.7 ms | 2.7 ms | — |
+| evaluate | 2,196.1 ms | **2,143.4 ms** | **−2.4 %** |
+| impostor tessellation | 451.2 ms | **443.9 ms** | **−1.6 %** |
+
+**The split is at parity — marginally on the faster side, i.e. inside noise.** No
+escalation to `lto = "fat"` / `codegen-units = 1` is warranted. Against Phase 0's
+*recorded* table (2,089.2 / 433.3) the same run reads +2.6 % / +2.4 %, and the
+same-session control shows that entire gap is session drift, not the refactor —
+Phase 4's diagnosis was right, and its instruction to re-baseline is what makes
+this number trustworthy. (`nut-bolt.cnnd`, 10 reps: evaluate 11.8 ms, impostors
+1.7 ms, triangles 26.3 ms — against Phase 0's 11.5 / 1.7 / 25.7. Also parity, and
+also far better than Phase 4's 13.5 / 2.0 / 32.7 interim reading, which is a
+second, independent confirmation that that session was simply slow.)
+
+The LTO-on/off pair — Phase 4's "cheap sanity check" — is where the interesting
+result is:
+
+| nanobeam | thin LTO | LTO off | penalty |
+|---|---|---|---|
+| Phase 0 (one crate) | 2,089.2 ms / 433.3 ms | 2,183.3 ms / 525.4 ms | 1.05× / 1.21× |
+| Phase 5 (six crates) | **2,143.4 ms / 443.9 ms** | **4,560.7 ms / 961.3 ms** | **2.13× / 2.17×** |
+
+Before the split, turning LTO off cost 5–21 %. After it, **2.1×**. D13's
+"exposure" is therefore entirely real and considerably larger than the entry's
+own hedging suggested — the per-atom accessor loops really do stop inlining
+across the new boundaries — and `[profile.release] lto = "thin"` is what makes
+the whole refactor performance-neutral. It has gone from a precaution to a
+load-bearing setting: **removing it would now be a 2× runtime regression, not the
+5–20 % it would have been before Phase 1.** That is the single most important
+thing this phase established, and it is why the line in `rust/Cargo.toml` carries
+a comment saying so.
 
 ### Phase 6 — `atomcad-structure-designer` (with `expr`)
 

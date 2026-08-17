@@ -1,0 +1,18 @@
+// Integration test crate for `atomcad-display`.
+//
+// `atomic_impostor_alpha_test` and `atom_label_test` are NOT here: they drive
+// `tessellate_scene_content`, which Phase 5 of `doc/design_rust_crate_split.md`
+// (D7) moved up into `structure_designer`. A test's home is decided by what it
+// imports, so they live in `rust/tests/structure_designer/` now.
+
+#[path = "display/poly_mesh_tessellator_test.rs"]
+mod poly_mesh_tessellator_test;
+
+#[path = "display/csg_to_poly_mesh_test.rs"]
+mod csg_to_poly_mesh_test;
+
+#[path = "display/atomic_color_test.rs"]
+mod atomic_color_test;
+
+#[path = "display/atomic_render_style_test.rs"]
+mod atomic_render_style_test;

@@ -44,7 +44,7 @@ atomCAD is a CAD application for Atomically Precise Manufacturing (APM). It enab
 │  ├── (crystolecule → rust/crates/atomcad-crystolecule)      │
 │  ├── (geo_tree → rust/crates/atomcad-geo-tree: CSG, SDF)    │
 │  ├── (renderer → rust/crates/atomcad-renderer: wgpu)        │
-│  ├── display/            # Domain→renderer adapter          │
+│  ├── (display → rust/crates/atomcad-display: adapter)       │
 │  └── expr/               # Expression language              │
 └─────────────────────────────────────────────────────────────┘
 ```

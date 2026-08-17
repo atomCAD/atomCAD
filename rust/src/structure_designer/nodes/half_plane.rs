@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::structure_designer::common_constants;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -16,6 +15,7 @@ use crate::structure_designer::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::text_format::TextValue;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_display::gadget::{Gadget, GadgetPickContext};
 use atomcad_geo_tree::GeoNode;
 use atomcad_renderer::mesh::Material;
 use atomcad_renderer::mesh::Mesh;

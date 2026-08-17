@@ -33,7 +33,8 @@ rust && cargo test -j 4` still runs everything — the `default-members` entry i
 | Module | Coverage |
 |--------|----------|
 | `expr/` | Lexer, parser, evaluation, validation |
-| `crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill |
+| `crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill — now at `rust/crates/atomcad-crystolecule/tests/crystolecule/`, run with `cargo test -p atomcad-crystolecule` |
+| `display/` | Poly-mesh tessellation, CSG→poly-mesh, atom color/render style — now at `rust/crates/atomcad-display/tests/display/`, run with `cargo test -p atomcad-display`. The two scene-tessellation tests moved to `rust/tests/structure_designer/` (`atomic_impostor_alpha_test.rs`, `atom_label_test.rs`), because `tessellate_scene_content` is a `structure_designer` module. |
 | `geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) — now at `rust/crates/atomcad-geo-tree/tests/geo_tree/`, run with `cargo test -p atomcad-geo-tree` |
 | `renderer/` | Camera math, label atlas layout, impostor meshes, transparent sort — now at `rust/crates/atomcad-renderer/tests/renderer/`, run with `cargo test -p atomcad-renderer`. The four `api`-level axis-resolution tests stay at `rust/tests/renderer_api/` (`cargo test --test renderer_api`), because a member crate cannot depend on the root crate. |
 | `structure_designer/` | Network validator, node network operations, network evaluator |

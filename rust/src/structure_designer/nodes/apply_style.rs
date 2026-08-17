@@ -357,7 +357,7 @@ fn expand_label(
 /// and a label does not use. What a param element renders as is `P1` / `P2`,
 /// matching the popup's symbol.
 fn element_symbol(structure: &AtomicStructure, atomic_number: i16) -> String {
-    use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+    use atomcad_crystolecule::atomic_constants::param_atomic_number_to_index;
     use atomcad_crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 
     if structure

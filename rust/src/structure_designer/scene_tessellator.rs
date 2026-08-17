@@ -1,15 +1,15 @@
 // Direct tessellation from StructureDesignerScene (no Scene trait needed)
 
-use crate::display::atomic_tessellator;
-use crate::display::coordinate_system_tessellator;
-use crate::display::guided_placement_tessellator;
-use crate::display::poly_mesh_tessellator::{
+use crate::structure_designer::structure_designer_scene::{NodeOutput, StructureDesignerScene};
+use atomcad_display::atomic_tessellator;
+use atomcad_display::coordinate_system_tessellator;
+use atomcad_display::guided_placement_tessellator;
+use atomcad_display::poly_mesh_tessellator::{
     tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh,
 };
-use crate::display::preferences::{AtomicRenderingMethod, DisplayPreferences};
-use crate::display::surface_point_tessellator;
-use crate::display::unit_cell_wireframe_tessellator;
-use crate::structure_designer::structure_designer_scene::{NodeOutput, StructureDesignerScene};
+use atomcad_display::preferences::{AtomicRenderingMethod, DisplayPreferences};
+use atomcad_display::surface_point_tessellator;
+use atomcad_display::unit_cell_wireframe_tessellator;
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::camera::Camera;

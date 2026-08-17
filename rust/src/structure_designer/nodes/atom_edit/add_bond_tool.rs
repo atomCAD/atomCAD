@@ -10,11 +10,11 @@
 use super::atom_edit_data::*;
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::{HitTestResult, UNCHANGED_ATOMIC_NUMBER};
 use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
+use atomcad_display::preferences as display_prefs;
 use glam::f64::{DVec2, DVec3};
 
 /// Result of `add_bond_pointer_move`. Contains all info Flutter needs to draw

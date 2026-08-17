@@ -30,8 +30,6 @@ use atomcad_crystolecule::atomic_structure::AtomicStructure;
 // convert at its own boundary keeps one more `structure_designer -> api`
 // reference out of the tree. Path-qualified because the api twin in
 // `structure_designer_preferences` keeps the same identifier (D9a).
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use crate::display::gadget::GadgetPickContext;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::displayed_node_refs::collect_displayed_node_refs;
 use crate::structure_designer::implicit_eval::ray_tracing::{
@@ -49,6 +47,8 @@ use atomcad_crystolecule::atomic_structure_utils::calc_selection_transform;
 use atomcad_crystolecule::io::atom_export::AtomExportFormat;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_crystolecule::visualization::AtomicStructureVisualization as DomainAtomicStructureVisualization;
+use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
+use atomcad_display::gadget::GadgetPickContext;
 use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
@@ -6966,9 +6966,9 @@ impl StructureDesigner {
         ray_origin: &DVec3,
         ray_direction: &DVec3,
     ) -> Option<(u32, &AtomicStructure)> {
-        use crate::display::preferences as display_prefs;
         use crate::structure_designer::structure_designer_scene::NodeOutput;
         use atomcad_crystolecule::atomic_structure::HitTestResult;
+        use atomcad_display::preferences as display_prefs;
 
         let visualization = &self
             .preferences
@@ -7023,9 +7023,9 @@ impl StructureDesigner {
         ray_origin: &DVec3,
         ray_direction: &DVec3,
     ) -> Option<(u32, &AtomicStructure, NodeRef, f64)> {
-        use crate::display::preferences as display_prefs;
         use crate::structure_designer::structure_designer_scene::NodeOutput;
         use atomcad_crystolecule::atomic_structure::HitTestResult;
+        use atomcad_display::preferences as display_prefs;
 
         let visualization = &self
             .preferences

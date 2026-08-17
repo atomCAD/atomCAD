@@ -233,6 +233,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "atomcad-display"
+version = "0.1.0"
+dependencies = [
+ "atomcad-crystolecule",
+ "atomcad-geo-tree",
+ "atomcad-renderer",
+ "atomcad-util",
+ "csgrs",
+ "geo",
+ "glam",
+ "nalgebra",
+]
+
+[[package]]
 name = "atomcad-geo-tree"
 version = "0.1.0"
 dependencies = [
@@ -3061,24 +3075,22 @@ name = "rust_lib_flutter_cad"
 version = "0.1.0"
 dependencies = [
  "atomcad-crystolecule",
+ "atomcad-display",
  "atomcad-geo-tree",
  "atomcad-renderer",
  "atomcad-test-support",
  "atomcad-util",
  "blake3",
- "csgrs",
  "dirs",
  "dlopen",
  "flutter_rust_bridge",
  "flutter_rust_bridge_codegen",
- "geo",
  "glam",
  "image",
  "indexmap 2.7.0",
  "insta",
  "lazy_static",
  "lru",
- "nalgebra",
  "regex",
  "rustc-hash 2.1.1",
  "serde",
@@ -3089,7 +3101,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "toml 0.8.23",
- "wgpu",
 ]
 
 [[package]]

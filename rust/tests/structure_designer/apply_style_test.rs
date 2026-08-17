@@ -1059,7 +1059,7 @@ fn apply_style_label_element_token_honors_name_overrides() {
     // A motif parameter element must label `P1` — the same symbol the hover
     // popup shows for it. The override map is a membership test; its mapped
     // String is the parameter's display name, which a label does not use.
-    use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::param_index_to_atomic_number;
+    use atomcad_crystolecule::atomic_constants::param_index_to_atomic_number;
     let net = "test";
     let mut designer = setup_designer_with_network(net);
 

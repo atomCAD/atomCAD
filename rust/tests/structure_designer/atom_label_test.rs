@@ -13,17 +13,15 @@
 //! rendering-method match.
 
 use atomcad_crystolecule::atomic_structure::{AtomRenderStyle, AtomicStructure};
-use atomcad_renderer::camera::Camera;
-use atomcad_renderer::label_mesh::LabelMesh;
-use glam::f64::DVec3;
-use rust_lib_flutter_cad::display::atomic_tessellator::{
-    get_displayed_atom_radius, tessellate_atom_labels,
-};
-use rust_lib_flutter_cad::display::preferences::{
+use atomcad_display::atomic_tessellator::{get_displayed_atom_radius, tessellate_atom_labels};
+use atomcad_display::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
     BackgroundPreferences, DisplayPreferences, GeometryVisualizationPreferences, MeshSmoothing,
 };
-use rust_lib_flutter_cad::display::scene_tessellator::tessellate_scene_content;
+use atomcad_renderer::camera::Camera;
+use atomcad_renderer::label_mesh::LabelMesh;
+use glam::f64::DVec3;
+use rust_lib_flutter_cad::structure_designer::scene_tessellator::tessellate_scene_content;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
     NodeOutput, NodeSceneData, StructureDesignerScene,
 };

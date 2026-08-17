@@ -1,11 +1,11 @@
 // Tests for wireframe tessellation, in particular the coplanar-edge
 // suppression added for issue #366 (improve visibility of wireframe mode).
 
+use atomcad_display::poly_mesh::PolyMesh;
+use atomcad_display::poly_mesh_tessellator::tessellate_poly_mesh_to_line_mesh;
+use atomcad_display::preferences::MeshSmoothing;
 use atomcad_renderer::line_mesh::LineMesh;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::display::poly_mesh::PolyMesh;
-use rust_lib_flutter_cad::display::poly_mesh_tessellator::tessellate_poly_mesh_to_line_mesh;
-use rust_lib_flutter_cad::display::preferences::MeshSmoothing;
 
 const WHITE: [f32; 3] = [1.0, 1.0, 1.0];
 

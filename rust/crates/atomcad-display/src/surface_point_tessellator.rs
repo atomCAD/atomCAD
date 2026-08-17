@@ -1,7 +1,7 @@
-use crate::display::surface_point_cloud::SurfacePoint;
-use crate::display::surface_point_cloud::SurfacePoint2D;
-use crate::display::surface_point_cloud::SurfacePointCloud;
-use crate::display::surface_point_cloud::SurfacePointCloud2D;
+use crate::surface_point_cloud::SurfacePoint;
+use crate::surface_point_cloud::SurfacePoint2D;
+use crate::surface_point_cloud::SurfacePointCloud;
+use crate::surface_point_cloud::SurfacePointCloud2D;
 use atomcad_renderer::mesh::Material;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator;

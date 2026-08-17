@@ -5,8 +5,6 @@ use std::time::SystemTime;
 
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualization;
 use crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences;
-use crate::display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
-use crate::display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
 use crate::structure_designer::common_constants::ARRAY_DISPLAY_CAP;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::eval_errors::{ErrorAddress, ErrorOrigin};
@@ -29,6 +27,8 @@ use crate::structure_designer::structure_designer_scene::{
     DisplayedPinOutput, NodeOutput, NodeSceneData,
 };
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
+use atomcad_display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::csg_cache::CsgConversionCache;
 

@@ -2,8 +2,6 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIEditAtomTool, NodeTypeCategory,
 };
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use crate::display::preferences as display_prefs;
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::atom_op::map_atomic;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -28,6 +26,8 @@ use atomcad_crystolecule::atomic_structure::BondReference;
 use atomcad_crystolecule::atomic_structure::HitTestResult;
 use atomcad_crystolecule::atomic_structure::SelectModifier;
 use atomcad_crystolecule::atomic_structure::{AtomDisplayState, AtomicStructure};
+use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
+use atomcad_display::preferences as display_prefs;
 use atomcad_util::transform::Transform;
 use glam::f64::DVec3;
 use std::io;

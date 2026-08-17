@@ -520,3 +520,13 @@ mod error_origins_test;
 
 #[path = "structure_designer/chain_hygiene_test.rs"]
 mod chain_hygiene_test;
+
+// Scene tessellation. These two came from `tests/display/` in Phase 5 of
+// `doc/design_rust_crate_split.md`: `tessellate_scene_content` moved up into
+// `structure_designer` (D7), and `atomcad-display` can no longer name the
+// `StructureDesignerScene` they build.
+#[path = "structure_designer/atomic_impostor_alpha_test.rs"]
+mod atomic_impostor_alpha_test;
+
+#[path = "structure_designer/atom_label_test.rs"]
+mod atom_label_test;

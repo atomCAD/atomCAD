@@ -1,11 +1,11 @@
 // Tests for Phase 4: Unit Cell Wireframe tessellation
 
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_renderer::line_mesh::LineMesh;
-use glam::f64::DVec3;
-use rust_lib_flutter_cad::display::unit_cell_wireframe_tessellator::{
+use atomcad_display::unit_cell_wireframe_tessellator::{
     tessellate_unit_cell_wireframe, tessellate_unit_cell_wireframe_with_color,
 };
+use atomcad_renderer::line_mesh::LineMesh;
+use glam::f64::DVec3;
 use std::collections::HashSet;
 
 /// Helper: collect all line segments as pairs of (start, end) positions from a LineMesh.

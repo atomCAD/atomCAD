@@ -9,17 +9,17 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::inline_bond::{BOND_DELETED, BOND_SINGLE};
+use atomcad_display::atomic_tessellator::tessellate_atomic_structure_impostors;
+use atomcad_display::preferences::{
+    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
+    BackgroundPreferences, DisplayPreferences, GeometryVisualizationPreferences, MeshSmoothing,
+};
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::camera::Camera;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
 use glam::f64::DVec3;
-use rust_lib_flutter_cad::display::atomic_tessellator::tessellate_atomic_structure_impostors;
-use rust_lib_flutter_cad::display::preferences::{
-    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
-    BackgroundPreferences, DisplayPreferences, GeometryVisualizationPreferences, MeshSmoothing,
-};
-use rust_lib_flutter_cad::display::scene_tessellator::tessellate_scene_content;
+use rust_lib_flutter_cad::structure_designer::scene_tessellator::tessellate_scene_content;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::{
     NodeOutput, NodeSceneData, StructureDesignerScene,
 };

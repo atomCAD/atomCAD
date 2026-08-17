@@ -1,5 +1,5 @@
-use crate::display::poly_mesh::PolyMesh;
-use crate::display::preferences::MeshSmoothing;
+use crate::poly_mesh::PolyMesh;
+use crate::preferences::MeshSmoothing;
 use atomcad_crystolecule::crystolecule_constants;
 use atomcad_renderer::line_mesh::LineMesh;
 use atomcad_renderer::mesh::{Material, Mesh, Vertex};
@@ -561,7 +561,7 @@ const COPLANAR_ANGLE_THRESHOLD_DEGREES: f64 = 1.0;
 /// display smoothing mode and degrades safely: if a face normal were ever
 /// unset (zero), the dot product is 0, the edge reads as non-coplanar, and it
 /// is kept — wireframe never silently blanks.
-fn edge_is_coplanar_interior(poly_mesh: &PolyMesh, edge: &crate::display::poly_mesh::Edge) -> bool {
+fn edge_is_coplanar_interior(poly_mesh: &PolyMesh, edge: &crate::poly_mesh::Edge) -> bool {
     if edge.face_indices.len() != 2 {
         return false;
     }

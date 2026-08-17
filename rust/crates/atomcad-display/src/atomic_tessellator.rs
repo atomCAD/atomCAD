@@ -1,13 +1,11 @@
-use crate::structure_designer::nodes::atom_edit::atom_edit::param_atomic_number_to_index;
+use atomcad_crystolecule::atomic_constants::param_atomic_number_to_index;
 use atomcad_crystolecule::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use atomcad_crystolecule::atomic_structure::{
     Atom, AtomDisplayState, AtomRenderStyle, AtomicStructure, BondReference,
 };
 use atomcad_renderer::tessellator::tessellator::{self, OccluderSphere};
 // Scene trait removed - is_atom_marked was deprecated and always returned false
-use crate::display::preferences::{
-    AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
-};
+use crate::preferences::{AtomicStructureVisualization, AtomicStructureVisualizationPreferences};
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::label_atlas::layout_label;

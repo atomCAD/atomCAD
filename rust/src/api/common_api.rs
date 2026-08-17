@@ -124,7 +124,7 @@ async fn initialize_cad_instance_async() {
             let display_preferences = crate::api::api_common::to_display_preferences(
                 &cad_instance.structure_designer.preferences,
             );
-            let background_line_mesh = crate::display::coordinate_system_tessellator::tessellate_background_coordinate_system(
+            let background_line_mesh = atomcad_display::coordinate_system_tessellator::tessellate_background_coordinate_system(
         None,
         &display_preferences.background
       );

@@ -95,9 +95,14 @@ tempfile = "3.14"
 # it can live (and it is why csgrs's own `lto = true` has never applied).
 # Before the split there was no `[profile.release]` at all, i.e. LTO off and
 # `codegen-units = 16`. Crate boundaries turn hot intra-crate calls into
-# cross-crate ones, so thin LTO is enabled here to restore most cross-crate
-# inlining; `lto = "fat"` + `codegen-units = 1` is the escalation if the
-# post-Phase-5 benchmark shows a regression.
+# cross-crate ones, so thin LTO is enabled here to restore that inlining.
+#
+# DO NOT REMOVE THIS. The Phase 5 benchmark measured what it is worth: on the
+# 1.07M-atom nanobeam, turning LTO off costs **2.1×** (evaluate 2,143 ms ->
+# 4,561 ms; impostor tessellation 444 ms -> 961 ms). Before any code moved the
+# same switch cost only 5-21 %. With thin LTO on, the six-crate build is at
+# parity with the pre-split monolith; without it, the split is a 2× regression.
+# (`lto = "fat"` + `codegen-units = 1` remains available, but is not needed.)
 # ---------------------------------------------------------------------------
 [profile.release]
 lto = "thin"
@@ -106,15 +111,12 @@ lto = "thin"
 flutter_rust_bridge = "=2.10.0"
 # Extracted backend crates (doc/design_rust_crate_split.md)
 atomcad-crystolecule = { path = "crates/atomcad-crystolecule" }
+atomcad-display = { path = "crates/atomcad-display" }
 atomcad-geo-tree = { path = "crates/atomcad-geo-tree" }
 atomcad-renderer = { path = "crates/atomcad-renderer" }
 atomcad-util = { path = "crates/atomcad-util" }
 dlopen = { workspace = true }
 lazy_static = { workspace = true }
-# wgpu / image: Phase 3 moved the renderer out, but `api/screenshot_api.rs` reads
-# the rendered texture back with `wgpu` and encodes it with `image`, so both stay
-# here as well. (`bytemuck` did leave — the renderer was its only user.)
-wgpu = { workspace = true }
 tokio = { workspace = true }
 glam = { workspace = true }
 lru = { workspace = true }
@@ -127,13 +129,10 @@ toml = { workspace = true }
 indexmap = { workspace = true }
 smallvec = { workspace = true }
 rustc-hash = { workspace = true }
-# csgrs / nalgebra / geo: Phase 2 moved geo_tree out, but `display/csg_to_poly_mesh.rs`
-# still names these three directly, so they cannot leave the root until Phase 5
-# extracts `atomcad-display`. (`rayon` did leave here — geo_tree was its only user.)
-csgrs = { workspace = true }
-nalgebra = { workspace = true }
+# image: `api/screenshot_api.rs` encodes the read-back texture as PNG. (`wgpu`
+# itself left with Phase 5 — the readback goes through `atomcad-renderer`, and
+# the root crate names no `wgpu` type; Phase 3's note here was inaccurate.)
 image = { workspace = true }
-geo = { workspace = true }
 # pyo3 = { version = "0.22", features = ["auto-initialize"] }
 
 blake3 = { workspace = true }

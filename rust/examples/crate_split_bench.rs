@@ -40,16 +40,16 @@
 use std::time::{Duration, Instant};
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
+use atomcad_display::atomic_tessellator::{
+    AtomicTessellatorParams, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
+};
+use atomcad_display::preferences::{
+    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
+};
 use atomcad_renderer::atom_impostor_mesh::AtomImpostorMesh;
 use atomcad_renderer::bond_impostor_mesh::BondImpostorMesh;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
-use rust_lib_flutter_cad::display::atomic_tessellator::{
-    AtomicTessellatorParams, tessellate_atomic_structure, tessellate_atomic_structure_impostors,
-};
-use rust_lib_flutter_cad::display::preferences::{
-    AtomicRenderingMethod, AtomicStructureVisualization, AtomicStructureVisualizationPreferences,
-};
 use rust_lib_flutter_cad::structure_designer::structure_designer::StructureDesigner;
 use rust_lib_flutter_cad::structure_designer::structure_designer_scene::NodeOutput;
 

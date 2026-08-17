@@ -26,11 +26,11 @@ use super::atom_edit_data::{
 use super::operations::{BaseAtomPromotionInfo, gather_base_atom_promotion_info};
 use super::types::*;
 use crate::api::structure_designer::structure_designer_preferences::AtomicStructureVisualization;
-use crate::display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
-use crate::display::preferences as display_prefs;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use atomcad_crystolecule::atomic_structure::HitTestResult;
 use atomcad_crystolecule::atomic_structure_diff::AtomSource;
+use atomcad_display::atomic_tessellator::{BAS_STICK_RADIUS, effective_displayed_atom_radius};
+use atomcad_display::preferences as display_prefs;
 use glam::f64::{DVec2, DVec3};
 use std::collections::HashSet;
 

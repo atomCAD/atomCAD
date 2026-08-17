@@ -1,0 +1,25 @@
+[package]
+name = "atomcad-display"
+version = "0.1.0"
+publish = false
+authors = ["Machine Phase Systems <hello@machinephase.systems>"]
+license = "MPL-2.0"
+edition = "2024"
+
+# Sits above `crystolecule`/`geo-tree` and below `structure_designer`
+# (doc/design_rust_crate_split.md, Phase 5). It is the only crate that depends
+# on *both* the domain and the renderer, which is what makes it the adapter.
+# It must NOT depend on `structure_designer` or on the root crate: D7 moved
+# `scene_tessellator.rs` up precisely so that edge could be deleted.
+# Versions come from [workspace.dependencies] in ../../Cargo.toml (D4).
+[dependencies]
+atomcad-crystolecule = { path = "../atomcad-crystolecule" }
+atomcad-geo-tree = { path = "../atomcad-geo-tree" }
+atomcad-renderer = { path = "../atomcad-renderer" }
+atomcad-util = { path = "../atomcad-util" }
+# csgrs / geo / nalgebra are named directly by `csg_to_poly_mesh.rs`, which
+# earcut-triangulates a CSG sketch. They left the root manifest with this crate.
+csgrs = { workspace = true }
+geo = { workspace = true }
+glam = { workspace = true }
+nalgebra = { workspace = true }

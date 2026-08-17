@@ -1,4 +1,4 @@
-use crate::display::poly_mesh::PolyMesh;
+use crate::poly_mesh::PolyMesh;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_geo_tree::csg_types::CSGMesh;
 use atomcad_geo_tree::csg_types::CSGSketch;

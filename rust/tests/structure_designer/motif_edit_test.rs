@@ -1,5 +1,9 @@
 // Tests for the motif_edit node (Phase 2 + Phase 3: parameter elements + Phase 5: ghost atoms + Phase 6: cross-cell bonds + Phase 7: undo)
 
+use atomcad_crystolecule::atomic_constants::{
+    PARAM_ELEMENT_BASE, is_param_element, param_atomic_number_to_index,
+    param_atomic_number_to_motif, param_index_to_atomic_number,
+};
 use atomcad_crystolecule::atomic_structure::{AtomicStructure, BondReference};
 use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -13,9 +17,8 @@ use rust_lib_flutter_cad::structure_designer::node_data::EvalOutput;
 use rust_lib_flutter_cad::structure_designer::node_type_registry::NodeTypeRegistry;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::with_atom_edit_undo;
 use rust_lib_flutter_cad::structure_designer::nodes::atom_edit::atom_edit::{
-    AtomEditData, CrossCellBondInfo, PARAM_ELEMENT_BASE, generate_ghost_atoms,
-    get_node_type_motif_edit, is_atom_edit_family, is_param_element, min_distance_to_unit_cube,
-    param_atomic_number_to_index, param_atomic_number_to_motif, param_index_to_atomic_number,
+    AtomEditData, CrossCellBondInfo, generate_ghost_atoms, get_node_type_motif_edit,
+    is_atom_edit_family, min_distance_to_unit_cube,
 };
 use rust_lib_flutter_cad::structure_designer::serialization::atom_edit_data_serialization::{
     SerializableAtomEditData, atom_edit_data_to_serializable, serializable_to_atom_edit_data,

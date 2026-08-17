@@ -328,7 +328,10 @@ impl AtomEditData {
                 .iter()
                 .enumerate()
                 .map(|(i, (_, default_z))| {
-                    (super::types::param_index_to_atomic_number(i), *default_z)
+                    (
+                        atomcad_crystolecule::atomic_constants::param_index_to_atomic_number(i),
+                        *default_z,
+                    )
                 })
                 .collect();
             result.set_effective_atomic_numbers(overrides);
@@ -346,7 +349,8 @@ impl AtomEditData {
         //     tooltips show user-defined parameter names (e.g., "PRIMARY")
         //     instead of "Unknown".
         for (i, (name, _)) in self.parameter_elements.iter().enumerate() {
-            let reserved_z = super::types::param_index_to_atomic_number(i);
+            let reserved_z =
+                atomcad_crystolecule::atomic_constants::param_index_to_atomic_number(i);
             result
                 .decorator_mut()
                 .element_name_overrides
@@ -2708,7 +2712,7 @@ pub fn atomic_structure_to_motif(
     parameter_elements: &[(String, i16)],
     cross_cell_bonds: &HashMap<BondReference, CrossCellBondInfo>,
 ) -> Motif {
-    use super::types::{is_param_element, param_atomic_number_to_motif};
+    use atomcad_crystolecule::atomic_constants::{is_param_element, param_atomic_number_to_motif};
     use atomcad_crystolecule::motif::ParameterElement;
 
     // Build parameters list

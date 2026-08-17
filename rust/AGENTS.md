@@ -11,6 +11,8 @@ Dependencies flow downward (no circular dependencies):
 ├─────────────────────────────────────────────────────┤
 │        display           │          api             │
 │   (Tessellation)         │   (Flutter API layer)    │
+│   extracted:             │                          │
+│   atomcad-display        │                          │
 ├──────────────────────────┴──────────────────────────┤
 │  crystolecule  │  geo_tree   │  renderer  │   expr  │
 │  (Atoms/bonds) │  (CSG/SDF)  │   (wgpu)   │  (Lang) │
@@ -25,7 +27,6 @@ Dependencies flow downward (no circular dependencies):
 ## Key Modules
 
 - **structure_designer/** - Node network, evaluator, serialization (.cnnd) (see `src/structure_designer/AGENTS.md`)
-- **display/** - Tessellates domain objects (atoms, geometry) into meshes
 - **expr/** - Expression language (lexer, parser, validation)
 - **api/** - Flutter Rust Bridge API layer
 - **`crates/atomcad-util/`** - was `src/util/`; the bottom of the DAG, now its
@@ -37,10 +38,10 @@ Dependencies flow downward (no circular dependencies):
   evaluation, geometry caching (see `crates/atomcad-geo-tree/src/AGENTS.md`).
   Depends on `atomcad-util` only. Imported as `atomcad_geo_tree::…` (**not**
   `crate::geo_tree::…`), including from tests. Its own tests live in
-  `crates/atomcad-geo-tree/tests/`. It owns `csgrs`, `geo`, `nalgebra`, `rayon`
-  and `blake3`; note `src/display/csg_to_poly_mesh.rs` still names `csgrs` /
-  `geo` / `nalgebra` directly, so those three also stay in the root manifest
-  until `atomcad-display` is extracted.
+  `crates/atomcad-geo-tree/tests/`. It owns `rayon` and `blake3`, and shares
+  `csgrs` / `geo` / `nalgebra` with `atomcad-display` (whose
+  `csg_to_poly_mesh.rs` names all three directly). None of them is in the root
+  manifest any more.
 - **`crates/atomcad-crystolecule/`** - was `src/crystolecule/`; atomic
   structures, unit cells, motifs, lattice operations, CIF/XYZ/MOL I/O, UFF
   simulation (see `crates/atomcad-crystolecule/src/AGENTS.md`). Depends on
@@ -69,11 +70,26 @@ Dependencies flow downward (no circular dependencies):
   `examples/gen_font_atlas.rs`, the generator for `assets/font_atlas.png` and
   `src/font_metrics.rs` — run it with
   `cargo run --release -p atomcad-renderer --example gen_font_atlas`. Note
-  `src/api/screenshot_api.rs` still names `wgpu` and `image` directly, so those
-  two also stay in the root manifest. Its GPU-free tests live in
+  `src/api/screenshot_api.rs` still names `image` directly, so that one stays in
+  the root manifest as well; `wgpu` does not (the readback goes through this
+  crate). Its GPU-free tests live in
   `crates/atomcad-renderer/tests/renderer/`; the four api-level
   axis-resolution tests that used to sit in `camera_test.rs` are at
   `rust/tests/renderer_api/` (see Testing below).
+- **`crates/atomcad-display/`** - was `src/display/`; tessellates domain objects
+  (atoms, bonds, CSG meshes, point clouds, gadgets) into renderer meshes, and
+  owns `DisplayPreferences`. The only crate that depends on **both** the domain
+  and the renderer — that is what makes it the adapter. Imported as
+  `atomcad_display::…` (**not** `crate::display::…`), including from tests; its
+  tests live in `crates/atomcad-display/tests/display/`.
+
+  It must not depend on `structure_designer`. Phase 5 deleted the two edges that
+  did: `scene_tessellator.rs` moved **up** to
+  `src/structure_designer/scene_tessellator.rs` (it adapts the *scene graph*, a
+  `structure_designer` concept, not the domain), and the parameter-element
+  helpers (`param_atomic_number_to_index` and family) moved **down** into
+  `atomcad_crystolecule::atomic_constants`, beside the element table whose
+  encoding they describe.
 
 ## Cargo workspace
 
@@ -83,9 +99,9 @@ are picked up by the `members = ["crates/*"]` glob. This is step 0 of
 `doc/design_rust_crate_split.md`, which converts the top-level modules into
 crates so the dependency DAG above becomes compiler-enforced rather than
 convention-enforced. `atomcad-util` (Phase 1), `atomcad-geo-tree` (Phase 2),
-`atomcad-renderer` (Phase 3) and `atomcad-crystolecule` (Phase 4, together with
-the `atomcad-test-support` dev-only helper crate) are extracted; `display` and
-`structure_designer` (with `expr`) follow in Phases 5-6.
+`atomcad-renderer` (Phase 3), `atomcad-crystolecule` (Phase 4, together with
+the `atomcad-test-support` dev-only helper crate) and `atomcad-display`
+(Phase 5) are extracted; `structure_designer` (with `expr`) follows in Phase 6.
 
 Rules that follow from that layout:
 
@@ -102,8 +118,11 @@ Rules that follow from that layout:
   extracted crate — tests would vanish from the run with no error. `cargo test
   --workspace -j 4` is the belt-and-braces form.
 - `[profile.*]` is only honoured in the workspace root manifest (this is why
-  csgrs's own `lto = true` has never applied). `[profile.release] lto = "thin"`
-  is there to restore cross-crate inlining lost to the split; see D13.
+  csgrs's own `lto = true` has never applied). **`[profile.release] lto = "thin"`
+  is load-bearing, not a precaution** — it restores the cross-crate inlining the
+  split gives up, and the Phase 5 benchmark measured the difference at **2.1×**
+  on the million-atom path (5-21 % before any code moved). Deleting it would be
+  a 2× runtime regression, silently. See D13.
 - **Use `cargo fmt`, never `cargo fmt --all`.** Plain `cargo fmt` honours
   `default-members`, so it already covers `crates/*`. `--all` additionally
   reaches into the *vendored* `../csgrs` path dependency and reformats it,
@@ -212,6 +231,11 @@ When adding new functionality to the Rust codebase:
    - `rust/crates/atomcad-geo-tree/tests/geo_tree/` - Geometry tests
    - `rust/crates/atomcad-renderer/tests/renderer/` - GPU-free renderer tests
      (camera math, label layout, impostor meshes, transparent sort)
+   - `rust/crates/atomcad-display/tests/display/` - tessellation tests. The two
+     that drive `tessellate_scene_content` are **not** here: that function is a
+     `structure_designer` module now, so they sit in
+     `rust/tests/structure_designer/` (`atomic_impostor_alpha_test.rs`,
+     `atom_label_test.rs`)
    - `rust/crates/atomcad-util/tests/util/` - Utility tests
    - `rust/tests/expr/` - Expression language tests
    - `rust/tests/integration/` - Integration/roundtrip tests

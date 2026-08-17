@@ -20,6 +20,7 @@ structure_designer/
 ├── structure_designer.rs      # StructureDesigner: main application state
 ├── structure_designer_changes.rs  # Change tracking for incremental refresh
 ├── structure_designer_scene.rs    # Scene graph for rendering output
+├── scene_tessellator.rs       # Scene graph → renderer meshes (calls atomcad-display)
 ├── node_network.rs            # NodeNetwork + Node: the core DAG
 ├── node_type.rs               # NodeType: node signature definition
 ├── node_data.rs               # NodeData trait: per-node behavior

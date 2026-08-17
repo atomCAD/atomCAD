@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkStackElement;
 use crate::structure_designer::evaluator::network_evaluator::{
@@ -24,6 +23,7 @@ use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_crystolecule::unit_cell_symmetries::{
     RotationalSymmetry, analyze_unit_cell_symmetries,
 };
+use atomcad_display::gadget::{Gadget, GadgetPickContext};
 use atomcad_geo_tree::GeoNode;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};

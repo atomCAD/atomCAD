@@ -1,5 +1,4 @@
 use crate::api::structure_designer::structure_designer_api_types::NodeTypeCategory;
-use crate::display::gadget::{Gadget, GadgetPickContext};
 use crate::structure_designer::data_type::DataType;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluationContext;
 use crate::structure_designer::evaluator::network_evaluator::NetworkEvaluator;
@@ -19,6 +18,7 @@ use crate::structure_designer::utils::half_space_utils;
 use crate::structure_designer::utils::half_space_utils::get_dragged_shift;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_display::gadget::{Gadget, GadgetPickContext};
 use atomcad_geo_tree::GeoNode;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};

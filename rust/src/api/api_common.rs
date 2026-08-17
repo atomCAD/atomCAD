@@ -1,9 +1,9 @@
 use super::common_api_types::{APIIVec2, APIIVec3, APITransform, APIVec2, APIVec3};
 use crate::api::structure_designer::structure_designer_preferences as api_prefs;
-use crate::display::preferences as display_prefs;
 use crate::structure_designer::camera_settings::CameraSettings;
 use crate::structure_designer::structure_designer::StructureDesigner;
 use crate::structure_designer::structure_designer_changes::StructureDesignerChanges;
+use atomcad_display::preferences as display_prefs;
 use atomcad_renderer::renderer::Renderer;
 use atomcad_util::transform::Transform;
 use glam::DQuat;
@@ -440,7 +440,7 @@ pub fn update_gadget_pick_context(cad_instance: &mut CADInstance) {
     let (_, viewport_height) = cad_instance.renderer.get_viewport_size();
     let viewport_height = viewport_height.max(1) as f64;
     cad_instance.structure_designer.gadget_pick_context =
-        crate::display::gadget::GadgetPickContext {
+        atomcad_display::gadget::GadgetPickContext {
             eye: camera.eye,
             perspective_world_per_pixel: 2.0 * (camera.fovy * 0.5).tan() / viewport_height,
             ortho_world_per_pixel: 2.0 * camera.ortho_half_height / viewport_height,
@@ -477,7 +477,7 @@ pub fn refresh_structure_designer(
         label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
-    ) = crate::display::scene_tessellator::tessellate_scene_content(
+    ) = crate::structure_designer::scene_tessellator::tessellate_scene_content(
         &cad_instance
             .structure_designer
             .last_generated_structure_designer_scene,
@@ -502,7 +502,7 @@ pub fn refresh_structure_designer(
 
     if !renderer_lightweight {
         let background_line_mesh =
-            crate::display::coordinate_system_tessellator::tessellate_background_coordinate_system(
+            atomcad_display::coordinate_system_tessellator::tessellate_background_coordinate_system(
                 cad_instance
                     .structure_designer
                     .last_generated_structure_designer_scene

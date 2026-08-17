@@ -1,7 +1,7 @@
 use glam::f32::Vec3;
 use glam::f64::DVec3;
 
-use crate::display::preferences::BackgroundPreferences;
+use crate::preferences::BackgroundPreferences;
 use atomcad_crystolecule::crystolecule_constants::DIAMOND_UNIT_CELL_SIZE_ANGSTROM;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
