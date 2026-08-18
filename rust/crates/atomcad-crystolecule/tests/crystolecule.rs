@@ -127,3 +127,9 @@ mod relax_atom_limit_test;
 
 #[path = "crystolecule/weld_coincident_atoms_test.rs"]
 mod weld_coincident_atoms_test;
+
+#[path = "crystolecule/patch_test.rs"]
+mod patch_test;
+
+#[path = "crystolecule/patch_build_test.rs"]
+mod patch_build_test;

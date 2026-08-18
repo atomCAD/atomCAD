@@ -10,11 +10,11 @@
 
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::atomic_structure::atom::Atom;
-use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_geo_tree::GeoNode;
-use atomcad_structure_designer::nodes::patch_latticefill::{
+use atomcad_crystolecule::patch::{
     CompatibilityReport, apply_patch, region_center_depths, select_patch_cells,
 };
+use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_geo_tree::GeoNode;
 use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
 use glam::i32::IVec3;

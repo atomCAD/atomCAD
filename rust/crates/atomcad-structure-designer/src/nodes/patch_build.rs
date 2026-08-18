@@ -11,6 +11,10 @@
 //!
 //! The output is the built-in `Patch` record
 //! `{ tile: Molecule, tiling_vectors: Array[IVec3], cut_volume: Blueprint }`.
+//!
+//! The extraction itself ([`extract_patch_tile`]) and the tiling-vector
+//! validation are domain code and live in [`atomcad_crystolecule::patch`];
+//! this file is the node wrapper around them.
 
 use crate::data_type::{DataType, RecordType};
 use crate::evaluator::network_evaluator::NetworkEvaluationContext;
@@ -26,18 +30,12 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use atomcad_crystolecule::atomic_structure::AtomicStructure;
-use atomcad_geo_tree::GeoNode;
-use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
+use atomcad_crystolecule::patch::{
+    DEFAULT_BUILD_THRESHOLD, extract_patch_tile, validate_tiling_vectors,
+};
 use glam::i32::IVec3;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
-
-/// Default build threshold `ε` (Å). A slab atom counts as interior when its
-/// `cut_volume` membership SDF ≤ `ε`. Must be large enough to catch atoms
-/// authored right on the cut surface, but well below the nearest interplanar
-/// spacing so it never grabs the layer below. See design §8, open question 1.
-pub const DEFAULT_BUILD_THRESHOLD: f64 = 0.1;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatchBuildData {
@@ -56,138 +54,6 @@ impl Default for PatchBuildData {
             epsilon: DEFAULT_BUILD_THRESHOLD,
         }
     }
-}
-
-/// Validates the tiling vectors per design §4: there must be 1–3 of them and
-/// they must be linearly independent.
-pub fn validate_tiling_vectors(vectors: &[IVec3]) -> Result<(), String> {
-    match vectors.len() {
-        0 => Err("patch_build: tiling_vectors must have 1–3 entries, got 0".to_string()),
-        1 => {
-            if vectors[0] == IVec3::ZERO {
-                Err("patch_build: the single tiling vector is zero (degenerate)".to_string())
-            } else {
-                Ok(())
-            }
-        }
-        2 => {
-            // Linearly independent iff the cross product is non-zero.
-            let cross = vectors[0].as_dvec3().cross(vectors[1].as_dvec3());
-            if cross.length_squared() < 1e-9 {
-                Err("patch_build: tiling vectors are linearly dependent".to_string())
-            } else {
-                Ok(())
-            }
-        }
-        3 => {
-            // Linearly independent iff the scalar triple product is non-zero.
-            let det = vectors[0]
-                .as_dvec3()
-                .dot(vectors[1].as_dvec3().cross(vectors[2].as_dvec3()));
-            if det.abs() < 1e-9 {
-                Err("patch_build: tiling vectors are linearly dependent".to_string())
-            } else {
-                Ok(())
-            }
-        }
-        n => Err(format!(
-            "patch_build: tiling_vectors must have 1–3 entries, got {n}"
-        )),
-    }
-}
-
-/// Extracts the tile from `source` given the `cut_volume` geometry (a real-space
-/// SDF) and the build threshold `epsilon` (§4 "Extraction").
-///
-/// The extracted atoms are kept **in the coordinates they were drawn in** — they
-/// came straight off the authored slab, so they are already lattice-registered.
-/// `patch_latticefill` then places the tile by whole-lattice-vector translations
-/// only (the tiling steps plus the optional `origin` offset), which keeps every
-/// atom on the lattice so the welds line up; at the default offset nothing is
-/// moved, so the patch reappears exactly where it was authored.
-///
-/// This is the node-free core so the extraction logic is testable without the
-/// node-network machinery.
-pub fn extract_patch_tile(
-    source: &AtomicStructure,
-    cut_volume: &GeoNode,
-    epsilon: f64,
-) -> AtomicStructure {
-    // 1. Interior `I` = slab atoms inside the cut volume (membership SDF ≤ ε).
-    let mut interior: HashSet<u32> = HashSet::new();
-    for (id, atom) in source.iter_atoms() {
-        if cut_volume.implicit_eval_3d(&atom.position) <= epsilon {
-            interior.insert(*id);
-        }
-    }
-
-    // 2. Ghosts `G` = atoms *outside* the cut bonded to some interior atom
-    //    (distance-1 only). These are the neighbour-tile and bulk-collar copies.
-    let mut ghosts: HashSet<u32> = HashSet::new();
-    for id in &interior {
-        let atom = source.get_atom(*id).expect("interior atom exists");
-        for bond in &atom.bonds {
-            let partner = bond.other_atom_id();
-            if !interior.contains(&partner) {
-                ghosts.insert(partner);
-            }
-        }
-    }
-
-    // 3. Build the tile: interior atoms (real) + ghost atoms (patch-ghost flag).
-    //    Sort ids for a deterministic id assignment in the new structure.
-    let mut tile = AtomicStructure::new();
-    let mut id_map: HashMap<u32, u32> = HashMap::new();
-
-    let mut interior_ids: Vec<u32> = interior.iter().copied().collect();
-    interior_ids.sort_unstable();
-    let mut ghost_ids: Vec<u32> = ghosts.iter().copied().collect();
-    ghost_ids.sort_unstable();
-
-    for id in &interior_ids {
-        let a = source.get_atom(*id).expect("interior atom exists");
-        let new_id = tile.add_atom(a.atomic_number, a.position);
-        // Preserve structurally-meaningful per-atom metadata; the rest (select,
-        // display-ghost) starts cleared (`add_atom` zeroes flags).
-        tile.set_atom_frozen(new_id, a.is_frozen());
-        tile.set_atom_hybridization_override(new_id, a.hybridization_override());
-        id_map.insert(*id, new_id);
-    }
-    for id in &ghost_ids {
-        let a = source.get_atom(*id).expect("ghost atom exists");
-        let new_id = tile.add_atom(a.atomic_number, a.position);
-        tile.set_atom_frozen(new_id, a.is_frozen());
-        tile.set_atom_hybridization_override(new_id, a.hybridization_override());
-        tile.set_atom_patch_ghost(new_id, true);
-        id_map.insert(*id, new_id);
-    }
-
-    // 4. Bonds: every slab bond with at least one endpoint in `I`
-    //    (interior–interior and interior–ghost). Ghost–ghost bonds are dropped:
-    //    we only walk interior atoms, and an interior atom's outside partners
-    //    are exactly the ghosts, so both endpoints are always mapped.
-    let mut seen: HashSet<(u32, u32)> = HashSet::new();
-    for id in &interior_ids {
-        let a = source.get_atom(*id).expect("interior atom exists");
-        for bond in &a.bonds {
-            let partner = bond.other_atom_id();
-            let Some(&new_partner) = id_map.get(&partner) else {
-                continue;
-            };
-            let key = if *id < partner {
-                (*id, partner)
-            } else {
-                (partner, *id)
-            };
-            if seen.insert(key) {
-                tile.add_bond(id_map[id], new_partner, bond.bond_order());
-            }
-        }
-    }
-
-    // The tile keeps its authored absolute coordinates — no re-expression. The
-    // cut volume is likewise stored as-drawn (see `eval`).
-    tile
 }
 
 impl NodeData for PatchBuildData {

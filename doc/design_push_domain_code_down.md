@@ -13,11 +13,13 @@ deliberate boundary already documented in `crystolecule`, and **dropped**; §4
 records it so it is not re-proposed.
 
 **No change to the Dart-facing API surface, no `.cnnd` format change, no
-user-visible change.** §1 and §2 are pure relocation — `use` statements are
-rewritten, function bodies are not touched. §3 is the exception: it is an
-extract-and-split of a function that mixes crystallography with node state, and
-it is the only phase that changes a signature and adds tests. It is kept in its
-own commit for exactly that reason.
+user-visible change.** §1 is a pure relocation: `use` statements are rewritten,
+function bodies are not. §2 is the same except for one seam — two Miller-index
+helpers leave `half_space_utils` for a different crate than the rest of the
+file, which rewrites three call expressions (§2.2). §3 is the real exception:
+an extract-and-split of a function that mixes crystallography with node state,
+the only phase that changes a signature and the only one that adds tests. It is
+kept in its own commit for exactly that reason.
 
 ## For the implementor
 
@@ -25,15 +27,21 @@ Each phase is one commit that builds and tests green on its own. Most of the
 work is a mechanical import rewrite the compiler verifies. The parts where an
 otherwise sensible decision is wrong:
 
-1. **The moving line ranges are not contiguous.** In both patch files the node's
-   `*Data` struct and its serde defaults sit *between* two moving blocks. Move
-   the blocks named in §1.1, not the span between them, or `PatchLatticeFillData`
-   and `PatchBuildData` end up in `crystolecule` and the build breaks in a
-   confusing way.
+1. **The moving line ranges are not contiguous, and they are item boundaries.**
+   In both patch files the node's `*Data` struct and its serde defaults sit
+   *between* two moving blocks. Move the blocks named in §1.1, not the span
+   between them, or `PatchLatticeFillData` and `PatchBuildData` end up in
+   `crystolecule` and the build breaks in a confusing way. Each range also
+   opens on a doc comment or section banner rather than on the `fn`/`struct`
+   keyword — slicing on the keyword line leaves a `///` block attached to
+   nothing, which rustc rejects outright.
 2. **Inside a moved file, `atomcad_crystolecule::X` must become `crate::X`.**
    A crate cannot refer to itself by its package name. This applies to every
    import in §1's moved code and to `xyz_gadget_utils`'s
-   `use atomcad_display::gadget::GadgetPickContext` in §2.
+   `use atomcad_display::gadget::GadgetPickContext` in §2. Conversely, a `use`
+   you add to a moved file is **private** — it does not re-export the symbol at
+   the moved file's path. Three node call sites depend on exactly that and are
+   easy to miss; see §2.2.
 3. **`patch_build_test.rs` does not move as a unit — one of its ten tests must
    stay behind.** It is the only one that touches `NetworkResult`, and it is
    testing a node-level concern. Splitting the file is correct, not sloppy. **D3**
@@ -54,7 +62,10 @@ otherwise sensible decision is wrong:
    enumeration is exercised by *nothing* — the only facet tests in the tree are
    text-property round-trips. Derive the characterisation expectations from the
    **current** implementation before rewriting it (§3.3 gives a recipe), or the
-   refactor is unguarded. **D8**
+   refactor is unguarded. Phase 3 writes **two** test files, one per crate:
+   `miller_test.rs` for the extracted domain function and
+   `facet_shell_symmetry_test.rs` for the wrapper — the second is the one that
+   guards the behaviour change, so do not stop after the first. **D8**
 9. **Do not revive §4.** The CIF assembly move is the obvious next candidate and
    looks clean on inspection; §4 explains why it was rejected. **D6**
 
@@ -104,18 +115,38 @@ the three moves.
 The patch core is already labelled in its own comment as *"the node-free core so
 the model is testable on plain `AtomicStructure`s without the node-network
 machinery"*. It lives in **four blocks across two files** — not two contiguous
-spans, because each file's `*Data` struct is interleaved with it:
+spans, because each file's `*Data` struct is interleaved with it.
+
+Every range below is an **item boundary**: it starts at the item's first `///`
+doc line (or the `// ====` section banner above it) and ends at the item's
+closing brace. Do not slice on the `fn`/`struct`/`const`/`#[derive]` keyword
+line — a range that starts one line late strands a doc comment in the source
+file, which is `error: expected item after doc comments`, not a warning.
 
 | File | Moving lines | Net |
 |---|---|---:|
-| `nodes/patch_latticefill.rs` | `85-124` (doc comments, the three consts, `CompatibilityReport`) | 10 |
-| `nodes/patch_latticefill.rs` | `190-682` (`free_directions` … `apply_patch`) | 370 |
+| `nodes/patch_latticefill.rs` | `85-123` (doc comments, the three consts, `CompatibilityReport`) | 10 |
+| `nodes/patch_latticefill.rs` | `181-676` (the "Cell selection" banner, `free_directions` … `apply_patch`) | 370 |
 | `nodes/patch_build.rs` | `36-40` (`DEFAULT_BUILD_THRESHOLD` + its doc comment) | 1 |
-| `nodes/patch_build.rs` | `63-192` (`validate_tiling_vectors`, `extract_patch_tile`) | 95 |
+| `nodes/patch_build.rs` | `61-191` (`validate_tiling_vectors`, `extract_patch_tile`, both with their doc comments) | 95 |
 
-**`patch_latticefill.rs:126-188` and `patch_build.rs:43-61` sit between those
+**`patch_latticefill.rs:125-179` and `patch_build.rs:42-59` sit between those
 blocks and must NOT move** — they are `PatchLatticeFillData` /
-`PatchBuildData`, their `serde` default fns and their `impl Default`. See §1.2.
+`PatchBuildData` (from their `#[derive]` line), their `serde` default fns and
+their `impl Default`. See §1.2.
+
+Both second blocks open on a comment that is easy to cut off, and
+`patch_latticefill.rs`'s also closes just short of one:
+
+- `patch_latticefill.rs` — `impl Default` closes at **179**; `181-183` is the
+  `// ==== Cell selection` banner and `185-189` is `free_directions`'s doc
+  comment, so the block opens at **181**, not 190. At the far end `apply_patch`
+  closes at **676**; `678-680` is the `// ==== Node wrapper` banner and `682` is
+  `PatchFields`'s doc comment, both of which **stay**, so the block ends at
+  **676**, not 682.
+- `patch_build.rs` — `61-62` is `validate_tiling_vectors`'s doc comment, so the
+  block opens at **61**, not 63. The far end is clean: `extract_patch_tile`
+  closes at **191**, `192` is blank and `193` opens `impl NodeData`.
 
 The symbols in the moving blocks:
 
@@ -145,7 +176,7 @@ created. All of those imports become `crate::…` once inside the crate.
 cache) with their `default_*` fns and `impl Default`, plus `read_patch_record`,
 `region_structure`, both `impl NodeData` blocks and both `get_node_type()` —
 everything that speaks `NetworkResult`. `patch_latticefill.rs` drops from 1,035
-to ~460 raw lines; `patch_build.rs` from 402 to ~270.
+to ~500 raw lines; `patch_build.rs` from 402 to ~265.
 
 The `default_tolerance()` / `default_epsilon()` fns stay but now import their
 constants from `crystolecule::patch` (**D2**).
@@ -162,22 +193,31 @@ reads it. A `crystolecule::patch` module sits naturally beside `weld.rs` and
 
 ### 1.4 Tests
 
-`tests/structure_designer/patch_latticefill_test.rs` (1,224 lines, 23 tests)
-imports **only** `atomcad_crystolecule`, `atomcad_geo_tree`, `atomcad_util`,
+**Paths below are as they stand after `doc/design_rust_crate_split.md`:** the
+structure-designer suite is `crates/atomcad-structure-designer/tests/…`, the
+crystolecule suite is `crates/atomcad-crystolecule/tests/…`, and only the root
+package's own suites (`tests/integration/`, `tests/structure_designer_api/`,
+`tests/renderer_api/`) still hang off `rust/tests/`. A bare
+`tests/structure_designer/` no longer exists.
+
+`crates/atomcad-structure-designer/tests/structure_designer/patch_latticefill_test.rs`
+(1,224 lines, 23 tests) imports **only**
+`atomcad_crystolecule`, `atomcad_geo_tree`, `atomcad_util`,
 `glam`, and exactly four symbols from the moving set — `CompatibilityReport`,
 `apply_patch`, `region_center_depths`, `select_patch_cells`. Zero
 `StructureDesigner`, zero network construction. It moves wholesale to
 `crates/atomcad-crystolecule/tests/crystolecule/patch_test.rs`.
 
-`tests/structure_designer/patch_build_test.rs` (278 lines, 10 tests) is
-**mixed**: nine tests call `extract_patch_tile` / `validate_tiling_vectors` on
+`crates/atomcad-structure-designer/tests/structure_designer/patch_build_test.rs`
+(278 lines, 10 tests) is **mixed**: nine tests call `extract_patch_tile` / `validate_tiling_vectors` on
 hand-built structures and move; `crystal_and_molecule_sources_yield_same_tile`
 constructs `NetworkResult::Crystal` and `NetworkResult::Molecule` to assert
 `extract_atomic()` yields the same tile from both — a node-level concern that
 stays. **D3**
 
-`tests/structure_designer/patch_record_test.rs` (167 lines) tests the built-in
-`Patch` *record type*, not the algorithm. It stays.
+`crates/atomcad-structure-designer/tests/structure_designer/patch_record_test.rs`
+(167 lines) tests the built-in `Patch` *record type*, not the algorithm.
+It stays.
 
 ### 1.5 Callers to update
 
@@ -186,13 +226,14 @@ stays. **D3**
 - `src/api/structure_designer/structure_designer_api.rs:220` — imports
   `CompatibilityReport` from `nodes::patch_latticefill`; repoint to
   `atomcad_crystolecule::patch`. `PatchLatticeFillData` stays where it is, so
-  the `use` splits in two. The `APICompatibilityReport` mapping at line 4910 is
+  the `use` splits in two. The `APICompatibilityReport` mapping at line 4909 is
   unchanged.
-- Test harness registration in `tests/structure_designer.rs` and
+- Test harness registration in
+  `crates/atomcad-structure-designer/tests/structure_designer.rs` and
   `crates/atomcad-crystolecule/tests/crystolecule.rs`.
 
-`tests/integration/patch_roundtrip_test.rs` needs no change (it only names node
-types and `*Data` structs).
+The root package's `rust/tests/integration/patch_roundtrip_test.rs` needs no
+change (it only names node types and `*Data` structs).
 
 ## 2. Gadget geometry utilities → `atomcad-display` (+ 50 lines to `crystolecule`)
 
@@ -232,7 +273,23 @@ domain→renderer adapter. They go to `atomcad-crystolecule` instead — either
 appended to `unit_cell_symmetries.rs` or a **new `miller.rs`**. Use `miller.rs`:
 §3 fills it out with two more Miller-index functions in the very next phase, so
 it is a module from the start rather than a two-function drop box.
-`display::half_space_utils` then imports them like any other domain function.
+
+**This is the one part of Phase 2 that is not an import rewrite, and it reaches
+three call sites the §2.1 count does not include.** The two functions are used
+asymmetrically:
+
+- `simplify_miller_index` has **no caller outside the file** — only
+  `half_space_utils` itself, at line 232 (`tessellate_miller_indices_discs`) and
+  line 422 (inside `generate_possible_miller_indices`). A plain `use` at the top
+  of the moved `display::half_space_utils` covers it.
+- `generate_possible_miller_indices` **is called from three node files by module
+  path**, not through a `use`: `drawing_plane.rs:537`, `facet_shell.rs:479` and
+  `half_space.rs:451`, all as
+  `half_space_utils::generate_possible_miller_indices(...)`. A `use` inside
+  `half_space_utils` is private and does **not** re-export, so those three paths
+  stop resolving; `pub use`-ing it back into `display::half_space_utils` would
+  fix them but is exactly the shim D7 forbids. **Repoint all three at
+  `atomcad_crystolecule::miller::generate_possible_miller_indices` instead.**
 
 Everything else in the file — `HalfSpaceGeometry`, `HalfSpaceVisualization`, the
 handle/disc constants, the `tessellate_*` and `hit_test_*` functions — is
@@ -250,11 +307,11 @@ those distinct, so **do not merge them.**
 ## 3. Miller-index symmetry families → `atomcad-crystolecule::miller`
 
 **~47 source lines down, ~10 left behind as a wrapper.** The smallest item, and
-the only one that is not a pure relocation.
+the only one that changes a signature and rewrites a caller.
 
 ### 3.1 What moves
 
-`facet_shell.rs:283-376` holds two functions that answer a purely
+`facet_shell.rs:283-372` holds two functions that answer a purely
 crystallographic question — *given a Miller index `(hkl)`, what is its symmetry
 family `{hkl}`?*:
 
@@ -264,6 +321,10 @@ family `{hkl}`?*:
 - `get_symmetric_variants` — permutes the absolute values, then enumerates every
   sign combination, skipping the sign flip on zero components. For `(1,1,0)`
   that yields the 12 members of `{110}`; for `(1,0,0)`, the 6 of `{100}`.
+
+§1.1's item-boundary rule applies here too: `283` is `get_symmetric_variants`'s
+`//` comment (not `///`), `generate_unique_permutations` closes at **372**, and
+`374-378` is `hit_facet_by_ray`'s doc comment, which **stays**.
 
 They land beside `simplify_miller_index` and `generate_possible_miller_indices`
 in the `crystolecule::miller` module that Phase 2 creates. All four answer
@@ -308,7 +369,8 @@ Three of the four call sites — `facet_shell.rs:162`, `213` and `469` — keep
 calling the wrapper unchanged. The fourth is the exception below.
 
 **Free cleanup, and the one place a behaviour change could sneak in:**
-`split_symmetry_members` (`facet_shell.rs:238`, calling at line 264) builds a
+`split_symmetry_members` (`facet_shell.rs:239`, doc comment at `237-238`,
+calling `get_symmetric_variants` at line 264) builds a
 `temp_facet` with `symmetrize: true` and the original `visible` purely to feed
 `get_symmetric_variants` — which reads neither field — and then overwrites
 `variant.visible` on every result anyway. The extraction deletes that dance
@@ -325,10 +387,11 @@ never call `get_symmetric_variants`, `generate_unique_permutations` or
 `ensure_cached_facets`. Nothing outside `facet_shell.rs` calls either function,
 and no snapshot test covers the resulting geometry.
 
-That cuts both ways. It makes this the one phase without a safety net — and it
-makes the move worth doing, because `{hkl}` family enumeration is exactly the
-kind of thing that should have a table test and cannot easily have one while it
-is a private method returning node data.
+That cuts both ways. Left alone it would make this the one phase without a
+safety net — which is why this section specifies **two** new test files
+rather than none. It also makes the move worth doing: `{hkl}` family enumeration is exactly
+the kind of thing that should have a table test and cannot easily have one while
+it is a private method returning node data.
 
 The tests go in `crates/atomcad-crystolecule/tests/crystolecule/miller_test.rs`:
 
@@ -367,6 +430,30 @@ honest ways to pin its behaviour, in order of preference:
 Do **not** write the expectations by running the newly-extracted function: that
 asserts only that the code equals itself.
 
+**A second test file, in the *other* crate — `miller_test.rs` cannot reach the
+part of Phase 3 that can actually regress.** It lives in `atomcad-crystolecule`
+and can only see `symmetry_equivalent_indices`. But the only *behaviour* this
+phase changes is in `facet_shell.rs`: the new wrapper's hard-coded
+`visible: true`, and the deleted `temp_facet` in `split_symmetry_members`
+(§3.2). Leave that to the manual walkthrough and the phase stays unguarded in
+exactly the place §3.2 flags as at risk.
+
+It does not have to be, and this half needs **no** scratch commit:
+`split_symmetry_members` is already `pub`, and `FacetShellData` and `Facet` are
+`pub` with `pub` fields — no `StructureDesigner`, no network, no
+`NetworkResult`, so it can be characterised from a test crate directly against
+today's code. Add
+`crates/atomcad-structure-designer/tests/structure_designer/facet_shell_symmetry_test.rs`
+and register it in
+`crates/atomcad-structure-designer/tests/structure_designer.rs`. The load-bearing
+case: build a `FacetShellData` holding one facet
+`{ miller_index: (1,1,1), symmetrize: true, visible: false }`, call
+`split_symmetry_members(0)`, and assert it returns `true`, yields **8** facets,
+and that **every** one has `visible == false` and `symmetrize == false`. Two
+more cheap rows while the file is open: splitting a non-`symmetrize` facet
+returns `false` and leaves `facets` untouched, and an out-of-range index returns
+`false`.
+
 ## 4. Considered and dropped — CIF → structure assembly
 
 **Decision: not done.** Recorded in full because the candidate looks clean on
@@ -375,8 +462,8 @@ under `nodes/`. It is clean. It is still the wrong move, for the reason in §4.2
 
 ### 4.1 What it would have moved
 
-`nodes/import_cif.rs:277-532` (204 source lines) plus the `CifImportResult`
-struct at line 40, into `crystolecule::io::cif`:
+`nodes/import_cif.rs:276-530` (204 source lines) plus the `CifImportResult`
+struct at line 39, into `crystolecule::io::cif`:
 
 | Symbol | Role |
 |---|---|
@@ -464,14 +551,18 @@ be rewritten in the same commit so the module tells one story.
 - **D7 — No `pub use` shims left behind.** The crate-split doc's rule 5 is about
   flutter_rust_bridge visibility and does not apply here (nothing moving is
   Dart-facing), but leaving re-exports at the old paths would preserve exactly
-  the misfiling this design removes. Update the ~13 call sites instead.
+  the misfiling this design removes. Update the ~13 call sites instead — plus
+  the three in §2.2, which are the only ones where a shim would actually be
+  tempting because the caller names the module rather than importing it.
 - **D8 — §3 is a split, and it goes in its own commit with its own tests.** It
   is tempting to fold it into Phase 2, since both fill the same new `miller.rs`.
-  Don't: Phase 2 is a byte-for-byte relocation the compiler fully verifies,
-  §3 changes a signature and rewrites a call path with **zero** existing test
-  coverage. Mixing them means a Phase-2 regression and a Phase-3 regression are
-  indistinguishable in the history. Characterisation tests go in **before** the
-  move, against the current implementation.
+  Don't: Phase 2 moves function bodies unchanged and the compiler verifies every
+  path it touches — including §2.2's three call sites, which fail to resolve if
+  missed. §3 changes a signature and rewrites a call path where a wrong result
+  still compiles, with **zero** existing test coverage. Mixing them means a
+  Phase-2 regression and a Phase-3 regression are indistinguishable in the
+  history. Characterisation tests go in **before** the move, against the current
+  implementation.
 
 ## Phases
 
@@ -493,16 +584,22 @@ both coherent stopping points; Phase 3 without Phase 2 is not.
    `structure_designer_api.rs:220`. The api `use` splits in two:
    `CompatibilityReport` from `atomcad_crystolecule::patch`,
    `PatchLatticeFillData` still from `atomcad_structure_designer`.
-4. Move the tests, keeping both filenames so git follows the renames:
-   - `patch_latticefill_test.rs` → `tests/crystolecule/patch_test.rs` (whole file)
-   - `patch_build_test.rs` → `tests/crystolecule/patch_build_test.rs` (nine
-     tests), leaving `crystal_and_molecule_sources_yield_same_tile` behind in
-     the original file along with any helper it needs
-   - register both new files in `tests/crystolecule.rs`; in
-     `tests/structure_designer.rs` drop the `#[path]` entry for
-     `patch_latticefill_test` and keep the one for the now-single-test
-     `patch_build_test`. `count_real_and_ghost` is used on both sides, so it is
-     copied, not moved.
+4. Move the tests out of `crates/atomcad-structure-designer/tests/` into
+   `crates/atomcad-crystolecule/tests/`, keeping both filenames so git follows
+   the renames (paths below are relative to each crate's `tests/`):
+   - `structure_designer/patch_latticefill_test.rs` → `crystolecule/patch_test.rs`
+     (whole file)
+   - `structure_designer/patch_build_test.rs` → `crystolecule/patch_build_test.rs`
+     (nine tests), leaving `crystal_and_molecule_sources_yield_same_tile` behind
+     in the original file along with any helper it needs
+   - register both new files in
+     `crates/atomcad-crystolecule/tests/crystolecule.rs`; in
+     `crates/atomcad-structure-designer/tests/structure_designer.rs` drop the
+     `#[path]` entry for `patch_latticefill_test` (currently at lines 440-441)
+     and keep the one for the now-single-test `patch_build_test`.
+     `count_real_and_ghost` is used on both sides — by the moving tests at
+     `patch_build_test.rs:65/89/122/142` and by the staying one at `221-222` —
+     so it is copied, not moved.
 5. `cargo fmt && cargo clippy && cargo test -j 4`.
 6. **Diff `lib/src/rust/`** — must be empty.
 
@@ -511,14 +608,23 @@ both coherent stopping points; Phase 3 without Phase 2 is not.
 1. Create `crates/atomcad-crystolecule/src/miller.rs` with
    `simplify_miller_index` + `generate_possible_miller_indices`; add to `lib.rs`.
 2. Move `utils/half_space_utils.rs` and `utils/xyz_gadget_utils.rs` to
-   `crates/atomcad-display/src/`; add both to `display/src/lib.rs`. Inside them,
-   rewrite `use atomcad_display::gadget::…` → `use crate::gadget::…`, and point
-   `half_space_utils` at `atomcad_crystolecule::miller` for the two functions
-   extracted in step 1.
+   `crates/atomcad-display/src/`; add both to
+   `crates/atomcad-display/src/lib.rs`. Inside `xyz_gadget_utils`, rewrite
+   `use atomcad_display::gadget::…` → `use crate::gadget::…`. Inside
+   `half_space_utils`, add `use atomcad_crystolecule::miller::simplify_miller_index;`
+   — that is the *only* one of the two extracted functions it still calls
+   (line 232); its own call to `generate_possible_miller_indices` left with the
+   function in step 1.
 3. Rewrite the ten `use crate::utils::…` sites across the eight node files named
-   in §2.1.
-4. Delete `src/utils/` and the `pub mod utils;` line at
-   `atomcad-structure-designer/src/lib.rs:64` — the directory becomes empty.
+   in §2.1, **and** the three module-path calls to
+   `half_space_utils::generate_possible_miller_indices` at `drawing_plane.rs:537`,
+   `facet_shell.rs:479` and `half_space.rs:451`, which now point at
+   `atomcad_crystolecule::miller` (§2.2). Those three are not covered by the ten
+   — do not leave a `pub use` behind to spare them (D7).
+4. Delete `crates/atomcad-structure-designer/src/utils/` — both moved files and
+   the two-line `mod.rs` that declares them — and the `pub mod utils;` line at
+   `crates/atomcad-structure-designer/src/lib.rs:64`. Nothing else lives in that
+   directory, so it goes away entirely.
 5. `cargo fmt` (**expect reflow**: the import prefix gets longer) then clippy,
    test.
 
@@ -526,25 +632,38 @@ both coherent stopping points; Phase 3 without Phase 2 is not.
 
 Not a relocation; read §3.2 and §3.3 in full first.
 
-1. **Capture the current behaviour before changing anything** — §3.3 gives the
-   two recipes. The output is a set of expected `IVec3` families for the seven
-   table rows, recorded as literals.
+1. **Capture the current behaviour before changing anything.** Two outputs, both
+   derived from the *unmodified* code:
+   - the expected `IVec3` family for each of §3.3's seven table rows, recorded
+     as literals for step 3 — §3.3 gives two recipes, since
+     `get_symmetric_variants` is private today;
+   - `facet_shell_symmetry_test.rs` itself (§3.3) — written, registered in
+     `crates/atomcad-structure-designer/tests/structure_designer.rs`, and **run
+     green against the current `temp_facet` code path** before step 4 touches
+     anything. No scratch commit needed: `split_symmetry_members` is already
+     `pub`.
 2. Add `symmetry_equivalent_indices(IVec3) -> Vec<IVec3>` and
    `generate_unique_permutations` to `crystolecule::miller`. The latter moves
    verbatim; the former is `get_symmetric_variants` with the `Facet`
    construction replaced by bare `IVec3`s.
 3. Add `crates/atomcad-crystolecule/tests/crystolecule/miller_test.rs` with the
    step-1 literals, plus coverage for Phase 2's `simplify_miller_index` and
-   `generate_possible_miller_indices`. Register it in `tests/crystolecule.rs`.
+   `generate_possible_miller_indices`. Register it in
+   `crates/atomcad-crystolecule/tests/crystolecule.rs`.
 4. Replace `facet_shell.rs`'s `get_symmetric_variants` body with the ~10-line
    wrapper in §3.2. The three call sites at lines 162, 213 and 469 are untouched.
 5. Simplify `split_symmetry_members`: drop the `temp_facet` construction and
    call the wrapper on the facet's own `miller_index`/`shift`. **Keep the
    `variant.visible = visible` assignment** — see §3.2.
-6. `cargo fmt && cargo clippy && cargo test -j 4`. Expect the test count to
+6. Re-run step 1's `facet_shell_symmetry_test.rs` unchanged. It must still be
+   green: it is the only automated cover for steps 4–5, and the whole point is
+   that the rewrite did not move it. Do **not** adjust its expectations to
+   match the new code — a red result here means step 4 or 5 changed behaviour
+   (almost certainly the `variant.visible = visible` assignment).
+7. `cargo fmt && cargo clippy && cargo test -j 4`. Expect the test count to
    *rise* here — the only phase where that is correct.
 
-Steps 1–5 land as **one commit**. The characterisation literals are worthless as
+Steps 1–6 land as **one commit**. The characterisation literals are worthless as
 a guard if they are authored after the rewrite, which is why step 1 comes first
 even though nothing is committed until the end.
 
@@ -554,9 +673,9 @@ even though nothing is committed until the end.
    to the module map and key-types table. Say what `miller.rs` is *for*
    (Miller-index arithmetic and symmetry families, no rendering), so the next
    `simplify_*`-shaped helper lands there instead of in a node file.
-2. `crates/atomcad-structure-designer/src/AGENTS.md` — drop `utils/` from the
-   directory-structure block, and note that the patch core now lives in
-   `crystolecule`.
+2. `crates/atomcad-structure-designer/src/AGENTS.md` — drop the `utils/` line
+   (currently line 76) from the directory-structure block, and note that the
+   patch core now lives in `crystolecule`.
 3. `crates/atomcad-display/src/lib.rs` — its module list is the crate's own
    overview; keep the doc comment honest about the two new modules.
 4. Root `AGENTS.md` — check the Subdirectory Instructions list for any path that
@@ -581,7 +700,7 @@ changes:
 | Check | Expectation |
 |---|---|
 | `cd rust && cargo test -j 4` after Phases 1–2 | same pass count as before, ~5,054; **no test deleted, none added** |
-| … after Phase 3 | count **rises** by the new `miller_test.rs` cases; still nothing deleted |
+| … after Phase 3 | count **rises** by the new `miller_test.rs` and `facet_shell_symmetry_test.rs` cases; still nothing deleted |
 | `cargo clippy` | at or below the ~36-warning baseline |
 | `flutter analyze` | unchanged, ~139 |
 | `git diff --stat lib/src/rust/` after Phase 1 | **empty** |
@@ -603,7 +722,10 @@ agents must not run it.
 - **After Phase 3** (facet symmetry reaches the screen): on a `facet_shell`
   node, toggle `symmetrize` on a `(1,1,1)` facet and confirm 8 faces appear;
   then use *split symmetry members* and confirm the split facets inherit the
-  original facet's `visible` state — the one behaviour §3.2 flags as at risk.
+  original facet's `visible` state. This is confirmation that the behaviour
+  reaches the UI, **not** the gate — §3.3's
+  `facet_shell_symmetry_test.rs` is the gate, and it must be green before the
+  walkthrough is worth doing.
 
 ## What was checked and rejected
 

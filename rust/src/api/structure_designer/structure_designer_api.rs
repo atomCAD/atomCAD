@@ -144,6 +144,7 @@ use crate::api::structure_designer::structure_designer_api_types::{
 };
 use crate::api::structure_designer::view_builders;
 use atomcad_crystolecule::io::atom_export::AtomExportFormat;
+use atomcad_crystolecule::patch::CompatibilityReport;
 use atomcad_crystolecule::unit_cell_symmetries::{
     CrystalSystem, analyze_unit_cell_complete, classify_crystal_system,
 };
@@ -217,9 +218,7 @@ use atomcad_structure_designer::nodes::motif_sub::MotifSubData;
 use atomcad_structure_designer::nodes::parameter::ParameterData;
 use atomcad_structure_designer::nodes::passivate::PassivateData;
 use atomcad_structure_designer::nodes::patch_build::PatchBuildData;
-use atomcad_structure_designer::nodes::patch_latticefill::{
-    CompatibilityReport, PatchLatticeFillData,
-};
+use atomcad_structure_designer::nodes::patch_latticefill::PatchLatticeFillData;
 use atomcad_structure_designer::nodes::plane_tiling_vectors::PlaneTilingVectorsData;
 use atomcad_structure_designer::nodes::print::PrintData;
 use atomcad_structure_designer::nodes::product::ProductData;
