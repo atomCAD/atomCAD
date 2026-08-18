@@ -3,6 +3,7 @@ use crate::canvas_viewport::CanvasViewport;
 use crate::node_data::NodeData;
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::{NodeType, OutputPinDefinition};
+use crate::nodes::parameter::ParameterData;
 use crate::structure_designer::StructureDesigner;
 use glam::f64::DVec2;
 use serde::{Deserialize, Serialize};
@@ -1320,6 +1321,9 @@ impl NodeNetwork {
             };
 
             self.nodes.insert(new_id, new_node);
+            // A cloned `parameter` would otherwise carry the source's param_id
+            // into this network (issue #96). Harmless for every other type.
+            self.mint_parameter_identity(new_id);
             // Preserve the source node's display state (eye on/off + which
             // output pins are shown) instead of forcing every copy visible.
             // Forcing visible "opened all eyes" on paste, slowing loads and
@@ -1372,6 +1376,70 @@ impl NodeNetwork {
         }
 
         new_ids
+    }
+
+    /// Give a freshly cloned `parameter` node its own identity in this network.
+    ///
+    /// `param_id` is what `network_validator::repair_call_sites_for_network`
+    /// matches call-site wires on, and it must be unique per network (invariant
+    /// B3). Node cloning copies `NodeData` verbatim, so without this the copy
+    /// shares its twin's id, the two collapse onto one entry in the repair map,
+    /// and the copy silently inherits its twin's wire at every call site — the
+    /// same "Damage A" `dedupe_param_ids_in_network` heals on load, reached by a
+    /// plain in-session edit (issue #96). Call it after inserting any cloned
+    /// node; it is a no-op for every other node type.
+    ///
+    /// `param_name` is uniquified **only on an actual collision**, so pasting a
+    /// parameter into a network that has no such name keeps the author's name.
+    /// `sort_order` is deliberately left alone: `compare_parameters` tiebreaks
+    /// equal sort orders on `node_id`, which lands the copy directly after its
+    /// original — where a user duplicating a parameter expects it.
+    fn mint_parameter_identity(&mut self, node_id: u64) {
+        let is_parameter = self
+            .nodes
+            .get(&node_id)
+            .and_then(|node| node.data.as_any_ref().downcast_ref::<ParameterData>())
+            .is_some();
+        if !is_parameter {
+            return;
+        }
+
+        // Names held by every OTHER parameter node in this network.
+        let taken: HashSet<String> = self
+            .nodes
+            .iter()
+            .filter(|&(&id, _)| id != node_id)
+            .filter_map(|(_, node)| node.data.as_any_ref().downcast_ref::<ParameterData>())
+            .map(|param_data| param_data.param_name.clone())
+            .collect();
+
+        let param_id = self.next_param_id;
+        self.next_param_id += 1;
+
+        if let Some(node) = self.nodes.get_mut(&node_id)
+            && let Some(param_data) = node.data.as_any_mut().downcast_mut::<ParameterData>()
+        {
+            param_data.param_id = Some(param_id);
+            if taken.contains(&param_data.param_name) {
+                param_data.param_name = unique_param_name(&param_data.param_name, &taken);
+            }
+        }
+    }
+
+    /// Pull `next_param_id` above the `param_id` a re-created parameter node
+    /// carries. Undo/redo re-installs nodes from snapshots that already hold a
+    /// minted id, so the counter has to be dragged forward or the next mint
+    /// collides with the restored node. Mirrors `AddNodeCommand::redo`.
+    pub fn raise_next_param_id_above(&mut self, node_id: u64) {
+        if let Some(param_id) = self
+            .nodes
+            .get(&node_id)
+            .and_then(|node| node.data.as_any_ref().downcast_ref::<ParameterData>())
+            .and_then(|param_data| param_data.param_id)
+            && self.next_param_id <= param_id
+        {
+            self.next_param_id = param_id + 1;
+        }
     }
 
     /// Generate a unique display name for a new node of the given type.
@@ -2374,9 +2442,26 @@ impl NodeNetwork {
 
         // Insert the duplicated node into the network
         self.nodes.insert(new_node_id, duplicated_node);
+        // A duplicated `parameter` needs its own param_id and a non-colliding
+        // param_name (issue #96). Harmless for every other type.
+        self.mint_parameter_identity(new_node_id);
 
         Some(new_node_id)
     }
+}
+
+/// `radius` → `radius2`, `param0` → `param2`: strip any trailing digits, then
+/// append the lowest counter (from 2) that is free. Mirrors the numeric-suffix
+/// shape of [`NodeNetwork::generate_unique_display_name`], but picks the first
+/// free counter rather than `max + 1` — a parameter name is only required to be
+/// unique, not stable against deletion.
+fn unique_param_name(base: &str, taken: &HashSet<String>) -> String {
+    let stem = base.trim_end_matches(|c: char| c.is_ascii_digit());
+    let stem = if stem.is_empty() { base } else { stem };
+    (2u64..)
+        .map(|counter| format!("{}{}", stem, counter))
+        .find(|candidate| !taken.contains(candidate))
+        .expect("a free parameter name exists: `taken` is finite")
 }
 
 /// Visit every node in `network`, recursing into HOF zone bodies at every

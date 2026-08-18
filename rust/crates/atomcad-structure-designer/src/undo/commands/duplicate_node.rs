@@ -11,6 +11,9 @@ pub struct DuplicateNodeCommand {
     pub node_snapshot: NodeSnapshot,
     /// To restore network.next_node_id on undo
     pub next_node_id_before: u64,
+    /// To restore network.next_param_id on undo — duplicating a `parameter`
+    /// node mints a fresh id and so consumes the counter (issue #96).
+    pub next_param_id_before: u64,
     pub description: String,
 }
 
@@ -43,6 +46,9 @@ impl UndoCommand for DuplicateNodeCommand {
 
             // Restore next_node_id
             network.next_node_id = self.next_node_id_before;
+            // Restore next_param_id (a no-op unless the duplicate was a
+            // `parameter` node, which consumes one).
+            network.next_param_id = self.next_param_id_before;
         }
     }
 
@@ -98,6 +104,10 @@ impl UndoCommand for DuplicateNodeCommand {
                 }
                 snap.apply_zone_state(node, body);
             }
+
+            // The snapshot carries the param_id minted at duplicate time, so
+            // drag the counter back past it (undo reset it).
+            network.raise_next_param_id_above(snap.node_id);
         }
     }
 

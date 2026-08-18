@@ -3109,13 +3109,15 @@ impl StructureDesigner {
             None => return 0,
         };
 
-        // Capture next_node_id before duplication (for undo)
-        let next_node_id_before = self
+        // Capture the id counters before duplication (for undo). `next_param_id`
+        // matters because duplicating a `parameter` node mints a fresh id
+        // (issue #96).
+        let (next_node_id_before, next_param_id_before) = self
             .node_type_registry
             .node_networks
             .get(&node_network_name)
-            .map(|n| n.next_node_id)
-            .unwrap_or(0);
+            .map(|n| (n.next_node_id, n.next_param_id))
+            .unwrap_or((0, 0));
 
         // Early return if the node network doesn't exist
         let new_node_id = self
@@ -3137,6 +3139,16 @@ impl StructureDesigner {
             // Apply display policy considering only this node as dirty
             self.apply_node_display_policy(Some(&dirty_nodes));
 
+            // Re-derive validation-dependent state, exactly as `paste_at_position`
+            // does and for the same reason: the refresh path does not validate
+            // (see `project_refresh_does_not_validate`). Duplicating a
+            // `parameter` node changes the network's *interface*, so without
+            // this the custom node type's pin list — and every call site's
+            // argument mapping — stays stale until some unrelated edit happens
+            // to trigger a validation pass (issue #96). Runs before the undo
+            // snapshot below so the snapshot captures settled node state.
+            self.validate_active_network();
+
             // Push undo command
             if let Some(node_snapshot) = self.snapshot_node(&node_network_name, new_node_id) {
                 self.push_command(
@@ -3146,6 +3158,7 @@ impl StructureDesigner {
                         new_node_id,
                         node_snapshot,
                         next_node_id_before,
+                        next_param_id_before,
                     },
                 );
             }
@@ -3239,13 +3252,14 @@ impl StructureDesigner {
         clipboard_snapshot.copy_nodes_from(clipboard, &all_clipboard_ids, DVec2::ZERO);
         let snapshot_ids: HashSet<u64> = clipboard_snapshot.nodes.keys().copied().collect();
 
-        // Capture next_node_id before paste for undo
-        let next_node_id_before = self
+        // Capture the id counters before paste for undo. `next_param_id` matters
+        // because a pasted `parameter` node mints a fresh id (issue #96).
+        let (next_node_id_before, next_param_id_before) = self
             .node_type_registry
             .node_networks
             .get(&node_network_name)
-            .map(|n| n.next_node_id)
-            .unwrap_or(0);
+            .map(|n| (n.next_node_id, n.next_param_id))
+            .unwrap_or((0, 0));
 
         let active_network = match self
             .node_type_registry
@@ -3323,6 +3337,7 @@ impl StructureDesigner {
                 pasted_wires,
                 display_states,
                 next_node_id_before,
+                next_param_id_before,
             });
         }
 

@@ -14,6 +14,9 @@ pub struct PasteNodesCommand {
     pub display_states: Vec<(u64, NodeDisplayType)>,
     /// next_node_id before the paste (restored on undo)
     pub next_node_id_before: u64,
+    /// next_param_id before the paste (restored on undo) — a pasted `parameter`
+    /// node mints a fresh id and so consumes the counter (issue #96).
+    pub next_param_id_before: u64,
 }
 
 impl PasteNodesCommand {
@@ -72,6 +75,10 @@ impl PasteNodesCommand {
                     node.custom_name = snap.custom_name.clone();
                     snap.apply_zone_state(node, body);
                 }
+
+                // The snapshot carries the param_id minted at paste time, so
+                // drag the counter back past it (undo reset it).
+                network.raise_next_param_id_above(snap.node_id);
             }
 
             // Re-establish wires between pasted nodes
@@ -126,6 +133,9 @@ impl PasteNodesCommand {
 
             // Restore next_node_id
             network.next_node_id = self.next_node_id_before;
+            // Restore next_param_id (a no-op unless a `parameter` node was
+            // among the pasted nodes, which consumes one).
+            network.next_param_id = self.next_param_id_before;
         }
     }
 }

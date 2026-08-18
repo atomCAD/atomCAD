@@ -41,6 +41,7 @@
 //! parameter add no longer re-jumbles).
 
 use atomcad_structure_designer::data_type::DataType;
+use atomcad_structure_designer::invariants::{InvariantKind, check_network_invariants};
 use atomcad_structure_designer::network_validator::dedupe_param_ids_in_network;
 use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::nodes::parameter::ParameterData;
@@ -713,5 +714,313 @@ fn guard_add_at_end_then_reorder_to_middle() {
         srcs(&designer, "main", f, 2),
         vec![i2],
         "final pin2 (last)<-i2"
+    );
+}
+
+// ###########################################################################
+// #96 — duplicating / pasting a parameter node must mint a fresh identity.
+// ###########################################################################
+//
+// `add_node` hands every new `parameter` node a fresh `param_id` from the
+// network's `next_param_id` counter, but `NodeNetwork::duplicate_node` and
+// `copy_nodes_from` clone the node data verbatim — including `param_id`. The
+// result is the same "Damage A" state this file's F6 section heals on load,
+// except reached by a plain in-session edit:
+//
+//  - `check_network_invariants` reports `DuplicateParamId` (fatal, so the debug
+//    wrapper panics at the next `validate_network`), and
+//  - in release, `repair_call_sites_for_network` builds `param_id -> old_index`
+//    as a `HashMap`, so the two colliding params collapse onto one entry and the
+//    duplicate silently inherits its twin's wire at every call site.
+//
+// `sort_order` is deliberately NOT touched by the fix: `compare_parameters`
+// tiebreaks equal sort orders on `node_id`, so the copy lands directly after its
+// original — which is where a user duplicating a parameter expects it.
+
+/// Current `param_name` of a parameter node.
+fn param_name_of(designer: &StructureDesigner, network: &str, node_id: u64) -> String {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap()
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ParameterData>()
+        .unwrap()
+        .param_name
+        .clone()
+}
+
+/// Every `DuplicateParamId` violation currently present in `network`.
+fn duplicate_param_id_violations(designer: &StructureDesigner, network: &str) -> Vec<String> {
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get(network)
+        .unwrap();
+    check_network_invariants(net, &designer.node_type_registry)
+        .into_iter()
+        .filter(|v| v.kind == InvariantKind::DuplicateParamId)
+        .map(|v| v.detail)
+        .collect()
+}
+
+/// D1: the duplicate gets its own `param_id`, so the per-network uniqueness
+/// invariant (B3) still holds. Checked before any validation runs, so a failure
+/// surfaces as the assertion rather than the debug invariant panic.
+#[test]
+fn regression_duplicate_param_node_mints_fresh_param_id() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+
+    designer.set_active_node_network_name(Some("Filt".to_string()));
+    let dup = designer.duplicate_node(ids[0]);
+    assert_ne!(dup, 0, "duplicate_node should succeed");
+
+    let original_id = param_id_of(&designer, "Filt", ids[0]);
+    let dup_id = param_id_of(&designer, "Filt", dup);
+    assert!(dup_id.is_some(), "duplicate must carry a param_id");
+    assert_ne!(
+        original_id, dup_id,
+        "duplicated parameter must get a fresh param_id, not a clone of the original's"
+    );
+    assert_eq!(
+        duplicate_param_id_violations(&designer, "Filt"),
+        Vec::<String>::new(),
+        "duplicating a parameter must not violate the param_id uniqueness invariant"
+    );
+}
+
+/// D2: the headline damage — with a cloned `param_id` the new pin steals a
+/// preceding pin's wire at every call site of the network.
+#[test]
+fn regression_duplicate_param_node_does_not_steal_call_site_wire() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+
+    designer.add_node_network("main");
+    designer.set_active_node_network_name(Some("main".to_string()));
+    let i1 = designer.add_node("int", DVec2::new(0.0, 0.0));
+    let i2 = designer.add_node("int", DVec2::new(0.0, 80.0));
+    let f = designer.add_node("Filt", DVec2::new(150.0, 0.0));
+    designer.connect_nodes(i1, 0, f, 0);
+    designer.connect_nodes(i2, 0, f, 1);
+    assert_eq!(srcs(&designer, "main", f, 0), vec![i1], "setup pin0<-i1");
+    assert_eq!(srcs(&designer, "main", f, 1), vec![i2], "setup pin1<-i2");
+
+    // The user duplicates the `first` parameter node and renames the copy,
+    // intending a third, initially unconnected pin.
+    designer.set_active_node_network_name(Some("Filt".to_string()));
+    let dup = designer.duplicate_node(ids[0]);
+    set_parameter_props(&mut designer, "Filt", dup, "third", DataType::Int, 2);
+    designer.validate_active_network();
+
+    assert_eq!(
+        arg_count(&designer, "main", f),
+        3,
+        "instance grew to 3 pins"
+    );
+    assert_eq!(srcs(&designer, "main", f, 0), vec![i1], "pin0 (first)<-i1");
+    assert_eq!(srcs(&designer, "main", f, 1), vec![i2], "pin1 (last)<-i2");
+    assert_eq!(
+        srcs(&designer, "main", f, 2),
+        Vec::<u64>::new(),
+        "pin2 (third) must be unconnected, not a clone of pin0's wire"
+    );
+}
+
+/// D3: the duplicate also gets a non-colliding `param_name`, so the network does
+/// not land in a blocking "Duplicate parameter name" error state.
+#[test]
+fn regression_duplicate_param_node_gets_unique_name() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("radius", 0), ("last", 1)]);
+
+    designer.set_active_node_network_name(Some("Filt".to_string()));
+    let dup = designer.duplicate_node(ids[0]);
+    designer.validate_active_network();
+
+    assert_ne!(
+        param_name_of(&designer, "Filt", ids[0]),
+        param_name_of(&designer, "Filt", dup),
+        "duplicated parameter must get a unique name"
+    );
+    let name_errors: Vec<String> = designer
+        .node_type_registry
+        .node_networks
+        .get("Filt")
+        .unwrap()
+        .validation_errors
+        .iter()
+        .filter(|e| e.error_text.contains("Duplicate parameter name"))
+        .map(|e| e.error_text.clone())
+        .collect();
+    assert_eq!(
+        name_errors,
+        Vec::<String>::new(),
+        "duplicating a parameter must not leave the network in a duplicate-name error state"
+    );
+}
+
+/// D4: copy/paste within the same network has the same identity hole as
+/// duplicate — `copy_nodes_from` clones the node data verbatim too.
+#[test]
+fn regression_paste_param_node_mints_fresh_param_id() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+
+    designer.set_active_node_network_name(Some("Filt".to_string()));
+    designer.select_nodes(vec![ids[0]]);
+    assert!(designer.copy_selection(), "copy should succeed");
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 300.0));
+    assert_eq!(pasted.len(), 1, "one node pasted");
+
+    assert_ne!(
+        param_id_of(&designer, "Filt", ids[0]),
+        param_id_of(&designer, "Filt", pasted[0]),
+        "pasted parameter must get a fresh param_id"
+    );
+    assert_eq!(
+        duplicate_param_id_violations(&designer, "Filt"),
+        Vec::<String>::new(),
+        "pasting a parameter must not violate the param_id uniqueness invariant"
+    );
+}
+
+/// D5 (guard): pasting a parameter into a DIFFERENT network keeps its name — the
+/// rename is a collision remedy, not an unconditional renumbering. The `param_id`
+/// still comes from the target network's counter, since ids are per-network.
+#[test]
+fn guard_paste_param_into_other_network_keeps_name() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Src", &[("radius", 0)]);
+    make_filter(&mut designer, "Dst", &[("height", 0)]);
+
+    designer.set_active_node_network_name(Some("Src".to_string()));
+    designer.select_nodes(vec![ids[0]]);
+    assert!(designer.copy_selection(), "copy should succeed");
+    designer.set_active_node_network_name(Some("Dst".to_string()));
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 200.0));
+    assert_eq!(pasted.len(), 1, "one node pasted");
+
+    assert_eq!(
+        param_name_of(&designer, "Dst", pasted[0]),
+        "radius",
+        "no name collision in the target network, so the name is preserved"
+    );
+    assert_eq!(
+        duplicate_param_id_violations(&designer, "Dst"),
+        Vec::<String>::new(),
+        "pasted parameter must hold a param_id unique within the TARGET network"
+    );
+}
+
+/// D6: minting a fresh id advances `next_param_id`, so undo has to restore it —
+/// otherwise the counter drifts and (per this file's header) a later parameter
+/// add can collide all over again.
+#[test]
+fn guard_duplicate_param_node_undo_restores_next_param_id() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+
+    designer.set_active_node_network_name(Some("Filt".to_string()));
+    let before = designer
+        .node_type_registry
+        .node_networks
+        .get("Filt")
+        .unwrap()
+        .next_param_id;
+
+    let dup = designer.duplicate_node(ids[0]);
+    designer.validate_active_network();
+    let after_dup = designer
+        .node_type_registry
+        .node_networks
+        .get("Filt")
+        .unwrap()
+        .next_param_id;
+    assert!(
+        after_dup > before,
+        "duplicating a parameter consumes a param_id ({} -> {})",
+        before,
+        after_dup
+    );
+
+    assert!(designer.undo(), "undo should succeed");
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .get("Filt")
+            .unwrap()
+            .nodes
+            .contains_key(&dup),
+        "undo removes the duplicate"
+    );
+    assert_eq!(
+        designer
+            .node_type_registry
+            .node_networks
+            .get("Filt")
+            .unwrap()
+            .next_param_id,
+        before,
+        "undo must restore next_param_id"
+    );
+
+    // Redo must re-establish the fresh identity, not resurrect the collision.
+    assert!(designer.redo(), "redo should succeed");
+    designer.validate_active_network();
+    assert_eq!(
+        duplicate_param_id_violations(&designer, "Filt"),
+        Vec::<String>::new(),
+        "redo must restore the duplicate's fresh param_id"
+    );
+}
+
+/// D7 (guard): `sort_order` is intentionally left alone. Equal sort orders are
+/// tiebroken by `node_id`, so the copy lands immediately after its original — the
+/// placement a user duplicating a parameter expects. This pins the decision taken
+/// on issue #96 against a future "pick the lowest unoccupied sort order".
+#[test]
+fn guard_duplicate_param_node_keeps_sort_order_and_lands_after_original() {
+    let mut designer = StructureDesigner::new();
+    let ids = make_filter(&mut designer, "Filt", &[("first", 0), ("last", 1)]);
+
+    designer.set_active_node_network_name(Some("Filt".to_string()));
+    let dup = designer.duplicate_node(ids[0]);
+    designer.validate_active_network();
+
+    let net = designer
+        .node_type_registry
+        .node_networks
+        .get("Filt")
+        .unwrap();
+    let dup_sort = net
+        .nodes
+        .get(&dup)
+        .unwrap()
+        .data
+        .as_any_ref()
+        .downcast_ref::<ParameterData>()
+        .unwrap()
+        .sort_order;
+    assert_eq!(dup_sort, 0, "sort_order is cloned unchanged");
+
+    let names: Vec<String> = net
+        .node_type
+        .parameters
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
+    assert_eq!(names.len(), 3, "three parameters");
+    assert_eq!(names[0], "first", "original stays first (lower node id)");
+    assert_eq!(
+        names[2], "last",
+        "the copy sorts before `last`, not after it"
     );
 }

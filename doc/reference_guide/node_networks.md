@@ -184,7 +184,9 @@ To set up an input pin (parameter) of your custom node you need to use a `parame
 
 The above image shows a subnetwork named `cube` which has an integer parameter defined name `size`.
 
-The *sort order* property of a parameter determines the order of the parameters in the resulting custom node.
+The *sort order* property of a parameter determines the order of the parameters in the resulting custom node. Parameters that share a sort order keep a stable relative order, so you do not have to keep the numbers distinct.
+
+Duplicating or copy-pasting a `parameter` node gives the copy a name that does not clash with the existing parameters (`radius` becomes `radius2`), while keeping its sort order — which places the new pin directly after the one you copied. Rename it and adjust its sort order to move it elsewhere. Pasting a parameter into a *different* network keeps its original name unless that network already has a parameter with that name.
 
 A `parameter` node declares an input pin of the node network it sits in, so it can only be placed at the **top level of a network** — never inside a higher-order function's or a `closure`'s inline body. A body is not a network with its own interface: values reach it through the body's [zone-input pins](#higher-order-functions-and-inline-bodies) (`element`, `acc`) and through [capture wires](#higher-order-functions-and-inline-bodies) from the enclosing scope. Accordingly, `parameter` does not appear in the Add Node popup when you add a node inside a body, and pasting a selection that contains one into a body drops it. An older project file that contains such a node shows a warning badge on it — the rest of the network keeps working; replace the node with a capture wire or a zone input.
 
