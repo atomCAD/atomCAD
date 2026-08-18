@@ -1047,7 +1047,7 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiCommonApiIsOrthographic();
 
-  void crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();
+  bool crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();
 
   Future<LayoutAlgorithmPreference>
       crateApiStructureDesignerStructureDesignerPreferencesLayoutAlgorithmPreferenceDefault();
@@ -9841,14 +9841,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  void crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork() {
+  bool crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 285)!;
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_unit,
+        decodeSuccessData: sse_decode_bool,
         decodeErrorData: null,
       ),
       constMeta:

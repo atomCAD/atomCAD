@@ -2303,8 +2303,13 @@ List<String> takeLoadParamIdRepairs() => RustLib.instance.api
 /// # Behavior
 /// - Uses the layout algorithm specified in StructureDesignerPreferences
 /// - Reorganizes all nodes in the active network for improved readability
+/// - Recorded as a single undoable "Auto-Layout Network" step (#270)
 /// - Automatically refreshes the UI after layout
-void layoutActiveNetwork() => RustLib.instance.api
+///
+/// Returns true if the layout actually moved something (and therefore pushed an
+/// undo step); false if the network was already laid out or is empty. The UI
+/// uses this to decide whether to offer "Ctrl+Z to undo".
+bool layoutActiveNetwork() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLayoutActiveNetwork();
 
 /// Get information about whether/how the current selection can be factored into a subnetwork.

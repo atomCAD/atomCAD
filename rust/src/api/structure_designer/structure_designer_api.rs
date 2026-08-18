@@ -154,7 +154,6 @@ use atomcad_structure_designer::data_type::{DataType, RecordType};
 use atomcad_structure_designer::evaluator::network_result::{
     Alignment, NetworkResult, dmat3_to_rows,
 };
-use atomcad_structure_designer::layout;
 use atomcad_structure_designer::node_data::CustomNodeData;
 use atomcad_structure_designer::nodes::apply::ApplyData;
 use atomcad_structure_designer::nodes::apply_diff::ApplyDiffData;
@@ -8648,42 +8647,23 @@ pub fn take_load_param_id_repairs() -> Vec<String> {
 /// # Behavior
 /// - Uses the layout algorithm specified in StructureDesignerPreferences
 /// - Reorganizes all nodes in the active network for improved readability
+/// - Recorded as a single undoable "Auto-Layout Network" step (#270)
 /// - Automatically refreshes the UI after layout
+///
+/// Returns true if the layout actually moved something (and therefore pushed an
+/// undo step); false if the network was already laid out or is empty. The UI
+/// uses this to decide whether to offer "Ctrl+Z to undo".
 #[flutter_rust_bridge::frb(sync)]
-pub fn layout_active_network() {
+pub fn layout_active_network() -> bool {
     unsafe {
-        with_mut_cad_instance(|cad_instance| {
-            let structure_designer = &mut cad_instance.structure_designer;
-
-            // Get the active network name
-            let network_name = match &structure_designer.active_node_network_name {
-                Some(name) => name.clone(),
-                None => return,
-            };
-
-            // Get the layout algorithm from preferences
-            let algorithm = structure_designer
-                .preferences
-                .layout_preferences
-                .layout_algorithm
-                .into();
-
-            // Get a const pointer to the registry for layout computation
-            let registry_ptr = &structure_designer.node_type_registry
-                as *const atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
-
-            // Apply layout to the network
-            if let Some(network) = structure_designer
-                .node_type_registry
-                .node_networks
-                .get_mut(&network_name)
-            {
-                layout::layout_network(network, &*registry_ptr, algorithm);
-            }
-
-            // Refresh the UI
-            refresh_structure_designer_auto(cad_instance);
-        });
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let changed = cad_instance.structure_designer.layout_active_network();
+                refresh_structure_designer_auto(cad_instance);
+                changed
+            },
+            false,
+        )
     }
 }
 

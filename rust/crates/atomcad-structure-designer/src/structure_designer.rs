@@ -6019,6 +6019,69 @@ impl StructureDesigner {
         }
     }
 
+    /// Auto-layout the active (top-level) network with the algorithm selected
+    /// in preferences, recorded as a single undoable step (#270).
+    ///
+    /// Layout only rewrites `Node::position`, so the whole action is expressible
+    /// as one `MoveNodesCommand` - no dedicated command type is needed.
+    ///
+    /// Returns whether anything actually moved, i.e. whether an undo step was
+    /// pushed. A layout that moves nothing pushes nothing, so the caller must
+    /// not advertise an undo in that case - `Ctrl+Z` would hit the *previous*
+    /// command instead.
+    pub fn layout_active_network(&mut self) -> bool {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return false,
+        };
+        let algorithm = self.preferences.layout_preferences.layout_algorithm.into();
+
+        // Two *shared* borrows of the registry (the network lives inside it), so
+        // no raw pointer is needed here - unlike `layout::layout_network`, which
+        // needs `&mut NodeNetwork` and `&NodeTypeRegistry` simultaneously.
+        let network = match self.node_type_registry.node_networks.get(&network_name) {
+            Some(network) => network,
+            None => return false,
+        };
+        let positions = crate::layout::compute_layout(network, &self.node_type_registry, algorithm);
+
+        // (node_id, old_position, new_position), skipping nodes that stay put.
+        let mut moves: Vec<(u64, DVec2, DVec2)> = positions
+            .iter()
+            .filter_map(|(&node_id, &new_pos)| {
+                network
+                    .nodes
+                    .get(&node_id)
+                    .filter(|node| node.position != new_pos)
+                    .map(|node| (node_id, node.position, new_pos))
+            })
+            .collect();
+        if moves.is_empty() {
+            return false;
+        }
+        // `positions` is a HashMap; sort so the recorded command is deterministic.
+        moves.sort_by_key(|&(node_id, _, _)| node_id);
+
+        let network = match self.node_type_registry.node_networks.get_mut(&network_name) {
+            Some(network) => network,
+            None => return false,
+        };
+        for &(node_id, _old_pos, new_pos) in &moves {
+            if let Some(node) = network.nodes.get_mut(&node_id) {
+                node.position = new_pos;
+            }
+        }
+
+        self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
+            network_name,
+            scope_path: Vec::new(),
+            moves,
+            description: "Auto-Layout Network".to_string(),
+        });
+        self.set_dirty(true);
+        true
+    }
+
     /// Toggle wire in selection (for Ctrl+click)
     pub fn toggle_wire_selection(
         &mut self,

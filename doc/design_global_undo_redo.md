@@ -72,6 +72,7 @@ A critical question: does every user action map 1:1 to a single StructureDesigne
 | Rename network | `rename_node_network()` | `RenameNetwork` |
 | Delete network | `delete_node_network()` | `DeleteNetwork` |
 | Factor selection | `factor_selection_into_subnetwork()` | `FactorSelection` |
+| Auto-Layout Network | `layout_active_network()` | `MoveNodes` |
 
 ### Actions That Involve Multiple SD Calls But Are Still One Command
 
@@ -84,6 +85,8 @@ A critical question: does every user action map 1:1 to a single StructureDesigne
 **Cut:** `cut_selection()` calls `copy_selection()` then `delete_selected()`. `copy_selection()` only writes to the clipboard field on StructureDesigner — it does not mutate any node network, so it never pushes a command. `delete_selected()` pushes a `DeleteNodesCommand`. Result: exactly 1 command. No special mechanism needed.
 
 **Auto-connect:** `auto_connect_to_node()` computes compatible pins, then calls `self.connect_nodes()`. `auto_connect_to_node()` itself does NOT push a command — only `connect_nodes()` does, producing exactly 1 `ConnectWireCommand`. This works because `auto_connect_to_node()` is a pure wrapper: it computes which pins to connect, then delegates to the single command-producing method.
+
+**Auto-Layout Network:** the menu action only rewrites `Node::position`, so it reuses `MoveNodesCommand` rather than introducing a layout-specific command: `layout_active_network()` computes the new positions, diffs them against the current ones, applies them, and pushes one command carrying every `(id, old, new)` triple. A layout that moves nothing pushes nothing, and the method returns that fact so the UI does not offer an undo that would hit the previous command instead (#270).
 
 **Move nodes (drag):** `move_selected_nodes()` is called many times per drag but it NEVER pushes commands on its own. Instead, the begin/end grouping mechanism (see MoveNodes section) handles this: `begin_move_nodes()` captures start positions, intermediate `move_selected_nodes()` calls just move the nodes without recording anything, and `end_move_nodes()` creates a single `MoveNodesCommand` from start to final positions.
 

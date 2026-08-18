@@ -260,12 +260,22 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             MenuItemButton(
                               key: const Key('auto_layout_network_item'),
                               onPressed: () {
-                                widget.model.autoLayoutNetwork();
+                                final changed =
+                                    widget.model.autoLayoutNetwork();
                                 // Reset view to show all nodes after layout
                                 final state = nodeNetworkKey.currentState;
                                 if (state != null) {
                                   state.updatePanOffsetForCurrentNetwork(
                                       forceUpdate: true);
+                                }
+                                // Rearranging every node is a big, unprompted
+                                // visual change; point at the way back out
+                                // instead of gating it behind a confirmation
+                                // dialog (#270). Only when there is actually
+                                // an undo step to reach.
+                                if (changed) {
+                                  _showTransientSnackBar(context,
+                                      'Auto-layout applied — Ctrl+Z to undo');
                                 }
                               },
                               child: const Text('Auto-Layout Network'),

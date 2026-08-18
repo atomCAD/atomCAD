@@ -970,9 +970,14 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Apply auto-layout to the active node network.
   /// Uses the layout algorithm configured in preferences.
-  void autoLayoutNetwork() {
-    structure_designer_api.layoutActiveNetwork();
+  ///
+  /// Returns whether anything actually moved. A layout is recorded as a single
+  /// undoable step, but a no-op layout records nothing, so callers must not
+  /// offer an undo when this returns false (#270).
+  bool autoLayoutNetwork() {
+    final changed = structure_designer_api.layoutActiveNetwork();
     refreshFromKernel();
+    return changed;
   }
 
   // ===== UNDO/REDO =====

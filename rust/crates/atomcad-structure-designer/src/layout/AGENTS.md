@@ -25,5 +25,9 @@ Automatic layout algorithms for repositioning nodes in a network.
 
 Layout is triggered by:
 - AI text format edits (auto-layout new nodes via `text_format/auto_layout.rs`)
-- "Auto-Layout Network" menu action in the UI
+- "Auto-Layout Network" menu action in the UI, through
+  `StructureDesigner::layout_active_network()` — **not** `layout_network()`
+  directly. That wrapper diffs old against new positions and records the whole
+  rearrangement as one undoable `MoveNodesCommand` (#270); calling
+  `layout_network()` from a user-facing path would silently bypass undo.
 - Node size estimation uses constants from `node_layout.rs` in the parent directory

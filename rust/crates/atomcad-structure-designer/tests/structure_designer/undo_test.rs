@@ -6,6 +6,7 @@ use atomcad_structure_designer::nodes::float::FloatData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
 use atomcad_structure_designer::nodes::switch::SwitchCaseValue;
 use atomcad_structure_designer::nodes::vec3::Vec3Data;
+use atomcad_structure_designer::preferences::LayoutAlgorithmPreference;
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     SerializableNodeTypeRegistryNetworks, node_network_to_serializable,
 };
@@ -739,6 +740,140 @@ fn undo_move_multiple_drags_are_separate_commands() {
     assert!(designer.undo()); // undo second drag
     assert!(designer.undo()); // undo first drag
     assert!(!designer.undo()); // nothing left
+}
+
+// ===== Auto-Layout Tests (#270) =====
+
+/// Builds `float -> sphere -> structure_move` with every node stacked on the
+/// origin, so any layout algorithm has to move at least one of them.
+fn setup_designer_for_layout(algorithm: LayoutAlgorithmPreference) -> StructureDesigner {
+    let mut designer = setup_designer_with_network("test");
+    designer.preferences.layout_preferences.layout_algorithm = algorithm;
+
+    let float_id = designer.add_node("float", DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", DVec2::ZERO);
+    let move_id = designer.add_node("structure_move", DVec2::ZERO);
+    designer.connect_nodes(float_id, 0, sphere_id, 0);
+    designer.connect_nodes(sphere_id, 0, move_id, 0);
+
+    designer.undo_stack.clear();
+    designer
+}
+
+fn node_positions(designer: &StructureDesigner, network_name: &str) -> Vec<(u64, DVec2)> {
+    let network = designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .expect("network exists");
+    let mut positions: Vec<(u64, DVec2)> = network
+        .nodes
+        .iter()
+        .map(|(&id, node)| (id, node.position))
+        .collect();
+    positions.sort_by_key(|&(id, _)| id);
+    positions
+}
+
+#[test]
+fn undo_auto_layout_network_sugiyama() {
+    let mut designer = setup_designer_for_layout(LayoutAlgorithmPreference::Sugiyama);
+    let before = node_positions(&designer, "test");
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.layout_active_network();
+    });
+
+    // Guard against a vacuous roundtrip: the layout must actually have moved
+    // something, otherwise the assertions above would hold trivially.
+    designer.layout_active_network();
+    assert_ne!(
+        before,
+        node_positions(&designer, "test"),
+        "auto-layout should reposition the stacked nodes"
+    );
+}
+
+#[test]
+fn undo_auto_layout_network_topological_grid() {
+    let mut designer = setup_designer_for_layout(LayoutAlgorithmPreference::TopologicalGrid);
+    let before = node_positions(&designer, "test");
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.layout_active_network();
+    });
+
+    designer.layout_active_network();
+    assert_ne!(
+        before,
+        node_positions(&designer, "test"),
+        "auto-layout should reposition the stacked nodes"
+    );
+}
+
+#[test]
+fn auto_layout_is_a_single_undo_step() {
+    let mut designer = setup_designer_for_layout(LayoutAlgorithmPreference::Sugiyama);
+
+    designer.layout_active_network();
+
+    assert!(designer.undo(), "one undo should revert the whole layout");
+    assert!(
+        !designer.undo(),
+        "auto-layout must push exactly one command, not one per node"
+    );
+}
+
+#[test]
+fn auto_layout_command_description() {
+    let mut designer = setup_designer_for_layout(LayoutAlgorithmPreference::Sugiyama);
+
+    designer.layout_active_network();
+
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Auto-Layout Network"),
+        "the undo snackbar shows this text"
+    );
+}
+
+#[test]
+fn auto_layout_marks_design_dirty() {
+    let mut designer = setup_designer_for_layout(LayoutAlgorithmPreference::Sugiyama);
+    designer.set_dirty(false);
+
+    designer.layout_active_network();
+
+    assert!(
+        designer.is_dirty(),
+        "node positions are persisted, so a layout is an unsaved change"
+    );
+}
+
+#[test]
+fn repeated_auto_layout_creates_no_second_command() {
+    let mut designer = setup_designer_for_layout(LayoutAlgorithmPreference::Sugiyama);
+
+    designer.layout_active_network();
+    let laid_out = node_positions(&designer, "test");
+
+    // The algorithms compute absolute positions from the graph alone, so a
+    // second run is a no-op and must not push an empty undo step.
+    designer.layout_active_network();
+    assert_eq!(laid_out, node_positions(&designer, "test"));
+
+    assert!(designer.undo());
+    assert!(!designer.undo());
+}
+
+#[test]
+fn auto_layout_with_no_active_network_is_a_noop() {
+    let mut designer = StructureDesigner::new();
+    designer.set_active_node_network_name(None);
+
+    designer.layout_active_network();
+
+    assert!(!designer.undo(), "nothing to undo");
 }
 
 // ===== Phase 4: SetReturnNode Tests =====
