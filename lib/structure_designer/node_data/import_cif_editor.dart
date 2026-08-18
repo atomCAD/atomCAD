@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cad/common/error_display.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_cad/common/file_dialog_directory.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 
@@ -104,10 +105,13 @@ class _ImportCifEditorState extends State<ImportCifEditor> {
         type: FileType.custom,
         allowedExtensions: ['cif'],
         dialogTitle: 'Select CIF file',
+        initialDirectory:
+            initialDirectoryFor(APIFileDialogPurpose.structureImport),
       );
 
       if (result != null && result.files.single.path != null) {
         final filePath = result.files.single.path!;
+        rememberPickedFile(APIFileDialogPurpose.structureImport, filePath);
         _updateFileName(filePath);
 
         // Automatically try to load the file after browsing

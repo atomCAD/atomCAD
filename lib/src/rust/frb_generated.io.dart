@@ -202,6 +202,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIFieldEditorHint dco_decode_api_field_editor_hint(dynamic raw);
 
   @protected
+  APIFileDialogPurpose dco_decode_api_file_dialog_purpose(dynamic raw);
+
+  @protected
   APIFilterData dco_decode_api_filter_data(dynamic raw);
 
   @protected
@@ -1720,6 +1723,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIFieldEditorHint sse_decode_api_field_editor_hint(
+      SseDeserializer deserializer);
+
+  @protected
+  APIFileDialogPurpose sse_decode_api_file_dialog_purpose(
       SseDeserializer deserializer);
 
   @protected
@@ -3502,6 +3509,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_field_editor_hint(
       APIFieldEditorHint self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_file_dialog_purpose(
+      APIFileDialogPurpose self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_filter_data(APIFilterData self, SseSerializer serializer);

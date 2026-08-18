@@ -29,6 +29,7 @@ use super::structure_designer_api_types::APIExprData;
 use super::structure_designer_api_types::APIExprParameter;
 use super::structure_designer_api_types::APIExtrudeData;
 use super::structure_designer_api_types::APIFieldEditorHint;
+use super::structure_designer_api_types::APIFileDialogPurpose;
 use super::structure_designer_api_types::APIFilterData;
 use super::structure_designer_api_types::APIFoldData;
 use super::structure_designer_api_types::APIForeachData;
@@ -7867,6 +7868,47 @@ pub fn get_design_file_path() -> Option<String> {
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_recent_files() -> Vec<String> {
     atomcad_structure_designer::recent_files::load_recent_files()
+}
+
+/// The folder a file dialog of the given `purpose` should open in, or `None`
+/// to let the platform pick (issue #420).
+///
+/// Flutter passes this straight to `FilePicker`'s `initialDirectory`. Windows
+/// would half-fake this on its own via the shell's per-executable folder MRU;
+/// the XDG portal used on Linux would not, which is why the folder has to be
+/// named explicitly — see `last_directories.rs` for the full story.
+///
+/// For [`APIFileDialogPurpose::Design`] there is a fallback: with nothing
+/// recorded yet, the most recent design's folder is used, so the very first
+/// dialog after an upgrade already lands in the right place instead of at
+/// `$HOME`.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_last_directory(purpose: APIFileDialogPurpose) -> Option<String> {
+    use atomcad_structure_designer::last_directories;
+
+    if let Some(directory) = last_directories::get_last_directory(purpose.into()) {
+        return Some(directory);
+    }
+
+    if purpose != APIFileDialogPurpose::Design {
+        return None;
+    }
+
+    let recent = atomcad_structure_designer::recent_files::load_recent_files();
+    let parent = std::path::Path::new(recent.first()?).parent()?;
+    parent
+        .is_dir()
+        .then(|| parent.to_string_lossy().into_owned())
+}
+
+/// Records the folder containing `file_path` as the one to reopen for
+/// `purpose` next time (issue #420).
+///
+/// Takes the chosen *file* rather than a directory because that is what every
+/// file dialog hands back.
+#[flutter_rust_bridge::frb(sync)]
+pub fn record_last_directory(purpose: APIFileDialogPurpose, file_path: String) {
+    atomcad_structure_designer::last_directories::record_file(purpose.into(), &file_path);
 }
 
 #[flutter_rust_bridge::frb(sync)]

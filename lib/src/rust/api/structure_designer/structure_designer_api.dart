@@ -1987,6 +1987,34 @@ String? getDesignFilePath() => RustLib.instance.api
 List<String> getRecentFiles() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiGetRecentFiles();
 
+/// The folder a file dialog of the given `purpose` should open in, or `None`
+/// to let the platform pick (issue #420).
+///
+/// Flutter passes this straight to `FilePicker`'s `initialDirectory`. Windows
+/// would half-fake this on its own via the shell's per-executable folder MRU;
+/// the XDG portal used on Linux would not, which is why the folder has to be
+/// named explicitly — see `last_directories.rs` for the full story.
+///
+/// For [`APIFileDialogPurpose::Design`] there is a fallback: with nothing
+/// recorded yet, the most recent design's folder is used, so the very first
+/// dialog after an upgrade already lands in the right place instead of at
+/// `$HOME`.
+String? getLastDirectory({required APIFileDialogPurpose purpose}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetLastDirectory(
+            purpose: purpose);
+
+/// Records the folder containing `file_path` as the one to reopen for
+/// `purpose` next time (issue #420).
+///
+/// Takes the chosen *file* rather than a directory because that is what every
+/// file dialog hands back.
+void recordLastDirectory(
+        {required APIFileDialogPurpose purpose, required String filePath}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiRecordLastDirectory(
+            purpose: purpose, filePath: filePath);
+
 APIResult loadNodeNetworks({required String filePath}) => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiLoadNodeNetworks(
         filePath: filePath);

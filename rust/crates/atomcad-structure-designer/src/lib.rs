@@ -34,6 +34,7 @@ pub mod expr;
 pub mod identifier;
 pub mod implicit_eval;
 pub mod invariants;
+pub mod last_directories;
 pub mod layout;
 pub mod navigation_history;
 pub mod network_usages;

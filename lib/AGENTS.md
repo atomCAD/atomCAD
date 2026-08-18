@@ -159,6 +159,43 @@ showDialog(
 );
 ```
 
+### File Dialogs Must Remember Their Folder
+
+Never call `FilePicker.platform.pickFiles` / `.saveFile` directly. Go through
+`lib/common/file_dialog_directory.dart`: pass `initialDirectoryFor(purpose)` as
+`initialDirectory`, and call `rememberPickedFile(purpose, path)` with whatever
+the dialog returned.
+
+```dart
+final result = await FilePicker.platform.pickFiles(
+  type: FileType.custom,
+  allowedExtensions: ['cif'],
+  dialogTitle: 'Select CIF file',
+  initialDirectory: initialDirectoryFor(APIFileDialogPurpose.structureImport),
+);
+if (result != null && result.files.single.path != null) {
+  final filePath = result.files.single.path!;
+  rememberPickedFile(APIFileDialogPurpose.structureImport, filePath);
+  // ...
+}
+```
+
+This is the kind of bug that only one maintainer can see. On Windows
+`file_picker` calls comdlg32's `GetOpenFileNameW` / `GetSaveFileNameW`, which
+fall back to the shell's per-executable folder MRU when no initial directory is
+given — so a dialog that never passes one still *appears* to remember where you
+were. On Linux the same package talks to the XDG desktop portal, which shows a
+folder only when the app names one, and the dialog reopens at `$HOME` every
+time. That was issue #420: the feature had never been implemented, and Windows
+was faking it convincingly enough that it read as "works for me".
+
+Pick the `APIFileDialogPurpose` that matches what the dialog is *for*, not what
+extension it filters — each purpose is an independent remembered folder, so
+exporting a structure must not move where *Load Design* opens. Adding a fifth
+purpose means adding a variant to `FileDialogPurpose` in
+`rust/crates/atomcad-structure-designer/src/last_directories.rs` (and its api
+twin); the `key()` strings there are the persisted contract and must not change.
+
 ### Calling Rust API
 
 ```dart

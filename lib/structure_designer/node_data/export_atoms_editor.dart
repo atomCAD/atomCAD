@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter_cad/common/file_dialog_directory.dart';
 import 'package:flutter_cad/common/export_format_dialog.dart';
 import 'package:flutter_cad/inputs/string_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
@@ -97,6 +98,8 @@ class _ExportAtomsEditorState extends State<ExportAtomsEditor> {
         fileName: 'structure',
         type: FileType.custom,
         allowedExtensions: [extension],
+        initialDirectory:
+            initialDirectoryFor(APIFileDialogPurpose.structureExport),
       );
 
       if (outputFile != null) {
@@ -106,6 +109,7 @@ class _ExportAtomsEditorState extends State<ExportAtomsEditor> {
         if (!outputFile.toLowerCase().endsWith('.$extension')) {
           outputFile = '$outputFile.$extension';
         }
+        rememberPickedFile(APIFileDialogPurpose.structureExport, outputFile);
         _updateFileName(outputFile);
       }
     } catch (e) {

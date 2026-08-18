@@ -4,6 +4,7 @@ use crate::api::common_api_types::APITransform;
 use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use atomcad_structure_designer::evaluator::network_evaluator::PrintLogEntry;
+use atomcad_structure_designer::last_directories::FileDialogPurpose as DomainFileDialogPurpose;
 use atomcad_structure_designer::node_network::CollapseMode;
 use atomcad_structure_designer::node_network::FunctionPinDisposition;
 use atomcad_structure_designer::node_network::FunctionPinRole;
@@ -2181,6 +2182,47 @@ impl From<DomainExecuteResult> for APIExecuteResult {
             ok: r.ok,
             error: r.error,
             logs: r.logs.iter().map(Into::into).collect(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// File-dialog purpose twin (issue #420)
+// ---------------------------------------------------------------------------
+
+/// Flutter-facing mirror of [`DomainFileDialogPurpose`] — which kind of file
+/// dialog a remembered folder belongs to.
+///
+/// Flutter is the only caller that can know what a dialog is *for*, so the
+/// purpose has to cross the bridge. It is an enum rather than a free-form key
+/// so a typo at one of the call sites cannot silently open a fifth, unshared
+/// slot in `last_directories.json`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIFileDialogPurpose {
+    Design,
+    CnndLibrary,
+    StructureImport,
+    StructureExport,
+}
+
+impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
+    fn from(purpose: APIFileDialogPurpose) -> Self {
+        match purpose {
+            APIFileDialogPurpose::Design => DomainFileDialogPurpose::Design,
+            APIFileDialogPurpose::CnndLibrary => DomainFileDialogPurpose::CnndLibrary,
+            APIFileDialogPurpose::StructureImport => DomainFileDialogPurpose::StructureImport,
+            APIFileDialogPurpose::StructureExport => DomainFileDialogPurpose::StructureExport,
+        }
+    }
+}
+
+impl From<DomainFileDialogPurpose> for APIFileDialogPurpose {
+    fn from(purpose: DomainFileDialogPurpose) -> Self {
+        match purpose {
+            DomainFileDialogPurpose::Design => APIFileDialogPurpose::Design,
+            DomainFileDialogPurpose::CnndLibrary => APIFileDialogPurpose::CnndLibrary,
+            DomainFileDialogPurpose::StructureImport => APIFileDialogPurpose::StructureImport,
+            DomainFileDialogPurpose::StructureExport => APIFileDialogPurpose::StructureExport,
         }
     }
 }

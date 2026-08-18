@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../common/draggable_dialog.dart';
 import '../common/error_display.dart';
 import '../common/export_format_dialog.dart';
+import '../common/file_dialog_directory.dart';
 import '../common/menu_widget.dart';
 import '../common/section.dart';
 import 'error_report.dart';
@@ -653,10 +654,13 @@ class _StructureDesignerState extends State<StructureDesigner> {
       type: FileType.custom,
       allowedExtensions: ['xyz'],
       dialogTitle: 'Import XYZ File',
+      initialDirectory:
+          initialDirectoryFor(APIFileDialogPurpose.structureImport),
     );
 
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
+      rememberPickedFile(APIFileDialogPurpose.structureImport, filePath);
       final error = graphModel.importXyzIntoAtomEdit(filePath);
       if (error.isNotEmpty && mounted) {
         showErrorDialog(
@@ -697,6 +701,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
     if (!await _confirmDiscardChanges()) return;
 
     debugPrint('Opening recent file: $filePath');
+    rememberPickedFile(APIFileDialogPurpose.design, filePath);
     final loadResult = graphModel.loadNodeNetworks(filePath);
 
     if (!loadResult.success && mounted) {
@@ -771,11 +776,13 @@ class _StructureDesignerState extends State<StructureDesigner> {
       type: FileType.custom,
       allowedExtensions: ['cnnd'],
       dialogTitle: 'Load Design File',
+      initialDirectory: initialDirectoryFor(APIFileDialogPurpose.design),
     );
 
     if (result != null && result.files.isNotEmpty) {
       String filePath = result.files.first.path!;
       debugPrint('Design file selected: $filePath');
+      rememberPickedFile(APIFileDialogPurpose.design, filePath);
       final loadResult = graphModel.loadNodeNetworks(filePath);
 
       if (!loadResult.success) {
@@ -804,6 +811,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       fileName: 'design',
       type: FileType.custom,
       allowedExtensions: ['cnnd'],
+      initialDirectory: initialDirectoryFor(APIFileDialogPurpose.design),
     );
 
     if (outputFile != null) {
@@ -812,6 +820,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
       if (!finalPath.contains('.')) {
         finalPath = '$outputFile.cnnd';
       }
+      rememberPickedFile(APIFileDialogPurpose.design, finalPath);
       final result = graphModel.saveNodeNetworksAs(finalPath);
       if (!result.success) {
         _showSaveErrorDialog(result.errorMessage);
@@ -895,10 +904,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
         type: FileType.custom,
         allowedExtensions: ['cnnd'],
         dialogTitle: 'Select .cnnd Library File',
+        initialDirectory: initialDirectoryFor(APIFileDialogPurpose.cnndLibrary),
       );
 
       if (result != null && result.files.isNotEmpty) {
         String filePath = result.files.first.path!;
+        rememberPickedFile(APIFileDialogPurpose.cnndLibrary, filePath);
 
         // Show the import dialog
         if (mounted) {
@@ -945,6 +956,8 @@ class _StructureDesignerState extends State<StructureDesigner> {
         fileName: 'structure',
         type: FileType.custom,
         allowedExtensions: [selectedFormat],
+        initialDirectory:
+            initialDirectoryFor(APIFileDialogPurpose.structureExport),
       );
 
       if (outputFile != null) {
@@ -952,6 +965,7 @@ class _StructureDesignerState extends State<StructureDesigner> {
         if (!outputFile.toLowerCase().endsWith('.$selectedFormat')) {
           outputFile = '$outputFile.$selectedFormat';
         }
+        rememberPickedFile(APIFileDialogPurpose.structureExport, outputFile);
 
         // Call the export method
         final result = graphModel.exportVisibleAtomicStructures(outputFile);

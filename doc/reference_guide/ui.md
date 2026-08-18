@@ -386,6 +386,13 @@ Used for loading and saving a design, exporting a design to .xyz or .mol, undo/r
   - *Save Design* (**Ctrl+S**) is a quick save: it writes the design straight back to the file it was loaded from or last saved to, with no dialog. A short confirmation appears at the bottom of the window ("Saved *filename*", or "No changes to save" when the design is already up to date). If the design has never been saved and so has no file yet, **Ctrl+S** opens the *Save Design As* dialog instead.
   - *Save Design As* (**Ctrl+Shift+S**) always opens the file dialog, so it is the way to write the design to a *new* file — the one you pick also becomes the target of subsequent quick saves.
 - *File > Export visible*: You can export visible atomic structures into `.xyz` or `.mol` format. `.mol` is a better choice because in this case bonds are saved too. `.xyz` do not support bond information so when saving into `.xyz` bond information is lost. In case of `.mol` the newer `V3000` flavor is used instead of the old `V2000` flavor because `V3000` supports more than 999 atoms.
+- **File dialogs remember where you were.** Every file dialog reopens in the folder you last used, so you do not have to dig down the same path each time. The folder is remembered separately for each kind of dialog, and persists across sessions:
+  - designs (*Load Design*, *Save Design As*, *Open Recent*),
+  - `.cnnd` libraries (*Import from .cnnd library*),
+  - structure imports (`.xyz`, `.cif` — both the *Import XYZ* menu item and the Browse buttons on the `import_xyz` / `import_cif` nodes),
+  - structure exports (`.xyz`, `.mol` — both *Export visible* and the `export_atoms` node's Browse button).
+
+  So exporting a structure to a renders folder does not move where *Load Design* opens next time. If a remembered folder has since been deleted or lives on a drive that is not mounted, the dialog falls back to the system default.
 - *Edit > Undo* (`Ctrl+Z`) / *Edit > Redo* (`Ctrl+Shift+Z` or `Ctrl+Y`): Undo and redo all operations, including node edits, wire connections, atom editing, and more.
 - *Edit > Validate active network*: Validates the active node network and reports any errors. Available in Node Network Mode only.
 - *Edit > Go to next error* (`F8`) / *Edit > Go to previous error* (`Shift+F8`): Steps selection through the active network's errors one at a time, wrapping around, so you can walk its problems without hunting for the red nodes. Each step activates the errored node and scrolls it into view (the same oriented jump the error badge uses). Greyed out when the active network has no errors. Available in Node Network Mode only.
