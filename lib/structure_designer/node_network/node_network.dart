@@ -1208,6 +1208,21 @@ class NodeNetworkState extends State<NodeNetwork> {
 
   /// Handles tap down in the main area
   void _handleTapDown(TapDownDetails details) {
+    // A tap that lands on a note currently open for in-place editing (issue
+    // #421) belongs to that note's text field. This handler runs on the 100 ms
+    // press deadline — *before* the gesture arena resolves in the field's
+    // favour — so grabbing canvas focus here would pull the caret out on every
+    // click inside the note. Every other tap position still takes focus, which
+    // is exactly what commits and closes the in-place editor.
+    final editing = widget.graphModel.inPlaceEditRef;
+    if (editing != null) {
+      final hit =
+          _makeResolver()?.findNodeAtScreenPosition(details.localPosition);
+      if (hit != null &&
+          widget.graphModel.isInPlaceEditTarget(hit.node.id, hit.scopeChain)) {
+        return;
+      }
+    }
     focusNode.requestFocus();
   }
 
@@ -1797,7 +1812,10 @@ class NodeNetworkState extends State<NodeNetwork> {
             },
             child: MouseRegion(
               onEnter: (event) {
-                if (!focusNode.hasFocus) {
+                // Not while a note is open for in-place editing (issue #421):
+                // the user moving the pointer out to a side panel and back
+                // would otherwise silently close the editor mid-sentence.
+                if (!focusNode.hasFocus && model.inPlaceEditRef == null) {
                   focusNode.requestFocus();
                 }
               },

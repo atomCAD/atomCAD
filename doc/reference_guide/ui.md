@@ -175,6 +175,9 @@ Right-click in the node editor to open the **Add Node** window and add a new nod
 **Move nodes**
 Left-click a node and drag to move it.
 
+**Edit a comment note in place**
+Double-click a [comment](./nodes/annotation.md#comment) node — the yellow sticky note — to type into it directly on the canvas, rather than going to the Node Properties panel. Double-click its title bar to edit the title, its body to edit the text; the cursor lands on the character you clicked. Click outside to finish, or press `Esc` to discard. The panel fields still work and stay in sync.
+
 **Connect pins**
 Left-click and drag from an output pin to an input pin to create a wire. To disconnect a wire, select it and press `Del` (see Selection below).
 

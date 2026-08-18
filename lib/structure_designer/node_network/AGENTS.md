@@ -70,6 +70,59 @@ of frame time; per-widget `ScopeResolver` construction made rebuilds O(N²)):
    new widget that renders drag-mutated state must either live under the
    per-node `ListenableBuilder` or listen to `dragRepaint` itself.
 
+## Editable widgets on the canvas (the focus-steal trap)
+
+Comment notes are editable in place (issue #421): double-clicking one swaps its
+`Text` widgets for `TextField`s inside the same canvas `Stack`. Any future
+canvas-embedded editable has to clear the same two hazards, both of which come
+from the canvas needing keyboard focus for its own shortcuts:
+
+1. **`NodeNetworkState` grabs focus on tap-down and on mouse-enter.** The
+   tap-down grab is the nastier one: `TapGestureRecognizer` fires `onTapDown` on
+   the 100 ms press deadline, *before* the arena resolves in the editable's
+   favour, so it runs even for clicks the field ultimately wins — and pulls the
+   caret straight back out. Both grabs consult
+   `StructureDesignerModel.inPlaceEditRef` (mouse-enter skips outright;
+   tap-down skips only for a tap that hit the note being edited, since every
+   other tap must still take focus — that is what closes the editor). The flag
+   is deliberately non-notifying: it is written from focus callbacks.
+2. **The node's own drag handlers fight the field's selection drag.** Detach
+   `onPanStart`/`onPanUpdate`/`onPanEnd` while editing rather than relying on the
+   arena to favour the child.
+
+**Do not open the editor with `onDoubleTap`.** `DoubleTapGestureRecognizer`
+*holds the gesture arena* on the first tap (`gestures/multitap.dart`
+`_registerFirstTap`), which breaks the node's ordinary click handling in two
+ways: a real double-click makes it win and **reject** the sibling
+`TapGestureRecognizer`, so `onTapDown` never fires and the node is never
+selected; and a plain single click has its `onTapDown` delayed by the whole
+`kDoubleTapTimeout`. `CommentNodeWidget._handleTapDown` compares timestamps
+itself instead, which costs nothing and hands the handler the click position.
+
+Whatever opens the editor should also **select the node** — a double-click's
+second tap and the context-menu route both bypass the normal selection path,
+and an unselected node leaves the properties panel pointed somewhere else.
+
+To put the caret **where the user clicked**, read it off the rendered widget
+rather than recomputing it from layout constants: hold a `GlobalKey` on the
+static `Text`, and before the rebuild swaps it out call
+`RenderParagraph.getPositionForOffset(renderObject.globalToLocal(globalPos))`.
+That uses the line breaks actually on screen and folds in padding, canvas zoom,
+and scroll offset for free. Assign the resulting `TextSelection` to the
+controller *after* `requestFocus` — assigning `.text` leaves the selection
+invalid, which `EditableText` resolves to end-of-text when focus arrives.
+
+Two further rules the note editor follows, worth copying:
+
+- **Do not `refreshFromKernel()` per keystroke.** Push the value to the kernel
+  and refresh once when editing ends. A full refresh hands the widget a fresh
+  `NodeView`; resyncing a focused controller from it is the classic caret-jump
+  bug, and the on-screen text is the field's own content anyway.
+- **The field must own its vertical scroll** — see `lib/AGENTS.md` → "A Text
+  Field Must Own Its Own Vertical Scroll" (issue #422). The note's static branch
+  keeps its `SingleChildScrollView`; the editing branch uses `expands: true`
+  instead.
+
 ## Wire Rendering
 
 Wires use cubic Bezier curves with data-type-based coloring:

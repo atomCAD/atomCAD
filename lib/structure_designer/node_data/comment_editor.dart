@@ -60,6 +60,20 @@ class _CommentEditorState extends State<CommentEditor> {
     if (oldWidget.nodeId != widget.nodeId) {
       _labelController.text = widget.data?.label ?? '';
       _textController.text = widget.data?.text ?? '';
+      return;
+    }
+    // Same node, changed data: something else edited this note — in practice
+    // the canvas in-place editor (issue #421) or an undo. Adopt the new value
+    // so the two surfaces cannot disagree. Skipped for a focused field, whose
+    // controller is the authority for the edit in progress (and assigning to
+    // it would move the caret to the end).
+    final label = widget.data?.label ?? '';
+    final text = widget.data?.text ?? '';
+    if (!_labelFocusNode.hasFocus && _labelController.text != label) {
+      _labelController.text = label;
+    }
+    if (!_textFocusNode.hasFocus && _textController.text != text) {
+      _textController.text = text;
     }
   }
 

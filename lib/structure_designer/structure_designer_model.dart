@@ -178,6 +178,30 @@ class StructureDesignerModel extends ChangeNotifier {
   int? atomEditSelectedElement;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
 
+  /// The comment note currently being edited **in place** on the canvas
+  /// (`node_network/comment_node_widget.dart`), or null when none is.
+  ///
+  /// The canvas grabs keyboard focus on tap-down and on mouse-enter so its
+  /// shortcuts (Del, Ctrl+C/V/X/D) work; both would yank focus straight back
+  /// out of the note's text field, so both consult this. Mouse-enter skips the
+  /// grab outright while a note is open; tap-down skips it only for a tap that
+  /// lands on *this* note (see [isInPlaceEditTarget]) — a tap anywhere else
+  /// must still take focus, since that is what closes the in-place editor.
+  ///
+  /// Deliberately **not** a notifying property: it is set from focus callbacks
+  /// during a build/focus pass and must not trigger a canvas rebuild.
+  ({BigInt nodeId, List<BigInt> scopeChain})? inPlaceEditRef;
+
+  /// True if the node at ([nodeId], [scopeChain]) is the note currently open
+  /// in the in-place editor. A bare id is ambiguous across scopes, so both
+  /// halves are compared (see `node_network/AGENTS.md` → "Scope chains").
+  bool isInPlaceEditTarget(BigInt nodeId, List<BigInt> scopeChain) {
+    final ref = inPlaceEditRef;
+    return ref != null &&
+        ref.nodeId == nodeId &&
+        listEquals(ref.scopeChain, scopeChain);
+  }
+
   /// Drag fast-path notifier. Continuous drag gestures (node drag, wire
   /// rubber-band drag) must NOT call [notifyListeners] per pointer delta: a
   /// full notify rebuilds and re-lays-out every node widget plus every other
