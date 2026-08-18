@@ -65,6 +65,26 @@ common_api.setCameraTransform(transform: transform);
 
 ## Common Patterns
 
+### A Text Field Must Own Its Own Vertical Scroll
+
+Never give a multi-line `TextField` / `CodeField` an **outer** vertical
+`SingleChildScrollView` to make it fit a fixed-height slot. Put the field in the
+slot and let it scroll itself (`expands: true` with `maxLines`/`minLines` null,
+or a plain `maxLines: N`).
+
+Flutter compensates a drag-selection anchor for exactly two scroll offsets
+(`TextSelectionGestureDetectorBuilder.onDragSelectionUpdate`): the editable's
+*own* viewport offset, and the offset of the **nearest ancestor** `Scrollable`.
+An extra scroll view wrapped around the field is neither — so every pixel
+scrolled mid-drag drags the anchor along with the viewport, and the selection
+silently stays clipped to whatever is on screen. That was issue #422 in the
+motif definition editor: Ctrl+A worked, drag-select-and-scroll looked like it
+worked, and only the visible lines were ever copied. Regression test:
+`test/motif_editor_selection_test.dart`.
+
+The same wrapping also kills drag-past-the-edge autoscroll, since the field
+believes it has room for all of its content.
+
 ### Showing an Error Message (never hand-roll one)
 
 Every user-facing failure message must be **extractable** — issue #359. The rule,

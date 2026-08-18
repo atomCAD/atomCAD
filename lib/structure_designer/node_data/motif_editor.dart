@@ -129,28 +129,36 @@ class _MotifEditorState extends State<MotifEditor> {
                         ),
                   ),
                 ),
-                // Code field
+                // Code field.
+                //
+                // The field must scroll *itself* (`expands: true`), never be
+                // wrapped in an outer SingleChildScrollView. Flutter only
+                // compensates a drag-selection anchor for the editable's own
+                // viewport offset and for the *nearest ancestor* Scrollable
+                // (which here is CodeField's internal horizontal one). An
+                // extra vertical scroll view around the field is invisible to
+                // that compensation, so scrolling mid-drag drags the anchor
+                // along with the viewport and the selection stays clipped to
+                // whatever is on screen. See issue #422.
                 SizedBox(
                   height: 200,
                   child: CodeTheme(
                     data: CodeThemeData(styles: githubTheme),
-                    child: SingleChildScrollView(
-                      child: CodeField(
-                        controller: _definitionController,
-                        focusNode: _definitionFocusNode,
-                        textStyle: const TextStyle(
-                          fontFamily: 'Courier New',
-                          fontFamilyFallback: [
-                            'Consolas',
-                            'Monaco',
-                            'Menlo',
-                            'monospace'
-                          ],
-                          fontSize: 14.0,
-                        ),
-                        expands: false,
-                        wrap: false,
+                    child: CodeField(
+                      controller: _definitionController,
+                      focusNode: _definitionFocusNode,
+                      textStyle: const TextStyle(
+                        fontFamily: 'Courier New',
+                        fontFamilyFallback: [
+                          'Consolas',
+                          'Monaco',
+                          'Menlo',
+                          'monospace'
+                        ],
+                        fontSize: 14.0,
                       ),
+                      expands: true,
+                      wrap: false,
                     ),
                   ),
                 ),
