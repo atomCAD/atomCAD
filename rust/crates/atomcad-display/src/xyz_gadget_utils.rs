@@ -1,5 +1,5 @@
+use crate::gadget::GadgetPickContext;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_display::gadget::GadgetPickContext;
 use atomcad_renderer::mesh::Material;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator;

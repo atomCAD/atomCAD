@@ -11,10 +11,10 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::utils::xyz_gadget_utils;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::gadget::{Gadget, GadgetPickContext};
+use atomcad_display::xyz_gadget_utils;
 use atomcad_geo_tree::GeoNode;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};

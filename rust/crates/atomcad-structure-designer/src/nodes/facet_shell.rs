@@ -14,10 +14,10 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
-use crate::utils::half_space_utils;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::gadget::{Gadget, GadgetPickContext};
+use atomcad_display::half_space_utils;
 use atomcad_display::poly_mesh::PolyMesh;
 use atomcad_geo_tree::GeoNode;
 use atomcad_renderer::mesh::Mesh;
@@ -476,7 +476,7 @@ impl NodeData for FacetShellData {
             shift: selected_facet.shift,
             dragged_shift: selected_facet.shift as f64,
             dragged_handle_index: None,
-            possible_miller_indices: half_space_utils::generate_possible_miller_indices(
+            possible_miller_indices: atomcad_crystolecule::miller::generate_possible_miller_indices(
                 self.max_miller_index,
             ),
             unit_cell: facet_shell_cache.unit_cell.clone(),

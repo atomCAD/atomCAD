@@ -1,8 +1,8 @@
 use crate::node_data::NodeData;
 use crate::node_network_gadget::NodeNetworkGadget;
-use crate::utils::xyz_gadget_utils;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::gadget::{Gadget, GadgetPickContext};
+use atomcad_display::xyz_gadget_utils;
 use atomcad_renderer::mesh::Mesh;
 use atomcad_renderer::tessellator::tessellator::{Tessellatable, TessellationOutput};
 use glam::f64::{DQuat, DVec3};

@@ -8,6 +8,7 @@ pub mod guided_placement;
 pub mod hydrogen_passivation;
 pub mod io;
 pub mod lattice_fill;
+pub mod miller;
 pub mod motif;
 pub mod motif_bond_inference;
 pub mod motif_parser;
