@@ -57,18 +57,18 @@
   <text x="850.0" y="86" class="subtitle">Circle area proportional to lines of code in src/ • Arrows point to dependencies (some are cut for clarity)</text>
 
   <g id="arrows">
-    <path class="dependency-arrow" d="M 1324.1589184991399,216.30433305159573 Q 1409.390478501244,303.3650077343153 1525.8410815008601,339.18730466832517"/>
-    <path class="dependency-arrow" d="M 1329.836221324648,339.10763973508347 Q 1422.287998488628,377.62298485344644 1520.163778675352,356.38399798483744"/>
-    <path class="dependency-arrow" d="M 1347.2675909304894,470.3056935915981 Q 1449.688219769916,450.991826028367 1524.4898187420429,378.4126865782"/>
-    <path class="dependency-arrow" d="M 1290.0,435.4916377199209 Q 1320.0,405.4916377199209 1290.0,375.4916377199209"/>
-    <path class="dependency-arrow" d="M 1054.1589184991399,339.18730466832517 Q 1170.609521498756,303.3650077343153 1255.8410815008601,216.30433305159573"/>
-    <path class="dependency-arrow" d="M 1055.5101812579571,378.4126865782 Q 1130.311780230084,450.991826028367 1232.7324090695106,470.3056935915981"/>
-    <path class="dependency-arrow" d="M 1059.836221324648,356.38399798483744 Q 1157.712001511372,377.62298485344644 1250.163778675352,339.10763973508347"/>
-    <path class="dependency-arrow" d="M 869.4024314963011,360.0 Q 924.7012157481506,390.0 980.0,360.0"/>
-    <path class="dependency-arrow" d="M 865.581183321874,389.9654919723377 Q 1039.039779600989,465.9280740024372 1227.5561054071277,483.8108421425887"/>
-    <path class="dependency-arrow" d="M 869.2796440615272,354.58639124203927 Q 1061.0205645279498,375.9149476659692 1250.0411339813554,337.30520506193216"/>
-    <path class="dependency-arrow" d="M 536.9090848369307,360.0 Q 583.7533266703148,390.0 630.5975685036989,360.0"/>
-    <path class="dependency-arrow" d="M 301.6708249673535,360.0 Q 362.3808700652114,390.0 423.09091516306927,360.0"/>
+    <path class="dependency-arrow" d="M 1324.1046356553961,215.42806105305505 Q 1409.323854823901,302.8417438173419 1525.8953643446039,339.09847309853455"/>
+    <path class="dependency-arrow" d="M 1329.8231557276436,338.2836963641972 Q 1422.1821283405443,377.13063387152755 1520.1768442723564,356.2428377873924"/>
+    <path class="dependency-arrow" d="M 1348.124365996593,469.86143985361844 Q 1450.116607302968,450.7696991593771 1524.4898187420429,378.4126865782"/>
+    <path class="dependency-arrow" d="M 1290.0,434.5265341515896 Q 1320.0,404.5265341515896 1290.0,374.5265341515896"/>
+    <path class="dependency-arrow" d="M 1054.1046356553961,339.09847309853455 Q 1170.676145176099,302.8417438173419 1255.8953643446039,215.42806105305505"/>
+    <path class="dependency-arrow" d="M 1055.5101812579571,378.4126865782 Q 1129.883392697032,450.7696991593771 1231.875634003407,469.86143985361844"/>
+    <path class="dependency-arrow" d="M 1059.8231557276436,356.2428377873924 Q 1157.8178716594557,377.13063387152755 1250.1768442723564,338.2836963641972"/>
+    <path class="dependency-arrow" d="M 868.3245586885957,360.0 Q 924.1622793442979,390.0 980.0,360.0"/>
+    <path class="dependency-arrow" d="M 864.5378057873979,389.6949866856217 Q 1038.0509822034744,465.6717191216 1226.6218881465743,483.56863766763036"/>
+    <path class="dependency-arrow" d="M 868.1931241922051,354.4244657173573 Q 1060.5323985808532,375.38458974603344 1250.044431856868,336.41136156001164"/>
+    <path class="dependency-arrow" d="M 536.907127146401,360.0 Q 584.2912842289027,390.0 631.6754413114043,360.0"/>
+    <path class="dependency-arrow" d="M 301.6708249673535,360.0 Q 362.38184891047626,390.0 423.09287285359903,360.0"/>
   </g>
   <g id="modules">
   <g id="module-ui">
@@ -80,18 +80,18 @@
     </text>
   </g>
   <g id="module-api">
-    <circle class="module-circle" cx="480" cy="360.0" r="56.909084836930724" fill="#7C3AED"/>
-    <text class="module-label" x="480" y="350.0" style="font-size: 18.969694945643575px">api</text>
+    <circle class="module-circle" cx="480" cy="360.0" r="56.907127146400995" fill="#7C3AED"/>
+    <text class="module-label" x="480" y="350.0" style="font-size: 18.969042382133665px">api</text>
     <text class="module-loc" x="480" y="375.0">
-      <tspan style="font-size: 14.227271209232681px; font-weight: bold">14,535</tspan>
+      <tspan style="font-size: 14.226781786600249px; font-weight: bold">14,534</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-structure_designer">
-    <circle class="module-circle" cx="750" cy="360.0" r="119.40243149630116" fill="#EF4444"/>
+    <circle class="module-circle" cx="750" cy="360.0" r="118.32455868859576" fill="#EF4444"/>
     <text class="module-label" x="750" y="350.0" style="font-size: 20px">structure_designer</text>
     <text class="module-loc" x="750" y="375.0">
-      <tspan style="font-size: 18px; font-weight: bold">63,985</tspan>
+      <tspan style="font-size: 18px; font-weight: bold">62,835</tspan>
       <tspan style="font-size: 12.6px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
@@ -99,31 +99,31 @@
     <circle class="module-circle" cx="1020" cy="360.0" r="40" fill="#F59E0B"/>
     <text class="module-label" x="1020" y="350.0" style="font-size: 16px">display</text>
     <text class="module-loc" x="1020" y="375.0">
-      <tspan style="font-size: 14px; font-weight: bold">2,583</tspan>
+      <tspan style="font-size: 14px; font-weight: bold">3,173</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-renderer">
-    <circle class="module-circle" cx="1290" cy="195.4916377199209" r="40" fill="#10B981"/>
-    <text class="module-label" x="1290" y="185.4916377199209" style="font-size: 16px">renderer</text>
-    <text class="module-loc" x="1290" y="210.4916377199209">
+    <circle class="module-circle" cx="1290" cy="194.5265341515896" r="40" fill="#10B981"/>
+    <text class="module-label" x="1290" y="184.5265341515896" style="font-size: 16px">renderer</text>
+    <text class="module-loc" x="1290" y="209.5265341515896">
       <tspan style="font-size: 14px; font-weight: bold">4,180</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-geo_tree">
-    <circle class="module-circle" cx="1290" cy="335.4916377199209" r="40" fill="#3B82F6"/>
-    <text class="module-label" x="1290" y="325.4916377199209" style="font-size: 16px">geo_tree</text>
-    <text class="module-loc" x="1290" y="350.4916377199209">
+    <circle class="module-circle" cx="1290" cy="334.5265341515896" r="40" fill="#3B82F6"/>
+    <text class="module-label" x="1290" y="324.5265341515896" style="font-size: 16px">geo_tree</text>
+    <text class="module-loc" x="1290" y="349.5265341515896">
       <tspan style="font-size: 14px; font-weight: bold">2,101</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>
   <g id="module-crystolecule">
-    <circle class="module-circle" cx="1290" cy="500.0" r="64.5083622800791" fill="#8B5CF6"/>
+    <circle class="module-circle" cx="1290" cy="500.0" r="65.47346584841041" fill="#8B5CF6"/>
     <text class="module-label" x="1290" y="490.0" style="font-size: 20px">crystolecule</text>
     <text class="module-loc" x="1290" y="515.0">
-      <tspan style="font-size: 16.127090570019774px; font-weight: bold">18,676</tspan>
+      <tspan style="font-size: 16.368366462102603px; font-weight: bold">19,239</tspan>
       <tspan style="font-size: 12px; font-weight: normal; opacity: 0.85"> lines</tspan>
     </text>
   </g>

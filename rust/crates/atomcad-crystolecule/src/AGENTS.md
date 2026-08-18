@@ -40,6 +40,8 @@ crates/atomcad-crystolecule/src/
 ├── motif_parser.rs                 # Text format parser for motifs
 ├── guided_placement.rs             # Guided atom placement geometry (bond directions, saturation)
 ├── hydrogen_passivation.rs         # General-purpose H passivation for arbitrary structures
+├── miller.rs                       # Miller-index arithmetic: reduction, enumeration, symmetry families {hkl}
+├── patch.rs                        # Surface-patch domain model: tile extraction, cell selection, apply_patch
 ├── weld.rs                         # weld_coincident_atoms(): fuse atoms at the same position (surface patches)
 ├── structure.rs                    # `Structure` value type (lattice_vecs + motif + motif_offset)
 ├── unit_cell_struct.rs             # Unit cell geometry & coordinate conversion
@@ -95,6 +97,8 @@ crates/atomcad-crystolecule/src/
 | `Motif` | `motif.rs` | Sites (fractional coords), bonds (with cell offsets), parameter elements |
 | `SiteSpecifier` | `motif.rs` | Site index + IVec3 relative cell offset |
 | `DrawingPlane` | `drawing_plane.rs` | Miller-indexed 2D plane with 2D↔3D transforms. Built via `from_spec(miller, u, v, …)` (the case matrix in `doc/design_drawing_plane_explicit_axes.md`): auto-pick both in-plane axes from the Miller index, or pin one/both in-plane lattice directions `[u v w]` explicitly, or derive the Miller index from `u × v`. `DrawingPlane::new` is a thin `from_spec` wrapper. `is_compatible` compares the resolved `u_axis`/`v_axis`, not just the Miller index |
+| `CompatibilityReport` | `patch.rs` | Welded / orphaned / over-coordination stats from `apply_patch`. Dart-facing twin `APICompatibilityReport` in `api/` |
+| `SelectedCell` | `patch.rs` | One tiling site chosen by `select_patch_cells`: an in-plane lattice `offset` plus the `k` indices it spans along the free (non-periodic) direction |
 | `LatticeFillConfig` | `lattice_fill/config.rs` | Unit cell + motif + geometry + options for filling |
 | `PlacedAtomTracker` | `lattice_fill/placed_atom_tracker.rs` | CrystallographicAddress → atom ID mapping |
 | `AtomInfo` | `atomic_constants.rs` | Element properties (symbol, radii, color) |
@@ -123,6 +127,10 @@ crates/atomcad-crystolecule/src/
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
 **Guided Placement** (`guided_placement.rs`): Computes chemically valid candidate positions for bonded atom placement. Given an anchor atom, determines hybridization (sp3/sp2/sp1 via UFF type assignment or manual override), checks saturation, computes bond distance, and returns guide dot positions at correct bond angles. Three placement modes: `FixedDots` (deterministic positions), `FreeSphere` (bare atom, click anywhere), `FreeRing` (single bond without dihedral reference, rotating dots on cone). Includes a crystal bond length table for ~20 semiconductor compounds (diamond cubic / zinc blende lattice parameters) with UFF fallback. Dative bond mode unlocks lone pair / empty orbital positions but does not persist any bond kind distinction — dative is a placement-time consideration only. Design doc: `doc/atom_edit/guided_atom_placement.md`.
+
+**Miller Indices** (`miller.rs`): Integer `(h,k,l)` triples naming a lattice plane. Three operations, all pure number theory over `IVec3` with no lattice, no structure and no rendering: `simplify_miller_index` reduces a triple by its GCD, `generate_possible_miller_indices` enumerates every reduced index within a bound, and `symmetry_equivalent_indices` expands one index into its symmetry family `{hkl}` — every permutation of the absolute components with every sign combination, skipping the sign flip on a zero component, so `(1,1,1)` yields 8 members and `(1,2,3)` the full 48-member orbit. The enumeration order is deterministic and callers index into it, so it is pinned by `miller_test.rs`.
+
+**Surface Patches** (`patch.rs`): The node-free core of the surface-patch feature — testable on plain `AtomicStructure`s without the node network. `validate_tiling_vectors` and `extract_patch_tile` are the authoring half; `select_patch_cells` and `region_center_depths` choose which lattice cells receive a tile; `apply_patch` runs the cut → place → weld → drop → passivate pipeline and reports welded / orphaned / over-coordinated counts as a `CompatibilityReport`. Patch ghosts are bit 6 of `Atom.flags` and drive weld survivorship. Design docs: `doc/design_surface_patches.md`, `doc/design_patch_cell_selection.md`.
 
 ## Important Constants (`crystolecule_constants.rs`)
 
@@ -153,6 +161,8 @@ atomic_structure_utils → AtomicStructure, atomic_constants
 io/cif/*      →  UnitCellStruct, Motif, AtomicStructure, atomic_constants
 io/*          →  AtomicStructure, atomic_constants
 motif_bond_inference → Motif, UnitCellStruct, atomic_constants
+miller        →  glam only (no crystolecule types at all)
+patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
 guided_placement → AtomicStructure, simulation/uff (typer, params)
 hydrogen_passivation → AtomicStructure, atomic_constants, guided_placement
 ```
@@ -178,6 +188,9 @@ tests/crystolecule/
 ├── hydrogen_passivation_test.rs   # General-purpose H passivation tests
 ├── motif_parser_test.rs           # Tokenization, all commands, error cases
 ├── motif_bond_inference_test.rs   # Bond inference on fractional coords, cross-cell bonds
+├── miller_test.rs                 # Index reduction, enumeration, {hkl} symmetry families
+├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
+├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── io/
 │   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
 │   ├── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
@@ -216,5 +229,7 @@ by name across the workspace.
 **CIF-related changes**: The CIF parser (`io/cif/parser.rs`) is a generic STAR/CIF parser. Symmetry operations are in `io/cif/symmetry.rs`, crystal data extraction in `io/cif/structure.rs`, and the 230 space group lookup table in `io/cif/space_groups.rs`. Test fixtures are in `rust/tests/fixtures/cif/` (diamond, nacl, hexagonal, multi_block, with_bonds) — outside this crate, reached via `atomcad_test_support::fixture_path("cif/…")`, because the same fixture tree is read from three packages.
 
 **Changing the motif format**: Update `motif_parser.rs` parse functions and `motif.rs` structs. Update `DEFAULT_ZINCBLENDE_MOTIF` if the syntax changes.
+
+**A new Miller-index helper**: It goes in `miller.rs`, not in the node or tessellator that wants it. The test is whether the function needs anything beyond an `IVec3` — if it reasons about `(h,k,l)` as integers, it is crystallography and belongs here, even when its only caller today is a gadget. `simplify_miller_index` and `generate_possible_miller_indices` were filed in `structure-designer`'s `half_space_utils` until `doc/design_push_domain_code_down.md` (§2.2, D5) split them out — they had no rendering dependency at all, and the file they sat in only happened to be their first caller.
 
 **New lattice fill feature**: Add to `lattice_fill/` as a separate file, wire into `fill_algorithm.rs` pipeline. The pipeline order is: place atoms → create bonds → remove lone atoms → surface reconstruction → hydrogen passivation.

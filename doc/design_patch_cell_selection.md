@@ -52,12 +52,14 @@ Boolean `debug_show_frontier_tiles` (default false). When on, take the selected 
 
 ## Implementation
 
-`rust/src/structure_designer/nodes/patch_latticefill.rs`:
+`rust/crates/atomcad-structure-designer/src/nodes/patch_latticefill.rs` (node
+state) and `rust/crates/atomcad-crystolecule/src/patch.rs` (the algorithm —
+split out by `doc/design_push_domain_code_down.md` §1 after this landed):
 - `PatchLatticeFillData` gains `debug_project_to_test_plane`/`debug_show_frontier_tiles` (`#[serde(default)]`), exposed via `get/set_text_properties`; **no new input pins** (debug checkboxes are properties only).
 - New helpers `region_center_depths`, `project_to_test_plane`, `point_in_region`; `select_patch_cells` rewritten (atom-based; returns each cell's `k` indices for the frontier box); `compute_frontier`. Drop `tile_reference_anchor`, `footprint_corners`, `corner_in_region_shadow`; keep `free_directions`.
 - `apply_patch` gains the two flags and the debug branching; always runs the real weld on the selected cells for the report, then builds the output (real, or projected/frontier overlay).
 
-## Tests (`rust/tests/structure_designer/patch_latticefill_test.rs`)
+## Tests (`rust/crates/atomcad-crystolecule/tests/crystolecule/patch_test.rs`)
 - **tilted region height:** a region whose XYZ-AABB centre is *outside* the slab selects zero cells under the old rule but the right cells under the normal-depth midpoint.
 - **symmetry:** symmetric region + symmetric tiling → symmetric selection (no corner bias).
 - **shape poke-out:** an interior atom that would land outside the region rejects its cell.

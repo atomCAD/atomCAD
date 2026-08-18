@@ -2438,3 +2438,16 @@ branch — schedule them into a quiet window.**
   to hold new crates to a stricter standard than the ~14-warning
   baseline. Not attempted during the move, so that lint churn never
   obscures a relocation error.
+- **Relocating misfiled domain code — DONE, see
+  `doc/design_push_domain_code_down.md`.** This design deliberately moved *no*
+  code between layers: every module went to the crate it already belonged to,
+  which left the question of what was misfiled entirely open. That follow-up
+  answers it and lands the three cases worth moving — the surface-patch core
+  and the Miller-index helpers down to `atomcad-crystolecule`, the gadget
+  geometry utilities down to `atomcad-display` (deleting
+  `structure-designer/src/utils/` outright). It also records, in §4, the one
+  candidate that passed the mechanical `crate::`-free test and was rejected on
+  judgement — the CIF assembly — so it is not re-proposed. Its D6 is the
+  general lesson: no `crate::` references is a *necessary* condition for
+  pushing code down, not a sufficient one. The remaining smaller misfilings
+  are listed in its own Deferred section.

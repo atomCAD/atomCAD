@@ -72,9 +72,25 @@ structure_designer/
 ├── text_format/               # Human-readable text format (AI integration)
 ├── serialization/             # .cnnd JSON file I/O
 ├── layout/                    # Automatic node layout algorithms
-├── implicit_eval/             # SDF evaluation and visualization
-└── utils/                     # Utility helpers (half-space, XYZ gadget)
+└── implicit_eval/             # SDF evaluation and visualization
 ```
+
+**Domain code that used to live here.** `doc/design_push_domain_code_down.md`
+moved three pockets out of this crate; look downstairs before re-adding
+something in their shape:
+
+- the **surface-patch core** (tile extraction, cell selection, `apply_patch`) is
+  `atomcad_crystolecule::patch`. `nodes/patch_latticefill.rs` and
+  `nodes/patch_build.rs` keep only their `*Data` structs, record reading and
+  `impl NodeData` — everything that speaks `NetworkResult`.
+- **Miller-index arithmetic and `{hkl}` symmetry families** are
+  `atomcad_crystolecule::miller`. `facet_shell.rs` keeps an 11-line wrapper that
+  re-attaches the node-side `symmetrize`/`visible` fields, because those are
+  editor state and the domain crate must not learn about them.
+- the **gadget geometry helpers** (`half_space_utils`, `xyz_gadget_utils`) are
+  `atomcad_display`; the `utils/` directory is gone entirely. No `pub use` shims
+  were left at the old paths (D7), so a stale path is a build error rather than
+  a silent redirect.
 
 ## Key Types
 

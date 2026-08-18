@@ -41,16 +41,16 @@ Regenerate with `python scripts/architecture_diagram/crate_size_table.py`.
 
 | Crate | Source | Files | Test code | Tests |
 |---|---:|---:|---:|---:|
-| `atomcad-structure-designer` | 63,985 | 245 | 82,756 | 3,358 |
-| `atomcad-crystolecule` | 18,676 | 50 | 21,134 | 1,171 |
+| `atomcad-structure-designer` | 62,835 | 242 | 81,815 | 3,330 |
+| `atomcad-crystolecule` | 19,239 | 52 | 22,372 | 1,217 |
 | `atomcad-renderer` | 4,180 | 17 | 652 | 38 |
-| `atomcad-display` | 2,583 | 12 | 642 | 28 |
+| `atomcad-display` | 3,173 | 14 | 642 | 28 |
 | `atomcad-geo-tree` | 2,101 | 8 | 1,216 | 66 |
 | `atomcad-util` | 1,348 | 15 | 118 | 15 |
 | `atomcad-test-support` | 121 | 3 | — | — |
-| `rust_lib_flutter_cad (api)` | 14,535 | 22 | 9,142 | 359 |
+| `rust_lib_flutter_cad (api)` | 14,534 | 22 | 9,142 | 359 |
 | Flutter UI (lib/, Dart) | 37,715 | 166 | 2,467 | — |
-| **Total (hand-written)** | **145,244** | **538** | **118,127** | **5,035** |
+| **Total (hand-written)** | **145,246** | **539** | **118,424** | **5,053** |
 
 Generated code is excluded throughout: `rust/src/frb_generated.rs` (26,200
 lines) and `lib/src/rust/` (40,222 lines) are flutter_rust_bridge output.
@@ -66,12 +66,16 @@ Three things the table cannot say for itself:
   crate, not because the subject lives up there.
 - **`expr` is inside `atomcad-structure-designer`** (D8): 2,407 of its source
   lines and 5,972 of its test lines.
-- **`atomcad-structure-designer` is 59 % of the backend**, and 31,570 of its
-  63,985 lines are the 129 node implementations under `nodes/`. Splitting those
+- **`atomcad-structure-designer` is 58 % of the backend**, and 31,042 of its
+  62,835 lines are the 129 node implementations under `nodes/`. Splitting those
   out is the largest remaining structural prize and needs its own design — see
-  Deferred / follow-ups in `doc/design_rust_crate_split.md`.
+  Deferred / follow-ups in `doc/design_rust_crate_split.md`. It shed ~1,150
+  lines to `crystolecule` and `display` in
+  `doc/design_push_domain_code_down.md`, which also records why that only moved
+  the share by a point: roughly half of `nodes/` is `impl NodeData` +
+  `get_node_type()` boilerplate with nowhere lower to go.
 
-The suite reports ~5,054 tests against the 5,035 `#[test]` functions counted
+The suite reports ~5,058 tests against the 5,053 `#[test]` functions counted
 here; the difference is doc-tests plus a handful of inline `#[cfg(test)]`
 modules that predate the "tests go in `tests/`" convention.
 

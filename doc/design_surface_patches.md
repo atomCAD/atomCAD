@@ -8,7 +8,7 @@
 - Built-in record infrastructure (`ElementMapping`) — the representation precedent (§2). (`MaterializeRegion` is a proposed, not-yet-implemented built-in record — see `doc/design_materialize_regions.md`.)
 - `materialize` / `fill_lattice` — its hydrogen passivation is reused for residual edge danglers (§5); and the feature is conceptually "fill a region with a patch" the way `materialize` fills a region with a crystal.
 - `DrawingPlane` (`rust/src/crystolecule/drawing_plane.rs`) — supplies the in-plane lattice vectors `u_axis/v_axis` for the common 2D-surface case.
-- `plane_tiling_vectors` node (`rust/src/structure_designer/nodes/plane_tiling_vectors.rs`) + the `IMat2` type — the implemented, ergonomic way to produce `tiling_vectors` from a `DrawingPlane` + a 2×2 integer superlattice (see §4).
+- `plane_tiling_vectors` node (`rust/crates/atomcad-structure-designer/src/nodes/plane_tiling_vectors.rs`) + the `IMat2` type — the implemented, ergonomic way to produce `tiling_vectors` from a `DrawingPlane` + a 2×2 integer superlattice (see §4).
 
 Background: [atomCAD/atomCAD#347](https://github.com/atomCAD/atomCAD/discussions/347).
 
@@ -148,7 +148,7 @@ Both are naturally satisfied in the common case where the slab is authored from 
 
 - Validate `1 ≤ len(tiling_vectors) ≤ 3` and linear independence. At apply time `patch_latticefill`'s `region` must be tiling-commensurate with build `lattice`, and its `target` must share build `lattice`'s full lattice + motif registration (see above).
 - The `cut_volume`'s translates under `tiling_vectors` should **tile the reconstructed strip without gaps** (else old surface atoms survive between tiles); `patch_build` can warn if they don't.
-- *Ergonomic vectors (optional):* the canonical input is `tiling_vectors: Array[IVec3]`, but the user need not hand-solve the in-plane crystallography — the **`plane_tiling_vectors`** node (`rust/src/structure_designer/nodes/plane_tiling_vectors.rs`) produces it. Pins: `plane: DrawingPlane` (supplies the in-plane vectors `u_axis/v_axis`) and an optional `superlattice: IMat2` override (else its stored, UI-editable 2×2); output `Array[IVec3]`. Each superlattice **row** is one tiling vector in the `(u_axis, v_axis)` basis — `(1×1)` = identity, diagonal `n×m` = rows `(n,0),(0,m)`, √3×√3 R30° = `(2,1),(-1,1)`, c(2×2) = `(1,1),(1,-1)`. 2D-surface case only; 1D/3D patches enter `tiling_vectors` directly.
+- *Ergonomic vectors (optional):* the canonical input is `tiling_vectors: Array[IVec3]`, but the user need not hand-solve the in-plane crystallography — the **`plane_tiling_vectors`** node (`rust/crates/atomcad-structure-designer/src/nodes/plane_tiling_vectors.rs`) produces it. Pins: `plane: DrawingPlane` (supplies the in-plane vectors `u_axis/v_axis`) and an optional `superlattice: IMat2` override (else its stored, UI-editable 2×2); output `Array[IVec3]`. Each superlattice **row** is one tiling vector in the `(u_axis, v_axis)` basis — `(1×1)` = identity, diagonal `n×m` = rows `(n,0),(0,m)`, √3×√3 R30° = `(2,1),(-1,1)`, c(2×2) = `(1,1),(1,-1)`. 2D-surface case only; 1D/3D patches enter `tiling_vectors` directly.
 
 ## 5. Node: `patch_latticefill`
 
@@ -232,7 +232,7 @@ The one new piece of core machinery (§3), the bit-6 accessors reserved in `atom
 - **Source:**
   - `rust/src/crystolecule/atomic_structure/atom.rs` — add `is_patch_ghost()` / `set_patch_ghost()` for `ATOM_FLAG_PATCH_GHOST = 1 << 6` (bit already reserved).
   - new `rust/src/crystolecule/weld.rs` (declared `pub` in `crystolecule/mod.rs`) — `weld_coincident_atoms(structure: &mut AtomicStructure, tolerance: f64)`: spatial-grid bucket by position (reuse the existing `4.0 Å` grid), cluster atoms within `tolerance`, fuse each cluster into one survivor — union bond lists (dedup by partner, assert equal order), union flags, survivor is patch-ghost iff every member was (else real, flag cleared), rewrite all bond endpoints to the survivor id.
-  - `rust/src/structure_designer/node_type_registry.rs` — `built_in_record_type_defs.insert("Patch", …)` next to `ElementMapping`, fields `tile: Molecule`, `tiling_vectors: Array[IVec3]`, `cut_volume: Blueprint` (per §"Schema").
+  - `rust/crates/atomcad-structure-designer/src/node_type_registry.rs` — `built_in_record_type_defs.insert("Patch", …)` next to `ElementMapping`, fields `tile: Molecule`, `tiling_vectors: Array[IVec3]`, `cut_volume: Blueprint` (per §"Schema").
 - **Rust tests:**
   - `rust/tests/crystolecule/weld_coincident_atoms_test.rs`:
     1. two coincident atoms fuse into one; bond lists union; partner ids rewritten.
@@ -242,7 +242,7 @@ The one new piece of core machinery (§3), the bit-6 accessors reserved in `atom
     5. bulk-bond inheritance: a collar-like atom welds onto a bulk atom and the survivor carries the bulk atom's outward bonds + the collar's inward bond.
     6. three-way coincident cluster collapses to one survivor.
     7. flag accessor round-trip: `set_patch_ghost(true/false)` toggles bit 6 only, leaving bits 0–5 untouched.
-  - `rust/tests/structure_designer/patch_record_test.rs`:
+  - `rust/crates/atomcad-structure-designer/tests/structure_designer/patch_record_test.rs`:
     8. `lookup_record_type_def("Patch")` resolves with the three expected fields and types.
     9. a network with `record_construct`/`record_destructure` on `Patch` validates and round-trips a value.
     10. dangling-ref check: a user record referencing `Patch` is **not** flagged dangling (built-in resolves).
@@ -251,8 +251,8 @@ The one new piece of core machinery (§3), the bit-6 accessors reserved in `atom
 
 The "draw, don't assemble" authoring step (§4): extract the tile from a slab + cut volume, keeping it in its authored coordinates.
 
-- **Source:** `rust/src/structure_designer/nodes/patch_build.rs` (+ register in `nodes/mod.rs`, `node_type_registry.rs`). Extraction helpers (interior/ghost split, bond selection) factored into a plain function so they test without the node wrapper.
-- **Rust tests** — `rust/tests/structure_designer/patch_build_test.rs`:
+- **Source:** the node wrapper is `rust/crates/atomcad-structure-designer/src/nodes/patch_build.rs` (+ register in `nodes/mod.rs`, `node_type_registry.rs`); `validate_tiling_vectors` and `extract_patch_tile` are in `rust/crates/atomcad-crystolecule/src/patch.rs`. Extraction helpers (interior/ghost split, bond selection) factored into a plain function so they test without the node wrapper — `doc/design_push_domain_code_down.md` §1 later moved that node-free core down to `crystolecule` outright.
+- **Rust tests** — `rust/crates/atomcad-crystolecule/tests/crystolecule/patch_build_test.rs` (one test that constructs `NetworkResult` stayed behind in the structure-designer suite):
   1. **interior split:** atoms with SDF ≤ `ε` are interior (real); atoms outside are not interior.
   2. **ghost capture:** an outside atom bonded to an interior atom becomes a patch-ghost; an outside atom with no bond into the interior is excluded; **distance-1 only**.
   3. **bond selection:** interior–interior and interior–ghost bonds kept; ghost–ghost bonds dropped.
@@ -265,9 +265,9 @@ The "draw, don't assemble" authoring step (§4): extract the tile from a slab + 
 
 The core algorithm (§5) plus the two things that fall directly out of it: the compatibility stats (§6) and serialization. This is where the model proves out end to end; keep it node-free-testable via a core `apply_patch(...)` function that also returns the weld/coordination report.
 
-- **Source:** `rust/src/structure_designer/nodes/patch_latticefill.rs` (+ registration). Core `apply_patch(target, region, patch, origin, passivate, tolerance) -> (AtomicStructure, CompatibilityReport)` plus the projected-containment cell-selection helper. The report carries welded-vs-orphaned collar counts and post-weld coordination. `Patch` is a record and both nodes are ordinary node types, so serialization needs **no new plumbing** — the round-trip tests just lock that in.
+- **Source:** the node wrapper is `rust/crates/atomcad-structure-designer/src/nodes/patch_latticefill.rs` (+ registration); `apply_patch`, `select_patch_cells` and the cell-selection helpers are in `rust/crates/atomcad-crystolecule/src/patch.rs`. Core `apply_patch(target, region, patch, origin, passivate, tolerance) -> (AtomicStructure, CompatibilityReport)` plus the projected-containment cell-selection helper. The report carries welded-vs-orphaned collar counts and post-weld coordination. `Patch` is a record and both nodes are ordinary node types, so serialization needs **no new plumbing** — the round-trip tests just lock that in.
 - **Rust tests:**
-  - `rust/tests/structure_designer/patch_latticefill_test.rs`:
+  - `rust/crates/atomcad-crystolecule/tests/crystolecule/patch_test.rs`:
     1. **periodic weld (tile↔tile):** two adjacent placed tiles whose shared/ghost atoms coincide weld into a continuous structure; the boundary-crossing (e.g. dimer) bond becomes an ordinary bond; no duplicate atoms remain.
     2. **bulk weld (tile↔collar):** collar patch-ghosts weld onto surviving substrate atoms and inherit bulk bonds; coordination preserved (`bulk —(inherited)— collar —(tile)— interior`).
     3. **cut-then-weld coordination:** the cut removes the displaced surface and the collar's bond to it; the collar's inward bond replaces it — no net dangler at a welded collar.

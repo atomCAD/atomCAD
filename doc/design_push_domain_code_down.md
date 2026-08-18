@@ -1,6 +1,15 @@
 # Design: Pushing Domain Code Down out of `atomcad-structure-designer`
 
-## Status: Ready for implementation.
+## Status: Implemented (all four phases).
+
+Phase 1 (`crystolecule::patch`), Phase 2 (gadget utils to `display`, Miller
+helpers to `crystolecule`), Phase 3 (Miller symmetry families) and Phase 4
+(documentation) are all landed. Phase 3's characterisation needed no scratch
+commit after all: the public `split_symmetry_members` reaches the private
+`get_symmetric_variants` and preserves its Miller indices, so a throwaway test
+that split a facet and printed the result captured the real families and their
+emission order. The test count moved 5,040 → 5,058, the only phase permitted to
+move it, and only upward.
 
 `doc/design_rust_crate_split.md` made the crate DAG compiler-enforced but
 deliberately moved **no** code between layers: every module went to the crate it
