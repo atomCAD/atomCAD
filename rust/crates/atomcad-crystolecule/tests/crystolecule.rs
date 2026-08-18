@@ -133,3 +133,6 @@ mod patch_test;
 
 #[path = "crystolecule/patch_build_test.rs"]
 mod patch_build_test;
+
+#[path = "crystolecule/miller_test.rs"]
+mod miller_test;

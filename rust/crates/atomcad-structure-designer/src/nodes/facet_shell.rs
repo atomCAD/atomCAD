@@ -14,6 +14,7 @@ use crate::node_type::{
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
+use atomcad_crystolecule::miller::symmetry_equivalent_indices;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_display::gadget::{Gadget, GadgetPickContext};
@@ -247,21 +248,12 @@ impl FacetShellData {
             return false;
         }
 
-        // Clone the necessary data before borrowing mutably
-        let miller_index = self.facets[facet_index].miller_index;
-        let shift = self.facets[facet_index].shift;
+        // The split facets inherit the original's visibility; the wrapper emits
+        // `visible: true`, so it is re-applied below.
         let visible = self.facets[facet_index].visible;
 
-        // Create a temporary facet to generate variants
-        let temp_facet = Facet {
-            miller_index,
-            shift,
-            symmetrize: true,
-            visible,
-        };
-
         // Generate all symmetric variants
-        let variants = self.get_symmetric_variants(&temp_facet);
+        let variants = self.get_symmetric_variants(&self.facets[facet_index]);
 
         // Remove the original facet
         self.facets.remove(facet_index);
@@ -280,95 +272,20 @@ impl FacetShellData {
         true
     }
 
-    // Generate all symmetric variants for the given facet
+    /// Expands `facet` into its Miller-index symmetry family, as facets.
+    ///
+    /// The crystallography lives in `crystolecule::miller`; this wrapper only
+    /// re-attaches the node-side state the domain layer must not know about.
     fn get_symmetric_variants(&self, facet: &Facet) -> Vec<Facet> {
-        let mut ret: Vec<Facet> = Vec::new();
-
-        let miller = facet.miller_index;
-        let shift = facet.shift;
-
-        // Generate all permutations with sign changes
-        let h = miller.x;
-        let k = miller.y;
-        let l = miller.z;
-
-        // Store absolute values to identify the family type
-        let abs_h = h.abs();
-        let abs_k = k.abs();
-        let abs_l = l.abs();
-
-        // Helper closure to add a symmetrized facet with given miller indices
-        let mut add_symmetric_facet = |x: i32, y: i32, z: i32| {
-            ret.push(Facet {
-                miller_index: IVec3::new(x, y, z),
-                shift,
+        symmetry_equivalent_indices(facet.miller_index)
+            .into_iter()
+            .map(|miller_index| Facet {
+                miller_index,
+                shift: facet.shift,
                 symmetrize: false, // Set to false in the cached copy
                 visible: true,     // Set visible to true for all cached facets
-            });
-        };
-
-        // Generate all permutations with sign combinations
-        // This covers all cases: {100}, {110}, {111}, {hhl}, and general {hkl}
-
-        // Generate permutations of the absolute values
-        let abs_permutations = Self::generate_unique_permutations(abs_h, abs_k, abs_l);
-
-        // For each base permutation, generate all sign combinations
-        for (x, y, z) in abs_permutations {
-            // Add all sign combinations
-            add_symmetric_facet(x, y, z);
-
-            if x != 0 {
-                add_symmetric_facet(-x, y, z);
-            }
-
-            if y != 0 {
-                add_symmetric_facet(x, -y, z);
-
-                if x != 0 {
-                    add_symmetric_facet(-x, -y, z);
-                }
-            }
-
-            if z != 0 {
-                add_symmetric_facet(x, y, -z);
-
-                if x != 0 {
-                    add_symmetric_facet(-x, y, -z);
-                }
-
-                if y != 0 {
-                    add_symmetric_facet(x, -y, -z);
-
-                    if x != 0 {
-                        add_symmetric_facet(-x, -y, -z);
-                    }
-                }
-            }
-        }
-        ret
-    }
-
-    pub fn generate_unique_permutations(a: i32, b: i32, c: i32) -> Vec<(i32, i32, i32)> {
-        // Use a HashSet to automatically handle uniqueness of permutations.
-        let mut unique_perms: HashSet<(i32, i32, i32)> = HashSet::new();
-
-        // Manually list all 3! = 6 possible permutations for three elements.
-        // The HashSet will ensure that only unique combinations are stored,
-        // which is crucial if the input numbers themselves contain duplicates.
-        unique_perms.insert((a, b, c));
-        unique_perms.insert((a, c, b));
-        unique_perms.insert((b, a, c));
-        unique_perms.insert((b, c, a));
-        unique_perms.insert((c, a, b));
-        unique_perms.insert((c, b, a));
-
-        // Convert the HashSet into a Vec, sorted for deterministic order
-        // so downstream consumers (e.g. snapshot tests over the resulting
-        // intersection geometry) see a stable element ordering.
-        let mut perms: Vec<(i32, i32, i32)> = unique_perms.into_iter().collect();
-        perms.sort();
-        perms
+            })
+            .collect()
     }
 
     /// Hit test a ray against the facet shell polyhedron

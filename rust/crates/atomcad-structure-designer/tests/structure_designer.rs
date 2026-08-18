@@ -500,3 +500,6 @@ mod atomic_impostor_alpha_test;
 
 #[path = "structure_designer/atom_label_test.rs"]
 mod atom_label_test;
+
+#[path = "structure_designer/facet_shell_symmetry_test.rs"]
+mod facet_shell_symmetry_test;
