@@ -41,6 +41,10 @@ class CommentNodeWidget extends StatefulWidget {
   /// inside an HOF/closure body (see [scopeChain]).
   final ScopeResolver resolver;
 
+  /// Draw the note as if it were not selected. Set by the image export — see
+  /// `NodeWidget.hideSelection`.
+  final bool hideSelection;
+
   const CommentNodeWidget({
     super.key,
     required this.node,
@@ -48,7 +52,12 @@ class CommentNodeWidget extends StatefulWidget {
     required this.zoomLevel,
     required this.resolver,
     this.scopeChain = const [],
+    this.hideSelection = false,
   });
+
+  /// Selection state as it should be **drawn**; interaction handlers keep
+  /// reading `node.selected`.
+  bool get drawSelected => node.selected && !hideSelection;
 
   @override
   State<CommentNodeWidget> createState() => _CommentNodeWidgetState();
@@ -186,14 +195,14 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
           decoration: BoxDecoration(
             color: COMMENT_BACKGROUND_COLOR,
             border: Border.all(
-              color: widget.node.selected
+              color: widget.drawSelected
                   ? COMMENT_SELECTED_BORDER_COLOR
                   : COMMENT_BORDER_COLOR,
-              width: widget.node.selected ? 2.0 : 1.0,
+              width: widget.drawSelected ? 2.0 : 1.0,
               style: BorderStyle.solid,
             ),
             borderRadius: BorderRadius.circular(4.0),
-            boxShadow: widget.node.selected
+            boxShadow: widget.drawSelected
                 ? [
                     BoxShadow(
                       color:

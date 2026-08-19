@@ -69,6 +69,11 @@ class NodeNetworkPainter extends CustomPainter {
   /// node widget's opaque body Container background.
   final bool overlay;
 
+  /// Draw every wire as unselected. Set by the image export so a selected
+  /// wire's glow — editing state, not meaning — stays out of the picture. See
+  /// `NodeWidget.hideSelection`.
+  final bool hideSelection;
+
   /// [repaint] should be the model's `dragRepaint` notifier: during the drag
   /// fast path (node drag / wire rubber-band drag) nothing rebuilds, so the
   /// painter must repaint from this listenable to track the live positions it
@@ -77,7 +82,12 @@ class NodeNetworkPainter extends CustomPainter {
       {this.panOffset = Offset.zero,
       this.zoomLevel = ZoomLevel.normal,
       this.overlay = false,
+      this.hideSelection = false,
       super.repaint});
+
+  /// A wire's selection state as it should be **drawn**; hit testing keeps
+  /// reading `wire.selected`.
+  bool _drawSelected(bool wireSelected) => wireSelected && !hideSelection;
 
   /// Build a [ScopeResolver] for the current frame. Returns null when no
   /// network is active. Constructed once per `paint` and once per
@@ -374,7 +384,7 @@ class NodeNetworkPainter extends CustomPainter {
       // Alignment dashes are top-level-only (see _drawWiresAtScope); body
       // captures render solid.
       _drawWire(c.sourcePos, c.destPos, canvas, paint, c.dataType,
-          c.wire.selected, null);
+          _drawSelected(c.wire.selected), null);
     }
     canvas.restore();
   }
@@ -397,8 +407,8 @@ class NodeNetworkPainter extends CustomPainter {
       final alignment = scopeChain.isEmpty
           ? _getSourcePinAlignment(wire.sourceNodeId, wire.sourceOutputPinIndex)
           : null;
-      _drawWire(source.$1, dest.$1, canvas, paint, source.$2, wire.selected,
-          alignment);
+      _drawWire(source.$1, dest.$1, canvas, paint, source.$2,
+          _drawSelected(wire.selected), alignment);
     }
   }
 

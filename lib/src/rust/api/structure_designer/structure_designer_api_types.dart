@@ -1507,13 +1507,14 @@ sealed class APIFieldEditorHint with _$APIFieldEditorHint {
 ///
 /// Flutter is the only caller that can know what a dialog is *for*, so the
 /// purpose has to cross the bridge. It is an enum rather than a free-form key
-/// so a typo at one of the call sites cannot silently open a fifth, unshared
+/// so a typo at one of the call sites cannot silently open an extra, unshared
 /// slot in `last_directories.json`.
 enum APIFileDialogPurpose {
   design,
   cnndLibrary,
   structureImport,
   structureExport,
+  networkImage,
   ;
 }
 

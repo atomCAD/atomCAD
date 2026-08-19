@@ -47,6 +47,8 @@ pub enum FileDialogPurpose {
     StructureImport,
     /// Structure exports: `.xyz`, `.mol`.
     StructureExport,
+    /// Node-network images: the `.png` written by *Export node network image*.
+    NetworkImage,
 }
 
 impl FileDialogPurpose {
@@ -57,6 +59,7 @@ impl FileDialogPurpose {
             Self::CnndLibrary => "library",
             Self::StructureImport => "import",
             Self::StructureExport => "export",
+            Self::NetworkImage => "network_image",
         }
     }
 }

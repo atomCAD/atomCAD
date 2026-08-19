@@ -10,6 +10,7 @@ import '../common/menu_widget.dart';
 import '../common/section.dart';
 import 'error_report.dart';
 import 'structure_designer_model.dart';
+import 'node_network/export_network_image.dart';
 import 'node_network/node_network.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api.dart'
     as structure_designer_api;
@@ -116,6 +117,12 @@ class _StructureDesignerState extends State<StructureDesigner> {
                             onPressed: _exportVisible,
                             child: const Text('Export visible'),
                           ),
+                          if (!model.directEditingMode)
+                            MenuItemButton(
+                              key: const Key('export_network_image_item'),
+                              onPressed: _exportNetworkImage,
+                              child: const Text('Export node network image...'),
+                            ),
                           if (model.directEditingMode)
                             MenuItemButton(
                               key: const Key('import_xyz_item'),
@@ -948,6 +955,14 @@ class _StructureDesignerState extends State<StructureDesigner> {
         );
       }
     }
+  }
+
+  /// Export the whole active node network canvas as a PNG — including the parts
+  /// that don't fit on screen (`node_network/export_network_image.dart`).
+  Future<void> _exportNetworkImage() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!mounted) return;
+    await exportNetworkImage(context, graphModel);
   }
 
   /// Export visible atomic structures as XYZ or MOL file

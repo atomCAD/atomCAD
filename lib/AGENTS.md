@@ -191,7 +191,7 @@ was faking it convincingly enough that it read as "works for me".
 
 Pick the `APIFileDialogPurpose` that matches what the dialog is *for*, not what
 extension it filters — each purpose is an independent remembered folder, so
-exporting a structure must not move where *Load Design* opens. Adding a fifth
+exporting a structure must not move where *Load Design* opens. Adding another
 purpose means adding a variant to `FileDialogPurpose` in
 `rust/crates/atomcad-structure-designer/src/last_directories.rs` (and its api
 twin); the `key()` strings there are the persisted contract and must not change.

@@ -7,6 +7,8 @@ Interactive visual node graph editor widget. Handles rendering, interaction, and
 | File | Purpose |
 |------|---------|
 | `node_network.dart` | Main editor widget: pan/zoom, selection, wire dragging, keyboard shortcuts |
+| `node_network_content.dart` | What the canvas *contains*, shared by the live editor and the image export: the scope walk, the node-widget switch, the content bounding box |
+| `export_network_image.dart` | *File → Export node network image*: the whole network as a PNG, rendered offscreen at full size |
 | `node_network_painter.dart` | Custom painter: grid, wires (Bezier curves), pin hit testing |
 | `node_widget.dart` | Individual node rendering: pins, title, drag, context menu, HOF body region |
 | `scope_resolver.dart` | Per-frame `ScopeResolver` + `LayoutCache` for scope-aware coordinates, hit testing, and pin-position resolution |
@@ -36,6 +38,38 @@ Three discrete levels with different detail:
 - **Wire creation:** Drag from pin → drop on compatible pin
 - **Auto-connect:** Drop wire in empty space → opens `AddNodePopup` filtered by type
 - **Keyboard:** Ctrl+C/X/V (copy/cut/paste), Del (delete), Ctrl+D (duplicate)
+
+## The canvas is rendered twice (live editor + image export)
+
+*File → Export node network image* renders the same canvas a second time, off
+screen, laid out at the full size of the content rather than the viewport, and
+rasterizes it to a PNG (`lib/common/offscreen_capture.dart` explains the private
+build/pipeline-owner trick and what a detached tree may depend on).
+
+The consequence for anything you add to the canvas: **content rendering belongs
+in `node_network_content.dart`, not in `NodeNetworkState`.** A new kind of node
+widget, or a change to which nodes/bodies get walked, must go through
+`appendCanvasNodeWidgets` / `canvasNodeWidget` or it will be missing from every
+exported image while looking perfectly fine on screen. What legitimately stays
+in `NodeNetworkState` is what a still image has no use for: pan/zoom state,
+pointer handling, the selection rectangle, and the drag fast path below.
+
+The capture is a single build → layout → paint pass, so nothing that needs a
+later frame (a post-frame callback, an animation, a hover) can appear in it.
+
+It renders the current model state verbatim with **one** exception: the
+`hideSelection` flag, threaded from `NodeNetworkCanvasSnapshot` through
+`canvasNodeWidget` into `NodeWidget` / `CommentNodeWidget` / `NodeNetworkPainter`,
+draws everything as neither selected nor active. Styling code reads the derived
+`_drawSelected` / `_drawActive` (and `NodeNetworkPainter._drawSelected(...)`)
+rather than `node.selected` / `node.active`, so new highlight styling must go
+through them too; interaction handlers keep reading the real flags.
+
+**Suppressing highlights at render time is deliberate, not laziness** — the
+obvious alternative, clearing the selection around the export, also clears the
+active node (`NodeNetwork::clear_selection`), which re-runs the display policy
+and, under a selection-driven policy, re-evaluates the 3D scene twice for the
+sake of a picture.
 
 ## Performance invariants (drag fast path + shared resolver)
 

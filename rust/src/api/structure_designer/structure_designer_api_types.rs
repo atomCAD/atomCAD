@@ -2195,7 +2195,7 @@ impl From<DomainExecuteResult> for APIExecuteResult {
 ///
 /// Flutter is the only caller that can know what a dialog is *for*, so the
 /// purpose has to cross the bridge. It is an enum rather than a free-form key
-/// so a typo at one of the call sites cannot silently open a fifth, unshared
+/// so a typo at one of the call sites cannot silently open an extra, unshared
 /// slot in `last_directories.json`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum APIFileDialogPurpose {
@@ -2203,6 +2203,7 @@ pub enum APIFileDialogPurpose {
     CnndLibrary,
     StructureImport,
     StructureExport,
+    NetworkImage,
 }
 
 impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
@@ -2212,6 +2213,7 @@ impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
             APIFileDialogPurpose::CnndLibrary => DomainFileDialogPurpose::CnndLibrary,
             APIFileDialogPurpose::StructureImport => DomainFileDialogPurpose::StructureImport,
             APIFileDialogPurpose::StructureExport => DomainFileDialogPurpose::StructureExport,
+            APIFileDialogPurpose::NetworkImage => DomainFileDialogPurpose::NetworkImage,
         }
     }
 }
@@ -2223,6 +2225,7 @@ impl From<DomainFileDialogPurpose> for APIFileDialogPurpose {
             DomainFileDialogPurpose::CnndLibrary => APIFileDialogPurpose::CnndLibrary,
             DomainFileDialogPurpose::StructureImport => APIFileDialogPurpose::StructureImport,
             DomainFileDialogPurpose::StructureExport => APIFileDialogPurpose::StructureExport,
+            DomainFileDialogPurpose::NetworkImage => APIFileDialogPurpose::NetworkImage,
         }
     }
 }

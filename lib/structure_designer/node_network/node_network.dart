@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cad/structure_designer/node_network/add_node_popup.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_widget.dart';
-import 'package:flutter_cad/structure_designer/node_network/comment_node_widget.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network_content.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
@@ -423,12 +423,16 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
   final ZoomLevel zoomLevel;
   final bool overlay;
 
+  /// Draw wires as unselected — see `NodeNetworkPainter.hideSelection`.
+  final bool hideSelection;
+
   const NodeNetworkInteractionLayer(
       {super.key,
       required this.model,
       required this.panOffset,
       required this.zoomLevel,
-      this.overlay = false});
+      this.overlay = false,
+      this.hideSelection = false});
 
   @override
   Widget build(BuildContext context) {
@@ -442,6 +446,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
               panOffset: panOffset,
               zoomLevel: zoomLevel,
               overlay: true,
+              hideSelection: hideSelection,
               repaint: model.dragRepaint),
           child: Container(),
         ),
@@ -451,6 +456,7 @@ class NodeNetworkInteractionLayer extends StatelessWidget {
       painter: NodeNetworkPainter(model,
           panOffset: panOffset,
           zoomLevel: zoomLevel,
+          hideSelection: hideSelection,
           repaint: model.dragRepaint),
       // A plain Container (no gesture/opaque behavior) so the layer fills the
       // Stack for painting but stays transparent to pointer events — taps are
@@ -1328,7 +1334,13 @@ class NodeNetworkState extends State<NodeNetwork> {
       scale: getZoomScale(_zoomLevel),
       zoomLevel: _zoomLevel,
     );
-    _appendNodesRecursive(children, view, const <BigInt>[], view, resolver);
+    appendCanvasNodeWidgets(
+      children: children,
+      rootView: view,
+      resolver: resolver,
+      builder: (node, scopeChain, nodeResolver) =>
+          _buildNodeWidget(node, scopeChain, view, nodeResolver),
+    );
 
     // Top wire layer (overlay): body wires + dragged wire. These need to
     // paint above the node widgets — the HOF's body Container has an opaque
@@ -1344,20 +1356,10 @@ class NodeNetworkState extends State<NodeNetwork> {
     return children;
   }
 
-  /// Append every NodeWidget reachable from the top-level network — first the
-  /// outer scope's nodes (HOFs included), then each HOF's body nodes
-  /// recursively. Body nodes appear *above* their HOF in the Stack so they
-  /// can receive pointer events first.
-  ///
-  /// [resolver] is consulted to decide whether to descend into each HOF's
-  /// body: a body that's collapsed (rendered too small to be readable —
-  /// see U6) is skipped, since the HOF widget itself already swaps in the
-  /// `[N nodes]` placeholder for that case.
-  /// Build the widget for a single node in [scopeChain]. Comment nodes get the
-  /// special [CommentNodeWidget] rendering at every scope (top level *and*
-  /// inside HOF/closure bodies); all other nodes get the generic [NodeWidget].
-  /// Both widgets are scope-aware (positioning + key + API calls), so the same
-  /// routing works for the top-level walk and the recursive zone-body walk.
+  /// Build the Stack child for a single node in [scopeChain] — the interactive
+  /// canvas's node builder, handed to [appendCanvasNodeWidgets]. The widget
+  /// itself comes from the shared [canvasNodeWidget]; what this adds is the
+  /// drag fast path.
   ///
   /// The node widget is wrapped in a [ListenableBuilder] on the model's
   /// `dragRepaint` notifier — the node-drag fast path. Drag ticks bump that
@@ -1395,26 +1397,15 @@ class NodeNetworkState extends State<NodeNetwork> {
     List<BigInt> scopeChain,
     NodeNetworkView rootView,
     ScopeResolver resolver,
-  ) {
-    if (node.nodeTypeName == 'Comment') {
-      return CommentNodeWidget(
-        key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain),
+  ) =>
+      canvasNodeWidget(
         node: node,
+        scopeChain: scopeChain,
+        rootView: rootView,
+        resolver: resolver,
         panOffset: _panOffset,
         zoomLevel: _zoomLevel,
-        resolver: resolver,
-        scopeChain: scopeChain,
       );
-    }
-    return NodeWidget(
-      node: node,
-      panOffset: _panOffset,
-      zoomLevel: _zoomLevel,
-      rootView: rootView,
-      resolver: resolver,
-      scopeChain: scopeChain,
-    );
-  }
 
   /// Resolver for drag-tick rebuilds of drag-affected nodes. The build-time
   /// resolver is stale during a drag (a dragged HOF's body origin moves every
@@ -1434,51 +1425,6 @@ class NodeNetworkState extends State<NodeNetwork> {
       _dragResolverTick = tick;
     }
     return _dragResolver!;
-  }
-
-  void _appendNodesRecursive(
-    List<Widget> children,
-    NodeNetworkView view,
-    List<BigInt> scopeChain,
-    NodeNetworkView rootView,
-    ScopeResolver resolver,
-  ) {
-    for (final entry in view.nodes.entries) {
-      children
-          .add(_buildNodeWidget(entry.value, scopeChain, rootView, resolver));
-    }
-    // Then walk into each HOF's body — body nodes are drawn after their
-    // owner HOF so they layer on top. Skip if the body is collapsed.
-    for (final entry in view.nodes.entries) {
-      final node = entry.value;
-      final zone = node.zone;
-      if (zone == null) continue;
-      final bodyChain = [...scopeChain, node.id];
-      if (resolver.isBodyCollapsed(bodyChain)) continue;
-      _appendZoneNodesRecursive(children, zone, bodyChain, rootView, resolver);
-    }
-  }
-
-  void _appendZoneNodesRecursive(
-    List<Widget> children,
-    ZoneView zone,
-    List<BigInt> scopeChain,
-    NodeNetworkView rootView,
-    ScopeResolver resolver,
-  ) {
-    for (final entry in zone.nodes.entries) {
-      children
-          .add(_buildNodeWidget(entry.value, scopeChain, rootView, resolver));
-    }
-    for (final entry in zone.nodes.entries) {
-      final node = entry.value;
-      final inner = node.zone;
-      if (inner == null) continue;
-      final innerChain = [...scopeChain, node.id];
-      if (resolver.isBodyCollapsed(innerChain)) continue;
-      _appendZoneNodesRecursive(
-          children, inner, innerChain, rootView, resolver);
-    }
   }
 
   /// Handle pointer down event - check for middle mouse button, Shift + right mouse, or left-click for rectangle selection

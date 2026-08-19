@@ -845,6 +845,14 @@ class NodeWidget extends StatelessWidget {
   /// made canvas rebuilds O(N²) (the dominant cost in 100+-node networks).
   final ScopeResolver resolver;
 
+  /// Draw the node as if it were neither selected nor active.
+  ///
+  /// Set by the image export (`export_network_image.dart`): selection and the
+  /// active-node highlight are editing state, and a reader of the exported
+  /// picture has no way to tell them from meaning. Nothing else changes — the
+  /// node is still laid out and drawn exactly where it is.
+  final bool hideSelection;
+
   NodeWidget({
     required this.node,
     required this.panOffset,
@@ -852,7 +860,14 @@ class NodeWidget extends StatelessWidget {
     required this.rootView,
     required this.resolver,
     this.scopeChain = const [],
+    this.hideSelection = false,
   }) : super(key: NodeWidgetKeys.nodeWidget(node.id, scopeChain: scopeChain));
+
+  /// Selection / active state as it should be **drawn** — the styling code uses
+  /// these rather than `node.selected` / `node.active` so [hideSelection] has a
+  /// single point of effect. Interaction handlers keep reading the real flags.
+  bool get _drawSelected => node.selected && !hideSelection;
+  bool get _drawActive => node.active && !hideSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -1036,7 +1051,7 @@ class NodeWidget extends StatelessWidget {
                                   // white on the orange selected/active title
                                   // bar, where amber would lose contrast.
                                   style: TextStyle(
-                                    color: (node.active || node.selected)
+                                    color: (_drawActive || _drawSelected)
                                         ? Colors.white
                                         : getDataTypeColor(node.outputPins.first
                                             .effectiveDataType),
@@ -1456,9 +1471,9 @@ class NodeWidget extends StatelessWidget {
 
   /// Returns the title bar color based on selection state
   Color _getTitleColor() {
-    if (node.active) {
+    if (_drawActive) {
       return NODE_COLOR_ACTIVE;
-    } else if (node.selected) {
+    } else if (_drawSelected) {
       return NODE_COLOR_SELECTED;
     }
     return NODE_TITLE_COLOR_NORMAL;
@@ -1482,7 +1497,7 @@ class NodeWidget extends StatelessWidget {
               spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
         ],
       );
-    } else if (node.active) {
+    } else if (_drawActive) {
       // Active node: thicker border, full glow
       return (
         NODE_COLOR_ACTIVE,
@@ -1494,7 +1509,7 @@ class NodeWidget extends StatelessWidget {
               spreadRadius: WIRE_GLOW_SPREAD_RADIUS)
         ],
       );
-    } else if (node.selected) {
+    } else if (_drawSelected) {
       // Selected but not active
       return (
         NODE_COLOR_SELECTED,
