@@ -16,7 +16,7 @@ use crate::lattice_fill::placed_atom_tracker::{CrystallographicAddress, PlacedAt
 use crate::motif::Motif;
 use crate::unit_cell_struct::UnitCellStruct;
 use glam::IVec3;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 
 /// Surface orientation classification for atoms.
@@ -51,6 +51,22 @@ const AXIS_ALIGNMENT_THRESHOLD: f64 = 0.5;
 ///
 /// Set to false for normal reconstruction operation.
 const SURFACE_RECONSTRUCTION_VISUAL_DEBUG: bool = false;
+
+/// What a reconstruction pass produced.
+///
+/// `unpaired_surface_atoms` is consumed by the concave-rebonding pass
+/// (`doc/design_concave_rebonding.md` §7). An atom is in it when all three of
+/// these hold: it classified as a {100} surface atom, `reconstruct_surface`
+/// resolved true **at its own position**, and it did not end up in an applied
+/// dimer. The middle condition is what keeps regional reconstruction correct --
+/// see the note where the set is populated.
+#[derive(Debug, Default)]
+pub struct SurfaceReconstructionOutcome {
+    /// Number of dimers formed.
+    pub dimer_count: usize,
+    /// {100} surface atoms reconstruction was enabled for but could not pair.
+    pub unpaired_surface_atoms: FxHashSet<u32>,
+}
 
 #[derive(Clone, Copy)]
 struct SurfaceReconstructionParams {
@@ -328,6 +344,12 @@ struct DimerCandidateData {
     /// Vector of dimer pair candidates.
     /// The partner orientation has not been validated yet - validation happens later.
     dimer_pairs: Vec<DimerPair>,
+
+    /// Classified {100} surface atoms that reconstruction is enabled for at
+    /// their own position. Atoms that go on to form a dimer are removed from
+    /// this set, so what survives is the "unpaired" set of
+    /// [`SurfaceReconstructionOutcome`].
+    reconstruction_enabled_surface_atoms: FxHashSet<u32>,
 }
 
 /// Helper function to parse lattice offset notation into IVec3.
@@ -818,6 +840,7 @@ fn process_atoms(
 ) -> DimerCandidateData {
     let mut partner_orientations: FxHashMap<u32, SurfaceOrientation> = FxHashMap::default();
     let mut dimer_pairs: Vec<DimerPair> = Vec::new();
+    let mut reconstruction_enabled_surface_atoms: FxHashSet<u32> = FxHashSet::default();
 
     // Iterate through all placed atoms
     for (address, atom_id) in atom_tracker.iter_atoms() {
@@ -841,8 +864,19 @@ fn process_atoms(
             continue;
         }
 
-        // Resolve invert_phase per atom at its position (region-aware).
-        let invert_phase = resolver.resolve_at(atom_position).invert_phase;
+        // Resolve this atom's settings once at its position (region-aware):
+        // the dimer phase, and whether reconstruction applies here at all.
+        let atom_options = resolver.resolve_at(atom_position);
+        let invert_phase = atom_options.invert_phase;
+
+        // An atom may only be treated as "unpaired" later if reconstruction was
+        // enabled AT ITS OWN POSITION (doc/design_concave_rebonding.md D3).
+        // With `surf_recon` true only inside a region this loop still runs, and
+        // still classifies atoms OUTSIDE that region -- but those are dihydride
+        // by the user's choice and must never be rebonded.
+        if atom_options.reconstruct_surface {
+            reconstruction_enabled_surface_atoms.insert(atom_id);
+        }
 
         // Check if this is a primary dimer atom
         if is_primary_dimer_atom(&address, orientation, invert_phase) {
@@ -867,6 +901,7 @@ fn process_atoms(
     DimerCandidateData {
         partner_orientations,
         dimer_pairs,
+        reconstruction_enabled_surface_atoms,
     }
 }
 
@@ -1072,7 +1107,7 @@ fn reconstruct_surface_100_diamond_cubic(
     single_bond_atoms_already_removed: bool,
     resolver: &SettingsResolver,
     params: SurfaceReconstructionParams,
-) -> usize {
+) -> SurfaceReconstructionOutcome {
     // Remove single-bond atoms if they haven't been removed yet
     // This is necessary for proper surface reconstruction
     if !single_bond_atoms_already_removed {
@@ -1081,16 +1116,19 @@ fn reconstruct_surface_100_diamond_cubic(
 
     // Step 1: Process atoms - classify orientations and identify dimer candidates
     // Debug visualization is applied during processing if SURFACE_RECONSTRUCTION_VISUAL_DEBUG is true
-    let candidate_data = process_atoms(structure, atom_tracker, resolver);
+    let DimerCandidateData {
+        partner_orientations,
+        dimer_pairs,
+        mut reconstruction_enabled_surface_atoms,
+    } = process_atoms(structure, atom_tracker, resolver);
 
-    // Step 2: Process dimer candidates - validate and apply reconstruction
+    // Step 2: Process dimer candidates - validate and apply reconstruction.
+    // Every atom that ends up in an APPLIED dimer leaves the enabled set; what
+    // remains is the unpaired set the concave-rebonding pass may act on.
     let mut dimer_count = 0;
-    for dimer_pair in &candidate_data.dimer_pairs {
+    for dimer_pair in &dimer_pairs {
         // Validate: check that the partner has the same orientation as the primary
-        if let Some(&partner_orientation) = candidate_data
-            .partner_orientations
-            .get(&dimer_pair.partner_atom_id)
-        {
+        if let Some(&partner_orientation) = partner_orientations.get(&dimer_pair.partner_atom_id) {
             // Only reconstruct if both atoms have the same surface orientation
             if partner_orientation == dimer_pair.primary_orientation {
                 // Resolve per-dimer settings at the midpoint of the two atoms
@@ -1119,12 +1157,17 @@ fn reconstruct_surface_100_diamond_cubic(
                     opts.passivation_element,
                     params,
                 );
+                reconstruction_enabled_surface_atoms.remove(&dimer_pair.primary_atom_id);
+                reconstruction_enabled_surface_atoms.remove(&dimer_pair.partner_atom_id);
                 dimer_count += 1;
             }
         }
     }
 
-    dimer_count
+    SurfaceReconstructionOutcome {
+        dimer_count,
+        unpaired_surface_atoms: reconstruction_enabled_surface_atoms,
+    }
 }
 
 /// Performs surface reconstruction on the atomic structure.
@@ -1144,7 +1187,9 @@ fn reconstruct_surface_100_diamond_cubic(
 ///   and `hydrogen_passivation` (per dimer) — see §B5 step 5
 ///
 /// # Returns
-/// * The number of surface reconstructions performed (e.g., number of dimers for (100) reconstruction)
+/// * A [`SurfaceReconstructionOutcome`]: the number of dimers formed, plus the
+///   {100} surface atoms reconstruction was enabled for but could not pair
+///   (consumed by [`super::concave_rebond::rebond_concave_clashes`])
 pub fn reconstruct_surface(
     structure: &mut AtomicStructure,
     atom_tracker: &PlacedAtomTracker,
@@ -1153,10 +1198,10 @@ pub fn reconstruct_surface(
     parameter_element_values: &HashMap<String, i16>,
     single_bond_atoms_already_removed: bool,
     resolver: &SettingsResolver,
-) -> usize {
+) -> SurfaceReconstructionOutcome {
     let params = match get_reconstruction_params(motif, unit_cell, parameter_element_values) {
         Some(p) => p,
-        None => return 0,
+        None => return SurfaceReconstructionOutcome::default(),
     };
 
     reconstruct_surface_100_diamond_cubic(

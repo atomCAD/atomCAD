@@ -213,6 +213,9 @@ pub struct LatticeFillStatistics {
     pub non_batched_evaluations: i32,
     pub batched_evaluations: i32,
     pub surface_reconstructions: i32,
+    /// Concave-corner clashes resolved into host-host bonds
+    /// (`doc/design_concave_rebonding.md`).
+    pub concave_rebonds: i32,
 }
 
 impl Default for LatticeFillStatistics {
@@ -235,6 +238,7 @@ impl LatticeFillStatistics {
             non_batched_evaluations: 0,
             batched_evaluations: 0,
             surface_reconstructions: 0,
+            concave_rebonds: 0,
         }
     }
 
@@ -271,6 +275,9 @@ impl LatticeFillStatistics {
                 "  surface reconstructions: {}",
                 self.surface_reconstructions
             );
+        }
+        if self.concave_rebonds > 0 {
+            println!("  concave rebonds: {}", self.concave_rebonds);
         }
         println!(
             "  evaluations: {} non-batched, {} batched",

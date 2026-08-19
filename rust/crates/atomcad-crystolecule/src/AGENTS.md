@@ -68,6 +68,7 @@ crates/atomcad-crystolecule/src/
 │       ├── symmetry.rs             # Symmetry operation parsing and expansion
 │       └── space_groups.rs         # Lookup table for 230 space groups (symmetry ops)
 ├── lattice_fill/
+│   ├── concave_rebond.rs           # Concave-corner clash → host-host bond rewrite
 │   ├── config.rs                   # LatticeFillConfig, Options, Result, Statistics
 │   ├── fill_algorithm.rs           # Recursive lattice filling (SDF sampling)
 │   ├── hydrogen_passivation.rs     # H termination of dangling bonds
@@ -130,7 +131,9 @@ crates/atomcad-crystolecule/src/
 
 **Motif**: A template of atom sites and bonds that repeats at every lattice point. Sites use fractional coordinates; bonds reference sites with relative cell offsets (e.g., `SiteSpecifier { site_index: 0, relative_cell: IVec3(1,0,0) }` means site 0 in the +x neighboring cell). Parameter elements allow substitutional flexibility (e.g., PRIMARY=Carbon).
 
-**Lattice Filling**: `fill_lattice()` recursively subdivides a bounding box, evaluates an SDF geometry at motif sites, places atoms where SDF ≤ 0.01, creates bonds from the motif template, then applies cleanup → surface reconstruction → hydrogen passivation.
+**Lattice Filling**: `fill_lattice()` recursively subdivides a bounding box, evaluates an SDF geometry at motif sites, places atoms where SDF ≤ 0.01, creates bonds from the motif template, then applies cleanup → surface reconstruction → hydrogen passivation → concave rebonding.
+
+The last step must stay last. `hydrogen_passivate` decides whether a bond is dangling from the **motif**, not from an atom's actual bonds, so any pass that adds a non-lattice bond before it runs will not stop it placing a terminator on that same direction as well — leaving the host over-coordinated. `concave_rebond` therefore runs *after* passivation and repairs the result rather than pre-empting it. `reconstruct_surface` hands it the set of {100} surface atoms it classified but could not pair, and an empty set makes the pass a no-op — which is what gates it on `surf_recon` without a second flag. See `doc/design_concave_rebonding.md`.
 
 **Memory Layout**: `InlineBond` packs atom_id (29 bits) + bond_order (3 bits) into 4 bytes. `SmallVec<[InlineBond; 4]>` keeps up to 4 bonds inline per atom. Spatial grid (FxHashMap, cell size 4.0 Å) enables O(1) neighbor queries. `AtomicStructure` no longer carries a `frame_transform` — movement nodes bake transforms directly into atom positions (see `doc/design_lattice_space_refactoring.md` Appendix B).
 
@@ -228,6 +231,7 @@ tests/crystolecule/
 ├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
+├── concave_rebond_test.rs         # Concave-corner rebonding; clash detector re-derived independently
 ├── io/
 │   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
 │   ├── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
@@ -276,4 +280,6 @@ methods that only a grid can answer — the two `Option`-returning methods
 
 **A new Miller-index helper**: It goes in `miller.rs`, not in the node or tessellator that wants it. The test is whether the function needs anything beyond an `IVec3` — if it reasons about `(h,k,l)` as integers, it is crystallography and belongs here, even when its only caller today is a gadget. `simplify_miller_index` and `generate_possible_miller_indices` were filed in `structure-designer`'s `half_space_utils` until `doc/design_push_domain_code_down.md` (§2.2, D5) split them out — they had no rendering dependency at all, and the file they sat in only happened to be their first caller.
 
-**New lattice fill feature**: Add to `lattice_fill/` as a separate file, wire into `fill_algorithm.rs` pipeline. The pipeline order is: place atoms → create bonds → remove lone atoms → surface reconstruction → hydrogen passivation.
+**New lattice fill feature**: Add to `lattice_fill/` as a separate file, wire into `fill_algorithm.rs` pipeline. The pipeline order is: place atoms → create bonds → remove lone atoms → remove single-bond atoms → surface reconstruction → hydrogen passivation → concave rebonding.
+
+Two things to know before inserting a step. (1) Anything that reasons about *dangling* bonds must account for `hydrogen_passivate` deriving them from the motif rather than from actual bonds — see the note under **Lattice Filling**. (2) A geometric rule that fires on interatomic distance needs more than a distance threshold if it must hold for every passivant: `passiv_elem` ranges over H/F/Cl/Br/I, and a bulky halogen reaches ~0.6 Å further from its host while any vdW-scaled threshold grows with it, so distance alone stops discriminating. `concave_rebond` conjoins the distance test with two element-independent geometric ones for exactly this reason.

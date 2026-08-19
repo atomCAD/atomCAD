@@ -5,6 +5,8 @@ expression: out
 === apply_function_pin/apply_over_custom_network_iter.cnnd
   network 'Main' valid=true
   network 'mynet' valid=true
+=== concave_rebond/step_edge.cnnd
+  network 'Main' valid=true
 === inline_metadata_migration/old_format_metadata.cnnd
   network 'Main' valid=true
 === invariants/healthy.cnnd

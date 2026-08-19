@@ -20,6 +20,9 @@ mod atom_tags_test;
 #[path = "crystolecule/auto_bonding_test.rs"]
 mod auto_bonding_test;
 
+#[path = "crystolecule/concave_rebond_test.rs"]
+mod concave_rebond_test;
+
 #[path = "crystolecule/drawing_plane_test.rs"]
 mod drawing_plane_test;
 

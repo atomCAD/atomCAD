@@ -9,9 +9,11 @@ use atomcad_util::box_subdivision::subdivide_daabox;
 use atomcad_util::daabox::DAABox;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
+use rustc_hash::FxHashSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use super::concave_rebond::rebond_concave_clashes;
 use super::hydrogen_passivation::hydrogen_passivate;
 use super::surface_reconstruction::reconstruct_surface;
 use crate::atomic_structure_utils::{
@@ -182,9 +184,10 @@ pub fn fill_lattice(
         }
 
         // Apply surface reconstruction if enabled (before hydrogen passivation)
+        let mut unpaired_surface_atoms: FxHashSet<u32> = FxHashSet::default();
         if resolver.enabled_anywhere(options.reconstruct_surface, |r| r.surf_recon) {
             let _reconstruction_timer = Timer::new("LatticeFill surface reconstruction");
-            let reconstruction_count = reconstruct_surface(
+            let outcome = reconstruct_surface(
                 &mut atomic_structure,
                 &atom_tracker,
                 &config.motif,
@@ -193,7 +196,8 @@ pub fn fill_lattice(
                 rm_single_enabled,
                 &resolver,
             );
-            statistics.surface_reconstructions = reconstruction_count as i32;
+            statistics.surface_reconstructions = outcome.dimer_count as i32;
+            unpaired_surface_atoms = outcome.unpaired_surface_atoms;
         }
 
         // Apply hydrogen passivation after bonds are created and lone atoms removed
@@ -205,6 +209,29 @@ pub fn fill_lattice(
                 &mut statistics,
                 &resolver,
             );
+        }
+
+        // Resolve concave-corner terminator clashes into host-host bonds
+        // (doc/design_concave_rebonding.md).
+        //
+        // This MUST run after passivation, not before: `hydrogen_passivate`
+        // derives dangling-ness from the motif rather than from an atom's actual
+        // bonds, so a shortcut bond added earlier would not stop it placing the
+        // terminator too, leaving the host 5-coordinate (D1).
+        //
+        // No separate enable flag: the pass is a no-op when the unpaired set is
+        // empty, which is exactly when reconstruction did not run, so it is
+        // gated by `surf_recon` structurally rather than by a second boolean
+        // (D5, and the gating argument in §7).
+        if !unpaired_surface_atoms.is_empty() {
+            let _rebond_timer = Timer::new("LatticeFill concave rebonding");
+            let rebonds = rebond_concave_clashes(
+                &mut atomic_structure,
+                &atom_tracker,
+                &unpaired_surface_atoms,
+                config.unit_cell.a.length(),
+            );
+            statistics.concave_rebonds = rebonds as i32;
         }
     }
 

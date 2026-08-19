@@ -117,7 +117,23 @@ The predetermined position of the Hydrogen is so that the C-H bond length is 1.0
 
 ## Potential problems and mitigations, improvements
 
-TODO
+### Unpaired surface atoms at concave corners
+
+The dimer search is all-or-nothing: `process_atoms` looks up the partner's crystallographic address
+in `PlacedAtomTracker`, and if the lookup fails (or the partner classifies to a different facet) the
+atom is silently dropped from the algorithm. It keeps both dangling bonds and step 5 passivates both,
+producing a **dihydride (CH2 / SiH2, or CCl2 / SiCl2) row**.
+
+That is harmless where the missing partner is over open vacuum, but at a **concave corner** — a (100)
+terrace meeting an ascending wall, narrowed to a strip one atom row wide — the second dangling bond
+points straight at a dangling bond on the wall, and the two terminators land ~1.4 A apart (H) or
+~0.5 A apart (Cl). The correct resolution is to drop both terminators and bond the two host atoms
+directly across the corner (a *rebonded step edge*), which is coordination-neutral.
+
+See **`doc/design_concave_rebonding.md`** for the fix: a post-passivation pass that detects clashing
+terminator pairs and rewrites them into a host-host bond, gated on the reconstruction having actually
+run and left one of the hosts unpaired.
+
 
 ## Learnings. What can be generalized from this for other reconstructions? What will be the building blocks and architecture of a surface reconstruction system?
 
