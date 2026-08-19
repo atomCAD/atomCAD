@@ -72,10 +72,11 @@ surface.
 
 Three consequences drive the design:
 
-1. **A field's meaning is not recoverable from its numbers**, and it changes
-   how the field must be presented — one surface or two, what a sensible
-   threshold is, whether it forms surfaces or paints them. So the meaning is
-   part of the value: see `FieldKind`.
+1. **A field's meaning is not recoverable from its numbers** — but the two
+   properties that actually drive rendering are: whether it is **signed**
+   (extract at `±level`, two colors) and its **magnitude scale**. Both follow
+   from the data's value range, so no semantic tag is needed. See §Why there
+   is no `FieldKind`.
 2. **All three quantities are dominated by sharp peaks at the nuclei**, with
    all the interesting structure in the low-magnitude tail. Electron density
    spans roughly six orders of magnitude between the conventional surface
@@ -112,7 +113,7 @@ Reference magnitudes, for choosing defaults later:
                        v
              dyn ScalarField          <-- THE CONTRACT
              sample / sample_batch / gradient
-             bounds / kind / metadata
+             bounds / native_grid / value_range
                        |
         +--------------+--------------------+
         |                                   |
@@ -134,7 +135,7 @@ Molden support into a rewrite of that consumer. A consumer that takes
 
 | Piece | Location | Rationale |
 |---|---|---|
-| `ScalarField`, `FieldKind`, `FieldMetadata`, `GridGeometry`, `SampledField` | `atomcad-crystolecule/src/field/` | The cube loader must produce an `AtomicStructure` from the file's atom block, so ingestion cannot live below `crystolecule`. Volumetric data about a molecule belongs beside the molecule. |
+| `ScalarField`, `FieldBounds`, `GridGeometry`, `SampledField` | `atomcad-crystolecule/src/field/` | The cube loader must produce an `AtomicStructure` from the file's atom block, so ingestion cannot live below `crystolecule`. Volumetric data about a molecule belongs beside the molecule. |
 | `cube_loader.rs` | `atomcad-crystolecule/src/io/cube_loader.rs` | Beside `xyz_loader.rs` / `cif/`, following the established `io/` convention. |
 | `import_cube`, `sample_field` nodes | `atomcad-structure-designer/src/nodes/` | Standard node location. |
 
@@ -167,8 +168,9 @@ every published threshold convention in the chemistry literature.
 
 ```rust
 /// A scalar function of 3D real space — sampled from a grid, or evaluated
-/// analytically. Coordinates are real-space Ångström; values are in whatever
-/// atomic unit the quantity uses (see `FieldKind`).
+/// analytically. Coordinates are real-space Ångström; values are passed
+/// through in whatever atomic unit the source quantity uses (§Background has
+/// the conventional ranges).
 ///
 /// `Send + Sync` is required: consumers evaluate in parallel batches, mirroring
 /// `atomcad_geo_tree::BatchedImplicitEvaluator`.
@@ -187,9 +189,12 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     }
 
     /// Gradient at `point`, in value-units per Ångström. Used for isosurface
-    /// normals. Default is a central difference stepped at
-    /// `suggested_spacing() * 0.5`; analytic sources override with the exact
-    /// derivative.
+    /// normals.
+    ///
+    /// The default is a central difference stepped at half the native grid
+    /// spacing when `native_grid()` is `Some`, and at `DEFAULT_GRADIENT_STEP`
+    /// otherwise. Both concrete implementations are expected to override it —
+    /// see §Gradient below — so the default is a fallback, not the norm.
     fn gradient(&self, point: DVec3) -> DVec3 { /* central difference */ }
 
     /// Region outside which `sample` is defined to return `0.0`.
@@ -197,17 +202,41 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     fn data_bounds(&self) -> Option<FieldBounds>;
 
     /// Box a consumer should sample when it has no better instruction.
-    /// Sampled sources return their stored box; analytic sources derive one
-    /// from atom positions plus a margin.
+    ///
+    /// For a sampled source this is the box **through the outermost sample
+    /// points** — node-centered, NOT extended by half a voxel (see §Bounds
+    /// convention). For an analytic source it is derived from atom positions
+    /// plus a margin.
     fn suggested_bounds(&self) -> FieldBounds;
 
-    /// Grid step a consumer should use absent better instruction, in Ångström.
-    /// For a sampled source this is the stored spacing — sampling finer buys
-    /// interpolation, not information.
-    fn suggested_spacing(&self) -> f64;
+    /// The field's intrinsic sample lattice, when it has one. `Some` for a
+    /// sampled source; `None` for an analytic source, which has no preferred
+    /// lattice at all.
+    ///
+    /// A consumer that wants zero information loss should use this grid
+    /// verbatim when it is `Some`: sampling a stored field *anywhere else*
+    /// blends eight stored values per point, which smooths the field for no
+    /// gain — the stored lattice is already the resolution ceiling, so
+    /// sampling finer buys interpolation, not information.
+    ///
+    /// This is a **fidelity fast path, not the interface.** Every consumer
+    /// must still work correctly from `sample` alone when this returns `None`;
+    /// a consumer that only functions when it is `Some` is broken and will
+    /// fail against the first Molden field it meets.
+    fn native_grid(&self) -> Option<GridGeometry>;
 
-    fn kind(&self) -> FieldKind;
-    fn metadata(&self) -> &FieldMetadata;
+    /// Minimum and maximum over the field's data.
+    ///
+    /// Free for a sampled source — one pass during parsing, over samples
+    /// already being read. `None` for an analytic source, which has no data
+    /// to scan until something samples it.
+    ///
+    /// This is what replaces a semantic type tag (§Why there is no
+    /// `FieldKind`). `min >= 0` means the field is non-negative, so a consumer
+    /// can skip the negative-level extraction; the span sets a log slider's
+    /// bounds. Both are *derived*, so they work for any scalar quantity
+    /// chemistry produces, not just the three or four anyone thought to name.
+    fn value_range(&self) -> Option<(f64, f64)>;
 }
 ```
 
@@ -222,10 +251,39 @@ node layers a stricter, more diagnostic behavior on top — see below.
 consumer still needs a finite box to work in. Collapsing them into one method
 would force the Molden implementation to lie about one or the other.
 
-**Why `suggested_spacing` exists at all.** It is the honest expression of the
-asymmetry between the two sources: a sampled field has an intrinsic resolution
-limit and an analytic one does not. A consumer that respects it will not waste
-work over-sampling a coarse cube, and will not under-sample a Molden field.
+**There is deliberately no `suggested_spacing`.** The field knows *where* to
+look — only it has the atom positions, which is why `suggested_bounds` is not
+`Option` — but not *how finely*, which is a consumer-side quality decision
+(draft versus final, zoom level, time budget). Its one genuine contribution to
+resolution is `native_grid`. A consumer choosing its own lattice writes the
+fallback at the call site:
+`native_grid().map(|g| g.spacing()).unwrap_or(quality.default_spacing)`.
+
+### Bounds convention
+
+For a sampled field, `suggested_bounds` (and `data_bounds`) is the box **through
+the outermost sample points**. Cube grids are **node-centered** — the origin *is*
+sample `(0,0,0)`, not a voxel corner — so with `dims = [nx, ny, nz]` the box
+spans `nx - 1` steps while containing `nx` samples.
+
+Stating this matters because both conventions exist in the wild, and picking one
+silently is how a half-voxel offset creeps in. It also makes the fencepost work
+out: a consumer walking from `min` to `max` **inclusive** at the native spacing
+generates exactly `nx` points landing precisely on the stored values. A consumer
+that iterates exclusively of `max` silently drops the last plane — which is
+another reason to prefer `native_grid` verbatim over reconstructing a lattice
+from a box and a step.
+
+### Gradient
+
+The trait's default central difference exists so a third implementation is never
+*forced* to write one, but both concrete implementations should override it:
+
+- **`AnalyticField`** — the exact analytic derivative. A Gaussian's derivative is
+  as cheap as its value, so there is no reason to approximate.
+- **`SampledField`** — central differences **on the stored samples directly**,
+  not on interpolated values. Exact with respect to the stored data, cheaper than
+  three interpolated pairs, and precisely what isosurface normals want.
 
 ### `FieldBounds`
 
@@ -243,72 +301,79 @@ pub struct FieldBounds {
 If a general AABB is later wanted elsewhere it should move to `atomcad-util`;
 it is defined here for now to avoid speculatively widening a shared crate.
 
-### `FieldKind` — the semantic tag
+### Why there is no `FieldKind`
 
-```rust
-/// What a field's numbers *mean*. Not derivable from the numbers themselves,
-/// so it travels with the value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FieldKind {
-    /// Signed wavefunction amplitude (a molecular orbital). Rendered as a
-    /// pair of surfaces at +/-level in two colors.
-    Amplitude,
-    /// Non-negative electron density. One surface, one color.
-    Density,
-    /// Signed potential; diverges at nuclei. Used to color another field's
-    /// surface, not to form one.
-    Potential,
-    /// Meaning unknown — the file did not say and the user has not.
-    Unknown,
-}
-```
+An earlier draft carried a semantic tag — `Amplitude` / `Density` /
+`Potential` / `Unknown` — guessed from the cube comment line and overridable on
+the node. It is deliberately **not** in this design. Recorded here because its
+absence is the kind of thing a later contributor will want to "fix".
 
-`FieldKind` is the reason the deferred visualization design can be written
-without revisiting ingestion: surface *count*, default *threshold*, slider
-*scale*, and whether a field forms or paints a surface are all functions of this
-one enum.
+It was claimed to drive four things. Three evaporate under inspection:
 
-Nothing in a `.cube` file states the kind. PySCF writes a descriptive comment
-line, but that is free text, not a specified field. So:
+- **Surface count.** Extract at `+level` and `-level` unconditionally. On a
+  non-negative field the negative pass finds no crossings and yields empty
+  geometry, so the one-surface case degenerates on its own, with no semantic
+  knowledge. (An earlier draft worried about speckle from negative noise in
+  density data. That was wrong: a density is computed as a sum of squares, so
+  it is non-negative to roundoff, and trilinear interpolation of non-negative
+  values is a convex combination and stays non-negative.)
+- **Slider scale.** The level is `±L` with `L > 0`, so the slider spans
+  positive values only and log scale is right for every quantity.
+- **Forms-vs-paints role.** Never enforced, only advisory — and an ESP
+  isosurface is a real object (an equipotential surface), just an unusual one.
 
-- the loader **guesses** from the comment lines and the file stem (matching
-  `orbital` / `mo` -> `Amplitude`, `density` / `rho` -> `Density`,
-  `esp` / `mep` / `potential` -> `Potential`), falling back to `Unknown`
-- the guess is a **default, always user-overridable** on the node
-- a `Density` field whose samples contain a significantly negative value is a
-  contradiction; the loader downgrades the guess to `Unknown` rather than
-  propagating a kind the data refutes
+The fourth, **default threshold**, is real but is not solved by a tag either:
+the interesting levels span orders of magnitude, and the honest answers are a
+fixed constant plus a log slider, or a percentile-of-magnitude rule. Both are
+data-driven, and *which* is right is an explicitly deferred question
+(§Deferred). A tag in the ingestion contract serving an unvalidated
+visualization decision is precisely the speculation §Scope forbids.
 
-### `FieldMetadata`
+The decisive objection is generality. Chemistry produces electron density, MO
+amplitude, ESP, spin density, deformation density, ELF, reduced density
+gradient, ALIE, Fukui functions, the Laplacian of the density, and more. A
+four-variant enum cannot name that space — everything interesting lands in
+`Unknown`, or the enum grows forever. Meanwhile the two properties that
+actually drive rendering, **signedness** and **magnitude scale**, are derivable
+from the data for all of them. Hence `value_range` on the trait.
 
-```rust
-/// Provenance and identity for one field. Fields a `.cube` file cannot supply
-/// are `None` today and populated by the Molden loader later — which is the
-/// whole point of declaring them now.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct FieldMetadata {
-    /// Human-readable label for UI. From the cube comment line or file stem.
-    pub label: Option<String>,
-    /// Index within the source file (0-based). Distinct from `orbital_index`.
-    pub field_index: usize,
-    /// Orbital index as the *producing program* numbered it. `.cube`
-    /// multi-field files carry this on their index line; single-field files
-    /// do not.
-    pub orbital_index: Option<i32>,
-    /// Orbital energy, hartree. Molden only.
-    pub energy: Option<f64>,
-    /// Occupation number. Molden only. Enables automatic HOMO selection.
-    pub occupancy: Option<f64>,
-    /// `Alpha` / `Beta` for unrestricted calculations. Molden only.
-    pub spin: Option<Spin>,
-    /// Symmetry label, e.g. `1a1`. Molden only.
-    pub symmetry: Option<String>,
-}
-```
+What is genuinely lost is a machine-readable label, and nothing downstream needs
+to branch on one.
 
-Declaring the Molden-only fields now as `Option` is deliberate: it means adding
-Molden changes a *loader*, not a struct signature that every consumer and UI
-touches.
+### Why there is no `FieldMetadata` either
+
+An earlier draft carried a `FieldMetadata` struct — `label`, `field_index`,
+`orbital_index`, `energy`, `occupancy`, `spin`, `symmetry` — with the
+Molden-only members declared as `Option` up front so that adding Molden would
+change only a loader. Removed for the same reason as `FieldKind`, and recorded
+here for the same reason.
+
+Every member fails the test *"is there a known use, and is it not easily
+determined otherwise?"*:
+
+| Member | Verdict |
+|---|---|
+| `energy`, `occupancy`, `spin`, `symmetry` | **Permanently `None` for this document's entire scope.** No loader here can populate them; only Molden could, and Molden is not being built. Pure dead weight. |
+| `field_index` | Trivially derivable — it *is* the index into the containing `Vec` / `Array[ScalarField]`. Duplicating a container's own indexing inside its elements only creates a value that can go stale. |
+| `orbital_index` | Exists only in the multi-field cube variant, which is P5: provisional, and untestable until a Gaussian-produced file is available. It belongs to that feature, not to the base contract. |
+| `label` | Populated, but with no in-scope consumer. See below. |
+
+**Where field identity actually comes from in scope: the node, not the value.**
+PySCF writes one field per file, so a network importing `homo.cube` and
+`lumo.cube` has two `import_cube` nodes, each already labelled by its file name
+in its subtitle. The node disambiguates; the value does not need to. Per-field
+identity only starts earning its place when one node emits many fields — which
+is exactly P5 and Molden, where whatever identity those need can be added
+shaped by what they actually need rather than guessed now.
+
+So the `Spin` enum and the `metadata()` trait method go too. The cube comment
+lines are parsed and discarded; surfacing them on `CubeFile` is a one-line
+addition whenever a use appears.
+
+The counter-argument the earlier draft made — that declaring the Molden members
+now means Molden changes a loader rather than a signature — does not hold up.
+There are exactly two implementors of `ScalarField`, and the Molden work edits
+both anyway.
 
 ### `SampledField` — the `.cube` implementation
 
@@ -322,21 +387,37 @@ pub struct SampledField {
     /// `(i * dims[1] + j) * dims[2] + k`. This matches the `.cube` traversal
     /// order, so the loader fills it sequentially with no transposition.
     samples: Vec<f32>,
-    kind: FieldKind,
-    metadata: FieldMetadata,
+    /// Min and max, accumulated during parsing — free there, a full grid
+    /// rescan later.
+    value_range: (f64, f64),
 }
 
 /// Grid placement in real space. General enough for a sheared grid even
 /// though PySCF only ever writes axis-aligned ones — the format permits it,
 /// and the generality costs one matrix instead of three scalars.
+///
+/// This is also what `ScalarField::native_grid` hands back, so it is the
+/// complete answer to "where exactly are the stored samples" — origin, three
+/// axis vectors, and counts, with no convention left implicit.
 #[derive(Debug, Clone, Copy)]
 pub struct GridGeometry {
-    /// Position of sample (0,0,0), Ångström.
+    /// Position of sample (0,0,0), Ångström. Node-centered: this IS a sample
+    /// point, not a voxel corner.
     pub origin: DVec3,
     /// Step vectors along the three grid axes, Ångström.
     pub axes: [DVec3; 3],
     /// Sample counts along each axis.
     pub dims: [usize; 3],
+}
+
+impl GridGeometry {
+    /// Per-axis step lengths, Ångström. Convenience for consumers choosing
+    /// their own lattice; exact only for an axis-aligned grid, so a consumer
+    /// that must handle shear uses `axes` directly.
+    pub fn spacing(&self) -> DVec3 { /* axis vector lengths */ }
+
+    /// Box through the outermost sample points (see §Bounds convention).
+    pub fn bounds(&self) -> FieldBounds { /* origin .. origin + (dims-1)*axes */ }
 }
 ```
 
@@ -401,7 +482,7 @@ Consequences to handle:
   copies of one file comparing unequal is acceptable; nothing depends on
   structural field equality).
 - `NetworkResult` is `Debug`; the trait requires `Debug`, and implementations
-  print a summary (kind, dims, label), never their samples.
+  print a summary (dims and value range), never their samples.
 - `NetworkResult` is never serde-serialized — results are recomputed from the
   network — so there is **no `.cnnd` surface** and no migration.
 
@@ -416,7 +497,7 @@ Consequences to handle:
 | **Output pin 0** | `field: ScalarField` — the field selected by `index` |
 | **Output pin 1** | `fields: Array[ScalarField]` — every field in the file |
 | **Output pin 2** | `molecule: Molecule` — atoms from the file's atom block |
-| **Property** | `file_name: Option<String>`, plus a `FieldKind` override |
+| **Property** | `file_name: Option<String>` |
 
 Node data follows `ImportXYZData` (`nodes/import_xyz.rs`) closely: `file_name`
 persisted, parsed payload `#[serde(skip)]`, a `node_data_loader` that reloads
@@ -441,19 +522,14 @@ future work, and `index` remains the primitive underneath it.
 
 Out-of-range `index` is an evaluation error naming the valid range.
 
-**Explicitly not included: a statistics readout in the node editor.** Min, max,
-percentiles, and dimensions would help choose thresholds, but they are a
-visualization concern, and `sample_field` plus the error messages specified
-below already make the parser verifiable. Adding a stats panel now would be
-building part of the deferred half on speculation. (Bounds *do* appear in
-`sample_field`'s out-of-bounds error, which is where they are actually needed
-for diagnosis.)
+**Explicitly not included: a statistics readout in the node editor.** Min, max
+and percentiles would help choose thresholds, but that is a visualization
+concern, and `sample_field` already makes the parser verifiable without it.
 
 The editor widget follows
-`lib/structure_designer/node_data/import_xyz_editor.dart` (file picker plus a
-`FieldKind` dropdown), registered in `node_data/node_data_widget.dart`. The
-picker uses the remembered import directory, per the existing last-directories
-behavior.
+`lib/structure_designer/node_data/import_xyz_editor.dart` — a file picker and
+nothing else, registered in `node_data/node_data_widget.dart`. The picker uses
+the remembered import directory, per the existing last-directories behavior.
 
 ## Node: `sample_field`
 
@@ -495,7 +571,7 @@ genuine analysis capability and works through the headless CLI.
 Plain ASCII. Structure, with the multi-field variant shown:
 
 ```
- Comment line 1                                <- free text; kind heuristic reads this
+ Comment line 1                                <- free text; read past, not retained
  Comment line 2                                <- free text
    -3   -5.000000  -5.000000  -5.000000        <- natoms (SIGNED), origin xyz, [NVal]
     2    5.000000   0.000000   0.000000        <- N1, step vector along axis 1
@@ -586,57 +662,169 @@ pub struct CubeFile {
 
 ## Forward compatibility: Molden
 
-Molden files store the wavefunction **analytically** — a Gaussian basis set plus
-the MO coefficient matrix — rather than as samples. That buys resolution
-independence (no fixed grid, so no chunky lobes when zoomed in, and a
-GPU-evaluated field becomes possible), all orbitals in one ~100 KB file instead
-of ~6 MB per orbital, and per-orbital energy, occupancy, spin and symmetry
-metadata that `.cube` throws away — which is what makes automatic HOMO/LUMO
-selection possible.
+### What a Molden file actually contains
 
-It costs implementing contracted-Gaussian evaluation, whose traps are well known
-and mostly silent: Cartesian versus spherical shells (signalled by the presence
-or absence of `[5D]` / `[7F]` / `[9G]` sections), component ordering within a
-shell (which differs per producing program, and where a wrong order yields a
-plausible but wrong field), normalization conventions (a wrong assumption
-rescales the field, so the shape looks perfect and the threshold becomes
-meaningless), and per-program format variation.
+Exactly three things: the **geometry**, the **basis set** (contracted Gaussian
+shells per atom), and the **MO coefficient matrix**. Nothing else. In
+particular it contains **no sampled data at all** — no density, no potential,
+no grid.
 
-**This is why the ordering matters.** With `.cube` support already in place,
-exporting both formats from one PySCF calculation gives a half-million-point
-ground truth from a trusted implementation for free:
+The `[MO]` section holds one entry per orbital, covering **every** orbital the
+basis produces — the occupied ones and the empty (virtual) ones alike, which is
+why LUMO and above are available. Each entry is a coefficient vector plus four
+metadata items:
+
+```
+ Sym= 5a1
+ Ene= -0.4977          <- a NUMBER, not a field
+ Spin= Alpha
+ Occup= 2.000000
+    1    0.994216      <- M coefficients, one per basis function
+    2    0.026068
+   ...
+```
+
+**`Ene=` is not a field.** It is a single eigenvalue per orbital — nothing to
+sample, nothing to draw. It, `Occup=`, `Spin=` and `Sym=` are per-orbital
+metadata, and together they are what makes automatic HOMO selection possible:
+*the highest-index orbital with `Occup > 0`*. Where they should live is a
+question for the Molden work — the base contract deliberately carries no
+metadata (§Why there is no `FieldMetadata` either), and `Wavefunction` is the
+natural home, since these describe orbitals in a file rather than properties of
+a sampled scalar function.
+
+### Stored versus derived quantities
+
+The distinction that shapes the node design: a `.cube` file is a **snapshot** —
+someone already chose what to compute and at what resolution, and you get
+exactly that. A Molden file is a **source** — you hold the wavefunction and can
+generate any derived quantity on demand, at any resolution.
+
+| Quantity | In the file? | How many | Cost to derive |
+|---|---|---|---|
+| Orbital amplitude `psi_i` | yes, as coefficients | **one per orbital** (M of them) | cheap — evaluate the basis, contract with one column |
+| Orbital energy / occupancy / spin / symmetry | yes, literally | one value per orbital | free; it is metadata, not a field |
+| Electron density `rho` | **no** — derived | **exactly one** per molecule | moderate — build the density matrix, then a quadratic form per point |
+| Spin density | **no** — derived | one (open-shell only) | moderate — the alpha/beta density difference |
+| Electrostatic potential | **no** — derived | **exactly one** per molecule | **expensive** — nuclear-attraction integrals over all basis pairs, per point |
+
+Density and potential are *one each*, not one per orbital, because both are
+properties of the **total** electron distribution:
+
+```
+rho(r) = sum over occupied i of  occ_i * |psi_i(r)|^2
+```
+
+One molecule has one density and one potential regardless of how many orbitals
+were summed to build them.
+
+### Node shape: `Wavefunction` as the parsed file
+
+Because the derived quantities must not be computed eagerly, `import_molden`
+cannot be a straight clone of `import_cube`. The parsed file gets its own type,
+and each field is a *view* of it:
+
+```
+import_molden ──> Wavefunction    (geometry + basis + coefficients + metadata)
+              └─> Molecule
+
+orbital(Wavefunction, index) ──> ScalarField     signed
+density(Wavefunction)        ──> ScalarField     non-negative
+esp(Wavefunction)            ──> ScalarField     signed   (see below)
+```
+
+Laziness falls out of the shape: nothing is evaluated until a node asks for it,
+and asking for one orbital never costs a density.
+
+A minimal first cut may skip `Wavefunction` and have `import_molden` emit
+`Array[ScalarField]` of orbitals plus `Molecule`, matching `import_cube`. That
+is a reasonable staging decision, but the `Wavefunction` shape is the one to
+aim at — retrofitting it later means changing a node's pins rather than adding
+nodes, and new pins must be appended, never inserted.
+
+**`DataType::Wavefunction` is still purely additive**, which is the claim this
+whole section exists to make checkable. It adds a type and some nodes; it
+changes nothing that already exists.
+
+### Electrostatic potential: a node we will not build for a long time
+
+`esp(Wavefunction)` is listed above for completeness, and it is **not planned**.
+
+Computing an ESP from a wavefunction requires nuclear-attraction integrals over
+every basis-function pair at every grid point. It is a substantially harder and
+slower piece of quantum chemistry than orbital or density evaluation — slow
+even inside PySCF, which has decades of optimized integral code behind it.
+Reimplementing it in Rust would be a large effort for a quantity PySCF already
+computes correctly via `cubegen.mep`.
+
+**So the expected workflow, indefinitely and including after Molden support
+lands, is: orbitals and density from `.molden`, electrostatic potential from a
+`.cube` file.** The two paths compose without friction — a density from a
+wavefunction and a potential from a cube meet at the isosurface node as two
+ordinary `ScalarField`s, which is exactly what the deferred color-by design
+needs. Nothing about mixing sources is a special case.
+
+### What Molden buys, and what it costs
+
+**Buys:** resolution independence — no fixed grid, so no faceted lobes when
+zoomed in, and a GPU-evaluated field becomes possible. Also all orbitals in one
+file rather than ~6 MB each, though the coefficient block is M×M and so grows
+with the **square** of basis size: tens of kilobytes for a small molecule, tens
+of megabytes for a large one.
+
+**Costs:** implementing contracted-Gaussian evaluation, a known minefield whose
+failures are mostly *silent* — spherical-versus-Cartesian shells (the `[5D]` /
+`[7F]` / `[9G]` flags, Cartesian by default), component ordering within a shell,
+normalization conventions, and per-program variation. Wrong ordering or
+normalization yields a plausible-looking but wrong field, which is exactly what
+the next subsection exists to catch.
+
+### Why `.cube` first: it is the test oracle
+
+With `.cube` support already in place, exporting both formats from one PySCF
+calculation gives a half-million-point ground truth from a trusted
+implementation, for free:
 
 ```python
 cubegen.orbital(mol, 'ref.cube', mf.mo_coeff[:, i])
 molden.from_scf(mf, 'ref.molden')
 ```
 
-Sample the Molden evaluator at the cube file's exact grid points and compare.
-Every ordering, normalization and sign bug surfaces as a numerical mismatch
-instead of as a subtly wrong picture months later.
+Sample the Molden evaluator at the cube file's exact grid points and compare
+(agreement to ~1e-6 relative). Every ordering, normalization and sign bug
+surfaces immediately as a numerical mismatch instead of as a subtly wrong
+picture months later. This oracle exists *only because* the cube path was built
+first.
 
 ### What Molden support will and will not touch
 
-The point of this section is to make the claim checkable rather than
-aspirational.
+**Unchanged:** `ScalarField`, `FieldBounds`,
+`DataType::ScalarField`, `NetworkResult::ScalarField`, `sample_field`,
+`import_cube`, the pin color, and every deferred visualization consumer.
 
-**Unchanged:** `ScalarField`, `FieldKind`, `FieldMetadata`, `FieldBounds`,
-`DataType::ScalarField`, `NetworkResult::ScalarField`, `sample_field`, the pin
-color, and every deferred visualization consumer.
+**Added:** `io/molden_loader.rs`; a `Wavefunction` type and
+`DataType::Wavefunction`; an `AnalyticField` implementing `ScalarField`
+(overriding `sample_batch` to reuse per-shell setup across a batch and
+`gradient` with the exact derivative, returning `None` from **both**
+`data_bounds` and `native_grid`, and deriving `suggested_bounds` from atom
+positions plus a ~1.6 Å margin — the equivalent of `cubegen`'s default 3 Bohr);
+the `import_molden`, `orbital` and `density` nodes; and per-orbital `energy` /
+`occupancy` / `spin` / `symmetry` metadata, carried on `Wavefunction`.
 
-**Added:** `io/molden_loader.rs`; an `AnalyticField` implementing the trait
-(overriding `sample_batch` for per-shell setup reuse and `gradient` with the
-exact derivative, returning `None` from `data_bounds`, and deriving
-`suggested_bounds` from atom positions plus a ~1.6 Å margin — the equivalent of
-`cubegen`'s default 3 Bohr); an `import_molden` node emitting the same three
-pins as `import_cube`; and populated `energy` / `occupancy` / `spin` /
-`symmetry` metadata.
+**The two asymmetries the contract already absorbs**, both expressed as an
+`Option` returning `None`:
 
-**The one asymmetry the contract already absorbs:** an analytic field is
-unbounded, so `data_bounds` returns `None` while `suggested_bounds` returns a
-derived box. Every consumer takes an explicit box with "auto from the field" as
-its default, so both sources look identical from the outside and Molden's extra
-freedom surfaces as a resolution control rather than a special case.
+- an analytic field is **unbounded**, so `data_bounds` is `None` while
+  `suggested_bounds` still returns a derived box — which is why the latter is
+  not optional.
+- an analytic field has **no preferred lattice**, so `native_grid` is `None`.
+  This is the load-bearing one: it is exactly why no consumer may be written
+  against a grid, and why the first Molden field will immediately expose any
+  consumer that was.
+
+Every consumer takes an explicit box and resolution, with "auto from the field"
+as the default, so both sources look identical from the outside and Molden's
+extra freedom surfaces as a resolution control rather than a special case.
 
 ## Rendering direction
 
@@ -685,10 +873,11 @@ Each step ends green: `cargo test -j 4`, `cargo clippy`, `flutter analyze`.
 
 ### P1 — Field abstraction and cube loader (backend only)
 
-- `crystolecule/src/field/mod.rs`: `ScalarField`, `FieldBounds`, `FieldKind`,
-  `FieldMetadata`, `Spin`, `GridGeometry`, `SampledField`
+- `crystolecule/src/field/mod.rs`: `ScalarField`, `FieldBounds`,
+  `GridGeometry`, `SampledField`
 - `crystolecule/src/io/cube_loader.rs`: `load_cube` producing `CubeFile`,
-  single-field path plus the units heuristic and the kind guess
+  single-field path plus the units heuristic; `value_range` accumulated in the
+  same pass that reads the samples
 - unit tests per the test strategy below; no Flutter, no node, no API
 
 Deliverable: a parser with numerically verified axis ordering and unit handling.
@@ -709,7 +898,7 @@ registry-validation suite staying green.
 
 - node data, `eval`, loader/saver following `ImportXYZData`
 - registration in `nodes/mod.rs` and `node_type_registry.rs`
-- `import_cube_editor.dart` (file picker, `FieldKind` override) and its
+- `import_cube_editor.dart` (file picker only) and its
   `node_data_widget.dart` entry
 - reference guide: `doc/reference_guide/nodes/atomic.md`
 
@@ -766,13 +955,13 @@ Other cases:
 |---|---|
 | Ramp field, 3x4x5 | axis order, no mirroring, no transposition |
 | Trilinear midpoint | interpolation between known samples |
-| Synthetic 2p_z | sign changes across the nodal plane; `Amplitude` handled signed |
+| Synthetic 2p_z | sign changes across the nodal plane; negative values preserved, not clamped |
 | Atom block vs reference `.xyz` | element, count and position agreement |
 | Bohr fixture | positions convert to Ångström; bond lengths chemically sane |
 | Ångström-scaled fixture | units heuristic fires and sets `units_warning` |
 | Single-atom fixture | heuristic stays silent, no spurious warning |
 | Truncated / non-numeric / zero-dim fixtures | descriptive error, no panic |
-| Negative sample in a `Density`-guessed file | kind downgraded to `Unknown` |
+| `value_range` on every fixture | matches the min/max of the fixture's literal values |
 | Out-of-bounds `sample` | exactly `0.0` |
 | `gradient` on an analytic fixture | central difference matches the known derivative within tolerance |
 | `sample_field` out of bounds | error text contains the bounds |
@@ -794,6 +983,64 @@ Not designed here. What follows is the question list and the evidence that
 settles each, so the deferral is a plan rather than a gap. Revisit once P4 lands
 and real cube data can be rendered in a throwaway debug view.
 
+### Settled in advance: surface topology and coloring
+
+One sub-question is already answered, and answered without any semantic input —
+it follows from the sign of the data. Recorded here so it is not re-litigated.
+
+**On an isosurface the field is constant by definition** — that is what an
+isosurface *is*. So "if no color field is given, color by the isosurface field
+itself" is vacuous: it maps a constant through a colormap and produces one flat
+color. The no-color-field case is therefore not a degenerate colormap but a
+distinct mode:
+
+- **color field supplied** — per-vertex, sampled and mapped through a colormap
+- **no color field** — **per-component solid color**
+
+Both converge at the GPU, since `Vertex` already carries per-vertex albedo and a
+solid component simply writes one albedo to every vertex. One rendering path,
+two authoring paths.
+
+**Topology and coloring are decided independently:**
+
+| | no color field | color field supplied |
+|---|---|---|
+| **signed field** | two components, two solid colors — the conventional blue/red phase picture | two components, both painted per-vertex; **phase information is lost** |
+| **non-negative field** | one component, one solid color | one component, painted per-vertex — the classic ESP map |
+
+Signedness decides *how many components*; color-field presence decides *how they
+are colored*. Neither decision consults the other.
+
+**Extraction runs at `+level` and `-level` unconditionally.** On a non-negative
+field the negative pass finds no crossings and produces empty geometry, so the
+one-component case falls out with no semantic knowledge and no branch. The only
+reason to test anything is to skip wasted work: `value_range().min >= 0` short-
+circuits the negative pass.
+
+This is why there is no `FieldKind` (§Why there is no `FieldKind`) — the
+property that governs topology is the sign of the data, which the data already
+states.
+
+**Two affordances to build in:**
+
+- **The two phase colors must be swappable by one click.** Blue/red is common but
+  not universal, and more importantly the global sign of an orbital is
+  *arbitrary* — re-running a calculation can flip which lobe is which. Flipping
+  is how a user makes two orbitals comparable side by side, or matches a
+  published figure. Trivial to implement, disproportionately useful.
+- **A color field on a signed surface destroys phase information**, and that is
+  the user's call rather than something to block. The default for a signed
+  field stays phase coloring. If both channels are wanted at once, the escape is
+  to distinguish components by *material* rather than color — the negative lobe
+  rendered more matte — since `Vertex` carries roughness and metallic alongside
+  albedo.
+
+**Where self-coloring does become meaningful:** a **slice plane** or **direct
+volume rendering**, where the field genuinely varies across what is drawn. There
+"color by the field itself" is the natural default. A slice plane is nearly free
+against this contract — it needs only `sample` over a 2D grid — and is worth
+considering as a debugging view well before isosurface extraction lands.
+
 **Open questions, and what answers them:**
 
 | Question | Evidence needed |
@@ -802,7 +1049,7 @@ and real cube data can be rendered in a throwaway debug view.
 | Are gradient-derived normals sufficient, or is mesh smoothing needed? | Same render, comparing face normals against `gradient` normals |
 | Is two-pass back/front-face transparency good enough for concave lobes, or is a per-triangle sort required? | Render a d-type orbital, which is strongly concave, at alpha 0.5 |
 | Is marching-cubes triangle count at cube resolution acceptable, or is decimation needed? | Triangle counts and frame times for an 80^3 extraction |
-| What is a sensible default threshold per `FieldKind`, and what slider scale? | Sweep thresholds against the conventional values on real data |
+| What is a sensible default threshold with no semantic tag — a fixed constant, or a percentile-of-magnitude rule derived from `value_range` and the samples? | Sweep both against the conventional values (0.02 for amplitudes, 0.002 for densities) on real cubes and see which lands closer, more often |
 | Is GPU raymarching worth building, or does the mesh path suffice? | Answered by the four rows above, collectively |
 
 **The one genuinely open design question**, which is why this half cannot be
@@ -818,16 +1065,18 @@ intersect an orbital with a `cuboid` — a product question, not a technical one
 
 Related deferred items:
 
-- multi-field coloring: sampling a `Potential` field onto a `Density` surface.
-  The contract supports it (per-vertex albedo already exists); the node shape
-  and colormap UI do not.
+- multi-field coloring: the *mode* is settled above; what remains deferred is
+  the node shape (an optional second field input) and the colormap UI —
+  palette, range, and the fact that range must never auto-fit to the color
+  field's extrema, for the nuclear-cusp reason in §Background. The pairings
+  that motivate it: density at 0.002 colored by electrostatic potential (the
+  standard "ESP map"), and reduced density gradient colored by
+  `sign(lambda_2)*rho` (NCI analysis, which separates attraction from steric
+  repulsion and is a physically grounded alternative to sphere-radius clash
+  detection). Both are ordinary `ScalarField` pairs.
 - automatic HOMO/LUMO selection — needs Molden metadata, so it follows Molden.
-- localized orbitals attached to bonds. Canonical MOs are delocalized and often
-  unrecognizable to a chemist; a localizing transform (Boys, Pipek-Mezey) yields
-  orbitals that sit on individual bonds, which atomCAD already represents as
-  first-class objects. "Show the orbital on this bond" is a CAD-native framing
-  no general-purpose chemistry viewer offers. Well beyond this document,
-  recorded because it argues for keeping `FieldMetadata` extensible.
+- localized orbitals (Boys, Pipek-Mezey) attached to bonds, which atomCAD
+  already represents as first-class objects. Well beyond this document.
 
 ## Documentation touchpoints
 
