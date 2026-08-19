@@ -276,6 +276,7 @@ pub fn api_data_type_to_data_type(api_data_type: &APIDataType) -> Result<DataTyp
         APIDataTypeBase::HasFreeLinOps => DataType::HasFreeLinOps,
         APIDataTypeBase::Motif => DataType::Motif,
         APIDataTypeBase::Structure => DataType::Structure,
+        APIDataTypeBase::ScalarField => DataType::ScalarField,
         APIDataTypeBase::Unit => DataType::Unit,
         APIDataTypeBase::Record => {
             // Empty name is intentionally accepted: a freshly-placed record
@@ -442,6 +443,7 @@ pub fn data_type_to_api_data_type(data_type: &DataType) -> APIDataType {
         DataType::HasFreeLinOps => APIDataTypeBase::HasFreeLinOps,
         DataType::Motif => APIDataTypeBase::Motif,
         DataType::Structure => APIDataTypeBase::Structure,
+        DataType::ScalarField => APIDataTypeBase::ScalarField,
         DataType::Unit => APIDataTypeBase::Unit,
         _ => APIDataTypeBase::Custom, // All other types are considered custom
     };

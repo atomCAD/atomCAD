@@ -680,3 +680,45 @@ fn higher_arity_functions_are_never_forced() {
         &registry
     ));
 }
+
+/// P2 of `doc/design_scalar_fields.md`. Both API conversion directions have a
+/// catch-all arm (`_ => APIDataTypeBase::Custom` outbound, and an inbound match
+/// that only fails to compile for a *new* API variant), so a missed arm degrades
+/// silently to a `Custom` string round-trip rather than failing the build.
+#[test]
+fn scalar_field_round_trips_through_the_api_boundary() {
+    // Rust -> API: a first-class base variant, not `Custom`.
+    let api = data_type_to_api_data_type(&DataType::ScalarField);
+    assert!(matches!(api.data_type_base, APIDataTypeBase::ScalarField));
+    assert!(!api.array);
+    assert_eq!(
+        api.custom_data_type, None,
+        "a first-class base must not fall through to the Custom string path"
+    );
+
+    // API -> Rust.
+    assert_eq!(api_data_type_to_data_type(&api), Ok(DataType::ScalarField));
+
+    // ...and back again, unchanged.
+    let api_from_scratch = APIDataType {
+        data_type_base: APIDataTypeBase::ScalarField,
+        custom_data_type: None,
+        array: false,
+        children: vec![],
+    };
+    assert_eq!(
+        api_data_type_to_data_type(&api_from_scratch),
+        Ok(DataType::ScalarField)
+    );
+}
+
+#[test]
+fn scalar_field_array_round_trips_through_the_api_boundary() {
+    let array = DataType::Array(Box::new(DataType::ScalarField));
+
+    let api = data_type_to_api_data_type(&array);
+    assert!(matches!(api.data_type_base, APIDataTypeBase::ScalarField));
+    assert!(api.array, "the array flag carries the `[T]` wrapper");
+
+    assert_eq!(api_data_type_to_data_type(&api), Ok(array));
+}

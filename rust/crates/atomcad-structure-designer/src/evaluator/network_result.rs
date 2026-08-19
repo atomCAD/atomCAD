@@ -8,6 +8,7 @@ use atomcad_crystolecule::atomic_structure::{
     BOND_SINGLE, BOND_TRIPLE,
 };
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
+use atomcad_crystolecule::field::ScalarField;
 use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -19,6 +20,7 @@ use glam::f64::DVec3;
 use glam::i32::IVec2;
 use glam::i32::IVec3;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct GeometrySummary2D {
@@ -241,6 +243,17 @@ pub enum NetworkResult {
     Molecule(MoleculeData),
     Motif(Motif),
     Structure(Structure),
+    /// A scalar field value (`.cube` grid today, analytic wavefunction later).
+    ///
+    /// `dyn` so one variant carries both a sampled and an analytic field —
+    /// Molden support adds no variant and touches no `match`. `Arc` keeps
+    /// [`NetworkResult::clone`] cheap: the evaluator clones results freely and
+    /// the payload is megabytes, where the other large variants (`Molecule`,
+    /// `Crystal`) clone deeply at affordable size. Unlike the other
+    /// `Arc`-shared payloads here, this one wraps a `Send + Sync` value, so it
+    /// needs no `clippy::arc_with_non_send_sync` allowance. See
+    /// `doc/design_scalar_fields.md`.
+    ScalarField(Arc<dyn ScalarField>),
     Array(Vec<NetworkResult>),
     /// Lazy stream value (`Iter[T]`). The enclosed `Walker` is the runtime
     /// state machine produced by iterator-aware nodes (`range`, `map`,
@@ -319,6 +332,7 @@ impl NetworkResult {
             NetworkResult::Molecule(_) => Some(DataType::Molecule),
             NetworkResult::Motif(_) => Some(DataType::Motif),
             NetworkResult::Structure(_) => Some(DataType::Structure),
+            NetworkResult::ScalarField(_) => Some(DataType::ScalarField),
             NetworkResult::Function(closure) => Some(DataType::Function(closure.function_type())),
             NetworkResult::Unit => Some(DataType::Unit),
             NetworkResult::Record(fields) => {
@@ -900,6 +914,13 @@ impl NetworkResult {
                     structure.motif_offset.z,
                 )
             }
+            NetworkResult::ScalarField(field) => match field.native_grid() {
+                Some(grid) => format!(
+                    "ScalarField {}x{}x{}",
+                    grid.dims[0], grid.dims[1], grid.dims[2]
+                ),
+                None => "ScalarField".to_string(),
+            },
             NetworkResult::Record(fields) => {
                 let field_strings: Vec<String> = fields
                     .iter()
@@ -983,6 +1004,44 @@ impl NetworkResult {
                     structure.motif_offset.z,
                     structure.motif.to_detailed_string(),
                 )
+            }
+            NetworkResult::ScalarField(field) => {
+                let mut out = String::from("ScalarField:");
+                match field.native_grid() {
+                    Some(grid) => {
+                        let spacing = grid.spacing();
+                        out.push_str(&format!(
+                            "\n  dims: {}x{}x{}\n  origin: ({:.6}, {:.6}, {:.6})\n  spacing: ({:.6}, {:.6}, {:.6})",
+                            grid.dims[0],
+                            grid.dims[1],
+                            grid.dims[2],
+                            grid.origin.x,
+                            grid.origin.y,
+                            grid.origin.z,
+                            spacing.x,
+                            spacing.y,
+                            spacing.z,
+                        ));
+                    }
+                    None => out.push_str("\n  dims: analytic (no native grid)"),
+                }
+                let bounds = field.suggested_bounds();
+                out.push_str(&format!(
+                    "\n  suggested_bounds: ({:.6}, {:.6}, {:.6}) .. ({:.6}, {:.6}, {:.6})",
+                    bounds.min.x,
+                    bounds.min.y,
+                    bounds.min.z,
+                    bounds.max.x,
+                    bounds.max.y,
+                    bounds.max.z,
+                ));
+                match field.value_range() {
+                    Some((min, max)) => {
+                        out.push_str(&format!("\n  value_range: {:.6e} .. {:.6e}", min, max))
+                    }
+                    None => out.push_str("\n  value_range: unknown"),
+                }
+                out
             }
             NetworkResult::Error(msg) => {
                 format!("Error: {}", msg)

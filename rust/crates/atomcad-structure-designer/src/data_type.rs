@@ -140,6 +140,12 @@ pub enum DataType {
     HasFreeLinOps,
     Motif,
     Structure,
+    /// A scalar function of 3D real space — sampled from a `.cube` grid, or
+    /// (later) evaluated analytically from a wavefunction. An ordinary
+    /// first-class pin type: not abstract, no subtyping relationships, and no
+    /// implicit conversions to or from anything. See
+    /// `doc/design_scalar_fields.md`.
+    ScalarField,
     /// The type with exactly one value — return type of effect nodes
     /// (`export_atoms`, `foreach`, …). A universal `T → Unit` widening is
     /// added at field-level so any sub-network output can be consumed by an
@@ -337,6 +343,7 @@ impl fmt::Display for DataType {
             DataType::HasFreeLinOps => write!(f, "HasFreeLinOps"),
             DataType::Motif => write!(f, "Motif"),
             DataType::Structure => write!(f, "Structure"),
+            DataType::ScalarField => write!(f, "ScalarField"),
             DataType::Unit => write!(f, "Unit"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
@@ -1435,6 +1442,7 @@ impl DataTypeParser {
                     "HasFreeLinOps" => Ok(DataType::HasFreeLinOps),
                     "Motif" => Ok(DataType::Motif),
                     "Structure" => Ok(DataType::Structure),
+                    "ScalarField" => Ok(DataType::ScalarField),
                     "Unit" => Ok(DataType::Unit),
                     // Plain unknown identifiers are NOT silently treated as
                     // record names: the text-format parser uses this as a

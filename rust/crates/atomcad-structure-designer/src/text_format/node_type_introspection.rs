@@ -102,6 +102,7 @@ fn is_wire_only_type(data_type: &DataType) -> bool {
             | DataType::HasAtoms
             | DataType::Motif
             | DataType::Structure
+            | DataType::ScalarField
             | DataType::LatticeVecs
             | DataType::DrawingPlane
             | DataType::Unit

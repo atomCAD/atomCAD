@@ -87,6 +87,8 @@ String _flatBaseLabel(APIDataTypeBase base) {
       return 'Motif';
     case APIDataTypeBase.structure:
       return 'Structure';
+    case APIDataTypeBase.scalarField:
+      return 'ScalarField';
     case APIDataTypeBase.unit:
       return 'Unit';
     case APIDataTypeBase.record:

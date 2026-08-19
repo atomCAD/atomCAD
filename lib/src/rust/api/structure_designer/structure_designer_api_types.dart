@@ -956,6 +956,10 @@ enum APIDataTypeBase {
   motif,
   structure,
 
+  /// A scalar function of 3D real space (`.cube` grid today). Ordinary
+  /// first-class pin type. See `doc/design_scalar_fields.md`.
+  scalarField,
+
   /// The type with exactly one value. Produced by effect nodes; carries no
   /// payload. See `doc/design_node_execution.md`.
   unit,

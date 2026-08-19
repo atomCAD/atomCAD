@@ -506,3 +506,6 @@ mod atom_label_test;
 
 #[path = "structure_designer/facet_shell_symmetry_test.rs"]
 mod facet_shell_symmetry_test;
+
+#[path = "structure_designer/scalar_field_type_test.rs"]
+mod scalar_field_type_test;

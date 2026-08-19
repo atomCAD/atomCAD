@@ -207,6 +207,11 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   'Motif': Color(0xFF00ACC1), // Light blue-green (cyan)
   'Structure': Color(0xFF00796B), // Deep teal (composite of lattice + motif)
 
+  // Volumetric data (red family - sampled scalar functions of space).
+  // No substring conflict with any key above, so declaration order here is
+  // free; `[ScalarField]` and `Iter[ScalarField]` match through the same key.
+  'ScalarField': Color(0xFFE57373), // Soft red
+
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber
 

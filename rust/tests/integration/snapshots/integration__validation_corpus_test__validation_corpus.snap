@@ -22,7 +22,7 @@ expression: out
 === iterator_migration/old_malformed_arguments.cnnd
   network 'Main' valid=true
 === iterator_migration/old_malformed_map_output_type.cnnd
-  LOAD FAILED: In network 'Main': unknown variant `ThisIsNotAValidDataType`, expected one of `None`, `Bool`, `String`, `Int`, `Float`, `Vec2`, `Vec3`, `IVec2`, `IVec3`, `IMat2`, `IMat3`, `Mat3`, `LatticeVecs`, `DrawingPlane`, `Geometry2D`, `Blueprint`, `HasAtoms`, `Crystal`, `Molecule`, `HasStructure`, `HasFreeLinOps`, `Motif`, `Structure`, `Unit`, `Array`, `Iterator`, `Optional`, `Function`, `AnyFunction`, `Record`
+  LOAD FAILED: In network 'Main': unknown variant `ThisIsNotAValidDataType`, expected one of `None`, `Bool`, `String`, `Int`, `Float`, `Vec2`, `Vec3`, `IVec2`, `IVec3`, `IMat2`, `IMat3`, `Mat3`, `LatticeVecs`, `DrawingPlane`, `Geometry2D`, `Blueprint`, `HasAtoms`, `Crystal`, `Molecule`, `HasStructure`, `HasFreeLinOps`, `Motif`, `Structure`, `ScalarField`, `Unit`, `Array`, `Iterator`, `Optional`, `Function`, `AnyFunction`, `Record`
 === iterator_migration/old_map_to_array_at.cnnd
   network 'Main' valid=true
     scope=[] node=2 blocking=true "Zone-output pin 'result' has no incoming wire"

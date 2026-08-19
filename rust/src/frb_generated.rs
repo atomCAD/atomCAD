@@ -13391,12 +13391,13 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
 20 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps,
 21 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif,
 22 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure,
-23 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit,
-24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record,
-25 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter,
-26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Optional,
-27 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
-28 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
+23 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::ScalarField,
+24 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit,
+25 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record,
+26 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter,
+27 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Optional,
+28 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function,
+29 => crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom,
             _ => unreachable!("Invalid variant for APIDataTypeBase: {}", inner),
         };
     }
@@ -19514,12 +19515,13 @@ impl flutter_rust_bridge::IntoDart
             Self::HasFreeLinOps => 20.into_dart(),
             Self::Motif => 21.into_dart(),
             Self::Structure => 22.into_dart(),
-            Self::Unit => 23.into_dart(),
-            Self::Record => 24.into_dart(),
-            Self::Iter => 25.into_dart(),
-            Self::Optional => 26.into_dart(),
-            Self::Function => 27.into_dart(),
-            Self::Custom => 28.into_dart(),
+            Self::ScalarField => 23.into_dart(),
+            Self::Unit => 24.into_dart(),
+            Self::Record => 25.into_dart(),
+            Self::Iter => 26.into_dart(),
+            Self::Optional => 27.into_dart(),
+            Self::Function => 28.into_dart(),
+            Self::Custom => 29.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -24229,12 +24231,13 @@ crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::H
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::HasFreeLinOps => { 20 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Motif => { 21 }
 crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Structure => { 22 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit => { 23 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record => { 24 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter => { 25 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Optional => { 26 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 27 }
-crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 28 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::ScalarField => { 23 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Unit => { 24 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Record => { 25 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Iter => { 26 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Optional => { 27 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Function => { 28 }
+crate::api::structure_designer::structure_designer_api_types::APIDataTypeBase::Custom => { 29 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

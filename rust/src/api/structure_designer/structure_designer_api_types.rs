@@ -56,6 +56,9 @@ pub enum APIDataTypeBase {
     HasFreeLinOps,
     Motif,
     Structure,
+    /// A scalar function of 3D real space (`.cube` grid today). Ordinary
+    /// first-class pin type. See `doc/design_scalar_fields.md`.
+    ScalarField,
     /// The type with exactly one value. Produced by effect nodes; carries no
     /// payload. See `doc/design_node_execution.md`.
     Unit,
