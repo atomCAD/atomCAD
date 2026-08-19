@@ -23,6 +23,9 @@ mod auto_bonding_test;
 #[path = "crystolecule/drawing_plane_test.rs"]
 mod drawing_plane_test;
 
+#[path = "crystolecule/field_test.rs"]
+mod field_test;
+
 #[path = "crystolecule/motif_bond_inference_test.rs"]
 mod motif_bond_inference_test;
 
@@ -46,6 +49,9 @@ mod unit_cell_symmetries_test;
 
 #[path = "crystolecule/io/atom_export_test.rs"]
 mod atom_export_test;
+
+#[path = "crystolecule/io/cube_loader_test.rs"]
+mod cube_loader_test;
 
 #[path = "crystolecule/io/cif_parser_test.rs"]
 mod cif_parser_test;

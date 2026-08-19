@@ -4,6 +4,7 @@ pub mod atomic_structure_diff;
 pub mod atomic_structure_utils;
 pub mod crystolecule_constants;
 pub mod drawing_plane;
+pub mod field;
 pub mod guided_placement;
 pub mod hydrogen_passivation;
 pub mod io;

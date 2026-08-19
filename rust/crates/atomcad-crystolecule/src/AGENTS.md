@@ -54,7 +54,10 @@ crates/atomcad-crystolecule/src/
 │   ├── inline_bond.rs              # 4-byte compact bond (29-bit id + 3-bit order)
 │   └── atomic_structure_decorator.rs  # Display/selection metadata
 ├── motif_bond_inference.rs          # Bond inference on motif fractional coords (cross-cell)
+├── field/
+│   └── mod.rs                      # ScalarField trait, FieldBounds, GridGeometry, SampledField
 ├── io/
+│   ├── cube_loader.rs              # Gaussian .cube import (volumetric scalar data + atom block)
 │   ├── mol_exporter.rs             # MOL V3000 export
 │   ├── xyz_loader.rs               # XYZ import
 │   ├── xyz_saver.rs                # XYZ export
@@ -115,6 +118,11 @@ crates/atomcad-crystolecule/src/
 | `CifBond` | `io/cif/structure.rs` | Explicit bond from `_geom_bond_*` with symmetry codes |
 | `CifLoadResult` | `io/cif/mod.rs` | Unit cell + expanded atom sites (fractional coords) |
 | `ExpandedAtomSite` | `io/cif/mod.rs` | Label, atomic number, fractional position |
+| `ScalarField` | `field/mod.rs` | Trait: a scalar function of 3D space. `sample` / `sample_batch` / `gradient`, `data_bounds` / `suggested_bounds`, `native_grid`, `value_range`. `Send + Sync` |
+| `SampledField` | `field/mod.rs` | `ScalarField` stored as `f32` samples on a regular grid, trilinearly interpolated |
+| `GridGeometry` | `field/mod.rs` | Origin + three axis vectors + counts. **Node-centered**: the origin IS sample (0,0,0) |
+| `FieldBounds` | `field/mod.rs` | Axis-aligned box, Ångström. The workspace has no general AABB type to reuse |
+| `CubeFile` | `io/cube_loader.rs` | Parsed `.cube`: `atoms`, `fields`, and an advisory `units_warning` |
 
 ## Core Concepts
 
@@ -132,6 +140,29 @@ crates/atomcad-crystolecule/src/
 
 **Surface Patches** (`patch.rs`): The node-free core of the surface-patch feature — testable on plain `AtomicStructure`s without the node network. `validate_tiling_vectors` and `extract_patch_tile` are the authoring half; `select_patch_cells` and `region_center_depths` choose which lattice cells receive a tile; `apply_patch` runs the cut → place → weld → drop → passivate pipeline and reports welded / orphaned / over-coordinated counts as a `CompatibilityReport`. Patch ghosts are bit 6 of `Atom.flags` and drive weld survivorship. Design docs: `doc/design_surface_patches.md`, `doc/design_patch_cell_selection.md`.
 
+**Scalar Fields** (`field/`): Volumetric data about a molecule — orbital
+amplitudes, electron density, electrostatic potential — behind one trait,
+`ScalarField`. Two invariants govern everything here:
+
+- **Every coordinate crossing `ScalarField` is real-space Ångström**, matching
+  `AtomicStructure`. Each loader converts from its file's units exactly once, at
+  load time; no consumer ever sees Bohr. Field *values* are the exception and are
+  passed through unconverted in their native atomic units — converting them would
+  invalidate every published threshold convention in the chemistry literature.
+- **No consumer may be written against a grid.** `native_grid()` is a fidelity
+  fast path that returns `None` for an analytic source (the future Molden path),
+  so anything that only works when it is `Some` is broken. Write against
+  `sample` / `sample_batch` and take an explicit box and resolution.
+
+`sample` outside `data_bounds` returns exactly `0.0` — never an error. A finite
+box is a *window* onto a field that decays to zero, and the rule keeps every
+consumer free of an error path in its innermost loop.
+
+The `.cube` loader always reads coordinates as Bohr and uses the atom block only
+as a **plausibility check**: implausible interatomic distances set an advisory
+`units_warning` and never rescale the parse (`io/cube_loader.rs` documents why).
+Design doc: `doc/design_scalar_fields.md`.
+
 ## Important Constants (`crystolecule_constants.rs`)
 
 - `DIAMOND_UNIT_CELL_SIZE_ANGSTROM`: 3.567 Å
@@ -148,6 +179,9 @@ crates/atomcad-crystolecule/src/
 - `CifParseError` (io/cif/parser) — syntax errors in CIF text
 - `CifError` (io/cif/symmetry, structure) — symmetry operation or crystal data extraction errors
 - `CifLoadError` (io/cif/mod) — top-level load errors (wraps parse/extraction/IO)
+- `CubeError` (io/cube_loader) — Io / Parse / Unsupported / Field variants
+- `FieldError` (field) — grid description problems (zero dimension, sample-count
+  mismatch, degenerate axes, non-finite sample)
 
 All use `thiserror` derive macros.
 
@@ -160,6 +194,8 @@ motif_parser  →  Motif, atomic_constants
 atomic_structure_utils → AtomicStructure, atomic_constants
 io/cif/*      →  UnitCellStruct, Motif, AtomicStructure, atomic_constants
 io/*          →  AtomicStructure, atomic_constants
+io/cube_loader → AtomicStructure, atomic_constants, field
+field         →  glam only (no crystolecule types at all)
 motif_bond_inference → Motif, UnitCellStruct, atomic_constants
 miller        →  glam only (no crystolecule types at all)
 patch         →  AtomicStructure, UnitCellStruct, weld, hydrogen_passivation, guided_placement, GeoNode
@@ -189,11 +225,13 @@ tests/crystolecule/
 ├── motif_parser_test.rs           # Tokenization, all commands, error cases
 ├── motif_bond_inference_test.rs   # Bond inference on fractional coords, cross-cell bonds
 ├── miller_test.rs                 # Index reduction, enumeration, {hkl} symmetry families
+├── field_test.rs                  # ScalarField contract: bounds, interpolation, gradients
 ├── patch_test.rs                  # Cell selection, region depths, apply_patch pipeline
 ├── patch_build_test.rs            # Tiling-vector validation, tile extraction
 ├── io/
 │   ├── mol_exporter_test.rs       # V3000 format, molecules, bond types
 │   ├── xyz_roundtrip_test.rs      # Save/load cycles, precision, edge cases
+│   ├── cube_loader_test.rs        # .cube parsing: axis order, units check, malformed input
 │   ├── cif_parser_test.rs         # CIF syntax: tags, loops, quotes, uncertainties
 │   ├── cif_symmetry_test.rs       # Symmetry operation parsing, expansion, dedup
 │   ├── cif_structure_test.rs      # Crystal data extraction, old/new tags, bonds
@@ -225,6 +263,12 @@ by name across the workspace.
 **Adding an element property**: Update `atomic_constants.rs` lazy-static maps (`ATOM_INFO`, `CHEMICAL_ELEMENTS`).
 
 **Adding a new I/O format**: Create `io/format_name.rs`, add `pub mod` in `io/mod.rs`, define an error type with `thiserror`. For complex formats, use a subdirectory (see `io/cif/` as an example).
+
+**A new scalar-field source** (Molden, a different volumetric format): implement
+`ScalarField` beside `SampledField` and add a loader under `io/`. Do **not** add
+methods that only a grid can answer — the two `Option`-returning methods
+(`data_bounds`, `native_grid`) exist precisely so an analytic source can say
+"unbounded" and "no preferred lattice" without lying.
 
 **CIF-related changes**: The CIF parser (`io/cif/parser.rs`) is a generic STAR/CIF parser. Symmetry operations are in `io/cif/symmetry.rs`, crystal data extraction in `io/cif/structure.rs`, and the 230 space group lookup table in `io/cif/space_groups.rs`. Test fixtures are in `rust/tests/fixtures/cif/` (diamond, nacl, hexagonal, multi_block, with_bonds) — outside this crate, reached via `atomcad_test_support::fixture_path("cif/…")`, because the same fixture tree is read from three packages.
 

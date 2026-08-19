@@ -22,12 +22,14 @@ ingestion half in detail**. The visualization node is deliberately deferred.
 **Designed in detail here:**
 
 - the `ScalarField` abstraction — the interface every consumer sees
-- `.cube` file parsing, including the multi-field variant
+- `.cube` file parsing, including the multi-field variant (specified here,
+  implemented in P5 — see §P5)
 - `DataType` / `NetworkResult` plumbing for a new value kind
 - the `import_cube` node
 - the `sample_field` node — a probe that makes ingestion verifiable in the app
   before any rendering exists
-- an implementation plan and test strategy covering the above
+- a phased implementation plan, each phase carrying its own tests and, where
+  there is UI, its own manual walkthrough
 
 **Deliberately deferred** (see [Deferred: the visualization
 node](#deferred-the-visualization-node)):
@@ -70,21 +72,17 @@ essentially never drawn as its own isosurface; it is sampled *onto* a surface
 formed by another field, producing the familiar red/blue-mapped molecular
 surface.
 
-Three consequences drive the design:
+Two consequences drive the design:
 
 1. **A field's meaning is not recoverable from its numbers** — but the two
-   properties that actually drive rendering are: whether it is **signed**
-   (extract at `±level`, two colors) and its **magnitude scale**. Both follow
-   from the data's value range, so no semantic tag is needed. See §Why there
-   is no `FieldKind`.
-2. **All three quantities are dominated by sharp peaks at the nuclei**, with
-   all the interesting structure in the low-magnitude tail. Electron density
-   spans roughly six orders of magnitude between the conventional surface
-   threshold (0.002) and its value at a carbon nucleus (order 100). Any
-   auto-ranging over a field's min/max produces a useless picture of a few
-   bright dots. Defaults must come from the semantics, never the extrema.
-3. **Field magnitudes are in atomic units** and vary by quantity, so a single
-   global default threshold cannot exist.
+   properties that drive rendering are: whether it is **signed**, and its
+   **magnitude scale**. Both follow from the data's value range, so no semantic
+   tag is needed (§Why there is no semantic tag or metadata).
+2. **All these quantities are dominated by sharp peaks at the nuclei**, with the
+   interesting structure in the low-magnitude tail — density spans six orders of
+   magnitude between the conventional surface threshold (0.002) and its value at
+   a carbon nucleus (order 100). **Any auto-ranging over min/max produces a
+   useless picture of a few bright dots.**
 
 Reference magnitudes, for choosing defaults later:
 
@@ -113,7 +111,8 @@ Reference magnitudes, for choosing defaults later:
                        v
              dyn ScalarField          <-- THE CONTRACT
              sample / sample_batch / gradient
-             bounds / native_grid / value_range
+             data_bounds / suggested_bounds
+             native_grid / value_range
                        |
         +--------------+--------------------+
         |                                   |
@@ -172,8 +171,11 @@ every published threshold convention in the chemistry literature.
 /// through in whatever atomic unit the source quantity uses (§Background has
 /// the conventional ranges).
 ///
-/// `Send + Sync` is required: consumers evaluate in parallel batches, mirroring
-/// `atomcad_geo_tree::BatchedImplicitEvaluator`.
+/// `Send + Sync` is required so that the deferred sampling consumers can
+/// evaluate in parallel batches, mirroring
+/// `atomcad_geo_tree::BatchedImplicitEvaluator`. Nothing in P1-P4 evaluates in
+/// parallel — the node evaluator is single-threaded — but the bound is free to
+/// hold now and expensive to add later (§Rendering direction).
 pub trait ScalarField: Send + Sync + std::fmt::Debug {
     /// Value at `point`. Outside `data_bounds` this returns exactly `0.0`.
     /// Never errors, never returns NaN.
@@ -195,6 +197,11 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     /// spacing when `native_grid()` is `Some`, and at `DEFAULT_GRADIENT_STEP`
     /// otherwise. Both concrete implementations are expected to override it —
     /// see §Gradient below — so the default is a fallback, not the norm.
+    ///
+    /// `DEFAULT_GRADIENT_STEP` is a `pub const f64` beside the trait in
+    /// `field/mod.rs`. Use **0.05 Å**: comfortably below any spacing a cube
+    /// writer produces (PySCF's default 80^3 box lands near 0.15-0.20 Å) and
+    /// far above `f64` cancellation noise.
     fn gradient(&self, point: DVec3) -> DVec3 { /* central difference */ }
 
     /// Region outside which `sample` is defined to return `0.0`.
@@ -231,11 +238,11 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     /// already being read. `None` for an analytic source, which has no data
     /// to scan until something samples it.
     ///
-    /// This is what replaces a semantic type tag (§Why there is no
-    /// `FieldKind`). `min >= 0` means the field is non-negative, so a consumer
-    /// can skip the negative-level extraction; the span sets a log slider's
-    /// bounds. Both are *derived*, so they work for any scalar quantity
-    /// chemistry produces, not just the three or four anyone thought to name.
+    /// This replaces a semantic type tag (§Why there is no semantic tag or
+    /// metadata). `min >= 0` means the field is non-negative, so a consumer can
+    /// skip the negative-level extraction; the span sets a log slider's bounds.
+    /// Both are *derived*, so they work for any scalar quantity chemistry
+    /// produces, not just the three or four anyone thought to name.
     fn value_range(&self) -> Option<(f64, f64)>;
 }
 ```
@@ -243,8 +250,9 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
 **The out-of-bounds rule is `0.0`, not an error.** A finite cube box is a
 *window* onto a field that decays to zero; `0.0` is the physically correct
 answer just outside it, and it keeps every consumer free of an error path in
-its innermost loop. Note this is a property of the *trait*; the `sample_field`
-node layers a stricter, more diagnostic behavior on top — see below.
+its innermost loop. This is the *only* rule: `sample_field` returns `0.0` out of
+bounds too (§Node: `sample_field`), so no consumer anywhere layers a second,
+stricter convention on top.
 
 **Why `data_bounds` and `suggested_bounds` are separate.** They coincide for
 `.cube` and diverge for Molden, where the field is defined everywhere but a
@@ -266,13 +274,12 @@ the outermost sample points**. Cube grids are **node-centered** — the origin *
 sample `(0,0,0)`, not a voxel corner — so with `dims = [nx, ny, nz]` the box
 spans `nx - 1` steps while containing `nx` samples.
 
-Stating this matters because both conventions exist in the wild, and picking one
-silently is how a half-voxel offset creeps in. It also makes the fencepost work
-out: a consumer walking from `min` to `max` **inclusive** at the native spacing
-generates exactly `nx` points landing precisely on the stored values. A consumer
-that iterates exclusively of `max` silently drops the last plane — which is
-another reason to prefer `native_grid` verbatim over reconstructing a lattice
-from a box and a step.
+Both conventions exist in the wild, and picking one silently is how a half-voxel
+offset creeps in. It also fixes the fencepost: walking `min` to `max`
+**inclusive** at the native spacing gives exactly `nx` points on the stored
+values, whereas iterating exclusively of `max` silently drops the last plane —
+one more reason to prefer `native_grid` verbatim over rebuilding a lattice from
+a box and a step.
 
 ### Gradient
 
@@ -288,92 +295,42 @@ The trait's default central difference exists so a third implementation is never
 ### `FieldBounds`
 
 No axis-aligned bounding-box type exists in the workspace to reuse, so:
+`struct FieldBounds { min: DVec3, max: DVec3 }`, real-space Ångström. If a
+general AABB is wanted elsewhere later it can move to `atomcad-util`.
 
-```rust
-/// Axis-aligned box in real-space Ångström.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FieldBounds {
-    pub min: DVec3,
-    pub max: DVec3,
-}
-```
+### Why there is no semantic tag or metadata
 
-If a general AABB is later wanted elsewhere it should move to `atomcad-util`;
-it is defined here for now to avoid speculatively widening a shared crate.
+Earlier drafts carried a `FieldKind` enum (`Amplitude` / `Density` /
+`Potential` / `Unknown`, guessed from the comment line, overridable on the node)
+and a `FieldMetadata` struct (`label`, `field_index`, `orbital_index`, `energy`,
+`occupancy`, `spin`, `symmetry`). Both are gone — recorded here because an
+absence is what a later contributor tries to "fix".
 
-### Why there is no `FieldKind`
+`FieldKind` was claimed to drive four things and survived none. **Surface
+count**: extract at `+level` and `-level` unconditionally; on a non-negative
+field the negative pass finds no crossings. (It cannot produce speckle either —
+a density is a sum of squares, and trilinear interpolation of non-negative
+values stays non-negative.) **Slider scale**: the level is `±L` with `L > 0`, so
+log is right for everything. **Forms-vs-paints**: advisory, never enforced.
+**Default threshold**: real, but the honest answers — a fixed constant, or a
+percentile-of-magnitude rule — are data-driven, and which one wins is deferred.
 
-An earlier draft carried a semantic tag — `Amplitude` / `Density` /
-`Potential` / `Unknown` — guessed from the cube comment line and overridable on
-the node. It is deliberately **not** in this design. Recorded here because its
-absence is the kind of thing a later contributor will want to "fix".
+The decisive objection is generality: chemistry produces density, amplitude,
+ESP, spin density, deformation density, ELF, reduced density gradient, ALIE,
+Fukui functions, the Laplacian. A four-variant enum cannot name that space,
+while **signedness** and **magnitude scale** — the two properties that actually
+drive rendering — are derivable from the data for all of them. Hence
+`value_range`.
 
-It was claimed to drive four things. Three evaporate under inspection:
-
-- **Surface count.** Extract at `+level` and `-level` unconditionally. On a
-  non-negative field the negative pass finds no crossings and yields empty
-  geometry, so the one-surface case degenerates on its own, with no semantic
-  knowledge. (An earlier draft worried about speckle from negative noise in
-  density data. That was wrong: a density is computed as a sum of squares, so
-  it is non-negative to roundoff, and trilinear interpolation of non-negative
-  values is a convex combination and stays non-negative.)
-- **Slider scale.** The level is `±L` with `L > 0`, so the slider spans
-  positive values only and log scale is right for every quantity.
-- **Forms-vs-paints role.** Never enforced, only advisory — and an ESP
-  isosurface is a real object (an equipotential surface), just an unusual one.
-
-The fourth, **default threshold**, is real but is not solved by a tag either:
-the interesting levels span orders of magnitude, and the honest answers are a
-fixed constant plus a log slider, or a percentile-of-magnitude rule. Both are
-data-driven, and *which* is right is an explicitly deferred question
-(§Deferred). A tag in the ingestion contract serving an unvalidated
-visualization decision is precisely the speculation §Scope forbids.
-
-The decisive objection is generality. Chemistry produces electron density, MO
-amplitude, ESP, spin density, deformation density, ELF, reduced density
-gradient, ALIE, Fukui functions, the Laplacian of the density, and more. A
-four-variant enum cannot name that space — everything interesting lands in
-`Unknown`, or the enum grows forever. Meanwhile the two properties that
-actually drive rendering, **signedness** and **magnitude scale**, are derivable
-from the data for all of them. Hence `value_range` on the trait.
-
-What is genuinely lost is a machine-readable label, and nothing downstream needs
-to branch on one.
-
-### Why there is no `FieldMetadata` either
-
-An earlier draft carried a `FieldMetadata` struct — `label`, `field_index`,
-`orbital_index`, `energy`, `occupancy`, `spin`, `symmetry` — with the
-Molden-only members declared as `Option` up front so that adding Molden would
-change only a loader. Removed for the same reason as `FieldKind`, and recorded
-here for the same reason.
-
-Every member fails the test *"is there a known use, and is it not easily
-determined otherwise?"*:
-
-| Member | Verdict |
-|---|---|
-| `energy`, `occupancy`, `spin`, `symmetry` | **Permanently `None` for this document's entire scope.** No loader here can populate them; only Molden could, and Molden is not being built. Pure dead weight. |
-| `field_index` | Trivially derivable — it *is* the index into the containing `Vec` / `Array[ScalarField]`. Duplicating a container's own indexing inside its elements only creates a value that can go stale. |
-| `orbital_index` | Exists only in the multi-field cube variant, which is P5: provisional, and untestable until a Gaussian-produced file is available. It belongs to that feature, not to the base contract. |
-| `label` | Populated, but with no in-scope consumer. See below. |
-
-**Where field identity actually comes from in scope: the node, not the value.**
-PySCF writes one field per file, so a network importing `homo.cube` and
-`lumo.cube` has two `import_cube` nodes, each already labelled by its file name
-in its subtitle. The node disambiguates; the value does not need to. Per-field
-identity only starts earning its place when one node emits many fields — which
-is exactly P5 and Molden, where whatever identity those need can be added
-shaped by what they actually need rather than guessed now.
-
-So the `Spin` enum and the `metadata()` trait method go too. The cube comment
-lines are parsed and discarded; surfacing them on `CubeFile` is a one-line
-addition whenever a use appears.
-
-The counter-argument the earlier draft made — that declaring the Molden members
-now means Molden changes a loader rather than a signature — does not hold up.
-There are exactly two implementors of `ScalarField`, and the Molden work edits
-both anyway.
+`FieldMetadata` fails the same test (*known use, not easily determined
+otherwise*). Four members would be permanently `None` across this document's
+whole scope; `field_index` is the container's own index; `orbital_index` belongs
+to the P5 multi-field variant. `label` is populated but unconsumed — PySCF
+writes one field per file, so each `import_cube` node is already labelled by its
+file name, and the **node** disambiguates rather than the value. Per-field
+identity earns its place only when one node emits many fields (P5, Molden),
+where it can be shaped by what those actually need. `Spin` and `metadata()` go
+with it.
 
 ### `SampledField` — the `.cube` implementation
 
@@ -383,6 +340,11 @@ both anyway.
 #[derive(Debug, Clone)]
 pub struct SampledField {
     grid: GridGeometry,
+    /// Inverse of the 3x3 matrix whose columns are `grid.axes`, cached at
+    /// construction so `sample` does not rebuild it per call. Lives here and
+    /// not on `GridGeometry`, which stays a small `Copy` description of where
+    /// the samples are.
+    inv_basis: DMat3,
     /// Row-major with the LAST axis contiguous: index
     /// `(i * dims[1] + j) * dims[2] + k`. This matches the `.cube` traversal
     /// order, so the loader fills it sequentially with no transposition.
@@ -439,14 +401,42 @@ is an ordinary first-class pin type — not an `Optional`-style modifier, not
 abstract, with no subtyping relationships and no implicit conversions to or from
 anything.
 
-Touchpoints for adding it, all in existing per-variant tables:
+Touchpoints for adding it. Most are existing per-variant tables, but the list
+spans Rust core, the FRB boundary and Dart — fourteen sites plus a codegen run,
+not the handful it looks like. Note which ones the compiler catches:
+`to_display_string` and the Dart switches are exhaustive and will fail the
+build, but **`infer_data_type` has a `_ => None` arm, so omitting it compiles
+and silently mis-infers the type**.
+
+**Rust core (`atomcad-structure-designer`):**
 
 | Site | Change |
 |---|---|
 | `data_type.rs` `enum DataType` | new variant |
-| `data_type.rs` `impl fmt::Display` (~line 332) | `=> write!(f, "ScalarField")` |
-| `data_type.rs` parser keyword table (~line 1430) | `"ScalarField" => Ok(DataType::ScalarField)` |
-| `lib/structure_designer/node_network/node_network.dart` (~line 196) | pin color entry |
+| `data_type.rs` `impl fmt::Display` (~line 339) | `=> write!(f, "ScalarField")` |
+| `data_type.rs` `from_string` keyword table (~line 1437) | `"ScalarField" => Ok(DataType::ScalarField)` |
+| `text_format/node_type_introspection.rs` (~line 104) | add to the "no text literal representation" list, beside `Blueprint` / `Motif` / `Structure` |
+| `evaluator/network_result.rs` `infer_data_type` (~line 320) | `NetworkResult::ScalarField(_) => Some(DataType::ScalarField)` — **not a compile error if missed** |
+| `evaluator/network_result.rs` `to_display_string` (~line 880) | short summary; exhaustive match |
+| `evaluator/network_result.rs` `to_detailed_string` (~line 952) | optional — dims and value range; otherwise falls through `_ =>` to `to_display_string` |
+
+**FRB boundary (root crate):**
+
+| Site | Change |
+|---|---|
+| `src/api/structure_designer/structure_designer_api_types.rs` `enum APIDataTypeBase` (~line 35) | new variant |
+| `src/api/structure_designer/structure_designer_api.rs` (~line 277) | `APIDataTypeBase::ScalarField => DataType::ScalarField` |
+| `src/api/structure_designer/structure_designer_api.rs` (~line 443) | `DataType::ScalarField => APIDataTypeBase::ScalarField` |
+| — | re-run `flutter_rust_bridge_codegen generate` |
+
+**Dart:**
+
+| Site | Change |
+|---|---|
+| `lib/inputs/data_type_input.dart` (~line 321) | type-selector entry |
+| `lib/inputs/type_editor_dialog.dart` (~line 82) | type-editor entry |
+| `lib/structure_designer/node_network/node_widget.dart` `_apiDataTypeToString` (~line 445) | display name; exhaustive switch |
+| `lib/structure_designer/node_network/node_network.dart` (~line 207) | pin color entry |
 
 `canonicalize_data_type` needs no change — the variant has no nested type.
 
@@ -460,31 +450,45 @@ committing.
 
 ```rust
 /// A scalar field value. `Arc` because `NetworkResult` is cloned freely
-/// throughout evaluation and the payload is megabytes; every other large
-/// variant predates this concern and clones deeply.
+/// throughout evaluation and the payload is megabytes; the other large
+/// variants (`Molecule`, `Crystal`) clone deeply, which is affordable at
+/// their size and would not be at this one.
 ScalarField(Arc<dyn ScalarField>),
 ```
 
-**`Arc<dyn ScalarField>`, deliberately, on both counts.** `dyn` is what lets one
-variant carry both a sampled and an analytic field, so adding Molden adds no
-variant and touches no `match`. `Arc` is what keeps `NetworkResult::clone`
-cheap: the evaluator clones results freely, and a deep clone of a multi-megabyte
-grid on every wire traversal would be a real performance defect. This makes
-`ScalarField` the first `Arc`-shared payload in `NetworkResult`; that is a
-justified departure rather than an inconsistency, and worth a comment at the
-variant saying so.
+**Deliberate on both counts.** `dyn` lets one variant carry both a sampled and
+an analytic field, so Molden adds no variant and touches no `match`. `Arc` keeps
+`NetworkResult::clone` cheap — the evaluator clones freely, and deep-cloning a
+multi-megabyte grid per wire traversal would be a real performance defect.
+`Arc`-shared payloads are already established here — `Walker::from_array` holds
+an `Arc<Vec<NetworkResult>>`, and evaluation contexts hold
+`Arc<HashMap<CaptureKey, NetworkResult>>` — so this is a familiar shape, not a
+departure. Unlike those two, this `Arc` wraps a `Send + Sync` payload, so it
+needs no `#[allow(clippy::arc_with_non_send_sync)]`.
 
-Consequences to handle:
+Consequences to handle — fewer than one might expect, because `NetworkResult`
+derives only `Clone` and `Default`:
 
-- `NetworkResult` derives `PartialEq` and `Default`. `dyn ScalarField` supports
-  neither. Compare by `Arc::ptr_eq` — fields are immutable once loaded, so
-  pointer identity is a sound conservative equality (two independently loaded
-  copies of one file comparing unequal is acceptable; nothing depends on
-  structural field equality).
-- `NetworkResult` is `Debug`; the trait requires `Debug`, and implementations
-  print a summary (dims and value range), never their samples.
+- **There is no `PartialEq` to satisfy.** `NetworkResult` does not derive it,
+  and nothing in the tree compares two results. Do **not** hand-write an
+  `Arc::ptr_eq` equality for this variant: it would be the only comparison in
+  the enum and it has no caller.
+- **There is no `Debug` to satisfy either** — `NetworkResult` is not `Debug`.
+  The trait keeps its `Debug` supertrait on separate merit: it makes fields
+  printable in loader tests and assertion messages. Implementations print a
+  summary (dims and value range), never their samples.
+- **`Default` is unaffected**: the derive is anchored to `#[default] None`, so
+  adding a variant changes nothing.
+- The human-readable paths are *not* derived and do need arms — see the
+  touchpoint table above. `to_display_string` is exhaustive and will fail the
+  build; `infer_data_type` has a `_ => None` arm and will not.
 - `NetworkResult` is never serde-serialized — results are recomputed from the
   network — so there is **no `.cnnd` surface** and no migration.
+- `NetworkResult` is deliberately **not** `Send`/`Sync` (see the note on
+  `empty_captures` in `evaluator/network_evaluator.rs`), and the evaluator is
+  single-threaded today. `ScalarField: Send + Sync` therefore buys nothing at
+  this variant; it is required by the *sampling* consumers (§Rendering
+  direction), and holding the bound on the trait costs nothing.
 
 ## Node: `import_cube`
 
@@ -493,10 +497,8 @@ Consequences to handle:
 | **Name** | `import_cube` |
 | **Category** | `AtomicStructure` — beside `import_xyz` / `import_cif` |
 | **Input pin 0** | `file_name: String` — optional; wired value overrides the stored property, matching `import_xyz` |
-| **Input pin 1** | `index: Int` — optional, default `0`; selects which field within a multi-field file |
-| **Output pin 0** | `field: ScalarField` — the field selected by `index` |
-| **Output pin 1** | `fields: Array[ScalarField]` — every field in the file |
-| **Output pin 2** | `molecule: Molecule` — atoms from the file's atom block |
+| **Output pin 0** | `field: ScalarField` — the file's field |
+| **Output pin 1** | `molecule: Molecule` — atoms from the file's atom block |
 | **Property** | `file_name: Option<String>` |
 
 Node data follows `ImportXYZData` (`nodes/import_xyz.rs`) closely: `file_name`
@@ -505,22 +507,28 @@ after deserialization, and a `node_data_saver` that relativizes the path via
 `try_make_relative` so projects stay portable. This keeps megabytes of samples
 out of the `.cnnd` file, exactly as `AtomicStructure` is kept out today.
 
-**Why three output pins, with pin 0 redundant against pin 1.** Pin 0 serves the
-overwhelmingly common case — PySCF writes one field per file — with no
-`array_at` node in the graph. Pin 1 serves the multi-field case and, later, a
-Molden file's full orbital set, where mapping an isosurface over every field to
-build a gallery is the natural network. Both are `Arc` clones, so the redundancy
-costs nothing at runtime. Pin 2 is what makes ingestion verifiable before any
-field rendering exists.
+`eval` takes `CubeFile.fields[0]` for pin 0 and `CubeFile.atoms` for pin 1.
+Before P5 that indexing is total: parsing rule 1 rejects every multi-field file,
+so `fields` always holds exactly one element.
 
-**Why an `index` input pin when cube files almost always hold one field.** It is
-the pin that lets a Molden file be useful without a graph change. For `.cube`
-with one field it is inert. Selecting by *position* is admittedly the wrong
-affordance for Molden — "the HOMO" is what a user wants — but that selection
-needs `occupancy`, which only Molden supplies; a metadata-driven selector is
-future work, and `index` remains the primitive underneath it.
+Output pin 1 (`molecule`) is what makes ingestion verifiable before any field
+rendering exists.
 
-Out-of-range `index` is an evaluation error naming the valid range.
+**The multi-field pins are deliberately absent.** An `index: Int` input and a
+`fields: Array[ScalarField]` output are the right shape for a multi-field cube
+and, later, a Molden file's full orbital set — but nothing can produce or test
+either before P5, and P5 may wait indefinitely for a file to validate against
+(§P5). Shipping them at P3 would mean an inert `index` and an output that always
+carries a one-element array. Because this project's rule is that new pins are
+**appended, never inserted**, adding them in P5 as input pin 1 and output pin 2
+is free and breaks nothing built in the meantime — so there is no cost to
+waiting and a small cost to not.
+
+When P5 lands, `index` (default `0`) selects which field output pin 0 carries,
+and an out-of-range `index` is an evaluation error naming the valid range.
+Selecting by *position* is the wrong affordance for Molden — "the HOMO" is what
+a user wants — but that needs occupancy data only Molden supplies, so a
+metadata-driven selector is future work built on top.
 
 **Explicitly not included: a statistics readout in the node editor.** Min, max
 and percentiles would help choose thresholds, but that is a visualization
@@ -539,32 +547,26 @@ the remembered import directory, per the existing last-directories behavior.
 | **Category** | `MathAndProgramming` |
 | **Input pin 0** | `field: ScalarField` — required |
 | **Input pin 1** | `point: Vec3` — required; real-space Ångström |
-| **Output** | `Float` |
+| **Output pin 0** | `value: Float` |
 
 Evaluates the field at one point. Small, pure, and the thing that makes the
 whole ingestion half testable inside the running application: wire a `vec3` into
 it, wire the result into `print`, and read values off the console.
 
-**Out-of-bounds is an error here, unlike in the trait**, and the message names
-the field's bounds:
+**Out-of-bounds returns `0.0`, exactly as the trait specifies.** One rule
+everywhere, with no second convention to remember and no error path in the
+node.
 
-```
-point (5.20, 0.00, 0.00) is outside field bounds
-  (-2.65, -2.65, -2.65) .. (2.65, 2.65, 2.65)
-```
-
-The reasoning is diagnostic. The most likely ingestion bug is a units mistake —
-missing the Bohr-to-Ångström conversion scales every coordinate by 1.89. Under
-the trait's permissive rule that presents as `0.0` everywhere, which says
-"something is wrong" but not what. An error that prints the bounds says it
-immediately, and delivers the one piece of statistics that matters for
-diagnosis on demand rather than as permanent UI. Consumers that legitimately
-sample outside a box (the future isosurface node, whose sampling box may exceed
-the data box) use the trait directly and get `0.0`.
-
-Beyond debugging, this node has standalone value: sampling an orbital at a
-specific point, or along a bond via `map` over a generated point array, is a
-genuine analysis capability and works through the headless CLI.
+An earlier draft made this an evaluation error naming the field's bounds, on the
+reasoning that the likeliest ingestion bug is a missed Bohr-to-Ångström
+conversion. That diagnostic is not worth its cost. The same bug is caught one
+phase earlier and far more legibly at P3, where the `molecule` pin renders the
+structure 1.89x too large through the existing impostor path — a picture, not a
+message. Meanwhile the error rule would break this node's other reason to exist:
+sampling an orbital at a point, or along a bond via `map` over a point array, is
+a genuine analysis capability that works through the CLI, and a hard error would
+fail the whole evaluation the moment one point strayed past the box edge —
+exactly the region where a decaying field is most interesting.
 
 ## The `.cube` format — parser specification
 
@@ -593,6 +595,12 @@ complete regardless. Use `natoms.unsigned_abs()` for the atom loop and
 `natoms < 0` for the flag. The classic bug is `for _ in 0..natoms` silently
 iterating zero times on a negative value, after which every subsequent read is
 misaligned and may still parse into plausible garbage.
+
+**Before P5 the flag is a rejection, not a branch.** P1 reads the sign correctly
+in order to *detect* the multi-field variant and then fails with a clear
+"multi-field cube files are not yet supported" error. Rules 2 and 4 below
+specify the multi-field parse for when P5 implements it; do not implement them
+in P1.
 
 **2. Line 3 has either four or five numbers.** The optional fifth is `NVal`,
 values per grid point — redundant with the multi-field index line, but some
@@ -623,26 +631,40 @@ a code comment.
 **5. Traversal order is x-slowest, z-fastest.** Matches `SampledField`'s
 declared layout, so the loader appends sequentially with no transposition.
 Getting this wrong transposes or mirrors the field, and — critically — is
-**invisible in any axis-symmetric test case**. See the test strategy.
+**invisible in any axis-symmetric test case**. See the ramp test in §P1.
 
 **6. Units.** Coordinates and step vectors are Bohr in everything PySCF and
 Gaussian write. A convention exists whereby a negative voxel count signals
 Ångström, but it is documented inconsistently across sources — some describe
 negative as Bohr — so **do not rely on either reading**.
 
-Detect instead, from data already in the file:
+**Always read coordinates and step vectors as Bohr**, and use the atom block as
+a *plausibility check* only — never as an override:
 
-- default to Bohr for positive voxel counts (what every real producer writes)
 - compute nearest-neighbour distances across the atom block and compare against
   covalent radii, which `crystolecule` already has. A C–C single bond is 1.54 Å
   or 2.91 Bohr — a factor of 1.89 apart, with no plausible ambiguity.
-- if the distances contradict the assumed units, **warn loudly** and use the
-  detected units. The loader itself only records `units_warning`; the
-  `import_cube` node surfaces it as a non-blocking `NodeDataError::warning` from
-  `get_data_error`, which is correct by the blocking litmus in
-  `doc/design_error_management.md` — the node still produces a usable field.
+- **concretely**: for each atom take the distance to its nearest neighbour, and
+  divide by the sum of the two covalent radii; warn when the **median** of those
+  ratios falls below `0.7` or above `1.6`. A correctly-read Bohr file lands near
+  `1.0`. An Ångström file read as Bohr is scaled by 0.529, so it lands near
+  `0.53` — well inside the lower trip. The window is wide enough that ordinary
+  chemistry never trips it and narrow enough that a factor of 1.89 always does.
+- when the check trips, record a `units_warning` naming the observed median
+  ratio. The `import_cube` node surfaces it as a non-blocking
+  `NodeDataError::warning` from `get_data_error`, which is correct by the
+  blocking litmus in `doc/design_error_management.md` — the node still produces
+  a usable field, and the user is told exactly what looks wrong.
+- **do not re-interpret the file on the strength of the check.** Short contacts
+  are not the only thing an atom block can hold: an ion pair, a van der Waals
+  cluster, two separated fragments, or one stretched bond all produce distances
+  the heuristic cannot distinguish from an Ångström file. Acting on that guess
+  silently rescales every coordinate — and with them the grid, the field, and
+  every threshold read off it — by 1.89, which is a wrong answer the user
+  *cannot see*, traded against a wrong answer the warning already names.
+  Warning-only keeps the whole diagnostic value and none of the failure mode.
 
-A single-atom file has no distances to check; accept the default silently.
+A file with fewer than two atoms has no distances to check; stay silent.
 
 **7. Malformed input yields a descriptive error, never a panic.** Truncated
 value blocks, non-numeric tokens, zero dimensions, and non-finite samples are
@@ -654,8 +676,12 @@ all rejected with the byte or token offset. The loader signature mirrors
 ```rust
 pub struct CubeFile {
     pub atoms: AtomicStructure,
-    pub fields: Vec<SampledField>,   // one per field; shares `grid`
-    /// Set when the units heuristic contradicted the assumed units.
+    /// One per field in the file. Before P5 this always has exactly one
+    /// element (rule 1). Every entry carries an identical `GridGeometry`.
+    pub fields: Vec<SampledField>,
+    /// Set when the atom block's interatomic distances look chemically
+    /// implausible under the assumed Bohr units. Advisory only — coordinates
+    /// are always read as Bohr regardless.
     pub units_warning: Option<String>,
 }
 ```
@@ -689,7 +715,7 @@ sample, nothing to draw. It, `Occup=`, `Spin=` and `Sym=` are per-orbital
 metadata, and together they are what makes automatic HOMO selection possible:
 *the highest-index orbital with `Occup > 0`*. Where they should live is a
 question for the Molden work — the base contract deliberately carries no
-metadata (§Why there is no `FieldMetadata` either), and `Wavefunction` is the
+metadata (§Why there is no semantic tag or metadata), and `Wavefunction` is the
 natural home, since these describe orbitals in a file rather than properties of
 a sampled scalar function.
 
@@ -737,7 +763,8 @@ Laziness falls out of the shape: nothing is evaluated until a node asks for it,
 and asking for one orbital never costs a density.
 
 A minimal first cut may skip `Wavefunction` and have `import_molden` emit
-`Array[ScalarField]` of orbitals plus `Molecule`, matching `import_cube`. That
+`Array[ScalarField]` of orbitals plus `Molecule`, matching the shape P5 gives
+`import_cube`. That
 is a reasonable staging decision, but the `Wavefunction` shape is the one to
 aim at — retrofitting it later means changing a node's pins rather than adding
 nodes, and new pins must be appended, never inserted.
@@ -781,20 +808,13 @@ the next subsection exists to catch.
 
 ### Why `.cube` first: it is the test oracle
 
-With `.cube` support already in place, exporting both formats from one PySCF
-calculation gives a half-million-point ground truth from a trusted
-implementation, for free:
-
-```python
-cubegen.orbital(mol, 'ref.cube', mf.mo_coeff[:, i])
-molden.from_scf(mf, 'ref.molden')
-```
-
-Sample the Molden evaluator at the cube file's exact grid points and compare
-(agreement to ~1e-6 relative). Every ordering, normalization and sign bug
-surfaces immediately as a numerical mismatch instead of as a subtly wrong
-picture months later. This oracle exists *only because* the cube path was built
-first.
+Export both formats from one PySCF calculation — `cubegen.orbital(mol,
+'ref.cube', mf.mo_coeff[:, i])` and `molden.from_scf(mf, 'ref.molden')` — then
+sample the Molden evaluator at the cube's exact grid points and compare
+(~1e-6 relative). That is a half-million-point ground truth from a trusted
+implementation, for free, and it turns every ordering, normalization and sign
+bug into an immediate numerical mismatch rather than a subtly wrong picture
+months later. The oracle exists *only because* the cube path was built first.
 
 ### What Molden support will and will not touch
 
@@ -870,69 +890,93 @@ not rediscovered:
 ## Implementation plan
 
 Each step ends green: `cargo test -j 4`, `cargo clippy`, `flutter analyze`.
+Every phase below carries **its own tests**, and every phase with UI carries
+**its own manual walkthrough**; a phase is not done until both pass. Only the
+shared fixture machinery sits outside the phases, because P1 builds it and P3/P4
+consume it.
 
-### P1 — Field abstraction and cube loader (backend only)
-
-- `crystolecule/src/field/mod.rs`: `ScalarField`, `FieldBounds`,
-  `GridGeometry`, `SampledField`
-- `crystolecule/src/io/cube_loader.rs`: `load_cube` producing `CubeFile`,
-  single-field path plus the units heuristic; `value_range` accumulated in the
-  same pass that reads the samples
-- unit tests per the test strategy below; no Flutter, no node, no API
-
-Deliverable: a parser with numerically verified axis ordering and unit handling.
-Nothing user-visible.
-
-### P2 — `DataType` and `NetworkResult` plumbing
-
-- `DataType::ScalarField` and its four touchpoints
-- `NetworkResult::ScalarField(Arc<dyn ScalarField>)`, with `PartialEq` by
-  `Arc::ptr_eq` and a summary `Debug`
-- Dart pin color
-
-Deliverable: a wireable type carrying no values yet. Verified by a type
-round-trip test through `from_string` / `Display` and by the existing
-registry-validation suite staying green.
-
-### P3 — `import_cube` node and editor
-
-- node data, `eval`, loader/saver following `ImportXYZData`
-- registration in `nodes/mod.rs` and `node_type_registry.rs`
-- `import_cube_editor.dart` (file picker only) and its
-  `node_data_widget.dart` entry
-- reference guide: `doc/reference_guide/nodes/atomic.md`
-
-Deliverable: **the first user-visible milestone.** Import a `.cube` and see the
-molecule render through the existing impostor path off the `molecule` pin. This
-validates the atom block, the Bohr-to-Ångström conversion, and path
-relativization with zero new rendering code.
-
-### P4 — `sample_field` node
-
-- node, registration, reference guide entry in
-  `doc/reference_guide/nodes/math_programming.md`
-- integration test: load a fixture cube, sample at points with known values,
-  assert; assert the out-of-bounds error text names the bounds
-
-Deliverable: ingestion is fully verifiable in the running application and from
-the headless CLI. **This closes the scope of this document.**
-
-### P5 — Multi-field cube support (provisional)
-
-Deliberately last, and separable: it cannot be validated without a
-Gaussian-produced multi-field file. Adds the negative-`natoms` branch, the index
-line, de-interleaving, and the `fields` / `index` pins.
-
-If no such file is available when P4 lands, P5 waits rather than shipping
-untested parsing. The single-field path must reject a negative `natoms` with a
-clear "multi-field cube files are not yet supported" error rather than
-misparsing it.
-
-## Testing strategy
+### Shared: fixtures and sample data
 
 Tests live in `crates/atomcad-crystolecule/tests/crystolecule/` for the loader
 and field, and under the structure-designer crate's `tests/` for the nodes, per
 the "tests go in the owning crate's `tests/`" rule.
+
+Fixtures are small `.cube` files under `rust/tests/fixtures/cube/`, addressed
+through `atomcad_test_support::fixture_path`. Keep them tiny (a 3x4x5 grid is 60
+values) so they are readable and diffable in review. They are generated by
+script but **committed**, and the committed file is the hand-checkable artifact
+— a test asserts against literal values a reviewer can verify by eye, never
+against whatever the generator happened to emit.
+
+`scripts/make_cube_fixtures.py`, **numpy only**, beside the existing
+`scripts/architecture_diagram/` helpers. Three subcommands:
+
+| Command | Writes | Committed? |
+|---|---|---|
+| `tests` | `rust/tests/fixtures/cube/` — the fixtures the phase test tables name | yes, tiny |
+| `manual` | `sample_data/cube/` (gitignored, `--out` to override) — the eyeball files below | no, regenerate on demand |
+| `pyscf` | `rust/tests/fixtures/cube/water_homo.cube` — one low-resolution realism fixture | yes, once; **optional**, see below |
+
+The malformed fixtures (truncated, non-numeric, zero-dim, negative `natoms`) are
+hand-edited copies of a valid one rather than script output — the corruption is
+the point, and it should be visible in the diff.
+
+Files the `manual` subcommand writes, used by the P3 and P4 walkthroughs:
+
+| File | Contents | What it exercises |
+|---|---|---|
+| `water.cube` | real water geometry in **Bohr** (O–H 0.958 Å, H–O–H 104.5°), coarse grid, a crude analytic 2p_z on the oxygen | P3: atom block, Bohr→Ångström, bonding |
+| `water_angstrom.cube` | the same geometry written in Ångström | P3: the `units_warning` path |
+| `ramp_3x4x5.cube` | the automated ramp fixture, copied for interactive use | P4: exact expected sample values |
+
+#### PySCF: optional, and deliberately not on the critical path
+
+**Nothing in P1–P4 depends on PySCF, and the plan must not acquire such a
+dependency.** Within this document's scope no field is ever rendered, so a real
+PySCF orbital shows the same three atoms a numpy-written file does, and yields a
+sampled number that cannot be verified by inspection — whereas the ramp
+fixture's expected value is exact. numpy covers every test and every walkthrough
+step in this plan.
+
+What PySCF buys is **realism a hand-written file cannot fake**: a real producer's
+whitespace and line wrapping, `%13.5E` value formatting, six values per line with
+a break at the end of each innermost run, 80^3 dimensions, a few megabytes, and
+genuine Bohr coordinates — precisely the variation that parsing rule 3
+(token stream, not lines) exists to survive. That is worth exactly one committed
+smoke fixture: one water HOMO at low resolution, via
+`cubegen.orbital(mol, 'water_homo.cube', mf.mo_coeff[:, i])`. PySCF becomes
+genuinely load-bearing only later, as the Molden test oracle (§Why `.cube`
+first: it is the test oracle).
+
+**Setup cost on the maintainer's Windows machine: small but not zero.** PySCF
+publishes no Windows wheels, so it runs under WSL; WSL2 with Ubuntu 24.04 is
+already installed, with Python 3.12 but no `pip` and no `venv`, and Ubuntu 24.04
+refuses system-wide `pip install` (PEP 668). So:
+
+```bash
+wsl -d Ubuntu                                  # then, inside:
+sudo apt update && sudo apt install -y python3-venv   # one interactive password
+python3 -m venv ~/pyscf && ~/pyscf/bin/pip install pyscf
+```
+
+A few minutes, one `sudo` prompt, and it pulls numpy/scipy/h5py. If that is ever
+inconvenient, skip it — the `pyscf` subcommand is the only thing that needs it,
+and everything else in this document still works.
+
+### P1 — Field abstraction and cube loader (backend only)
+
+**Work**
+
+- `rust/crates/atomcad-crystolecule/src/field/mod.rs`: `ScalarField`,
+  `FieldBounds`, `GridGeometry`, `SampledField`, `DEFAULT_GRADIENT_STEP`
+- `rust/crates/atomcad-crystolecule/src/io/cube_loader.rs`: `load_cube`
+  producing `CubeFile`,
+  single-field path plus the units plausibility warning; `value_range`
+  accumulated in the same pass that reads the samples
+- `scripts/make_cube_fixtures.py` and the committed fixtures it writes
+- no Flutter, no node, no API
+
+**Tests**
 
 **The ordering test must use an asymmetric field.** This is the single most
 important test in the plan. The dominant bug class for grid parsers is axis
@@ -949,8 +993,6 @@ cannot even preserve the shape). Then assert `sample` at each exact grid point
 returns its own index code. This pins down every permutation and reversal at
 once, and it is the test that would otherwise fail silently.
 
-Other cases:
-
 | Test | Asserts |
 |---|---|
 | Ramp field, 3x4x5 | axis order, no mirroring, no transposition |
@@ -958,24 +1000,133 @@ Other cases:
 | Synthetic 2p_z | sign changes across the nodal plane; negative values preserved, not clamped |
 | Atom block vs reference `.xyz` | element, count and position agreement |
 | Bohr fixture | positions convert to Ångström; bond lengths chemically sane |
-| Ångström-scaled fixture | units heuristic fires and sets `units_warning` |
-| Single-atom fixture | heuristic stays silent, no spurious warning |
+| Ångström-scaled fixture | median ratio near `0.53` trips the low bound, `units_warning` set — **and coordinates are still read as Bohr**, i.e. no silent rescale |
+| Widely-spaced fixture (two separated fragments) | median ratio above `1.6` trips the high bound, positions unchanged — the check never alters the parse |
+| Single-atom fixture | fewer than two atoms, so no distances to check: silent, no spurious warning |
 | Truncated / non-numeric / zero-dim fixtures | descriptive error, no panic |
 | `value_range` on every fixture | matches the min/max of the fixture's literal values |
 | Out-of-bounds `sample` | exactly `0.0` |
-| `gradient` on an analytic fixture | central difference matches the known derivative within tolerance |
-| `sample_field` out of bounds | error text contains the bounds |
-| Negative `natoms` before P5 | clear unsupported-variant error |
+| `SampledField::gradient` on a fixture sampled from a known formula (the 2p_z) | matches that formula's analytic derivative within tolerance |
+| Negative `natoms` | clear "multi-field not yet supported" error (replaced by P5) |
 
-Fixtures: small hand-written `.cube` files under `rust/tests/fixtures/`,
-addressed through `atomcad_test_support::fixture_path`. Keep them tiny (a 3x4x5
-grid is 60 values) so they are readable and diffable in review. Generating them
-with a short numpy script is fine — numpy is available on the maintainer's
-machine — but the committed fixtures are the hand-checkable artifact.
+**Deliverable:** a parser with numerically verified axis ordering and unit
+handling. Nothing user-visible.
 
-A real PySCF-generated cube is worth committing once as a smoke fixture (one
-water HOMO at low resolution), but the correctness tests must rest on fixtures
-whose expected values are derivable by hand.
+### P2 — `DataType` and `NetworkResult` plumbing
+
+**Work**
+
+- `DataType::ScalarField` and **all fourteen** touchpoints plus the FRB codegen
+  run — `data_type.rs`, `node_type_introspection.rs`, `network_result.rs`, the
+  three API sites, and four Dart sites (see the table above). Budget this as a
+  cross-language step, not a one-line enum addition.
+- `NetworkResult::ScalarField(Arc<dyn ScalarField>)` and its `to_display_string`
+  / `infer_data_type` arms. No `PartialEq` and no `Debug` impl is needed.
+- Dart pin color and type-selector entries
+
+**Tests**
+
+| Test | Asserts |
+|---|---|
+| `DataType` text round-trip | `from_string("ScalarField")` and `Display` agree |
+| `APIDataType` round-trip, both directions | catches a missed conversion arm at the FRB boundary |
+| `infer_data_type` on a `NetworkResult::ScalarField` | returns `Some(DataType::ScalarField)` — **the one site with no compiler backstop**, so it needs an explicit test |
+| Existing registry-validation suite | stays green |
+
+**Deliverable:** a wireable type carrying no values yet.
+
+### P3 — `import_cube` node and editor
+
+**Work**
+
+- node data, `eval`, loader/saver following `ImportXYZData`
+- registration in `nodes/mod.rs` and `node_type_registry.rs`
+- `import_cube_editor.dart` (file picker only) and its
+  `node_data_widget.dart` entry
+- reference guide: `doc/reference_guide/nodes/atomic.md`
+
+**Tests**
+
+| Test | Asserts |
+|---|---|
+| Node eval on a fixture | `molecule` pin matches the fixture's atom block; `field` pin's `value_range` matches the fixture |
+| `file_name` input pin wired | overrides the stored property, mirroring the `import_xyz` test |
+| `.cnnd` round-trip | saved path is relativized; after reload `node_data_loader` has repopulated the `#[serde(skip)]` payload |
+| Fixture with `units_warning` | surfaces as a **non-blocking** `NodeDataError::warning` from `get_data_error`, and the node still produces a usable field |
+
+**Manual walkthrough**
+
+1. `import_cube` → load `sample_data/cube/water.cube` → display the `molecule`
+   output pin.
+2. **Expect** three atoms with O–H ≈ 0.96 Å and H–O–H ≈ 104.5°, bonded. If the
+   molecule looks roughly **1.9x too large**, the Bohr conversion is missing —
+   this render *is* the units check the design leans on (§Node: `sample_field`).
+3. Load `water_angstrom.cube`. **Expect** the identical geometry **plus** a
+   non-blocking amber warning on the node. Specifically expect the molecule
+   *not* to be rescaled: the check warns, it never re-interprets (§rule 6).
+4. Save the project, move the `.cnnd` to another folder, reload. **Expect** the
+   field to still load — path relativization via `try_make_relative`.
+
+**Deliverable:** **the first user-visible milestone.** Import a `.cube` and see
+the molecule render through the existing impostor path off the `molecule` pin.
+This validates the atom block, the Bohr-to-Ångström conversion, and path
+relativization with zero new rendering code.
+
+### P4 — `sample_field` node
+
+**Work**
+
+- node, registration, reference guide entry in
+  `doc/reference_guide/nodes/math_programming.md`
+
+**Tests**
+
+| Test | Asserts |
+|---|---|
+| Sample at exact grid points of the ramp fixture | each returns its own index code |
+| Sample at a midpoint | the trilinear average of its neighbours |
+| Sample outside the box | returns exactly `0.0`, matching the trait — **not** an error |
+
+**Manual walkthrough**
+
+1. Wire `import_cube.field` → `sample_field.field`, a `vec3` → `.point`, and the
+   result → `print`.
+2. On `ramp_3x4x5.cube`, sampling exact grid point `(i, j, k)` prints
+   `100*i + 10*j + k`. Sampling the midpoint of two neighbours prints their
+   average. Both are checkable in your head, which is the whole point of the
+   ramp.
+3. A point well outside the box prints `0`, **not** an error (§Node:
+   `sample_field`).
+4. Repeat step 2 through `atomcad-cli` to confirm the headless path.
+
+**Deliverable:** ingestion is fully verifiable in the running application and
+from the headless CLI. **This closes the scope of this document.**
+
+### P5 — Multi-field cube support (provisional)
+
+Deliberately last, and separable: it cannot be validated without a
+Gaussian-produced multi-field file. If no such file is available when P4 lands,
+P5 waits rather than shipping untested parsing — until then the single-field
+path rejects a negative `natoms` with a clear "multi-field cube files are not
+yet supported" error rather than misparsing it (tested in P1).
+
+**Work**
+
+- the negative-`natoms` branch, the index line, and de-interleaving
+- **appended**, so P3's numbering is untouched: the `index` input pin and the
+  `fields: Array[ScalarField]` output pin
+
+**Tests**
+
+| Test | Asserts |
+|---|---|
+| A real Gaussian-produced multi-field file | de-interleaving is right — **this file existing is the gate on the phase**, per parsing rule 4 |
+| Negative `natoms` | now parses, and the atom block is read completely (the `unsigned_abs` rule); P1's unsupported-variant test is replaced |
+| `index` selection | picks the right field; out-of-range errors naming the valid range |
+| Pin numbering | pins 0 and 1 keep their P3 meanings; the new pins are input 1 and output 2 |
+
+**Deliverable:** multi-field cubes load, with the parse validated against a file
+this project did not write.
 
 ## Deferred: the visualization node
 
@@ -1017,29 +1168,24 @@ one-component case falls out with no semantic knowledge and no branch. The only
 reason to test anything is to skip wasted work: `value_range().min >= 0` short-
 circuits the negative pass.
 
-This is why there is no `FieldKind` (§Why there is no `FieldKind`) — the
-property that governs topology is the sign of the data, which the data already
-states.
+This is why there is no semantic tag: the property governing topology is the
+sign of the data, which the data already states.
 
-**Two affordances to build in:**
+Two affordances follow:
 
-- **The two phase colors must be swappable by one click.** Blue/red is common but
-  not universal, and more importantly the global sign of an orbital is
-  *arbitrary* — re-running a calculation can flip which lobe is which. Flipping
-  is how a user makes two orbitals comparable side by side, or matches a
-  published figure. Trivial to implement, disproportionately useful.
-- **A color field on a signed surface destroys phase information**, and that is
-  the user's call rather than something to block. The default for a signed
-  field stays phase coloring. If both channels are wanted at once, the escape is
-  to distinguish components by *material* rather than color — the negative lobe
-  rendered more matte — since `Vertex` carries roughness and metallic alongside
-  albedo.
+- **The two phase colors must be swappable by one click** — not for taste, but
+  because an orbital's global sign is *arbitrary* and re-running a calculation
+  can flip which lobe is which. Flipping is how a user compares two orbitals or
+  matches a published figure.
+- **A color field on a signed surface destroys phase information.** The user's
+  call, not something to block; the default for a signed field stays phase
+  coloring. If both channels are wanted at once, distinguish components by
+  *material* instead — `Vertex` carries roughness and metallic alongside albedo.
 
-**Where self-coloring does become meaningful:** a **slice plane** or **direct
-volume rendering**, where the field genuinely varies across what is drawn. There
-"color by the field itself" is the natural default. A slice plane is nearly free
-against this contract — it needs only `sample` over a 2D grid — and is worth
-considering as a debugging view well before isosurface extraction lands.
+**Self-coloring does become meaningful** for a **slice plane** or **volume
+rendering**, where the field varies across what is drawn. A slice plane is nearly
+free here — only `sample` over a 2D grid — and would make a good debugging view
+well before isosurface extraction lands.
 
 **Open questions, and what answers them:**
 
@@ -1088,4 +1234,5 @@ Per `AGENTS.md`, in the same change as the code:
   and its color (P2)
 - `crates/atomcad-crystolecule/src/AGENTS.md` — `field/` module-map entry and
   the "coordinates crossing `ScalarField` are Ångström" invariant (P1)
-- `doc/testing.md` — the asymmetric-ramp requirement for grid fixtures (P1)
+- `doc/testing.md` — the asymmetric-ramp requirement for grid fixtures, and
+  `scripts/make_cube_fixtures.py` as their source (P1)

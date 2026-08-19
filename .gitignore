@@ -46,3 +46,7 @@ app.*.map.json
 
 # Distribution files
 /dist/
+
+# Regenerable sample data (scripts/make_cube_fixtures.py manual).
+# The committed cube fixtures live in rust/tests/fixtures/cube/ instead.
+/sample_data/
