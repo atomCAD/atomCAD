@@ -6,7 +6,8 @@ expression: out
   network 'Main' valid=true
   network 'mynet' valid=true
 === concave_rebond/step_edge.cnnd
-  network 'Main' valid=true
+  network 'ascending_corner' valid=true
+  network 'undercut_corner' valid=true
 === inline_metadata_migration/old_format_metadata.cnnd
   network 'Main' valid=true
 === invariants/healthy.cnnd

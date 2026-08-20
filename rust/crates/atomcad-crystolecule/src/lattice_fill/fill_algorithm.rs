@@ -223,7 +223,7 @@ pub fn fill_lattice(
         // empty, which is exactly when reconstruction did not run, so it is
         // gated by `surf_recon` structurally rather than by a second boolean
         // (D5, and the gating argument in §7).
-        if !unpaired_surface_atoms.is_empty() {
+        if options.rebond_concave_clashes && !unpaired_surface_atoms.is_empty() {
             let _rebond_timer = Timer::new("LatticeFill concave rebonding");
             let rebonds = rebond_concave_clashes(
                 &mut atomic_structure,

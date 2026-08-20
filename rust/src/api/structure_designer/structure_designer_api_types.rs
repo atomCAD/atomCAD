@@ -1690,6 +1690,10 @@ pub struct APIMaterializeData {
     pub remove_single_bond_atoms_before_passivation: bool, // Whether to remove atoms with exactly one bond before passivation
     pub surface_reconstruction: bool, // Whether to apply surface reconstruction
     pub invert_phase: bool,
+    /// Whether to rebond concave-corner terminator clashes. Sub-option of
+    /// `surface_reconstruction` -- both must be on. See
+    /// doc/design_concave_rebonding.md.
+    pub rebond_concave_clashes: bool,
     /// Atomic number of the passivation terminator (root/global value). `1`
     /// (hydrogen) by default; halogens F/Cl/Br/I place at the correct
     /// host–halogen bond length. See doc/design_halogen_passivation.md D4.

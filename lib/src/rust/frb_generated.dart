@@ -16455,8 +16455,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIMaterializeData dco_decode_api_materialize_data(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return APIMaterializeData(
       parameterElementValueDefinition: dco_decode_String(arr[0]),
       hydrogenPassivation: dco_decode_bool(arr[1]),
@@ -16464,9 +16464,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       removeSingleBondAtomsBeforePassivation: dco_decode_bool(arr[3]),
       surfaceReconstruction: dco_decode_bool(arr[4]),
       invertPhase: dco_decode_bool(arr[5]),
-      passivationElement: dco_decode_i_16(arr[6]),
-      error: dco_decode_opt_String(arr[7]),
-      availableParameters: dco_decode_list_api_motif_parameter_info(arr[8]),
+      rebondConcaveClashes: dco_decode_bool(arr[6]),
+      passivationElement: dco_decode_i_16(arr[7]),
+      error: dco_decode_opt_String(arr[8]),
+      availableParameters: dco_decode_list_api_motif_parameter_info(arr[9]),
     );
   }
 
@@ -20845,6 +20846,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_decode_bool(deserializer);
     var var_surfaceReconstruction = sse_decode_bool(deserializer);
     var var_invertPhase = sse_decode_bool(deserializer);
+    var var_rebondConcaveClashes = sse_decode_bool(deserializer);
     var var_passivationElement = sse_decode_i_16(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
     var var_availableParameters =
@@ -20857,6 +20859,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             var_removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: var_surfaceReconstruction,
         invertPhase: var_invertPhase,
+        rebondConcaveClashes: var_rebondConcaveClashes,
         passivationElement: var_passivationElement,
         error: var_error,
         availableParameters: var_availableParameters);
@@ -25813,6 +25816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.removeSingleBondAtomsBeforePassivation, serializer);
     sse_encode_bool(self.surfaceReconstruction, serializer);
     sse_encode_bool(self.invertPhase, serializer);
+    sse_encode_bool(self.rebondConcaveClashes, serializer);
     sse_encode_i_16(self.passivationElement, serializer);
     sse_encode_opt_String(self.error, serializer);
     sse_encode_list_api_motif_parameter_info(

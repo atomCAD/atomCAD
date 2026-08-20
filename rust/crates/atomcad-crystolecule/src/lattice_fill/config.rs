@@ -85,6 +85,10 @@ impl SettingsResolver<'_> {
             remove_single_bond_atoms: self.root.remove_single_bond_atoms,
             reconstruct_surface: self.root.reconstruct_surface,
             invert_phase: self.root.invert_phase,
+            // Node-level only: no `RegionSpec` field, so this never varies by
+            // position. It still follows `surf_recon` per-region implicitly,
+            // because the unpaired set it consumes is already region-resolved.
+            rebond_concave_clashes: self.root.rebond_concave_clashes,
             passivation_element: self.root.passivation_element,
         };
 
@@ -185,6 +189,15 @@ pub struct LatticeFillOptions {
     pub reconstruct_surface: bool,
 
     pub invert_phase: bool,
+
+    /// Whether to rewrite concave-corner terminator clashes into a direct
+    /// host-host bond (`doc/design_concave_rebonding.md`).
+    ///
+    /// This is a **sub-option of `reconstruct_surface`**, not an independent
+    /// step: the pass only acts on surface atoms that reconstruction classified
+    /// and left unpaired, so where reconstruction did not run there are none and
+    /// the flag has no effect. Rebonding therefore requires *both* to be on.
+    pub rebond_concave_clashes: bool,
 
     /// Atomic number of the passivation terminator (root/global value). `1`
     /// (hydrogen) reproduces legacy behavior; a halogen (9/17/35/53) terminates

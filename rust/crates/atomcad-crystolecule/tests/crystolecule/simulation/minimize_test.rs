@@ -2521,6 +2521,7 @@ fn create_diamond_cuboid_with_options(
         remove_single_bond_atoms,
         reconstruct_surface: surface_reconstruction,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     };
 

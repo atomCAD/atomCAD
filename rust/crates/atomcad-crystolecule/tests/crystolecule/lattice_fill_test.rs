@@ -197,6 +197,7 @@ site 1 C 0.0 0.0 0.0
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     };
 
@@ -246,6 +247,7 @@ bond 1 ..-2
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     };
 
@@ -303,6 +305,7 @@ site 1 C 0.0 0.0 0.0
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     };
     let result_remove = fill_lattice(&config, &options_remove, &fill_region);
@@ -319,6 +322,7 @@ site 1 C 0.0 0.0 0.0
         remove_single_bond_atoms: false,
         reconstruct_surface: false,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     };
     let result_keep = fill_lattice(&config, &options_keep, &fill_region);
@@ -380,6 +384,7 @@ fn box_atom_count(motif: &Motif, cell: &UnitCellStruct, cells: f64, reconstruct:
         remove_single_bond_atoms: false,
         reconstruct_surface: reconstruct,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     };
     let margin = 5.0;
@@ -449,6 +454,7 @@ fn fill_box(
         remove_single_bond_atoms: false,
         reconstruct_surface: reconstruct,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: passivant,
     };
     let margin = 5.0;

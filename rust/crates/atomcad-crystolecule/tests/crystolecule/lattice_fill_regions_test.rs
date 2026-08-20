@@ -53,6 +53,7 @@ fn opts(
         remove_single_bond_atoms: rm_single,
         reconstruct_surface: surf_recon,
         invert_phase: invert,
+        rebond_concave_clashes: true,
         passivation_element: 1,
     }
 }

@@ -53,6 +53,17 @@ pub struct MaterializeData {
     pub surface_reconstruction: bool,
     #[serde(default)]
     pub invert_phase: bool,
+    /// Whether to rebond concave-corner terminator clashes
+    /// (`doc/design_concave_rebonding.md`). A sub-option of
+    /// `surface_reconstruction`: it only affects atoms reconstruction left
+    /// unpaired, so both must be on for anything to happen.
+    ///
+    /// serde default `true` -- unlike `remove_unbonded_atoms`, this does not
+    /// preserve any historical behavior, because the pass has never shipped
+    /// disabled. No file predates it, so there is no old-vs-new fork to
+    /// protect (design D5).
+    #[serde(default = "default_true")]
+    pub rebond_concave_clashes: bool,
     /// Atomic number of the passivation terminator (root/global value). serde
     /// default `1` (hydrogen) so old files load unchanged. Restricted to the
     /// monovalent passivant set (validated at eval time, D1). Regions may
@@ -80,6 +91,8 @@ struct MaterializeDataDeserialized {
     pub surface_reconstruction: bool,
     #[serde(default)]
     pub invert_phase: bool,
+    #[serde(default = "default_true")]
+    pub rebond_concave_clashes: bool,
     #[serde(default = "default_passiv_elem")]
     pub passivation_element: i16,
 }
@@ -98,6 +111,7 @@ impl<'de> Deserialize<'de> for MaterializeData {
             remove_single_bond_atoms_before_passivation: de
                 .remove_single_bond_atoms_before_passivation,
             surface_reconstruction: de.surface_reconstruction,
+            rebond_concave_clashes: de.rebond_concave_clashes,
             invert_phase: de.invert_phase,
             passivation_element: de.passivation_element,
             error: None,
@@ -341,6 +355,9 @@ impl NodeData for MaterializeData {
             remove_single_bond_atoms,
             reconstruct_surface: surface_reconstruction,
             invert_phase,
+            // Stored-only property (no pin), like
+            // `parameter_element_value_definition` -- see get/set_text_properties.
+            rebond_concave_clashes: self.rebond_concave_clashes,
             passivation_element,
         };
 
@@ -409,6 +426,12 @@ impl NodeData for MaterializeData {
                 "invert_phase".to_string(),
                 TextValue::Bool(self.invert_phase),
             ),
+            // Stored-only field (no matching parameter), like
+            // parameter_element_value_definition above.
+            (
+                "rebond".to_string(),
+                TextValue::Bool(self.rebond_concave_clashes),
+            ),
             (
                 "passiv_elem".to_string(),
                 TextValue::Int(self.passivation_element as i32),
@@ -455,6 +478,11 @@ impl NodeData for MaterializeData {
             self.surface_reconstruction = v
                 .as_bool()
                 .ok_or_else(|| "surf_recon must be a boolean".to_string())?;
+        }
+        if let Some(v) = props.get("rebond") {
+            self.rebond_concave_clashes = v
+                .as_bool()
+                .ok_or_else(|| "rebond must be a boolean".to_string())?;
         }
         if let Some(v) = props.get("invert_phase") {
             self.invert_phase = v
@@ -648,6 +676,7 @@ pub fn get_node_type() -> NodeType {
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
         error: None,
         parameter_element_values: HashMap::new(),

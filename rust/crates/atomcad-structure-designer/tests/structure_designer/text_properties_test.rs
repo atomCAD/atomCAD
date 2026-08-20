@@ -1063,6 +1063,7 @@ fn test_materialize_roundtrip() {
         remove_single_bond_atoms_before_passivation: false,
         surface_reconstruction: false,
         invert_phase: false,
+        rebond_concave_clashes: true,
         passivation_element: 1,
         error: None,
         parameter_element_values: HashMap::new(),
@@ -1075,6 +1076,8 @@ fn test_materialize_roundtrip() {
         remove_single_bond_atoms_before_passivation: true,
         surface_reconstruction: true,
         invert_phase: true,
+        // the other case uses true, so the roundtrip covers both values
+        rebond_concave_clashes: false,
         passivation_element: 9,
         error: None,
         parameter_element_values: HashMap::new(),

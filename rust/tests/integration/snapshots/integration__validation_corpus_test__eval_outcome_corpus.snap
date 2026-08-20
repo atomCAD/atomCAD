@@ -15,7 +15,8 @@ expression: out
   network 'mynet' node=5 pin=0 -> Ok
   network 'mynet' node=6 pin=0 -> Ok
 === concave_rebond/step_edge.cnnd
-  network 'Main' node=16 pin=0 -> Ok
+  network 'ascending_corner' node=8 pin=0 -> Ok
+  network 'undercut_corner' node=16 pin=0 -> Ok
 === inline_metadata_migration/old_format_metadata.cnnd
   network 'Main' node=3 pin=0 -> Ok
 === invariants/healthy.cnnd

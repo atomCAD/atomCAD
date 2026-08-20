@@ -14254,6 +14254,7 @@ impl SseDecode
         let mut var_removeSingleBondAtomsBeforePassivation = <bool>::sse_decode(deserializer);
         let mut var_surfaceReconstruction = <bool>::sse_decode(deserializer);
         let mut var_invertPhase = <bool>::sse_decode(deserializer);
+        let mut var_rebondConcaveClashes = <bool>::sse_decode(deserializer);
         let mut var_passivationElement = <i16>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
         let mut var_availableParameters = <Vec<
@@ -14266,6 +14267,7 @@ impl SseDecode
             remove_single_bond_atoms_before_passivation: var_removeSingleBondAtomsBeforePassivation,
             surface_reconstruction: var_surfaceReconstruction,
             invert_phase: var_invertPhase,
+            rebond_concave_clashes: var_rebondConcaveClashes,
             passivation_element: var_passivationElement,
             error: var_error,
             available_parameters: var_availableParameters,
@@ -20914,6 +20916,7 @@ impl flutter_rust_bridge::IntoDart
                 .into_dart(),
             self.surface_reconstruction.into_into_dart().into_dart(),
             self.invert_phase.into_into_dart().into_dart(),
+            self.rebond_concave_clashes.into_into_dart().into_dart(),
             self.passivation_element.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
             self.available_parameters.into_into_dart().into_dart(),
@@ -24800,6 +24803,7 @@ impl SseEncode
         <bool>::sse_encode(self.remove_single_bond_atoms_before_passivation, serializer);
         <bool>::sse_encode(self.surface_reconstruction, serializer);
         <bool>::sse_encode(self.invert_phase, serializer);
+        <bool>::sse_encode(self.rebond_concave_clashes, serializer);
         <i16>::sse_encode(self.passivation_element, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
         <Vec<crate::api::structure_designer::structure_designer_api_types::APIMotifParameterInfo>>::sse_encode(self.available_parameters, serializer);

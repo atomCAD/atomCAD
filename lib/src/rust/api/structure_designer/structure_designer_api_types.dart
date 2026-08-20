@@ -2374,6 +2374,11 @@ class APIMaterializeData {
   final bool surfaceReconstruction;
   final bool invertPhase;
 
+  /// Whether to rebond concave-corner terminator clashes. Sub-option of
+  /// `surface_reconstruction` -- both must be on. See
+  /// doc/design_concave_rebonding.md.
+  final bool rebondConcaveClashes;
+
   /// Atomic number of the passivation terminator (root/global value). `1`
   /// (hydrogen) by default; halogens F/Cl/Br/I place at the correct
   /// host–halogen bond length. See doc/design_halogen_passivation.md D4.
@@ -2388,6 +2393,7 @@ class APIMaterializeData {
     required this.removeSingleBondAtomsBeforePassivation,
     required this.surfaceReconstruction,
     required this.invertPhase,
+    required this.rebondConcaveClashes,
     required this.passivationElement,
     this.error,
     required this.availableParameters,
@@ -2401,6 +2407,7 @@ class APIMaterializeData {
       removeSingleBondAtomsBeforePassivation.hashCode ^
       surfaceReconstruction.hashCode ^
       invertPhase.hashCode ^
+      rebondConcaveClashes.hashCode ^
       passivationElement.hashCode ^
       error.hashCode ^
       availableParameters.hashCode;
@@ -2418,6 +2425,7 @@ class APIMaterializeData {
               other.removeSingleBondAtomsBeforePassivation &&
           surfaceReconstruction == other.surfaceReconstruction &&
           invertPhase == other.invertPhase &&
+          rebondConcaveClashes == other.rebondConcaveClashes &&
           passivationElement == other.passivationElement &&
           error == other.error &&
           availableParameters == other.availableParameters;

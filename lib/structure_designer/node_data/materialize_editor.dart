@@ -37,6 +37,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
   late bool _removeSingleBondAtomsBeforePassivation;
   late bool _surfaceReconstruction;
   late bool _invertPhase;
+  late bool _rebondConcaveClashes;
   late int _passivationElement;
 
   /// True when the optional `passiv_elem` input pin is wired. When connected,
@@ -85,6 +86,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
             _removeSingleBondAtomsBeforePassivation,
         surfaceReconstruction: _surfaceReconstruction,
         invertPhase: _invertPhase,
+        rebondConcaveClashes: _rebondConcaveClashes,
         passivationElement: _passivationElement,
         error: null,
         availableParameters: const [],
@@ -103,6 +105,7 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
         widget.data?.removeSingleBondAtomsBeforePassivation ?? false;
     _surfaceReconstruction = widget.data?.surfaceReconstruction ?? false;
     _invertPhase = widget.data?.invertPhase ?? false;
+    _rebondConcaveClashes = widget.data?.rebondConcaveClashes ?? true;
     _passivationElement = widget.data?.passivationElement ?? 1;
   }
 
@@ -134,8 +137,11 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
     if (oldWidget.data?.invertPhase != widget.data?.invertPhase) {
       _invertPhase = widget.data?.invertPhase ?? false;
     }
-    if (oldWidget.data?.passivationElement !=
-        widget.data?.passivationElement) {
+    if (oldWidget.data?.rebondConcaveClashes !=
+        widget.data?.rebondConcaveClashes) {
+      _rebondConcaveClashes = widget.data?.rebondConcaveClashes ?? true;
+    }
+    if (oldWidget.data?.passivationElement != widget.data?.passivationElement) {
       _passivationElement = widget.data?.passivationElement ?? 1;
     }
   }
@@ -189,7 +195,8 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
                   const Expanded(
                     child: Text(
                       'Regions override these settings inside their volumes.',
-                      style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+                      style:
+                          TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
                     ),
                   ),
                 ],
@@ -270,11 +277,30 @@ class _MaterializeEditorState extends State<MaterializeEditor> {
 
           const SizedBox(height: 8),
 
+          CheckboxListTile(
+            title: const Text('Rebond Concave Corners'),
+            subtitle: const Text(
+              'Fix clashing terminators at surface reconstruction step edges',
+            ),
+            value: _rebondConcaveClashes,
+            onChanged: (value) {
+              final newValue = value ?? true;
+              setState(() {
+                _rebondConcaveClashes = newValue;
+              });
+
+              _commitChanges();
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+
+          const SizedBox(height: 8),
+
           // Passivation checkbox
           CheckboxListTile(
             title: const Text('Passivation'),
-            subtitle: const Text(
-                'Add terminating atoms to passivate dangling bonds'),
+            subtitle:
+                const Text('Add terminating atoms to passivate dangling bonds'),
             value: _hydrogenPassivation,
             onChanged: (value) {
               final newValue = value ?? true;

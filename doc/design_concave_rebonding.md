@@ -130,7 +130,7 @@ nearest legitimate contact is at 1.195. The 0.75 threshold has ~1.2× headroom a
 ~1.6× margin below the legitimate contact, with nothing in between — the measured spectrum jumps
 straight from 1.521 Å to 2.869 Å with no intermediate population.
 
-### Tests 4 and 5 are load-bearing, not belt-and-braces
+### Which of the three tests actually does the rejecting
 
 That comfortable picture is a **hydrogen-only** picture, and assuming it generalises would be the
 easiest way to break this feature. The passivant is user-selectable (`passiv_elem`, and per-region at
@@ -149,15 +149,61 @@ Measured on the two control fixtures, over the whole allowed set
 | Br | 2.79 Å | 2.069 Å | **98 / 70** |
 | I | 3.06 Å | 1.790 Å | **98 / 70** |
 
-So on a plain silicon slab with chlorine passivation, the distance test alone would propose ~98
-spurious bonds. Every one of them is rejected by test 4 (hosts 4.591 Å apart against a 4.03 Å cap)
-**and** independently by test 5 (facing 0.413 against a 0.5 floor) — both of which are purely
-geometric and therefore *element-independent*, which is exactly why they hold as the terminator gets
-bulkier.
+So on a plain silicon slab with chlorine passivation, **the distance test alone would propose ~98
+spurious bonds**. Both remaining tests reject every one of them, and both are purely geometric and
+therefore element-independent — which is why they keep working as the terminator gets bulkier.
 
 **Do not "simplify" this criterion to the distance test.** For H and F that simplification looks
 harmless and passes every hydrogen test; for Cl/Br/I it fuses a hundred surface atom pairs on an
 ordinary slab. The control tests run over all five passivants for this reason.
+
+**Which one carries it, measured.** `dump_is_facing_test_redundant` counts, over every fixture ×
+passivant combination, the pairs where test 5 is the *sole* rejector — tests 1, 3 and 4 all pass and
+only facing says no. That count is **zero everywhere**: test 4 (host separation) rejects all 98/110/93
+first. So today the facing test is redundant, and any claim that it is what prevents the halogen
+false positives is wrong.
+
+It is kept anyway, because the redundancy rests on a thin and accidental margin. The case where test 5
+*would* be the sole rejector is realizable: **two reconstructed dimer atoms at the unrelaxed
+second-neighbour distance**. Their terminators tilt 24° from the normal, so facing is 0.407 (below the
+0.5 floor) while the Cl–Cl separation is 3.840 − 2×2.02×sin24° = 2.20 Å — inside the clash threshold,
+with hosts at 3.840 Å, well inside the 4.032 Å cap. Tests 3 and 4 both pass; only facing objects.
+
+That configuration does not occur here only because dimerisation pulls those atoms out to 4.591 Å,
+**0.56 Å past the cap**. Raise `HOST_SEPARATION_FACTOR`, or change the dimer displacement constants,
+and test 5 becomes the only thing preventing ~100 spurious bonds. It is cheap insurance against a
+margin that comes from a displacement constant rather than from anything structural.
+
+A worked non-facing clash (from `dump_one_non_facing_clash`, flat slab, Cl) shows why a clash does
+*not* imply facing: an unpaired atom with a tetrahedral 54.6° dangler reaches 1.65 Å laterally toward
+a neighbouring **dimer** atom whose own terminator tilts only 24° and leans 0.82 Å. One side reaches,
+the other is merely in the way; the two chlorines meet at 2.217 Å with facing 0.813 on one side and
+0.413 on the other, and the dangling directions 78.7° apart.
+
+### The dihedral angle of the corner
+
+A concave (100)/(111) corner comes in two flavours, 70° apart, and the first fixture built for §10
+accidentally tested only one of them:
+
+- **Undercut, ~55° vacuum dihedral.** The wall leans *out* over the terrace. This is what
+  `undercut_corner_geometry` produces, because its removed region `{z ≥ Z_LOW} & {x+y+z ≤ cut}` moves
+  the solid boundary to *smaller* `x+y` as `z` grows. `dump_wall_profile` measures the lean directly:
+  min `x+y` of solid runs 29.87 → 29.87 → 27.16 → 27.15 climbing from z=12.22 to z=16.29.
+- **Ascending, ~125° vacuum dihedral.** The wall *recedes* as it rises. This is the profile a real
+  anisotropic etch of Si(100) gives, so it is the case that matters for actual devices, and the one
+  the original bug report almost certainly came from. `ascending_corner_geometry`, removed region
+  `{z ≥ Z_LOW} & {x+y−z ≤ cut}`.
+
+It is not obvious a priori that a criterion calibrated on one holds on the other — 70° is a lot, and
+test 5 (facing) is the sort of rule that could plausibly be angle-sensitive. It is not: measured
+across a full sweep of the ascending geometry, every offset yields rebonds (2–13 of them, more than
+the undercut case at some registries), zero unresolved clashes and zero over-coordination. The reason
+is that tests 4 and 5 are statements about the *local lattice geometry* of the two hosts and their
+dangling bonds, not about the macroscopic facet angle: in both flavours a terrace atom's spare
+dangling bond points at a wall atom's, and their separation is the same second-neighbour distance.
+
+Both angles now have permanent regression tests (§10). Do not delete either — a fixture that covers
+only the undercut leaves the physically realistic case unguarded.
 
 Test 5 is what distinguishes "two dangling bonds pointing at each other across a concave corner"
 from "two terminators brushing past each other on a flat face". On (111) all danglers are parallel to
@@ -232,9 +278,32 @@ off. Because the set is empty wherever reconstruction did not run, that cannot h
   atoms are dihydride by the user's choice. They must not be rebonded.
 - **D4 — terminators identified by absence from `PlacedAtomTracker`** (§6), not by element alone and
   not by a new flag. Exact, zero new state, and correct for halogen-bearing motifs.
-- **D5 — no new setting; the pass is part of `surf_recon`.** An earlier draft proposed a `rebond`
-  boolean (node-data field + appended pin + `MaterializeRegion` field) as an opt-out. It was
-  dropped, because its justification did not survive contact with the serde-default question.
+- **D5 (revised) — a stored-only `rebond` boolean, default on, no pin and no region field.**
+
+  *Originally decided the other way; reversed once a real use case appeared.* The first draft
+  proposed the option as a compatibility opt-out, that justification proved vacuous, and the option
+  was dropped. It came back for a different and much better reason: **Lukas needs to A/B the fix
+  interactively to review the chemistry**, and toggling it is the only way to isolate this one effect
+  with everything else about the reconstruction held identical.
+
+  Three things make the revised version cheap where the original was not:
+
+  - **No `MaterializeRegion` field.** That was the expensive half — a permanent public record schema
+    addition — and a toggle does not need it. The flag is node-level; it still follows `surf_recon`
+    per region implicitly, because the unpaired set it consumes is already region-resolved.
+  - **No pin.** A stored-only property, exactly like `parameter_element_value_definition`. That
+    removes the positional-argument question entirely, and it is still settable from the text format
+    and the CLI, so it can be toggled without the GUI.
+  - **The serde-default dilemma evaporated.** Rebonding has never shipped disabled, so no file
+    predates it and there is no old-vs-new behaviour fork. `default_true` on both the serde default
+    and the node creator is uncontroversial.
+
+  Rejected alternative: overloading an existing boolean such as `rm_unbonded`. Beyond the obvious
+  dishonesty of a mislabelled checkbox, it would have **confounded the very measurement it was for** —
+  turning off `rm_unbonded` also leaves lone atoms in the structure, so the A/B would differ in two
+  ways at once.
+
+  The original reasoning, kept because it is why the *first* attempt failed:
 
   Both existing `materialize` settings pick their serde default explicitly to keep old files
   behaving as before — `remove_unbonded_atoms` is `#[serde(default = "default_true")]` *"to preserve
@@ -281,7 +350,11 @@ implementation by construction.
   Si–Si bonds at the unrelaxed ~3.84 Å separation. Finds 0 today. (A same-layer Si–Si bond is an
   exact discriminator: the lattice has none, so every one was added by reconstruction — dimers pulled
   in to 2.34 Å, rebonds left at 3.84 Å per D6.)
-- `halogen_passivant_clash_also_resolved` — same corner with Cl (guards D2's scaling).
+- `halogen_passivant_clash_also_resolved` — same corner over the whole passivant set.
+- `ascending_corner_leaves_no_terminator_clash`, `ascending_corner_creates_rebonds`,
+  `ascending_corner_rebonding_is_coordination_neutral` — the **obtuse** (~125°) corner, the profile a
+  real anisotropic etch produces. Same three assertions, 9 rebonds, on a geometry whose dihedral is
+  70° away from the undercut fixture. See the angle discussion in §5.
 
 **Green now, and must stay green:**
 
@@ -358,9 +431,9 @@ exact geometry being claimed. Land it as its own commit — it churns
 
 ## 13. Surface area (D5)
 
-Because there is no new setting, the change is confined to `atomcad-crystolecule` plus one
-documentation line. No new pin, no node-data field, no `MaterializeRegion` field, no FRB regen, no
-Flutter work, no serde-default question, no `.cnnd` version bump.
+The pass itself is confined to `atomcad-crystolecule`. The `rebond` toggle (D5, revised) adds a
+stored-only property on top of it. Still **no pin, no `MaterializeRegion` field, and no `.cnnd`
+version bump** — those were the expensive, permanent parts and none is needed for a toggle.
 
 | layer | change |
 |---|---|
@@ -369,6 +442,10 @@ Flutter work, no serde-default question, no `.cnnd` version bump.
 | `lattice_fill/surface_reconstruction.rs` | `reconstruct_surface` returns `SurfaceReconstructionOutcome` (§7) |
 | `lattice_fill/fill_algorithm.rs` | call the pass after `hydrogen_passivate`; feed it the unpaired set |
 | `LatticeFillStatistics` | `concave_rebonds: i32` |
+| `LatticeFillOptions` | `rebond_concave_clashes: bool` + inherited in `SettingsResolver::resolve_at` |
+| `MaterializeData` / `APIMaterializeData` | same field, `#[serde(default = "default_true")]`, creator `true` |
+| `materialize` text format | `rebond` in `get`/`set_text_properties` — this is what makes it CLI-settable |
+| FRB + Flutter | codegen, then a `Rebond Concave Corners` checkbox beside `Invert Phase` |
 | Reference guide | one paragraph under `surf_recon` in `doc/reference_guide/nodes/atomic.md` — the behaviour is user-visible even though no control is |
 
 Deferred, not part of this change: a non-blocking `ValidationError::warning()` on `materialize`
