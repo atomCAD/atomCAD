@@ -1235,3 +1235,48 @@ fn dump_is_facing_test_redundant() {
         }
     }
 }
+
+/// Scaling check for the rebonding pass. Materializes the same corner at
+/// several sizes and lets the built-in `Timer`s print, so the pass can be
+/// compared against the other pipeline phases and against linear growth.
+#[test]
+#[ignore]
+fn scaling_of_the_rebond_pass() {
+    for cells in [6.0_f64, 12.0, 18.0, 24.0] {
+        let l = cells * SI_A;
+        let h = (cells / 2.0).round() * SI_A;
+        let z_low = ((cells / 2.0).round() - 1.0) * SI_A;
+        let cut = 0.7 * l - z_low;
+        let third = cut / 3.0;
+        let slab = axis_aligned_box(DVec3::ZERO, DVec3::new(l, l, h));
+        let removed = GeoNode::intersection_3d(vec![
+            GeoNode::half_space(DVec3::new(0.0, 0.0, -1.0), DVec3::new(0.0, 0.0, z_low)),
+            GeoNode::half_space(
+                DVec3::new(1.0, 1.0, -1.0).normalize(),
+                DVec3::new(third, third, -third),
+            ),
+        ]);
+        let geometry = GeoNode::difference_3d(Box::new(slab), Box::new(removed));
+
+        let config = LatticeFillConfig {
+            unit_cell: cubic_cell(SI_A),
+            motif: silicon_motif(),
+            parameter_element_values: HashMap::new(),
+            geometry,
+            motif_offset: DVec3::ZERO,
+            regions: Vec::new(),
+        };
+        let margin = 6.0;
+        let region = DAABox::new(
+            DVec3::splat(-margin),
+            DVec3::new(l + margin, l + margin, h + margin),
+        );
+        println!("\n##### {cells} cells #####");
+        let result = fill_lattice(&config, &options(true, 1), &region);
+        println!(
+            "##### atoms {} rebonds {} #####",
+            result.atomic_structure.get_num_of_atoms(),
+            rebond_count(&result.atomic_structure)
+        );
+    }
+}
