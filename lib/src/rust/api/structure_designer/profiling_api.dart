@@ -6,7 +6,8 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `ns_to_ms`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// The most recent refresh, never coalesced — what the always-on status strip
 /// shows. `None` before the first refresh of the session.
@@ -18,6 +19,222 @@ APIRefreshProfile? getLastRefreshProfile() => RustLib.instance.api
 /// than flushing the interesting refreshes out of the ring (D6).
 List<APIRefreshProfile> getRefreshProfileHistory() => RustLib.instance.api
     .crateApiStructureDesignerProfilingApiGetRefreshProfileHistory();
+
+/// Whether the opt-in per-node profiler is currently armed. Session state, not
+/// a persisted preference: leaving it on across sessions would silently skew
+/// later measurements (D2).
+bool getEvalProfilingEnabled() => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiGetEvalProfilingEnabled();
+
+/// Arms or disarms the per-node profiler. Takes effect on the next evaluation
+/// pass; the previously collected table stays readable until another profiled
+/// pass replaces it.
+void setEvalProfilingEnabled({required bool enabled}) => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiSetEvalProfilingEnabled(
+        enabled: enabled);
+
+/// The most recent **profiled** pass's per-node table — read, never drained
+/// (D6). `None` until a pass has run with profiling armed.
+///
+/// Deliberately not "the last refresh's": an unrelated lightweight tick, or a
+/// refresh taken after the toggle went off, must not blank the panel.
+APIEvalProfile? getLastEvalProfile() => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiGetLastEvalProfile();
+
+/// Arms the profiler and forces one **full** refresh, so successive readings
+/// are comparable (D8b).
+///
+/// Without it the panel shows whatever partial refresh happened to run last,
+/// and two measurements taken a minute apart measure different amounts of
+/// work. The toggle is left **on** afterwards rather than restored, so the
+/// *View* menu keeps telling the truth about what the next refresh will do.
+void profileFullRefresh() => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiProfileFullRefresh();
+
+/// Flutter-facing mirror of [`CsgCacheDelta`].
+class APICsgCacheCounts {
+  final BigInt meshHits;
+  final BigInt meshMisses;
+  final BigInt sketchHits;
+  final BigInt sketchMisses;
+
+  const APICsgCacheCounts({
+    required this.meshHits,
+    required this.meshMisses,
+    required this.sketchHits,
+    required this.sketchMisses,
+  });
+
+  @override
+  int get hashCode =>
+      meshHits.hashCode ^
+      meshMisses.hashCode ^
+      sketchHits.hashCode ^
+      sketchMisses.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APICsgCacheCounts &&
+          runtimeType == other.runtimeType &&
+          meshHits == other.meshHits &&
+          meshMisses == other.meshMisses &&
+          sketchHits == other.sketchHits &&
+          sketchMisses == other.sketchMisses;
+}
+
+/// The per-node breakdown of one profiled evaluation pass.
+class APIEvalProfile {
+  final BigInt totalEvaluations;
+
+  /// Summed self time over every record — the figure to compare against the
+  /// refresh's `evalMs` phase.
+  final double totalSelfMs;
+  final List<APINodeProfileRecord> byNode;
+  final List<APINodeTypeProfileRecord> byNodeType;
+
+  const APIEvalProfile({
+    required this.totalEvaluations,
+    required this.totalSelfMs,
+    required this.byNode,
+    required this.byNodeType,
+  });
+
+  @override
+  int get hashCode =>
+      totalEvaluations.hashCode ^
+      totalSelfMs.hashCode ^
+      byNode.hashCode ^
+      byNodeType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIEvalProfile &&
+          runtimeType == other.runtimeType &&
+          totalEvaluations == other.totalEvaluations &&
+          totalSelfMs == other.totalSelfMs &&
+          byNode == other.byNode &&
+          byNodeType == other.byNodeType;
+}
+
+/// One row of the profiler panel's **By node** table: an aggregate over every
+/// evaluation of one node in one home network during one pass.
+///
+/// There is deliberately **no `Lookups` column here**. Lookups (requests) and
+/// evaluations are equal only until the evaluation memo lands, and a column
+/// that quietly changes meaning is how a regression hides — so Phase 3 adds
+/// `lookups` and `wasted` as new fields alongside this one rather than
+/// re-interpreting `evaluations` (D8b).
+class APINodeProfileRecord {
+  /// Human-readable address: `"main/fold#12/add#3 (mysum)"`.
+  final String label;
+  final String nodeTypeName;
+
+  /// Click-to-jump target — the network the node lives in. For a node inside
+  /// a custom network this is that network, not the one being profiled.
+  final String hostNetwork;
+
+  /// Click-to-jump target — the HOF-body chain within `host_network`.
+  final Uint64List scopePath;
+
+  /// Click-to-jump target — the node.
+  final BigInt nodeId;
+
+  /// False only for a lazily-evaluated HOF body whose address could not be
+  /// pinned down (see `NodeLocation::navigable`). Such a row is still
+  /// measured and still rolls up by type; the panel just renders it
+  /// non-clickable rather than offering a jump that lands nowhere.
+  final bool navigable;
+  final BigInt evaluations;
+
+  /// Time in this node's own `eval`, with its dependencies' time subtracted.
+  final double selfMs;
+
+  /// Wall time including everything this node pulled. A custom-node instance
+  /// legitimately shows ~zero `self_ms` against a large `total_ms`: it
+  /// delegates to its network's return node.
+  final double totalMs;
+
+  const APINodeProfileRecord({
+    required this.label,
+    required this.nodeTypeName,
+    required this.hostNetwork,
+    required this.scopePath,
+    required this.nodeId,
+    required this.navigable,
+    required this.evaluations,
+    required this.selfMs,
+    required this.totalMs,
+  });
+
+  @override
+  int get hashCode =>
+      label.hashCode ^
+      nodeTypeName.hashCode ^
+      hostNetwork.hashCode ^
+      scopePath.hashCode ^
+      nodeId.hashCode ^
+      navigable.hashCode ^
+      evaluations.hashCode ^
+      selfMs.hashCode ^
+      totalMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeProfileRecord &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          nodeTypeName == other.nodeTypeName &&
+          hostNetwork == other.hostNetwork &&
+          scopePath == other.scopePath &&
+          nodeId == other.nodeId &&
+          navigable == other.navigable &&
+          evaluations == other.evaluations &&
+          selfMs == other.selfMs &&
+          totalMs == other.totalMs;
+}
+
+/// One row of the **By node type** table — a roll-up of every
+/// [`APINodeProfileRecord`] sharing a type name. Both tables come from one map,
+/// so their totals agree by construction.
+class APINodeTypeProfileRecord {
+  final String nodeTypeName;
+
+  /// How many distinct nodes of this type were evaluated.
+  final BigInt nodes;
+  final BigInt evaluations;
+  final double selfMs;
+  final double totalMs;
+
+  const APINodeTypeProfileRecord({
+    required this.nodeTypeName,
+    required this.nodes,
+    required this.evaluations,
+    required this.selfMs,
+    required this.totalMs,
+  });
+
+  @override
+  int get hashCode =>
+      nodeTypeName.hashCode ^
+      nodes.hashCode ^
+      evaluations.hashCode ^
+      selfMs.hashCode ^
+      totalMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APINodeTypeProfileRecord &&
+          runtimeType == other.runtimeType &&
+          nodeTypeName == other.nodeTypeName &&
+          nodes == other.nodes &&
+          evaluations == other.evaluations &&
+          selfMs == other.selfMs &&
+          totalMs == other.totalMs;
+}
 
 /// Flutter-facing mirror of [`RefreshMode`]. Which of the three refresh paths
 /// produced a profile row — the tag that makes a 40 ms drag tick and a 1.8 s
@@ -70,6 +287,18 @@ class APIRefreshProfile {
   /// Worst `total_ms` among the refreshes coalesced into this row.
   final double maxTotalMs;
 
+  /// CSG conversion-cache activity this refresh caused (D12). Shown *beside*
+  /// the phase totals, never folded into node time — the time itself is
+  /// charged to the node that triggered the conversion, and what these
+  /// counters add is why two otherwise identical refreshes differ.
+  final APICsgCacheCounts csgCache;
+
+  /// Whether this refresh's evaluation pass was profiled per node. The table
+  /// itself is fetched separately by [`get_last_eval_profile`] — a history
+  /// row carries the flag only, so listing 20 rows does not marshal 20
+  /// tables across the FFI boundary.
+  final bool hasNodeStats;
+
   const APIRefreshProfile({
     required this.mode,
     this.evalMs,
@@ -81,6 +310,8 @@ class APIRefreshProfile {
     required this.totalMs,
     required this.count,
     required this.maxTotalMs,
+    required this.csgCache,
+    required this.hasNodeStats,
   });
 
   @override
@@ -94,7 +325,9 @@ class APIRefreshProfile {
       backgroundMs.hashCode ^
       totalMs.hashCode ^
       count.hashCode ^
-      maxTotalMs.hashCode;
+      maxTotalMs.hashCode ^
+      csgCache.hashCode ^
+      hasNodeStats.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -110,5 +343,7 @@ class APIRefreshProfile {
           backgroundMs == other.backgroundMs &&
           totalMs == other.totalMs &&
           count == other.count &&
-          maxTotalMs == other.maxTotalMs;
+          maxTotalMs == other.maxTotalMs &&
+          csgCache == other.csgCache &&
+          hasNodeStats == other.hasNodeStats;
 }

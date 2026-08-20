@@ -331,6 +331,19 @@ class StructureDesignerModel extends ChangeNotifier {
   /// toolbar toggle / `Ctrl+`` ` keyboard shortcut flips this.
   bool consolePanelVisible = false;
 
+  /// Whether the Profiler panel is currently visible (docked at bottom,
+  /// above the always-on status strip). Toggled from the *View* menu.
+  /// See `doc/design_eval_profiling.md` (D8b).
+  bool profilerPanelVisible = false;
+
+  /// Whether the **opt-in** per-node evaluation profiler is armed. Mirrors the
+  /// kernel flag; phase timing has no off state and is not affected.
+  ///
+  /// Session state, deliberately not a persisted preference: it costs two
+  /// clock reads and a map update per node evaluation, and silently staying on
+  /// across sessions would skew later measurements (D1/D2).
+  bool evalProfilingEnabled = false;
+
   /// Latest refresh phase breakdown, for the always-on status strip
   /// (`doc/design_eval_profiling.md` D8a).
   ///
@@ -3401,6 +3414,35 @@ class StructureDesignerModel extends ChangeNotifier {
       unreadPrintLogCount = 0;
     }
     notifyListeners();
+  }
+
+  /// Toggle the Profiler panel's docked-bottom visibility.
+  ///
+  /// Opening the panel does **not** arm the per-node profiler: the Phases tab
+  /// is fed by the always-on phase clock and is useful on its own, and arming
+  /// a profiler as a side effect of looking at one would tax every subsequent
+  /// refresh without the user having asked (D1).
+  void toggleProfilerPanel() {
+    profilerPanelVisible = !profilerPanelVisible;
+    notifyListeners();
+  }
+
+  /// Arms or disarms the per-node profiler. The previously collected table
+  /// stays readable afterwards — a profile is a snapshot, and disarming should
+  /// stop the panel updating rather than blank it.
+  void setEvalProfilingEnabled(bool enabled) {
+    profiling_api.setEvalProfilingEnabled(enabled: enabled);
+    evalProfilingEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Arms the profiler and forces one **full** refresh, so two readings taken
+  /// a minute apart measure the same amount of work (D8b). Without it the
+  /// panel shows whatever partial refresh happened to run last.
+  void profileFullRefresh() {
+    profiling_api.profileFullRefresh();
+    evalProfilingEnabled = true;
+    refreshFromKernel();
   }
 
   // Facet Shell API wrapper methods. These act on the node shown in the

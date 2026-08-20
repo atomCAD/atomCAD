@@ -16,6 +16,7 @@ We will discuss the different parts of the UI in detail. The parts are:
 - Display Preferences Panel
 - Camera Control Panel
 - Refresh status strip
+- Profiler panel
 - Preferences Dialog (Edit > Preferences)
 
 ## 3D Viewport
@@ -304,6 +305,109 @@ The tag in brackets says which kind of refresh you are looking at:
 During a drag the strip updates about five times a second rather than on every mouse move, so watching it costs nothing.
 
 There is nothing to configure and nothing to switch on; the strip is simply there. It is a quick way to answer "why did that feel slow?" — for instance, to see whether a sluggish edit is spending its time evaluating the network or drawing an unusually heavy structure.
+
+## Profiler panel
+
+Where the [refresh status strip](#refresh-status-strip) says *how long* the last
+refresh took, the **Profiler panel** says *what it was spent on*. It is a
+docked, collapsible bottom panel, hidden by default; open it from
+*View > Show Profiler* and close it from the same entry or the panel's `×`.
+
+The panel has three tabs, and only the first one works without switching
+anything on.
+
+### Phases
+
+A table of the last ~20 refreshes, newest first, with each one broken into its
+phases in milliseconds: **Eval**, **Scene** (scene-dependent node data),
+**Gadget**, **Tess**, **GPU** and **Bkgnd** (the background grid/axes rebuild),
+against the refresh's **Total**.
+
+Two columns need a word of explanation:
+
+- **N** — a run of consecutive *Lightweight* refreshes is folded into a single
+  row, because one gadget drag emits hundreds of them and they would otherwise
+  push every interesting refresh out of the table before you could look at it.
+  `N` says how many ticks the row covers, and its timings are their means.
+- **CSG hit/lookup** — how many geometry-conversion cache lookups the refresh
+  made and how many of them hit. The *time* is already charged to the node that
+  triggered the conversion; the counter is here because it explains why two
+  otherwise identical refreshes differ.
+
+As on the strip, a Lightweight refresh shows `—` for **Eval** rather than
+`0.00`: it runs no evaluation pass at all, which is not the same thing as an
+instantaneous one.
+
+### Turning per-node measurement on
+
+The other two tabs need the **Per-node** switch in the panel header. It is off
+by default and deliberately not remembered between sessions: per-node
+measurement costs two clock reads and a table update on *every node
+evaluation*, which is nothing on a normal graph and very much something inside a
+`map` body over a hundred thousand elements. A profiler that inflates the
+numbers it reports is worse than none, so switch it off when you are done
+measuring. (Phase timing, and therefore the Phases tab and the status strip, has
+no off switch and no measurable cost.)
+
+The **Profile full refresh** button next to it arms the switch and forces a
+*Full* refresh. Use it whenever you want two readings you can compare: without
+it the panel shows whatever partial refresh happened to run last, and two
+measurements taken minutes apart may have evaluated quite different amounts of
+the network.
+
+The tables are a snapshot. Switching Per-node back off — or doing anything else
+that causes an ordinary refresh — leaves the last measured tables on screen
+rather than blanking them.
+
+### By node type
+
+`Type | Nodes | Evals | Self | Total | % self`, sorted by self time. This is
+the first place to look: it answers "which *kind* of node is this design
+spending its time in", and it is usually a much shorter list than the per-node
+one.
+
+- **Self** is the time inside that node's own evaluation, with the time spent
+  evaluating its inputs subtracted.
+- **Total** includes everything the node pulled from upstream.
+- **Evals** counts evaluations, not nodes — a node that several other nodes
+  depend on is evaluated once per consumer, so this number is routinely larger
+  than **Nodes**.
+
+### By node
+
+`Node | Evals | Self | Total`, sorted by self time, one row per node. The node
+is named by its full address — `main/fold#12/add#3 (mysum)` is the `add` node
+with id 3, custom-named `mysum`, inside the body of the `fold` with id 12 in the
+network `main`. **Click a row to jump to that node on the canvas**, the same way
+*Find Usages* and the error picker jump.
+
+The address is relative to the network the node actually lives in, so the jump
+crosses network boundaries: a row reading `geo.1-precursor_proxy/materialize#8`
+opens the `geo.1-precursor_proxy` network and selects node 8 there. Note what
+such a row means — it is **one row for the node itself**, summed over every
+instance of that subnetwork and every time each was evaluated. A high **Evals**
+count on it is the interesting signal: the same subnetwork cone is being
+recomputed once per consumer.
+
+Two readings in this table look like bugs and are not:
+
+- **A custom-node instance shows almost no self time against a large total.**
+  That is correct and is the useful reading: the instance itself only delegates
+  to its network's return node, so its *total* is what the subnetwork cost.
+- **A `map` shows a near-zero total, with the time appearing under the `collect`
+  that consumed it.** `map` is lazy — its body runs when something pulls
+  elements out of the stream, so the work is attributed to the puller. To read
+  the cost of a `map` body, look at the body's own rows.
+
+A greyed-out, non-clickable row is rare: it is a node inside a lazily evaluated
+`map`/`filter` body whose position could not be pinned down to a single network.
+It is measured like any other and still rolls up in the By-node-type table;
+there is simply no address to jump to.
+
+### What this panel is not
+
+It measures at node boundaries, so it will tell you *which* node is slow but not
+which line inside it. For that, an external profiler is still the right tool.
 
 ## Node Properties Panel
 

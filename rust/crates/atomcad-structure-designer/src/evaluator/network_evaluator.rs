@@ -6,6 +6,7 @@ use std::time::SystemTime;
 use crate::common_constants::ARRAY_DISPLAY_CAP;
 use crate::data_type::DataType;
 use crate::eval_errors::{ErrorAddress, ErrorOrigin};
+use crate::evaluator::eval_profiler;
 use crate::evaluator::network_result::NetworkResult;
 use crate::evaluator::network_result::{error_in_input, error_in_input_chained};
 use crate::evaluator::zone_closure::{build_node_function_closure, run_closure_once};
@@ -274,6 +275,74 @@ fn eval_frame_key(network_stack: &[NetworkStackElement], node_id: u64) -> EvalFr
         (frame.node_network as *const NodeNetwork as usize).hash(&mut hasher);
         frame.node_id.hash(&mut hasher);
     }
+    node_id.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Aggregation key of the per-node profiler's "By node" table — "which node is
+/// this?", which is a **different question** from the re-entrancy guard's
+/// "which live frame chain is this?" ([`EvalFrameKey`]) and from Phase 3's
+/// "which evaluation environment is this?" (`doc/design_eval_profiling.md` D9).
+///
+/// Read off `network_stack.last()` via [`frame_identity`]: the top frame always
+/// names the network the node actually lives in, which is unambiguous under
+/// stack excursions and per-network id collisions alike. Two *instances* of one
+/// custom network therefore aggregate into a single row — that is the point:
+/// the table answers "how expensive is this node", not "how expensive was this
+/// call site".
+pub type NodeProfileKey = u64;
+
+/// Identity of the frame at the top of `network_stack`, split by frame kind so
+/// that **no body frame hashes a network address** (`doc/design_eval_profiling.md`
+/// D9's frame-identity table).
+///
+/// - *registry-owned frame* (the root, or a custom-network instance entry): the
+///   network address. Those networks are borrowed immutably from the registry,
+///   which outlives the pass, so the address is pinned and stable by
+///   construction — and it is the only identity available. The frame's own
+///   `node_id` is deliberately **not** part of its identity, which is what
+///   makes two instances of one custom network share a row.
+/// - *zone body frame*: `(identity of the frame below it, owner node id)`. A
+///   body needs no address — networks are immutable during a pass and a
+///   synthesized body is a pure function of its owner node — and the enclosing
+///   frame is required because `node_id` counters are per-network, so two HOFs
+///   in two different networks can own bodies with the same id.
+///
+/// Dropping the address from body frames is not a mitigation but a removal:
+/// both kinds of body network *do* get dropped mid-pass (`zone_closure.rs`
+/// pushes a locally constructed body network; closure bodies are `Arc`s), and
+/// this key is **retained** past the life of its frames, unlike
+/// [`eval_frame_key`]'s. That is precisely the argument `eval_frame_key`'s doc
+/// comment makes for its own address hashing ("a spurious collision needs two
+/// **live** frames") and the one claim this key may not borrow.
+///
+/// One residual ambiguity is accepted rather than engineered away: a lazy
+/// walker calls `run_closure_once` with an **empty** enclosing stack, so the
+/// pair degenerates to `owner_node_id` alone — which `ZoneClosure` documents as
+/// not unique across networks (`doc/design_closures.md`). Two lazily-driven
+/// bodies whose owners share a node id in two different networks merge into one
+/// table row. That costs a cosmetically wrong row in a rare case.
+pub fn frame_identity(network_stack: &[NetworkStackElement]) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let body_start = match network_stack.iter().rposition(|frame| !frame.is_zone_body) {
+        Some(index) => {
+            (network_stack[index].node_network as *const NodeNetwork as usize).hash(&mut hasher);
+            index + 1
+        }
+        None => 0,
+    };
+    for frame in &network_stack[body_start..] {
+        frame.node_id.hash(&mut hasher);
+    }
+    hasher.finish()
+}
+
+/// [`NodeProfileKey`] for `node_id` evaluated against `network_stack`.
+pub fn node_profile_key(network_stack: &[NetworkStackElement], node_id: u64) -> NodeProfileKey {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    frame_identity(network_stack).hash(&mut hasher);
     node_id.hash(&mut hasher);
     hasher.finish()
 }
@@ -657,6 +726,14 @@ impl NetworkEvaluator {
         if !root_network.valid {
             return NodeSceneData::new(NodeOutput::None);
         }
+
+        // Name the pass's root network for the per-node profiler's record
+        // locations (`doc/design_eval_profiling.md` D5). Read here rather than
+        // off the network stack because the lazy walkers run bodies against a
+        // body-only stack that has no root frame. A no-op when profiling is
+        // off, and idempotent across the pass's several displayed roots — a
+        // refresh evaluates exactly one active network.
+        eval_profiler::note_root_network(network_name);
 
         // Reset per-call scratch fields — `generate_scene` is invoked once per
         // displayed node within a single shared `context`, but each
@@ -1909,6 +1986,13 @@ impl NetworkEvaluator {
                 .insert(context.node_ref(node_id), msg.clone());
             return EvalOutput::single(NetworkResult::Error(msg));
         }
+        // Per-node profiler frame (`doc/design_eval_profiling.md` D3/D4).
+        // `None` — and therefore free — unless profiling is switched on. It
+        // opens *after* the two gates above, which return without dispatching
+        // to `eval`, and is released by `Drop` on every path below, including
+        // the `Unit`-skip and the two custom-network bails.
+        let _profiler_frame =
+            eval_profiler::begin(network_stack, node_id, &context.eval_scope_path);
         {
             let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
@@ -2165,6 +2249,13 @@ impl NetworkEvaluator {
                 .insert(context.node_ref(node_id), msg.clone());
             return NetworkResult::Error(msg);
         }
+        // Per-node profiler frame — see the matching comment in
+        // `evaluate_all_outputs`. It covers the `-1` function-pin arm too: that
+        // arm runs no `eval`, but it does build a closure and pre-evaluate its
+        // captures, and charging that to nothing would leave a hole in the
+        // table that makes the numbers stop adding up.
+        let _profiler_frame =
+            eval_profiler::begin(network_stack, node_id, &context.eval_scope_path);
         {
             // Function pin (`output_pin_index == -1`): synthesize a `Function`
             // value from this node viewed as a function of its *unconnected* inputs,

@@ -9,6 +9,7 @@ Network evaluation engine. Processes the node DAG to produce displayable output.
 | `network_evaluator.rs` | Main evaluator: traverses DAG, evaluates nodes, builds scene |
 | `network_result.rs` | `NetworkResult` enum: all possible node output values |
 | `iterator_walker.rs` | `Walker` tree: lazy stream runtime for `Iter[T]` (carried by `NetworkResult::Iterator`) |
+| `eval_profiler.rs` | Opt-in per-node evaluation profiler: `EvalProfile` (live accumulator *and* finished report), the RAII `NodeEvalGuard`, and the pass thread-local `with_eval_context` installs and takes back |
 | `zone_closure.rs` | `ZoneClosure` bundle (incl. `pre_supplied_args` for partial application — see `doc/design_currying.md`) + the shared per-element `run_closure_once` / `build_inline_closure` / `build_node_function_closure` (powers the HOF zone bodies, the `closure` node, the function pin, the `apply` node's recursive consumption loop, and the `NetworkResult::Function` value) |
 
 ## NetworkEvaluator
@@ -47,6 +48,53 @@ Per-pass scratch state threaded through every `evaluate*` call. Notable fields:
 - **`print_buffer: Vec<PrintLogEntry>`** — appended to by the `print` node's `eval`; drained by the orchestrator (`StructureDesigner::with_eval_context`) into `StructureDesigner.print_log` at end-of-pass.
 
 In production code paths inside `crates/atomcad-structure-designer/src/`, the only `NetworkEvaluationContext::new()` caller is `StructureDesigner::with_eval_context` (the per-pass orchestrator). The eager HOFs (`fold`/`foreach`) build their per-iteration body context via `fresh_inner_for_eager_body` (a struct literal, outside the `::new()` audit) and `drain_inner_context` it back; the lazy zone walkers reuse the caller's context. The old `FunctionEvaluator::evaluate` inner-body `::new()` site was removed in closures Phase 2. Tests are exempt; reviewers grepping for `NetworkEvaluationContext::new(` outside `with_eval_context` have a one-shot audit.
+
+## Per-pass state: the thread-local rule
+
+Two hooks in `evaluate` / `evaluate_all_outputs` open a profiler frame — one
+`eval_profiler::begin(...)` call each, right after the poison and re-entrancy
+gates (`doc/design_eval_profiling.md` D3/D4). Two invariants around them are
+easy to break and silent when broken:
+
+- **The frame is released by `Drop`, never by hand.** Both functions have many
+  early exits — the poison check, the cycle guard, the central `Unit`-skip rule,
+  the invalid-network and missing-return-node bails — and a leaked accumulator
+  frame corrupts *every ancestor's* self time without any error. This is the
+  opposite trade from the `eval_in_progress` bracket sitting next to it, whose
+  manual cleanup is deliberate (a leak there produces a caught error). The guard
+  is a plain `Instant` + `u32` and is **not constructed at all** when profiling
+  is off, so it respects the STACK-SIZE WARNING on `evaluate_all_outputs`; keep
+  it that way — no borrows, no closure wrapper, no `Box`.
+- **Per-pass state belongs either in a pass thread-local or in *both*
+  `fresh_inner_for_eager_body` and `drain_inner_context` — never on
+  `NetworkEvaluationContext` alone.** The eager HOFs (`apply`, `fold`,
+  `foreach`) evaluate their bodies against a `fresh_inner_for_eager_body`
+  context whose `drain_inner_context` merges **`print_buffer` and nothing
+  else**. State parked on the context is therefore silently dropped for every
+  eager-HOF body. For the profiler that would not have produced a missing row
+  but a *wrong* one: the body's time would never reach the HOF's child
+  accumulator, so `fold` would be charged its entire body cost as **self** time,
+  and the body's own records would vanish. The profiler is in a thread-local for
+  exactly this reason, which also makes "no call site can forget it" true rather
+  than merely intended — a new eager-body site cannot drop what it never held.
+
+`StructureDesigner::with_eval_context` is the single owner of the profiler's
+lifetime: it installs a fresh `EvalProfile` at the start of a pass and takes it
+back at the end, at the same seam as the existing `print_buffer` drain and with
+the same "regardless of how the closure returned" discipline.
+
+**Three identity questions, three functions, none interchangeable.**
+`eval_frame_key` answers "is this frame chain already live?" for the re-entrancy
+guard; its key exists only while its frames do, which is what licenses it to
+hash network *addresses*. `frame_identity` / `node_profile_key` answer "which
+node is this?" for the profiler's aggregation, and their key is **retained** past
+the life of its frames — so a body frame is identified by
+`(identity of the frame below, owner node id)` and never by an address, because
+body networks get dropped mid-pass and an address can be reused. A registry
+frame's own `node_id` is deliberately not part of its identity, which is what
+makes two instances of one custom network aggregate into one row. Phase 3 of the
+design adds a third sibling for the evaluation *environment*; do not merge any
+of them.
 
 ## Central skip rule (Unit-returning nodes)
 

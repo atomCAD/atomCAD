@@ -16,12 +16,15 @@ use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
 use super::node_type_registry::{NodeTypeRegistry, UserTypeKind, allowed_in_zone_body};
 use super::preferences::load_preferences;
-use super::refresh_profile::{RefreshProfile, RefreshProfileHistory, RefreshSubPhases, elapsed_ms};
+use super::refresh_profile::{
+    CsgCacheDelta, RefreshProfile, RefreshProfileHistory, RefreshSubPhases, elapsed_ms,
+};
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
 use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
 use crate::data_type::DataType;
 use crate::displayed_node_refs::collect_displayed_node_refs;
+use crate::evaluator::eval_profiler::{self, EvalProfile};
 use crate::implicit_eval::ray_tracing::{raytrace_geometries, raytrace_geometry};
 use crate::node_data::CustomNodeData;
 use crate::node_data::DragDirection;
@@ -43,6 +46,7 @@ use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use std::time::Instant;
 
 /// A ray hit result associated with a specific node.
@@ -246,6 +250,23 @@ pub struct StructureDesigner {
     // drains — it. Consecutive lightweight rows coalesce so a gadget drag
     // cannot flush the interesting history (D6).
     pub refresh_profiles: RefreshProfileHistory,
+
+    // Opt-in per-node evaluation profiler (Phase 2 of
+    // `doc/design_eval_profiling.md`, D1/D2). A **runtime** flag rather than a
+    // cargo feature or a `debug_assertions` gate: `flutter run` loads the
+    // release DLL, so a compile-gated profiler would be invisible in the build
+    // the maintainer actually runs. Deliberately **not** a persisted
+    // preference either — it would silently stay on across sessions and skew
+    // later measurements. Same lifetime and plumbing as the Console panel's
+    // visibility flag.
+    pub eval_profiling_enabled: bool,
+
+    // The profile produced by the most recent `with_eval_context` pass, parked
+    // here so `refresh_full` / `refresh_partial` can fold it into the sub-phase
+    // report they return. Taken (not read) by the refresh paths, so a
+    // subsequent non-refresh pass (CLI, Execute) cannot re-report a stale
+    // table.
+    last_eval_profile: Option<Arc<EvalProfile>>,
 }
 
 impl Default for StructureDesigner {
@@ -291,6 +312,8 @@ impl StructureDesigner {
             eval_error_snapshots: HashMap::new(),
             pending_load_param_id_repairs: Vec::new(),
             refresh_profiles: RefreshProfileHistory::new(),
+            eval_profiling_enabled: false,
+            last_eval_profile: None,
         }
     }
 }
@@ -324,6 +347,12 @@ impl StructureDesigner {
             &mut NetworkEvaluationContext,
         ) -> R,
     ) -> R {
+        // Install the per-node profiler for the duration of this pass (D6).
+        // The thread-local, *not* the context, is the owner: an eager HOF body
+        // runs against a `fresh_inner_for_eager_body` context whose
+        // `drain_inner_context` merges only `print_buffer`, so context-parked
+        // state is silently lost for `fold` / `foreach` / `apply` bodies.
+        eval_profiler::install(self.eval_profiling_enabled.then(EvalProfile::default));
         let mut context = NetworkEvaluationContext::new();
         context.execute = execute;
         context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
@@ -337,9 +366,12 @@ impl StructureDesigner {
             &mut context,
         );
         // Drain regardless of how `f` returned — prints accumulated up to a
-        // mid-pass error are still worth showing to the user.
+        // mid-pass error are still worth showing to the user. The profiler is
+        // taken back at the same seam and under the same discipline: a pass
+        // that ended in an error still measured everything it got through.
         let entries = std::mem::take(&mut context.print_buffer);
         self.print_log.extend(entries);
+        self.last_eval_profile = eval_profiler::take().map(Arc::new);
         result
     }
 
@@ -1321,7 +1353,17 @@ impl StructureDesigner {
             }
         };
 
-        let sub_phases = match changes.mode {
+        // Drop any profile left by a non-refresh pass (CLI, Execute). Those
+        // also go through `with_eval_context`, and without this a partial
+        // refresh that turned out to need no evaluation would `take()` an
+        // Execute pass's table and report it as its own.
+        self.last_eval_profile = None;
+
+        // CSG conversion-cache activity caused by this refresh (D12). Measured
+        // around the whole dispatch so it covers every path that can convert.
+        let csg_before = self.network_evaluator.get_csg_cache_stats();
+
+        let mut sub_phases = match changes.mode {
             RefreshMode::Lightweight => {
                 // Lightweight refresh - only update gadget tessellation without re-evaluation
                 // The gadget is already active and should not be recreated
@@ -1341,6 +1383,8 @@ impl StructureDesigner {
                     eval_ms: None,
                     scene_dependent_ms,
                     gadget_ms: elapsed_ms(gadget_start),
+                    node_stats: None,
+                    csg_cache: CsgCacheDelta::default(),
                 }
             }
 
@@ -1364,6 +1408,9 @@ impl StructureDesigner {
         if !matches!(changes.mode, RefreshMode::Lightweight) {
             self.harvest_eval_error_snapshot(&node_network_name);
         }
+
+        let csg_after = self.network_evaluator.get_csg_cache_stats();
+        sub_phases.csg_cache = CsgCacheDelta::between(&csg_before, &csg_after);
 
         sub_phases
     }
@@ -1485,6 +1532,10 @@ impl StructureDesigner {
             eval_ms: Some(eval_ms),
             scene_dependent_ms,
             gadget_ms: elapsed_ms(gadget_start),
+            // Taken, not read: the next non-refresh pass must not be able to
+            // re-report this table.
+            node_stats: self.last_eval_profile.take(),
+            csg_cache: CsgCacheDelta::default(),
         }
     }
 
@@ -1733,6 +1784,10 @@ impl StructureDesigner {
             eval_ms: Some(eval_ms),
             scene_dependent_ms,
             gadget_ms: elapsed_ms(gadget_start),
+            // Taken, not read: the next non-refresh pass must not be able to
+            // re-report this table.
+            node_stats: self.last_eval_profile.take(),
+            csg_cache: CsgCacheDelta::default(),
         }
     }
 

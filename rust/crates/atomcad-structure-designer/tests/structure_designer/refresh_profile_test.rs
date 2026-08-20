@@ -45,6 +45,7 @@ fn row(mode: RefreshMode, total_ms: f64) -> RefreshProfile {
         },
         scene_dependent_ms: total_ms * 0.1,
         gadget_ms: total_ms * 0.1,
+        ..Default::default()
     };
     RefreshProfile::new(
         mode,

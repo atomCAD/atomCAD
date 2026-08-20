@@ -23,8 +23,10 @@
 //! Reports live here for the session only: nothing touches `.cnnd` or
 //! preferences, so there is no undo command and no file-format change.
 
+use crate::evaluator::eval_profiler::EvalProfile;
 use crate::structure_designer_changes::RefreshMode;
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// How many refresh rows the history ring retains (D6).
@@ -44,7 +46,7 @@ pub fn elapsed_ms(start: Instant) -> f64 {
 /// `with_eval_context`, and rendering that as `0.00` would read as "evaluation
 /// is free", which is the single most misleading thing this measurement could
 /// say (D6).
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct RefreshSubPhases {
     /// Time inside the displayed-roots evaluation pass, or `None` when the
     /// refresh ran no pass.
@@ -53,6 +55,48 @@ pub struct RefreshSubPhases {
     pub scene_dependent_ms: f64,
     /// Time spent rebuilding the gadget and its tessellatable.
     pub gadget_ms: f64,
+    /// Per-node evaluation breakdown, `Some` only when the opt-in profiler was
+    /// switched on for this pass (Phase 2, D1/D2). `Arc`-shared because the
+    /// history ring clones each row, and a table of ~10³ records should not be
+    /// deep-copied once per refresh.
+    pub node_stats: Option<Arc<EvalProfile>>,
+    /// CSG conversion-cache hits and misses **caused by this refresh** (D12).
+    /// Reported next to the phase totals rather than folded into node time:
+    /// the time itself is charged to the node that triggered the conversion,
+    /// and what the counters add is *why* two otherwise identical refreshes
+    /// differ.
+    pub csg_cache: CsgCacheDelta,
+}
+
+/// CSG conversion-cache activity over one refresh — the difference between two
+/// `NetworkEvaluator::get_csg_cache_stats` readings (D12).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CsgCacheDelta {
+    pub mesh_hits: u64,
+    pub mesh_misses: u64,
+    pub sketch_hits: u64,
+    pub sketch_misses: u64,
+}
+
+impl CsgCacheDelta {
+    /// `after - before`, saturating: the cache can be cleared mid-refresh,
+    /// which would otherwise underflow.
+    pub fn between(
+        before: &atomcad_geo_tree::csg_cache::CacheStats,
+        after: &atomcad_geo_tree::csg_cache::CacheStats,
+    ) -> Self {
+        Self {
+            mesh_hits: after.mesh_hits.saturating_sub(before.mesh_hits),
+            mesh_misses: after.mesh_misses.saturating_sub(before.mesh_misses),
+            sketch_hits: after.sketch_hits.saturating_sub(before.sketch_hits),
+            sketch_misses: after.sketch_misses.saturating_sub(before.sketch_misses),
+        }
+    }
+
+    /// Total lookups the refresh made.
+    pub fn lookups(&self) -> u64 {
+        self.mesh_hits + self.mesh_misses + self.sketch_hits + self.sketch_misses
+    }
 }
 
 impl RefreshSubPhases {
@@ -93,6 +137,12 @@ pub struct RefreshProfile {
     pub count: u32,
     /// Largest `total_ms` among the refreshes coalesced into this row.
     pub max_total_ms: f64,
+    /// Per-node breakdown of this refresh's evaluation pass, `Some` only when
+    /// the opt-in profiler was on. Never carried by a coalesced lightweight
+    /// row: a lightweight refresh runs no pass at all.
+    pub node_stats: Option<Arc<EvalProfile>>,
+    /// CSG conversion-cache hits/misses this refresh caused (D12).
+    pub csg_cache: CsgCacheDelta,
 }
 
 impl RefreshProfile {
@@ -116,6 +166,8 @@ impl RefreshProfile {
             total_ms,
             count: 1,
             max_total_ms: total_ms,
+            node_stats: sub_phases.node_stats,
+            csg_cache: sub_phases.csg_cache,
         }
     }
 
@@ -142,6 +194,16 @@ impl RefreshProfile {
         self.background_ms = merge_mean_opt(self.background_ms, other.background_ms, n);
         self.total_ms = merge_mean(self.total_ms, other.total_ms, n);
         self.max_total_ms = self.max_total_ms.max(other.max_total_ms);
+        // Cache counters are *sums*, not means: the question a coalesced drag
+        // row answers is "how many conversions did the whole drag cost", and a
+        // per-tick mean of a mostly-zero counter says nothing.
+        self.csg_cache.mesh_hits += other.csg_cache.mesh_hits;
+        self.csg_cache.mesh_misses += other.csg_cache.mesh_misses;
+        self.csg_cache.sketch_hits += other.csg_cache.sketch_hits;
+        self.csg_cache.sketch_misses += other.csg_cache.sketch_misses;
+        // `node_stats` is deliberately untouched: only lightweight rows
+        // coalesce and a lightweight refresh runs no evaluation pass, so
+        // neither side ever carries one.
     }
 }
 
@@ -177,6 +239,7 @@ fn merge_mean_opt(mean: Option<f64>, sample: Option<f64>, n: u32) -> Option<f64>
 pub struct RefreshProfileHistory {
     rows: VecDeque<RefreshProfile>,
     last: Option<RefreshProfile>,
+    last_node_stats: Option<Arc<EvalProfile>>,
 }
 
 impl RefreshProfileHistory {
@@ -198,7 +261,19 @@ impl RefreshProfileHistory {
                 self.rows.pop_front();
             }
         }
+        if profile.node_stats.is_some() {
+            self.last_node_stats = profile.node_stats.clone();
+        }
         self.last = Some(profile);
+    }
+
+    /// The most recent **profiled** pass's per-node table, which is not
+    /// necessarily the most recent refresh's: an unrelated lightweight tick
+    /// (or a refresh taken with the profiler switched off) must not blank the
+    /// panel. A profile is a snapshot, and it stays on screen until another
+    /// profiled pass replaces it.
+    pub fn last_node_stats(&self) -> Option<&Arc<EvalProfile>> {
+        self.last_node_stats.as_ref()
     }
 
     /// The most recent refresh, never coalesced.
@@ -222,5 +297,6 @@ impl RefreshProfileHistory {
     pub fn clear(&mut self) {
         self.rows.clear();
         self.last = None;
+        self.last_node_stats = None;
     }
 }
