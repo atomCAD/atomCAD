@@ -15,6 +15,7 @@ We will discuss the different parts of the UI in detail. The parts are:
 - Node Properties Panel
 - Display Preferences Panel
 - Camera Control Panel
+- Refresh status strip
 - Preferences Dialog (Edit > Preferences)
 
 ## 3D Viewport
@@ -277,6 +278,32 @@ Header controls:
 A small dot on the *View > Show Console* menu item (and on the toolbar toggle, when the panel is closed) signals that new entries arrived since the panel was last open. Opening the panel clears the dot.
 
 See the [`print` node reference](./nodes/math_programming.md#print) for how to feed the Console panel from a node network.
+
+## Refresh status strip
+
+Along the very bottom of the window runs a thin, always-visible strip that reports how long the last screen refresh took and where that time went:
+
+```
+refresh 1.83 s — eval 1.61 · tess 0.15 · gpu 0.02 · view 0.05   (Partial)
+refresh 0.04 s — eval —    · tess 0.02 · gpu 0.01 · view 0.01   (Lightweight)
+```
+
+All numbers are seconds. The phases are:
+
+- **eval** — evaluating the node network to produce the displayed results. This is usually the dominant cost on a heavy design.
+- **tess** — turning those results into triangles, lines and impostors for the renderer.
+- **gpu** — uploading the new meshes to the graphics card.
+- **view** — rebuilding the editor's own views (node network, panels, lists) from the updated state.
+
+The tag in brackets says which kind of refresh you are looking at:
+
+- **Full** — everything was re-evaluated.
+- **Partial** — only the parts affected by what you just changed. Toggling a node's display on and off should be visibly cheaper than a Full refresh.
+- **Lightweight** — no evaluation at all; only the gadget and the view were updated. This is what a gadget drag produces, and it is why the **eval** entry reads `—` rather than `0.00`: there was no evaluation phase to time, which is not the same thing as an instantaneous one.
+
+During a drag the strip updates about five times a second rather than on every mouse move, so watching it costs nothing.
+
+There is nothing to configure and nothing to switch on; the strip is simply there. It is a quick way to answer "why did that feel slow?" — for instance, to see whether a sluggish edit is spending its time evaluating the network or drawing an unusually heavy structure.
 
 ## Node Properties Panel
 

@@ -22,6 +22,7 @@ import 'camera_control_widget.dart';
 import 'preferences_window.dart';
 import 'main_content_area.dart';
 import 'console_panel.dart';
+import 'refresh_profile_strip.dart';
 
 /// The structure designer editor.
 class StructureDesigner extends StatefulWidget {
@@ -344,6 +345,10 @@ class _StructureDesignerState extends State<StructureDesigner> {
             // Bottom-docked Console panel (collapses to zero height when
             // hidden). See `doc/design_node_execution.md` (Phase 4).
             const ConsolePanel(),
+            // Always-on refresh phase readout. Repaints off its own
+            // ValueNotifier, never with the model — see
+            // `doc/design_eval_profiling.md` (D8a).
+            const RefreshProfileStrip(),
           ],
         ),
       ),

@@ -16,6 +16,7 @@ use super::node_networks_import_manager::NodeNetworksImportManager;
 use super::node_type::{NodeType, OutputPinDefinition};
 use super::node_type_registry::{NodeTypeRegistry, UserTypeKind, allowed_in_zone_body};
 use super::preferences::load_preferences;
+use super::refresh_profile::{RefreshProfile, RefreshProfileHistory, RefreshSubPhases, elapsed_ms};
 use super::structure_designer_changes::{RefreshMode, StructureDesignerChanges};
 use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
@@ -42,6 +43,7 @@ use atomcad_geo_tree::implicit_geometry::ImplicitGeometry3D;
 use glam::f64::DVec2;
 use glam::f64::DVec3;
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 /// A ray hit result associated with a specific node.
 ///
@@ -237,6 +239,13 @@ pub struct StructureDesigner {
     // so the UI can show a one-time "auto-repaired" modal. Empty when the loaded
     // project needed no repair.
     pub pending_load_param_id_repairs: Vec<String>,
+
+    // Always-on refresh phase breakdown (Phase 1 of
+    // `doc/design_eval_profiling.md`). Session-only and never serialized: the
+    // API layer records one row per refresh here and the UI reads — never
+    // drains — it. Consecutive lightweight rows coalesce so a gadget drag
+    // cannot flush the interesting history (D6).
+    pub refresh_profiles: RefreshProfileHistory,
 }
 
 impl Default for StructureDesigner {
@@ -281,6 +290,7 @@ impl StructureDesigner {
             print_log: Vec::new(),
             eval_error_snapshots: HashMap::new(),
             pending_load_param_id_repairs: Vec::new(),
+            refresh_profiles: RefreshProfileHistory::new(),
         }
     }
 }
@@ -1288,7 +1298,15 @@ impl StructureDesigner {
     }
 
     // Generates the scene to be rendered according to the displayed nodes of the active node network
-    pub fn refresh(&mut self, changes: &StructureDesignerChanges) {
+    //
+    // Returns the sub-phase timings this function can see (Phase 1 of
+    // `doc/design_eval_profiling.md`, D6). It deliberately does **not** build a
+    // `RefreshProfile`: tessellation and GPU upload happen above this crate,
+    // and this crate may not reference `api/`. The API layer's
+    // `refresh_structure_designer` is the one place that sees all the phases,
+    // so it assembles the row. Callers with no interest in timing simply drop
+    // the value.
+    pub fn refresh(&mut self, changes: &StructureDesignerChanges) -> RefreshSubPhases {
         // Clear pending changes at the start of refresh
         self.pending_changes.clear();
 
@@ -1299,31 +1317,43 @@ impl StructureDesigner {
                 // No active network — clear the scene so the viewport doesn't
                 // keep rendering stale output from a previously active network.
                 self.last_generated_structure_designer_scene = StructureDesignerScene::new();
-                return;
+                return RefreshSubPhases::nothing_ran();
             }
         };
 
-        match changes.mode {
+        let sub_phases = match changes.mode {
             RefreshMode::Lightweight => {
                 // Lightweight refresh - only update gadget tessellation without re-evaluation
                 // The gadget is already active and should not be recreated
+                let scene_dependent_start = Instant::now();
                 self.refresh_scene_dependent_node_data();
+                let scene_dependent_ms = elapsed_ms(scene_dependent_start);
+
+                let gadget_start = Instant::now();
                 if let Some(gadget) = &self.gadget {
                     self.last_generated_structure_designer_scene.tessellatable =
                         Some(gadget.as_tessellatable());
+                }
+                // `eval_ms: None`, not `Some(0.0)` — a lightweight refresh
+                // never enters `with_eval_context`, and reporting a zero here
+                // would read as "evaluation is free" (D6).
+                RefreshSubPhases {
+                    eval_ms: None,
+                    scene_dependent_ms,
+                    gadget_ms: elapsed_ms(gadget_start),
                 }
             }
 
             RefreshMode::Full => {
                 // Full refresh - re-evaluate everything
-                self.refresh_full(&node_network_name);
+                self.refresh_full(&node_network_name)
             }
 
             RefreshMode::Partial => {
                 // Partial refresh - use tracked changes
-                self.refresh_partial(&node_network_name, changes);
+                self.refresh_partial(&node_network_name, changes)
             }
-        }
+        };
 
         // After each evaluating refresh, replace the active network's
         // last-known evaluation-error snapshot from the live scene so the
@@ -1334,6 +1364,15 @@ impl StructureDesigner {
         if !matches!(changes.mode, RefreshMode::Lightweight) {
             self.harvest_eval_error_snapshot(&node_network_name);
         }
+
+        sub_phases
+    }
+
+    /// Records one assembled refresh row (Phase 1 of
+    /// `doc/design_eval_profiling.md`). Called by the API layer, which is the
+    /// only place that sees every phase of a refresh.
+    pub fn record_refresh_profile(&mut self, profile: RefreshProfile) {
+        self.refresh_profiles.record(profile);
     }
 
     /// Replaces `network_name`'s (the active network's) eval-error snapshot
@@ -1360,11 +1399,11 @@ impl StructureDesigner {
     }
 
     // Full refresh implementation - re-evaluates all displayed nodes
-    fn refresh_full(&mut self, node_network_name: &str) {
+    fn refresh_full(&mut self, node_network_name: &str) -> RefreshSubPhases {
         let (active_node_ref, displayed_node_refs) = {
             let network = match self.node_type_registry.node_networks.get(node_network_name) {
                 Some(network) => network,
-                None => return,
+                None => return RefreshSubPhases::nothing_ran(),
             };
 
             // Create new scene with empty node_data HashMap and invisibility cache.
@@ -1397,6 +1436,7 @@ impl StructureDesigner {
         let mut new_scenes: Vec<(NodeRef, crate::structure_designer_scene::NodeSceneData)> =
             Vec::with_capacity(displayed_node_refs.len());
 
+        let eval_start = Instant::now();
         self.with_eval_context(false, |evaluator, registry, prefs, context| {
             for (node_ref, display_type) in &displayed_node_refs {
                 let node_data = evaluator.generate_scene_scoped(
@@ -1414,6 +1454,7 @@ impl StructureDesigner {
                 new_scenes.push((node_ref.clone(), node_data));
             }
         });
+        let eval_ms = elapsed_ms(eval_start);
 
         for (node_ref, node_data) in new_scenes {
             self.last_generated_structure_designer_scene
@@ -1425,8 +1466,11 @@ impl StructureDesigner {
         // Note: eval_cache is now accessed directly from node_data via get_selected_node_eval_cache()
         self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
 
+        let scene_dependent_start = Instant::now();
         self.refresh_scene_dependent_node_data();
+        let scene_dependent_ms = elapsed_ms(scene_dependent_start);
 
+        let gadget_start = Instant::now();
         // Recreate the gadget for the selected node
         if let Some(network) = self.node_type_registry.node_networks.get(node_network_name) {
             self.gadget = network.provide_gadget(self);
@@ -1436,14 +1480,24 @@ impl StructureDesigner {
             self.last_generated_structure_designer_scene.tessellatable =
                 Some(gadget.as_tessellatable());
         }
+
+        RefreshSubPhases {
+            eval_ms: Some(eval_ms),
+            scene_dependent_ms,
+            gadget_ms: elapsed_ms(gadget_start),
+        }
     }
 
     // Partial refresh implementation - only re-evaluates affected nodes
     // Uses invisible node caching for ultra-fast visibility changes
-    fn refresh_partial(&mut self, node_network_name: &str, changes: &StructureDesignerChanges) {
+    fn refresh_partial(
+        &mut self,
+        node_network_name: &str,
+        changes: &StructureDesignerChanges,
+    ) -> RefreshSubPhases {
         let network = match self.node_type_registry.node_networks.get(node_network_name) {
             Some(network) => network,
-            None => return,
+            None => return RefreshSubPhases::nothing_ran(),
         };
 
         // Clone necessary data before mutable borrows to avoid borrow checker issues
@@ -1597,6 +1651,12 @@ impl StructureDesigner {
         let mut selected_node_unit_cell: Option<UnitCellStruct> = None;
 
         // Step 5: Re-evaluate nodes that need it (skip if empty)
+        //
+        // The timer brackets the whole step, including the case where nothing
+        // needs evaluating. A partial refresh *has* an evaluation phase — it
+        // may simply have found no work — which is why this reports `Some(0.0)`
+        // where a lightweight refresh reports `None` (D6).
+        let eval_start = Instant::now();
         if !nodes_needing_evaluation.is_empty() {
             // Snapshot (ref, display_type) pairs upfront so the closure body
             // does not need to re-borrow `self.node_type_registry`. Display
@@ -1645,9 +1705,13 @@ impl StructureDesigner {
                 self.last_generated_structure_designer_scene.unit_cell = selected_node_unit_cell;
             }
         }
+        let eval_ms = elapsed_ms(eval_start);
 
+        let scene_dependent_start = Instant::now();
         self.refresh_scene_dependent_node_data();
+        let scene_dependent_ms = elapsed_ms(scene_dependent_start);
 
+        let gadget_start = Instant::now();
         // Always refresh the gadget (simplest approach - handles all cases)
         // This ensures gadget is updated when:
         // - Selected node was re-evaluated
@@ -1663,6 +1727,12 @@ impl StructureDesigner {
                 // No gadget for selected node - clear tessellatable
                 self.last_generated_structure_designer_scene.tessellatable = None;
             }
+        }
+
+        RefreshSubPhases {
+            eval_ms: Some(eval_ms),
+            scene_dependent_ms,
+            gadget_ms: elapsed_ms(gadget_start),
         }
     }
 

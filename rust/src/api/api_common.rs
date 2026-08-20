@@ -3,6 +3,7 @@ use atomcad_display::preferences as display_prefs;
 use atomcad_renderer::renderer::Renderer;
 use atomcad_structure_designer::camera_settings::CameraSettings;
 use atomcad_structure_designer::preferences as domain_prefs;
+use atomcad_structure_designer::refresh_profile::{RefreshProfile, elapsed_ms};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer_changes::StructureDesignerChanges;
 use atomcad_util::transform::Transform;
@@ -11,6 +12,7 @@ use glam::f64::DVec2;
 use glam::f64::DVec3;
 use glam::i32::IVec2;
 use glam::i32::IVec3;
+use std::time::Instant;
 
 pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     APIVec3 {
@@ -441,20 +443,31 @@ pub fn update_gadget_pick_context(cad_instance: &mut CADInstance) {
         };
 }
 
+/// Runs a refresh and records its always-on phase breakdown (Phase 1 of
+/// `doc/design_eval_profiling.md`, D6).
+///
+/// This is the only place that sees all three Rust-side cost centres —
+/// evaluation (inside `StructureDesigner::refresh`, which reports its own
+/// sub-phases), tessellation, and GPU upload — so it is where the
+/// `RefreshProfile` row is assembled. The remaining phase, Dart-side view
+/// building and FFI marshalling, is timed in Dart (D7).
 pub fn refresh_structure_designer(
     cad_instance: &mut CADInstance,
     changes: &StructureDesignerChanges,
 ) {
     //let _timer = Timer::new(&format!("refresh_structure_designer changes: {:?}", changes.mode));
 
+    let refresh_start = Instant::now();
+
     update_gadget_pick_context(cad_instance);
 
-    cad_instance.structure_designer.refresh(changes);
+    let sub_phases = cad_instance.structure_designer.refresh(changes);
 
     // Get lightweight flag from the changes for renderer
     let renderer_lightweight = changes.is_lightweight();
 
     let display_preferences = to_display_preferences(&cad_instance.structure_designer.preferences);
+    let tessellate_start = Instant::now();
     let (
         lightweight_mesh,
         gadget_line_mesh,
@@ -478,7 +491,9 @@ pub fn refresh_structure_designer(
         renderer_lightweight,
         &display_preferences,
     );
+    let tessellate_ms = elapsed_ms(tessellate_start);
 
+    let gpu_upload_start = Instant::now();
     cad_instance.renderer.update_all_gpu_meshes(
         &lightweight_mesh,
         &gadget_line_mesh,
@@ -492,8 +507,10 @@ pub fn refresh_structure_designer(
         &gadget_bond_impostor_mesh,
         !renderer_lightweight,
     );
+    let gpu_upload_ms = elapsed_ms(gpu_upload_start);
 
-    if !renderer_lightweight {
+    let background_ms = if !renderer_lightweight {
+        let background_start = Instant::now();
         let background_line_mesh =
             atomcad_display::coordinate_system_tessellator::tessellate_background_coordinate_system(
                 cad_instance
@@ -506,7 +523,23 @@ pub fn refresh_structure_designer(
         cad_instance
             .renderer
             .update_background_mesh(&background_line_mesh);
-    }
+        Some(elapsed_ms(background_start))
+    } else {
+        // Skipped entirely on a lightweight refresh — `None`, not zero.
+        None
+    };
+
+    let profile = RefreshProfile::new(
+        changes.mode,
+        sub_phases,
+        tessellate_ms,
+        gpu_upload_ms,
+        background_ms,
+        elapsed_ms(refresh_start),
+    );
+    cad_instance
+        .structure_designer
+        .record_refresh_profile(profile);
 }
 
 /// Convenience wrapper that gets pending changes and refreshes both StructureDesigner and Renderer

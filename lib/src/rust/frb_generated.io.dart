@@ -14,6 +14,7 @@ import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_cif_api.dart';
 import 'api/structure_designer/import_cube_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
+import 'api/structure_designer/profiling_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
 import 'api/structure_designer/structure_designer_api_types.dart';
@@ -388,6 +389,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRectData dco_decode_api_rect_data(dynamic raw);
 
   @protected
+  APIRefreshMode dco_decode_api_refresh_mode(dynamic raw);
+
+  @protected
+  APIRefreshProfile dco_decode_api_refresh_profile(dynamic raw);
+
+  @protected
   APIRegPolyData dco_decode_api_reg_poly_data(dynamic raw);
 
   @protected
@@ -756,6 +763,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRectData dco_decode_box_autoadd_api_rect_data(dynamic raw);
 
   @protected
+  APIRefreshProfile dco_decode_box_autoadd_api_refresh_profile(dynamic raw);
+
+  @protected
   APIRegPolyData dco_decode_box_autoadd_api_reg_poly_data(dynamic raw);
 
   @protected
@@ -1008,6 +1018,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRecordTypeField> dco_decode_list_api_record_type_field(dynamic raw);
+
+  @protected
+  List<APIRefreshProfile> dco_decode_list_api_refresh_profile(dynamic raw);
 
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
@@ -1335,6 +1348,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRectData? dco_decode_opt_box_autoadd_api_rect_data(dynamic raw);
+
+  @protected
+  APIRefreshProfile? dco_decode_opt_box_autoadd_api_refresh_profile(
+      dynamic raw);
 
   @protected
   APIRegPolyData? dco_decode_opt_box_autoadd_api_reg_poly_data(dynamic raw);
@@ -1945,6 +1962,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRectData sse_decode_api_rect_data(SseDeserializer deserializer);
 
   @protected
+  APIRefreshMode sse_decode_api_refresh_mode(SseDeserializer deserializer);
+
+  @protected
+  APIRefreshProfile sse_decode_api_refresh_profile(
+      SseDeserializer deserializer);
+
+  @protected
   APIRegPolyData sse_decode_api_reg_poly_data(SseDeserializer deserializer);
 
   @protected
@@ -2392,6 +2416,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIRefreshProfile sse_decode_box_autoadd_api_refresh_profile(
+      SseDeserializer deserializer);
+
+  @protected
   APIRegPolyData sse_decode_box_autoadd_api_reg_poly_data(
       SseDeserializer deserializer);
 
@@ -2688,6 +2716,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRecordTypeField> sse_decode_list_api_record_type_field(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APIRefreshProfile> sse_decode_list_api_refresh_profile(
       SseDeserializer deserializer);
 
   @protected
@@ -3080,6 +3112,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIRectData? sse_decode_opt_box_autoadd_api_rect_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIRefreshProfile? sse_decode_opt_box_autoadd_api_refresh_profile(
       SseDeserializer deserializer);
 
   @protected
@@ -3764,6 +3800,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_rect_data(APIRectData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_refresh_mode(
+      APIRefreshMode self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_refresh_profile(
+      APIRefreshProfile self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
 
@@ -4220,6 +4264,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRectData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_refresh_profile(
+      APIRefreshProfile self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_reg_poly_data(
       APIRegPolyData self, SseSerializer serializer);
 
@@ -4524,6 +4572,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_record_type_field(
       List<APIRecordTypeField> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_refresh_profile(
+      List<APIRefreshProfile> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_rotational_symmetry(
@@ -4920,6 +4972,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_rect_data(
       APIRectData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_refresh_profile(
+      APIRefreshProfile? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_reg_poly_data(

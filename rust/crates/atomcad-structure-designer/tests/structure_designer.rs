@@ -515,3 +515,6 @@ mod scalar_field_type_test;
 
 #[path = "structure_designer/sample_field_test.rs"]
 mod sample_field_test;
+
+#[path = "structure_designer/refresh_profile_test.rs"]
+mod refresh_profile_test;

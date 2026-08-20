@@ -29,6 +29,10 @@ import 'package:flutter_cad/src/rust/api/structure_designer/xray_api.dart'
     as xray_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/tag_api.dart'
     as tag_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
+    as profiling_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/profiling_api.dart'
+    show APIRefreshMode, APIRefreshProfile;
 import 'package:flutter_cad/src/rust/api/common_api.dart' as common_api;
 import 'package:flutter_cad/structure_designer/namespace_utils.dart';
 
@@ -144,6 +148,27 @@ Uint64List scopeChainToBytes(List<BigInt> scopeChain) {
     out[i] = scopeChain[i].toUnsigned(64);
   }
   return out;
+}
+
+/// One refresh's phase breakdown as the status strip sees it: the Rust-side
+/// row plus the Dart-side phase Rust cannot see.
+///
+/// `viewMs` measures the whole `refreshFromKernel` block — the ~15 synchronous
+/// FFI calls plus the view construction they feed. Because `#[frb(sync)]`
+/// calls are synchronous, this stopwatch brackets the kernel's own
+/// `totalMs`, and the difference between the two is itself a measurement: the
+/// FFI and serialization overhead nothing else reports
+/// (`doc/design_eval_profiling.md` D7).
+class RefreshProfileSample {
+  const RefreshProfileSample({required this.kernel, required this.viewMs});
+
+  /// The Rust-side phase breakdown of the refresh this view build followed.
+  /// Null when a refresh has not run yet this session (the view build still
+  /// gets timed).
+  final APIRefreshProfile? kernel;
+
+  /// Wall time of the Dart-side view rebuild, in milliseconds.
+  final double viewMs;
 }
 
 /// Manages the entire node graph.
@@ -305,6 +330,34 @@ class StructureDesignerModel extends ChangeNotifier {
   /// Whether the Console panel is currently visible (docked at bottom). The
   /// toolbar toggle / `Ctrl+`` ` keyboard shortcut flips this.
   bool consolePanelVisible = false;
+
+  /// Latest refresh phase breakdown, for the always-on status strip
+  /// (`doc/design_eval_profiling.md` D8a).
+  ///
+  /// **This deliberately does not ride on [notifyListeners].** A gadget drag
+  /// marks a lightweight refresh on every pointer move, and an always-on
+  /// measurement widget that forced a model-wide rebuild per tick would be a
+  /// self-inflicted regression measured by itself. Only the strip listens
+  /// here, and writing it never notifies the model.
+  final ValueNotifier<RefreshProfileSample?> refreshProfile =
+      ValueNotifier(null);
+
+  /// Monotonic clock backing the lightweight-tick throttle below. A plain
+  /// `DateTime.now()` would do, but a `Stopwatch` cannot jump with the wall
+  /// clock.
+  final Stopwatch _refreshProfileClock = Stopwatch()..start();
+
+  /// `_refreshProfileClock` reading at the last strip write, used to coalesce
+  /// lightweight ticks to ~5 Hz. Drag ticks are near-identical to each other,
+  /// so a strip that updates five times a second still reads as live.
+  ///
+  /// Independent of the Rust-side ring's coalescing (D6): this one throttles
+  /// *repaints*, that one merges *rows*. A tick dropped here is still counted
+  /// there, so the history reports the full drag.
+  int _lastRefreshProfileWriteMs = 0;
+
+  /// Minimum gap between two strip writes for lightweight refreshes (~5 Hz).
+  static const int _LIGHTWEIGHT_STRIP_THROTTLE_MS = 200;
 
   /// Chain of HOF node IDs identifying the body that keyboard shortcuts
   /// (Delete, Ctrl+C/V/X/D, etc.) operate on. Empty means the active
@@ -3257,6 +3310,10 @@ class StructureDesignerModel extends ChangeNotifier {
   }
 
   void refreshFromKernel() {
+    // Times the whole block below — the FFI marshalling plus the view
+    // construction — which is the one refresh phase Rust cannot see (D7 of
+    // `doc/design_eval_profiling.md`).
+    final viewStopwatch = Stopwatch()..start();
     // Any full refresh ends the node-drag fast path: the drag-commit paths
     // (updateNodePosition / updateSelectedNodesPosition) all come through
     // here, and a mid-drag refresh from elsewhere replaces the view objects
@@ -3303,7 +3360,28 @@ class StructureDesignerModel extends ChangeNotifier {
       }
     }
 
+    _publishRefreshProfile(viewStopwatch.elapsedMicroseconds / 1000.0);
+
     notifyListeners();
+  }
+
+  /// Publishes the last refresh's phase breakdown to the status strip.
+  ///
+  /// Never calls [notifyListeners] — the strip listens to
+  /// [refreshProfile] alone, precisely so a drag tick does not force a
+  /// model-wide rebuild (D8a). Lightweight refreshes are additionally
+  /// throttled to ~5 Hz: they arrive on every pointer move and are
+  /// near-identical to each other, and the ones dropped here are still
+  /// counted in the kernel's history ring.
+  void _publishRefreshProfile(double viewMs) {
+    final kernel = profiling_api.getLastRefreshProfile();
+    final now = _refreshProfileClock.elapsedMilliseconds;
+    if (kernel?.mode == APIRefreshMode.lightweight &&
+        now - _lastRefreshProfileWriteMs < _LIGHTWEIGHT_STRIP_THROTTLE_MS) {
+      return;
+    }
+    _lastRefreshProfileWriteMs = now;
+    refreshProfile.value = RefreshProfileSample(kernel: kernel, viewMs: viewMs);
   }
 
   /// Clear the Console panel log (Rust-side buffer + Flutter-side mirror).
