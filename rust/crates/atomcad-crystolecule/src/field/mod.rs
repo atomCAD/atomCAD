@@ -27,6 +27,23 @@ use thiserror::Error;
 /// cancellation noise.
 pub const DEFAULT_GRADIENT_STEP: f64 = 0.05;
 
+/// How far outside a sampled field's box a point may sit and still be treated
+/// as *on* the boundary, in fractional-index units scaled by the axis span.
+///
+/// Without it the out-of-bounds rule is a knife edge, and the last sample plane
+/// of a real file is unreachable: a `.cube` writer emits its step vector in
+/// Bohr with six decimals, so converting back to Ångström reproduces the
+/// nominal spacing only to ~1e-7 relative. On a grid a user believes has 1.0 Å
+/// spacing, the outermost plane then lands a few times 1e-7 Å *past* the box
+/// and `sample` returns `0.0` instead of the stored value — a jump of the full
+/// data range from a rounding error the user cannot see. Scaling by the span
+/// keeps the guard effective on the far face of a large grid, where the same
+/// relative error is proportionally larger in index units.
+///
+/// A millionth of a grid's extent is far below any physically meaningful
+/// distance, so nothing legitimately out of bounds is captured by it.
+pub const BOUNDARY_INDEX_TOLERANCE: f64 = 1e-6;
+
 /// Things that can be wrong with a grid description.
 #[derive(Debug, Error, PartialEq)]
 pub enum FieldError {
@@ -391,11 +408,20 @@ impl SampledField {
     /// `None` when it falls outside the stored range. The `is_finite` guard is
     /// load-bearing: a NaN satisfies neither comparison and would otherwise slip
     /// through as an in-range index.
+    ///
+    /// The boundary carries a tolerance of [`BOUNDARY_INDEX_TOLERANCE`] *of the
+    /// axis span* — see that constant for why a knife-edge comparison here is
+    /// not good enough.
     #[inline]
     fn axis_cell(f: f64, n: usize) -> Option<(usize, f64)> {
-        if !f.is_finite() || f < 0.0 || f > (n - 1) as f64 {
+        let last = (n - 1) as f64;
+        let tolerance = BOUNDARY_INDEX_TOLERANCE * last.max(1.0);
+        if !f.is_finite() || f < -tolerance || f > last + tolerance {
             return None;
         }
+        // Inside, but possibly a hair past a face: snap onto it so the blend
+        // factors stay in [0, 1] and the corner indices stay in range.
+        let f = f.clamp(0.0, last);
         if n == 1 {
             return Some((0, 0.0));
         }

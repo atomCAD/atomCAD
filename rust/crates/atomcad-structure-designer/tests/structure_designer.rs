@@ -512,3 +512,6 @@ mod facet_shell_symmetry_test;
 
 #[path = "structure_designer/scalar_field_type_test.rs"]
 mod scalar_field_type_test;
+
+#[path = "structure_designer/sample_field_test.rs"]
+mod sample_field_test;

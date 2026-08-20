@@ -83,6 +83,7 @@ pub mod rect;
 pub mod reg_poly;
 pub mod relax;
 pub mod remove_hydrogen;
+pub mod sample_field;
 pub mod sequence;
 pub mod sphere;
 pub mod string;

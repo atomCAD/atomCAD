@@ -131,6 +131,25 @@ The plane supplies the in-plane lattice basis vectors `u_axis`, `v_axis`. Each *
 
 - `Array[IVec3]` — the two tiling vectors. Degenerate (linearly dependent) rows are not rejected here; `patch_build`'s linear-independence check reports them.
 
+## sample_field
+
+Evaluates a `ScalarField` — the volumetric data an [`import_cube`](./atomic.md#import_cube) node loads — at **one point in space**, and returns the value as a `Float`.
+
+Nothing draws a scalar field in the 3D viewport yet, so this node is how you look at one: wire it into [`print`](#print) and read the values off the [Console panel](../ui.md#console-panel), or sample along a line or a shell of points with [`map`](#map) to get a profile you can inspect. It works identically from the headless CLI.
+
+**Input pins**
+
+- `field: ScalarField` — the field to evaluate. Wire the `field` output pin of an `import_cube` node.
+- `point: Vec3` — where to evaluate it, in ordinary real-space Ångström, exactly like every other position in the app. The `.cube` file's Bohr coordinates were already converted at load time; you never work in Bohr here.
+
+**Output (single pin)**
+
+- `Float` — the field's value at that point, in whatever atomic unit the source quantity uses. Values are **not** converted, so the thresholds published in the chemistry literature apply unchanged (roughly ±0.02–0.05 for orbital amplitudes, 0.002 for a density's molecular surface). A signed quantity such as an orbital amplitude or an electrostatic potential keeps its sign.
+
+Between stored samples the value is **trilinearly interpolated** from the eight surrounding grid points, so a `.cube` file's resolution is the ceiling on what you can learn from it: sampling more finely than the file's own grid buys smoothness, not information.
+
+**Sampling outside the file's box returns `0.0`, not an error.** A cube file covers a finite box, and the quantities it holds decay to zero outside the molecule, so `0.0` is the physically right answer just past the edge — and it means a `map` over a shell of points does not fail wholesale the moment one point strays outside, which is exactly where a decaying field is most interesting. If you get zeros where you expected values, check the box: the field pin's hover readout shows the grid dimensions, and `import_cube`'s `molecule` pin shows you where the structure sits.
+
 ## bool
 
 Outputs a Bool value (`true` or `false`).

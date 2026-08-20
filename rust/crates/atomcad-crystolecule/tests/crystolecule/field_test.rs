@@ -125,6 +125,43 @@ fn sampling_outside_the_box_returns_exactly_zero() {
 }
 
 #[test]
+fn a_point_a_float_hair_past_the_far_face_still_reads_the_boundary_sample() {
+    // A `.cube` writer emits its step vector in Bohr with six decimals, so the
+    // Ångström spacing this fixture *nominally* has (1.0) round-trips to
+    // 0.999_999_934. The last sample plane then sits a few times 1e-7 Å inside
+    // where the user thinks it is, and a knife-edge bounds test would answer a
+    // sample at the nominal position with 0.0 — a jump of the whole data range
+    // from a rounding error nobody can see. See `BOUNDARY_INDEX_TOLERANCE`.
+    let spacing = 1.889_726 * 0.529_177_210_903;
+    let grid = GridGeometry {
+        origin: DVec3::ZERO,
+        axes: [DVec3::X * spacing, DVec3::Y * spacing, DVec3::Z * spacing],
+        dims: [3, 4, 5],
+    };
+    let mut samples = Vec::with_capacity(grid.sample_count());
+    for i in 0..3 {
+        for j in 0..4 {
+            for k in 0..5 {
+                samples.push((100 * i + 10 * j + k) as f32);
+            }
+        }
+    }
+    let field = SampledField::new(grid, samples).unwrap();
+
+    assert!(
+        spacing < 1.0,
+        "the round-trip should land just short of 1.0"
+    );
+    assert_eq!(field.sample(DVec3::new(2.0, 3.0, 4.0)), 234.0);
+    assert_eq!(field.sample(DVec3::new(0.0, 0.0, 4.0)), 4.0);
+
+    // The tolerance is a hair, not a margin: a point genuinely off the end is
+    // still out of bounds.
+    assert_eq!(field.sample(DVec3::new(0.0, 0.0, 4.01)), 0.0);
+    assert_eq!(field.sample(DVec3::new(-0.01, 0.0, 0.0)), 0.0);
+}
+
+#[test]
 fn sampling_a_non_finite_point_returns_zero_rather_than_a_bogus_index() {
     let field = unit_ramp([3, 4, 5]);
     assert_eq!(field.sample(DVec3::new(f64::NAN, 0.0, 0.0)), 0.0);

@@ -159,7 +159,12 @@ amplitudes, electron density, electrostatic potential — behind one trait,
 
 `sample` outside `data_bounds` returns exactly `0.0` — never an error. A finite
 box is a *window* onto a field that decays to zero, and the rule keeps every
-consumer free of an error path in its innermost loop.
+consumer free of an error path in its innermost loop. The boundary itself is
+**not** a knife edge: a `.cube` writer emits its step vector in Bohr with six
+decimals, so the outermost sample plane of a real file lands ~1e-7 Å off where
+the nominal spacing puts it, and a strict comparison would answer a sample at
+its own nominal position with `0.0` — a jump of the whole data range. Hence
+`BOUNDARY_INDEX_TOLERANCE`; keep it when touching `axis_cell`.
 
 The `.cube` loader always reads coordinates as Bohr and uses the atom block only
 as a **plausibility check**: implausible interatomic distances set an advisory

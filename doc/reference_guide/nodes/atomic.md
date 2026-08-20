@@ -83,7 +83,7 @@ Field **values** are passed through unconverted, in whatever atomic unit the sou
 **Typical pipeline**
 
 - *Check the import:* display the `molecule` output pin. You should see the expected structure at the expected size; a molecule about 1.9× too large means the file's units are not what the header implies.
-- *Use the field:* wire `field` into a node that consumes a `ScalarField`. Nothing renders a field yet — visualization is a separate piece of work — so for now the `molecule` pin is what you look at.
+- *Read the field:* wire `field` into a [`sample_field`](./math_programming.md#sample_field) node together with a `vec3`, and wire the result into `print` to read values off the Console. Nothing renders a field in the viewport yet — visualization is a separate piece of work — so `sample_field` and the `molecule` pin are how you inspect an import.
 
 ## materialize
 
