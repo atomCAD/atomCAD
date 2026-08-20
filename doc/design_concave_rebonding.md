@@ -180,6 +180,30 @@ a neighbouring **dimer** atom whose own terminator tilts only 24° and leans 0.8
 the other is merely in the way; the two chlorines meet at 2.217 Å with facing 0.813 on one side and
 0.413 on the other, and the dangling directions 78.7° apart.
 
+### How bad the clash was before the fix
+
+Measured with `surf_recon` **on** and the pass disabled (`dump_unreconstructed_clash_by_passivant`
+reproduces the same geometry with reconstruction off, and a one-line temporary disable of the pass
+confirmed the identical numbers with it on):
+
+| passivant | Si–X bond | pre-fix clash | vdW sum | fraction |
+|---|---|---|---|---|
+| H | 1.420 Å | **1.521 Å** | 2.40 Å | 0.634 |
+| F | 1.600 Å | **1.228 Å** | 2.92 Å | 0.420 |
+| Cl | 2.020 Å | **0.542 Å** | 3.64 Å | 0.149 |
+| Br | 2.160 Å | **0.313 Å** | 3.72 Å | 0.084 |
+| I | 2.440 Å | **0.144 Å** | 4.08 Å | 0.035 |
+
+The corner goes from 0.542 Å to 2.217 Å for chlorine — a factor of four, and a change of *kind*
+rather than degree. 0.542 Å is shorter than the H–H bond in H₂ (0.74 Å) and about a quarter of a real
+Cl–Cl bond (1.99 Å): two nuclei inside each other's core electrons, which no force field or renderer
+handles sensibly. What remains at 2.217 Å is a strained but ordinary van der Waals contact, present
+identically on a flat slab with no corner at all.
+
+Severity scales hard with terminator size, which is why the original report — a C₂HCl₃ deposition
+leaving a CCl₂ row — sat at the worst end of this table and read as obviously broken rather than
+merely strained.
+
 ### The dihedral angle of the corner
 
 A concave (100)/(111) corner comes in two flavours, 70° apart, and the first fixture built for §10
@@ -244,6 +268,45 @@ has terminators 1.39 Å apart (this is exactly why ideal Si(100)-1×1 dihydride 
 ungated clash rule would silently dimerize the whole face — performing reconstruction the user turned
 off. Because the set is empty wherever reconstruction did not run, that cannot happen: with
 `surf_recon` off globally, `reconstruct_surface` is not called at all and the pass is a no-op.
+
+### Scope: what this will and will not fire on
+
+The decision has two stages with very different generality, and it is worth being explicit because
+the module reads more general than it is.
+
+**Stage 1 — finding candidate pairs — is fully generic.** Tests 1, 3, 4 and 5 are distance,
+direction and van der Waals radii. No Miller indices, no facet classification, no motif knowledge.
+That half would work on any structure.
+
+**Stage 2 — test 2, the gate — is narrow.** At least one host must be in `unpaired_surface_atoms`,
+and that set is only non-empty when *all* of the following hold:
+
+1. `get_reconstruction_params` accepted the crystal: zincblende **topology**, approximately cubic
+   cell, `PRIMARY == SECONDARY`, and specifically **carbon at 3.567 Å or silicon at 5.431 Å**
+   (±0.05 Å). Nothing else is in that table.
+2. The atom classified into one of the six **{100}** orientations, which requires **exactly two
+   bonds**, both aligned on one axis.
+3. `surf_recon` resolved true at that atom's own position.
+4. It did not end up in an applied dimer.
+
+**Only one side has to qualify.** The other host is unconstrained — any element, any coordination,
+any facet — as long as it carries a terminator and the pair passes the geometry. In the §10 fixture
+that asymmetry is load-bearing: the qualifying host is the unpaired terrace atom, while its partner is
+the wall-base atom with *three* bonds, classified `Unknown`, which could never qualify alone.
+
+Consequences:
+
+- **Works:** a concave corner between (100) and *any* other facet, which is why the 55° undercut and
+  the 125° receding wall behave identically. Any passivant. Both C and Si. Several rebonds on one host
+  (two of the fixture's nine do exactly that).
+- **Never fires:** any material outside diamond C/Si at those two lattice constants (Ge, SiC, GaAs, or
+  any zincblende with `PRIMARY != SECONDARY`); corners where neither side is a two-bonded {100} atom,
+  e.g. a concave (111)/(111) corner; anywhere reconstruction is off.
+
+The narrowness is deliberate — it is what makes the pass safe rather than merely well-tuned (§7). If
+it ever needs to reach further, the cheap lever is **widening what feeds `unpaired_surface_atoms`**
+(adding Ge to `get_reconstruction_params`, or classifying non-{100} facets), not loosening the
+criterion. For anything genuinely exotic, hand-authored `patch` tiles remain the escape hatch (§12).
 
 ## 8. Determinism and safety
 
