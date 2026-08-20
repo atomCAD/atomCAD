@@ -165,13 +165,30 @@ pub fn rebond_concave_clashes(
     let max_host_separation = HOST_SEPARATION_FACTOR * lattice_constant / 2.0_f64.sqrt();
 
     // --- Collect phase: read-only, so every distance below stays valid. ---
+    //
+    // Test 2 is applied by CONSTRUCTION, not as a filter: we seed only from
+    // terminators whose host is unpaired, so `a.host` satisfies it by
+    // definition. That is what keeps this loop cheap. The grid query is the
+    // expensive part, and the unpaired set is tiny next to the terminator list
+    // -- measured on a 61k-atom slab, 33 unpaired against ~10^4 terminators.
+    // Seeding from every terminator instead made this pass ~20% of total fill
+    // time; seeding from the unpaired ones leaves only the two O(n) scans above.
+    //
+    // It stays COMPLETE because an accepted pair needs at least one unpaired
+    // host, so every such pair is reachable from whichever end is unpaired. A
+    // pair with BOTH hosts unpaired is reachable from either end -- which is why
+    // the old `other_id <= a.id` dedupe no longer works and `seen` replaces it.
+    // (That case is real: two of the nine rebonds in the §10 fixture share a
+    // host.)
+    let mut seen: FxHashSet<(u32, u32)> = FxHashSet::default();
     let mut candidates: Vec<Candidate> = Vec::new();
-    for a in &terminators {
+    for a in terminators
+        .iter()
+        .filter(|t| unpaired_surface_atoms.contains(&t.host))
+    {
         let search_radius = CLASH_FRACTION * (a.vdw + max_vdw);
         for other_id in structure.get_atoms_in_radius(&a.position, search_radius) {
-            // Visit each pair once. `get_atoms_in_radius` walks a hash grid, so
-            // its order is not stable -- never let it decide anything.
-            if other_id <= a.id {
+            if other_id == a.id {
                 continue;
             }
             let Some(&index) = by_id.get(&other_id) else {
@@ -179,14 +196,14 @@ pub fn rebond_concave_clashes(
             };
             let b = &terminators[index];
 
-            // Test 1: distinct hosts, not already bonded to each other.
-            if a.host == b.host || structure.has_bond_between(a.host, b.host) {
+            // Each unordered pair once. `get_atoms_in_radius` walks a hash grid,
+            // so its order is not stable -- never let it decide anything.
+            if !seen.insert((a.id.min(b.id), a.id.max(b.id))) {
                 continue;
             }
-            // Test 2: at least one host was left unpaired by reconstruction.
-            if !unpaired_surface_atoms.contains(&a.host)
-                && !unpaired_surface_atoms.contains(&b.host)
-            {
+
+            // Test 1: distinct hosts, not already bonded to each other.
+            if a.host == b.host || structure.has_bond_between(a.host, b.host) {
                 continue;
             }
             // Test 3: the terminators sterically clash.
@@ -217,12 +234,17 @@ pub fn rebond_concave_clashes(
                 continue;
             }
 
+            // Canonical orientation (lower terminator id first) so the sort
+            // key below is exactly what the previous full-sweep loop produced.
+            // Without this the greedy outcome could differ for equal-distance
+            // pairs, purely because of which end we happened to seed from.
+            let (lo, hi) = if a.id < b.id { (a, b) } else { (b, a) };
             candidates.push(Candidate {
                 distance,
-                terminator_a: a.id,
-                terminator_b: b.id,
-                host_a: a.host,
-                host_b: b.host,
+                terminator_a: lo.id,
+                terminator_b: hi.id,
+                host_a: lo.host,
+                host_b: hi.host,
             });
         }
     }
