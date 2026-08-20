@@ -39,6 +39,7 @@ use super::structure_designer_api_types::APIHalfPlaneData;
 use super::structure_designer_api_types::APIHoveredAtomInfo;
 use super::structure_designer_api_types::APIIfData;
 use super::structure_designer_api_types::APIImportCIFData;
+use super::structure_designer_api_types::APIImportCubeData;
 use super::structure_designer_api_types::APIImportXYZData;
 use super::structure_designer_api_types::APIInferBondsData;
 use super::structure_designer_api_types::APILiteralField;
@@ -201,6 +202,7 @@ use atomcad_structure_designer::nodes::imat3_cols::IMat3ColsData;
 use atomcad_structure_designer::nodes::imat3_diag::IMat3DiagData;
 use atomcad_structure_designer::nodes::imat3_rows::IMat3RowsData;
 use atomcad_structure_designer::nodes::import_cif::ImportCifData;
+use atomcad_structure_designer::nodes::import_cube::ImportCubeData;
 use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
 use atomcad_structure_designer::nodes::infer_bonds::InferBondsData;
 use atomcad_structure_designer::nodes::int::IntData;
@@ -3710,6 +3712,27 @@ pub fn get_import_xyz_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIImpo
     }
 }
 
+/// Reads the stored data of an `import_cube` node. Only the file name is
+/// stored — the parsed samples are `#[serde(skip)]` payload, reloaded from the
+/// file rather than round-tripped through Dart.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_import_cube_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIImportCubeData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let import_cube_data = node_data.as_any_ref().downcast_ref::<ImportCubeData>()?;
+                Some(APIImportCubeData {
+                    file_name: import_cube_data.file_name.clone(),
+                })
+            },
+            None,
+        )
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_export_atoms_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIExportAtomsData> {
     unsafe {
@@ -5915,6 +5938,29 @@ pub fn set_import_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIImportXY
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, import_xyz_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+/// Replaces an `import_cube` node's stored file name.
+///
+/// The parsed payload is dropped: the new name has not been loaded yet, and
+/// `import_cube` (the action) is what loads it. Validation runs so a units
+/// warning left over from the previous file disappears immediately rather than
+/// lingering in the error list — the refresh paths do not validate.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_import_cube_data(scope_path: Vec<u64>, node_id: u64, data: APIImportCubeData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let import_cube_data = Box::new(ImportCubeData {
+                file_name: data.file_name.clone(),
+                loaded: None,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, import_cube_data);
+            cad_instance.structure_designer.validate_active_network();
             refresh_structure_designer_auto(cad_instance);
         });
     }

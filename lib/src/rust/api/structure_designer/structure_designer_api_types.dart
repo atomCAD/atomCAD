@@ -2036,6 +2036,24 @@ class APIImportCIFData {
           bondTolerance == other.bondTolerance;
 }
 
+class APIImportCubeData {
+  final String? fileName;
+
+  const APIImportCubeData({
+    this.fileName,
+  });
+
+  @override
+  int get hashCode => fileName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIImportCubeData &&
+          runtimeType == other.runtimeType &&
+          fileName == other.fileName;
+}
+
 class APIImportXYZData {
   final String? fileName;
 

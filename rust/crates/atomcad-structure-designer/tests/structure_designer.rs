@@ -245,6 +245,9 @@ mod unit_cell_wireframe_test;
 #[path = "structure_designer/import_cif_test.rs"]
 mod import_cif_test;
 
+#[path = "structure_designer/import_cube_test.rs"]
+mod import_cube_test;
+
 #[path = "structure_designer/infer_bonds_test.rs"]
 mod infer_bonds_test;
 

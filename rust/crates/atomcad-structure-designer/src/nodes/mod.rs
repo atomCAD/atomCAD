@@ -49,6 +49,7 @@ pub mod imat3_cols;
 pub mod imat3_diag;
 pub mod imat3_rows;
 pub mod import_cif;
+pub mod import_cube;
 pub mod import_xyz;
 pub mod infer_bonds;
 pub mod int;

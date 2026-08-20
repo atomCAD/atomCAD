@@ -8,6 +8,7 @@ pub mod edit_atom_api;
 pub mod facet_shell_api;
 pub mod import_api;
 pub mod import_cif_api;
+pub mod import_cube_api;
 pub mod import_xyz_api;
 pub mod relax_api;
 pub mod structure_designer_api;

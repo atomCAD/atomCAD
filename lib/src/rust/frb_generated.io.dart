@@ -12,6 +12,7 @@ import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
 import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_cif_api.dart';
+import 'api/structure_designer/import_cube_api.dart';
 import 'api/structure_designer/import_xyz_api.dart';
 import 'api/structure_designer/relax_api.dart';
 import 'api/structure_designer/structure_designer_api.dart';
@@ -264,6 +265,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIImportCIFData dco_decode_api_import_cif_data(dynamic raw);
+
+  @protected
+  APIImportCubeData dco_decode_api_import_cube_data(dynamic raw);
 
   @protected
   APIImportXYZData dco_decode_api_import_xyz_data(dynamic raw);
@@ -671,6 +675,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIImportCIFData dco_decode_box_autoadd_api_import_cif_data(dynamic raw);
+
+  @protected
+  APIImportCubeData dco_decode_box_autoadd_api_import_cube_data(dynamic raw);
 
   @protected
   APIImportXYZData dco_decode_box_autoadd_api_import_xyz_data(dynamic raw);
@@ -1246,6 +1253,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIImportCIFData? dco_decode_opt_box_autoadd_api_import_cif_data(dynamic raw);
 
   @protected
+  APIImportCubeData? dco_decode_opt_box_autoadd_api_import_cube_data(
+      dynamic raw);
+
+  @protected
   APIImportXYZData? dco_decode_opt_box_autoadd_api_import_xyz_data(dynamic raw);
 
   @protected
@@ -1798,6 +1809,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIImportCIFData sse_decode_api_import_cif_data(SseDeserializer deserializer);
 
   @protected
+  APIImportCubeData sse_decode_api_import_cube_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIImportXYZData sse_decode_api_import_xyz_data(SseDeserializer deserializer);
 
   @protected
@@ -2275,6 +2290,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIImportCIFData sse_decode_box_autoadd_api_import_cif_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIImportCubeData sse_decode_box_autoadd_api_import_cube_data(
       SseDeserializer deserializer);
 
   @protected
@@ -2962,6 +2981,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIImportCubeData? sse_decode_opt_box_autoadd_api_import_cube_data(
+      SseDeserializer deserializer);
+
+  @protected
   APIImportXYZData? sse_decode_opt_box_autoadd_api_import_xyz_data(
       SseDeserializer deserializer);
 
@@ -3591,6 +3614,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIImportCIFData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_import_cube_data(
+      APIImportCubeData self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_import_xyz_data(
       APIImportXYZData self, SseSerializer serializer);
 
@@ -4091,6 +4118,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_import_cif_data(
       APIImportCIFData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_import_cube_data(
+      APIImportCubeData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_import_xyz_data(
@@ -4789,6 +4820,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_import_cif_data(
       APIImportCIFData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_import_cube_data(
+      APIImportCubeData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_import_xyz_data(

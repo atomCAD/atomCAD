@@ -51,6 +51,7 @@ use super::nodes::imat3_cols::get_node_type as imat3_cols_get_node_type;
 use super::nodes::imat3_diag::get_node_type as imat3_diag_get_node_type;
 use super::nodes::imat3_rows::get_node_type as imat3_rows_get_node_type;
 use super::nodes::import_cif::get_node_type as import_cif_get_node_type;
+use super::nodes::import_cube::get_node_type as import_cube_get_node_type;
 use super::nodes::import_xyz::get_node_type as import_xyz_get_node_type;
 use super::nodes::infer_bonds::get_node_type as infer_bonds_get_node_type;
 use super::nodes::int::get_node_type as int_get_node_type;
@@ -858,6 +859,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(atom_composediff_get_node_type());
         ret.add_node_type(import_xyz_get_node_type());
         ret.add_node_type(import_cif_get_node_type());
+        ret.add_node_type(import_cube_get_node_type());
         ret.add_node_type(export_atoms_get_node_type());
         ret.add_node_type(atom_cut_get_node_type());
         ret.add_node_type(relax_get_node_type());

@@ -1398,6 +1398,10 @@ pub struct APIImportXYZData {
     pub file_name: Option<String>,
 }
 
+pub struct APIImportCubeData {
+    pub file_name: Option<String>,
+}
+
 pub struct APIImportCIFData {
     pub file_name: Option<String>,
     pub block_name: Option<String>,

@@ -888,6 +888,15 @@ APIImportXYZData? getImportXyzData(
         .crateApiStructureDesignerStructureDesignerApiGetImportXyzData(
             scopePath: scopePath, nodeId: nodeId);
 
+/// Reads the stored data of an `import_cube` node. Only the file name is
+/// stored — the parsed samples are `#[serde(skip)]` payload, reloaded from the
+/// file rather than round-tripped through Dart.
+APIImportCubeData? getImportCubeData(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiGetImportCubeData(
+            scopePath: scopePath, nodeId: nodeId);
+
 APIExportAtomsData? getExportAtomsData(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
@@ -1484,6 +1493,20 @@ void setImportXyzData(
         required APIImportXYZData data}) =>
     RustLib.instance.api
         .crateApiStructureDesignerStructureDesignerApiSetImportXyzData(
+            scopePath: scopePath, nodeId: nodeId, data: data);
+
+/// Replaces an `import_cube` node's stored file name.
+///
+/// The parsed payload is dropped: the new name has not been loaded yet, and
+/// `import_cube` (the action) is what loads it. Validation runs so a units
+/// warning left over from the previous file disappears immediately rather than
+/// lingering in the error list — the refresh paths do not validate.
+void setImportCubeData(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required APIImportCubeData data}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetImportCubeData(
             scopePath: scopePath, nodeId: nodeId, data: data);
 
 APIImportCIFData? getImportCifData(

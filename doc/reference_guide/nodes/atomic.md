@@ -55,6 +55,36 @@ Imports a crystal structure from a CIF (Crystallographic Information File) file 
 - *Direct fill:* wire `motif` and `unit_cell` into a `materialize` node (via a `structure` node) to use the imported crystal as a template for filling geometry.
 - *Edit then fill:* wire `atoms` and `unit_cell` into a `motif_edit` node, edit interactively in 3D, then feed the edited motif into `materialize`.
 
+## import_cube
+
+Imports **volumetric scalar data** from a Gaussian `.cube` file — the standard output format of quantum-chemistry packages such as [PySCF](https://pyscf.org/), Gaussian and ORCA. A cube file holds a scalar quantity sampled on a regular 3D grid around a molecule: a molecular-orbital amplitude, an electron density, an electrostatic potential.
+
+![TODO(image): the `import_cube` node selected with its properties panel showing the file path and the Browse / Load buttons](TODO)
+
+**Input pin** (optional; can also be set as a property)
+
+- `file_name: String` — path to the `.cube` file. As with `import_xyz`, paths are converted to relative paths whenever possible so projects remain portable when copied to another machine. A wired value overrides the stored property.
+
+**Output pins**
+
+- `field: ScalarField` — the sampled data. `ScalarField` is a scalar function of 3D space, and it is what a future isosurface node will draw. It renders nothing in the 3D viewport on its own.
+- `molecule: Molecule` — the atoms from the file's atom block, with bonds inferred. This is the atomic structure the field was computed around, and displaying it is the quickest way to confirm a file loaded correctly.
+
+**Coordinates and units**
+
+Coordinates and grid step vectors in a `.cube` file are **always read as Bohr** and converted to Ångström, which is what every producer in practice writes. (A convention exists whereby a negative voxel count signals Ångström, but it is documented inconsistently across sources, so atomCAD does not rely on it.)
+
+To catch a file that was nevertheless written in Ångström, the node checks the atom block for chemical plausibility: it compares each atom's nearest-neighbour distance against the sum of the two covalent radii, and if the median ratio is far from 1 it shows an **amber (non-blocking) warning** naming the observed ratio. The node still produces a usable field and molecule — **the check warns, it never re-interprets the file.** Short contacts have too many innocent causes (an ion pair, a van der Waals cluster, two separated fragments) for a silent rescale by 1.89 to be safe, and a rescale would move the grid, the field and every threshold read off it in a way you could not see. If the warning appears and the geometry does look wrong, re-export the file from your quantum-chemistry package in Bohr.
+
+Field **values** are passed through unconverted, in whatever atomic unit the source quantity uses — converting them would invalidate the published threshold conventions (roughly ±0.02–0.05 for orbital amplitudes, 0.002 for a density's molecular surface).
+
+**Multi-field cube files are not yet supported.** A file whose atom count is written negative — the format's flag for several fields sharing one grid — is rejected with a clear message rather than misparsed.
+
+**Typical pipeline**
+
+- *Check the import:* display the `molecule` output pin. You should see the expected structure at the expected size; a molecule about 1.9× too large means the file's units are not what the header implies.
+- *Use the field:* wire `field` into a node that consumes a `ScalarField`. Nothing renders a field yet — visualization is a separate piece of work — so for now the `molecule` pin is what you look at.
+
 ## materialize
 
 Converts a `Blueprint` into a `Crystal` by carving atoms out of the infinite crystal field using the blueprint's geometry as a cookie cutter. The output retains the `Structure`, so further structure-aligned operations remain available downstream.

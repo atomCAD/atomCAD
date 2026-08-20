@@ -17,6 +17,8 @@ import 'package:flutter_cad/src/rust/api/structure_designer/import_xyz_api.dart'
     as import_xyz_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_cif_api.dart'
     as import_cif_api;
+import 'package:flutter_cad/src/rust/api/structure_designer/import_cube_api.dart'
+    as import_cube_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/import_api.dart'
     as import_api;
 import 'package:flutter_cad/src/rust/api/structure_designer/atom_edit_api.dart'
@@ -3151,6 +3153,26 @@ class StructureDesignerModel extends ChangeNotifier {
 
   APIResult importXyz(BigInt nodeId) {
     var result = import_xyz_api.importXyz(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+    refreshFromKernel();
+    return result;
+  }
+
+  void setImportCubeData(BigInt nodeId, APIImportCubeData data) {
+    structure_designer_api.setImportCubeData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
+  APIImportCubeData? getImportCubeData(BigInt nodeId) {
+    return structure_designer_api.getImportCubeData(
+        scopePath: propertyEditorScopePath, nodeId: nodeId);
+  }
+
+  APIResult importCube(BigInt nodeId) {
+    var result = import_cube_api.importCube(
         scopePath: propertyEditorScopePath, nodeId: nodeId);
     refreshFromKernel();
     return result;

@@ -69,6 +69,7 @@ import 'package:flutter_cad/structure_designer/node_data/motif_sub_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/materialize_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_xyz_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/import_cif_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/import_cube_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/infer_bonds_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_replace_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/export_atoms_editor.dart';
@@ -973,6 +974,14 @@ class NodeDataWidget extends StatelessWidget {
         return ImportCifEditor(
           nodeId: selectedNode.id,
           data: importCifData,
+          model: model,
+        );
+      case 'import_cube':
+        final importCubeData = model.getImportCubeData(selectedNode.id);
+
+        return ImportCubeEditor(
+          nodeId: selectedNode.id,
+          data: importCubeData,
           model: model,
         );
       case 'infer_bonds':
