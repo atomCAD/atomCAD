@@ -1,6 +1,7 @@
 use crate::crystolecule_constants::{DEFAULT_ZINCBLENDE_MOTIF, DIAMOND_UNIT_CELL_SIZE_ANGSTROM};
 use crate::motif::Motif;
 use crate::unit_cell_struct::UnitCellStruct;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::f64::DVec3;
 
 /// Crystal structure: lattice vectors + motif + motif offset.
@@ -68,5 +69,18 @@ impl Structure {
             && self
                 .motif_offset
                 .abs_diff_eq(other.motif_offset, OFFSET_TOLERANCE)
+    }
+}
+
+// Memory size estimation implementation
+
+impl MemorySizeEstimator for Structure {
+    fn estimate_memory_bytes(&self) -> usize {
+        // `lattice_vecs` and `motif_offset` are plain inline data, so
+        // `size_of::<Structure>()` already covers everything except the
+        // motif's heap. Subtracting the inline `Motif` header keeps it from
+        // being counted twice.
+        std::mem::size_of::<Structure>() - std::mem::size_of::<Motif>()
+            + self.motif.estimate_memory_bytes()
     }
 }

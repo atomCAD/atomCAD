@@ -113,6 +113,19 @@ impl CsgConversionCache {
         Self::new(DEFAULT_MESH_CAPACITY, DEFAULT_SKETCH_CAPACITY)
     }
 
+    /// Applies new memory budgets to both caches, evicting immediately if the
+    /// new limits are smaller than the current usage.
+    ///
+    /// Exists so a preferences change takes effect without a restart
+    /// (`doc/design_eval_memoization.md` D11); the eviction itself is
+    /// `MemoryBoundedLruCache::resize`.
+    pub fn set_capacities(&mut self, mesh_capacity_bytes: usize, sketch_capacity_bytes: usize) {
+        self.mesh_cache.resize(mesh_capacity_bytes);
+        self.sketch_cache.resize(sketch_capacity_bytes);
+        self.stats.mesh_capacity_bytes = mesh_capacity_bytes;
+        self.stats.sketch_capacity_bytes = sketch_capacity_bytes;
+    }
+
     /// Get a cached mesh, returns None if not found
     pub fn get_mesh(&mut self, hash: &blake3::Hash) -> Option<Arc<CSGMesh>> {
         if let Some(mesh) = self.mesh_cache.get(hash) {

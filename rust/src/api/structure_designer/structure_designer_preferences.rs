@@ -494,6 +494,54 @@ fn default_max_displacement() -> f64 {
     0.1
 }
 
+/// Budgets for the application's memory-bounded caches, in **megabytes**.
+///
+/// Megabytes rather than bytes because bytes are the wrong unit for a person,
+/// and a `u32` of MB cannot overflow a `usize` of bytes on any target we build
+/// for. See `doc/design_eval_memoization.md` D11.
+///
+/// Lowering a budget costs **recomputation, never correctness**.
+#[frb]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryPreferences {
+    /// CSG mesh conversion cache (3D geometry → `csgrs` mesh). Default 200 MB.
+    #[frb(non_final)]
+    #[serde(default = "default_csg_mesh_cache_mb")]
+    pub csg_mesh_cache_mb: u32,
+
+    /// CSG sketch conversion cache (2D geometry → `csgrs` sketch).
+    /// Default 56 MB.
+    #[frb(non_final)]
+    #[serde(default = "default_csg_sketch_cache_mb")]
+    pub csg_sketch_cache_mb: u32,
+
+    /// Scene data retained for nodes that were made invisible, so restoring
+    /// their visibility needs no re-evaluation. Default 256 MB.
+    #[frb(non_final)]
+    #[serde(default = "default_invisible_node_cache_mb")]
+    pub invisible_node_cache_mb: u32,
+}
+
+fn default_csg_mesh_cache_mb() -> u32 {
+    200
+}
+fn default_csg_sketch_cache_mb() -> u32 {
+    56
+}
+fn default_invisible_node_cache_mb() -> u32 {
+    256
+}
+
+impl Default for MemoryPreferences {
+    fn default() -> Self {
+        Self {
+            csg_mesh_cache_mb: default_csg_mesh_cache_mb(),
+            csg_sketch_cache_mb: default_csg_sketch_cache_mb(),
+            invisible_node_cache_mb: default_invisible_node_cache_mb(),
+        }
+    }
+}
+
 /// Preferences for auto-layout operations.
 #[frb]
 #[derive(Clone, Serialize, Deserialize)]
@@ -538,6 +586,8 @@ pub struct StructureDesignerPreferences {
     pub layout_preferences: LayoutPreferences,
     #[serde(default)]
     pub simulation_preferences: SimulationPreferences,
+    #[serde(default)]
+    pub memory_preferences: MemoryPreferences,
 }
 
 impl StructureDesignerPreferences {
@@ -828,6 +878,26 @@ impl From<&domain::SimulationPreferences> for SimulationPreferences {
     }
 }
 
+impl From<&MemoryPreferences> for domain::MemoryPreferences {
+    fn from(p: &MemoryPreferences) -> Self {
+        domain::MemoryPreferences {
+            csg_mesh_cache_mb: p.csg_mesh_cache_mb,
+            csg_sketch_cache_mb: p.csg_sketch_cache_mb,
+            invisible_node_cache_mb: p.invisible_node_cache_mb,
+        }
+    }
+}
+
+impl From<&domain::MemoryPreferences> for MemoryPreferences {
+    fn from(p: &domain::MemoryPreferences) -> Self {
+        MemoryPreferences {
+            csg_mesh_cache_mb: p.csg_mesh_cache_mb,
+            csg_sketch_cache_mb: p.csg_sketch_cache_mb,
+            invisible_node_cache_mb: p.invisible_node_cache_mb,
+        }
+    }
+}
+
 impl From<&LayoutPreferences> for domain::LayoutPreferences {
     fn from(p: &LayoutPreferences) -> Self {
         domain::LayoutPreferences {
@@ -857,6 +927,7 @@ impl From<&StructureDesignerPreferences> for domain::StructureDesignerPreference
             background_preferences: (&p.background_preferences).into(),
             layout_preferences: (&p.layout_preferences).into(),
             simulation_preferences: (&p.simulation_preferences).into(),
+            memory_preferences: (&p.memory_preferences).into(),
         }
     }
 }
@@ -878,6 +949,7 @@ impl From<&domain::StructureDesignerPreferences> for StructureDesignerPreference
             background_preferences: (&p.background_preferences).into(),
             layout_preferences: (&p.layout_preferences).into(),
             simulation_preferences: (&p.simulation_preferences).into(),
+            memory_preferences: (&p.memory_preferences).into(),
         }
     }
 }

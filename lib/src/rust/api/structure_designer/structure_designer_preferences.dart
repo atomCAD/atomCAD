@@ -7,8 +7,8 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
   triangleMesh,
@@ -297,6 +297,50 @@ class LayoutPreferences {
           autoLayoutAfterEdit == other.autoLayoutAfterEdit;
 }
 
+/// Budgets for the application's memory-bounded caches, in **megabytes**.
+///
+/// Megabytes rather than bytes because bytes are the wrong unit for a person,
+/// and a `u32` of MB cannot overflow a `usize` of bytes on any target we build
+/// for. See `doc/design_eval_memoization.md` D11.
+///
+/// Lowering a budget costs **recomputation, never correctness**.
+class MemoryPreferences {
+  /// CSG mesh conversion cache (3D geometry → `csgrs` mesh). Default 200 MB.
+  int csgMeshCacheMb;
+
+  /// CSG sketch conversion cache (2D geometry → `csgrs` sketch).
+  /// Default 56 MB.
+  int csgSketchCacheMb;
+
+  /// Scene data retained for nodes that were made invisible, so restoring
+  /// their visibility needs no re-evaluation. Default 256 MB.
+  int invisibleNodeCacheMb;
+
+  MemoryPreferences({
+    required this.csgMeshCacheMb,
+    required this.csgSketchCacheMb,
+    required this.invisibleNodeCacheMb,
+  });
+
+  static Future<MemoryPreferences> default_() => RustLib.instance.api
+      .crateApiStructureDesignerStructureDesignerPreferencesMemoryPreferencesDefault();
+
+  @override
+  int get hashCode =>
+      csgMeshCacheMb.hashCode ^
+      csgSketchCacheMb.hashCode ^
+      invisibleNodeCacheMb.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MemoryPreferences &&
+          runtimeType == other.runtimeType &&
+          csgMeshCacheMb == other.csgMeshCacheMb &&
+          csgSketchCacheMb == other.csgSketchCacheMb &&
+          invisibleNodeCacheMb == other.invisibleNodeCacheMb;
+}
+
 /// Enum to control mesh smoothing behavior during tessellation
 enum MeshSmoothing {
   /// Smooth normals: averages normals at each vertex from all connected faces
@@ -409,6 +453,7 @@ class StructureDesignerPreferences {
   final BackgroundPreferences backgroundPreferences;
   final LayoutPreferences layoutPreferences;
   final SimulationPreferences simulationPreferences;
+  final MemoryPreferences memoryPreferences;
 
   const StructureDesignerPreferences.raw({
     required this.geometryVisualizationPreferences,
@@ -417,6 +462,7 @@ class StructureDesignerPreferences {
     required this.backgroundPreferences,
     required this.layoutPreferences,
     required this.simulationPreferences,
+    required this.memoryPreferences,
   });
 
   StructureDesignerPreferences cloneSelf() => RustLib.instance.api
@@ -437,7 +483,8 @@ class StructureDesignerPreferences {
       atomicStructureVisualizationPreferences.hashCode ^
       backgroundPreferences.hashCode ^
       layoutPreferences.hashCode ^
-      simulationPreferences.hashCode;
+      simulationPreferences.hashCode ^
+      memoryPreferences.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -451,5 +498,6 @@ class StructureDesignerPreferences {
               other.atomicStructureVisualizationPreferences &&
           backgroundPreferences == other.backgroundPreferences &&
           layoutPreferences == other.layoutPreferences &&
-          simulationPreferences == other.simulationPreferences;
+          simulationPreferences == other.simulationPreferences &&
+          memoryPreferences == other.memoryPreferences;
 }

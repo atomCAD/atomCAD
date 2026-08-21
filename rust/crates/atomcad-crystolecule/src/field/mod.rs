@@ -275,6 +275,21 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     /// scalar quantity chemistry produces, not just the three or four anyone
     /// thought to name.
     fn value_range(&self) -> Option<(f64, f64)>;
+
+    /// Approximate footprint of this field in bytes, including its heap.
+    ///
+    /// On the trait rather than in a `MemorySizeEstimator` impl because a field
+    /// is only ever held as `Arc<dyn ScalarField>`, and the rest of the
+    /// interface exposes *sampling* only — from outside, a sampled grid and an
+    /// analytic wavefunction are indistinguishable, yet one is megabytes and
+    /// the other is a few hundred bytes. Memory-bounded caches that hold field
+    /// values (the per-pass evaluation memo,
+    /// `doc/design_eval_memoization.md` D6 R1) would otherwise be blind to
+    /// precisely the payload they exist to bound.
+    ///
+    /// Required, not defaulted: a new field kind that forgot to report its size
+    /// should not silently claim to be free.
+    fn estimate_memory_bytes(&self) -> usize;
 }
 
 /// One axis of the trait's default central difference.
@@ -535,5 +550,11 @@ impl ScalarField for SampledField {
 
     fn value_range(&self) -> Option<(f64, f64)> {
         Some(self.value_range)
+    }
+
+    /// The sample grid dominates; everything else is a handful of inline
+    /// `f64`s already covered by `size_of::<SampledField>()`.
+    fn estimate_memory_bytes(&self) -> usize {
+        std::mem::size_of::<SampledField>() + self.samples.capacity() * std::mem::size_of::<f32>()
     }
 }

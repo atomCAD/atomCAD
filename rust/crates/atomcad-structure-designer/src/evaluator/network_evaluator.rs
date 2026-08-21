@@ -893,6 +893,18 @@ impl NetworkEvaluator {
         self.csg_conversion_cache.clear();
     }
 
+    /// Applies new CSG cache budgets, evicting immediately if either is now
+    /// smaller than the current usage. Driven by the Memory preferences
+    /// (`doc/design_eval_memoization.md` D11).
+    pub fn set_csg_cache_capacities(
+        &mut self,
+        mesh_capacity_bytes: usize,
+        sketch_capacity_bytes: usize,
+    ) {
+        self.csg_conversion_cache
+            .set_capacities(mesh_capacity_bytes, sketch_capacity_bytes);
+    }
+
     /// Get cache statistics
     pub fn get_csg_cache_stats(&self) -> atomcad_geo_tree::csg_cache::CacheStats {
         self.csg_conversion_cache.stats()

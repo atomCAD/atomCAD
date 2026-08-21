@@ -92,6 +92,13 @@ class PreferencesKeys {
       Key('pref_continuous_minimization_settle_steps_input');
   static const Key continuousMinimizationMaxDisplacementInput =
       Key('pref_continuous_minimization_max_displacement_input');
+
+  // Memory settings
+  static const Key csgMeshCacheMbInput = Key('pref_csg_mesh_cache_mb_input');
+  static const Key csgSketchCacheMbInput =
+      Key('pref_csg_sketch_cache_mb_input');
+  static const Key invisibleNodeCacheMbInput =
+      Key('pref_invisible_node_cache_mb_input');
 }
 
 /// A modal preferences window for the structure designer.
@@ -108,6 +115,14 @@ class PreferencesWindow extends StatefulWidget {
 }
 
 class _PreferencesWindowState extends State<PreferencesWindow> {
+  /// Clamp for every cache budget in the Memory section. A cache below one
+  /// entry's size still works (it degrades to a pass-through), so these are
+  /// typo guards rather than correctness floors. Mirrors
+  /// `MIN_CACHE_BUDGET_MB` / `MAX_CACHE_BUDGET_MB` in
+  /// `rust/crates/atomcad-structure-designer/src/preferences.rs`.
+  static const int _minCacheBudgetMb = 1;
+  static const int _maxCacheBudgetMb = 16 * 1024;
+
   // Local copy of preferences that we'll modify
   late StructureDesignerPreferences _preferences;
 
@@ -1499,6 +1514,104 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                   _preferences.simulationPreferences
                                           .continuousMinimizationMaxDisplacement =
                                       clamped;
+                                });
+                                _applyPreferences();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.medium),
+
+                    // Memory Preferences Section
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.medium),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Memory',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+                          const Text(
+                            'Budgets for the caches that speed up repeated work. '
+                            'Lowering one costs recomputation, never correctness.',
+                            style: TextStyle(fontSize: 12),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+                          Tooltip(
+                            message:
+                                'Converted 3D CSG meshes kept in memory for reuse.\n'
+                                'Lowering this makes geometry-heavy designs slower to\n'
+                                'evaluate, but never changes what they produce.\n'
+                                'Default: 200 MB.',
+                            child: IntInput(
+                              key: PreferencesKeys.csgMeshCacheMbInput,
+                              label: 'CSG mesh cache (MB)',
+                              value:
+                                  _preferences.memoryPreferences.csgMeshCacheMb,
+                              minimumValue: _minCacheBudgetMb,
+                              maximumValue: _maxCacheBudgetMb,
+                              onChanged: (value) {
+                                setState(() {
+                                  _preferences
+                                      .memoryPreferences.csgMeshCacheMb = value;
+                                });
+                                _applyPreferences();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+                          Tooltip(
+                            message:
+                                'Converted 2D CSG sketches kept in memory for reuse.\n'
+                                'Lowering this makes sketch-heavy designs slower to\n'
+                                'evaluate, but never changes what they produce.\n'
+                                'Default: 56 MB.',
+                            child: IntInput(
+                              key: PreferencesKeys.csgSketchCacheMbInput,
+                              label: 'CSG sketch cache (MB)',
+                              value: _preferences
+                                  .memoryPreferences.csgSketchCacheMb,
+                              minimumValue: _minCacheBudgetMb,
+                              maximumValue: _maxCacheBudgetMb,
+                              onChanged: (value) {
+                                setState(() {
+                                  _preferences.memoryPreferences
+                                      .csgSketchCacheMb = value;
+                                });
+                                _applyPreferences();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+                          Tooltip(
+                            message:
+                                'Scene data kept for nodes you have hidden, so showing\n'
+                                'them again is instant instead of a re-evaluation.\n'
+                                'Lowering this only costs that re-evaluation.\n'
+                                'Default: 256 MB.',
+                            child: IntInput(
+                              key: PreferencesKeys.invisibleNodeCacheMbInput,
+                              label: 'Hidden node scene cache (MB)',
+                              value: _preferences
+                                  .memoryPreferences.invisibleNodeCacheMb,
+                              minimumValue: _minCacheBudgetMb,
+                              maximumValue: _maxCacheBudgetMb,
+                              onChanged: (value) {
+                                setState(() {
+                                  _preferences.memoryPreferences
+                                      .invisibleNodeCacheMb = value;
                                 });
                                 _applyPreferences();
                               },

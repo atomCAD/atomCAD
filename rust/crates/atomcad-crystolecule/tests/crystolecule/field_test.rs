@@ -258,6 +258,9 @@ impl ScalarField for QuadraticField {
     fn value_range(&self) -> Option<(f64, f64)> {
         None
     }
+    fn estimate_memory_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+    }
 }
 
 #[test]
@@ -300,6 +303,9 @@ impl ScalarField for CubicField {
     }
     fn value_range(&self) -> Option<(f64, f64)> {
         None
+    }
+    fn estimate_memory_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
     }
 }
 
@@ -429,4 +435,46 @@ fn a_sheared_grid_samples_and_differentiates_in_real_space() {
         (gradient - DVec3::new(1.0, -1.0, 0.0)).length() < 1e-9,
         "{gradient}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// `ScalarField::estimate_memory_bytes` (`doc/design_eval_memoization.md` D6 R1)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_sampled_field_sizes_with_its_grid() {
+    // The whole reason the method is on the trait: from outside, a small field
+    // and a large one are indistinguishable, yet the grid is the largest single
+    // payload a memory-bounded cache holding field values can hold.
+    let small = unit_ramp([3, 3, 3]);
+    let large = unit_ramp([30, 30, 30]);
+
+    let small_bytes = small.estimate_memory_bytes();
+    let large_bytes = large.estimate_memory_bytes();
+
+    assert!(
+        large_bytes > small_bytes,
+        "a 1000x larger grid must size above a small one: {large_bytes} vs {small_bytes}"
+    );
+
+    // The *difference* must account for the extra samples. Stated as a
+    // difference rather than a ratio because a 27-sample grid is dominated by
+    // the struct header, which would dilute any ratio at the small end without
+    // saying anything about the estimator.
+    let extra_samples = 30 * 30 * 30 - 3 * 3 * 3;
+    assert!(
+        large_bytes - small_bytes >= extra_samples * std::mem::size_of::<f32>(),
+        "the estimate must cover the extra sample storage"
+    );
+
+    // And the estimate must at least cover the raw sample array.
+    assert!(large_bytes >= 30 * 30 * 30 * std::mem::size_of::<f32>());
+}
+
+#[test]
+fn a_field_reached_through_the_trait_object_still_reports_its_grid() {
+    // How the evaluator actually holds a field: `Arc<dyn ScalarField>`.
+    use std::sync::Arc;
+    let field: Arc<dyn ScalarField> = Arc::new(unit_ramp([8, 8, 8]));
+    assert!(field.estimate_memory_bytes() >= 8 * 8 * 8 * std::mem::size_of::<f32>());
 }

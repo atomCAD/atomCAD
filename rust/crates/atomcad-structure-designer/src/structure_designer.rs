@@ -32,6 +32,7 @@ use crate::node_data::NodeData;
 use crate::node_dependency_analysis::compute_downstream_dependents;
 use crate::node_type::{generic_node_data_loader, generic_node_data_saver};
 use crate::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
+use crate::preferences::MemoryPreferences;
 use crate::preferences::StructureDesignerPreferences;
 use crate::serialization::node_networks_serialization;
 use crate::structure_designer_scene::StructureDesignerScene;
@@ -303,10 +304,23 @@ impl Default for StructureDesigner {
 impl StructureDesigner {
     pub fn new() -> Self {
         let node_type_registry = NodeTypeRegistry::new();
-        let network_evaluator = NetworkEvaluator::new();
+        let mut network_evaluator = NetworkEvaluator::new();
         let node_display_policy_resolver = NodeDisplayPolicyResolver::new();
         // Load persisted preferences from config directory, or use defaults if not available
         let preferences = load_preferences();
+
+        // Apply the persisted cache budgets right here, not only when the
+        // preferences dialog is opened — otherwise a saved budget silently has
+        // no effect until the user visits the dialog (D11).
+        let memory = &preferences.memory_preferences;
+        network_evaluator.set_csg_cache_capacities(
+            MemoryPreferences::clamped_bytes(memory.csg_mesh_cache_mb),
+            MemoryPreferences::clamped_bytes(memory.csg_sketch_cache_mb),
+        );
+        let mut scene = StructureDesignerScene::new();
+        scene.set_invisible_node_cache_capacity(MemoryPreferences::clamped_bytes(
+            memory.invisible_node_cache_mb,
+        ));
 
         Self {
             node_type_registry,
@@ -315,7 +329,7 @@ impl StructureDesigner {
             gadget_pick_context: GadgetPickContext::disabled(),
             active_node_network_name: None,
             active_record_def_name: None,
-            last_generated_structure_designer_scene: StructureDesignerScene::new(),
+            last_generated_structure_designer_scene: scene,
             preferences,
             node_display_policy_resolver,
             import_manager: NodeNetworksImportManager::new(),
@@ -1381,7 +1395,7 @@ impl StructureDesigner {
             None => {
                 // No active network — clear the scene so the viewport doesn't
                 // keep rendering stale output from a previously active network.
-                self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+                self.last_generated_structure_designer_scene = self.fresh_scene();
                 return RefreshSubPhases::nothing_ran();
             }
         };
@@ -1487,7 +1501,7 @@ impl StructureDesigner {
             };
 
             // Create new scene with empty node_data HashMap and invisibility cache.
-            self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+            self.last_generated_structure_designer_scene = self.fresh_scene();
             self.last_generated_structure_designer_scene.active_node_id = network.active_node_id;
 
             // Snapshot the (ref, display_type) pairs so the closure below can
@@ -5404,7 +5418,7 @@ impl StructureDesigner {
         self.network_evaluator.clear_csg_cache();
 
         // Clear the last generated scene
-        self.last_generated_structure_designer_scene = StructureDesignerScene::new();
+        self.last_generated_structure_designer_scene = self.fresh_scene();
 
         // Mark for full refresh
         self.mark_full_refresh();
@@ -7312,6 +7326,36 @@ impl StructureDesigner {
     }
 
     /// Sets the preferences for the structure designer and applies necessary updates
+    /// Pushes the Memory preferences (D11) into the two caches that persist
+    /// across refreshes. Called from [`StructureDesigner::new`] (which loads
+    /// the persisted values) and from `set_preferences` (which receives an
+    /// edited copy).
+    fn apply_memory_preferences(&mut self) {
+        let memory = &self.preferences.memory_preferences;
+        let mesh_bytes = MemoryPreferences::clamped_bytes(memory.csg_mesh_cache_mb);
+        let sketch_bytes = MemoryPreferences::clamped_bytes(memory.csg_sketch_cache_mb);
+        let invisible_bytes = MemoryPreferences::clamped_bytes(memory.invisible_node_cache_mb);
+
+        self.network_evaluator
+            .set_csg_cache_capacities(mesh_bytes, sketch_bytes);
+        self.last_generated_structure_designer_scene
+            .set_invisible_node_cache_capacity(invisible_bytes);
+    }
+
+    /// A replacement scene carrying the configured invisible-node cache budget.
+    ///
+    /// The scene is rebuilt on every *full* refresh, so a plain
+    /// `StructureDesignerScene::new()` at any of those sites would quietly
+    /// reset the budget to the built-in default. Route every re-creation
+    /// through here.
+    fn fresh_scene(&self) -> StructureDesignerScene {
+        let mut scene = StructureDesignerScene::new();
+        scene.set_invisible_node_cache_capacity(MemoryPreferences::clamped_bytes(
+            self.preferences.memory_preferences.invisible_node_cache_mb,
+        ));
+        scene
+    }
+
     pub fn set_preferences(&mut self, preferences: StructureDesignerPreferences) {
         // Check if node display preferences have changed
         let node_display_prefs_changed =
@@ -7325,6 +7369,11 @@ impl StructureDesigner {
 
         // Update the preferences
         self.preferences = preferences;
+
+        // Cache budgets apply live — `MemoryBoundedLruCache::resize` evicts
+        // down to a smaller limit immediately rather than waiting for the next
+        // insert, so no restart is needed (D11).
+        self.apply_memory_preferences();
 
         // If node display preferences have changed, reapply the node display policy
         if node_display_prefs_changed {

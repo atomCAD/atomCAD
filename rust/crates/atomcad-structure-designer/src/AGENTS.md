@@ -287,6 +287,33 @@ Pre-edit footprints **must be captured before mutating** (the bodies have alread
 
 Design doc: `doc/design_zero_ary_closure_body_display.md` (issue #409).
 
+**The scene is rebuilt on every *full* refresh, so anything configured on it
+must be re-applied there.** `refresh_full` replaces
+`last_generated_structure_designer_scene` wholesale, as do "no active network"
+and `new_project`. Configuration that lives on the scene — today the
+invisible-node cache's memory budget, a user preference — would therefore
+silently revert to the built-in default at the next refresh. Every re-creation
+site goes through **`StructureDesigner::fresh_scene()`**, never a bare
+`StructureDesignerScene::new()`; add a new one and it must too. The failure mode
+is the worst kind: the setting visibly works when you change it and stops
+working a moment later, with nothing to attribute it to.
+
+## User preferences: three files and two apply sites
+
+A new preferences *section* touches, in order: `preferences.rs` here (the domain
+struct, `#[serde(default)]` **per field** — the tolerant-reader contract that
+keeps existing `preferences.json` files loading), a same-named twin in
+`rust/src/api/structure_designer/structure_designer_preferences.rs` with
+`#[frb(non_final)]` fields and `From` impls both ways, and a grey section in
+`lib/structure_designer/preferences_window.dart`.
+
+What is easy to miss is that a preference which *drives* something has **two**
+apply sites, not one: `StructureDesigner::set_preferences` (the edited copy
+arriving from the dialog) **and** `StructureDesigner::new`, which loads the
+persisted file. Wire only the first and a saved value takes effect only after
+the user re-opens the dialog — in a fresh session it does nothing at all.
+`apply_memory_preferences` is the worked example.
+
 ## Testing
 
 Tests go in `crates/atomcad-structure-designer/tests/structure_designer/` (see

@@ -913,7 +913,7 @@ self-check). **Phase 2 may start.**
 Optional, non-blocking: run the self-check clean on one or two further
 designs to broaden the evidence that the key is not under-split.
 
-### Phase 2 — Sizing, exclusion, and budgets (D6, D11)
+### Phase 2 — Sizing, exclusion, and budgets (D6, D11). Done
 
 Everything the memo needs that is a **pure function**: the
 `MemorySizeEstimator` impls for `NetworkResult` and `EvalOutput`, the
@@ -933,6 +933,25 @@ the predicate have no callers outside tests, and the preferences section
 touches caches this design does not own. It is separated for exactly that
 reason — about a third of the work and none of the risk — and doing it
 first means Phase 3 is a change to the evaluator and nothing else.
+
+**As built**, three notes for Phase 3:
+
+- `MemorySizeEstimator for NetworkResult` is a thin wrapper over
+  `NetworkResult::heap_bytes()`, which reports the heap *excluding* the inline
+  `size_of::<NetworkResult>()` every variant costs. The split is what lets
+  `Array` / `Record` / `EvalOutput` sum their elements without charging the enum
+  header twice — a `Vec`'s allocation is already
+  `capacity × size_of::<NetworkResult>()`. Call `heap_bytes` from a new
+  container arm, `estimate_memory_bytes` from a new top-level holder.
+- The R4 predicate is `NetworkResult::contains_iterator()`, with an
+  `EvalOutput::contains_iterator()` on top that asks **`display_results` as well
+  as `results`** — the memo stores the whole output under one key, so a walker
+  hiding in a display override has to exclude the entry too.
+- The scene is rebuilt on **every full refresh**, so the invisible-node cache's
+  budget is re-applied through `StructureDesigner::fresh_scene()` rather than
+  once at construction. Any per-scene state Phase 3 adds has the same problem,
+  and the failure is silent: it works when you set it and stops at the next
+  refresh. Recorded in `crates/atomcad-structure-designer/src/AGENTS.md`.
 
 #### Tests
 
@@ -975,6 +994,9 @@ first means Phase 3 is a change to the evaluator and nothing else.
   the claim the tooltip makes.
 - Restart and confirm the values persisted, then delete
   `preferences.json` and confirm the defaults come back.
+
+The Flutter smoke test (`flutter test integration_test/`) is a **pending manual
+step for the maintainer** here as it is for Phase 3.
 
 ### Phase 3 — The memo (D1–D5, D7–D10, plus D11's memo row)
 

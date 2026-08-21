@@ -357,6 +357,21 @@ impl StructureDesignerScene {
         }
     }
 
+    /// Applies a new memory budget to the invisible-node cache, evicting
+    /// immediately if the new limit is smaller than the current usage.
+    ///
+    /// The scene outlives a refresh but is rebuilt on new-project / clear, so
+    /// `StructureDesigner` re-applies the budget at each of those sites as well
+    /// as on a preferences change (`doc/design_eval_memoization.md` D11).
+    pub fn set_invisible_node_cache_capacity(&mut self, capacity_bytes: usize) {
+        self.invisible_node_cache.resize(capacity_bytes);
+    }
+
+    /// The invisible-node cache's current memory budget in bytes.
+    pub fn invisible_node_cache_capacity_bytes(&self) -> usize {
+        self.invisible_node_cache.max_memory_bytes()
+    }
+
     /// Returns the number of nodes currently in the invisible cache
     pub fn cached_node_count(&self) -> usize {
         self.invisible_node_cache.len()

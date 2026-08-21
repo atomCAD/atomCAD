@@ -4,8 +4,8 @@ use atomcad_crystolecule::visualization::AtomicStructureVisualization;
 use atomcad_structure_designer::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualizationPreferences, BackgroundPreferences,
     GeometryVisualization, GeometryVisualizationPreferences, LayoutAlgorithmPreference,
-    LayoutPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences, PrefColor,
-    SimulationPreferences, StructureDesignerPreferences,
+    LayoutPreferences, MemoryPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences,
+    PrefColor, SimulationPreferences, StructureDesignerPreferences,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -429,6 +429,11 @@ fn test_non_default_values_roundtrip() {
             continuous_minimization_settle_steps: 100,
             continuous_minimization_max_displacement: 0.05,
         },
+        memory_preferences: MemoryPreferences {
+            csg_mesh_cache_mb: 128,
+            csg_sketch_cache_mb: 32,
+            invisible_node_cache_mb: 512,
+        },
     };
 
     // Roundtrip
@@ -615,4 +620,171 @@ fn test_continuous_minimization_preferences_roundtrip() {
     let loaded: SimulationPreferences = serde_json::from_str(&json).expect("Failed to deserialize");
 
     assert_eq!(loaded, prefs);
+}
+
+// ---------------------------------------------------------------------------
+// Memory preferences (`doc/design_eval_memoization.md` D11)
+// ---------------------------------------------------------------------------
+
+/// The tolerant-reader contract, which is the one way a preferences change can
+/// break existing users: a file written before this phase has no
+/// `memory_preferences` section at all and must load with the documented
+/// defaults rather than zeroes.
+#[test]
+fn test_preferences_without_memory_section_defaults_it() {
+    let pre_memory_json = r#"{
+        "layout_preferences": {
+            "layout_algorithm": "Sugiyama",
+            "auto_layout_after_edit": true
+        }
+    }"#;
+
+    let loaded: StructureDesignerPreferences = serde_json::from_str(pre_memory_json)
+        .expect("A settings file predating memory_preferences must still load");
+
+    assert_eq!(loaded.memory_preferences.csg_mesh_cache_mb, 200);
+    assert_eq!(loaded.memory_preferences.csg_sketch_cache_mb, 56);
+    assert_eq!(loaded.memory_preferences.invisible_node_cache_mb, 256);
+}
+
+/// A partially-written section must fill only its missing fields — the
+/// per-field `#[serde(default)]` contract, not a whole-section fallback.
+#[test]
+fn test_partial_memory_section_defaults_only_the_missing_fields() {
+    let partial_json = r#"{
+        "memory_preferences": {
+            "csg_mesh_cache_mb": 64
+        }
+    }"#;
+
+    let loaded: StructureDesignerPreferences =
+        serde_json::from_str(partial_json).expect("A partial memory section must load");
+
+    assert_eq!(loaded.memory_preferences.csg_mesh_cache_mb, 64);
+    assert_eq!(loaded.memory_preferences.csg_sketch_cache_mb, 56);
+    assert_eq!(loaded.memory_preferences.invisible_node_cache_mb, 256);
+}
+
+/// Budgets are expressed in megabytes because bytes are the wrong unit for a
+/// person; the conversion is the only arithmetic in the path.
+#[test]
+fn test_megabyte_budgets_convert_to_bytes() {
+    assert_eq!(MemoryPreferences::mb_to_bytes(0), 0);
+    assert_eq!(MemoryPreferences::mb_to_bytes(1), 1024 * 1024);
+    assert_eq!(MemoryPreferences::mb_to_bytes(1024), 1024 * 1024 * 1024);
+}
+
+/// Applying a change must not need a restart: `set_preferences` pushes the new
+/// budgets straight into the live caches.
+#[test]
+fn test_memory_preferences_apply_live_without_a_restart() {
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
+
+    let mut sd = StructureDesigner::new();
+
+    // Pin the starting point rather than trusting whatever this machine's
+    // persisted preferences say (`StructureDesigner::new()` loads the real
+    // user file).
+    let mut prefs = sd.preferences.clone();
+    prefs.memory_preferences = MemoryPreferences {
+        csg_mesh_cache_mb: 300,
+        csg_sketch_cache_mb: 70,
+        invisible_node_cache_mb: 400,
+    };
+    sd.set_preferences(prefs.clone());
+
+    let stats = sd.network_evaluator.get_csg_cache_stats();
+    assert_eq!(stats.mesh_capacity_bytes, 300 * 1024 * 1024);
+    assert_eq!(stats.sketch_capacity_bytes, 70 * 1024 * 1024);
+    assert_eq!(
+        sd.last_generated_structure_designer_scene
+            .invisible_node_cache_capacity_bytes(),
+        400 * 1024 * 1024
+    );
+
+    // ...and lowering them takes effect at once too, which is the direction
+    // that matters: `MemoryBoundedLruCache::resize` evicts down to the new
+    // limit rather than waiting for the next insert.
+    prefs.memory_preferences = MemoryPreferences {
+        csg_mesh_cache_mb: 8,
+        csg_sketch_cache_mb: 4,
+        invisible_node_cache_mb: 16,
+    };
+    sd.set_preferences(prefs);
+
+    let stats = sd.network_evaluator.get_csg_cache_stats();
+    assert_eq!(stats.mesh_capacity_bytes, 8 * 1024 * 1024);
+    assert_eq!(stats.sketch_capacity_bytes, 4 * 1024 * 1024);
+    assert_eq!(
+        sd.last_generated_structure_designer_scene
+            .invisible_node_cache_capacity_bytes(),
+        16 * 1024 * 1024
+    );
+}
+
+/// The scene — and with it the invisible-node cache — is **rebuilt on every
+/// full refresh**, so a plain `StructureDesignerScene::new()` at any of those
+/// sites would quietly reset the budget to the built-in default. Without this
+/// test the setting appears to work (the dialog shows it, `set_preferences`
+/// applies it) and then silently stops working at the next refresh.
+#[test]
+fn test_invisible_node_cache_budget_survives_a_full_refresh() {
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
+
+    let mut sd = StructureDesigner::new();
+    sd.add_node_network("Main");
+    sd.set_active_node_network_name(Some("Main".to_string()));
+
+    let mut prefs = sd.preferences.clone();
+    prefs.memory_preferences.invisible_node_cache_mb = 33;
+    sd.set_preferences(prefs);
+
+    sd.mark_full_refresh();
+    let changes = sd.get_pending_changes();
+    sd.refresh(&changes);
+
+    assert_eq!(
+        sd.last_generated_structure_designer_scene
+            .invisible_node_cache_capacity_bytes(),
+        33 * 1024 * 1024,
+        "a full refresh must not reset the configured cache budget"
+    );
+}
+
+/// `preferences.json` is a plain text file a user can edit, so the apply path
+/// clamps rather than trusting it. A `0` budget would build a cache that evicts
+/// every entry the moment after it inserts it — still correct, and
+/// indistinguishable from a performance bug.
+#[test]
+fn test_out_of_range_budgets_are_clamped_on_the_apply_path() {
+    use atomcad_structure_designer::structure_designer::StructureDesigner;
+
+    assert_eq!(MemoryPreferences::clamped_bytes(0), 1024 * 1024);
+    assert_eq!(
+        MemoryPreferences::clamped_bytes(u32::MAX),
+        16 * 1024 * 1024 * 1024
+    );
+    // In-range values pass through untouched.
+    assert_eq!(
+        MemoryPreferences::clamped_bytes(200),
+        MemoryPreferences::mb_to_bytes(200)
+    );
+
+    let mut sd = StructureDesigner::new();
+    let mut prefs = sd.preferences.clone();
+    prefs.memory_preferences = MemoryPreferences {
+        csg_mesh_cache_mb: 0,
+        csg_sketch_cache_mb: 0,
+        invisible_node_cache_mb: 0,
+    };
+    sd.set_preferences(prefs);
+
+    let stats = sd.network_evaluator.get_csg_cache_stats();
+    assert_eq!(stats.mesh_capacity_bytes, 1024 * 1024);
+    assert_eq!(stats.sketch_capacity_bytes, 1024 * 1024);
+    assert_eq!(
+        sd.last_generated_structure_designer_scene
+            .invisible_node_cache_capacity_bytes(),
+        1024 * 1024
+    );
 }

@@ -1,3 +1,4 @@
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::f64::DVec3;
 use glam::i32::IVec3;
 use std::collections::HashMap;
@@ -343,5 +344,38 @@ fn format_site_specifier(spec: &SiteSpecifier) -> String {
             int_to_cell_char(cell.z),
             spec.site_index
         )
+    }
+}
+
+// Memory size estimation implementation
+
+impl MemorySizeEstimator for Motif {
+    fn estimate_memory_bytes(&self) -> usize {
+        let parameters_size = self.parameters.capacity() * std::mem::size_of::<ParameterElement>()
+            + self
+                .parameters
+                .iter()
+                .map(|p| p.name.capacity())
+                .sum::<usize>();
+
+        let sites_size = self.sites.capacity() * std::mem::size_of::<Site>();
+        let bonds_size = self.bonds.capacity() * std::mem::size_of::<MotifBond>();
+
+        // The two precomputed index maps are Vec<Vec<usize>>: the outer
+        // allocation plus every inner one.
+        let index_map_size = |map: &Vec<Vec<usize>>| {
+            map.capacity() * std::mem::size_of::<Vec<usize>>()
+                + map
+                    .iter()
+                    .map(|inner| inner.capacity() * std::mem::size_of::<usize>())
+                    .sum::<usize>()
+        };
+
+        std::mem::size_of::<Motif>()
+            + parameters_size
+            + sites_size
+            + bonds_size
+            + index_map_size(&self.bonds_by_site1_index)
+            + index_map_size(&self.bonds_by_site2_index)
     }
 }

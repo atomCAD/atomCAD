@@ -38,6 +38,27 @@ pub struct MemoryBoundedLruCache<K: Hash + Eq, V> {
 
     /// Function to estimate the memory size of a value in bytes
     size_estimator: fn(&V) -> usize,
+
+    /// High-water mark of [`Self::current_memory_bytes`] over this cache's
+    /// life. Never decreases. A cache whose *final* size is modest can still
+    /// have peaked near its budget mid-pass, and the peak is the number a
+    /// memory budget has to be sized against — see
+    /// `doc/design_eval_memoization.md` D10.
+    peak_memory_bytes: usize,
+
+    /// High-water mark of [`Self::len`] over this cache's life. Never
+    /// decreases.
+    peak_len: usize,
+
+    /// Count of entries dropped **because the budget was exceeded** — the
+    /// eviction loops in [`Self::insert`] and [`Self::resize`].
+    ///
+    /// Deliberately *not* incremented by [`Self::pop`], [`Self::pop_lru`],
+    /// [`Self::clear`] or a same-key replacement: those are the caller
+    /// removing an entry on purpose, which means something completely
+    /// different from the cache running out of room. A caller that collapses
+    /// the two loses the only signal that says "raise the budget".
+    lru_eviction_count: u64,
 }
 
 impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
@@ -62,6 +83,21 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
             current_memory_bytes: 0,
             max_memory_bytes,
             size_estimator,
+            peak_memory_bytes: 0,
+            peak_len: 0,
+            lru_eviction_count: 0,
+        }
+    }
+
+    /// Refreshes the high-water marks. Called after every operation that can
+    /// *raise* the current usage, which today is only [`Self::insert`].
+    fn update_peaks(&mut self) {
+        if self.current_memory_bytes > self.peak_memory_bytes {
+            self.peak_memory_bytes = self.current_memory_bytes;
+        }
+        let len = self.cache.len();
+        if len > self.peak_len {
+            self.peak_len = len;
         }
     }
 
@@ -85,6 +121,7 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
             if let Some((_, evicted_value)) = self.cache.pop_lru() {
                 let evicted_size = (self.size_estimator)(&evicted_value);
                 self.current_memory_bytes = self.current_memory_bytes.saturating_sub(evicted_size);
+                self.lru_eviction_count += 1;
             } else {
                 // Cache is empty, but value is still too large
                 // We allow insertion anyway to avoid data loss
@@ -103,6 +140,8 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
 
         // Add new value's size
         self.current_memory_bytes += value_size;
+
+        self.update_peaks();
 
         old_value
     }
@@ -201,6 +240,28 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
         self.max_memory_bytes
     }
 
+    /// Highest [`Self::current_memory_bytes`] ever reached by this cache.
+    ///
+    /// Monotonic: it survives eviction, [`Self::clear`] and [`Self::resize`],
+    /// because the question it answers is "how much did this cache need at its
+    /// worst?", not "how much does it hold now".
+    pub fn peak_memory_bytes(&self) -> usize {
+        self.peak_memory_bytes
+    }
+
+    /// Highest [`Self::len`] ever reached by this cache. Monotonic, for the
+    /// same reason as [`Self::peak_memory_bytes`].
+    pub fn peak_len(&self) -> usize {
+        self.peak_len
+    }
+
+    /// Number of entries evicted because the budget was exceeded. See
+    /// [`Self::lru_eviction_count`](struct.MemoryBoundedLruCache.html) — a
+    /// non-zero value means work was recomputed and the budget is too small.
+    pub fn lru_eviction_count(&self) -> u64 {
+        self.lru_eviction_count
+    }
+
     /// Returns the current memory usage as a percentage of the maximum (0.0 to 1.0).
     pub fn memory_usage_ratio(&self) -> f64 {
         if self.max_memory_bytes == 0 {
@@ -236,6 +297,7 @@ impl<K: Hash + Eq, V> MemoryBoundedLruCache<K, V> {
             if let Some((_, evicted_value)) = self.cache.pop_lru() {
                 let evicted_size = (self.size_estimator)(&evicted_value);
                 self.current_memory_bytes = self.current_memory_bytes.saturating_sub(evicted_size);
+                self.lru_eviction_count += 1;
             } else {
                 break;
             }

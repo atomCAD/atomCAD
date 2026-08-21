@@ -162,3 +162,68 @@ fn site_type_is_constructible() {
         multiplicity: 1,
     };
 }
+
+// ---------------------------------------------------------------------------
+// Memory size estimation (`doc/design_eval_memoization.md` D6)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn motif_and_structure_size_above_their_bare_struct_and_grow_with_content() {
+    use atomcad_crystolecule::motif::{Motif, ParameterElement};
+    use atomcad_util::memory_size_estimator::MemorySizeEstimator;
+
+    let empty = Motif {
+        parameters: Vec::new(),
+        sites: Vec::new(),
+        bonds: Vec::new(),
+        bonds_by_site1_index: Vec::new(),
+        bonds_by_site2_index: Vec::new(),
+    };
+    assert!(empty.estimate_memory_bytes() >= std::mem::size_of::<Motif>());
+
+    let populated = Motif {
+        parameters: vec![ParameterElement {
+            name: "X".to_string(),
+            default_atomic_number: 6,
+        }],
+        sites: (0..64)
+            .map(|i| Site {
+                atomic_number: 6,
+                position: DVec3::splat(i as f64 * 0.01),
+            })
+            .collect(),
+        bonds: (0..32)
+            .map(|i| MotifBond {
+                site_1: SiteSpecifier {
+                    site_index: i,
+                    relative_cell: IVec3::ZERO,
+                },
+                site_2: SiteSpecifier {
+                    site_index: i + 1,
+                    relative_cell: IVec3::ZERO,
+                },
+                multiplicity: 1,
+            })
+            .collect(),
+        bonds_by_site1_index: vec![vec![0usize; 4]; 64],
+        bonds_by_site2_index: vec![vec![0usize; 4]; 64],
+    };
+    assert!(
+        populated.estimate_memory_bytes() > empty.estimate_memory_bytes(),
+        "a motif with sites, bonds and index maps must size above an empty one"
+    );
+
+    // A `Structure` carries its motif, so it must track it — and it must not
+    // double-count the inline `Motif` header.
+    let mut structure = Structure::diamond();
+    let with_default_motif = structure.estimate_memory_bytes();
+    structure.motif = populated.clone();
+    let with_populated_motif = structure.estimate_memory_bytes();
+
+    assert!(with_populated_motif > with_default_motif);
+    assert_eq!(
+        with_populated_motif,
+        std::mem::size_of::<Structure>() - std::mem::size_of::<Motif>()
+            + populated.estimate_memory_bytes()
+    );
+}

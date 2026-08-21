@@ -674,6 +674,24 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Settle steps on release | Extra minimization steps run when a drag is released (0–500). |
 | Max displacement per step | Maximum atom displacement per minimization step in Ångströms (default 0.1 Å). |
 
+### Memory
+
+Budgets, in megabytes, for the caches that let atomCAD avoid repeating work it
+has already done. **Lowering a budget costs recomputation, never correctness** —
+a cache that has to discard something simply recomputes it the next time it is
+needed, so the design you get is identical either way. Raise them if you work
+with large designs and have memory to spare; lower them if atomCAD is using more
+memory than you want to give it.
+
+Changes take effect immediately — no restart — and are persisted like every
+other preference.
+
+| Setting | Description |
+|---------|-------------|
+| CSG mesh cache (MB) | Converted 3D geometry meshes kept for reuse. Default 200 MB. Lowering it makes geometry-heavy designs slower to evaluate. |
+| CSG sketch cache (MB) | Converted 2D geometry sketches kept for reuse. Default 56 MB. Lowering it makes sketch-heavy designs slower to evaluate. |
+| Hidden node scene cache (MB) | Scene data kept for nodes you have hidden, so making them visible again is instant instead of a re-evaluation. Default 256 MB. |
+
 ## Import from library .cnnd files
 
 The *File > Import from .cnnd library* menu item allows you import selected node networks from a library .cnnd file.

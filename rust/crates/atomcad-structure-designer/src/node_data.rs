@@ -10,6 +10,7 @@ use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_util::as_any::AsAny;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -95,6 +96,60 @@ impl EvalOutput {
             .get(&pin_index)
             .cloned()
             .unwrap_or_else(|| self.get(pin_index as i32))
+    }
+
+    /// Does any result carried here contain a lazy `Iter[T]` walker?
+    ///
+    /// The per-pass evaluation memo (`doc/design_eval_memoization.md` D4 / D6
+    /// R4) stores a whole `EvalOutput` under one key, so the exclusion has to
+    /// be asked of the whole output, not of one pin. `display_results` counts:
+    /// it is a second full payload, not a view of `results`.
+    pub fn contains_iterator(&self) -> bool {
+        self.results.iter().any(NetworkResult::contains_iterator)
+            || self
+                .display_results
+                .values()
+                .any(NetworkResult::contains_iterator)
+    }
+}
+
+/// Sizes the value type the evaluation memo stores (D2: the *whole*
+/// `EvalOutput`, not one pin's `NetworkResult`).
+///
+/// `display_results` is counted **deeply**: a decorated structure is a second
+/// full payload sitting beside the wire value, not a view of it, and on an
+/// `atom_edit` root it is the larger of the two.
+impl MemorySizeEstimator for EvalOutput {
+    fn estimate_memory_bytes(&self) -> usize {
+        let results_size = self.results.capacity() * std::mem::size_of::<NetworkResult>()
+            + self
+                .results
+                .iter()
+                .map(NetworkResult::heap_bytes)
+                .sum::<usize>();
+
+        // `HashMap` has no public capacity-in-buckets figure; `len` times the
+        // entry size is the honest approximation, and undercounting the table's
+        // slack is the direction D6 asks for.
+        let display_results_size = self
+            .display_results
+            .values()
+            .map(|value| {
+                std::mem::size_of::<usize>()
+                    + std::mem::size_of::<NetworkResult>()
+                    + value.heap_bytes()
+            })
+            .sum::<usize>();
+
+        let pin_subtitles_size = self
+            .pin_subtitles
+            .values()
+            .map(|s| std::mem::size_of::<usize>() + std::mem::size_of::<String>() + s.capacity())
+            .sum::<usize>();
+
+        // `unit_cell_override` is an inline `Option<UnitCellStruct>` — plain
+        // data, already covered by `size_of::<EvalOutput>()`.
+        std::mem::size_of::<EvalOutput>() + results_size + display_results_size + pin_subtitles_size
     }
 }
 

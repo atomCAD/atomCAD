@@ -389,6 +389,81 @@ fn default_max_displacement() -> f64 {
     0.1
 }
 
+/// Budgets for the application's memory-bounded caches, in **megabytes**.
+///
+/// Megabytes rather than bytes because bytes are the wrong unit for a person,
+/// and a `u32` of MB cannot overflow a `usize` of bytes on any target we build
+/// for. See `doc/design_eval_memoization.md` D11.
+///
+/// Lowering a budget costs **recomputation, never correctness**: every cache
+/// here recomputes what it evicted, and `MemoryBoundedLruCache::insert` admits
+/// an over-budget value once the cache is empty, so even an absurdly small
+/// budget degrades to a pass-through rather than failing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MemoryPreferences {
+    /// CSG mesh conversion cache (3D geometry → `csgrs` mesh). Default 200 MB.
+    #[serde(default = "default_csg_mesh_cache_mb")]
+    pub csg_mesh_cache_mb: u32,
+
+    /// CSG sketch conversion cache (2D geometry → `csgrs` sketch).
+    /// Default 56 MB.
+    #[serde(default = "default_csg_sketch_cache_mb")]
+    pub csg_sketch_cache_mb: u32,
+
+    /// Scene data retained for nodes that were made invisible, so restoring
+    /// their visibility needs no re-evaluation. Default 256 MB.
+    #[serde(default = "default_invisible_node_cache_mb")]
+    pub invisible_node_cache_mb: u32,
+}
+
+/// Smallest budget the UI offers. Not a correctness floor — a cache below one
+/// entry's size still works, just as a pass-through — but a value low enough to
+/// be pointless is more likely a typo than an intent.
+pub const MIN_CACHE_BUDGET_MB: u32 = 1;
+
+/// Largest budget the UI offers, chosen so the four budgets together cannot
+/// commit a machine to an absurd resident set by accident.
+pub const MAX_CACHE_BUDGET_MB: u32 = 16 * 1024;
+
+fn default_csg_mesh_cache_mb() -> u32 {
+    200
+}
+fn default_csg_sketch_cache_mb() -> u32 {
+    56
+}
+fn default_invisible_node_cache_mb() -> u32 {
+    256
+}
+
+impl MemoryPreferences {
+    /// Converts a megabyte budget to the byte count the cache layer takes.
+    pub fn mb_to_bytes(mb: u32) -> usize {
+        (mb as usize) * 1024 * 1024
+    }
+
+    /// Clamps a budget to `[MIN_CACHE_BUDGET_MB, MAX_CACHE_BUDGET_MB]` and
+    /// converts it to bytes. **This, not [`Self::mb_to_bytes`], is what the
+    /// apply path uses.**
+    ///
+    /// The dialog clamps too, but `preferences.json` is a plain text file a
+    /// user can edit, and a `0` there would build a cache that evicts every
+    /// entry the moment after it inserts it — technically still correct, and
+    /// indistinguishable from a performance bug.
+    pub fn clamped_bytes(mb: u32) -> usize {
+        Self::mb_to_bytes(mb.clamp(MIN_CACHE_BUDGET_MB, MAX_CACHE_BUDGET_MB))
+    }
+}
+
+impl Default for MemoryPreferences {
+    fn default() -> Self {
+        Self {
+            csg_mesh_cache_mb: default_csg_mesh_cache_mb(),
+            csg_sketch_cache_mb: default_csg_sketch_cache_mb(),
+            invisible_node_cache_mb: default_invisible_node_cache_mb(),
+        }
+    }
+}
+
 /// Preferences for auto-layout operations.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct LayoutPreferences {
@@ -429,6 +504,8 @@ pub struct StructureDesignerPreferences {
     pub layout_preferences: LayoutPreferences,
     #[serde(default)]
     pub simulation_preferences: SimulationPreferences,
+    #[serde(default)]
+    pub memory_preferences: MemoryPreferences,
 }
 
 const CONFIG_DIR_NAME: &str = "atomCAD";

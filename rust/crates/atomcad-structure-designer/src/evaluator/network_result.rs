@@ -13,6 +13,7 @@ use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use atomcad_util::transform::Transform2D;
 use glam::f64::DMat3;
 use glam::f64::DVec2;
@@ -1381,6 +1382,156 @@ fn dmat3_to_imat3_rows_truncate(m: &DMat3) -> [[i32; 3]; 3] {
         [r[1][0] as i32, r[1][1] as i32, r[1][2] as i32],
         [r[2][0] as i32, r[2][1] as i32, r[2][2] as i32],
     ]
+}
+
+// ---------------------------------------------------------------------------
+// Memory size estimation and the iterator exclusion
+// (`doc/design_eval_memoization.md` D6)
+// ---------------------------------------------------------------------------
+
+/// Heap-only portion of a value whose [`MemorySizeEstimator`] impl includes its
+/// own inline struct size.
+///
+/// Every payload below sits *inline* in the `NetworkResult` enum, so its struct
+/// header is already paid for by `size_of::<NetworkResult>()`. Adding
+/// `estimate_memory_bytes()` verbatim would charge it a second time. The
+/// `saturating_sub` is a guard, not an expectation: an impl is supposed to
+/// include its own size, and one that does not simply reports zero heap here.
+fn heap_of<T: MemorySizeEstimator>(value: &T) -> usize {
+    value
+        .estimate_memory_bytes()
+        .saturating_sub(std::mem::size_of::<T>())
+}
+
+impl NetworkResult {
+    /// Bytes this value owns on the **heap**, excluding the inline
+    /// `size_of::<NetworkResult>()` that every variant costs.
+    ///
+    /// Split out from [`MemorySizeEstimator::estimate_memory_bytes`] so
+    /// containers can sum their elements without charging the enum header
+    /// twice: an `Array`'s `Vec` allocation already costs
+    /// `capacity * size_of::<NetworkResult>()`, and each element's heap adds on
+    /// top of that.
+    ///
+    /// Two tiers for `Arc`-backed payloads (D6 R3):
+    ///
+    /// - **Deep** — [`NetworkResult::ScalarField`]. Its grid is the largest
+    ///   single thing a memo entry can hold and is invisible from outside the
+    ///   trait, which is why [`ScalarField::estimate_memory_bytes`] exists.
+    /// - **Pointer** — [`NetworkResult::Function`]. A [`ZoneClosure`]'s four
+    ///   `Arc`s *share structure*: `body` with the network itself and with
+    ///   every other closure over the same body, `captures` with every clone of
+    ///   this closure value. Deep-counting `captures` would charge the same map
+    ///   once per closure value alive in a pass, and it recurses back into
+    ///   arbitrary results.
+    ///
+    /// Direction of error is **undercount** (D6): the memo this feeds is
+    /// per-pass and most of what it holds is alive elsewhere anyway, so
+    /// over-estimating evicts entries that cost nothing to keep.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        match self {
+            // Inline scalars, vectors and matrices own no heap at all.
+            NetworkResult::None
+            | NetworkResult::Bool(_)
+            | NetworkResult::Int(_)
+            | NetworkResult::Float(_)
+            | NetworkResult::Vec2(_)
+            | NetworkResult::Vec3(_)
+            | NetworkResult::IVec2(_)
+            | NetworkResult::IVec3(_)
+            | NetworkResult::IMat2(_)
+            | NetworkResult::IMat3(_)
+            | NetworkResult::Mat3(_)
+            | NetworkResult::LatticeVecs(_)
+            | NetworkResult::DrawingPlane(_)
+            | NetworkResult::Unit => 0,
+
+            NetworkResult::String(s) | NetworkResult::Error(s) => s.capacity(),
+
+            NetworkResult::Geometry2D(g) => heap_of(&g.geo_tree_root),
+
+            NetworkResult::Blueprint(b) => {
+                heap_of(&b.structure)
+                    + heap_of(&b.geo_tree_root)
+                    + b.alignment_reason.as_ref().map_or(0, |r| r.capacity())
+            }
+
+            NetworkResult::Crystal(c) => {
+                heap_of(&c.structure)
+                    + heap_of(&c.atoms)
+                    + c.geo_tree_root.as_ref().map_or(0, heap_of)
+                    + c.alignment_reason.as_ref().map_or(0, |r| r.capacity())
+            }
+
+            NetworkResult::Molecule(m) => {
+                heap_of(&m.atoms) + m.geo_tree_root.as_ref().map_or(0, heap_of)
+            }
+
+            NetworkResult::Motif(m) => heap_of(m),
+            NetworkResult::Structure(s) => heap_of(s),
+
+            // Deep tier: the whole `Arc` pointee, which is heap by definition.
+            NetworkResult::ScalarField(field) => field.estimate_memory_bytes(),
+
+            // R2: recurse fully. Affordable because the estimator runs only on
+            // insert and eviction, never on a memo lookup.
+            NetworkResult::Array(items) => {
+                items.capacity() * std::mem::size_of::<NetworkResult>()
+                    + items.iter().map(NetworkResult::heap_bytes).sum::<usize>()
+            }
+            NetworkResult::Record(fields) => {
+                fields.capacity() * std::mem::size_of::<(String, NetworkResult)>()
+                    + fields
+                        .iter()
+                        .map(|(name, value)| name.capacity() + value.heap_bytes())
+                        .sum::<usize>()
+            }
+
+            // Pointer tier: the four `Arc`s and `return_type` are inline in
+            // `ZoneClosure`, which is inline in the enum, so only the
+            // `param_types` allocation is left — at `size_of` granularity,
+            // deliberately not recursing into nested `DataType`s.
+            NetworkResult::Function(closure) => {
+                closure.param_types.capacity() * std::mem::size_of::<DataType>()
+            }
+
+            // Never stored by the memo (D4, and R4 for nested occurrences), so
+            // no walker ever reaches the estimator. Reported as zero rather
+            // than panicking: this impl must stay total for any other caller.
+            NetworkResult::Iterator(_) => 0,
+        }
+    }
+
+    /// Does this value contain a lazy `Iter[T]` walker **anywhere** inside it?
+    ///
+    /// The value-side twin of [`crate::data_type::contains_iterator`], and the
+    /// memo's skip-insert test (D4 / D6 R4). It must be this rather than the
+    /// profiler's `RecordFlags::produced_iterator`, which is a flat top-level
+    /// check: a stored walker pins its `ZoneClosure` — possibly a large
+    /// `Arc<Vec<NetworkResult>>` — for the whole pass, and nesting one inside
+    /// an `Array` or a `Record` is representable even though no user path
+    /// constructs one today.
+    ///
+    /// Recursion covers `Array` and `Record` and **only** those, matching the
+    /// value model: `NetworkResult` has no `Optional` variant (an `Optional[T]`
+    /// value is the `T` value itself or `None`), and an iterator cannot be
+    /// captured into a closure, so `Function` needs no arm either.
+    pub fn contains_iterator(&self) -> bool {
+        match self {
+            NetworkResult::Iterator(_) => true,
+            NetworkResult::Array(items) => items.iter().any(NetworkResult::contains_iterator),
+            NetworkResult::Record(fields) => {
+                fields.iter().any(|(_, value)| value.contains_iterator())
+            }
+            _ => false,
+        }
+    }
+}
+
+impl MemorySizeEstimator for NetworkResult {
+    fn estimate_memory_bytes(&self) -> usize {
+        std::mem::size_of::<NetworkResult>() + self.heap_bytes()
+    }
 }
 
 #[cfg(test)]
