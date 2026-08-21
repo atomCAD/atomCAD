@@ -421,6 +421,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIRotationalSymmetry dco_decode_api_rotational_symmetry(dynamic raw);
 
   @protected
+  APISelfCheckViolation dco_decode_api_self_check_violation(dynamic raw);
+
+  @protected
   APISequenceData dco_decode_api_sequence_data(dynamic raw);
 
   @protected
@@ -1049,6 +1052,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRotationalSymmetry> dco_decode_list_api_rotational_symmetry(
+      dynamic raw);
+
+  @protected
+  List<APISelfCheckViolation> dco_decode_list_api_self_check_violation(
       dynamic raw);
 
   @protected
@@ -2025,6 +2032,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APISelfCheckViolation sse_decode_api_self_check_violation(
+      SseDeserializer deserializer);
+
+  @protected
   APISequenceData sse_decode_api_sequence_data(SseDeserializer deserializer);
 
   @protected
@@ -2779,6 +2790,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APIRotationalSymmetry> sse_decode_list_api_rotational_symmetry(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APISelfCheckViolation> sse_decode_list_api_self_check_violation(
       SseDeserializer deserializer);
 
   @protected
@@ -3897,6 +3912,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIRotationalSymmetry self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_self_check_violation(
+      APISelfCheckViolation self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_sequence_data(
       APISequenceData self, SseSerializer serializer);
 
@@ -4667,6 +4686,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_rotational_symmetry(
       List<APIRotationalSymmetry> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_self_check_violation(
+      List<APISelfCheckViolation> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_text_error(

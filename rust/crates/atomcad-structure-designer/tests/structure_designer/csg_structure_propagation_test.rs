@@ -30,11 +30,7 @@ fn evaluate(designer: &StructureDesigner, node_id: u64) -> NetworkResult {
     let network = registry.node_networks.get(NET).unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
 }
 

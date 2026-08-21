@@ -42,11 +42,7 @@ fn evaluate_cnnd_file(file_path: &str) -> EvaluationSnapshot {
     let mut context = NetworkEvaluationContext::new();
 
     let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    });
+    network_stack.push(NetworkStackElement::root(network));
 
     let mut displayed_node_outputs: Vec<DisplayedNodeOutput> = Vec::new();
 
@@ -161,11 +157,7 @@ fn test_sphere_node_basic() {
     let mut context = NetworkEvaluationContext::new();
 
     let mut network_stack = Vec::new();
-    network_stack.push(NetworkStackElement {
-        is_zone_body: false,
-        node_network: &network,
-        node_id: 0,
-    });
+    network_stack.push(NetworkStackElement::root(&network));
 
     let result = evaluator.evaluate(
         &network_stack,

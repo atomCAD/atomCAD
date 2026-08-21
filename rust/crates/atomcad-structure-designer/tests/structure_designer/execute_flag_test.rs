@@ -260,11 +260,7 @@ fn central_skip_rule_skips_eval_on_display_pass_when_all_pins_are_unit() {
     with_counter(counter.clone(), || {
         let mut ctx = NetworkEvaluationContext::new();
         // execute = false (the default) — display pass.
-        let stack = vec![NetworkStackElement {
-            is_zone_body: false,
-            node_network: &network,
-            node_id: 0,
-        }];
+        let stack = vec![NetworkStackElement::root(&network)];
         let result = evaluator.evaluate(&stack, node_id, 0, &registry, false, &mut ctx);
         assert!(matches!(result, NetworkResult::Unit));
     });
@@ -287,11 +283,7 @@ fn central_skip_rule_runs_eval_on_execute_pass_when_all_pins_are_unit() {
     with_counter(counter.clone(), || {
         let mut ctx = NetworkEvaluationContext::new();
         ctx.execute = true;
-        let stack = vec![NetworkStackElement {
-            is_zone_body: false,
-            node_network: &network,
-            node_id: 0,
-        }];
+        let stack = vec![NetworkStackElement::root(&network)];
         let result = evaluator.evaluate(&stack, node_id, 0, &registry, false, &mut ctx);
         assert!(matches!(result, NetworkResult::Unit));
     });
@@ -313,11 +305,7 @@ fn central_skip_rule_via_evaluate_all_outputs_skips_on_display_pass() {
 
     with_counter(counter.clone(), || {
         let mut ctx = NetworkEvaluationContext::new();
-        let stack = vec![NetworkStackElement {
-            is_zone_body: false,
-            node_network: &network,
-            node_id: 0,
-        }];
+        let stack = vec![NetworkStackElement::root(&network)];
         let output = evaluator.evaluate_all_outputs(&stack, node_id, &registry, false, &mut ctx);
         assert_eq!(output.results.len(), 1);
         assert!(matches!(output.results[0], NetworkResult::Unit));
@@ -340,11 +328,7 @@ fn central_skip_rule_does_not_skip_mixed_output_node_on_display_pass() {
 
     with_counter(counter.clone(), || {
         let mut ctx = NetworkEvaluationContext::new();
-        let stack = vec![NetworkStackElement {
-            is_zone_body: false,
-            node_network: &network,
-            node_id: 0,
-        }];
+        let stack = vec![NetworkStackElement::root(&network)];
         // Pin 0 is Float(7.0); the central rule must not apply because pin
         // 1's Unit type is not enough to make this an all-Unit node.
         let pin0 = evaluator.evaluate(&stack, node_id, 0, &registry, false, &mut ctx);

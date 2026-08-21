@@ -15,16 +15,21 @@
 //! module and not the wiring.
 
 use atomcad_structure_designer::data_type::DataType;
-use atomcad_structure_designer::evaluator::eval_profiler::{EvalProfile, NodeProfileRecord};
+use atomcad_structure_designer::evaluator::eval_profiler::{
+    EvalProfile, NodeLocation, NodeProfileRecord, RecordFlags, SelfCheckKeyMode,
+};
 use atomcad_structure_designer::evaluator::network_evaluator::{
-    NetworkStackElement, node_profile_key,
+    NetworkEvaluationContext, NetworkStackElement, eval_env_key, node_profile_key,
 };
 use atomcad_structure_designer::node_data::NodeData;
 use atomcad_structure_designer::node_network::{Argument, IncomingWire, NodeRef, SourcePin};
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::closure::{ClosureData, ClosureKind};
+use atomcad_structure_designer::nodes::collect::CollectData;
 use atomcad_structure_designer::nodes::expr::{ExprData, ExprParameter};
 use atomcad_structure_designer::nodes::fold::FoldData;
 use atomcad_structure_designer::nodes::int::IntData;
+use atomcad_structure_designer::nodes::map::MapData;
 use atomcad_structure_designer::nodes::range::RangeData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer_changes::{
@@ -812,28 +817,12 @@ fn the_body_network_address_is_not_an_input_to_the_key() {
     );
 
     let stack_a = vec![
-        NetworkStackElement {
-            is_zone_body: false,
-            node_network: &root,
-            node_id: 0,
-        },
-        NetworkStackElement {
-            is_zone_body: true,
-            node_network: &body_a,
-            node_id: 12,
-        },
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_static(&body_a, 12),
     ];
     let stack_b = vec![
-        NetworkStackElement {
-            is_zone_body: false,
-            node_network: &root,
-            node_id: 0,
-        },
-        NetworkStackElement {
-            is_zone_body: true,
-            node_network: &body_b,
-            node_id: 12,
-        },
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_static(&body_b, 12),
     ];
     assert_eq!(
         node_profile_key(&stack_a, 5),
@@ -845,16 +834,8 @@ fn the_body_network_address_is_not_an_input_to_the_key() {
     // Same allocation, different owner id → different key. `node_id` counters
     // are per-network, so this is what keeps two HOFs' bodies apart.
     let stack_c = vec![
-        NetworkStackElement {
-            is_zone_body: false,
-            node_network: &root,
-            node_id: 0,
-        },
-        NetworkStackElement {
-            is_zone_body: true,
-            node_network: &body_a,
-            node_id: 13,
-        },
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_static(&body_a, 13),
     ];
     assert_ne!(node_profile_key(&stack_a, 5), node_profile_key(&stack_c, 5));
 }
@@ -867,16 +848,8 @@ fn a_registry_frames_node_id_is_not_part_of_its_identity() {
     let designer = setup_designer_with_network("main");
     let network = designer.node_type_registry.node_networks["main"].clone();
 
-    let as_instance_7 = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: &network,
-        node_id: 7,
-    }];
-    let as_instance_9 = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: &network,
-        node_id: 9,
-    }];
+    let as_instance_7 = vec![NetworkStackElement::instance(&network, 7)];
+    let as_instance_9 = vec![NetworkStackElement::instance(&network, 9)];
     assert_eq!(
         node_profile_key(&as_instance_7, 3),
         node_profile_key(&as_instance_9, 3)
@@ -1082,4 +1055,683 @@ fn a_node_reached_through_a_parameter_excursion_keeps_its_own_address() {
         record.location.scope_path
     );
     assert!(record.location.navigable);
+}
+
+// ============================================================================
+// Phase 3 — the environment key and redundancy (D9, D10, D11)
+// ============================================================================
+//
+// The distinction every test below turns on: **an evaluation is redundant only
+// if it ran in an environment that had already been evaluated.** A diamond apex
+// pulled twice is one environment and one wasted evaluation; a body node run
+// once per element over three elements is three environments and no waste at
+// all. Counting evaluations alone cannot tell those apart, which is why a
+// static count could never produce a trustworthy ratio (design doc,
+// §Motivation).
+
+/// Refresh with the profiler **and** the D11 self-check armed, under the given
+/// key mode.
+fn self_checked_full_refresh(
+    designer: &mut StructureDesigner,
+    mode: SelfCheckKeyMode,
+) -> Arc<EvalProfile> {
+    designer.eval_profiling_enabled = true;
+    designer.eval_self_check_enabled = true;
+    designer.eval_self_check_key_mode = mode;
+    full_refresh(designer).expect("a profiled full refresh must produce a table")
+}
+
+/// The single record for a node inside a body (non-empty scope path).
+fn body_record_for(profile: &EvalProfile, node_id: u64) -> &NodeProfileRecord {
+    let matches: Vec<_> = profile
+        .records()
+        .iter()
+        .filter(|r| r.location.node_id == node_id && !r.location.scope_path.is_empty())
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "expected exactly one body record for #{node_id}; recorded: {:?}",
+        profile
+            .records()
+            .iter()
+            .map(|r| r.location.label.as_str())
+            .collect::<Vec<_>>()
+    );
+    matches[0]
+}
+
+/// The canonical redundancy shape: two consumers pull one apex within one
+/// environment. Two lookups, **one** distinct environment — so exactly one of
+/// the two evaluations was avoidable, and `wasted_ns` says so.
+#[test]
+fn a_diamond_reports_two_lookups_in_one_environment() {
+    let mut designer = setup_designer_with_network("main");
+
+    let apex = add_expr(&mut designer, "main", "7", vec![]);
+    let left = add_expr(&mut designer, "main", "a + 1", vec![("a", DataType::Int)]);
+    let right = add_expr(&mut designer, "main", "a + 2", vec![("a", DataType::Int)]);
+    let sink = add_expr(
+        &mut designer,
+        "main",
+        "a + b",
+        vec![("a", DataType::Int), ("b", DataType::Int)],
+    );
+    push_wire(&mut designer, "main", apex, left, 0);
+    push_wire(&mut designer, "main", apex, right, 0);
+    push_wire(&mut designer, "main", left, sink, 0);
+    push_wire(&mut designer, "main", right, sink, 1);
+    designer.validate_active_network();
+    display_only(&mut designer, "main", sink);
+
+    let profile = profiled_full_refresh(&mut designer);
+    let apex_record = record_for(&profile, apex);
+
+    assert_eq!(apex_record.lookups, 2);
+    assert_eq!(
+        apex_record.distinct_envs, 1,
+        "one environment, pulled twice"
+    );
+    assert_eq!(
+        apex_record.evaluations, 2,
+        "no memo yet, so every lookup evaluated"
+    );
+    assert_eq!(apex_record.redundancy_factor(), 2.0);
+    assert!(
+        !apex_record.flags.uncacheable(),
+        "a plain expr node is exactly what the memo would cache"
+    );
+
+    for id in [left, right, sink] {
+        let record = record_for(&profile, id);
+        assert_eq!(record.lookups, 1);
+        assert_eq!(record.distinct_envs, 1);
+        assert_eq!(record.wasted_ns(), 0, "#{id} has nothing to save");
+    }
+}
+
+/// **The test that proves the epoch works.** A lazily-driven `map` body runs
+/// once per element, and each run is a *different* environment — the zone-input
+/// frame and the captures `Arc` are rebuilt per invocation. Without
+/// `env_epoch` the three invocations would push a byte-identical body frame,
+/// report `distinct_envs = 1`, and inflate this design's own business case by
+/// claiming 3x redundancy where there is none.
+#[test]
+fn a_map_body_over_three_elements_reports_three_environments() {
+    let (mut designer, _map_id, body_expr) = build_map_over_three();
+    let profile = profiled_full_refresh(&mut designer);
+
+    let record = body_record_for(&profile, body_expr);
+    assert_eq!(record.lookups, 3, "one body run per element");
+    assert_eq!(
+        record.distinct_envs, 3,
+        "each invocation is its own environment — this is not redundancy"
+    );
+    assert_eq!(record.redundancy_factor(), 1.0);
+    assert_eq!(
+        record.wasted_ns(),
+        0,
+        "a memo could save nothing here, and the column must not pretend otherwise"
+    );
+}
+
+/// The eager path to the same conclusion, and the one that would catch a
+/// missing `next_env_epoch` carry: a `fold` body runs against a
+/// `fresh_inner_for_eager_body` context. If that context restarted its counter
+/// at 1 the epochs would still differ *within* the body, so this test alone
+/// would pass — which is why the monotonicity test below checks the counter
+/// directly rather than only through a fixture.
+#[test]
+fn a_fold_body_over_three_elements_reports_three_environments() {
+    let (mut designer, _fold_id, expr_id) = build_fold_over_three();
+    let profile = profiled_full_refresh(&mut designer);
+
+    let record = body_record_for(&profile, expr_id);
+    assert_eq!(record.lookups, 3);
+    assert_eq!(record.distinct_envs, 3);
+}
+
+/// Two displayed nodes **inside one 0-ary closure body** both pull a third body
+/// node. Each displayed root descends into the body separately, and that
+/// descent allocates **no** epoch — so the two pulls share an environment and
+/// the redundancy is real.
+///
+/// With a fresh epoch per descent this would read `distinct_envs = 2`, hiding
+/// exactly the cross-root redundancy the memo exists to collect. That is what
+/// makes this the test for `generate_scene_scoped`'s push.
+#[test]
+fn two_displayed_body_nodes_share_the_body_environment() {
+    let mut designer = setup_designer_with_network("main");
+
+    let closure = designer.add_node("closure", DVec2::ZERO);
+    designer.set_node_network_data_scoped(
+        &[],
+        closure,
+        Box::new(ClosureData {
+            kind: ClosureKind::Custom,
+            type_args: vec![DataType::Int],
+            param_names: vec![],
+            custom_label: None,
+        }),
+    );
+    let body = [closure];
+
+    let source = add_expr_to_body(&mut designer, "main", closure, "7", vec![]);
+    let left = add_expr_to_body(
+        &mut designer,
+        "main",
+        closure,
+        "a + 1",
+        vec![("a", DataType::Int)],
+    );
+    let right = add_expr_to_body(
+        &mut designer,
+        "main",
+        closure,
+        "a + 2",
+        vec![("a", DataType::Int)],
+    );
+    designer.connect_nodes_scoped(&body, source, 0, left, 0);
+    designer.connect_nodes_scoped(&body, source, 0, right, 0);
+    designer.connect_zone_output_wire(&body, left, 0, 0);
+    designer.validate_active_network();
+    assert!(
+        designer.get_active_node_network().unwrap().valid,
+        "the fixture must be valid, else nothing evaluates"
+    );
+
+    // Display exactly the two consumers, inside the body.
+    designer
+        .node_type_registry
+        .node_networks
+        .get_mut("main")
+        .unwrap()
+        .displayed_nodes
+        .clear();
+    for id in [left, right] {
+        designer.set_node_display_scoped(&body, id, true);
+    }
+    designer.set_node_display_scoped(&body, source, false);
+
+    let profile = profiled_full_refresh(&mut designer);
+    let record = body_record_for(&profile, source);
+
+    assert_eq!(
+        record.lookups, 2,
+        "both displayed body roots pull the shared source"
+    );
+    assert_eq!(
+        record.distinct_envs, 1,
+        "the scene descent must not allocate an epoch — with one, the two \
+         descents would look like different environments and the memo's case \
+         would vanish"
+    );
+}
+
+/// A **capture cone** pulled under one enclosing environment is one
+/// environment, not one per pull. Capture pre-evaluation pushes the body so
+/// `source_scope_depth` walks resolve in the parent scope, but it runs *before*
+/// any captures exist and is not an invocation — so it keeps epoch 0.
+///
+/// A fresh epoch there would pin capture redundancy at 1.0 forever and make
+/// every capture cone permanently uncacheable, which is the opposite of what
+/// the measurement is for. Here the `fold` is pulled twice (fan-out), so its
+/// captures are pre-evaluated twice against an identical enclosing stack.
+#[test]
+fn a_capture_cone_pulled_twice_shares_one_environment() {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::ZERO);
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 1,
+            step: 1,
+            count: 3,
+        }),
+    );
+    let init_id = designer.add_node("int", DVec2::new(0.0, 100.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        init_id,
+        Box::new(IntData { value: 0 }),
+    );
+
+    // The captured node: a top-level constant read from inside the body.
+    let captured = add_expr(&mut designer, "main", "10", vec![]);
+
+    let fold_id = designer.add_node("fold", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        fold_id,
+        Box::new(FoldData {
+            element_type: DataType::Int,
+            accumulator_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, fold_id, 0);
+    designer.connect_nodes(init_id, 0, fold_id, 1);
+
+    let body_expr = add_expr_to_body(
+        &mut designer,
+        "main",
+        fold_id,
+        "acc + elem + cap",
+        vec![
+            ("acc", DataType::Int),
+            ("elem", DataType::Int),
+            ("cap", DataType::Int),
+        ],
+    );
+    wire_zone_input_pin_to_body_node(&mut designer, "main", fold_id, 0, body_expr, 0);
+    wire_zone_input_pin_to_body_node(&mut designer, "main", fold_id, 1, body_expr, 1);
+    // The capture wire: depth 1 up to the top-level `captured` node.
+    {
+        let body = designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .nodes
+            .get_mut(&fold_id)
+            .unwrap()
+            .zone_mut()
+            .unwrap();
+        body.nodes.get_mut(&body_expr).unwrap().arguments[2]
+            .incoming_wires
+            .push(IncomingWire {
+                source_node_id: captured,
+                source_pin: SourcePin::NodeOutput { pin_index: 0 },
+                source_scope_depth: 1,
+            });
+    }
+    wire_body_node_to_zone_output(&mut designer, "main", fold_id, body_expr);
+
+    // Fan the fold out into two consumers of one displayed sink, so `fold.eval`
+    // — and therefore capture pre-evaluation — runs twice.
+    let left = add_expr(&mut designer, "main", "a + 1", vec![("a", DataType::Int)]);
+    let right = add_expr(&mut designer, "main", "a + 2", vec![("a", DataType::Int)]);
+    let sink = add_expr(
+        &mut designer,
+        "main",
+        "a + b",
+        vec![("a", DataType::Int), ("b", DataType::Int)],
+    );
+    push_wire(&mut designer, "main", fold_id, left, 0);
+    push_wire(&mut designer, "main", fold_id, right, 0);
+    push_wire(&mut designer, "main", left, sink, 0);
+    push_wire(&mut designer, "main", right, sink, 1);
+    designer.validate_active_network();
+    display_only(&mut designer, "main", sink);
+
+    let profile = profiled_full_refresh(&mut designer);
+    let record = profile
+        .records()
+        .iter()
+        .find(|r| r.location.node_id == captured)
+        .expect("the captured node must be recorded");
+
+    assert_eq!(
+        record.lookups, 2,
+        "the fold is pulled twice, so its captures are pre-evaluated twice"
+    );
+    assert_eq!(
+        record.distinct_envs, 1,
+        "capture pre-evaluation is not an invocation and must keep epoch 0"
+    );
+}
+
+/// Epoch allocation is monotonic across the **whole pass**, including epochs
+/// handed out inside an eager HOF body. The body runs against a
+/// `fresh_inner_for_eager_body` context, and without the explicit carry-and-
+/// merge that context would restart at 1 and re-issue numbers the outer context
+/// had already spent — producing two genuinely different environments with
+/// equal keys. Silent today; a wrong *result* once the memo keys on it.
+#[test]
+fn epoch_allocation_is_monotonic_across_an_eager_body_drain() {
+    let mut outer = NetworkEvaluationContext::new();
+    let first = outer.alloc_env_epoch();
+    let second = outer.alloc_env_epoch();
+    assert!(second > first, "epochs are handed out strictly increasing");
+
+    let mut inner = outer.fresh_inner_for_eager_body();
+    assert_eq!(
+        inner.peek_next_env_epoch(),
+        outer.peek_next_env_epoch(),
+        "the body context must continue the pass's numbering, not restart it"
+    );
+    let inner_epochs: Vec<u64> = (0..3).map(|_| inner.alloc_env_epoch()).collect();
+    assert!(inner_epochs.iter().all(|e| *e > second));
+
+    outer.drain_inner_context(inner);
+    let after = outer.alloc_env_epoch();
+    assert!(
+        after > *inner_epochs.last().unwrap(),
+        "an epoch spent inside the body was re-issued after the drain: {} <= {}",
+        after,
+        inner_epochs.last().unwrap()
+    );
+}
+
+// ============================================================================
+// The environment key itself (D9)
+// ============================================================================
+
+/// **The address is not an input to the key.** This key is retained — across
+/// the pass, and afterwards by the memo — while both kinds of body network get
+/// dropped mid-pass (`zone_closure` pushes a locally constructed body; closure
+/// bodies are `Arc`s), so a reused allocation must not silently merge two
+/// environments. That is precisely the argument `eval_frame_key`'s doc comment
+/// makes for its *own* address hashing ("a spurious collision needs two **live**
+/// frames") and the one claim this key may not borrow.
+#[test]
+fn the_body_network_address_is_not_an_input_to_the_env_key() {
+    let mut designer = setup_designer_with_network("main");
+    designer.add_node_network("other");
+    let root = designer.node_type_registry.node_networks["main"].clone();
+    let body_a = designer.node_type_registry.node_networks["other"].clone();
+    let body_b = designer.node_type_registry.node_networks["other"].clone();
+    assert_ne!(
+        &body_a as *const _, &body_b as *const _,
+        "the fixture needs two distinct allocations"
+    );
+
+    let stack_a = vec![
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_invocation(&body_a, 12, 7),
+    ];
+    let stack_b = vec![
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_invocation(&body_b, 12, 7),
+    ];
+    assert_eq!(
+        eval_env_key(&stack_a, 5, false),
+        eval_env_key(&stack_b, 5, false),
+        "same owner, same epoch, different allocation — one environment"
+    );
+
+    // Same allocation, different owner id → different environment. `node_id`
+    // counters are per-network, which is why the owner alone is not enough and
+    // the enclosing frames are hashed too.
+    let stack_c = vec![
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_invocation(&body_a, 13, 7),
+    ];
+    assert_ne!(
+        eval_env_key(&stack_a, 5, false),
+        eval_env_key(&stack_c, 5, false)
+    );
+}
+
+/// The epoch, `decorate` and the instance id are all *in* the key — the three
+/// separations `node_profile_key` deliberately does not make.
+#[test]
+fn the_env_key_separates_epochs_decorate_and_instances() {
+    let mut designer = setup_designer_with_network("main");
+    designer.add_node_network("other");
+    let root = designer.node_type_registry.node_networks["main"].clone();
+    let body = designer.node_type_registry.node_networks["other"].clone();
+
+    let base = vec![
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_invocation(&body, 12, 7),
+    ];
+    let next_epoch = vec![
+        NetworkStackElement::root(&root),
+        NetworkStackElement::body_invocation(&body, 12, 8),
+    ];
+    assert_ne!(
+        eval_env_key(&base, 5, false),
+        eval_env_key(&next_epoch, 5, false),
+        "two invocations of one body are two environments — the whole point of \
+         the epoch"
+    );
+
+    assert_ne!(
+        eval_env_key(&base, 5, false),
+        eval_env_key(&base, 5, true),
+        "`decorate` genuinely changes results, so it is in the key"
+    );
+
+    // Two instances of one custom network: one row in the profiler's table
+    // (`node_profile_key`), two environments here — their arguments come from
+    // different call sites.
+    let as_instance_7 = vec![NetworkStackElement::instance(&root, 7)];
+    let as_instance_9 = vec![NetworkStackElement::instance(&root, 9)];
+    assert_eq!(
+        node_profile_key(&as_instance_7, 3),
+        node_profile_key(&as_instance_9, 3)
+    );
+    assert_ne!(
+        eval_env_key(&as_instance_7, 3, false),
+        eval_env_key(&as_instance_9, 3, false)
+    );
+}
+
+// ============================================================================
+// The Wasted column (D10)
+// ============================================================================
+
+fn synthetic_record(
+    lookups: u64,
+    evaluations: u64,
+    distinct_envs: u64,
+    self_ns: u64,
+) -> NodeProfileRecord {
+    NodeProfileRecord {
+        location: NodeLocation {
+            host_network: "main".to_string(),
+            scope_path: Vec::new(),
+            node_id: 1,
+            label: "main/expr#1".to_string(),
+            node_type_name: "expr".to_string(),
+            navigable: true,
+        },
+        lookups,
+        evaluations,
+        distinct_envs,
+        self_ns,
+        total_ns: self_ns,
+        flags: RecordFlags::default(),
+    }
+}
+
+/// `wasted_ns = self_ns x (lookups - distinct_envs) / evaluations`, including
+/// the **post-memo** case `evaluations < lookups`. Dividing by `evaluations`
+/// rather than by `lookups` is what keeps the column meaningful after the memo
+/// lands: `self_ns` accumulates over actual evaluations, so `self_ns /
+/// evaluations` is the mean cost of computing the node once.
+#[test]
+fn wasted_ns_arithmetic_survives_the_memo() {
+    // Pre-memo: 4 requests, 1 environment, 4 evaluations of 100 ns each.
+    // Three of the four were avoidable.
+    let pre = synthetic_record(4, 4, 1, 400);
+    assert_eq!(pre.wasted_ns(), 300);
+    assert_eq!(pre.redundancy_factor(), 4.0);
+
+    // Post-memo, same node: still 4 requests over 1 environment, but only one
+    // evaluation ran. The projected saving has been *collected*, so what is
+    // still "wasted" is three times the one evaluation's cost — the same 300 ns
+    // the memo is now avoiding, which is how the acceptance criterion is read.
+    let post = synthetic_record(4, 1, 1, 100);
+    assert_eq!(post.wasted_ns(), 300);
+
+    // No redundancy at all: as many environments as requests.
+    let honest = synthetic_record(3, 3, 3, 300);
+    assert_eq!(honest.wasted_ns(), 0);
+    assert_eq!(honest.redundancy_factor(), 1.0);
+
+    // Degenerate rows must not divide by zero.
+    assert_eq!(synthetic_record(0, 0, 0, 0).wasted_ns(), 0);
+    assert_eq!(synthetic_record(0, 0, 0, 0).redundancy_factor(), 1.0);
+}
+
+/// A row the memo would decline to cache is **counted but flagged**, so its
+/// `wasted_ns` is never read as an available saving — and is excluded from the
+/// pass's projected total (D10).
+#[test]
+fn an_iterator_producer_is_flagged_as_uncacheable() {
+    let (mut designer, map_id, _body_expr) = build_map_over_three();
+    let profile = profiled_full_refresh(&mut designer);
+
+    let map_record = record_for(&profile, map_id);
+    assert!(
+        map_record.flags.produced_iterator,
+        "`map` yields a walker, which the memo deliberately does not store"
+    );
+    assert!(map_record.flags.uncacheable());
+
+    let flagged_waste: u64 = profile
+        .records()
+        .iter()
+        .filter(|r| r.flags.uncacheable())
+        .map(|r| r.wasted_ns())
+        .sum();
+    assert_eq!(
+        profile.projected_saving_ns(),
+        profile.records().iter().map(|r| r.wasted_ns()).sum::<u64>() - flagged_waste,
+        "the projected saving must exclude every flagged row"
+    );
+}
+
+// ============================================================================
+// The equal-key ⇒ equal-result self-check (D11)
+// ============================================================================
+
+/// The check runs clean on the fixtures above. Note this only means anything
+/// while there is **no memo**: once one serves the second request from the
+/// first result there is no second computation to compare and the check passes
+/// vacuously.
+#[test]
+fn the_self_check_runs_clean_on_real_passes() {
+    let (mut designer, _map_id, _body_expr) = build_map_over_three();
+    let profile = self_checked_full_refresh(&mut designer, SelfCheckKeyMode::Full);
+    assert!(profile.self_check_ran());
+    assert_eq!(
+        profile.self_check_violations(),
+        &[],
+        "equal keys produced different results on a `map` pass"
+    );
+
+    let (mut designer, _fold_id, _expr_id) = build_fold_over_three();
+    let profile = self_checked_full_refresh(&mut designer, SelfCheckKeyMode::Full);
+    assert_eq!(profile.self_check_violations(), &[]);
+}
+
+/// **The check has teeth.** `decorate` is one of the three varying inputs of
+/// `NodeData::eval`, and a selected node that also feeds another displayed node
+/// is evaluated both ways in one pass. Under the real key those are two
+/// environments and the check is silent; under a key with `decorate` dropped
+/// they collide, and the check must say so — otherwise a green result on a real
+/// design would prove nothing.
+#[test]
+fn the_self_check_catches_a_key_with_decorate_omitted() {
+    fn build() -> (StructureDesigner, u64) {
+        let mut designer = setup_designer_with_network("main");
+        let upstream = designer.add_node("atom_edit", DVec2::ZERO);
+        let downstream = designer.add_node("atom_edit", DVec2::new(200.0, 0.0));
+        designer.connect_nodes(upstream, 0, downstream, 0);
+        designer.validate_active_network();
+        designer
+            .node_type_registry
+            .node_networks
+            .get_mut("main")
+            .unwrap()
+            .displayed_nodes
+            .clear();
+        designer.set_node_display(upstream, true);
+        designer.set_node_display(downstream, true);
+        // Selection is what makes `decorate` true for `upstream`'s own scene
+        // evaluation — and only for that one.
+        designer.select_node(upstream);
+        (designer, upstream)
+    }
+
+    let (mut designer, upstream) = build();
+    let full = self_checked_full_refresh(&mut designer, SelfCheckKeyMode::Full);
+    assert_eq!(
+        record_for(&full, upstream).distinct_envs,
+        2,
+        "the selected node is evaluated decorated as its own root and \
+         undecorated as an input — two environments"
+    );
+    assert_eq!(
+        full.self_check_violations(),
+        &[],
+        "the real key separates them, so nothing is wrong"
+    );
+
+    let (mut designer, _upstream) = build();
+    let weakened = self_checked_full_refresh(&mut designer, SelfCheckKeyMode::OmitDecorate);
+    assert!(
+        !weakened.self_check_violations().is_empty(),
+        "a key missing `decorate` must be caught; a check that cannot fail \
+         proves nothing"
+    );
+}
+
+// ============================================================================
+// Phase 3 fixtures
+// ============================================================================
+
+/// `range(1..4) -> map(elem + 1) -> collect`, with the `collect` displayed so
+/// the lazy walker is actually drained. Returns `(designer, map_id,
+/// body_expr_id)`.
+fn build_map_over_three() -> (StructureDesigner, u64, u64) {
+    let mut designer = setup_designer_with_network("main");
+
+    let range_id = designer.add_node("range", DVec2::ZERO);
+    set_node_data(
+        &mut designer,
+        "main",
+        range_id,
+        Box::new(RangeData {
+            start: 1,
+            step: 1,
+            count: 3,
+        }),
+    );
+
+    let map_id = designer.add_node("map", DVec2::new(200.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        map_id,
+        Box::new(MapData {
+            input_type: DataType::Int,
+            output_type: DataType::Int,
+        }),
+    );
+    designer.connect_nodes(range_id, 0, map_id, 0);
+
+    let body_expr = add_expr_to_body(
+        &mut designer,
+        "main",
+        map_id,
+        "elem + 1",
+        vec![("elem", DataType::Int)],
+    );
+    wire_zone_input_pin_to_body_node(&mut designer, "main", map_id, 0, body_expr, 0);
+    wire_body_node_to_zone_output(&mut designer, "main", map_id, body_expr);
+
+    let collect_id = designer.add_node("collect", DVec2::new(400.0, 0.0));
+    set_node_data(
+        &mut designer,
+        "main",
+        collect_id,
+        Box::new(CollectData {
+            element_type: DataType::Int,
+            limit: None,
+            offset: 0,
+        }),
+    );
+    designer.connect_nodes(map_id, 0, collect_id, 0);
+    designer.validate_active_network();
+    display_only(&mut designer, "main", collect_id);
+
+    (designer, map_id, body_expr)
 }

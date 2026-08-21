@@ -298,11 +298,7 @@ fn abstract_typed_apply_output_evaluates_to_concrete_phase_variant() {
     let network = registry.node_networks.get("main").unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let stack = vec![NetworkStackElement::root(network)];
     let result = evaluator.evaluate(&stack, app, 0, registry, false, &mut context);
     match result {
         NetworkResult::Molecule(_) => {}

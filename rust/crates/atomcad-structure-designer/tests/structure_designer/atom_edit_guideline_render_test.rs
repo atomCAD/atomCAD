@@ -54,11 +54,7 @@ fn eval_guideline_visuals(
     let network = registry.node_networks.get("test").unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     let result = evaluator.evaluate(
         &network_stack,
         node_id,
@@ -171,11 +167,9 @@ fn tool_picked_atom_is_highlighted_in_diff_view() {
     let mut context =
         atomcad_structure_designer::evaluator::network_evaluator::NetworkEvaluationContext::new();
     let network_stack = vec![
-        atomcad_structure_designer::evaluator::network_evaluator::NetworkStackElement {
-            is_zone_body: false,
-            node_network: network,
-            node_id: 0,
-        },
+        atomcad_structure_designer::evaluator::network_evaluator::NetworkStackElement::root(
+            network,
+        ),
     ];
     let result = evaluator.evaluate(&network_stack, node_id, 1, registry, true, &mut context);
     let atoms = match result {

@@ -190,11 +190,7 @@ fn eval_outcome_corpus_snapshot() {
                 for pin in pins {
                     let evaluator = NetworkEvaluator::new();
                     let mut context = NetworkEvaluationContext::new();
-                    let stack = vec![NetworkStackElement {
-                        is_zone_body: false,
-                        node_network: network,
-                        node_id: 0,
-                    }];
+                    let stack = vec![NetworkStackElement::root(network)];
                     let result =
                         evaluator.evaluate(&stack, node_id, pin, registry, false, &mut context);
                     let outcome = match result {

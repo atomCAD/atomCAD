@@ -16,7 +16,7 @@ use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
 };
 use atomcad_structure_designer::evaluator::eval_profiler::{
-    EvalProfile, NodeProfileRecord, NodeTypeProfileRecord,
+    EvalProfile, NodeProfileRecord, NodeTypeProfileRecord, SelfCheckViolation,
 };
 use atomcad_structure_designer::refresh_profile::{CsgCacheDelta, RefreshProfile};
 use atomcad_structure_designer::structure_designer_changes::RefreshMode;
@@ -134,11 +134,11 @@ impl From<&RefreshProfile> for APIRefreshProfile {
 /// One row of the profiler panel's **By node** table: an aggregate over every
 /// evaluation of one node in one home network during one pass.
 ///
-/// There is deliberately **no `Lookups` column here**. Lookups (requests) and
-/// evaluations are equal only until the evaluation memo lands, and a column
-/// that quietly changes meaning is how a regression hides — so Phase 3 adds
-/// `lookups` and `wasted` as new fields alongside this one rather than
-/// re-interpreting `evaluations` (D8b).
+/// `lookups` and `wasted_ms` are Phase 3 fields that sit **alongside**
+/// `evaluations` rather than re-interpreting it (D8b). Before the evaluation
+/// memo lands `lookups == evaluations` exactly; afterwards the difference is the
+/// memo's hit count, and a column that quietly changed meaning at that point is
+/// how a regression would hide.
 #[derive(Debug, Clone)]
 pub struct APINodeProfileRecord {
     /// Human-readable address: `"main/fold#12/add#3 (mysum)"`.
@@ -157,6 +157,27 @@ pub struct APINodeProfileRecord {
     /// non-clickable rather than offering a jump that lands nowhere.
     pub navigable: bool,
     pub evaluations: u64,
+    /// Times a result for this node was **requested**. Equals `evaluations`
+    /// until the memo lands.
+    pub lookups: u64,
+    /// How many distinct evaluation environments those requests spanned (D9).
+    /// The denominator that makes the redundancy factor honest: a `map` body
+    /// node run once per element over 3 elements has 3 distinct environments
+    /// and is not redundant at all.
+    pub distinct_envs: u64,
+    /// `lookups / distinct_envs` — the per-node redundancy factor. `1.0` means
+    /// every request was a genuinely different environment.
+    pub redundancy_factor: f64,
+    /// Self time a perfect memo would avoid, in ms. **The actionable column.**
+    pub wasted_ms: f64,
+    /// The node produced an iterator, which `doc/design_eval_memoization.md` D4
+    /// deliberately does not cache — so its `wasted_ms` is not an available
+    /// saving.
+    pub produced_iterator: bool,
+    /// The re-entrancy backstop fired on this node (a wire cycle escaped
+    /// validation); D9 there forbids memoizing under it, so again `wasted_ms`
+    /// is not collectable.
+    pub under_reentrancy_backstop: bool,
     /// Time in this node's own `eval`, with its dependencies' time subtracted.
     pub self_ms: f64,
     /// Wall time including everything this node pulled. A custom-node instance
@@ -175,6 +196,12 @@ impl From<&NodeProfileRecord> for APINodeProfileRecord {
             node_id: record.location.node_id,
             navigable: record.location.navigable,
             evaluations: record.evaluations,
+            lookups: record.lookups,
+            distinct_envs: record.distinct_envs,
+            redundancy_factor: record.redundancy_factor(),
+            wasted_ms: ns_to_ms(record.wasted_ns()),
+            produced_iterator: record.flags.produced_iterator,
+            under_reentrancy_backstop: record.flags.under_reentrancy_backstop,
             self_ms: ns_to_ms(record.self_ns),
             total_ms: ns_to_ms(record.total_ns),
         }
@@ -213,8 +240,56 @@ pub struct APIEvalProfile {
     /// Summed self time over every record — the figure to compare against the
     /// refresh's `evalMs` phase.
     pub total_self_ms: f64,
+    /// Total result requests (Phase 3). Equal to `total_evaluations` until the
+    /// memo lands.
+    pub total_lookups: u64,
+    /// Distinct evaluation environments the pass visited — and, since the key
+    /// carries the node and `decorate` too, the **number of entries a perfect
+    /// memo would hold at peak**. The memo's memory question, measured before a
+    /// line of it is written.
+    pub total_distinct_envs: u64,
+    /// `total_lookups / total_distinct_envs`. Shown next to — never instead of
+    /// — the per-node breakdown: a pass that is globally 2.5x can be 11x on
+    /// `materialize` and 1.0 on body nodes, and only the breakdown says where a
+    /// memo would pay (D10).
+    pub redundancy_factor: f64,
+    /// Summed `wasted_ms` over the rows the memo would actually cache — rows
+    /// flagged uncacheable are excluded rather than inflating the projection.
+    pub projected_saving_ms: f64,
+    /// Environment tracking stopped at its ceiling, so `total_distinct_envs` is
+    /// a floor and the redundancy numbers are upper bounds. Reported rather than
+    /// silently capped.
+    pub envs_truncated: bool,
+    /// Whether the D11 equal-key/equal-result self-check ran for this pass.
+    pub self_check_ran: bool,
+    /// Self-check sampling hit its ceiling, so a clean result covers only the
+    /// environments seen before that point rather than the whole pass.
+    pub self_check_truncated: bool,
+    /// What it found. Empty is the expected outcome; a non-empty list means the
+    /// environment key is missing an input — a wrong number now, and a wrong
+    /// result once the memo keys on it.
+    pub self_check_violations: Vec<APISelfCheckViolation>,
     pub by_node: Vec<APINodeProfileRecord>,
     pub by_node_type: Vec<APINodeTypeProfileRecord>,
+}
+
+/// Flutter-facing mirror of [`SelfCheckViolation`]: two evaluations that shared
+/// an environment key produced different results.
+#[derive(Debug, Clone)]
+pub struct APISelfCheckViolation {
+    pub label: String,
+    pub first: String,
+    pub later: String,
+}
+
+impl From<&SelfCheckViolation> for APISelfCheckViolation {
+    fn from(violation: &SelfCheckViolation) -> Self {
+        Self {
+            label: violation.label.clone(),
+            first: violation.first.clone(),
+            later: violation.later.clone(),
+        }
+    }
 }
 
 impl From<&EvalProfile> for APIEvalProfile {
@@ -222,6 +297,18 @@ impl From<&EvalProfile> for APIEvalProfile {
         Self {
             total_evaluations: profile.total_evaluations(),
             total_self_ms: ns_to_ms(profile.total_self_ns()),
+            total_lookups: profile.total_lookups(),
+            total_distinct_envs: profile.total_distinct_envs(),
+            redundancy_factor: profile.redundancy_factor(),
+            projected_saving_ms: ns_to_ms(profile.projected_saving_ns()),
+            envs_truncated: profile.envs_truncated(),
+            self_check_ran: profile.self_check_ran(),
+            self_check_truncated: profile.self_check_truncated(),
+            self_check_violations: profile
+                .self_check_violations()
+                .iter()
+                .map(APISelfCheckViolation::from)
+                .collect(),
             by_node: profile
                 .records()
                 .iter()
@@ -295,6 +382,30 @@ pub fn set_eval_profiling_enabled(enabled: bool) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             cad_instance.structure_designer.eval_profiling_enabled = enabled;
+        });
+    }
+}
+
+/// Whether the self-check is armed. Needs per-node profiling on as well — the
+/// check lives in the profile.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_eval_self_check_enabled() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.eval_self_check_enabled,
+            false,
+        )
+    }
+}
+
+/// Arms or disarms the self-check. Session state like the profiler toggle, and
+/// for the same reason (D2): a check left on across sessions would quietly tax
+/// every later measurement.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_eval_self_check_enabled(enabled: bool) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.eval_self_check_enabled = enabled;
         });
     }
 }

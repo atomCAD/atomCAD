@@ -46,11 +46,7 @@ pub fn evaluate_pin(
     // bulks need the vdW cutoff to relax within the atom limit. Harmless for the
     // small structures used by these tests.
     context.use_vdw_cutoff = true;
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     evaluator.evaluate(&network_stack, node_id, pin, registry, false, &mut context)
 }
 

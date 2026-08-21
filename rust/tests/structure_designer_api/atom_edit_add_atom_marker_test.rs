@@ -86,11 +86,7 @@ fn evaluate_result(designer: &StructureDesigner) -> AtomicStructure {
         .get(network_name)
         .unwrap();
     let node_id = network.active_node_id.unwrap();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     let mut context = NetworkEvaluationContext::new();
     let result = designer.network_evaluator.evaluate(
         &network_stack,

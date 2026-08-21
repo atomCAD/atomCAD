@@ -49,9 +49,90 @@ pub struct NetworkStackElement<'a> {
     /// are ambiguous (a parameter's parent-stack excursion pops the stack
     /// frame while the instance's eval scope stays pushed).
     pub is_zone_body: bool,
+    /// Which **invocation** of a zone body this frame is — `0` on every frame
+    /// that is not one closure invocation (`doc/design_eval_profiling.md` D9).
+    ///
+    /// The network stack alone does not identify an evaluation *environment*: a
+    /// `map` over three elements pushes a byte-identical body frame three
+    /// times, while `run_closure_once` installs a different zone-input frame and
+    /// a different captures `Arc` on each. Those two live reads are the entire
+    /// gap between "same stack" and "same result", and both are bracketed by the
+    /// body push `run_closure_once` rebuilds per call — so stamping one number
+    /// from a per-pass counter at exactly that push closes it.
+    ///
+    /// The other three body pushes deliberately keep `0` and are **not**
+    /// interchangeable with the invocation push:
+    ///
+    /// - *capture pre-evaluation* (`zone_closure.rs`) runs before any captures
+    ///   exist — the push is only there so `source_scope_depth` walks resolve in
+    ///   the parent scope. A fresh epoch there would mark every capture cone as
+    ///   a brand-new environment, pinning capture redundancy at 1.0 forever and
+    ///   making those cones permanently uncacheable by the memo.
+    /// - *the scene descent* ([`NetworkEvaluator::generate_scene_scoped`])
+    ///   happens once per displayed root, not per element. A fresh epoch there
+    ///   would make the same displayed body node look like a different
+    ///   environment under each root, hiding exactly the cross-root redundancy
+    ///   the memo exists to collect.
+    ///
+    /// Allocated **unconditionally**, not behind the profiler toggle: it is one
+    /// increment against a push that already builds a stack and a captures map,
+    /// and `doc/design_eval_memoization.md` needs it in every pass. A counter
+    /// that is only correct while profiling is on is a trap.
+    pub env_epoch: u64,
 }
 
 impl<'a> NetworkStackElement<'a> {
+    /// The pass's root frame: a registry-owned network entered as itself.
+    pub fn root(node_network: &'a NodeNetwork) -> Self {
+        Self {
+            node_network,
+            node_id: 0,
+            is_zone_body: false,
+            env_epoch: 0,
+        }
+    }
+
+    /// A custom-network **instance** frame: `node_id` is the instance node that
+    /// caused the entry. Registry-owned like the root, so its address is pinned
+    /// for the pass.
+    pub fn instance(node_network: &'a NodeNetwork, node_id: u64) -> Self {
+        Self {
+            node_network,
+            node_id,
+            is_zone_body: false,
+            env_epoch: 0,
+        }
+    }
+
+    /// A zone-body frame for **one closure invocation** — the only push that
+    /// allocates an [`env_epoch`](Self::env_epoch). Take the epoch from
+    /// [`NetworkEvaluationContext::alloc_env_epoch`] immediately before the
+    /// push, so consecutive invocations of the same body are distinguishable.
+    pub fn body_invocation(
+        node_network: &'a NodeNetwork,
+        owner_node_id: u64,
+        env_epoch: u64,
+    ) -> Self {
+        Self {
+            node_network,
+            node_id: owner_node_id,
+            is_zone_body: true,
+            env_epoch,
+        }
+    }
+
+    /// A zone-body frame that is **not** an invocation: capture pre-evaluation
+    /// and the displayed-body scene descent. Keeps epoch 0 — see
+    /// [`env_epoch`](Self::env_epoch) for why each of them must.
+    pub fn body_static(node_network: &'a NodeNetwork, owner_node_id: u64) -> Self {
+        Self {
+            node_network,
+            node_id: owner_node_id,
+            is_zone_body: true,
+            env_epoch: 0,
+        }
+    }
+
     pub fn get_top_node(network_stack: &[NetworkStackElement<'a>], node_id: u64) -> &'a Node {
         network_stack
             .last()
@@ -243,6 +324,17 @@ pub struct NetworkEvaluationContext {
     /// body runs, chained instances of one custom network) never trips it.
     /// See `doc/design_error_management.md` D5 ("Defense in depth").
     pub eval_in_progress: HashSet<EvalFrameKey>,
+    /// Source of the per-pass [`NetworkStackElement::env_epoch`] stamps
+    /// (`doc/design_eval_profiling.md` D9). Starts at 1, so `0` stays
+    /// unambiguously "not an invocation frame".
+    ///
+    /// This is the one piece of per-pass state that lives on the context rather
+    /// than in the profiler's thread-local, because the memo will read it on
+    /// **every** evaluation and one field beats a thread-local read per push.
+    /// The price is that it is also the one piece that has to survive the
+    /// eager-HOF context split explicitly — see [`Self::fresh_inner_for_eager_body`]
+    /// and [`Self::drain_inner_context`], which carry it in and merge it back.
+    next_env_epoch: u64,
 }
 
 /// Identity of an evaluation frame chain for the re-entrancy guard: a hash
@@ -276,6 +368,82 @@ fn eval_frame_key(network_stack: &[NetworkStackElement], node_id: u64) -> EvalFr
         frame.node_id.hash(&mut hasher);
     }
     node_id.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Identity of one **evaluation environment**: everything a node's result can
+/// depend on, hashed into a scalar. The third of the three identity questions
+/// the evaluator answers, and interchangeable with neither of the others.
+///
+/// | function | question | lifetime of the key | may hash an address? |
+/// |---|---|---|---|
+/// | [`eval_frame_key`] | "is this frame chain already live?" | only while its frames are | yes, for every frame |
+/// | [`node_profile_key`] | "which node is this?" | retained for the pass | registry frames only |
+/// | [`eval_env_key`] | "which environment is this?" | retained for the pass, and by the memo | registry frames only |
+///
+/// **What a node's result depends on, and why this key is sufficient, is
+/// defined in `doc/design_eval_memoization.md` §"The evaluation environment"**
+/// — not restated here, because a second copy would go stale. In one line: the
+/// six arguments of `NodeData::eval` are a closed input surface, three of them
+/// (`network_stack`, `node_id`, `decorate`) vary, and the only two live context
+/// reads not determined by the stack — the zone-input frame and the captures
+/// `Arc` — change exactly once per closure invocation, which is what
+/// [`NetworkStackElement::env_epoch`] numbers.
+///
+/// Frame identity follows [`frame_identity`]'s split for the same reason: this
+/// key is *retained*, so it may not hash the address of a network that can be
+/// dropped mid-pass (`zone_closure.rs` pushes a locally constructed body
+/// network; closure bodies are `Arc`s). A registry-owned frame's address is
+/// pinned for the pass and is the only identity available; a body frame needs
+/// none, because a synthesized body is a pure function of its owner node and
+/// networks are immutable during a pass.
+///
+/// Unlike [`frame_identity`], a registry frame's own `node_id` **is** part of
+/// this key: two instances of one custom network are two environments (their
+/// arguments come from different call sites), even though they are one row in
+/// the profiler's "which node" table.
+///
+/// **Where this key errs, it errs toward under-reporting redundancy.** A lazy
+/// walker calls `run_closure_once` with `network_stack == &[]`, so its body
+/// frames carry no enclosing context and are separated by their fresh epochs
+/// even when two invocations genuinely share an environment. That direction is
+/// the safe one for both consumers: a conservative number here never becomes an
+/// unsound cache hit in the memo.
+///
+/// Phase 3 of `doc/design_eval_profiling.md` computes this and counts
+/// collisions; it does not act on them. It lives here rather than in
+/// `eval_profiler` precisely so the memo can call it without depending on the
+/// profiler being switched on.
+pub type EvalEnvKey = u64;
+
+/// [`EvalEnvKey`] for `node_id` evaluated against `network_stack` with the
+/// given `decorate` flag.
+///
+/// `decorate` is in the key, not a reason to skip: it genuinely changes results
+/// (`atom_edit_data.rs`, `edit_atom.rs` decorate atoms when the node is the
+/// selected root), and the selected node is normally evaluated once with
+/// `decorate = true` as its own scene root and repeatedly with `false` as an
+/// input. Those are two environments, not one.
+pub fn eval_env_key(
+    network_stack: &[NetworkStackElement],
+    node_id: u64,
+    decorate: bool,
+) -> EvalEnvKey {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for frame in network_stack {
+        // The frame-kind discriminant is hashed so a body frame and a registry
+        // frame can never coincide by accident once the address drops out of
+        // the body arm.
+        frame.is_zone_body.hash(&mut hasher);
+        if !frame.is_zone_body {
+            (frame.node_network as *const NodeNetwork as usize).hash(&mut hasher);
+        }
+        frame.node_id.hash(&mut hasher);
+        frame.env_epoch.hash(&mut hasher);
+    }
+    node_id.hash(&mut hasher);
+    decorate.hash(&mut hasher);
     hasher.finish()
 }
 
@@ -379,7 +547,27 @@ impl NetworkEvaluationContext {
             current_zone_input_values: HashMap::new(),
             captured_source_values: empty_captures(),
             eval_in_progress: HashSet::new(),
+            next_env_epoch: 1,
         }
+    }
+
+    /// Allocate the next environment epoch for a closure invocation about to
+    /// push its body frame (`doc/design_eval_profiling.md` D9).
+    ///
+    /// **Unconditional** — never behind the per-node profiling toggle. It is one
+    /// increment against a push that already builds a stack and a captures map,
+    /// and `doc/design_eval_memoization.md` needs the numbering correct in every
+    /// pass, profiled or not.
+    pub fn alloc_env_epoch(&mut self) -> u64 {
+        let epoch = self.next_env_epoch;
+        self.next_env_epoch += 1;
+        epoch
+    }
+
+    /// The next epoch this context would hand out. Diagnostic accessor — the
+    /// monotonicity test across an eager-HOF body drain reads it.
+    pub fn peek_next_env_epoch(&self) -> u64 {
+        self.next_env_epoch
     }
 
     /// Push a fresh iteration frame onto the HOF's zone-input scope-stack.
@@ -494,6 +682,12 @@ impl NetworkEvaluationContext {
             // capture pre-evaluation runs there while the owner's own eval is
             // in progress.
             eval_in_progress: HashSet::new(),
+            // **Carried, not reset.** Epochs number invocations across the whole
+            // pass; an inner context that restarted at 1 would hand out numbers
+            // already in use and produce two different environments with equal
+            // keys — a silently wrong redundancy number now, and a silently
+            // wrong memo result later (`doc/design_eval_profiling.md` D9).
+            next_env_epoch: self.next_env_epoch,
         }
     }
 
@@ -505,6 +699,17 @@ impl NetworkEvaluationContext {
     /// happens entirely on `inner.current_zone_input_values`).
     pub fn drain_inner_context(&mut self, mut inner: NetworkEvaluationContext) {
         self.print_buffer.append(&mut inner.print_buffer);
+        // The other half of the epoch carry (D9): every epoch the body handed
+        // out is spent, so the outer counter must not re-issue it. `max` rather
+        // than assignment because the inner context can only ever have moved
+        // forward, and the assertion says exactly that.
+        debug_assert!(
+            inner.next_env_epoch >= self.next_env_epoch,
+            "eager-body context returned a lower env epoch ({}) than it was given ({})              — an epoch would be re-issued",
+            inner.next_env_epoch,
+            self.next_env_epoch,
+        );
+        self.next_env_epoch = self.next_env_epoch.max(inner.next_env_epoch);
     }
 
     /// Mutate the `pin_index`-th value of the top iteration frame for
@@ -753,11 +958,7 @@ impl NetworkEvaluator {
         context.selected_node_eval_cache = None;
 
         // We assign the root node network zero node id. It is not used in the evaluation.
-        let mut network_stack = vec![NetworkStackElement {
-            is_zone_body: false,
-            node_network: root_network,
-            node_id: 0,
-        }];
+        let mut network_stack = vec![NetworkStackElement::root(root_network)];
         // Walk down to the body that owns `node_ref`, pushing one stack frame
         // (and one eval scope) per hop. A body frame's `node_id` is the id of
         // the zone-owning node whose body it is — the convention
@@ -780,11 +981,7 @@ impl NetworkEvaluator {
                     return NodeSceneData::new(NodeOutput::None);
                 }
             };
-            network_stack.push(NetworkStackElement {
-                is_zone_body: true,
-                node_network: body,
-                node_id: *hof_id,
-            });
+            network_stack.push(NetworkStackElement::body_static(body, *hof_id));
             context.push_eval_scope(*hof_id);
             pushed_scopes += 1;
             network = body;
@@ -1984,6 +2181,10 @@ impl NetworkEvaluator {
             context
                 .node_errors
                 .insert(context.node_ref(node_id), msg.clone());
+            // Flag the node's record: a result produced under the backstop is
+            // one the memo must never store (`doc/design_eval_memoization.md`
+            // D9), so its `wasted_ns` is not an available saving (D10).
+            eval_profiler::note_reentrancy_backstop(network_stack, node_id);
             return EvalOutput::single(NetworkResult::Error(msg));
         }
         // Per-node profiler frame (`doc/design_eval_profiling.md` D3/D4).
@@ -1991,8 +2192,8 @@ impl NetworkEvaluator {
         // opens *after* the two gates above, which return without dispatching
         // to `eval`, and is released by `Drop` on every path below, including
         // the `Unit`-skip and the two custom-network bails.
-        let _profiler_frame =
-            eval_profiler::begin(network_stack, node_id, &context.eval_scope_path);
+        let profiler_frame =
+            eval_profiler::begin(network_stack, node_id, &context.eval_scope_path, decorate);
         {
             let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
@@ -2048,11 +2249,7 @@ impl NetworkEvaluator {
                     )));
                 }
                 let mut child_network_stack = network_stack.to_vec();
-                child_network_stack.push(NetworkStackElement {
-                    is_zone_body: false,
-                    node_network: child_network,
-                    node_id,
-                });
+                child_network_stack.push(NetworkStackElement::instance(child_network, node_id));
                 if child_network.return_node_id.is_none() {
                     context.eval_in_progress.remove(&frame_key);
                     return EvalOutput::single(NetworkResult::Error(format!(
@@ -2175,6 +2372,15 @@ impl NetworkEvaluator {
             let key = context.node_ref(node_id);
             context.node_output_strings.insert(key, pin_strings);
 
+            // Memo-exclusion flags and the D11 self-check sample (Phase 3).
+            // `Drop` cannot see the results, so this is the one piece of the
+            // profiler's bookkeeping that is not RAII — and it is safe to be
+            // hand-placed precisely because missing it loses a *flag*, never a
+            // frame.
+            if let Some(frame) = &profiler_frame {
+                frame.note_results(&eval_output.results, true);
+            }
+
             context.eval_in_progress.remove(&frame_key);
             eval_output
         }
@@ -2247,15 +2453,20 @@ impl NetworkEvaluator {
             context
                 .node_errors
                 .insert(context.node_ref(node_id), msg.clone());
+            // See the matching arm in `evaluate_all_outputs`.
+            eval_profiler::note_reentrancy_backstop(network_stack, node_id);
             return NetworkResult::Error(msg);
         }
         // Per-node profiler frame — see the matching comment in
         // `evaluate_all_outputs`. It covers the `-1` function-pin arm too: that
         // arm runs no `eval`, but it does build a closure and pre-evaluate its
         // captures, and charging that to nothing would leave a hole in the
-        // table that makes the numbers stop adding up.
-        let _profiler_frame =
-            eval_profiler::begin(network_stack, node_id, &context.eval_scope_path);
+        // table that makes the numbers stop adding up. (That arm returns before
+        // the `note_results` call at the tail, so a function value is timed and
+        // counted but neither flagged nor self-checked — it is a closure bundle,
+        // not a computed result.)
+        let profiler_frame =
+            eval_profiler::begin(network_stack, node_id, &context.eval_scope_path, decorate);
         {
             // Function pin (`output_pin_index == -1`): synthesize a `Function`
             // value from this node viewed as a function of its *unconnected* inputs,
@@ -2354,6 +2565,14 @@ impl NetworkEvaluator {
                     };
                     pin_subtitle_override =
                         eval_output.pin_subtitles.get(&requested_pin_idx).cloned();
+                    // The self-check's sample has to be taken *here*, on the
+                    // complete `EvalOutput`, not at the tail on the projected
+                    // pin — see `NodeEvalGuard::note_results`. The custom-network
+                    // arm below has no complete output to offer (it forwards one
+                    // pin), so its results are checked in the child's own frame.
+                    if let Some(frame) = &profiler_frame {
+                        frame.note_results(&eval_output.results, true);
+                    }
                     eval_output.get(output_pin_index)
                 } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name)
                 {
@@ -2363,11 +2582,7 @@ impl NetworkEvaluator {
                         return NetworkResult::Error(format!("{} is invalid", node.node_type_name));
                     }
                     let mut child_network_stack = network_stack.to_vec();
-                    child_network_stack.push(NetworkStackElement {
-                        is_zone_body: false,
-                        node_network: child_network,
-                        node_id,
-                    });
+                    child_network_stack.push(NetworkStackElement::instance(child_network, node_id));
                     if child_network.return_node_id.is_none() {
                         context.eval_in_progress.remove(&frame_key);
                         return NetworkResult::Error(format!(
@@ -2437,6 +2652,13 @@ impl NetworkEvaluator {
                 entry.resize(pin_index + 1, String::new());
             }
             entry[pin_index] = display_string;
+
+            // Flags only (`full_output = false`): this is one projected pin,
+            // and the self-check sample was already taken above where the whole
+            // `EvalOutput` was in scope.
+            if let Some(frame) = &profiler_frame {
+                frame.note_results(std::slice::from_ref(&result), false);
+            }
 
             context.eval_in_progress.remove(&frame_key);
             result

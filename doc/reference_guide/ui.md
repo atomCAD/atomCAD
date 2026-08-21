@@ -313,7 +313,7 @@ refresh took, the **Profiler panel** says *what it was spent on*. It is a
 docked, collapsible bottom panel, hidden by default; open it from
 *View > Show Profiler* and close it from the same entry or the panel's `×`.
 
-The panel has three tabs, and only the first one works without switching
+The panel has four tabs, and only the first one works without switching
 anything on.
 
 ### Phases
@@ -340,7 +340,7 @@ instantaneous one.
 
 ### Turning per-node measurement on
 
-The other two tabs need the **Per-node** switch in the panel header. It is off
+The other three tabs need the **Per-node** switch in the panel header. It is off
 by default and deliberately not remembered between sessions: per-node
 measurement costs two clock reads and a table update on *every node
 evaluation*, which is nothing on a normal graph and very much something inside a
@@ -375,11 +375,21 @@ one.
 
 ### By node
 
-`Node | Evals | Self | Total`, sorted by self time, one row per node. The node
-is named by its full address — `main/fold#12/add#3 (mysum)` is the `add` node
-with id 3, custom-named `mysum`, inside the body of the `fold` with id 12 in the
-network `main`. **Click a row to jump to that node on the canvas**, the same way
-*Find Usages* and the error picker jump.
+`Node | Lookups | Evals | Self | Total | Wasted`, sorted by self time, one row
+per node.
+
+**Lookups** counts how many times a result for the node was *asked for*, and
+**Evals** how many times it was actually computed. Today those are always equal
+— nothing reuses an evaluation result between requests. **Wasted** is the part
+of the node's self time that would disappear if they were reused; it reads `—`
+for the few nodes where reuse is not on the table (see
+[Redundancy](#redundancy) below). **Self** and **Total** mean what they do in
+the By-node-type table.
+
+The node is named by its full address — `main/fold#12/add#3 (mysum)` is the
+`add` node with id 3, custom-named `mysum`, inside the body of the `fold` with
+id 12 in the network `main`. **Click a row to jump to that node on the canvas**,
+the same way *Find Usages* and the error picker jump.
 
 The address is relative to the network the node actually lives in, so the jump
 crosses network boundaries: a row reading `geo.1-precursor_proxy/materialize#8`
@@ -403,6 +413,64 @@ A greyed-out, non-clickable row is rare: it is a node inside a lazily evaluated
 `map`/`filter` body whose position could not be pinned down to a single network.
 It is measured like any other and still rolls up in the By-node-type table;
 there is simply no address to jump to.
+
+### Redundancy
+
+The question this tab answers is *not* "how often was this node evaluated?" but
+"how often was it evaluated **in a situation it had already been evaluated
+in**?" Only the second kind of repetition is avoidable, and the difference is
+easy to get backwards:
+
+- A node that two other nodes both depend on is evaluated twice with the exact
+  same inputs. One of those two evaluations is pure waste.
+- A node inside a `map`/`fold` body running over three elements is evaluated
+  three times — but each run sees a *different* element, so nothing is repeated
+  and nothing could be saved.
+
+The tab makes that distinction with **Envs**, short for *environments*. An
+environment is everything that can make one evaluation of a node differ from
+another: which subnetwork instance it was running inside, and — for a node in a
+loop body — which iteration it was on. By that reading the first case above is
+**one** environment visited twice, and the second is **three** environments
+visited once each.
+
+`Node | Lookups | Envs | Factor | Self | Wasted | Note`, ranked by **Wasted**:
+
+- **Factor** is `Lookups / Envs`. `1.0×` means every request was genuinely
+  different work. `11×` means the node was recomputed ten times for nothing.
+- **Wasted** is what that costs in milliseconds — the actionable number, and the
+  reason the table is sorted by it rather than by the factor. A node with a `20×`
+  factor and 0.1 ms of self time is not worth anything; a `2×` factor on a
+  600 ms `materialize` is.
+- **Note** marks the rows where the repetition could *not* simply be cached
+  away: `iterator` (the node produces a lazy stream, which is deliberately not
+  stored — its cost lives in whatever drains it) and `cycle` (the node is part
+  of a wiring loop that escaped validation, which is a bug to fix rather than a
+  saving to collect). Those rows show `—` under **Wasted** so the number is
+  never read as money on the table.
+
+The footnote under the table gives the same numbers for the pass as a whole,
+plus how much a perfect cache would save in total. Read the per-node rows before
+the total: a design can be "2.5× redundant" overall while all of that sits in
+two nodes and the rest is 1.0×.
+
+Nothing in this tab changes what the application computes. It measures a
+redundancy that is real today, so that it can be judged where — and whether —
+removing it would be worth it.
+
+The strip above the table reports the **self-check**: an expensive, off-by-
+default verification that two evaluations the profiler considers "the same
+situation" really did produce the same result. It exists to test the profiler's
+own reasoning rather than your design — a clean run means the redundancy numbers
+above can be trusted, and a violation means they cannot.
+
+Switch it on with the toggle at the left of the strip, then take a profiled
+refresh. It needs **Per-node** on as well, and it is markedly slower than
+ordinary profiling — it summarises every result the pass produces and keeps one
+summary per distinct situation — so switch it back off when you go back to
+measuring time. On a very large pass the sampling stops at a ceiling and the
+strip says so; a clean result then covers only the part of the pass that was
+sampled.
 
 ### What this panel is not
 

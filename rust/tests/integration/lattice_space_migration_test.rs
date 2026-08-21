@@ -71,11 +71,7 @@ fn evaluate_to_atoms(
         .unwrap_or_else(|| panic!("network {} missing from registry", network_name));
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
     match result {
         NetworkResult::Crystal(c) => c.atoms,
@@ -1660,11 +1656,7 @@ fn test_load_atom_fill_unwired_shape_case_c() {
     let network = registry.node_networks.get("Main").unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     let result = evaluator.evaluate(
         &network_stack,
         materialize_id,

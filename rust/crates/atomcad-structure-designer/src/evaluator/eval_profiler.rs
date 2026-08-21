@@ -47,10 +47,13 @@
 //!   so.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
-use crate::evaluator::network_evaluator::{NetworkStackElement, NodeProfileKey};
+use crate::evaluator::network_evaluator::{
+    EvalEnvKey, NetworkStackElement, NodeProfileKey, eval_env_key,
+};
+use crate::evaluator::network_result::NetworkResult;
 
 /// Where a profiled node lives, captured **once on vacant insert** — never on
 /// the hot update path, which would clone a `Vec` per evaluation (D5).
@@ -89,24 +92,132 @@ pub struct NodeLocation {
     pub navigable: bool,
 }
 
+/// Why a node's `wasted_ns` is **not** an available saving: the memo declines
+/// to cache some results on purpose (D10). Counted like everything else, but
+/// flagged so a big number in the Redundancy tab is not read as free money.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RecordFlags {
+    /// The node produced a `NetworkResult::Iterator` on at least one pin.
+    /// `doc/design_eval_memoization.md` D4 excludes those from the memo for
+    /// **memory** reasons, not correctness: a stored walker pins its
+    /// `ZoneClosure` — possibly an `Arc<Vec<NetworkResult>>` over a large source
+    /// array — for the whole pass, while memoizing it buys almost nothing (a
+    /// `map`'s `eval` only *builds* the walker; the work is in `next()`).
+    pub produced_iterator: bool,
+    /// The re-entrancy backstop fired on this node — a wire cycle escaped
+    /// validation and re-entered it. `doc/design_eval_memoization.md` D9 must
+    /// never store a result produced under it: with `A -> B -> A` the inner and
+    /// outer evaluations of `A` share a byte-identical environment and return
+    /// different results, which is the one case where the key is genuinely
+    /// insufficient.
+    pub under_reentrancy_backstop: bool,
+}
+
+impl RecordFlags {
+    /// Whether the memo would decline to cache this node's results, i.e.
+    /// whether `wasted_ns` overstates the achievable saving.
+    pub fn uncacheable(&self) -> bool {
+        self.produced_iterator || self.under_reentrancy_backstop
+    }
+}
+
 /// One row of the per-node table: an aggregate over every evaluation of one
 /// `(home frame, node)` pair during one pass.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeProfileRecord {
     pub location: NodeLocation,
-    /// Times `NodeData::eval` actually ran for this node in this environment.
+    /// Times a result for this node was **requested** (Phase 3, D10).
     ///
-    /// Phase 3 adds `lookups` (requests) and `distinct_envs` alongside it, and
-    /// with the memo the two diverge. Phase 2 deliberately does **not** show a
-    /// `Lookups` column filled with this value: they are equal only until the
-    /// memo lands, and a column that quietly changes meaning is how a
-    /// regression hides (D8b).
+    /// Before the memo lands this equals [`evaluations`](Self::evaluations)
+    /// exactly — every request runs `eval`. Afterwards the difference *is* the
+    /// memo's hit count, which is why the two are separate fields rather than
+    /// one column that quietly changes meaning (D8b).
+    pub lookups: u64,
+    /// Times `NodeData::eval` actually ran for this node.
     pub evaluations: u64,
+    /// How many distinct **evaluation environments** (`eval_env_key`) this node
+    /// was requested in during the pass (D9/D10).
+    ///
+    /// This is the denominator that makes the redundancy factor honest: a `map`
+    /// body node evaluated once per element over 3 elements runs in 3
+    /// *different* environments and is not redundant at all, while a diamond's
+    /// apex evaluated twice in one environment is redundant exactly once.
+    pub distinct_envs: u64,
     /// Time in this node's own `eval`, with time spent evaluating its upstream
     /// dependencies subtracted (D4).
     pub self_ns: u64,
     /// Wall time of the whole evaluation including everything it pulled.
     pub total_ns: u64,
+    /// Why this row's `wasted_ns` may not be collectable — see [`RecordFlags`].
+    pub flags: RecordFlags,
+}
+
+impl NodeProfileRecord {
+    /// **The actionable column** (D10): the self time a perfect memo would
+    /// avoid, in nanoseconds.
+    ///
+    /// `self_ns * (lookups - distinct_envs) / evaluations`. The division by
+    /// `evaluations` — not by `lookups` — is what keeps the number meaningful
+    /// after the memo lands: `self_ns` accumulates over actual evaluations, so
+    /// `self_ns / evaluations` is the mean cost of *computing* the node once,
+    /// and `lookups - distinct_envs` is how many of those computations were
+    /// avoidable.
+    ///
+    /// Zero once the memo is doing its job (`lookups == distinct_envs` per
+    /// environment), which is exactly the acceptance criterion
+    /// `doc/design_eval_memoization.md` states.
+    pub fn wasted_ns(&self) -> u64 {
+        if self.evaluations == 0 {
+            return 0;
+        }
+        let avoidable = self.lookups.saturating_sub(self.distinct_envs);
+        ((self.self_ns as u128 * avoidable as u128) / self.evaluations as u128) as u64
+    }
+
+    /// Requests per distinct environment — the per-node redundancy factor.
+    /// `1.0` means every request was a genuinely different environment.
+    ///
+    /// Reported **per node, never only globally** (D10): a pass that is
+    /// globally 2.5x but 11x on `materialize` and 1.0 on body nodes is the
+    /// realistic shape, and only the breakdown says where a memo would pay.
+    pub fn redundancy_factor(&self) -> f64 {
+        if self.distinct_envs == 0 {
+            return 1.0;
+        }
+        self.lookups as f64 / self.distinct_envs as f64
+    }
+}
+
+/// Which key the D11 self-check groups results under.
+///
+/// [`Full`](Self::Full) is the only mode any production path uses: it is the
+/// real environment key, and the check asks whether equal keys really do imply
+/// equal results. The weakened mode exists so the check itself can be shown to
+/// **fail** on a key that is missing an input — "a check that can't fail proves
+/// nothing" (D11) — and is reachable only from a test.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SelfCheckKeyMode {
+    /// The real `eval_env_key`.
+    #[default]
+    Full,
+    /// The key with `decorate` dropped. `decorate` genuinely changes results
+    /// (the selected node's own scene evaluation decorates atoms; every other
+    /// consumer of it does not), so a pass in which a selected node also feeds
+    /// another displayed node must report a violation under this mode — and
+    /// none under `Full`. That pair is the check's regression test.
+    OmitDecorate,
+}
+
+/// One equal-key-different-result finding from the D11 self-check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SelfCheckViolation {
+    /// Label of the node that produced two different results under one
+    /// environment key.
+    pub label: String,
+    /// Summary of the result recorded the first time the key was seen.
+    pub first: String,
+    /// Summary of the differing later result.
+    pub later: String,
 }
 
 /// The live accumulator **and** the finished report — one type, no separate
@@ -132,7 +243,54 @@ pub struct EvalProfile {
     /// The pass's root network — the fallback host for a record whose stack
     /// has no registry-owned frame to read one from (see `build_location`).
     root_network_name: String,
+    /// Per record, the set of environment keys it was requested in — the
+    /// working state behind `NodeProfileRecord::distinct_envs`. Parallel to
+    /// `records` rather than a field on it: the record type is the panel's row,
+    /// and a set of hashes is not a column.
+    record_envs: Vec<HashSet<EvalEnvKey>>,
+    /// Every environment key the pass saw. Its size is the **would-be memo peak
+    /// entry count** — one entry per `(environment, node, decorate)`, which is
+    /// exactly what `doc/design_eval_memoization.md` D2 would store — so the
+    /// memo's memory question is answered by measurement before a line of it is
+    /// written.
+    all_envs: HashSet<EvalEnvKey>,
+    /// Set when environment tracking hit [`MAX_TRACKED_ENVS`] and stopped
+    /// recording new keys. Surfaced in the panel rather than silently capping:
+    /// a truncated pass under-reports `distinct_envs`, which *over*-reports
+    /// redundancy, and a bound nobody is told about reads as coverage.
+    envs_truncated: bool,
+    /// D11 self-check state: environment key -> summary of the first result
+    /// recorded under it. `None` unless the check is armed.
+    self_check_results: Option<HashMap<EvalEnvKey, String>>,
+    /// Findings of the D11 self-check. Empty is the expected outcome; a
+    /// non-empty list means the environment key is missing an input — a wrong
+    /// *number* here, and a wrong *result* once the memo keys on it.
+    self_check_violations: Vec<SelfCheckViolation>,
+    /// Set when self-check sampling stopped at [`MAX_SELF_CHECK_SAMPLES`].
+    /// A truncated run checked only the environments it had already seen, so a
+    /// clean result covers less than the whole pass — reported, never silent.
+    self_check_truncated: bool,
+    /// Which key the self-check groups by. Never anything but
+    /// [`SelfCheckKeyMode::Full`] outside the check's own regression test.
+    self_check_key_mode: SelfCheckKeyMode,
 }
+
+/// Ceiling on tracked environment keys. Reaching it stops key recording for the
+/// rest of the pass and raises `envs_truncated`.
+///
+/// Environment tracking is inherently O(distinct environments), and a `map` over
+/// 10^5 elements produces 10^5 of them; an opt-in profiler may be slow but must
+/// not be the reason a session runs out of memory. At 8 bytes a key plus
+/// hash-set overhead this bound is a few tens of MB.
+pub const MAX_TRACKED_ENVS: usize = 1_000_000;
+
+/// Ceiling on retained self-check samples.
+///
+/// Lower than [`MAX_TRACKED_ENVS`] because an entry here is a summary *string*
+/// rather than a `u64`: at a hundred-odd bytes apiece this bound is a few tens
+/// of MB, where a million would be hundreds. The check runs in release builds
+/// now, so this is a real bound on a real design rather than a theoretical one.
+pub const MAX_SELF_CHECK_SAMPLES: usize = 200_000;
 
 impl EvalProfile {
     /// Every recorded node, in first-seen order. The "By node" table sorts a
@@ -180,6 +338,69 @@ impl EvalProfile {
     pub fn live_frame_count(&self) -> usize {
         self.child_acc.len()
     }
+
+    /// Total result *requests* the pass made. Equal to
+    /// [`Self::total_evaluations`] until the memo lands; afterwards the
+    /// difference is the memo's hit count (D10).
+    pub fn total_lookups(&self) -> u64 {
+        self.records.iter().map(|r| r.lookups).sum()
+    }
+
+    /// How many distinct evaluation environments the pass visited — and, since
+    /// the key already carries the node id and `decorate`, the **number of
+    /// entries a perfect memo would hold at peak**.
+    pub fn total_distinct_envs(&self) -> u64 {
+        self.all_envs.len() as u64
+    }
+
+    /// Pass-level redundancy factor: requests per distinct environment.
+    ///
+    /// Never the *only* number reported (D10). A pass that is globally 2.5x can
+    /// be 11x on `materialize` and 1.0 on body nodes, and only the per-node
+    /// breakdown says where a memo would pay.
+    pub fn redundancy_factor(&self) -> f64 {
+        let distinct = self.total_distinct_envs();
+        if distinct == 0 {
+            return 1.0;
+        }
+        self.total_lookups() as f64 / distinct as f64
+    }
+
+    /// Summed `wasted_ns` over the records the memo would actually cache. Rows
+    /// flagged uncacheable (D10) are excluded rather than quietly inflating the
+    /// projected saving.
+    pub fn projected_saving_ns(&self) -> u64 {
+        self.records
+            .iter()
+            .filter(|r| !r.flags.uncacheable())
+            .map(|r| r.wasted_ns())
+            .sum()
+    }
+
+    /// Whether environment tracking stopped early at [`MAX_TRACKED_ENVS`]. A
+    /// truncated pass under-counts `distinct_envs`, so its redundancy numbers
+    /// are upper bounds; the panel says so.
+    pub fn envs_truncated(&self) -> bool {
+        self.envs_truncated
+    }
+
+    /// Whether the D11 equal-key/equal-result self-check ran for this pass.
+    pub fn self_check_ran(&self) -> bool {
+        self.self_check_results.is_some()
+    }
+
+    /// Whether self-check sampling hit [`MAX_SELF_CHECK_SAMPLES`] and stopped
+    /// taking new environments. A clean result from a truncated run covers only
+    /// part of the pass.
+    pub fn self_check_truncated(&self) -> bool {
+        self.self_check_truncated
+    }
+
+    /// What the self-check found. Empty is the expected — and, so far, the
+    /// observed — outcome.
+    pub fn self_check_violations(&self) -> &[SelfCheckViolation] {
+        &self.self_check_violations
+    }
 }
 
 /// One row of the "By node type" table — a roll-up of every
@@ -199,6 +420,11 @@ thread_local! {
     /// profiling off costs one `Cell` read per evaluation rather than a
     /// `RefCell` borrow (D1).
     static ENABLED: Cell<bool> = const { Cell::new(false) };
+    /// Whether the D11 self-check is armed for the current pass, and under
+    /// which key. A second `Cell` for the same reason [`ENABLED`] is one: the
+    /// check's own hook runs once per evaluation and must cost nothing when it
+    /// is off, which is its normal state.
+    static SELF_CHECK: Cell<Option<SelfCheckKeyMode>> = const { Cell::new(None) };
     /// The live accumulator for the current pass, or `None` when profiling is
     /// off. Owned by `StructureDesigner::with_eval_context`.
     static PROFILE: RefCell<Option<EvalProfile>> = const { RefCell::new(None) };
@@ -211,13 +437,54 @@ thread_local! {
 /// [`take`] on every exit path.
 pub fn install(profile: Option<EvalProfile>) {
     ENABLED.set(profile.is_some());
+    SELF_CHECK.set(profile.as_ref().and_then(|p| {
+        p.self_check_results
+            .is_some()
+            .then_some(p.self_check_key_mode)
+    }));
     PROFILE.with_borrow_mut(|slot| *slot = profile);
+}
+
+/// A profile with the D11 equal-key/equal-result self-check armed.
+///
+/// **Available in every build, gated at runtime** — D11 specifies a
+/// `debug_assertions` gate, and that is the one part of it this implementation
+/// does not follow. `flutter run` loads the **release** DLL, so a compile-gated
+/// check would be missing from the only build the maintainer runs against real
+/// designs, which is precisely the failure mode D2 introduces the runtime
+/// profiler toggle to avoid. The gate's other justification disappeared when
+/// violations became *recorded* rather than asserted: `debug_assert!` compiles
+/// out in release, a recorded finding does not.
+///
+/// What remains is cost, and the runtime toggle already controls it: the check
+/// is off by default, does nothing unless per-node profiling is also on, and
+/// when armed adds one result summary per evaluation plus one retained summary
+/// per distinct environment (bounded by [`MAX_SELF_CHECK_SAMPLES`]).
+///
+/// **The check only means anything with the memo disabled** (D11). Once a memo
+/// serves the second request from the first result there is no second
+/// computation to compare, and the check passes vacuously. There is no memo
+/// yet, so every pass it runs on is a real test; when one lands, arming this
+/// must force it off for the pass and the panel must say so.
+pub fn profile_with_self_check() -> EvalProfile {
+    profile_with_self_check_mode(SelfCheckKeyMode::Full)
+}
+
+/// [`profile_with_self_check`] with an explicit key mode. Only the check's own
+/// regression test passes anything but [`SelfCheckKeyMode::Full`].
+pub fn profile_with_self_check_mode(mode: SelfCheckKeyMode) -> EvalProfile {
+    EvalProfile {
+        self_check_results: Some(HashMap::new()),
+        self_check_key_mode: mode,
+        ..EvalProfile::default()
+    }
 }
 
 /// Takes the finished profile back out at end of pass. Returns `None` when
 /// profiling was off.
 pub fn take() -> Option<EvalProfile> {
     ENABLED.set(false);
+    SELF_CHECK.set(None);
     let profile = PROFILE.with_borrow_mut(|slot| slot.take());
     debug_assert!(
         profile.as_ref().is_none_or(|p| p.child_acc.is_empty()),
@@ -266,6 +533,154 @@ pub fn note_root_network(name: &str) {
 pub struct NodeEvalGuard {
     start: Instant,
     record_index: u32,
+    /// The environment key the D11 self-check groups this evaluation under
+    /// (D9). Carried on the guard so [`NodeEvalGuard::note_results`] can feed
+    /// the check without re-hashing the stack — by the time the results exist
+    /// the stack slice is no longer in scope at every call site.
+    ///
+    /// The real `eval_env_key` in every mode but the deliberately-weakened one,
+    /// and unread when the check is off. The counters do not need it: `begin`
+    /// folds the real key into the record's environment set there and then.
+    self_check_key: EvalEnvKey,
+}
+
+impl NodeEvalGuard {
+    /// Record what this evaluation produced: the memo-exclusion flags (D10) and
+    /// the D11 self-check sample.
+    ///
+    /// Called from the two hook functions once the results exist — deliberately
+    /// **not** from `Drop`, which cannot see them. Costs one thread-local borrow
+    /// per evaluation on top of the guard's own, and only when profiling is on;
+    /// the self-check's expensive half (`to_display_string`) runs only when the
+    /// check is additionally armed.
+    ///
+    /// `full_output` says whether `results` is the node's **complete**
+    /// `EvalOutput` or a single projected pin. It gates the self-check and
+    /// nothing else, and the distinction is load-bearing rather than fussy: the
+    /// environment key deliberately excludes the output pin index (the memo's
+    /// value is the whole `EvalOutput` — `doc/design_eval_memoization.md` D2),
+    /// so comparing one pin's projection against another's under one key would
+    /// report a violation on every two-output node consumed on both pins. The
+    /// flags are safe either way — they only ever get OR-ed in.
+    pub fn note_results(&self, results: &[NetworkResult], full_output: bool) {
+        let produced_iterator = results
+            .iter()
+            .any(|r| matches!(r, NetworkResult::Iterator(_)));
+        let summary = (full_output && SELF_CHECK.get().is_some()).then(|| result_summary(results));
+        if !produced_iterator && summary.is_none() {
+            return;
+        }
+        PROFILE.with_borrow_mut(|slot| {
+            let Some(profile) = slot.as_mut() else {
+                return;
+            };
+            let record = &mut profile.records[self.record_index as usize];
+            record.flags.produced_iterator |= produced_iterator;
+            let label = record.location.label.clone();
+            let Some(summary) = summary else {
+                return;
+            };
+            let Some(seen) = profile.self_check_results.as_mut() else {
+                return;
+            };
+            match seen.get(&self.self_check_key) {
+                None if seen.len() >= MAX_SELF_CHECK_SAMPLES => {
+                    // Stop retaining new environments, but keep comparing the
+                    // ones already sampled: a partial check still catches a
+                    // wrong key on everything it saw before the ceiling.
+                    profile.self_check_truncated = true;
+                }
+                None => {
+                    seen.insert(self.self_check_key, summary);
+                }
+                Some(first) if *first != summary => {
+                    // Equal key, different result: the key is missing an input.
+                    // Recorded rather than panicked so one pass reports *every*
+                    // offender — a panic in the middle of a refresh would show
+                    // the first one and lose the rest, and this check exists to
+                    // be run against real designs.
+                    profile.self_check_violations.push(SelfCheckViolation {
+                        label,
+                        first: first.clone(),
+                        later: summary,
+                    });
+                }
+                Some(_) => {}
+            }
+        });
+    }
+}
+
+/// The self-check's notion of "same result" (D11).
+///
+/// `NetworkResult` equality is neither universally cheap nor even defined for
+/// every variant — `Function` carries a `Box<dyn NodeData>`, `Iterator` a live
+/// walker — so this compares display strings plus, where they exist, atom and
+/// bond counts. **A weak check that runs beats a perfect one that does not**:
+/// it is strong enough to have caught the `decorate` omission and a `NodeRef`
+/// key collision, which is what it is for.
+///
+/// Arrays are capped so a 10^5-element result does not turn the check into the
+/// dominant cost of the pass; two arrays agreeing on their first elements and
+/// differing later is a shape no known evaluator bug produces.
+fn result_summary(results: &[NetworkResult]) -> String {
+    const SUMMARY_ARRAY_CAP: usize = 32;
+    let mut out = String::new();
+    for result in results {
+        out.push_str(&result.to_display_string_capped(SUMMARY_ARRAY_CAP));
+        match result {
+            NetworkResult::Crystal(data) => out.push_str(&atomic_summary(&data.atoms)),
+            NetworkResult::Molecule(data) => out.push_str(&atomic_summary(&data.atoms)),
+            _ => {}
+        }
+        out.push(';');
+    }
+    out
+}
+
+/// Atom/bond counts plus a **decorator fingerprint**.
+///
+/// The decorator half is not padding: `decorate` is one of the three varying
+/// inputs the environment key carries, and every node that reads it —
+/// `atom_edit`, `edit_atom` — expresses the difference *only* through decorator
+/// state (selection marks, `from_selected_node`, guide visuals). Atom counts and
+/// display strings are identical either way, so without this the check could not
+/// see the very omission D11 names as the thing it would have caught.
+fn atomic_summary(atoms: &atomcad_crystolecule::atomic_structure::AtomicStructure) -> String {
+    let decorator = atoms.decorator();
+    format!(
+        "|atoms={},bonds={},sel={},marks={},labels={}",
+        atoms.get_num_of_atoms(),
+        atoms.get_num_of_bonds(),
+        decorator.from_selected_node as u8,
+        decorator.atom_display_states.len(),
+        decorator.atom_label.len(),
+    )
+}
+
+/// Flag the node's record as having tripped the re-entrancy backstop (D10).
+///
+/// Called from the two hook functions' cycle arms, which return *before*
+/// opening a profiler frame — so this looks the record up by key rather than
+/// through a guard. In a genuine cycle the record already exists: the outer
+/// evaluation of the same node opened it before recursing. When it does not
+/// (a shape no cycle can produce), the call is a no-op rather than a phantom
+/// zero-evaluation row.
+pub fn note_reentrancy_backstop(network_stack: &[NetworkStackElement], node_id: u64) {
+    if !is_enabled() {
+        return;
+    }
+    let key = crate::evaluator::network_evaluator::node_profile_key(network_stack, node_id);
+    PROFILE.with_borrow_mut(|slot| {
+        let Some(profile) = slot.as_mut() else {
+            return;
+        };
+        if let Some(index) = profile.index.get(&key).copied() {
+            profile.records[index as usize]
+                .flags
+                .under_reentrancy_backstop = true;
+        }
+    });
 }
 
 impl Drop for NodeEvalGuard {
@@ -309,11 +724,21 @@ pub fn begin(
     network_stack: &[NetworkStackElement],
     node_id: u64,
     scope_path: &[u64],
+    decorate: bool,
 ) -> Option<NodeEvalGuard> {
     if !is_enabled() {
         return None;
     }
     let key = crate::evaluator::network_evaluator::node_profile_key(network_stack, node_id);
+    // O(stack depth), and gated on the toggle for exactly that reason (D9).
+    // When the memo lands it consults the key on every evaluation and this
+    // becomes unconditional — which is why the function lives in the evaluator
+    // next to `eval_frame_key` rather than in this module.
+    let env_key = eval_env_key(network_stack, node_id, decorate);
+    let self_check_key = match SELF_CHECK.get() {
+        Some(SelfCheckKeyMode::OmitDecorate) => eval_env_key(network_stack, node_id, false),
+        _ => env_key,
+    };
     let record_index = PROFILE.with_borrow_mut(|slot| {
         let profile = slot.as_mut()?;
         let record_index = match profile.index.get(&key) {
@@ -331,20 +756,37 @@ pub fn begin(
                 let index = profile.records.len() as u32;
                 profile.records.push(NodeProfileRecord {
                     location,
+                    lookups: 0,
                     evaluations: 0,
+                    distinct_envs: 0,
                     self_ns: 0,
                     total_ns: 0,
+                    flags: RecordFlags::default(),
                 });
+                profile.record_envs.push(HashSet::new());
                 profile.index.insert(key, index);
                 index
             }
         };
+        // A lookup is counted here and an evaluation on release (`Drop`), so
+        // the two fields are already measuring different things before the memo
+        // makes them diverge.
+        profile.records[record_index as usize].lookups += 1;
+        if profile.all_envs.len() < MAX_TRACKED_ENVS {
+            profile.all_envs.insert(env_key);
+            if profile.record_envs[record_index as usize].insert(env_key) {
+                profile.records[record_index as usize].distinct_envs += 1;
+            }
+        } else {
+            profile.envs_truncated = true;
+        }
         profile.child_acc.push(0);
         Some(record_index)
     })?;
     Some(NodeEvalGuard {
         start: Instant::now(),
         record_index,
+        self_check_key,
     })
 }
 

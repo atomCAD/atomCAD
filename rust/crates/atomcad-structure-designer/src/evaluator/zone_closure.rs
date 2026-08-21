@@ -145,11 +145,7 @@ pub fn build_inline_closure<'a>(
     // correctly, pre-evaluate against the caller's context, then drop the
     // pushed stack.
     let mut body_stack = network_stack.to_vec();
-    body_stack.push(NetworkStackElement {
-        is_zone_body: true,
-        node_network: body.as_ref(),
-        node_id,
-    });
+    body_stack.push(NetworkStackElement::body_static(body.as_ref(), node_id));
 
     let captures = match build_captures(
         evaluator,
@@ -373,11 +369,7 @@ pub fn build_node_function_closure<'a>(
     // For a node with no wired inputs this produces an empty capture map.
     let captures = {
         let mut body_stack = network_stack.to_vec();
-        body_stack.push(NetworkStackElement {
-            is_zone_body: true,
-            node_network: &body_network,
-            node_id,
-        });
+        body_stack.push(NetworkStackElement::body_static(&body_network, node_id));
         match build_captures(
             evaluator,
             &body_stack,
@@ -499,12 +491,23 @@ pub fn run_closure_once<'a>(
     // Push the closure's body onto the base stack. For the lazy walkers
     // (`network_stack == &[]`) this is a body-only stack; for the eager HOFs
     // it is the full containing-network stack + body.
+    //
+    // **This is the one body push that allocates an environment epoch**
+    // (`doc/design_eval_profiling.md` D9). An invocation is exactly the unit at
+    // which the two live reads not determined by the stack change — the
+    // zone-input frame pushed just above and the captures `Arc` swapped in at
+    // the top of this function — and both are bracketed by this push, which is
+    // rebuilt on every call. Without it a `map` over three elements would look
+    // like three evaluations of one environment (redundancy 3x) instead of
+    // three environments (1.0), and the memo that inherits this key would serve
+    // element 1's result for element 2.
+    let env_epoch = context.alloc_env_epoch();
     let mut body_stack = network_stack.to_vec();
-    body_stack.push(NetworkStackElement {
-        is_zone_body: true,
-        node_network: closure.body.as_ref(),
-        node_id: closure.owner_node_id,
-    });
+    body_stack.push(NetworkStackElement::body_invocation(
+        closure.body.as_ref(),
+        closure.owner_node_id,
+        env_epoch,
+    ));
 
     let result = eval_step(
         evaluator,

@@ -9,7 +9,7 @@ Network evaluation engine. Processes the node DAG to produce displayable output.
 | `network_evaluator.rs` | Main evaluator: traverses DAG, evaluates nodes, builds scene |
 | `network_result.rs` | `NetworkResult` enum: all possible node output values |
 | `iterator_walker.rs` | `Walker` tree: lazy stream runtime for `Iter[T]` (carried by `NetworkResult::Iterator`) |
-| `eval_profiler.rs` | Opt-in per-node evaluation profiler: `EvalProfile` (live accumulator *and* finished report), the RAII `NodeEvalGuard`, and the pass thread-local `with_eval_context` installs and takes back |
+| `eval_profiler.rs` | Opt-in per-node evaluation profiler: `EvalProfile` (live accumulator *and* finished report), the RAII `NodeEvalGuard`, the redundancy counters (`lookups` / `distinct_envs` / `wasted_ns`) and the D11 equal-key/equal-result self-check, plus the pass thread-local `with_eval_context` installs and takes back |
 | `zone_closure.rs` | `ZoneClosure` bundle (incl. `pre_supplied_args` for partial application — see `doc/design_currying.md`) + the shared per-element `run_closure_once` / `build_inline_closure` / `build_node_function_closure` (powers the HOF zone bodies, the `closure` node, the function pin, the `apply` node's recursive consumption loop, and the `NetworkResult::Function` value) |
 
 ## NetworkEvaluator
@@ -31,7 +31,7 @@ Key methods:
 
 Handles both built-in nodes (call `NodeData::eval()`) and custom node types (recursive network evaluation: `evaluate`/`evaluate_all_outputs` push the sub-network onto the stack and recurse into its return node).
 
-**`generate_scene_scoped` and the frameless body evaluation.** For a non-empty `NodeRef::scope_path` it walks the path from the top-level network down through each closure's `zone`, pushing one `NetworkStackElement { node_network: body, node_id: owner_id }` **and** one `push_eval_scope(owner_id)` per hop (pop before building the `NodeSceneData` — the struct literal `.take()`s the eval cache). Captures then resolve through the ordinary `resolve_incoming_wire` stack walk, and errors / hover strings key under the right `NodeRef`.
+**`generate_scene_scoped` and the frameless body evaluation.** For a non-empty `NodeRef::scope_path` it walks the path from the top-level network down through each closure's `zone`, pushing one `NetworkStackElement::body_static(body, owner_id)` **and** one `push_eval_scope(owner_id)` per hop (`body_static`, not `body_invocation` — the descent happens once per displayed root, not per element; see the `env_epoch` table below) (pop before building the `NodeSceneData` — the struct literal `.take()`s the eval cache). Captures then resolve through the ordinary `resolve_incoming_wire` stack walk, and errors / hover strings key under the right `NodeRef`.
 
 Crucially it pushes **no zone frame**. That is the whole reason the feature is restricted to chains of 0-ary closures, which cannot legally hold `ZoneInput` wires — and it is why `current_zone_input` (which panicked) was replaced by **`try_current_zone_input(hof_id, pin_index) -> Option<&NetworkResult>`**. Three call sites use it: `resolve_incoming_wire` plus two in `zone_closure.rs` (`resolve_capture_source` and the zone-output resolver). A missing frame yields a localized `NetworkResult::Error("zone input referenced outside an invocation")` instead of a crash, because the eligibility guarantee is *derived* (it rests on validation having run and on a fresh `custom_node_type` cache — both known-fragile). **Do not reintroduce a panicking/`debug_assert`ing variant**: the frameless scene path shares this code, so an assert would fire on a legitimate path. See `doc/design_zero_ary_closure_body_display.md` §3.
 
@@ -92,9 +92,50 @@ the life of its frames — so a body frame is identified by
 `(identity of the frame below, owner node id)` and never by an address, because
 body networks get dropped mid-pass and an address can be reused. A registry
 frame's own `node_id` is deliberately not part of its identity, which is what
-makes two instances of one custom network aggregate into one row. Phase 3 of the
-design adds a third sibling for the evaluation *environment*; do not merge any
-of them.
+makes two instances of one custom network aggregate into one row.
+`eval_env_key` answers "which evaluation *environment* is this?" — the key
+`doc/design_eval_memoization.md` will memoize on — and differs from
+`node_profile_key` in exactly two places: it hashes each frame's `node_id` and
+`env_epoch` (so two instances of one custom network, and two invocations of one
+body, are two environments) and it hashes `decorate`. Do not merge any of them.
+
+## `env_epoch`: which body pushes allocate one
+
+`NetworkStackElement` carries an `env_epoch` that numbers **closure
+invocations** within a pass, and the four body-push sites are **not**
+interchangeable. Use the constructors — `::root`, `::instance`,
+`::body_invocation`, `::body_static` — rather than a struct literal, so a new
+push site has to choose:
+
+| push site | constructor | epoch |
+|---|---|---|
+| the pass's root network | `root` | 0 |
+| custom-network instance entry (both `evaluate*` arms) | `instance` | 0 |
+| **`run_closure_once`** — one invocation of a body | `body_invocation` | **fresh** |
+| capture pre-evaluation (`build_inline_closure`, `build_node_function_closure`) | `body_static` | 0 |
+| the displayed-body scene descent (`generate_scene_scoped`) | `body_static` | 0 |
+
+The fresh epoch is what separates a `map` over three elements into three
+environments: `run_closure_once` installs a different zone-input frame and a
+different captures `Arc` per call, and those are the only two live reads not
+determined by the network stack. The other three pushes must keep 0 — a fresh
+epoch at capture pre-evaluation would pin capture redundancy at 1.0 forever and
+make those cones permanently uncacheable, and one at the scene descent would
+hide the cross-root redundancy the memo exists to collect.
+
+Getting this wrong is a silently wrong *number* today and a silently wrong
+*result* once the memo keys on it. Two supporting rules:
+
+- **`alloc_env_epoch` is unconditional**, never behind the profiling toggle: the
+  memo needs correct numbering in every pass, and a counter that is only right
+  while profiling is on is a trap.
+- **The counter is the one piece of per-pass state that lives on
+  `NetworkEvaluationContext`** rather than in the profiler thread-local (the memo
+  will read it per evaluation). It is therefore also the one piece that must be
+  threaded through the eager-body split by hand: `fresh_inner_for_eager_body`
+  carries `next_env_epoch` **in** and `drain_inner_context` merges it back with
+  `max`. Without both halves a `fold`/`foreach`/`apply` body restarts at 1 and
+  re-issues epochs the outer context already spent.
 
 ## Central skip rule (Unit-returning nodes)
 

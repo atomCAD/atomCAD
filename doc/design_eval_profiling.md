@@ -623,6 +623,32 @@ computation to compare and the check passes vacuously. Enabling it must
 therefore force the memo off for that pass, and the panel must say so —
 otherwise a green result after the memo lands is evidence of nothing.
 
+*As implemented, with two deviations from the paragraph above.*
+
+**It is not `debug_assertions`-gated.** That gate contradicts D2 of this same
+document: `flutter run` loads the **release** DLL, so a compile-gated check
+would be absent from the only build it would ever be run against a real design
+in — and "run it on 2–3 real designs" is this decision's entire verification
+step. The gate's other justification also disappeared with the second deviation
+below: `debug_assert!` compiles out in release, a recorded finding does not.
+What is left is cost, and the runtime toggle already bounds it — the check is
+off by default, inert unless per-node profiling is also on, and its retained
+samples are capped (`MAX_SELF_CHECK_SAMPLES`, with the truncation reported in
+the panel rather than silently narrowing what was checked).
+
+Second, a violation is **recorded and surfaced** in the Redundancy tab rather
+than asserted, so one pass reports every offender instead of
+panicking on the first and losing the rest — this check exists to be run
+against real designs, where a mid-refresh panic would take the application
+down with the evidence. Tests do the asserting (`self_check_violations()`
+empty under the real key, non-empty under a deliberately weakened one). The
+weakened key is `SelfCheckKeyMode::OmitDecorate`, reachable only from a test;
+it is what proves the check can fail. The comparison summary is
+`to_display_string_capped` plus, for atomic results, atom/bond counts **and a
+decorator fingerprint** — without that last part the check could not see the
+`decorate` omission at all, since every node that reads `decorate` expresses
+the difference only through decorator state.
+
 ### D12. What is deliberately not attributed
 
 Time inside the CSG conversion cache is charged to the node that

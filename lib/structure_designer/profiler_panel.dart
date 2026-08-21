@@ -13,11 +13,11 @@
 /// closed. So the getters run inside `build`, which happens only when the panel
 /// is visible and only when the model notifies — never on a gadget drag tick.
 ///
-/// Three columns' worth of vocabulary is deliberately absent until Phase 3:
-/// `Lookups` and `Wasted` are defined per *evaluation environment*, and before
-/// the memo lands `lookups == evaluations` exactly. A column that quietly
-/// changes meaning once the memo ships is how a regression hides, so the memo's
-/// business case gets new columns rather than a re-reading of this one.
+/// Phase 3 adds the **Redundancy** tab and two columns to *By node* —
+/// `Lookups` and `Wasted` — as new fields rather than a re-reading of
+/// `Evals`. Before the evaluation memo lands `lookups == evaluations` exactly;
+/// afterwards the difference is the memo's hit count, and a column that quietly
+/// changed meaning at that point is how a regression would hide.
 library;
 
 import 'package:flutter/material.dart';
@@ -36,7 +36,12 @@ class ProfilerPanel extends StatefulWidget {
 class _ProfilerPanelState extends State<ProfilerPanel>
     with SingleTickerProviderStateMixin {
   static const double _panelHeight = 260;
-  static const List<String> _tabs = ['Phases', 'By node type', 'By node'];
+  static const List<String> _tabs = [
+    'Phases',
+    'By node type',
+    'By node',
+    'Redundancy',
+  ];
 
   late final TabController _tabController =
       TabController(length: _tabs.length, vsync: this);
@@ -73,6 +78,7 @@ class _ProfilerPanelState extends State<ProfilerPanel>
                     _PhasesTab(history: history),
                     _ByNodeTypeTab(profile: nodeStats),
                     _ByNodeTab(profile: nodeStats, model: model),
+                    _RedundancyTab(profile: nodeStats, model: model),
                   ],
                 ),
               ),
@@ -100,7 +106,7 @@ class _ProfilerPanelState extends State<ProfilerPanel>
           ),
           const SizedBox(width: 12),
           SizedBox(
-            width: 320,
+            width: 400,
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -311,6 +317,25 @@ String _ms(double value) {
   return value.toStringAsFixed(2);
 }
 
+/// `Wasted` for one row — **“—” when the memo would not cache the node.**
+///
+/// A flagged row's projected saving is not money on the table: iterator
+/// producers are excluded from the memo for memory reasons, and a result
+/// produced under the re-entrancy backstop must never be stored at all.
+/// Printing a number there would invite chasing a saving that cannot be
+/// collected.
+String _wasted(APINodeProfileRecord row) {
+  if (row.producedIterator || row.underReentrancyBackstop) return '—';
+  return _ms(row.wastedMs);
+}
+
+/// Why a row is not cacheable, for the Redundancy tab's Note column.
+String _flagNote(APINodeProfileRecord row) {
+  if (row.underReentrancyBackstop) return 'cycle';
+  if (row.producedIterator) return 'iterator';
+  return '';
+}
+
 String _pct(double numerator, double denominator) {
   if (denominator <= 0) return '—';
   return '${(100 * numerator / denominator).toStringAsFixed(1)}%';
@@ -477,18 +502,22 @@ class _ByNodeTab extends StatelessWidget {
     return _Table(
       columns: const [
         _Column('Node', 16),
+        _Column('Lookups', 4, numeric: true),
         _Column('Evals', 4, numeric: true),
         _Column('Self', 5, numeric: true),
         _Column('Total', 5, numeric: true),
+        _Column('Wasted', 5, numeric: true),
       ],
       rows: [
         for (final row in sorted)
           _Row(
             [
               row.label,
+              row.lookups.toString(),
               row.evaluations.toString(),
               _ms(row.selfMs),
               _ms(row.totalMs),
+              _wasted(row),
             ],
             dimmed: !row.navigable,
             onTap: row.navigable ? () => _jumpTo(row) : null,
@@ -497,16 +526,30 @@ class _ByNodeTab extends StatelessWidget {
       footnote:
           'Click a row to jump to the node — including into another network: a '
           'row named “other_net/materialize#8” opens that network and selects '
-          'node 8 there. Two readings are expected and are not bugs: a '
-          'custom-node instance shows ~zero self against a large total (it '
-          'delegates to its network’s return node), and a lazy “map” shows a '
-          'near-zero total with its body’s time nested under the “collect” '
-          'that pulled it.',
+          'node 8 there. “Lookups” counts requests and “Evals” counts runs of '
+          'the node — equal until the evaluation memo lands. “Wasted” is the '
+          'self time a perfect memo would avoid; “—” marks a node the memo '
+          'would not cache (see Redundancy). Two readings are expected and are '
+          'not bugs: a custom-node instance shows ~zero self against a large '
+          'total (it delegates to its network’s return node), and a lazy “map” '
+          'shows a near-zero total with its body’s time nested under the '
+          '“collect” that pulled it.',
     );
   }
 
   /// Reuses the scope-aware canvas navigation from Find Usages / error
   /// navigation, so the landing behaves identically from either entry point.
+  static void _jumpToRecord(
+      StructureDesignerModel model, APINodeProfileRecord record) {
+    // `scopePath` is FRB's `Uint64List` (BigInt elements), not
+    // `dart:typed_data`'s — `toList()` is what the other jump call sites use.
+    model.jumpToNode(
+      record.hostNetwork,
+      record.scopePath.toList(),
+      record.nodeId,
+    );
+  }
+
   void _jumpTo(APINodeProfileRecord record) {
     // `scopePath` is FRB's `Uint64List` (BigInt elements), not
     // `dart:typed_data`'s — `toList()` is what the other jump call sites use.
@@ -514,6 +557,191 @@ class _ByNodeTab extends StatelessWidget {
       record.hostNetwork,
       record.scopePath.toList(),
       record.nodeId,
+    );
+  }
+}
+
+// ============================================================================
+// Redundancy tab (Phase 3)
+// ============================================================================
+
+/// **The memo's business case, and afterwards its regression test.**
+///
+/// The number that matters is not how often a node was evaluated but how often
+/// it was evaluated *in an environment it had already been evaluated in*. A
+/// `map` body run once per element runs in a different environment each time
+/// and is not redundant at all; a diamond apex pulled twice is one environment
+/// and one avoidable evaluation. Only the second kind is something a memo could
+/// remove, which is why every row here is `Lookups` against `Envs`.
+class _RedundancyTab extends StatelessWidget {
+  const _RedundancyTab({required this.profile, required this.model});
+
+  final APIEvalProfile? profile;
+  final StructureDesignerModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = this.profile;
+    if (profile == null || profile.byNode.isEmpty) {
+      return Column(
+        children: [
+          _SelfCheckBar(model: model, profile: profile),
+          const Expanded(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Text(_emptyProfileMessage,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white38, fontSize: 12)),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+    // Ranked by Wasted — the projected saving — with the rows the memo would
+    // not cache sorted last rather than hidden: they are still measurements.
+    final sorted = [...profile.byNode]..sort((a, b) {
+        final aFlagged = a.producedIterator || a.underReentrancyBackstop;
+        final bFlagged = b.producedIterator || b.underReentrancyBackstop;
+        if (aFlagged != bFlagged) return aFlagged ? 1 : -1;
+        return b.wastedMs.compareTo(a.wastedMs);
+      });
+    return Column(
+      children: [
+        _SelfCheckBar(model: model, profile: profile),
+        Expanded(
+          child: _Table(
+            columns: const [
+              _Column('Node', 14),
+              _Column('Lookups', 4, numeric: true),
+              _Column('Envs', 4, numeric: true),
+              _Column('Factor', 4, numeric: true),
+              _Column('Self', 4, numeric: true),
+              _Column('Wasted', 4, numeric: true),
+              _Column('Note', 4),
+            ],
+            rows: [
+              for (final row in sorted)
+                _Row(
+                  [
+                    row.label,
+                    row.lookups.toString(),
+                    row.distinctEnvs.toString(),
+                    '${row.redundancyFactor.toStringAsFixed(1)}×',
+                    _ms(row.selfMs),
+                    _wasted(row),
+                    _flagNote(row),
+                  ],
+                  dimmed: !row.navigable ||
+                      row.producedIterator ||
+                      row.underReentrancyBackstop,
+                  onTap: row.navigable
+                      ? () => _ByNodeTab._jumpToRecord(model, row)
+                      : null,
+                ),
+            ],
+            footnote: _footnote(profile),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _footnote(APIEvalProfile profile) {
+    final buffer = StringBuffer()
+      ..write('${profile.totalLookups} lookups over '
+          '${profile.totalDistinctEnvs} distinct environments '
+          '(${profile.redundancyFactor.toStringAsFixed(2)}× overall); a perfect '
+          'memo would hold ${profile.totalDistinctEnvs} entries and save about '
+          '${_ms(profile.projectedSavingMs)} ms. An environment is the call '
+          'stack extended with the iteration of each enclosing loop, so a body '
+          'node run once per element reads 1.0× — that is not redundancy. Rows '
+          'marked “iterator” or “cycle” are counted but would not be cached, so '
+          'their Wasted shows “—”.');
+    if (profile.envsTruncated) {
+      buffer.write(' ⚠ Environment tracking hit its ceiling: the environment '
+          'counts are floors and the factors are upper bounds.');
+    }
+    return buffer.toString();
+  }
+}
+
+/// The D11 self-check's state, above the table.
+///
+/// It says two things the numbers cannot: whether the check actually ran (and
+/// over the whole pass, or only up to its sampling ceiling), and — the part
+/// that keeps a green result meaningful later — that it is only conclusive
+/// while no evaluation memo is serving second requests from first results.
+class _SelfCheckBar extends StatelessWidget {
+  const _SelfCheckBar({required this.model, required this.profile});
+
+  final StructureDesignerModel model;
+  final APIEvalProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final violations = profile?.selfCheckViolations ?? const [];
+    final ran = profile?.selfCheckRan ?? false;
+    final truncated = profile?.selfCheckTruncated ?? false;
+
+    final String status;
+    final Color color;
+    if (violations.isNotEmpty) {
+      status = 'Self-check: ${violations.length} equal-key/different-result '
+          'violation(s) — first: ${violations.first.label}';
+      color = const Color(0xFFE08A8A);
+    } else if (ran && truncated) {
+      status = 'Self-check: clean so far, but sampling hit its ceiling — the '
+          'environments after that point were not checked.';
+      color = const Color(0xFFD8C07A);
+    } else if (ran) {
+      status = 'Self-check: clean — every pair of evaluations sharing an '
+          'environment produced the same result (no memo is running, so this '
+          'is a real test)';
+      color = const Color(0xFF7BC67B);
+    } else if (model.evalSelfCheckEnabled) {
+      status = 'Self-check: armed — it runs on the next profiled pass.';
+      color = Colors.white38;
+    } else {
+      status = 'Self-check: off. Arming it validates the environment key '
+          'against real designs; it costs a result summary per evaluation and '
+          'one retained summary per distinct environment, so leave it off when '
+          'you are measuring time rather than correctness.';
+      color = Colors.white38;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      color: const Color(0xFF232323),
+      child: Row(
+        children: [
+          InkWell(
+            key: const Key('eval_self_check_toggle'),
+            onTap: () =>
+                model.setEvalSelfCheckEnabled(!model.evalSelfCheckEnabled),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Icon(
+                model.evalSelfCheckEnabled ? Icons.toggle_on : Icons.toggle_off,
+                size: 18,
+                color: model.evalSelfCheckEnabled
+                    ? const Color(0xFF7BC67B)
+                    : Colors.white38,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              status,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

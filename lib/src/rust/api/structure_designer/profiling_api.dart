@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `ns_to_ms`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// The most recent refresh, never coalesced — what the always-on status strip
 /// shows. `None` before the first refresh of the session.
@@ -31,6 +31,18 @@ bool getEvalProfilingEnabled() => RustLib.instance.api
 /// pass replaces it.
 void setEvalProfilingEnabled({required bool enabled}) => RustLib.instance.api
     .crateApiStructureDesignerProfilingApiSetEvalProfilingEnabled(
+        enabled: enabled);
+
+/// Whether the self-check is armed. Needs per-node profiling on as well — the
+/// check lives in the profile.
+bool getEvalSelfCheckEnabled() => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiGetEvalSelfCheckEnabled();
+
+/// Arms or disarms the self-check. Session state like the profiler toggle, and
+/// for the same reason (D2): a check left on across sessions would quietly tax
+/// every later measurement.
+void setEvalSelfCheckEnabled({required bool enabled}) => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiSetEvalSelfCheckEnabled(
         enabled: enabled);
 
 /// The most recent **profiled** pass's per-node table — read, never drained
@@ -90,12 +102,57 @@ class APIEvalProfile {
   /// Summed self time over every record — the figure to compare against the
   /// refresh's `evalMs` phase.
   final double totalSelfMs;
+
+  /// Total result requests (Phase 3). Equal to `total_evaluations` until the
+  /// memo lands.
+  final BigInt totalLookups;
+
+  /// Distinct evaluation environments the pass visited — and, since the key
+  /// carries the node and `decorate` too, the **number of entries a perfect
+  /// memo would hold at peak**. The memo's memory question, measured before a
+  /// line of it is written.
+  final BigInt totalDistinctEnvs;
+
+  /// `total_lookups / total_distinct_envs`. Shown next to — never instead of
+  /// — the per-node breakdown: a pass that is globally 2.5x can be 11x on
+  /// `materialize` and 1.0 on body nodes, and only the breakdown says where a
+  /// memo would pay (D10).
+  final double redundancyFactor;
+
+  /// Summed `wasted_ms` over the rows the memo would actually cache — rows
+  /// flagged uncacheable are excluded rather than inflating the projection.
+  final double projectedSavingMs;
+
+  /// Environment tracking stopped at its ceiling, so `total_distinct_envs` is
+  /// a floor and the redundancy numbers are upper bounds. Reported rather than
+  /// silently capped.
+  final bool envsTruncated;
+
+  /// Whether the D11 equal-key/equal-result self-check ran for this pass.
+  final bool selfCheckRan;
+
+  /// Self-check sampling hit its ceiling, so a clean result covers only the
+  /// environments seen before that point rather than the whole pass.
+  final bool selfCheckTruncated;
+
+  /// What it found. Empty is the expected outcome; a non-empty list means the
+  /// environment key is missing an input — a wrong number now, and a wrong
+  /// result once the memo keys on it.
+  final List<APISelfCheckViolation> selfCheckViolations;
   final List<APINodeProfileRecord> byNode;
   final List<APINodeTypeProfileRecord> byNodeType;
 
   const APIEvalProfile({
     required this.totalEvaluations,
     required this.totalSelfMs,
+    required this.totalLookups,
+    required this.totalDistinctEnvs,
+    required this.redundancyFactor,
+    required this.projectedSavingMs,
+    required this.envsTruncated,
+    required this.selfCheckRan,
+    required this.selfCheckTruncated,
+    required this.selfCheckViolations,
     required this.byNode,
     required this.byNodeType,
   });
@@ -104,6 +161,14 @@ class APIEvalProfile {
   int get hashCode =>
       totalEvaluations.hashCode ^
       totalSelfMs.hashCode ^
+      totalLookups.hashCode ^
+      totalDistinctEnvs.hashCode ^
+      redundancyFactor.hashCode ^
+      projectedSavingMs.hashCode ^
+      envsTruncated.hashCode ^
+      selfCheckRan.hashCode ^
+      selfCheckTruncated.hashCode ^
+      selfCheckViolations.hashCode ^
       byNode.hashCode ^
       byNodeType.hashCode;
 
@@ -114,6 +179,14 @@ class APIEvalProfile {
           runtimeType == other.runtimeType &&
           totalEvaluations == other.totalEvaluations &&
           totalSelfMs == other.totalSelfMs &&
+          totalLookups == other.totalLookups &&
+          totalDistinctEnvs == other.totalDistinctEnvs &&
+          redundancyFactor == other.redundancyFactor &&
+          projectedSavingMs == other.projectedSavingMs &&
+          envsTruncated == other.envsTruncated &&
+          selfCheckRan == other.selfCheckRan &&
+          selfCheckTruncated == other.selfCheckTruncated &&
+          selfCheckViolations == other.selfCheckViolations &&
           byNode == other.byNode &&
           byNodeType == other.byNodeType;
 }
@@ -121,11 +194,11 @@ class APIEvalProfile {
 /// One row of the profiler panel's **By node** table: an aggregate over every
 /// evaluation of one node in one home network during one pass.
 ///
-/// There is deliberately **no `Lookups` column here**. Lookups (requests) and
-/// evaluations are equal only until the evaluation memo lands, and a column
-/// that quietly changes meaning is how a regression hides — so Phase 3 adds
-/// `lookups` and `wasted` as new fields alongside this one rather than
-/// re-interpreting `evaluations` (D8b).
+/// `lookups` and `wasted_ms` are Phase 3 fields that sit **alongside**
+/// `evaluations` rather than re-interpreting it (D8b). Before the evaluation
+/// memo lands `lookups == evaluations` exactly; afterwards the difference is the
+/// memo's hit count, and a column that quietly changed meaning at that point is
+/// how a regression would hide.
 class APINodeProfileRecord {
   /// Human-readable address: `"main/fold#12/add#3 (mysum)"`.
   final String label;
@@ -148,6 +221,33 @@ class APINodeProfileRecord {
   final bool navigable;
   final BigInt evaluations;
 
+  /// Times a result for this node was **requested**. Equals `evaluations`
+  /// until the memo lands.
+  final BigInt lookups;
+
+  /// How many distinct evaluation environments those requests spanned (D9).
+  /// The denominator that makes the redundancy factor honest: a `map` body
+  /// node run once per element over 3 elements has 3 distinct environments
+  /// and is not redundant at all.
+  final BigInt distinctEnvs;
+
+  /// `lookups / distinct_envs` — the per-node redundancy factor. `1.0` means
+  /// every request was a genuinely different environment.
+  final double redundancyFactor;
+
+  /// Self time a perfect memo would avoid, in ms. **The actionable column.**
+  final double wastedMs;
+
+  /// The node produced an iterator, which `doc/design_eval_memoization.md` D4
+  /// deliberately does not cache — so its `wasted_ms` is not an available
+  /// saving.
+  final bool producedIterator;
+
+  /// The re-entrancy backstop fired on this node (a wire cycle escaped
+  /// validation); D9 there forbids memoizing under it, so again `wasted_ms`
+  /// is not collectable.
+  final bool underReentrancyBackstop;
+
   /// Time in this node's own `eval`, with its dependencies' time subtracted.
   final double selfMs;
 
@@ -164,6 +264,12 @@ class APINodeProfileRecord {
     required this.nodeId,
     required this.navigable,
     required this.evaluations,
+    required this.lookups,
+    required this.distinctEnvs,
+    required this.redundancyFactor,
+    required this.wastedMs,
+    required this.producedIterator,
+    required this.underReentrancyBackstop,
     required this.selfMs,
     required this.totalMs,
   });
@@ -177,6 +283,12 @@ class APINodeProfileRecord {
       nodeId.hashCode ^
       navigable.hashCode ^
       evaluations.hashCode ^
+      lookups.hashCode ^
+      distinctEnvs.hashCode ^
+      redundancyFactor.hashCode ^
+      wastedMs.hashCode ^
+      producedIterator.hashCode ^
+      underReentrancyBackstop.hashCode ^
       selfMs.hashCode ^
       totalMs.hashCode;
 
@@ -192,6 +304,12 @@ class APINodeProfileRecord {
           nodeId == other.nodeId &&
           navigable == other.navigable &&
           evaluations == other.evaluations &&
+          lookups == other.lookups &&
+          distinctEnvs == other.distinctEnvs &&
+          redundancyFactor == other.redundancyFactor &&
+          wastedMs == other.wastedMs &&
+          producedIterator == other.producedIterator &&
+          underReentrancyBackstop == other.underReentrancyBackstop &&
           selfMs == other.selfMs &&
           totalMs == other.totalMs;
 }
@@ -346,4 +464,30 @@ class APIRefreshProfile {
           maxTotalMs == other.maxTotalMs &&
           csgCache == other.csgCache &&
           hasNodeStats == other.hasNodeStats;
+}
+
+/// Flutter-facing mirror of [`SelfCheckViolation`]: two evaluations that shared
+/// an environment key produced different results.
+class APISelfCheckViolation {
+  final String label;
+  final String first;
+  final String later;
+
+  const APISelfCheckViolation({
+    required this.label,
+    required this.first,
+    required this.later,
+  });
+
+  @override
+  int get hashCode => label.hashCode ^ first.hashCode ^ later.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISelfCheckViolation &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          first == other.first &&
+          later == other.later;
 }

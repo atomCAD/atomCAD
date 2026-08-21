@@ -84,11 +84,7 @@ fn evaluate_pin0(designer: &StructureDesigner, network_name: &str, node_id: u64)
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let stack = vec![NetworkStackElement::root(network)];
     evaluator.evaluate(&stack, node_id, 0, registry, false, &mut context)
 }
 

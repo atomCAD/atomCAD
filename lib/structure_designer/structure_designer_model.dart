@@ -344,6 +344,15 @@ class StructureDesignerModel extends ChangeNotifier {
   /// across sessions would skew later measurements (D1/D2).
   bool evalProfilingEnabled = false;
 
+  /// Whether the D11 equal-key/equal-result self-check is armed — a **second**
+  /// toggle, genuinely expensive, that validates the evaluation-environment key
+  /// rather than arguing for it (`doc/design_eval_profiling.md` D11).
+  ///
+  /// Needs [evalProfilingEnabled] as well — the check lives in the profile.
+  /// Available in every build: `flutter run` loads the release DLL, and a check
+  /// that is compiled out there could never be run against a real design.
+  bool evalSelfCheckEnabled = false;
+
   /// Latest refresh phase breakdown, for the always-on status strip
   /// (`doc/design_eval_profiling.md` D8a).
   ///
@@ -3433,6 +3442,14 @@ class StructureDesignerModel extends ChangeNotifier {
   void setEvalProfilingEnabled(bool enabled) {
     profiling_api.setEvalProfilingEnabled(enabled: enabled);
     evalProfilingEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Arms or disarms the equal-key/equal-result self-check. Takes effect on the
+  /// next profiled pass.
+  void setEvalSelfCheckEnabled(bool enabled) {
+    profiling_api.setEvalSelfCheckEnabled(enabled: enabled);
+    evalSelfCheckEnabled = enabled;
     notifyListeners();
   }
 

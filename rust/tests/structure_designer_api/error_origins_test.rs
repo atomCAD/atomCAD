@@ -328,11 +328,7 @@ fn each_failing_input_records_its_own_link_in_pin_order() {
     let network = registry.node_networks.get("main").unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     // Resolve both pins, as a node tolerating its first errored input would.
     for param_index in 0..2 {
         let _ = evaluator.evaluate_arg(&network_stack, sink, registry, &mut context, param_index);
@@ -378,16 +374,8 @@ fn body_wire_source_carries_the_body_scope_path() {
     let mut context = NetworkEvaluationContext::new();
     context.push_eval_scope(map_id);
     let network_stack = vec![
-        NetworkStackElement {
-            is_zone_body: false,
-            node_network: network,
-            node_id: 0,
-        },
-        NetworkStackElement {
-            is_zone_body: true,
-            node_network: body,
-            node_id: map_id,
-        },
+        NetworkStackElement::root(network),
+        NetworkStackElement::body_static(body, map_id),
     ];
     let _ = evaluator.evaluate_arg(&network_stack, body_sink, registry, &mut context, 0);
 

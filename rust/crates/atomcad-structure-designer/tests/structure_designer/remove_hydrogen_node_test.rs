@@ -48,11 +48,7 @@ fn evaluate_to_atomic(
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
 
     let result = evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context);
 
@@ -73,11 +69,7 @@ fn evaluate_to_result(
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
 
     evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
 }

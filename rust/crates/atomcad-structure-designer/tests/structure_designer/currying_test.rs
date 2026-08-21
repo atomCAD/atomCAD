@@ -691,11 +691,7 @@ fn build_two_int_param_add_closure() -> (StructureDesigner, ZoneClosure) {
     let network = registry.node_networks.get("main").unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let stack = vec![NetworkStackElement::root(network)];
     let result = evaluator.evaluate(&stack, closure_id, 0, registry, false, &mut context);
 
     let zc = match result {
@@ -861,11 +857,7 @@ fn phase3_evaluate_node(
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let stack = vec![NetworkStackElement::root(network)];
     evaluator.evaluate(&stack, node_id, 0, registry, false, &mut context)
 }
 
@@ -1454,11 +1446,7 @@ fn phase4_drain_map_walker(
     let network = registry.node_networks.get(network_name).unwrap();
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let stack = vec![NetworkStackElement::root(network)];
     let result = evaluator.evaluate(&stack, map_node_id, 0, registry, false, &mut context);
 
     let mut walker = match result {

@@ -241,11 +241,7 @@ fn test_promote_iterator_param_fans_out_to_independent_walkers() {
         let network = registry.node_networks.get("net").unwrap();
         let evaluator = NetworkEvaluator::new();
         let mut context = NetworkEvaluationContext::new();
-        let stack = vec![NetworkStackElement {
-            is_zone_body: false,
-            node_network: network,
-            node_id: 0,
-        }];
+        let stack = vec![NetworkStackElement::root(network)];
         match evaluator.evaluate(&stack, id, 0, registry, false, &mut context) {
             NetworkResult::Array(items) => items
                 .into_iter()

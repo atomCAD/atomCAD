@@ -24,7 +24,7 @@ use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
 use crate::data_type::DataType;
 use crate::displayed_node_refs::collect_displayed_node_refs;
-use crate::evaluator::eval_profiler::{self, EvalProfile};
+use crate::evaluator::eval_profiler::{self, EvalProfile, SelfCheckKeyMode};
 use crate::implicit_eval::ray_tracing::{raytrace_geometries, raytrace_geometry};
 use crate::node_data::CustomNodeData;
 use crate::node_data::DragDirection;
@@ -261,6 +261,31 @@ pub struct StructureDesigner {
     // visibility flag.
     pub eval_profiling_enabled: bool,
 
+    // The D11 equal-key/equal-result self-check: a **second** toggle, off by
+    // default and genuinely expensive, that validates the environment key
+    // rather than arguing for it. It retains a summary of each key's first
+    // result and reports any later result under the same key that differs.
+    //
+    // Only meaningful while there is no memo (`doc/design_eval_memoization.md`):
+    // once a memo serves the second request from the first result there is no
+    // second computation to compare and the check passes vacuously, so a memo
+    // must force it off for the pass — and the panel must say so, or a green
+    // result later is evidence of nothing.
+    //
+    // Has no effect unless `eval_profiling_enabled` is also on — the check
+    // lives in the profile. Deliberately **not** `debug_assertions`-gated
+    // despite D11's wording: `flutter run` loads the release DLL, so a
+    // compile-gated check would be absent from the only build it would ever be
+    // run against a real design in (the same argument D2 makes for the profiler
+    // toggle itself).
+    pub eval_self_check_enabled: bool,
+
+    // Which key the self-check groups results under. `Full` — the real
+    // environment key — everywhere except the check's own regression test,
+    // which weakens the key on purpose to prove the check can fail (D11: "a
+    // check that can't fail proves nothing"). No UI sets this.
+    pub eval_self_check_key_mode: SelfCheckKeyMode,
+
     // The profile produced by the most recent `with_eval_context` pass, parked
     // here so `refresh_full` / `refresh_partial` can fold it into the sub-phase
     // report they return. Taken (not read) by the refresh paths, so a
@@ -313,6 +338,8 @@ impl StructureDesigner {
             pending_load_param_id_repairs: Vec::new(),
             refresh_profiles: RefreshProfileHistory::new(),
             eval_profiling_enabled: false,
+            eval_self_check_enabled: false,
+            eval_self_check_key_mode: SelfCheckKeyMode::Full,
             last_eval_profile: None,
         }
     }
@@ -352,7 +379,13 @@ impl StructureDesigner {
         // runs against a `fresh_inner_for_eager_body` context whose
         // `drain_inner_context` merges only `print_buffer`, so context-parked
         // state is silently lost for `fold` / `foreach` / `apply` bodies.
-        eval_profiler::install(self.eval_profiling_enabled.then(EvalProfile::default));
+        eval_profiler::install(self.eval_profiling_enabled.then(|| {
+            if self.eval_self_check_enabled {
+                eval_profiler::profile_with_self_check_mode(self.eval_self_check_key_mode)
+            } else {
+                EvalProfile::default()
+            }
+        }));
         let mut context = NetworkEvaluationContext::new();
         context.execute = execute;
         context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
@@ -8068,11 +8101,7 @@ impl StructureDesigner {
         // `execute = true`.
         let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
             let network = registry.node_networks.get(&network_name).unwrap();
-            let network_stack = vec![NetworkStackElement {
-                is_zone_body: false,
-                node_network: network,
-                node_id: 0,
-            }];
+            let network_stack = vec![NetworkStackElement::root(network)];
             evaluator.evaluate(
                 &network_stack,
                 node_id,
@@ -8179,11 +8208,7 @@ impl StructureDesigner {
         // `print(execute_only)` fire here while staying inert during display.
         let result = self.with_eval_context(true, |evaluator, registry, _prefs, context| {
             let network = registry.node_networks.get(&network_name_owned).unwrap();
-            let network_stack = vec![NetworkStackElement {
-                is_zone_body: false,
-                node_network: network,
-                node_id: 0,
-            }];
+            let network_stack = vec![NetworkStackElement::root(network)];
             evaluator.evaluate(
                 &network_stack,
                 node_id,
@@ -8242,11 +8267,7 @@ impl StructureDesigner {
         let subnetwork_name = subnetwork_name.to_string();
         let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
             let subnetwork = registry.node_networks.get(&subnetwork_name).unwrap();
-            let network_stack = vec![NetworkStackElement {
-                is_zone_body: false,
-                node_network: subnetwork,
-                node_id: 0,
-            }];
+            let network_stack = vec![NetworkStackElement::root(subnetwork)];
             evaluator.evaluate(&network_stack, param_node_id, 0, registry, false, context)
         });
         Some(result)

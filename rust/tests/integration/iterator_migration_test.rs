@@ -64,11 +64,7 @@ fn evaluate_node(registry: &NodeTypeRegistry, network_name: &str, node_id: u64) 
         .unwrap_or_else(|| panic!("network {} missing from registry", network_name));
     let evaluator = NetworkEvaluator::new();
     let mut context = NetworkEvaluationContext::new();
-    let network_stack = vec![NetworkStackElement {
-        is_zone_body: false,
-        node_network: network,
-        node_id: 0,
-    }];
+    let network_stack = vec![NetworkStackElement::root(network)];
     evaluator.evaluate(&network_stack, node_id, 0, registry, false, &mut context)
 }
 
