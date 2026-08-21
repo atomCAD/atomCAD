@@ -34,7 +34,7 @@ use atomcad_structure_designer::nodes::print::PrintData;
 use atomcad_structure_designer::nodes::range::RangeData;
 use atomcad_structure_designer::nodes::string::StringData;
 use atomcad_structure_designer::preferences::MemoryPreferences;
-use atomcad_structure_designer::refresh_profile::RefreshSubPhases;
+use atomcad_structure_designer::refresh_profile::{RefreshProfile, RefreshSubPhases};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer_changes::{
     RefreshMode, StructureDesignerChanges,
@@ -643,6 +643,21 @@ fn a_two_output_custom_network_instance_returns_both_pins() {
         instance_record.flags.subnetwork,
         "an instance pulled through `evaluate`'s single-pin arm must be flagged, \
          or every subnetwork in every design reads as a memo bug (D10)"
+    );
+    // This row *does* re-evaluate within one environment — two pins, two
+    // single-pin pulls, neither insertable — which is exactly why the flag has
+    // to keep it out of the acceptance criterion's population.
+    assert!(instance_record.evaluations > instance_record.distinct_envs);
+    assert_eq!(
+        profile.unmemoized_offender_count(),
+        0,
+        "a flagged row must be excluded from the offender count; offenders: {:?}",
+        profile
+            .records()
+            .iter()
+            .filter(|r| !r.flags.uncacheable() && r.evaluations > r.distinct_envs)
+            .map(|r| r.location.label.as_str())
+            .collect::<Vec<_>>()
     );
 }
 
@@ -1684,6 +1699,124 @@ fn a_tiny_budget_evicts_and_says_so() {
         strings.is_some(),
         "a tiny budget degrades, it does not break"
     );
+}
+
+// ============================================================================
+// Reading the result (Phase 4)
+// ============================================================================
+
+/// **The A/B pair, as the history ring sees it.** Two rows, one taken with the
+/// memo off and one with it on, have to be distinguishable — the whole
+/// comparison workflow the switch exists for is unreadable if they are not.
+///
+/// The flag rides on the row rather than being a "current state" reading for
+/// exactly this reason: by the time you look at the ring, the switch says
+/// whatever it says now, which tells you nothing about the row you are
+/// comparing against.
+#[test]
+fn the_history_ring_distinguishes_a_memo_off_row_from_a_memo_on_row() {
+    let (mut designer, _, _) = build_diamond();
+
+    designer.eval_memo_enabled = false;
+    let off = refresh(&mut designer);
+    designer.record_refresh_profile(RefreshProfile::new(
+        RefreshMode::Full,
+        off,
+        0.0,
+        0.0,
+        None,
+        1.0,
+    ));
+
+    designer.eval_memo_enabled = true;
+    let on = refresh(&mut designer);
+    designer.record_refresh_profile(RefreshProfile::new(
+        RefreshMode::Full,
+        on,
+        0.0,
+        0.0,
+        None,
+        1.0,
+    ));
+
+    let rows: Vec<_> = designer.refresh_profiles.rows().collect();
+    assert_eq!(rows.len(), 2);
+    assert!(
+        !rows[0].memo.enabled,
+        "the first row was taken with the memo off"
+    );
+    assert!(rows[1].memo.enabled);
+    assert!(
+        rows[1].memo.hits > 0,
+        "the memo-on row must carry its own counters, not the switch's state"
+    );
+    assert_eq!(
+        rows[0].memo.hits, 0,
+        "a memo-off row reports no activity, which is not the same as zero hits \
+         with the memo on"
+    );
+}
+
+/// **A free check on the key.** The profiler predicts the memo's peak entry
+/// count from the same `eval_env_key` the memo stores under, so the two must
+/// agree closely — and the memo's actual peak can only ever be *lower* (by
+/// whatever D3 retired and the LRU evicted), never higher.
+///
+/// A peak above the prediction would mean the memo and the profiler are keying
+/// on different things, which is the failure mode the frame-identity rules
+/// exist to prevent — caught here without needing the self-check.
+#[test]
+fn the_memos_actual_peak_never_exceeds_the_profilers_prediction() {
+    for (label, mut designer) in [
+        ("diamond", build_diamond().0),
+        ("map over 8", build_map_over(8).0),
+    ] {
+        designer.eval_profiling_enabled = true;
+        let sub_phases = refresh(&mut designer);
+        let profile = sub_phases
+            .node_stats
+            .expect("a profiled full refresh must produce a table");
+        let memo = sub_phases.memo;
+
+        assert!(
+            memo.peak_entries > 0,
+            "{label}: the memo held nothing at all"
+        );
+        assert!(
+            memo.peak_entries as u64 <= profile.total_distinct_envs(),
+            "{label}: the memo peaked at {} entries but the profiler predicted \
+             at most {} — the two are keying on different things",
+            memo.peak_entries,
+            profile.total_distinct_envs(),
+        );
+    }
+}
+
+/// The Redundancy footnote reads one way with the memo on and another with it
+/// off, and the number it leans on differs: with the memo on it is the count of
+/// **unexplained repeats** (zero when the memo is working), with it off it is
+/// the **projected saving**. Asserted on the data rather than the string, which
+/// is the panel's business.
+#[test]
+fn the_footnotes_two_readings_come_from_two_different_numbers() {
+    let (mut designer, _, _) = build_diamond();
+
+    designer.eval_memo_enabled = false;
+    let profile = profiled_refresh(&mut designer);
+    assert!(
+        profile.projected_saving_ns() > 0,
+        "with the memo off there is a saving left on the table to report"
+    );
+    assert!(
+        profile.unmemoized_offender_count() > 0,
+        "with the memo off, rows legitimately re-evaluate within one \
+         environment — which is why the offender count is only meaningful, and \
+         only shown, with the memo on"
+    );
+
+    designer.eval_memo_enabled = true;
+    let profile = profiled_refresh(&mut designer);
+    assert_eq!(profile.unmemoized_offender_count(), 0);
 }
 
 // ============================================================================

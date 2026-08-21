@@ -16,6 +16,7 @@ use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
     with_mut_cad_instance_or,
 };
+use atomcad_structure_designer::evaluator::eval_memo::MemoCounts;
 use atomcad_structure_designer::evaluator::eval_profiler::{
     EvalProfile, NodeProfileRecord, NodeTypeProfileRecord, SelfCheckViolation,
 };
@@ -91,6 +92,76 @@ pub struct APIRefreshProfile {
     /// row carries the flag only, so listing 20 rows does not marshal 20
     /// tables across the FFI boundary.
     pub has_node_stats: bool,
+    /// What the per-pass evaluation memo did during this refresh, and whether
+    /// it was on at all (`doc/design_eval_memoization.md` D10).
+    ///
+    /// Carried **per row**, not fetched separately, because the comparison this
+    /// exists for is two rows side by side — one taken with the memo off, one
+    /// with it on. A single "current state" reading could not express that.
+    pub memo: APIMemoCounts,
+}
+
+/// Flutter-facing mirror of [`MemoCounts`]: one refresh's evaluation-memo
+/// activity.
+///
+/// Byte counts stay `u64` rather than becoming megabytes here: the panel
+/// formats them, and a rounding decision made at the FFI boundary cannot be
+/// undone by the code that has to present it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct APIMemoCounts {
+    /// `false` means the memo was switched off for this pass — which is not the
+    /// same as "on, but this design had nothing to share", and the panel must
+    /// not render the two identically.
+    pub enabled: bool,
+    /// Entries held at the high-water mark. Compare against
+    /// [`APIEvalProfile::total_distinct_envs`], which predicts it.
+    pub peak_entries: u64,
+    pub peak_bytes: u64,
+    pub end_entries: u64,
+    pub end_bytes: u64,
+    pub budget_bytes: u64,
+    pub hits: u64,
+    pub misses: u64,
+    /// Misses on a key the memo had held earlier — work redone because the
+    /// budget was too small.
+    pub evicted_misses: u64,
+    /// Entries the LRU dropped because the budget was exceeded. **The Phase 5
+    /// trigger**: any eviction at all on an ordinary design.
+    pub lru_evictions: u64,
+    /// Entries retired because their body iteration ended (D3). Kept apart from
+    /// `lru_evictions` because they mean opposite things — one is the design
+    /// working, the other is the budget being too small.
+    pub epoch_drops: u64,
+    /// The deliberate exclusions firing (subnetwork arm, iterators,
+    /// re-entrancy), as a total.
+    pub declined_inserts: u64,
+    /// Time inside the memo's insert path, dominated by the size estimator's
+    /// recursive walk. Shown so it can be ruled out at a glance rather than
+    /// eroding the win invisibly.
+    pub insert_ms: f64,
+    /// The evicted-key tracking hit its ceiling, so `evicted_misses` is a floor.
+    pub inserted_tracking_truncated: bool,
+}
+
+impl From<MemoCounts> for APIMemoCounts {
+    fn from(counts: MemoCounts) -> Self {
+        Self {
+            enabled: counts.enabled,
+            peak_entries: counts.peak_entries as u64,
+            peak_bytes: counts.peak_bytes as u64,
+            end_entries: counts.end_entries as u64,
+            end_bytes: counts.end_bytes as u64,
+            budget_bytes: counts.budget_bytes as u64,
+            hits: counts.hits,
+            misses: counts.misses,
+            evicted_misses: counts.evicted_misses,
+            lru_evictions: counts.lru_evictions,
+            epoch_drops: counts.epoch_drops,
+            declined_inserts: counts.declined_inserts,
+            insert_ms: ns_to_ms(counts.insert_ns),
+            inserted_tracking_truncated: counts.inserted_tracking_truncated,
+        }
+    }
 }
 
 /// Flutter-facing mirror of [`CsgCacheDelta`].
@@ -128,6 +199,7 @@ impl From<&RefreshProfile> for APIRefreshProfile {
             max_total_ms: profile.max_total_ms,
             csg_cache: profile.csg_cache.into(),
             has_node_stats: profile.node_stats.is_some(),
+            memo: profile.memo.into(),
         }
     }
 }
@@ -281,6 +353,14 @@ pub struct APIEvalProfile {
     /// environment key is missing an input — a wrong number now, and a wrong
     /// result once the memo keys on it.
     pub self_check_violations: Vec<APISelfCheckViolation>,
+    /// **The acceptance criterion of `doc/design_eval_memoization.md`, as one
+    /// number**: rows that re-evaluated within a single environment with no
+    /// flag excusing it.
+    ///
+    /// Zero with the memo working. Computed in the domain rather than by
+    /// filtering `by_node` in Dart so the population it is counted over —
+    /// unflagged rows only — has exactly one definition.
+    pub unmemoized_offenders: u64,
     pub by_node: Vec<APINodeProfileRecord>,
     pub by_node_type: Vec<APINodeTypeProfileRecord>,
 }
@@ -321,6 +401,7 @@ impl From<&EvalProfile> for APIEvalProfile {
                 .iter()
                 .map(APISelfCheckViolation::from)
                 .collect(),
+            unmemoized_offenders: profile.unmemoized_offender_count() as u64,
             by_node: profile
                 .records()
                 .iter()

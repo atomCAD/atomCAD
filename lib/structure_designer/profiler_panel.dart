@@ -446,7 +446,14 @@ class _PhasesTab extends StatelessWidget {
           cache.sketchHits +
           cache.sketchMisses;
       rows.add(_Row([
-        _modeLabel(profile.mode),
+        // Only an evaluating refresh can have had the memo switched off. A
+        // Lightweight row runs no pass at all and so carries default
+        // (disabled) counters — tagging it "memo off" would blame the switch
+        // for a row that never consulted the memo either way.
+        _modeLabel(profile.mode) +
+            (profile.evalMs != null && !profile.memo.enabled
+                ? ' ·memo off'
+                : ''),
         profile.count > 1 ? '×${profile.count}' : '',
         _ms(profile.totalMs),
         // `—`, never `0.00`: a lightweight refresh runs no evaluation pass at
@@ -460,12 +467,23 @@ class _PhasesTab extends StatelessWidget {
         lookups == BigInt.zero
             ? '—'
             : '${cache.meshHits + cache.sketchHits}/$lookups',
+        _memoCell(profile.memo),
         profile.hasNodeStats ? '●' : '',
       ]));
     }
+    return Column(
+      children: [
+        // `history` is oldest-first, so the newest row is the last one.
+        _MemoStatsBar(profile: history.last),
+        Expanded(child: _phasesTable(rows)),
+      ],
+    );
+  }
+
+  Widget _phasesTable(List<_Row> rows) {
     return _Table(
       columns: const [
-        _Column('Mode', 7),
+        _Column('Mode', 9),
         _Column('N', 3, numeric: true),
         _Column('Total', 5, numeric: true),
         _Column('Eval', 5, numeric: true),
@@ -475,15 +493,115 @@ class _PhasesTab extends StatelessWidget {
         _Column('GPU', 5, numeric: true),
         _Column('Bkgnd', 5, numeric: true),
         _Column('CSG hit/lookup', 8, numeric: true),
+        _Column('Memo hit/req', 8, numeric: true),
         _Column('Prof', 3, numeric: true),
       ],
       rows: rows,
       footnote:
           'All times in ms. A “Light” row may coalesce a whole gadget drag — N '
-          'is how many ticks it covers and the times are their means. CSG shows '
-          'conversion-cache hits over lookups; that time is charged to the node '
-          'that triggered it, not counted separately. “●” marks a refresh whose '
-          'per-node table is the one shown in the other tabs.',
+          'is how many ticks it covers and the times are their means. CSG and '
+          'Memo show cache hits over requests; that time is charged to the node '
+          'that triggered the work, not counted separately. A row tagged '
+          '“·memo off” was taken with the evaluation memo disabled — that is '
+          'what makes an A/B pair readable side by side. “●” marks a refresh '
+          'whose per-node table is the one shown in the other tabs.',
+    );
+  }
+}
+
+/// One refresh's memo cell for the Phases ring: hits over requests, or `—` when
+/// no pass ran, or `off` when the memo was disabled for it.
+///
+/// `off` and `—` must stay distinguishable: the first is a switch someone
+/// flipped, the second is a lightweight refresh that ran no evaluation at all.
+String _memoCell(APIMemoCounts memo) {
+  if (!memo.enabled) return 'off';
+  final requests = memo.hits + memo.misses;
+  if (requests == BigInt.zero) return '—';
+  return '${memo.hits}/$requests';
+}
+
+/// Bytes as a human figure. Megabytes throughout, matching the unit the Memory
+/// preferences are expressed in, so a peak can be read straight against the
+/// budget the user set.
+String _mb(BigInt bytes) =>
+    '${(bytes.toDouble() / (1024 * 1024)).toStringAsFixed(1)} MB';
+
+/// The evaluation memo's numbers for the most recent refresh, above the Phases
+/// ring and beside the CSG counters it is the sibling of.
+///
+/// Always on, like the phase clock and unlike the per-node profiler: a few
+/// increments and one `max` per insert are unmeasurable, and someone chasing a
+/// memory number should not have to switch on something that distorts the time
+/// numbers to see it.
+class _MemoStatsBar extends StatelessWidget {
+  const _MemoStatsBar({required this.profile});
+
+  final APIRefreshProfile profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final memo = profile.memo;
+    final String text;
+    Color color = Colors.white54;
+
+    if (profile.evalMs == null) {
+      // A lightweight refresh consulted the memo neither way, so its default
+      // counters say nothing about the switch.
+      text = 'Evaluation memo: the last refresh ran no evaluation pass (a '
+          'lightweight refresh), so there is nothing to report.';
+    } else if (!memo.enabled) {
+      text =
+          'Evaluation memo: OFF for the last refresh — every shared node was '
+          'recomputed once per consumer. Switch “Memo” back on above when you '
+          'are done comparing.';
+      color = const Color(0xFFD8A05A);
+    } else if (memo.hits + memo.misses == BigInt.zero) {
+      text = 'Evaluation memo: on, but the last refresh made no result '
+          'requests at all.';
+    } else {
+      final buffer = StringBuffer()
+        ..write('Evaluation memo: ${memo.hits} hits / '
+            '${memo.hits + memo.misses} requests · peak '
+            '${memo.peakEntries} entries, ${_mb(memo.peakBytes)} of '
+            '${_mb(memo.budgetBytes)} · ended at ${memo.endEntries} entries, '
+            '${_mb(memo.endBytes)}');
+      if (memo.epochDrops > BigInt.zero) {
+        buffer.write(' · ${memo.epochDrops} entries retired with their loop '
+            'iteration');
+      }
+      if (memo.declinedInserts > BigInt.zero) {
+        buffer.write(' · ${memo.declinedInserts} deliberately not stored');
+      }
+      if (memo.insertMs >= 1.0) {
+        buffer.write(' · ${_ms(memo.insertMs)} ms measuring entry sizes');
+      }
+      if (memo.lruEvictions > BigInt.zero) {
+        // The one number here that is a *problem* rather than a reading, and
+        // the trigger the design's Phase 5 fires on.
+        buffer.write(' · ⚠ ${memo.lruEvictions} entries evicted for space '
+            '(${memo.evictedMisses} recomputed as a result) — raise '
+            '“Evaluation memo (MB)” in Preferences > Memory');
+        color = const Color(0xFFD8A05A);
+      }
+      if (memo.insertedTrackingTruncated) {
+        buffer.write(' · eviction tracking hit its ceiling, so the recomputed '
+            'count is a floor');
+      }
+      text = buffer.toString();
+    }
+
+    return Container(
+      key: const Key('memo_stats_bar'),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      color: const Color(0xFF232323),
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 10, color: color),
+      ),
     );
   }
 }
@@ -593,7 +711,8 @@ class _ByNodeTab extends StatelessWidget {
           'Click a row to jump to the node — including into another network: a '
           'row named “other_net/materialize#8” opens that network and selects '
           'node 8 there. “Lookups” counts requests and “Evals” counts runs of '
-          'the node — equal until the evaluation memo lands. “Wasted” is the '
+          'the node; with the evaluation memo on, the difference between them '
+          'is what the memo served rather than recomputed. “Wasted” is the '
           'self time a perfect memo would avoid; “—” marks a node the memo '
           'would not cache (see Redundancy). Two readings are expected and are '
           'not bugs: a custom-node instance shows ~zero self against a large '
@@ -705,24 +824,36 @@ class _RedundancyTab extends StatelessWidget {
                       : null,
                 ),
             ],
-            footnote: _footnote(profile),
+            footnote: _footnote(profile, model.evalMemoEnabled),
           ),
         ),
       ],
     );
   }
 
-  String _footnote(APIEvalProfile profile) {
+  String _footnote(APIEvalProfile profile, bool memoEnabled) {
     final buffer = StringBuffer()
       ..write('${profile.totalLookups} lookups over '
           '${profile.totalDistinctEnvs} distinct environments '
-          '(${profile.redundancyFactor.toStringAsFixed(2)}× overall); a perfect '
-          'memo would hold ${profile.totalDistinctEnvs} entries and save about '
-          '${_ms(profile.projectedSavingMs)} ms. An environment is the call '
-          'stack extended with the iteration of each enclosing loop, so a body '
-          'node run once per element reads 1.0× — that is not redundancy. Rows '
-          'marked “iterator”, “cycle”, “subnetwork” or “evicted” are counted '
-          'but were not served from the memo, so their Wasted shows “—”.');
+          '(${profile.redundancyFactor.toStringAsFixed(2)}× overall). An '
+          'environment is the call stack extended with the iteration of each '
+          'enclosing loop, so a body node run once per element reads 1.0× — '
+          'that is not redundancy. Rows marked “iterator”, “cycle”, '
+          '“subnetwork” or “evicted” were not served from the memo, so their '
+          'Wasted shows “—”.');
+    // The acceptance criterion, as one number the reader does not have to
+    // derive by diffing two columns.
+    if (memoEnabled) {
+      buffer.write(profile.unmemoizedOffenders == BigInt.zero
+          ? ' No unexplained repeats: every row either ran once per environment '
+              'or carries a reason why it could not.'
+          : ' ⚠ ${profile.unmemoizedOffenders} row(s) were recomputed within a '
+              'single environment with no reason given — that is a memo bug '
+              'worth reporting.');
+    } else {
+      buffer.write(' The memo is off, so a perfect one would save about '
+          '${_ms(profile.projectedSavingMs)} ms of this pass.');
+    }
     if (profile.envsTruncated) {
       buffer.write(' ⚠ Environment tracking hit its ceiling: the environment '
           'counts are floors and the factors are upper bounds.');

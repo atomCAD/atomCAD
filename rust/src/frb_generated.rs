@@ -14003,6 +14003,7 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APIEvalProfile
         let mut var_selfCheckViolations = <Vec<
             crate::api::structure_designer::profiling_api::APISelfCheckViolation,
         >>::sse_decode(deserializer);
+        let mut var_unmemoizedOffenders = <u64>::sse_decode(deserializer);
         let mut var_byNode = <Vec<
             crate::api::structure_designer::profiling_api::APINodeProfileRecord,
         >>::sse_decode(deserializer);
@@ -14020,6 +14021,7 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APIEvalProfile
             self_check_ran: var_selfCheckRan,
             self_check_truncated: var_selfCheckTruncated,
             self_check_violations: var_selfCheckViolations,
+            unmemoized_offenders: var_unmemoizedOffenders,
             by_node: var_byNode,
             by_node_type: var_byNodeType,
         };
@@ -14814,6 +14816,42 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
     }
 }
 
+impl SseDecode for crate::api::structure_designer::profiling_api::APIMemoCounts {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_enabled = <bool>::sse_decode(deserializer);
+        let mut var_peakEntries = <u64>::sse_decode(deserializer);
+        let mut var_peakBytes = <u64>::sse_decode(deserializer);
+        let mut var_endEntries = <u64>::sse_decode(deserializer);
+        let mut var_endBytes = <u64>::sse_decode(deserializer);
+        let mut var_budgetBytes = <u64>::sse_decode(deserializer);
+        let mut var_hits = <u64>::sse_decode(deserializer);
+        let mut var_misses = <u64>::sse_decode(deserializer);
+        let mut var_evictedMisses = <u64>::sse_decode(deserializer);
+        let mut var_lruEvictions = <u64>::sse_decode(deserializer);
+        let mut var_epochDrops = <u64>::sse_decode(deserializer);
+        let mut var_declinedInserts = <u64>::sse_decode(deserializer);
+        let mut var_insertMs = <f64>::sse_decode(deserializer);
+        let mut var_insertedTrackingTruncated = <bool>::sse_decode(deserializer);
+        return crate::api::structure_designer::profiling_api::APIMemoCounts {
+            enabled: var_enabled,
+            peak_entries: var_peakEntries,
+            peak_bytes: var_peakBytes,
+            end_entries: var_endEntries,
+            end_bytes: var_endBytes,
+            budget_bytes: var_budgetBytes,
+            hits: var_hits,
+            misses: var_misses,
+            evicted_misses: var_evictedMisses,
+            lru_evictions: var_lruEvictions,
+            epoch_drops: var_epochDrops,
+            declined_inserts: var_declinedInserts,
+            insert_ms: var_insertMs,
+            inserted_tracking_truncated: var_insertedTrackingTruncated,
+        };
+    }
+}
+
 impl SseDecode
     for crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode
 {
@@ -15279,6 +15317,10 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APIRefreshProf
                 deserializer,
             );
         let mut var_hasNodeStats = <bool>::sse_decode(deserializer);
+        let mut var_memo =
+            <crate::api::structure_designer::profiling_api::APIMemoCounts>::sse_decode(
+                deserializer,
+            );
         return crate::api::structure_designer::profiling_api::APIRefreshProfile {
             mode: var_mode,
             eval_ms: var_evalMs,
@@ -15292,6 +15334,7 @@ impl SseDecode for crate::api::structure_designer::profiling_api::APIRefreshProf
             max_total_ms: var_maxTotalMs,
             csg_cache: var_csgCache,
             has_node_stats: var_hasNodeStats,
+            memo: var_memo,
         };
     }
 }
@@ -20567,6 +20610,7 @@ impl flutter_rust_bridge::IntoDart
             self.self_check_ran.into_into_dart().into_dart(),
             self.self_check_truncated.into_into_dart().into_dart(),
             self.self_check_violations.into_into_dart().into_dart(),
+            self.unmemoized_offenders.into_into_dart().into_dart(),
             self.by_node.into_into_dart().into_dart(),
             self.by_node_type.into_into_dart().into_dart(),
         ]
@@ -21828,6 +21872,43 @@ impl
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::profiling_api::APIMemoCounts
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.enabled.into_into_dart().into_dart(),
+            self.peak_entries.into_into_dart().into_dart(),
+            self.peak_bytes.into_into_dart().into_dart(),
+            self.end_entries.into_into_dart().into_dart(),
+            self.end_bytes.into_into_dart().into_dart(),
+            self.budget_bytes.into_into_dart().into_dart(),
+            self.hits.into_into_dart().into_dart(),
+            self.misses.into_into_dart().into_dart(),
+            self.evicted_misses.into_into_dart().into_dart(),
+            self.lru_evictions.into_into_dart().into_dart(),
+            self.epoch_drops.into_into_dart().into_dart(),
+            self.declined_inserts.into_into_dart().into_dart(),
+            self.insert_ms.into_into_dart().into_dart(),
+            self.inserted_tracking_truncated
+                .into_into_dart()
+                .into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::profiling_api::APIMemoCounts
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::structure_designer::profiling_api::APIMemoCounts>
+    for crate::api::structure_designer::profiling_api::APIMemoCounts
+{
+    fn into_into_dart(self) -> crate::api::structure_designer::profiling_api::APIMemoCounts {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode
 {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
@@ -22637,6 +22718,7 @@ impl flutter_rust_bridge::IntoDart
             self.max_total_ms.into_into_dart().into_dart(),
             self.csg_cache.into_into_dart().into_dart(),
             self.has_node_stats.into_into_dart().into_dart(),
+            self.memo.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -25390,6 +25472,7 @@ impl SseEncode for crate::api::structure_designer::profiling_api::APIEvalProfile
             self.self_check_violations,
             serializer,
         );
+        <u64>::sse_encode(self.unmemoized_offenders, serializer);
         <Vec<crate::api::structure_designer::profiling_api::APINodeProfileRecord>>::sse_encode(
             self.by_node,
             serializer,
@@ -25913,6 +25996,26 @@ crate::api::structure_designer::structure_designer_api_types::APIMeasurement::At
     }
 }
 
+impl SseEncode for crate::api::structure_designer::profiling_api::APIMemoCounts {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.enabled, serializer);
+        <u64>::sse_encode(self.peak_entries, serializer);
+        <u64>::sse_encode(self.peak_bytes, serializer);
+        <u64>::sse_encode(self.end_entries, serializer);
+        <u64>::sse_encode(self.end_bytes, serializer);
+        <u64>::sse_encode(self.budget_bytes, serializer);
+        <u64>::sse_encode(self.hits, serializer);
+        <u64>::sse_encode(self.misses, serializer);
+        <u64>::sse_encode(self.evicted_misses, serializer);
+        <u64>::sse_encode(self.lru_evictions, serializer);
+        <u64>::sse_encode(self.epoch_drops, serializer);
+        <u64>::sse_encode(self.declined_inserts, serializer);
+        <f64>::sse_encode(self.insert_ms, serializer);
+        <bool>::sse_encode(self.inserted_tracking_truncated, serializer);
+    }
+}
+
 impl SseEncode
     for crate::api::structure_designer::structure_designer_api_types::APIMinimizeFreezeMode
 {
@@ -26252,6 +26355,9 @@ impl SseEncode for crate::api::structure_designer::profiling_api::APIRefreshProf
             serializer,
         );
         <bool>::sse_encode(self.has_node_stats, serializer);
+        <crate::api::structure_designer::profiling_api::APIMemoCounts>::sse_encode(
+            self.memo, serializer,
+        );
     }
 }
 

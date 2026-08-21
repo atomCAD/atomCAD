@@ -316,6 +316,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIMeasurement dco_decode_api_measurement(dynamic raw);
 
   @protected
+  APIMemoCounts dco_decode_api_memo_counts(dynamic raw);
+
+  @protected
   APIMinimizeFreezeMode dco_decode_api_minimize_freeze_mode(dynamic raw);
 
   @protected
@@ -1914,6 +1917,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIMeasurement sse_decode_api_measurement(SseDeserializer deserializer);
+
+  @protected
+  APIMemoCounts sse_decode_api_memo_counts(SseDeserializer deserializer);
 
   @protected
   APIMinimizeFreezeMode sse_decode_api_minimize_freeze_mode(
@@ -3788,6 +3794,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_measurement(
       APIMeasurement self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_memo_counts(APIMemoCounts self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_minimize_freeze_mode(

@@ -340,6 +340,21 @@ Two columns need a word of explanation:
   made and how many of them hit. The *time* is already charged to the node that
   triggered the conversion; the counter is here because it explains why two
   otherwise identical refreshes differ.
+- **Memo hit/req** — the same reading for the
+  [evaluation memo](#the-evaluation-memo-and-its-off-switch): how many node
+  results the refresh asked for and how many were served from earlier in the
+  same refresh. A row taken with the memo switched off reads `off` and is
+  tagged `·memo off` in the **Mode** column, which is what makes an A/B pair
+  legible side by side.
+
+Above the table, an always-present line reports the memo's numbers for the most
+recent refresh: hits over requests, the peak number of entries and megabytes it
+held against the budget from [Memory preferences](#memory), what it still held
+at the end, and — when they are non-zero — how many entries were retired with
+their loop iteration and how many were deliberately not stored. If the memo ever
+had to **evict** something for space, that line turns amber and names the
+preference to raise: an eviction means work was recomputed, and it is the one
+number here that is a problem rather than a reading.
 
 As on the strip, a Lightweight refresh shows `—` for **Eval** rather than
 `0.00`: it runs no evaluation pass at all, which is not the same thing as an
@@ -455,7 +470,24 @@ there is simply no address to jump to.
 The question this tab answers is *not* "how often was this node evaluated?" but
 "how often was it evaluated **in a situation it had already been evaluated
 in**?" Only the second kind of repetition is avoidable, and the difference is
-easy to get backwards:
+easy to get backwards.
+
+**Which reading you are getting depends on the memo switch**, and the footnote
+says which:
+
+- With the [memo](#the-evaluation-memo-and-its-off-switch) **on** — the normal
+  state — this tab shows the redundancy that is *left*. A healthy design reads
+  `1.0×` almost everywhere, and the footnote confirms there were no unexplained
+  repeats. It does **not** show what the memo saved: a result served from the
+  memo is not requested again further up the cone either, so both the counts and
+  the **Wasted** column collapse. To see what the memo actually did, read the
+  memo line above the [Phases](#phases) table, or profile the same design once
+  each way and compare the two ring rows.
+- With the memo **off**, the tab shows the redundancy that *would* be there
+  without it, and the footnote gives the total a perfect memo would save. This
+  is the reading the memo was designed against.
+
+The distinction between the two kinds of repetition:
 
 - A node that two other nodes both depend on is *requested* twice with the exact
   same inputs. One of those two requests is pure repetition — and, with the
@@ -496,10 +528,15 @@ visited once each.
   Those rows show `—` under **Wasted** so the number is never read as money on
   the table.
 
-The footnote under the table gives the same numbers for the pass as a whole,
-plus how much a perfect cache would save in total. Read the per-node rows before
-the total: a design can be "2.5× redundant" overall while all of that sits in
-two nodes and the rest is 1.0×.
+The footnote under the table gives the same numbers for the pass as a whole.
+With the memo on it ends with the one number that matters: how many rows were
+recomputed within a single situation *without* a reason in the **Note** column.
+That should read as "no unexplained repeats"; anything else is a bug in atomCAD
+worth reporting. With the memo off it gives the total a perfect memo would save
+instead.
+
+Read the per-node rows before the total: a design can be "2.5× redundant"
+overall while all of that sits in two nodes and the rest is 1.0×.
 
 Nothing in this tab changes what the application computes.
 

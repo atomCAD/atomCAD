@@ -184,15 +184,21 @@ impl NodeProfileRecord {
     /// and `lookups - distinct_envs` is how many of those computations were
     /// avoidable.
     ///
-    /// **Numerically unchanged by the memo**, which is easy to misread as a
-    /// bug. `lookups` do not fall when evaluations do — they measure demand —
-    /// and `self_ns` now accumulates over one evaluation instead of twelve,
-    /// with the division by `evaluations` restoring the same per-computation
-    /// mean. What flips is the *tense*: with the memo off this is the saving
-    /// **available**, with it on the saving **realized**
-    /// (`doc/design_eval_memoization.md` D10). The acceptance criterion is
-    /// stated over `evaluations == distinct_envs`, not over this reaching
-    /// zero — it never does.
+    /// **Collapses to ~0 once the memo is working, and not for the reason the
+    /// design first gave.** `lookups` was expected to hold steady because it
+    /// measures demand — but demand is itself *generated* by re-evaluation: a
+    /// consumer served from the memo never runs `eval`, so it never re-issues
+    /// its own downstream pulls, and the collapse compounds down the cone. On
+    /// the design's own measurement `materialize#8` went from 12 lookups to 1.
+    ///
+    /// So this column reads the redundancy that **remains**, not the saving
+    /// that was realized. What the memo actually did is read off `MemoCounts`
+    /// (hits over requests) and by comparing two history-ring rows, which is
+    /// why `doc/design_eval_memoization.md` D10's `Wasted` → `Saved` relabel
+    /// was rejected: it would have printed a zero next to the word "Saved".
+    ///
+    /// The acceptance criterion is stated over `evaluations == distinct_envs`
+    /// — see [`EvalProfile::unmemoized_offender_count`].
     pub fn wasted_ns(&self) -> u64 {
         if self.evaluations == 0 {
             return 0;

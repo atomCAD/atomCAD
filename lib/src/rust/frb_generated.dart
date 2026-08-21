@@ -16344,8 +16344,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIEvalProfile dco_decode_api_eval_profile(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return APIEvalProfile(
       totalEvaluations: dco_decode_u_64(arr[0]),
       totalSelfMs: dco_decode_f_64(arr[1]),
@@ -16357,8 +16357,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       selfCheckRan: dco_decode_bool(arr[7]),
       selfCheckTruncated: dco_decode_bool(arr[8]),
       selfCheckViolations: dco_decode_list_api_self_check_violation(arr[9]),
-      byNode: dco_decode_list_api_node_profile_record(arr[10]),
-      byNodeType: dco_decode_list_api_node_type_profile_record(arr[11]),
+      unmemoizedOffenders: dco_decode_u_64(arr[10]),
+      byNode: dco_decode_list_api_node_profile_record(arr[11]),
+      byNodeType: dco_decode_list_api_node_type_profile_record(arr[12]),
     );
   }
 
@@ -16984,6 +16985,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIMemoCounts dco_decode_api_memo_counts(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    return APIMemoCounts(
+      enabled: dco_decode_bool(arr[0]),
+      peakEntries: dco_decode_u_64(arr[1]),
+      peakBytes: dco_decode_u_64(arr[2]),
+      endEntries: dco_decode_u_64(arr[3]),
+      endBytes: dco_decode_u_64(arr[4]),
+      budgetBytes: dco_decode_u_64(arr[5]),
+      hits: dco_decode_u_64(arr[6]),
+      misses: dco_decode_u_64(arr[7]),
+      evictedMisses: dco_decode_u_64(arr[8]),
+      lruEvictions: dco_decode_u_64(arr[9]),
+      epochDrops: dco_decode_u_64(arr[10]),
+      declinedInserts: dco_decode_u_64(arr[11]),
+      insertMs: dco_decode_f_64(arr[12]),
+      insertedTrackingTruncated: dco_decode_bool(arr[13]),
+    );
+  }
+
+  @protected
   APIMinimizeFreezeMode dco_decode_api_minimize_freeze_mode(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return APIMinimizeFreezeMode.values[raw as int];
@@ -17366,8 +17391,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   APIRefreshProfile dco_decode_api_refresh_profile(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 12)
-      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return APIRefreshProfile(
       mode: dco_decode_api_refresh_mode(arr[0]),
       evalMs: dco_decode_opt_box_autoadd_f_64(arr[1]),
@@ -17381,6 +17406,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       maxTotalMs: dco_decode_f_64(arr[9]),
       csgCache: dco_decode_api_csg_cache_counts(arr[10]),
       hasNodeStats: dco_decode_bool(arr[11]),
+      memo: dco_decode_api_memo_counts(arr[12]),
     );
   }
 
@@ -20994,6 +21020,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_selfCheckTruncated = sse_decode_bool(deserializer);
     var var_selfCheckViolations =
         sse_decode_list_api_self_check_violation(deserializer);
+    var var_unmemoizedOffenders = sse_decode_u_64(deserializer);
     var var_byNode = sse_decode_list_api_node_profile_record(deserializer);
     var var_byNodeType =
         sse_decode_list_api_node_type_profile_record(deserializer);
@@ -21008,6 +21035,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         selfCheckRan: var_selfCheckRan,
         selfCheckTruncated: var_selfCheckTruncated,
         selfCheckViolations: var_selfCheckViolations,
+        unmemoizedOffenders: var_unmemoizedOffenders,
         byNode: var_byNode,
         byNodeType: var_byNodeType);
   }
@@ -21633,6 +21661,40 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  APIMemoCounts sse_decode_api_memo_counts(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_enabled = sse_decode_bool(deserializer);
+    var var_peakEntries = sse_decode_u_64(deserializer);
+    var var_peakBytes = sse_decode_u_64(deserializer);
+    var var_endEntries = sse_decode_u_64(deserializer);
+    var var_endBytes = sse_decode_u_64(deserializer);
+    var var_budgetBytes = sse_decode_u_64(deserializer);
+    var var_hits = sse_decode_u_64(deserializer);
+    var var_misses = sse_decode_u_64(deserializer);
+    var var_evictedMisses = sse_decode_u_64(deserializer);
+    var var_lruEvictions = sse_decode_u_64(deserializer);
+    var var_epochDrops = sse_decode_u_64(deserializer);
+    var var_declinedInserts = sse_decode_u_64(deserializer);
+    var var_insertMs = sse_decode_f_64(deserializer);
+    var var_insertedTrackingTruncated = sse_decode_bool(deserializer);
+    return APIMemoCounts(
+        enabled: var_enabled,
+        peakEntries: var_peakEntries,
+        peakBytes: var_peakBytes,
+        endEntries: var_endEntries,
+        endBytes: var_endBytes,
+        budgetBytes: var_budgetBytes,
+        hits: var_hits,
+        misses: var_misses,
+        evictedMisses: var_evictedMisses,
+        lruEvictions: var_lruEvictions,
+        epochDrops: var_epochDrops,
+        declinedInserts: var_declinedInserts,
+        insertMs: var_insertMs,
+        insertedTrackingTruncated: var_insertedTrackingTruncated);
+  }
+
+  @protected
   APIMinimizeFreezeMode sse_decode_api_minimize_freeze_mode(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -22019,6 +22081,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_maxTotalMs = sse_decode_f_64(deserializer);
     var var_csgCache = sse_decode_api_csg_cache_counts(deserializer);
     var var_hasNodeStats = sse_decode_bool(deserializer);
+    var var_memo = sse_decode_api_memo_counts(deserializer);
     return APIRefreshProfile(
         mode: var_mode,
         evalMs: var_evalMs,
@@ -22031,7 +22094,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         count: var_count,
         maxTotalMs: var_maxTotalMs,
         csgCache: var_csgCache,
-        hasNodeStats: var_hasNodeStats);
+        hasNodeStats: var_hasNodeStats,
+        memo: var_memo);
   }
 
   @protected
@@ -26361,6 +26425,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.selfCheckTruncated, serializer);
     sse_encode_list_api_self_check_violation(
         self.selfCheckViolations, serializer);
+    sse_encode_u_64(self.unmemoizedOffenders, serializer);
     sse_encode_list_api_node_profile_record(self.byNode, serializer);
     sse_encode_list_api_node_type_profile_record(self.byNodeType, serializer);
   }
@@ -26861,6 +26926,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_api_memo_counts(
+      APIMemoCounts self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.enabled, serializer);
+    sse_encode_u_64(self.peakEntries, serializer);
+    sse_encode_u_64(self.peakBytes, serializer);
+    sse_encode_u_64(self.endEntries, serializer);
+    sse_encode_u_64(self.endBytes, serializer);
+    sse_encode_u_64(self.budgetBytes, serializer);
+    sse_encode_u_64(self.hits, serializer);
+    sse_encode_u_64(self.misses, serializer);
+    sse_encode_u_64(self.evictedMisses, serializer);
+    sse_encode_u_64(self.lruEvictions, serializer);
+    sse_encode_u_64(self.epochDrops, serializer);
+    sse_encode_u_64(self.declinedInserts, serializer);
+    sse_encode_f_64(self.insertMs, serializer);
+    sse_encode_bool(self.insertedTrackingTruncated, serializer);
+  }
+
+  @protected
   void sse_encode_api_minimize_freeze_mode(
       APIMinimizeFreezeMode self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -27146,6 +27231,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.maxTotalMs, serializer);
     sse_encode_api_csg_cache_counts(self.csgCache, serializer);
     sse_encode_bool(self.hasNodeStats, serializer);
+    sse_encode_api_memo_counts(self.memo, serializer);
   }
 
   @protected

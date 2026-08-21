@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `ns_to_ms`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// The most recent refresh, never coalesced — what the always-on status strip
 /// shows. `None` before the first refresh of the session.
@@ -165,6 +165,15 @@ class APIEvalProfile {
   /// environment key is missing an input — a wrong number now, and a wrong
   /// result once the memo keys on it.
   final List<APISelfCheckViolation> selfCheckViolations;
+
+  /// **The acceptance criterion of `doc/design_eval_memoization.md`, as one
+  /// number**: rows that re-evaluated within a single environment with no
+  /// flag excusing it.
+  ///
+  /// Zero with the memo working. Computed in the domain rather than by
+  /// filtering `by_node` in Dart so the population it is counted over —
+  /// unflagged rows only — has exactly one definition.
+  final BigInt unmemoizedOffenders;
   final List<APINodeProfileRecord> byNode;
   final List<APINodeTypeProfileRecord> byNodeType;
 
@@ -179,6 +188,7 @@ class APIEvalProfile {
     required this.selfCheckRan,
     required this.selfCheckTruncated,
     required this.selfCheckViolations,
+    required this.unmemoizedOffenders,
     required this.byNode,
     required this.byNodeType,
   });
@@ -195,6 +205,7 @@ class APIEvalProfile {
       selfCheckRan.hashCode ^
       selfCheckTruncated.hashCode ^
       selfCheckViolations.hashCode ^
+      unmemoizedOffenders.hashCode ^
       byNode.hashCode ^
       byNodeType.hashCode;
 
@@ -213,8 +224,111 @@ class APIEvalProfile {
           selfCheckRan == other.selfCheckRan &&
           selfCheckTruncated == other.selfCheckTruncated &&
           selfCheckViolations == other.selfCheckViolations &&
+          unmemoizedOffenders == other.unmemoizedOffenders &&
           byNode == other.byNode &&
           byNodeType == other.byNodeType;
+}
+
+/// Flutter-facing mirror of [`MemoCounts`]: one refresh's evaluation-memo
+/// activity.
+///
+/// Byte counts stay `u64` rather than becoming megabytes here: the panel
+/// formats them, and a rounding decision made at the FFI boundary cannot be
+/// undone by the code that has to present it.
+class APIMemoCounts {
+  /// `false` means the memo was switched off for this pass — which is not the
+  /// same as "on, but this design had nothing to share", and the panel must
+  /// not render the two identically.
+  final bool enabled;
+
+  /// Entries held at the high-water mark. Compare against
+  /// [`APIEvalProfile::total_distinct_envs`], which predicts it.
+  final BigInt peakEntries;
+  final BigInt peakBytes;
+  final BigInt endEntries;
+  final BigInt endBytes;
+  final BigInt budgetBytes;
+  final BigInt hits;
+  final BigInt misses;
+
+  /// Misses on a key the memo had held earlier — work redone because the
+  /// budget was too small.
+  final BigInt evictedMisses;
+
+  /// Entries the LRU dropped because the budget was exceeded. **The Phase 5
+  /// trigger**: any eviction at all on an ordinary design.
+  final BigInt lruEvictions;
+
+  /// Entries retired because their body iteration ended (D3). Kept apart from
+  /// `lru_evictions` because they mean opposite things — one is the design
+  /// working, the other is the budget being too small.
+  final BigInt epochDrops;
+
+  /// The deliberate exclusions firing (subnetwork arm, iterators,
+  /// re-entrancy), as a total.
+  final BigInt declinedInserts;
+
+  /// Time inside the memo's insert path, dominated by the size estimator's
+  /// recursive walk. Shown so it can be ruled out at a glance rather than
+  /// eroding the win invisibly.
+  final double insertMs;
+
+  /// The evicted-key tracking hit its ceiling, so `evicted_misses` is a floor.
+  final bool insertedTrackingTruncated;
+
+  const APIMemoCounts({
+    required this.enabled,
+    required this.peakEntries,
+    required this.peakBytes,
+    required this.endEntries,
+    required this.endBytes,
+    required this.budgetBytes,
+    required this.hits,
+    required this.misses,
+    required this.evictedMisses,
+    required this.lruEvictions,
+    required this.epochDrops,
+    required this.declinedInserts,
+    required this.insertMs,
+    required this.insertedTrackingTruncated,
+  });
+
+  @override
+  int get hashCode =>
+      enabled.hashCode ^
+      peakEntries.hashCode ^
+      peakBytes.hashCode ^
+      endEntries.hashCode ^
+      endBytes.hashCode ^
+      budgetBytes.hashCode ^
+      hits.hashCode ^
+      misses.hashCode ^
+      evictedMisses.hashCode ^
+      lruEvictions.hashCode ^
+      epochDrops.hashCode ^
+      declinedInserts.hashCode ^
+      insertMs.hashCode ^
+      insertedTrackingTruncated.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIMemoCounts &&
+          runtimeType == other.runtimeType &&
+          enabled == other.enabled &&
+          peakEntries == other.peakEntries &&
+          peakBytes == other.peakBytes &&
+          endEntries == other.endEntries &&
+          endBytes == other.endBytes &&
+          budgetBytes == other.budgetBytes &&
+          hits == other.hits &&
+          misses == other.misses &&
+          evictedMisses == other.evictedMisses &&
+          lruEvictions == other.lruEvictions &&
+          epochDrops == other.epochDrops &&
+          declinedInserts == other.declinedInserts &&
+          insertMs == other.insertMs &&
+          insertedTrackingTruncated == other.insertedTrackingTruncated;
 }
 
 /// One row of the profiler panel's **By node** table: an aggregate over every
@@ -460,6 +574,14 @@ class APIRefreshProfile {
   /// tables across the FFI boundary.
   final bool hasNodeStats;
 
+  /// What the per-pass evaluation memo did during this refresh, and whether
+  /// it was on at all (`doc/design_eval_memoization.md` D10).
+  ///
+  /// Carried **per row**, not fetched separately, because the comparison this
+  /// exists for is two rows side by side — one taken with the memo off, one
+  /// with it on. A single "current state" reading could not express that.
+  final APIMemoCounts memo;
+
   const APIRefreshProfile({
     required this.mode,
     this.evalMs,
@@ -473,6 +595,7 @@ class APIRefreshProfile {
     required this.maxTotalMs,
     required this.csgCache,
     required this.hasNodeStats,
+    required this.memo,
   });
 
   @override
@@ -488,7 +611,8 @@ class APIRefreshProfile {
       count.hashCode ^
       maxTotalMs.hashCode ^
       csgCache.hashCode ^
-      hasNodeStats.hashCode;
+      hasNodeStats.hashCode ^
+      memo.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -506,7 +630,8 @@ class APIRefreshProfile {
           count == other.count &&
           maxTotalMs == other.maxTotalMs &&
           csgCache == other.csgCache &&
-          hasNodeStats == other.hasNodeStats;
+          hasNodeStats == other.hasNodeStats &&
+          memo == other.memo;
 }
 
 /// Flutter-facing mirror of [`SelfCheckViolation`]: two evaluations that shared
