@@ -210,6 +210,58 @@ When you select a custom node instance, the **Node Properties** panel auto-gener
 
 As with built-in nodes, a value wired into a parameter pin takes precedence over the value set inline (see [Node properties vs. input pins](#node-properties-vs-input-pins)). A parameter that is neither wired nor set inline falls back to the `default` input pin of its `parameter` node inside the subnetwork.
 
+## Cost model: how often a node is computed
+
+A node network is a graph, not a script, so "how many times does this run?" is a
+real question — and the answer is short:
+
+> **A node's result is computed once per call stack, where the call stack is
+> extended with the iteration index of each enclosing higher-order function.**
+
+With no HOFs and no subnetworks that collapses to *every node is computed once
+per refresh*, no matter how many other nodes read it or how many of them you are
+displaying. A node feeding five consumers is not five times the work; splitting
+an expensive computation out into its own node so several branches can share it
+is free.
+
+The model is compositional: what happens inside a body can be reasoned about
+without knowing what encloses it.
+
+### The one optimization it suggests
+
+The interesting case is a node **inside** a body:
+
+| Where an expensive node sits | How often it runs |
+|---|---|
+| Outside a body, feeding it through a capture wire | once per invocation of the body |
+| **Inside a body, but not depending on the iteration value** | **once per element — move it out of the body and it runs once** |
+| Inside a body, reading `element` / `acc` | once per element; nothing to do |
+
+The middle row is the whole advice: if a node inside a body draws all its inputs
+from capture wires, it is computing the same thing for every element. Drag it
+out of the body and feed its result back in as a capture.
+
+The third row is not something to work around. A node that reads the iteration
+value genuinely differs per element, and it could not be hoisted anyway — a
+zone-input wire cannot reach outside its body.
+
+### Two things the model does not promise
+
+- **Two instances of the same subnetwork compute twice.** They are two different
+  call stacks, and correctly so: their inputs come from different places.
+  Wrapping something in a subnetwork to make it shared does the opposite of what
+  you might expect.
+- **Streams are the exception.** An `Iter[T]` value is lazy: the node that
+  produces it only builds the stream, and the per-element work happens when
+  something drains it. Two consumers of one stream each drain their own copy, so
+  the elements are produced twice. Wire the stream into a `collect` node and
+  share *that* if you need the elements only once.
+
+If you want to see the real numbers for a design, the Profiler panel's
+*Redundancy* tab lists, per node, how many times its result was requested and
+how many times it was actually computed (*View > Show Profiler*, then switch on
+*Per-node*). See [Profiler panel](./ui.md#profiler-panel).
+
 ## Higher-order functions and inline bodies
 
 One of the key nodes to make an atomCAD node network more dynamic is the `expr` node. The `expr` node can represent arbitrary mathematical operations and even supports branching with the `if then else` construct. (See the description of the `expr` node in the nodes reference.)

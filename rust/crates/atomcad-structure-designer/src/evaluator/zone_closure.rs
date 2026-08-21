@@ -25,6 +25,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::data_type::{DataType, FunctionType};
+use crate::evaluator::eval_memo;
 use crate::evaluator::network_evaluator::{
     CaptureKey, NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
 };
@@ -520,6 +521,14 @@ pub fn run_closure_once<'a>(
     context.pop_eval_scope();
     context.pop_zone_input_frame(closure.owner_node_id);
     context.captured_source_values = saved_captures;
+
+    // Epoch-scoped eviction (`doc/design_eval_memoization.md` D3). Every memo
+    // entry created under this invocation carries `env_epoch` in its key, and
+    // epochs are never reused — so the moment the body frame is gone those
+    // entries are unreachable and can be retired in one step. Without this a
+    // 10^5-element `map` accumulates 10^5 generations of dead entries and waits
+    // for the LRU to notice. Not a correctness measure: memory only.
+    eval_memo::retire_epoch(env_epoch);
 
     result
 }

@@ -414,6 +414,16 @@ pub struct MemoryPreferences {
     /// their visibility needs no re-evaluation. Default 256 MB.
     #[serde(default = "default_invisible_node_cache_mb")]
     pub invisible_node_cache_mb: u32,
+
+    /// The **per-pass evaluation memo** (`doc/design_eval_memoization.md` D11).
+    /// Default 1024 MB — larger than its siblings because a single
+    /// million-atom `AtomicStructure` runs to tens or hundreds of megabytes, so
+    /// a handful of large results can reach 256 MB while the entry count still
+    /// looks trivial. The allocation is transient by construction: the table is
+    /// built at the start of a refresh pass and dropped at its end, so this is
+    /// a ceiling on a peak, not a resident-set commitment.
+    #[serde(default = "default_eval_memo_cache_mb")]
+    pub eval_memo_cache_mb: u32,
 }
 
 /// Smallest budget the UI offers. Not a correctness floor — a cache below one
@@ -433,6 +443,9 @@ fn default_csg_sketch_cache_mb() -> u32 {
 }
 fn default_invisible_node_cache_mb() -> u32 {
     256
+}
+fn default_eval_memo_cache_mb() -> u32 {
+    1024
 }
 
 impl MemoryPreferences {
@@ -460,6 +473,7 @@ impl Default for MemoryPreferences {
             csg_mesh_cache_mb: default_csg_mesh_cache_mb(),
             csg_sketch_cache_mb: default_csg_sketch_cache_mb(),
             invisible_node_cache_mb: default_invisible_node_cache_mb(),
+            eval_memo_cache_mb: default_eval_memo_cache_mb(),
         }
     }
 }

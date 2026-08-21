@@ -41,9 +41,35 @@ bool getEvalSelfCheckEnabled() => RustLib.instance.api
 /// Arms or disarms the self-check. Session state like the profiler toggle, and
 /// for the same reason (D2): a check left on across sessions would quietly tax
 /// every later measurement.
-void setEvalSelfCheckEnabled({required bool enabled}) => RustLib.instance.api
+///
+/// **Returns `false` when the request was refused** because the evaluation memo
+/// is on (`doc/design_eval_memoization.md` D10's hard gate). Once a memo serves
+/// the second request *from* the first result there is no second computation to
+/// compare and the check passes vacuously, so arming it under a memo would
+/// report a green that means nothing. The UI turns a `false` into an
+/// explanation pointing at the memo switch rather than a silent no-op.
+bool setEvalSelfCheckEnabled({required bool enabled}) => RustLib.instance.api
     .crateApiStructureDesignerProfilingApiSetEvalSelfCheckEnabled(
         enabled: enabled);
+
+/// Whether the per-pass evaluation memo is on. **Defaults to `true`** — it is
+/// the product's behaviour, unlike the profiler's opt-in toggle (D10).
+bool getEvalMemoEnabled() => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiGetEvalMemoEnabled();
+
+/// Switches the evaluation memo on or off and forces one **full** refresh, so
+/// the effect is visible immediately and the A/B comparison is between two
+/// comparable passes (D10).
+///
+/// The refresh is not a convenience: a per-pass memo only shows its effect on
+/// the *next* pass, and comparing a memo-off partial against a memo-on full
+/// measures nothing.
+///
+/// Returns `true` when an armed self-check had to be disarmed to let the memo
+/// run, so the panel can say so rather than leaving the user's diagnostic
+/// silently switched off.
+bool setEvalMemoEnabled({required bool enabled}) => RustLib.instance.api
+    .crateApiStructureDesignerProfilingApiSetEvalMemoEnabled(enabled: enabled);
 
 /// The most recent **profiled** pass's per-node table — read, never drained
 /// (D6). `None` until a pass has run with profiling armed.
@@ -248,6 +274,17 @@ class APINodeProfileRecord {
   /// is not collectable.
   final bool underReentrancyBackstop;
 
+  /// A custom-network instance requested through `evaluate`'s single-pin arm,
+  /// which D2 forbids the memo from inserting from. Such a row shows
+  /// `evaluations == lookups` permanently with the memo working perfectly;
+  /// unflagged, every subnetwork in every design would read as a memo bug.
+  final bool subnetwork;
+
+  /// The memo held this node's entry earlier in the pass and the LRU dropped
+  /// it, so the work was redone (D6). Distinguishes memory pressure from a
+  /// correctness bug.
+  final bool evicted;
+
   /// Time in this node's own `eval`, with its dependencies' time subtracted.
   final double selfMs;
 
@@ -270,6 +307,8 @@ class APINodeProfileRecord {
     required this.wastedMs,
     required this.producedIterator,
     required this.underReentrancyBackstop,
+    required this.subnetwork,
+    required this.evicted,
     required this.selfMs,
     required this.totalMs,
   });
@@ -289,6 +328,8 @@ class APINodeProfileRecord {
       wastedMs.hashCode ^
       producedIterator.hashCode ^
       underReentrancyBackstop.hashCode ^
+      subnetwork.hashCode ^
+      evicted.hashCode ^
       selfMs.hashCode ^
       totalMs.hashCode;
 
@@ -310,6 +351,8 @@ class APINodeProfileRecord {
           wastedMs == other.wastedMs &&
           producedIterator == other.producedIterator &&
           underReentrancyBackstop == other.underReentrancyBackstop &&
+          subnetwork == other.subnetwork &&
+          evicted == other.evicted &&
           selfMs == other.selfMs &&
           totalMs == other.totalMs;
 }

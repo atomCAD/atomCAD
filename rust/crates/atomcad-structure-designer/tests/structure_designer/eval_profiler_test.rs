@@ -44,6 +44,15 @@ use std::sync::Arc;
 
 fn setup_designer_with_network(network_name: &str) -> StructureDesigner {
     let mut designer = StructureDesigner::new();
+    // **The memo is pinned off for this whole file.** The profiler's redundancy
+    // numbers are *defined* against the un-memoized evaluator — `evaluations`
+    // is what a pass costs when nothing is shared, and the diamond-apex-twice
+    // counts below are the measurement `doc/design_eval_memoization.md` was
+    // built on. With the memo on (the product default since its Phase 3) those
+    // counts collapse, which is the memo working and not the profiler
+    // miscounting. The memo's own effect on these columns is asserted in
+    // `eval_memo_test.rs`, where it is the subject rather than the environment.
+    designer.eval_memo_enabled = false;
     designer.add_node_network(network_name);
     designer.set_active_node_network_name(Some(network_name.to_string()));
     designer

@@ -433,6 +433,7 @@ fn test_non_default_values_roundtrip() {
             csg_mesh_cache_mb: 128,
             csg_sketch_cache_mb: 32,
             invisible_node_cache_mb: 512,
+            eval_memo_cache_mb: 2048,
         },
     };
 
@@ -690,6 +691,7 @@ fn test_memory_preferences_apply_live_without_a_restart() {
         csg_mesh_cache_mb: 300,
         csg_sketch_cache_mb: 70,
         invisible_node_cache_mb: 400,
+        eval_memo_cache_mb: 2048,
     };
     sd.set_preferences(prefs.clone());
 
@@ -709,6 +711,7 @@ fn test_memory_preferences_apply_live_without_a_restart() {
         csg_mesh_cache_mb: 8,
         csg_sketch_cache_mb: 4,
         invisible_node_cache_mb: 16,
+        eval_memo_cache_mb: 32,
     };
     sd.set_preferences(prefs);
 
@@ -776,6 +779,7 @@ fn test_out_of_range_budgets_are_clamped_on_the_apply_path() {
         csg_mesh_cache_mb: 0,
         csg_sketch_cache_mb: 0,
         invisible_node_cache_mb: 0,
+        eval_memo_cache_mb: 0,
     };
     sd.set_preferences(prefs);
 

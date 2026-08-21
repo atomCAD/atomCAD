@@ -19,6 +19,11 @@
 ///   evaluation pass at all (`evalMs == null`), and printing a zero there
 ///   would read as "evaluation is free" — the single most misleading thing
 ///   this strip could say.
+/// - **An off evaluation memo is marked here, not only in the profiler
+///   panel.** The panel is usually closed and this strip never is, and a
+///   session running many times slower because of a switch flipped an hour ago
+///   is exactly the kind of thing that gets mistaken for a regression
+///   (`doc/design_eval_memoization.md` D10).
 library;
 
 import 'package:flutter/material.dart';
@@ -37,7 +42,8 @@ class RefreshProfileStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     // `read`, not `watch`: the strip must not rebuild with the model. The
     // ValueListenableBuilder below is its only rebuild trigger.
-    final notifier = context.read<StructureDesignerModel>().refreshProfile;
+    final model = context.read<StructureDesignerModel>();
+    final notifier = model.refreshProfile;
     return Container(
       height: REFRESH_PROFILE_STRIP_HEIGHT,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -48,14 +54,45 @@ class RefreshProfileStrip extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: ValueListenableBuilder<RefreshProfileSample?>(
         valueListenable: notifier,
-        builder: (context, sample, _) => Text(
-          _formatSample(sample),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white54,
-            fontSize: 11,
-            fontFeatures: [FontFeature.tabularFigures()],
+        builder: (context, sample, _) => ValueListenableBuilder<bool>(
+          // A second notifier rather than a model rebuild: the strip must not
+          // rebuild with the model (a gadget drag would tick it per pointer
+          // move), and the memo switch changes a handful of times per session.
+          valueListenable: model.evalMemoEnabledNotifier,
+          builder: (context, memoEnabled, _) => Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _formatSample(sample),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 11,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ),
+              if (!memoEnabled)
+                const Tooltip(
+                  message:
+                      'The evaluation memo is off, so every shared node is '
+                      'recomputed once per consumer.\n'
+                      'Re-enable it from View > Enable Evaluation Memo.',
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 8),
+                    child: Text(
+                      'memo OFF',
+                      key: Key('refresh_strip_memo_off_marker'),
+                      style: TextStyle(
+                        color: Color(0xFFD8A05A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),

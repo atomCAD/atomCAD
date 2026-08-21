@@ -99,6 +99,7 @@ class PreferencesKeys {
       Key('pref_csg_sketch_cache_mb_input');
   static const Key invisibleNodeCacheMbInput =
       Key('pref_invisible_node_cache_mb_input');
+  static const Key evalMemoCacheMbInput = Key('pref_eval_memo_cache_mb_input');
 }
 
 /// A modal preferences window for the structure designer.
@@ -1589,6 +1590,31 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 setState(() {
                                   _preferences.memoryPreferences
                                       .csgSketchCacheMb = value;
+                                });
+                                _applyPreferences();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+                          Tooltip(
+                            message:
+                                'Results kept during a single refresh so a node feeding\n'
+                                'several others is computed once instead of once per\n'
+                                'consumer. The table is built and discarded within one\n'
+                                'refresh, so this is a ceiling on a peak rather than\n'
+                                'memory the app holds onto.\n'
+                                'Default: 1024 MB.',
+                            child: IntInput(
+                              key: PreferencesKeys.evalMemoCacheMbInput,
+                              label: 'Evaluation memo (MB)',
+                              value: _preferences
+                                  .memoryPreferences.evalMemoCacheMb,
+                              minimumValue: _minCacheBudgetMb,
+                              maximumValue: _maxCacheBudgetMb,
+                              onChanged: (value) {
+                                setState(() {
+                                  _preferences.memoryPreferences
+                                      .evalMemoCacheMb = value;
                                 });
                                 _applyPreferences();
                               },

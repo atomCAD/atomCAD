@@ -519,6 +519,8 @@ mod sample_field_test;
 #[path = "structure_designer/eval_memo_sizing_test.rs"]
 mod eval_memo_sizing_test;
 
+#[path = "structure_designer/eval_memo_test.rs"]
+mod eval_memo_test;
 #[path = "structure_designer/eval_profiler_test.rs"]
 mod eval_profiler_test;
 

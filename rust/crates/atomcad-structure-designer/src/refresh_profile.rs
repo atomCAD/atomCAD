@@ -23,6 +23,7 @@
 //! Reports live here for the session only: nothing touches `.cnnd` or
 //! preferences, so there is no undo command and no file-format change.
 
+use crate::evaluator::eval_memo::MemoCounts;
 use crate::evaluator::eval_profiler::EvalProfile;
 use crate::structure_designer_changes::RefreshMode;
 use std::collections::VecDeque;
@@ -66,6 +67,21 @@ pub struct RefreshSubPhases {
     /// and what the counters add is *why* two otherwise identical refreshes
     /// differ.
     pub csg_cache: CsgCacheDelta,
+    /// What the per-pass evaluation memo did
+    /// (`doc/design_eval_memoization.md` D10), including whether it was
+    /// switched on at all.
+    ///
+    /// **Harvested, not queried.** Unlike the CSG cache the memo does not exist
+    /// when the panel renders — it is created and dropped inside one pass (D1)
+    /// — so the counters have to be taken at the same seam
+    /// `with_eval_context` takes the `EvalProfile`. A stats API that read a
+    /// live memo would return zeroes every time it was called.
+    ///
+    /// Always-on, like the phase clock and unlike the per-node profiler: a few
+    /// increments and one `max` per insert are unmeasurable, and someone
+    /// chasing a memory number should not have to distort the time numbers to
+    /// see it.
+    pub memo: MemoCounts,
 }
 
 /// CSG conversion-cache activity over one refresh — the difference between two
@@ -143,6 +159,11 @@ pub struct RefreshProfile {
     pub node_stats: Option<Arc<EvalProfile>>,
     /// CSG conversion-cache hits/misses this refresh caused (D12).
     pub csg_cache: CsgCacheDelta,
+    /// Evaluation-memo activity this refresh caused, and whether the memo was
+    /// on. The `enabled` flag is what makes the D10 A/B comparison readable in
+    /// the history ring: two rows, one memo-off and one memo-on, each carrying
+    /// its own numbers.
+    pub memo: MemoCounts,
 }
 
 impl RefreshProfile {
@@ -168,6 +189,7 @@ impl RefreshProfile {
             max_total_ms: total_ms,
             node_stats: sub_phases.node_stats,
             csg_cache: sub_phases.csg_cache,
+            memo: sub_phases.memo,
         }
     }
 
@@ -201,9 +223,9 @@ impl RefreshProfile {
         self.csg_cache.mesh_misses += other.csg_cache.mesh_misses;
         self.csg_cache.sketch_hits += other.csg_cache.sketch_hits;
         self.csg_cache.sketch_misses += other.csg_cache.sketch_misses;
-        // `node_stats` is deliberately untouched: only lightweight rows
-        // coalesce and a lightweight refresh runs no evaluation pass, so
-        // neither side ever carries one.
+        // `node_stats` and `memo` are deliberately untouched: only lightweight
+        // rows coalesce and a lightweight refresh runs no evaluation pass, so
+        // neither side ever carries either.
     }
 }
 

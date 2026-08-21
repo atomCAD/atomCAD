@@ -9,6 +9,7 @@ Network evaluation engine. Processes the node DAG to produce displayable output.
 | `network_evaluator.rs` | Main evaluator: traverses DAG, evaluates nodes, builds scene |
 | `network_result.rs` | `NetworkResult` enum: all possible node output values |
 | `iterator_walker.rs` | `Walker` tree: lazy stream runtime for `Iter[T]` (carried by `NetworkResult::Iterator`) |
+| `eval_memo.rs` | The **per-pass evaluation memo** (`doc/design_eval_memoization.md`): environment key → the whole `EvalOutput` a node produced in it, alive for exactly one refresh pass. Owns its own pass thread-local, its `MemoCounts`, and the three deliberate exclusions (iterators, `evaluate`'s single-pin custom-network arm, results produced under the re-entrancy backstop) |
 | `eval_profiler.rs` | Opt-in per-node evaluation profiler: `EvalProfile` (live accumulator *and* finished report), the RAII `NodeEvalGuard`, the redundancy counters (`lookups` / `distinct_envs` / `wasted_ns`) and the D11 equal-key/equal-result self-check, plus the pass thread-local `with_eval_context` installs and takes back |
 | `zone_closure.rs` | `ZoneClosure` bundle (incl. `pre_supplied_args` for partial application — see `doc/design_currying.md`) + the shared per-element `run_closure_once` / `build_inline_closure` / `build_node_function_closure` (powers the HOF zone bodies, the `closure` node, the function pin, the `apply` node's recursive consumption loop, and the `NetworkResult::Function` value) |
 
@@ -93,8 +94,8 @@ the life of its frames — so a body frame is identified by
 body networks get dropped mid-pass and an address can be reused. A registry
 frame's own `node_id` is deliberately not part of its identity, which is what
 makes two instances of one custom network aggregate into one row.
-`eval_env_key` answers "which evaluation *environment* is this?" — the key
-`doc/design_eval_memoization.md` will memoize on — and differs from
+`eval_env_key` answers "which evaluation *environment* is this?" — the key the
+memo in `eval_memo.rs` stores results under — and differs from
 `node_profile_key` in three places: it hashes each frame's `node_id` and
 `env_epoch` (so two instances of one custom network, and two invocations of one
 body, are two environments), it hashes `decorate`, and it is **128 bits** where
@@ -140,6 +141,91 @@ Getting this wrong is a silently wrong *number* today and a silently wrong
   carries `next_env_epoch` **in** and `drain_inner_context` merges it back with
   `max`. Without both halves a `fold`/`foreach`/`apply` body restarts at 1 and
   re-issues epochs the outer context already spent.
+
+## The evaluation memo
+
+`eval_memo` removes the evaluator's *sharing* gap: without it a node reached
+twice in one pass is computed twice, so a diamond re-runs its apex per consuming
+wire and every displayed root re-walks its whole upstream cone. The key is
+`eval_env_key` — the same function the profiler's redundancy counters use, which
+is what makes the panel's prediction and the memo's behaviour agree by
+construction. The argument for why that key is sufficient lives in
+`doc/design_eval_memoization.md` §"The evaluation environment"; do not restate
+it, and do not weaken the key without reading it.
+
+Six rules that are easy to break and silent when broken:
+
+- **Insert only where a *complete* `EvalOutput` is in hand.** The key omits the
+  output pin index, so an entry must be the whole output. `evaluate_all_outputs`
+  always has one (its custom-network arm passes the child return node's whole
+  output through); `evaluate`'s **built-in** arm has one before the `.get(pin)`
+  projection. `evaluate`'s **custom-network arm does not** — it forwards a
+  single pin — and must never insert. The complete output exists one level down,
+  at the child's return node, which is where the re-entering pull hits the memo
+  instead.
+- **The `-1` function pin neither reads nor writes the memo.** It returns a
+  synthesized `NetworkResult::Function`, not a projection of the node's `eval`
+  output, and the key does not distinguish it — so a `-1` request served from
+  the memo would get a value, and a `-1` result stored would be served to
+  ordinary consumers.
+- **Never store a result produced under the re-entrancy backstop.** With a cycle
+  `A → B → A` the inner and outer evaluations of `A` share a byte-identical
+  environment and return different results — the one case where the key is
+  genuinely insufficient. Both cycle arms return before reaching `insert`.
+- **Lookup happens before the `eval_in_progress` bracket** in both seams. A hit
+  recurses into nothing, so it needs no guard entry and no matching removal on
+  the early return. The poison check stays ahead of the lookup: a poisoned
+  node's synthesized error is never stored.
+- **A hit must not open a profiler frame.** `eval_profiler::note_memo_hit` counts
+  the lookup and the environment without pushing a child-accumulator frame or
+  incrementing `evaluations` — the divergence between `lookups` and
+  `evaluations` *is* the hit count. Opening a guard would count the hit as an
+  evaluation and hide the entire effect.
+- **A hit skips the node's `node_errors` / `node_output_strings` writes**, and
+  that is already correct: those were recorded under the node's own `NodeRef`
+  when it was first evaluated, and `get_node_error` / `get_node_output_strings`
+  scan every root's snapshot.
+
+Two consequences worth knowing rather than rediscovering:
+
+- **Effects fire once per pass** (`print` with fan-out 2 prints once). This is
+  the more correct semantics and is deliberate. The same goes for the
+  interior-mutability `NodeData` fields written from `eval` (`cached_input`,
+  `cached_unit_cell`, `available_parameters`, `last_report`, `available_tags`):
+  the memo makes the *first* write win where the last one used to, which is safe
+  only because every one of them is a pure function of the evaluation's inputs.
+  A new such field that depended on `decorate`, or on how many times `eval` ran,
+  would break silently.
+- **`selected_node_eval_cache` is the same hazard with no result to compare.**
+  It is safe only via an invariant that lives in selection code: `decorate` is
+  `true` **only** for a displayed root's own `evaluate_all_outputs`, and every
+  selection path keeps `active_node_id` inside `selected_node_ids`, so the
+  active node's own root evaluation is the unique `decorate = true` evaluation
+  of that node in the pass and can never be served from the memo. Adding
+  "activate without selecting" would break the gadget layer, and the
+  attribution would land on the memo.
+
+**Epoch-scoped eviction.** Entries created inside body invocation *N* carry
+`env_epoch` *N* in their key and are unreachable once that invocation pops, so
+`run_closure_once` retires the whole generation via `eval_memo::retire_epoch`
+after its pops. Memory only, never correctness — but without it a 10^5-element
+`map` accumulates 10^5 generations before the LRU notices. `retire_epoch` and
+the LRU's own evictions are counted **separately**: an epoch drop is the design
+working, an LRU eviction is the budget being too small, and they are the two
+signals a memory investigation has to tell apart.
+
+**Counters are harvested, not queried.** Unlike the CSG cache the memo does not
+outlive the pass, so `with_eval_context` takes its `MemoCounts` at the same seam
+it takes the `EvalProfile`, and `refresh_full` / `refresh_partial` fold them into
+`RefreshSubPhases`. There is deliberately no `get_memo_stats()`: it would return
+zeroes every time it was called.
+
+**The off switch is part of the feature.** `StructureDesigner::eval_memo_enabled`
+defaults **on**, is session-scoped, and forces a full refresh when toggled — the
+A/B comparison it exists for is meaningless between a memo-off partial and a
+memo-on full. The D11 self-check is hard-gated on it: it can only be armed while
+the memo is off, and switching the memo on disarms it, because a self-check
+running under a memo compares a computation against itself and always passes.
 
 ## Central skip rule (Unit-returning nodes)
 

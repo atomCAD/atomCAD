@@ -14,6 +14,7 @@
 
 use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance,
+    with_mut_cad_instance_or,
 };
 use atomcad_structure_designer::evaluator::eval_profiler::{
     EvalProfile, NodeProfileRecord, NodeTypeProfileRecord, SelfCheckViolation,
@@ -178,6 +179,15 @@ pub struct APINodeProfileRecord {
     /// validation); D9 there forbids memoizing under it, so again `wasted_ms`
     /// is not collectable.
     pub under_reentrancy_backstop: bool,
+    /// A custom-network instance requested through `evaluate`'s single-pin arm,
+    /// which D2 forbids the memo from inserting from. Such a row shows
+    /// `evaluations == lookups` permanently with the memo working perfectly;
+    /// unflagged, every subnetwork in every design would read as a memo bug.
+    pub subnetwork: bool,
+    /// The memo held this node's entry earlier in the pass and the LRU dropped
+    /// it, so the work was redone (D6). Distinguishes memory pressure from a
+    /// correctness bug.
+    pub evicted: bool,
     /// Time in this node's own `eval`, with its dependencies' time subtracted.
     pub self_ms: f64,
     /// Wall time including everything this node pulled. A custom-node instance
@@ -202,6 +212,8 @@ impl From<&NodeProfileRecord> for APINodeProfileRecord {
             wasted_ms: ns_to_ms(record.wasted_ns()),
             produced_iterator: record.flags.produced_iterator,
             under_reentrancy_backstop: record.flags.under_reentrancy_backstop,
+            subnetwork: record.flags.subnetwork,
+            evicted: record.flags.evicted,
             self_ms: ns_to_ms(record.self_ns),
             total_ms: ns_to_ms(record.total_ns),
         }
@@ -401,12 +413,64 @@ pub fn get_eval_self_check_enabled() -> bool {
 /// Arms or disarms the self-check. Session state like the profiler toggle, and
 /// for the same reason (D2): a check left on across sessions would quietly tax
 /// every later measurement.
+///
+/// **Returns `false` when the request was refused** because the evaluation memo
+/// is on (`doc/design_eval_memoization.md` D10's hard gate). Once a memo serves
+/// the second request *from* the first result there is no second computation to
+/// compare and the check passes vacuously, so arming it under a memo would
+/// report a green that means nothing. The UI turns a `false` into an
+/// explanation pointing at the memo switch rather than a silent no-op.
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_eval_self_check_enabled(enabled: bool) {
+pub fn set_eval_self_check_enabled(enabled: bool) -> bool {
     unsafe {
-        with_mut_cad_instance(|cad_instance| {
-            cad_instance.structure_designer.eval_self_check_enabled = enabled;
-        });
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                cad_instance
+                    .structure_designer
+                    .try_set_eval_self_check_enabled(enabled)
+            },
+            false,
+        )
+    }
+}
+
+/// Whether the per-pass evaluation memo is on. **Defaults to `true`** — it is
+/// the product's behaviour, unlike the profiler's opt-in toggle (D10).
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_eval_memo_enabled() -> bool {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| cad_instance.structure_designer.eval_memo_enabled,
+            true,
+        )
+    }
+}
+
+/// Switches the evaluation memo on or off and forces one **full** refresh, so
+/// the effect is visible immediately and the A/B comparison is between two
+/// comparable passes (D10).
+///
+/// The refresh is not a convenience: a per-pass memo only shows its effect on
+/// the *next* pass, and comparing a memo-off partial against a memo-on full
+/// measures nothing.
+///
+/// Returns `true` when an armed self-check had to be disarmed to let the memo
+/// run, so the panel can say so rather than leaving the user's diagnostic
+/// silently switched off.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_eval_memo_enabled(enabled: bool) -> bool {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                let disarmed = cad_instance
+                    .structure_designer
+                    .set_eval_memo_enabled(enabled);
+                cad_instance.structure_designer.mark_full_refresh();
+                refresh_structure_designer_auto(cad_instance);
+                disarmed
+            },
+            false,
+        )
     }
 }
 

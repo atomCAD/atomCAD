@@ -196,6 +196,19 @@ class _StructureDesignerState extends State<StructureDesigner> {
                                 ? 'Hide Profiler'
                                 : 'Show Profiler'),
                           ),
+                          // The evaluation memo's off switch. It lives next to
+                          // the profiler because switching it off is a
+                          // *diagnostic* act — recompute the same design
+                          // without sharing and compare — not a preference.
+                          // See `doc/design_eval_memoization.md` D10.
+                          MenuItemButton(
+                            key: const Key('toggle_eval_memo_item'),
+                            onPressed: () => graphModel
+                                .setEvalMemoEnabled(!model.evalMemoEnabled),
+                            child: Text(model.evalMemoEnabled
+                                ? 'Disable Evaluation Memo'
+                                : 'Enable Evaluation Memo'),
+                          ),
                         ],
                       );
                     },

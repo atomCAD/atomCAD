@@ -998,7 +998,7 @@ first means Phase 3 is a change to the evaluator and nothing else.
 The Flutter smoke test (`flutter test integration_test/`) is a **pending manual
 step for the maintainer** here as it is for Phase 3.
 
-### Phase 3 — The memo (D1–D5, D7–D10, plus D11's memo row)
+### Phase 3 — The memo (D1–D5, D7–D10, plus D11's memo row). Done
 
 The behaviour change: the pass thread-local table, lookup and insert at
 the two seams, the D2 insert rule, epoch-scoped eviction, the D9
@@ -1020,6 +1020,50 @@ Phase 3 also ships the reference-guide "Cost model" subsection
 (§"The user-facing cost model"). The feature is not done until the guide
 states the contract the memo now honours — before this phase only the
 capture row of that table is true.
+
+**As built**, five notes worth carrying forward:
+
+- **`evaluate_all_outputs` inserts from *every* arm, including its
+  custom-network one** — that arm passes the child return node's *complete*
+  `EvalOutput` through, so it satisfies D2. Only `evaluate`'s single-pin
+  custom-network arm is forbidden, and it is the one that raises the
+  `subnetwork` flag. Reading D2 as "no custom-network arm inserts" would give up
+  a real win for nothing.
+- **The `-1` function pin is a third exclusion D2 does not name.** It returns a
+  synthesized `Function` value, not a projection of the node's `eval` output,
+  and the key carries no pin index — so that arm neither reads nor writes the
+  memo. Without the guard, a node used both as a value and as a function value
+  (an ordinary shape: an `expr` feeding a sink *and* driving a `map.f`) would
+  serve one for the other. Regression test:
+  `a_function_pin_and_a_value_pin_of_one_node_do_not_share_a_memo_entry`.
+- **The `Unit`-skip rule inserts too**, contrary to D5's "skipped Unit outputs
+  need no entry". True as stated — the output is synthesized, not computed — but
+  an unstored one re-"evaluates" on every request, and an unflagged row with
+  `evaluations > distinct_envs` is indistinguishable from a memo bug in the
+  acceptance criterion. One entry per Unit node is cheaper than an exception in
+  the criterion.
+- **A hit must not open a profiler frame.** `eval_profiler::note_memo_hit` counts
+  the lookup and the environment without pushing a child-accumulator frame or
+  incrementing `evaluations`; the guard's `Drop` is what counts an evaluation, so
+  reusing `begin` on the hit path would have hidden the entire effect behind
+  unchanged numbers. The clone a hit pays for therefore lands in the *consumer's*
+  self time, which is the honest attribution.
+- **`last_stats` is not one of the six interior-mutability fields.** D5 lists it
+  among the write-only fields to confirm; it turns out never to be written at
+  all (`get_subtitle` always falls through to the stored `diff`). The other five
+  are pure functions of the evaluation's inputs and none reads `decorate`, so
+  first-write and last-write agree. `atom_edit`'s `get_cached_input()` and
+  `get_subtitle()` are asserted equal with the memo on and off.
+
+Two deviations in scope, both toward Phase 3 rather than away from it:
+`RecordFlags::{subnetwork, evicted}` are surfaced through `APINodeProfileRecord`
+and rendered in the Redundancy tab's **Note** column in this phase rather than
+Phase 4 — an unflagged row that re-evaluates reads as a memo failure, and
+leaving the flags invisible would have made the tab lie from the day the memo
+landed. `EvalProfile::unmemoized_offender_count` (the acceptance criterion as one
+number) is computed in the domain here; Phase 4 still owns rendering it in the
+footnote, the `Wasted`/`Saved` relabel, the memo statistics block, and the
+history-ring memo tag.
 
 #### Tests
 

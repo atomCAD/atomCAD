@@ -306,6 +306,13 @@ During a drag the strip updates about five times a second rather than on every m
 
 There is nothing to configure and nothing to switch on; the strip is simply there. It is a quick way to answer "why did that feel slow?" — for instance, to see whether a sluggish edit is spending its time evaluating the network or drawing an unusually heavy structure.
 
+One thing can appear at the right-hand end of the strip: an amber **memo OFF**
+marker. It means the [evaluation memo](#the-evaluation-memo-and-its-off-switch)
+has been switched off, which can make evaluation several times slower on a
+design with shared nodes. It is a diagnostic state, and the marker is on the
+always-visible strip precisely so that "everything got slow" has an answer
+sitting in front of you rather than behind a panel you last opened an hour ago.
+
 ## Profiler panel
 
 Where the [refresh status strip](#refresh-status-strip) says *how long* the last
@@ -358,6 +365,35 @@ the network.
 The tables are a snapshot. Switching Per-node back off — or doing anything else
 that causes an ordinary refresh — leaves the last measured tables on screen
 rather than blanking them.
+
+### The evaluation memo and its off switch
+
+During a refresh, atomCAD keeps each node's result so that a node feeding
+several others is computed once rather than once per consumer — this is what
+makes the [cost model](./node_networks.md#cost-model-how-often-a-node-is-computed)
+true. That table is the **evaluation memo**, and it is on by default; its size
+limit is the *Evaluation memo (MB)* budget in [Memory preferences](#memory).
+
+The **Memo** switch in the profiler panel header — mirrored by
+*View > Disable Evaluation Memo* — turns it off. This is a diagnostic, not a
+preference:
+
+- Unlike **Per-node**, it defaults **on**, because it is how the application
+  normally behaves.
+- Toggling it forces a *Full* refresh, so the effect shows up in the very next
+  reading rather than one refresh later.
+- It is not remembered between sessions. It resets to on when you restart.
+- While it is off, the [refresh status strip](#refresh-status-strip) shows an
+  amber **memo OFF** marker.
+
+What it is *for*: if you ever suspect a result is wrong, switch the memo off and
+refresh again. The viewport must not change. If it does, that is a bug in
+atomCAD worth reporting — and this is the one-click comparison that establishes
+it, on the design and the state that provoked it.
+
+Switching the memo **on** disarms the [self-check](#redundancy) if it was armed,
+and the self-check cannot be armed while the memo is on; the strip above the
+Redundancy table says so and points back here.
 
 ### By node type
 
@@ -421,8 +457,10 @@ The question this tab answers is *not* "how often was this node evaluated?" but
 in**?" Only the second kind of repetition is avoidable, and the difference is
 easy to get backwards:
 
-- A node that two other nodes both depend on is evaluated twice with the exact
-  same inputs. One of those two evaluations is pure waste.
+- A node that two other nodes both depend on is *requested* twice with the exact
+  same inputs. One of those two requests is pure repetition — and, with the
+  [evaluation memo](#the-evaluation-memo-and-its-off-switch) on, it is served
+  from the first rather than recomputed.
 - A node inside a `map`/`fold` body running over three elements is evaluated
   three times — but each run sees a *different* element, so nothing is repeated
   and nothing could be saved.
@@ -436,27 +474,34 @@ visited once each.
 
 `Node | Lookups | Envs | Factor | Self | Wasted | Note`, ranked by **Wasted**:
 
+- **Lookups** counts *requests*, not computations, so it does not fall when the
+  memo starts serving them — it measures demand. To see what was actually
+  computed, compare it against **Envs**.
 - **Factor** is `Lookups / Envs`. `1.0×` means every request was genuinely
-  different work. `11×` means the node was recomputed ten times for nothing.
+  different work. `11×` means ten of the eleven requests were repetitions — with
+  the memo on, ten of them were served rather than recomputed.
 - **Wasted** is what that costs in milliseconds — the actionable number, and the
   reason the table is sorted by it rather than by the factor. A node with a `20×`
   factor and 0.1 ms of self time is not worth anything; a `2×` factor on a
   600 ms `materialize` is.
 - **Note** marks the rows where the repetition could *not* simply be cached
   away: `iterator` (the node produces a lazy stream, which is deliberately not
-  stored — its cost lives in whatever drains it) and `cycle` (the node is part
-  of a wiring loop that escaped validation, which is a bug to fix rather than a
-  saving to collect). Those rows show `—` under **Wasted** so the number is
-  never read as money on the table.
+  stored — its cost lives in whatever drains it), `cycle` (the node is part of a
+  wiring loop that escaped validation, which is a bug to fix rather than a
+  saving to collect), `subnetwork` (a custom-node instance requested one pin at
+  a time, which the memo cannot store as a whole — the expensive work inside the
+  subnetwork is still shared) and `evicted` (the memo did hold this result and
+  had to drop it to stay inside its budget; raise *Evaluation memo (MB)* in
+  [Memory preferences](#memory) if you see this on a design you work with).
+  Those rows show `—` under **Wasted** so the number is never read as money on
+  the table.
 
 The footnote under the table gives the same numbers for the pass as a whole,
 plus how much a perfect cache would save in total. Read the per-node rows before
 the total: a design can be "2.5× redundant" overall while all of that sits in
 two nodes and the rest is 1.0×.
 
-Nothing in this tab changes what the application computes. It measures a
-redundancy that is real today, so that it can be judged where — and whether —
-removing it would be worth it.
+Nothing in this tab changes what the application computes.
 
 The strip above the table reports the **self-check**: an expensive, off-by-
 default verification that two evaluations the profiler considers "the same
@@ -465,8 +510,11 @@ own reasoning rather than your design — a clean run means the redundancy numbe
 above can be trusted, and a violation means they cannot.
 
 Switch it on with the toggle at the left of the strip, then take a profiled
-refresh. It needs **Per-node** on as well, and it is markedly slower than
-ordinary profiling — it summarises every result the pass produces and keeps one
+refresh. It needs **Per-node** on as well, and it can only be armed with the
+[evaluation memo](#the-evaluation-memo-and-its-off-switch) **off** — the check
+compares two computations of the same situation, and the memo serves the second
+from the first, so under a memo it would pass without testing anything. It is
+markedly slower than ordinary profiling — it summarises every result the pass produces and keeps one
 summary per distinct situation — so switch it back off when you go back to
 measuring time. On a very large pass the sampling stops at a ceiling and the
 strip says so; a clean result then covers only the part of the pass that was
@@ -691,6 +739,7 @@ other preference.
 | CSG mesh cache (MB) | Converted 3D geometry meshes kept for reuse. Default 200 MB. Lowering it makes geometry-heavy designs slower to evaluate. |
 | CSG sketch cache (MB) | Converted 2D geometry sketches kept for reuse. Default 56 MB. Lowering it makes sketch-heavy designs slower to evaluate. |
 | Hidden node scene cache (MB) | Scene data kept for nodes you have hidden, so making them visible again is instant instead of a re-evaluation. Default 256 MB. |
+| Evaluation memo (MB) | Results kept **during a single refresh** so that a node feeding several others is computed once instead of once per consumer (see [Cost model](./node_networks.md#cost-model-how-often-a-node-is-computed)). Default 1024 MB. Unlike the other three this table is built and discarded within one refresh, so the number is a ceiling on a peak rather than memory atomCAD holds on to — which is why the default is larger: a single million-atom structure can be tens or hundreds of megabytes on its own. |
 
 ## Import from library .cnnd files
 

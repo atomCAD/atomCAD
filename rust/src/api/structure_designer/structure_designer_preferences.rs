@@ -520,6 +520,15 @@ pub struct MemoryPreferences {
     #[frb(non_final)]
     #[serde(default = "default_invisible_node_cache_mb")]
     pub invisible_node_cache_mb: u32,
+
+    /// The **per-pass evaluation memo** (`doc/design_eval_memoization.md` D11).
+    /// Default 1024 MB — larger than its siblings because a single
+    /// million-atom `AtomicStructure` runs to tens or hundreds of megabytes.
+    /// The allocation is transient: the table is built at the start of a
+    /// refresh pass and dropped at its end.
+    #[frb(non_final)]
+    #[serde(default = "default_eval_memo_cache_mb")]
+    pub eval_memo_cache_mb: u32,
 }
 
 fn default_csg_mesh_cache_mb() -> u32 {
@@ -531,6 +540,9 @@ fn default_csg_sketch_cache_mb() -> u32 {
 fn default_invisible_node_cache_mb() -> u32 {
     256
 }
+fn default_eval_memo_cache_mb() -> u32 {
+    1024
+}
 
 impl Default for MemoryPreferences {
     fn default() -> Self {
@@ -538,6 +550,7 @@ impl Default for MemoryPreferences {
             csg_mesh_cache_mb: default_csg_mesh_cache_mb(),
             csg_sketch_cache_mb: default_csg_sketch_cache_mb(),
             invisible_node_cache_mb: default_invisible_node_cache_mb(),
+            eval_memo_cache_mb: default_eval_memo_cache_mb(),
         }
     }
 }
@@ -884,6 +897,7 @@ impl From<&MemoryPreferences> for domain::MemoryPreferences {
             csg_mesh_cache_mb: p.csg_mesh_cache_mb,
             csg_sketch_cache_mb: p.csg_sketch_cache_mb,
             invisible_node_cache_mb: p.invisible_node_cache_mb,
+            eval_memo_cache_mb: p.eval_memo_cache_mb,
         }
     }
 }
@@ -894,6 +908,7 @@ impl From<&domain::MemoryPreferences> for MemoryPreferences {
             csg_mesh_cache_mb: p.csg_mesh_cache_mb,
             csg_sketch_cache_mb: p.csg_sketch_cache_mb,
             invisible_node_cache_mb: p.invisible_node_cache_mb,
+            eval_memo_cache_mb: p.eval_memo_cache_mb,
         }
     }
 }

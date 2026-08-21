@@ -24,6 +24,7 @@ use super::undo::snapshot::PendingMove;
 use super::undo::{UndoCommand, UndoContext, UndoRefreshMode, UndoStack};
 use crate::data_type::DataType;
 use crate::displayed_node_refs::collect_displayed_node_refs;
+use crate::evaluator::eval_memo::{self, MemoCounts};
 use crate::evaluator::eval_profiler::{self, EvalProfile, SelfCheckKeyMode};
 use crate::implicit_eval::ray_tracing::{raytrace_geometries, raytrace_geometry};
 use crate::node_data::CustomNodeData;
@@ -293,6 +294,28 @@ pub struct StructureDesigner {
     // subsequent non-refresh pass (CLI, Execute) cannot re-report a stale
     // table.
     last_eval_profile: Option<Arc<EvalProfile>>,
+
+    // The per-pass evaluation memo's off switch
+    // (`doc/design_eval_memoization.md` D10).
+    //
+    // The memo is the one change in that design that can turn a correct network
+    // into a wrong one *silently* — a stale or over-shared entry produces a
+    // plausible value, not a crash — and the only way to answer "is this a memo
+    // bug or is my network wrong?" is to recompute the same design without it
+    // and compare, in the same session, on the state that provoked it.
+    //
+    // Three deliberate differences from `eval_profiling_enabled`, which it
+    // otherwise mirrors: it **defaults on** (it is the product's behaviour),
+    // toggling it forces a full refresh (a per-pass memo only shows its effect
+    // on the next pass), and it is session state for the *opposite* reason the
+    // profiler flag is — profiling must not silently stay *on* and skew later
+    // measurements, while a session quietly running 8x slower forever is the
+    // worse failure.
+    pub eval_memo_enabled: bool,
+
+    // What the most recent pass's memo did, parked here for the same reason and
+    // taken by the same paths as `last_eval_profile`.
+    last_memo_counts: Option<MemoCounts>,
 }
 
 impl Default for StructureDesigner {
@@ -354,6 +377,8 @@ impl StructureDesigner {
             eval_profiling_enabled: false,
             eval_self_check_enabled: false,
             eval_self_check_key_mode: SelfCheckKeyMode::Full,
+            eval_memo_enabled: true,
+            last_memo_counts: None,
             last_eval_profile: None,
         }
     }
@@ -400,6 +425,13 @@ impl StructureDesigner {
                 EvalProfile::default()
             }
         }));
+        // The per-pass memo lives in its own thread-local for exactly the same
+        // reason (D7): a context-owned table would be handed fresh and empty to
+        // every eager-HOF body and discarded by `drain_inner_context`, so
+        // bodies would memoize nothing and it would look like a tuning problem.
+        eval_memo::install(self.eval_memo_enabled.then(|| {
+            MemoryPreferences::clamped_bytes(self.preferences.memory_preferences.eval_memo_cache_mb)
+        }));
         let mut context = NetworkEvaluationContext::new();
         context.execute = execute;
         context.use_vdw_cutoff = self.preferences.simulation_preferences.use_vdw_cutoff;
@@ -419,7 +451,47 @@ impl StructureDesigner {
         let entries = std::mem::take(&mut context.print_buffer);
         self.print_log.extend(entries);
         self.last_eval_profile = eval_profiler::take().map(Arc::new);
+        // Harvest before the table is dropped — there is no `get_memo_stats()`
+        // to call afterwards, because the memo does not outlive the pass (D10).
+        self.last_memo_counts = eval_memo::take();
         result
+    }
+
+    /// Switches the evaluation memo on or off for subsequent passes (D10).
+    ///
+    /// Returns `true` when an armed self-check had to be **disarmed** to let the
+    /// memo run, so the caller can say so. The asymmetry with
+    /// [`Self::try_set_eval_self_check_enabled`] is deliberate: the memo is the
+    /// product's behaviour and a diagnostic must not block it, while a
+    /// self-check left silently armed under a memo reports a vacuous green —
+    /// once the memo serves the second request *from* the first result there is
+    /// no second computation to compare.
+    pub fn set_eval_memo_enabled(&mut self, enabled: bool) -> bool {
+        self.eval_memo_enabled = enabled;
+        let disarmed = enabled && self.eval_self_check_enabled;
+        if disarmed {
+            self.eval_self_check_enabled = false;
+        }
+        disarmed
+    }
+
+    /// Arms or disarms the equal-key/equal-result self-check, refusing to arm it
+    /// while the memo is on (D10's hard gate). Returns whether the request was
+    /// honoured.
+    ///
+    /// A gate rather than auto-forcing the memo off for the pass, which is what
+    /// `doc/design_eval_profiling.md` D11 originally proposed: auto-forcing
+    /// makes one switch have two effects and the second one invisible — the
+    /// pass's *Self*, *Total* and *Phases* numbers would silently become
+    /// memo-off numbers, a profile 8x slower than the product for a reason
+    /// recorded nowhere in the row, sitting in the same history ring as
+    /// comparable ones.
+    pub fn try_set_eval_self_check_enabled(&mut self, enabled: bool) -> bool {
+        if enabled && self.eval_memo_enabled {
+            return false;
+        }
+        self.eval_self_check_enabled = enabled;
+        true
     }
 
     /// Drain and return the accumulated print log entries. Called from FFI
@@ -1405,6 +1477,7 @@ impl StructureDesigner {
         // refresh that turned out to need no evaluation would `take()` an
         // Execute pass's table and report it as its own.
         self.last_eval_profile = None;
+        self.last_memo_counts = None;
 
         // CSG conversion-cache activity caused by this refresh (D12). Measured
         // around the whole dispatch so it covers every path that can convert.
@@ -1432,6 +1505,11 @@ impl StructureDesigner {
                     gadget_ms: elapsed_ms(gadget_start),
                     node_stats: None,
                     csg_cache: CsgCacheDelta::default(),
+                    // No pass ran, so no memo existed. `enabled: false` here
+                    // means "there was nothing to memoize", not "the memo is
+                    // switched off" — a lightweight row carries no eval time
+                    // either.
+                    memo: MemoCounts::default(),
                 }
             }
 
@@ -1583,6 +1661,7 @@ impl StructureDesigner {
             // re-report this table.
             node_stats: self.last_eval_profile.take(),
             csg_cache: CsgCacheDelta::default(),
+            memo: self.last_memo_counts.take().unwrap_or_default(),
         }
     }
 
@@ -1835,6 +1914,7 @@ impl StructureDesigner {
             // re-report this table.
             node_stats: self.last_eval_profile.take(),
             csg_cache: CsgCacheDelta::default(),
+            memo: self.last_memo_counts.take().unwrap_or_default(),
         }
     }
 

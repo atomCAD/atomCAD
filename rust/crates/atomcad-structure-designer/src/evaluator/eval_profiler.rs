@@ -111,13 +111,34 @@ pub struct RecordFlags {
     /// different results, which is the one case where the key is genuinely
     /// insufficient.
     pub under_reentrancy_backstop: bool,
+    /// The node is a **custom-network instance**, and at least one request for
+    /// it went through `evaluate`'s single-pin custom-network arm.
+    /// `doc/design_eval_memoization.md` D2 forbids inserting from that arm — it
+    /// forwards one `output_pin_index` to the child's return node and never
+    /// holds the complete `EvalOutput` the key promises — so such a row can
+    /// legitimately show `evaluations == lookups` with the memo working
+    /// perfectly. Unflagged, *every subnetwork instance in every design would
+    /// read as a memo bug*. That the cost is usually small (the expensive work
+    /// re-enters and hits at the child's return node) is why it is flagged
+    /// rather than fixed.
+    pub subnetwork: bool,
+    /// A request for this node missed on a key the memo had held earlier in the
+    /// pass: the LRU dropped the entry and the work was redone (D6/D10).
+    /// Without this, memory pressure is indistinguishable from a correctness
+    /// bug, and Phase 5's trigger has no signal to fire on.
+    pub evicted: bool,
 }
 
 impl RecordFlags {
-    /// Whether the memo would decline to cache this node's results, i.e.
-    /// whether `wasted_ns` overstates the achievable saving.
+    /// Whether this row's `wasted_ns` overstates the achievable saving — the
+    /// four reasons a row can legitimately re-evaluate in one environment.
+    ///
+    /// The first two are properties of the *result* (an iterator must not be
+    /// stored; a result produced under the cycle backstop must not be), the
+    /// last two of the *pass* (an arm that cannot insert; a budget that could
+    /// not hold what it inserted).
     pub fn uncacheable(&self) -> bool {
-        self.produced_iterator || self.under_reentrancy_backstop
+        self.produced_iterator || self.under_reentrancy_backstop || self.subnetwork || self.evicted
     }
 }
 
@@ -163,9 +184,15 @@ impl NodeProfileRecord {
     /// and `lookups - distinct_envs` is how many of those computations were
     /// avoidable.
     ///
-    /// Zero once the memo is doing its job (`lookups == distinct_envs` per
-    /// environment), which is exactly the acceptance criterion
-    /// `doc/design_eval_memoization.md` states.
+    /// **Numerically unchanged by the memo**, which is easy to misread as a
+    /// bug. `lookups` do not fall when evaluations do — they measure demand —
+    /// and `self_ns` now accumulates over one evaluation instead of twelve,
+    /// with the division by `evaluations` restoring the same per-computation
+    /// mean. What flips is the *tense*: with the memo off this is the saving
+    /// **available**, with it on the saving **realized**
+    /// (`doc/design_eval_memoization.md` D10). The acceptance criterion is
+    /// stated over `evaluations == distinct_envs`, not over this reaching
+    /// zero — it never does.
     pub fn wasted_ns(&self) -> u64 {
         if self.evaluations == 0 {
             return 0;
@@ -402,6 +429,21 @@ impl EvalProfile {
     pub fn self_check_violations(&self) -> &[SelfCheckViolation] {
         &self.self_check_violations
     }
+
+    /// **The acceptance criterion of `doc/design_eval_memoization.md`, as one
+    /// number**: rows that re-evaluated within a single environment without a
+    /// flag excusing it.
+    ///
+    /// With the memo on this reads zero. Computed here rather than in the panel
+    /// so the criterion is testable without a UI, and so the population it is
+    /// computed over — *unflagged* rows only — has exactly one definition.
+    pub fn unmemoized_offender_count(&self) -> usize {
+        self.records
+            .iter()
+            .filter(|record| !record.flags.uncacheable())
+            .filter(|record| record.evaluations > record.distinct_envs)
+            .count()
+    }
 }
 
 /// One row of the "By node type" table — a roll-up of every
@@ -462,11 +504,17 @@ pub fn install(profile: Option<EvalProfile>) {
 /// when armed adds one result summary per evaluation plus one retained summary
 /// per distinct environment (bounded by [`MAX_SELF_CHECK_SAMPLES`]).
 ///
-/// **The check only means anything with the memo disabled** (D11). Once a memo
+/// **The check only means anything with the memo disabled** (D11). Once the memo
 /// serves the second request from the first result there is no second
-/// computation to compare, and the check passes vacuously. There is no memo
-/// yet, so every pass it runs on is a real test; when one lands, arming this
-/// must force it off for the pass and the panel must say so.
+/// computation to compare, and the check passes vacuously.
+///
+/// That is enforced by a **hard gate**, not by forcing the memo off for the
+/// pass: `StructureDesigner::try_set_eval_self_check_enabled` refuses to arm the
+/// check while `eval_memo_enabled` is on, and `set_eval_memo_enabled(true)`
+/// disarms an armed check. Auto-forcing would make one switch have two effects
+/// and the second one invisible — the pass's *Self*, *Total* and *Phases*
+/// numbers would silently become memo-off numbers, sitting in the same history
+/// ring as comparable ones (`doc/design_eval_memoization.md` D10).
 pub fn profile_with_self_check() -> EvalProfile {
     profile_with_self_check_mode(SelfCheckKeyMode::Full)
 }
@@ -610,6 +658,29 @@ impl NodeEvalGuard {
             }
         });
     }
+
+    /// Flag this row as a **custom-network instance** whose request went
+    /// through `evaluate`'s single-pin arm, which
+    /// `doc/design_eval_memoization.md` D2 forbids inserting from. See
+    /// [`RecordFlags::subnetwork`] for why an unflagged row would read as a
+    /// memo bug.
+    pub fn note_subnetwork(&self) {
+        self.set_flag(|flags| flags.subnetwork = true);
+    }
+
+    /// Flag this row as having been recomputed after the memo's LRU dropped an
+    /// entry it had held (D6/D10).
+    pub fn note_evicted(&self) {
+        self.set_flag(|flags| flags.evicted = true);
+    }
+
+    fn set_flag(&self, apply: impl FnOnce(&mut RecordFlags)) {
+        PROFILE.with_borrow_mut(|slot| {
+            if let Some(profile) = slot.as_mut() {
+                apply(&mut profile.records[self.record_index as usize].flags);
+            }
+        });
+    }
 }
 
 /// The self-check's notion of "same result" (D11).
@@ -740,7 +811,53 @@ pub fn begin(
         Some(SelfCheckKeyMode::OmitDecorate) => eval_env_key(network_stack, node_id, false),
         _ => env_key,
     };
-    let record_index = PROFILE.with_borrow_mut(|slot| {
+    let record_index = count_lookup(network_stack, node_id, scope_path, key, env_key, true)?;
+    Some(NodeEvalGuard {
+        start: Instant::now(),
+        record_index,
+        self_check_key,
+    })
+}
+
+/// Count a request that the **evaluation memo served from a previous
+/// evaluation** (`doc/design_eval_memoization.md` D10).
+///
+/// A hit is a `lookup` and an environment visit, but *not* an `evaluation`: it
+/// must therefore not open a [`NodeEvalGuard`], whose `Drop` is what increments
+/// `evaluations` and pops a child-accumulator frame. The divergence between the
+/// two columns is the memo's hit count, which is the whole reason they were
+/// separate fields before there was a memo.
+///
+/// The clone the hit pays for lands in the *consumer's* self time, because no
+/// frame is opened for the producer. That is the honest attribution: with the
+/// memo on, serving the value is the consumer's cost, not a second evaluation
+/// of the producer.
+pub fn note_memo_hit(
+    network_stack: &[NetworkStackElement],
+    node_id: u64,
+    scope_path: &[u64],
+    decorate: bool,
+) {
+    if !is_enabled() {
+        return;
+    }
+    let key = crate::evaluator::network_evaluator::node_profile_key(network_stack, node_id);
+    let env_key = eval_env_key(network_stack, node_id, decorate);
+    count_lookup(network_stack, node_id, scope_path, key, env_key, false);
+}
+
+/// The bookkeeping shared by [`begin`] and [`note_memo_hit`]: find or create the
+/// row, count the lookup and the environment, and — only for a real evaluation
+/// — push the child-accumulator frame the guard's `Drop` will pop.
+fn count_lookup(
+    network_stack: &[NetworkStackElement],
+    node_id: u64,
+    scope_path: &[u64],
+    key: NodeProfileKey,
+    env_key: EvalEnvKey,
+    open_frame: bool,
+) -> Option<u32> {
+    PROFILE.with_borrow_mut(|slot| {
         let profile = slot.as_mut()?;
         let record_index = match profile.index.get(&key) {
             Some(index) => *index,
@@ -781,13 +898,10 @@ pub fn begin(
         } else {
             profile.envs_truncated = true;
         }
-        profile.child_acc.push(0);
+        if open_frame {
+            profile.child_acc.push(0);
+        }
         Some(record_index)
-    })?;
-    Some(NodeEvalGuard {
-        start: Instant::now(),
-        record_index,
-        self_check_key,
     })
 }
 

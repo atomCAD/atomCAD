@@ -131,6 +131,7 @@ class _ProfilerPanelState extends State<ProfilerPanel>
             style: TextButton.styleFrom(foregroundColor: Colors.white70),
           ),
           _PerNodeToggle(model: model),
+          _MemoToggle(model: model),
           InkWell(
             onTap: () => model.toggleProfilerPanel(),
             child: const Tooltip(
@@ -176,6 +177,56 @@ class _PerNodeToggle extends StatelessWidget {
                   style: TextStyle(
                       fontSize: 11,
                       color: on ? Colors.white70 : Colors.white38)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The evaluation memo's off switch, mirrored from the *View* menu entry.
+///
+/// It sits beside *Per-node* because the two are used together, but it is the
+/// opposite kind of switch: the profiler is a diagnostic that defaults off, and
+/// the memo is the product's behaviour that defaults **on**. The colouring says
+/// so — an *off* memo is amber, not grey, because it is the abnormal state and
+/// the one that makes every later measurement 8x slower.
+class _MemoToggle extends StatelessWidget {
+  const _MemoToggle({required this.model});
+
+  final StructureDesignerModel model;
+
+  @override
+  Widget build(BuildContext context) {
+    final on = model.evalMemoEnabled;
+    return Tooltip(
+      message: on
+          ? 'The evaluation memo is on (the normal state): a node feeding '
+              'several others is computed once per refresh.\n'
+              'Switch it off to recompute the same design without sharing — '
+              'the way to tell a memo bug from a wrong network.'
+          : 'The evaluation memo is OFF. Every shared node is recomputed once '
+              'per consumer, which can be many times slower.\n'
+              'This is a diagnostic state; switch it back on when you are '
+              'done comparing.',
+      child: InkWell(
+        key: const Key('eval_memo_toggle'),
+        onTap: () => model.setEvalMemoEnabled(!on),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(on ? Icons.toggle_on : Icons.toggle_off,
+                  size: 18,
+                  color:
+                      on ? const Color(0xFF7BC67B) : const Color(0xFFD8A05A)),
+              const SizedBox(width: 4),
+              Text('Memo',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: on ? Colors.white70 : const Color(0xFFD8A05A))),
             ],
           ),
         ),
@@ -317,15 +368,28 @@ String _ms(double value) {
   return value.toStringAsFixed(2);
 }
 
+/// Whether the evaluation memo declined — or failed — to serve this row, i.e.
+/// whether its repeated evaluations are excused.
+///
+/// Four reasons, and none of them is optional: an unexcused row that
+/// re-evaluates within one environment is a memo bug, and that reading is only
+/// meaningful if every legitimate reason is marked.
+bool _rowFlagged(APINodeProfileRecord row) =>
+    row.producedIterator ||
+    row.underReentrancyBackstop ||
+    row.subnetwork ||
+    row.evicted;
+
 /// `Wasted` for one row — **“—” when the memo would not cache the node.**
 ///
 /// A flagged row's projected saving is not money on the table: iterator
-/// producers are excluded from the memo for memory reasons, and a result
-/// produced under the re-entrancy backstop must never be stored at all.
-/// Printing a number there would invite chasing a saving that cannot be
-/// collected.
+/// producers are excluded from the memo for memory reasons, a result produced
+/// under the re-entrancy backstop must never be stored at all, a subnetwork
+/// instance's single-pin arm cannot store a complete output, and an evicted
+/// row's saving was available but the budget could not hold it. Printing a
+/// number there would invite chasing a saving that cannot be collected.
 String _wasted(APINodeProfileRecord row) {
-  if (row.producedIterator || row.underReentrancyBackstop) return '—';
+  if (_rowFlagged(row)) return '—';
   return _ms(row.wastedMs);
 }
 
@@ -333,6 +397,8 @@ String _wasted(APINodeProfileRecord row) {
 String _flagNote(APINodeProfileRecord row) {
   if (row.underReentrancyBackstop) return 'cycle';
   if (row.producedIterator) return 'iterator';
+  if (row.evicted) return 'evicted';
+  if (row.subnetwork) return 'subnetwork';
   return '';
 }
 
@@ -602,8 +668,8 @@ class _RedundancyTab extends StatelessWidget {
     // Ranked by Wasted — the projected saving — with the rows the memo would
     // not cache sorted last rather than hidden: they are still measurements.
     final sorted = [...profile.byNode]..sort((a, b) {
-        final aFlagged = a.producedIterator || a.underReentrancyBackstop;
-        final bFlagged = b.producedIterator || b.underReentrancyBackstop;
+        final aFlagged = _rowFlagged(a);
+        final bFlagged = _rowFlagged(b);
         if (aFlagged != bFlagged) return aFlagged ? 1 : -1;
         return b.wastedMs.compareTo(a.wastedMs);
       });
@@ -633,9 +699,7 @@ class _RedundancyTab extends StatelessWidget {
                     _wasted(row),
                     _flagNote(row),
                   ],
-                  dimmed: !row.navigable ||
-                      row.producedIterator ||
-                      row.underReentrancyBackstop,
+                  dimmed: !row.navigable || _rowFlagged(row),
                   onTap: row.navigable
                       ? () => _ByNodeTab._jumpToRecord(model, row)
                       : null,
@@ -657,8 +721,8 @@ class _RedundancyTab extends StatelessWidget {
           '${_ms(profile.projectedSavingMs)} ms. An environment is the call '
           'stack extended with the iteration of each enclosing loop, so a body '
           'node run once per element reads 1.0× — that is not redundancy. Rows '
-          'marked “iterator” or “cycle” are counted but would not be cached, so '
-          'their Wasted shows “—”.');
+          'marked “iterator”, “cycle”, “subnetwork” or “evicted” are counted '
+          'but were not served from the memo, so their Wasted shows “—”.');
     if (profile.envsTruncated) {
       buffer.write(' ⚠ Environment tracking hit its ceiling: the environment '
           'counts are floors and the factors are upper bounds.');
@@ -697,12 +761,22 @@ class _SelfCheckBar extends StatelessWidget {
       color = const Color(0xFFD8C07A);
     } else if (ran) {
       status = 'Self-check: clean — every pair of evaluations sharing an '
-          'environment produced the same result (no memo is running, so this '
-          'is a real test)';
+          'environment produced the same result (the check can only be armed '
+          'with the memo off, so this is a real test rather than a vacuous one)';
       color = const Color(0xFF7BC67B);
     } else if (model.evalSelfCheckEnabled) {
       status = 'Self-check: armed — it runs on the next profiled pass.';
       color = Colors.white38;
+    } else if (model.evalMemoEnabled) {
+      // The D10 hard gate. Arming is refused rather than silently forcing the
+      // memo off for the pass: that would make one switch have two effects,
+      // and the second one — a profile 8x slower than the product, sitting in
+      // the same history ring as comparable ones — would be invisible.
+      status = 'Self-check: unavailable while the evaluation memo is on. The '
+          'check compares two computations of one environment, and the memo '
+          'serves the second from the first — so it would pass vacuously. '
+          'Switch “Memo” off above to arm it.';
+      color = const Color(0xFFD8A05A);
     } else {
       status = 'Self-check: off. Arming it validates the environment key '
           'against real designs; it costs a result summary per evaluation and '
@@ -719,8 +793,13 @@ class _SelfCheckBar extends StatelessWidget {
         children: [
           InkWell(
             key: const Key('eval_self_check_toggle'),
-            onTap: () =>
-                model.setEvalSelfCheckEnabled(!model.evalSelfCheckEnabled),
+            // Inert while the memo is on: the kernel refuses the arm, and an
+            // affordance that silently does nothing is worse than one that is
+            // visibly unavailable with the reason spelled out beside it.
+            onTap: (model.evalMemoEnabled && !model.evalSelfCheckEnabled)
+                ? null
+                : () =>
+                    model.setEvalSelfCheckEnabled(!model.evalSelfCheckEnabled),
             child: Padding(
               padding: const EdgeInsets.only(right: 6),
               child: Icon(

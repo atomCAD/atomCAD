@@ -353,6 +353,38 @@ class StructureDesignerModel extends ChangeNotifier {
   /// that is compiled out there could never be run against a real design.
   bool evalSelfCheckEnabled = false;
 
+  /// Whether the **per-pass evaluation memo** is on
+  /// (`doc/design_eval_memoization.md` D10).
+  ///
+  /// Three deliberate differences from [evalProfilingEnabled], which it
+  /// otherwise mirrors:
+  ///
+  /// - **It defaults on.** The memo is the product's behaviour; the profiler's
+  ///   is not.
+  /// - **Session state for the opposite reason.** Profiling must not silently
+  ///   stay *on* across sessions and skew later measurements; the memo must not
+  ///   silently stay *off*, because a session quietly running 8x slower forever
+  ///   is the worse failure.
+  /// - **Toggling forces a full refresh**, because a per-pass memo only shows
+  ///   its effect on the next pass.
+  ///
+  /// The switch exists because the memo is the one change that can turn a
+  /// correct network into a wrong one *silently* — a stale entry produces a
+  /// plausible value, not a crash — and the only way to answer "memo bug or my
+  /// network?" is to recompute without it and compare, in the same session, on
+  /// the state that provoked it.
+  bool evalMemoEnabled = true;
+
+  /// [evalMemoEnabled], mirrored for the always-on refresh strip.
+  ///
+  /// The strip deliberately does **not** rebuild with the model (see
+  /// [refreshProfile]), so it cannot read the field directly. A second
+  /// notifier costs nothing — the memo switch changes a handful of times per
+  /// session — and keeps the "memo off" marker visible outside the profiler
+  /// panel, which is what stops the maintainer from later spending an
+  /// afternoon on a performance regression they switched on themselves.
+  final ValueNotifier<bool> evalMemoEnabledNotifier = ValueNotifier(true);
+
   /// Latest refresh phase breakdown, for the always-on status strip
   /// (`doc/design_eval_profiling.md` D8a).
   ///
@@ -3447,10 +3479,35 @@ class StructureDesignerModel extends ChangeNotifier {
 
   /// Arms or disarms the equal-key/equal-result self-check. Takes effect on the
   /// next profiled pass.
+  ///
+  /// Arming is **refused while the memo is on** (`doc/design_eval_memoization.md`
+  /// D10): once the memo serves the second request from the first result there
+  /// is no second computation to compare and the check passes vacuously. The
+  /// kernel owns that gate; this mirrors whatever it decided rather than
+  /// second-guessing it, so a refusal shows up as the toggle staying off.
   void setEvalSelfCheckEnabled(bool enabled) {
-    profiling_api.setEvalSelfCheckEnabled(enabled: enabled);
-    evalSelfCheckEnabled = enabled;
+    final accepted = profiling_api.setEvalSelfCheckEnabled(enabled: enabled);
+    evalSelfCheckEnabled = accepted ? enabled : evalSelfCheckEnabled;
     notifyListeners();
+  }
+
+  /// Switches the evaluation memo on or off. The kernel forces one **full**
+  /// refresh so the effect is visible on the very next reading — comparing a
+  /// memo-off partial refresh against a memo-on full one measures nothing.
+  ///
+  /// Switching the memo *on* disarms an armed self-check, and says so: the memo
+  /// is the product's behaviour and a diagnostic must not block it, while a
+  /// check left silently armed under a memo is exactly the vacuous green the
+  /// gate exists to prevent.
+  void setEvalMemoEnabled(bool enabled) {
+    final disarmedSelfCheck =
+        profiling_api.setEvalMemoEnabled(enabled: enabled);
+    evalMemoEnabled = enabled;
+    evalMemoEnabledNotifier.value = enabled;
+    if (disarmedSelfCheck) {
+      evalSelfCheckEnabled = false;
+    }
+    refreshFromKernel();
   }
 
   /// Arms the profiler and forces one **full** refresh, so two readings taken

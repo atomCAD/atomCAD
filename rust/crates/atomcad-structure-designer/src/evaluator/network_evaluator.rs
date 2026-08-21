@@ -6,6 +6,7 @@ use std::time::SystemTime;
 use crate::common_constants::ARRAY_DISPLAY_CAP;
 use crate::data_type::DataType;
 use crate::eval_errors::{ErrorAddress, ErrorOrigin};
+use crate::evaluator::eval_memo;
 use crate::evaluator::eval_profiler;
 use crate::evaluator::network_result::NetworkResult;
 use crate::evaluator::network_result::{error_in_input, error_in_input_chained};
@@ -417,7 +418,7 @@ fn eval_frame_key(network_stack: &[NetworkStackElement], node_id: u64) -> EvalFr
 ///
 /// **128 bits, unlike the other two keys**, because this is the one whose
 /// collision returns a *wrong value* rather than a spurious error or a merged
-/// table row. `doc/design_eval_memoization.md` D2 keys a result cache on it: two
+/// table row. [`crate::evaluator::eval_memo`] keys its result table on it: two
 /// distinct environments hashing equal would serve one node's result for
 /// another's. At 64 bits the birthday bound over the ~10^6 environments a large
 /// pass can produce is around 10^-7 per pass — small, but it buys a silent
@@ -2220,6 +2221,25 @@ impl NetworkEvaluator {
         if let Some(msg) = Self::check_node_poisoned(network_stack, node_id, context) {
             return EvalOutput::single(NetworkResult::Error(msg));
         }
+        // The per-pass memo (`doc/design_eval_memoization.md` D1/D2/D7). Ahead
+        // of the re-entrancy bracket on purpose: a hit recurses into nothing, so
+        // it needs no guard entry and no matching removal on the early return.
+        // The poison check stays ahead of *it* — a poisoned node's synthesized
+        // error is never stored.
+        let mut memo_key = 0u128;
+        let mut memo_evicted = false;
+        if eval_memo::is_enabled() {
+            memo_key = eval_env_key(network_stack, node_id, decorate);
+            if let Some(output) = eval_memo::lookup(memo_key, &mut memo_evicted) {
+                eval_profiler::note_memo_hit(
+                    network_stack,
+                    node_id,
+                    &context.eval_scope_path,
+                    decorate,
+                );
+                return output;
+            }
+        }
         let frame_key = eval_frame_key(network_stack, node_id);
         if !context.eval_in_progress.insert(frame_key) {
             let msg =
@@ -2231,6 +2251,7 @@ impl NetworkEvaluator {
             // one the memo must never store (`doc/design_eval_memoization.md`
             // D9), so its `wasted_ns` is not an available saving (D10).
             eval_profiler::note_reentrancy_backstop(network_stack, node_id);
+            eval_memo::note_declined();
             return EvalOutput::single(NetworkResult::Error(msg));
         }
         // Per-node profiler frame (`doc/design_eval_profiling.md` D3/D4).
@@ -2240,6 +2261,9 @@ impl NetworkEvaluator {
         // the `Unit`-skip and the two custom-network bails.
         let profiler_frame =
             eval_profiler::begin(network_stack, node_id, &context.eval_scope_path, decorate);
+        if memo_evicted && let Some(frame) = &profiler_frame {
+            frame.note_evicted();
+        }
         {
             let node = NetworkStackElement::get_top_node(network_stack, node_id);
 
@@ -2274,7 +2298,22 @@ impl NetworkEvaluator {
                         let key = context.node_ref(node_id);
                         context.node_output_strings.insert(key, pin_strings);
                         context.eval_in_progress.remove(&frame_key);
-                        return EvalOutput::multi(results);
+                        let output = EvalOutput::multi(results);
+                        // D5 says a skipped `Unit` output *needs* no entry, and
+                        // that is true — it is synthesized, not computed. We
+                        // store it anyway, for one entry's worth of memory: an
+                        // unstored one re-"evaluates" on every request, and an
+                        // unflagged row with `evaluations > distinct_envs` is
+                        // indistinguishable from a memo bug in the acceptance
+                        // criterion (D10).
+                        if eval_memo::is_enabled() {
+                            eval_memo::insert(
+                                memo_key,
+                                eval_memo::owning_epoch(network_stack),
+                                &output,
+                            );
+                        }
+                        return output;
                     }
                 }
             }
@@ -2427,6 +2466,19 @@ impl NetworkEvaluator {
                 frame.note_results(&eval_output.results, true);
             }
 
+            // Store the **complete** output (D2). Every arm reaching here has
+            // one — including the custom-network arm, which passes the child
+            // return node's whole `EvalOutput` through. It is `evaluate`'s
+            // single-pin custom-network arm, not this one, that D2 forbids
+            // inserting from.
+            if eval_memo::is_enabled() {
+                eval_memo::insert(
+                    memo_key,
+                    eval_memo::owning_epoch(network_stack),
+                    &eval_output,
+                );
+            }
+
             context.eval_in_progress.remove(&frame_key);
             eval_output
         }
@@ -2489,6 +2541,33 @@ impl NetworkEvaluator {
         if let Some(msg) = Self::check_node_poisoned(network_stack, node_id, context) {
             return NetworkResult::Error(msg);
         }
+        // The per-pass memo, projected onto the requested pin (D2/D7). Placed
+        // ahead of the re-entrancy bracket for the same reason as in
+        // `evaluate_all_outputs`: a hit recurses into nothing.
+        //
+        // **The `-1` function pin is excluded from both halves.** It returns a
+        // synthesized `NetworkResult::Function`, not a projection of the node's
+        // `eval` output, and the environment key does not carry the pin index —
+        // so a `-1` request that consulted the memo could be served a normal
+        // result, and a `-1` result stored under that key would be served to
+        // ordinary consumers.
+        let memo_active = eval_memo::is_enabled() && output_pin_index >= 0;
+        let mut memo_key = 0u128;
+        let mut memo_evicted = false;
+        if memo_active {
+            memo_key = eval_env_key(network_stack, node_id, decorate);
+            if let Some(result) =
+                eval_memo::lookup_pin(memo_key, output_pin_index, &mut memo_evicted)
+            {
+                eval_profiler::note_memo_hit(
+                    network_stack,
+                    node_id,
+                    &context.eval_scope_path,
+                    decorate,
+                );
+                return result;
+            }
+        }
         // See the STACK-SIZE WARNING on `evaluate_all_outputs`: every `return`
         // between this insert and the removal at the tail must run
         // `context.eval_in_progress.remove(&frame_key)` first.
@@ -2501,6 +2580,7 @@ impl NetworkEvaluator {
                 .insert(context.node_ref(node_id), msg.clone());
             // See the matching arm in `evaluate_all_outputs`.
             eval_profiler::note_reentrancy_backstop(network_stack, node_id);
+            eval_memo::note_declined();
             return NetworkResult::Error(msg);
         }
         // Per-node profiler frame — see the matching comment in
@@ -2513,6 +2593,9 @@ impl NetworkEvaluator {
         // not a computed result.)
         let profiler_frame =
             eval_profiler::begin(network_stack, node_id, &context.eval_scope_path, decorate);
+        if memo_evicted && let Some(frame) = &profiler_frame {
+            frame.note_evicted();
+        }
         {
             // Function pin (`output_pin_index == -1`): synthesize a `Function`
             // value from this node viewed as a function of its *unconnected* inputs,
@@ -2571,6 +2654,17 @@ impl NetworkEvaluator {
                             let key = context.node_ref(node_id);
                             context.node_output_strings.insert(key, pin_strings);
                             context.eval_in_progress.remove(&frame_key);
+                            // Stored for the same reason as the matching arm in
+                            // `evaluate_all_outputs`: a synthesized output is
+                            // cheap, but an *unstored* one makes the node read
+                            // as an unflagged memo failure (D10).
+                            if memo_active {
+                                eval_memo::insert(
+                                    memo_key,
+                                    eval_memo::owning_epoch(network_stack),
+                                    &EvalOutput::multi(vec![NetworkResult::Unit; pin_count]),
+                                );
+                            }
                             return NetworkResult::Unit;
                         }
                     }
@@ -2619,6 +2713,18 @@ impl NetworkEvaluator {
                     if let Some(frame) = &profiler_frame {
                         frame.note_results(&eval_output.results, true);
                     }
+                    // D2's other insert site: the built-in arm, where the
+                    // complete `EvalOutput` is in hand *before* the `.get(pin)`
+                    // projection. Storing it here is also what removes the
+                    // multi-pin redundancy for free — a two-output node consumed
+                    // on both pins now runs `eval` once.
+                    if memo_active {
+                        eval_memo::insert(
+                            memo_key,
+                            eval_memo::owning_epoch(network_stack),
+                            &eval_output,
+                        );
+                    }
                     eval_output.get(output_pin_index)
                 } else if let Some(child_network) = registry.node_networks.get(&node.node_type_name)
                 {
@@ -2635,6 +2741,20 @@ impl NetworkEvaluator {
                             "{} has no return node",
                             node.node_type_name
                         ));
+                    }
+                    // **D2's one forbidden insert.** This arm forwards a single
+                    // `output_pin_index` to the child's return node and gets one
+                    // `NetworkResult` back, so it never holds the complete output
+                    // the key promises; wrapping it in a one-pin `EvalOutput`
+                    // would serve a truncated output to the next
+                    // `evaluate_all_outputs` on this instance. The complete
+                    // output exists one level down, at the child's return node,
+                    // and that is where the re-entering pull hits the memo.
+                    if memo_active {
+                        eval_memo::note_declined();
+                        if let Some(frame) = &profiler_frame {
+                            frame.note_subnetwork();
+                        }
                     }
                     // Scope the custom-network internals under this instance id
                     // (see the matching branch in `evaluate_all_outputs`).
