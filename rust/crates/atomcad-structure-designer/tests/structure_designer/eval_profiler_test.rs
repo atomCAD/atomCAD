@@ -1467,6 +1467,34 @@ fn the_body_network_address_is_not_an_input_to_the_env_key() {
     );
 }
 
+/// **The environment key is 128 bits wide, and actually uses them.**
+///
+/// It is the one identity key whose collision serves a *wrong value* rather
+/// than raising an error or merging a table row, which is why it is wider than
+/// `eval_frame_key` and `node_profile_key`. A future refactor that quietly
+/// narrows it back — a single digest cast to `u128`, say — leaves the high half
+/// zero and every other test still passing, so this asserts the property
+/// directly. Deterministic, not probabilistic: `DefaultHasher` is fixed-seed.
+#[test]
+fn the_env_key_is_a_full_width_128_bit_digest() {
+    let designer = setup_designer_with_network("main");
+    let network = designer.node_type_registry.node_networks["main"].clone();
+    let stack = vec![NetworkStackElement::root(&network)];
+
+    let key = eval_env_key(&stack, 3, false);
+    assert_ne!(
+        key >> 64,
+        0,
+        "the high 64 bits are unused — the key has been narrowed back to one digest"
+    );
+    assert_ne!(key as u64, 0);
+    assert_eq!(
+        key,
+        eval_env_key(&stack, 3, false),
+        "the key must be stable within a pass, or a memo keyed on it would miss          every hit"
+    );
+}
+
 /// The epoch, `decorate` and the instance id are all *in* the key — the three
 /// separations `node_profile_key` deliberately does not make.
 #[test]

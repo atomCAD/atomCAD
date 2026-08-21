@@ -95,9 +95,13 @@ frame's own `node_id` is deliberately not part of its identity, which is what
 makes two instances of one custom network aggregate into one row.
 `eval_env_key` answers "which evaluation *environment* is this?" — the key
 `doc/design_eval_memoization.md` will memoize on — and differs from
-`node_profile_key` in exactly two places: it hashes each frame's `node_id` and
+`node_profile_key` in three places: it hashes each frame's `node_id` and
 `env_epoch` (so two instances of one custom network, and two invocations of one
-body, are two environments) and it hashes `decorate`. Do not merge any of them.
+body, are two environments), it hashes `decorate`, and it is **128 bits** where
+the other two are 64. The width is not symmetry-breaking for its own sake: a
+collision in the guard produces a caught error and one in the profiler merges a
+table row, while a collision here will serve one node's cached result for
+another's. Do not merge any of them, and do not narrow this one.
 
 ## `env_epoch`: which body pushes allocate one
 

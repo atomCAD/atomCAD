@@ -34,6 +34,15 @@ attributed.
   **N different environments** — not redundancy at all. Distinct-
   environment counting is inherently dynamic. Phase 3 is the real
   measurement; the numbers above are directional only.
+- **Outcome (2026-08-21).** Phase 3 measured the same design: **1169
+  lookups over 145 distinct environments, 8.06× overall**, with a single
+  `materialize` inside `geo.1-precursor_proxy` taking **6292 ms of a 6630
+  ms evaluation across 12 lookups in one environment**. The static replay
+  was directionally right and quantitatively useless, as predicted — it
+  guessed 6→11 evaluations for `materialize` where the truth is 12 in a
+  single environment, and it could not have produced the millisecond
+  column that makes the case. The full before-picture lives in
+  `doc/design_eval_memoization.md` §"The measurement".
 - **Evaluation may not even be the dominant phase.** Nobody has measured
   tessellation or the ~15 sync FFI calls `refreshFromKernel()` fires
   after every refresh. Concluding that the evaluator is the bottleneck
@@ -600,7 +609,11 @@ realistic shape, and only the breakdown says where a memo would pay.
 Nodes the memo deliberately declines to cache — iterator producers
 (`design_eval_memoization.md` D4) and results produced under the
 re-entrancy backstop (D9 there) — are counted but flagged, so
-`wasted_ns` is never read as an available saving.
+`wasted_ns` is never read as an available saving. D10 there adds two more
+flags when the memo lands (`subnetwork`, `evicted`) and settles what these
+columns mean once it is running: the factor is unchanged by design, and
+`wasted_ns` keeps its value while changing tense from *available* to
+*realized*.
 
 ### D11. The equal-key ⇒ equal-result self-check
 
@@ -619,9 +632,16 @@ one that does not.
 
 **The check only means anything with the memo disabled.** Once the memo
 serves the second request from the first result, there is no second
-computation to compare and the check passes vacuously. Enabling it must
-therefore force the memo off for that pass, and the panel must say so —
-otherwise a green result after the memo lands is evidence of nothing.
+computation to compare and the check passes vacuously — a green result
+after the memo lands would be evidence of nothing.
+
+`doc/design_eval_memoization.md` D10 settles how, and chooses a **hard
+gate over the auto-force sketched here**: the self-check can be armed only
+while the memo is switched off, rather than arming it silently switching
+the memo off. Auto-forcing would make one control have two effects, the
+second invisible — the same pass's *Self* / *Total* / *Phases* numbers
+would quietly become memo-off numbers. That decision lives there, with the
+memo switch it depends on.
 
 *As implemented, with two deviations from the paragraph above.*
 

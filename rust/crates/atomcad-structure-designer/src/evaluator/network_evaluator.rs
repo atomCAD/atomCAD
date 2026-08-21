@@ -379,7 +379,7 @@ fn eval_frame_key(network_stack: &[NetworkStackElement], node_id: u64) -> EvalFr
 /// |---|---|---|---|
 /// | [`eval_frame_key`] | "is this frame chain already live?" | only while its frames are | yes, for every frame |
 /// | [`node_profile_key`] | "which node is this?" | retained for the pass | registry frames only |
-/// | [`eval_env_key`] | "which environment is this?" | retained for the pass, and by the memo | registry frames only |
+/// | [`eval_env_key`] | "which environment is this?" | retained for the pass, and by the memo | registry frames only, and at 128 bits |
 ///
 /// **What a node's result depends on, and why this key is sufficient, is
 /// defined in `doc/design_eval_memoization.md` §"The evaluation environment"**
@@ -414,7 +414,15 @@ fn eval_frame_key(network_stack: &[NetworkStackElement], node_id: u64) -> EvalFr
 /// collisions; it does not act on them. It lives here rather than in
 /// `eval_profiler` precisely so the memo can call it without depending on the
 /// profiler being switched on.
-pub type EvalEnvKey = u64;
+///
+/// **128 bits, unlike the other two keys**, because this is the one whose
+/// collision returns a *wrong value* rather than a spurious error or a merged
+/// table row. `doc/design_eval_memoization.md` D2 keys a result cache on it: two
+/// distinct environments hashing equal would serve one node's result for
+/// another's. At 64 bits the birthday bound over the ~10^6 environments a large
+/// pass can produce is around 10^-7 per pass — small, but it buys a silent
+/// wrong answer, and the fix costs one extra SipHash over a handful of `u64`s.
+pub type EvalEnvKey = u128;
 
 /// [`EvalEnvKey`] for `node_id` evaluated against `network_stack` with the
 /// given `decorate` flag.
@@ -429,8 +437,34 @@ pub fn eval_env_key(
     node_id: u64,
     decorate: bool,
 ) -> EvalEnvKey {
+    // Two domain-separated digests over the same material, concatenated. The
+    // standard library gives no 128-bit hasher and this crate has no hash
+    // dependency; a second pass under a different domain constant is the
+    // cheapest way to the width, and the input is a handful of `u64`s over a
+    // stack that is a few frames deep.
+    //
+    // Honest about what this is: `DefaultHasher` is SipHash-1-3 under a fixed
+    // key, so the two halves are not *provably* independent and this is not a
+    // cryptographic 128-bit hash. It does not need to be — the threat is
+    // accidental collision among non-adversarial keys, and against that the
+    // concatenation moves the birthday bound from ~10^-7 to negligible.
+    const DOMAIN_LO: u64 = 0x243F_6A88_85A3_08D3;
+    const DOMAIN_HI: u64 = 0x9E37_79B9_7F4A_7C15;
+    let lo = eval_env_digest(network_stack, node_id, decorate, DOMAIN_LO);
+    let hi = eval_env_digest(network_stack, node_id, decorate, DOMAIN_HI);
+    ((hi as u128) << 64) | (lo as u128)
+}
+
+/// One 64-bit half of [`eval_env_key`], salted with `domain`.
+fn eval_env_digest(
+    network_stack: &[NetworkStackElement],
+    node_id: u64,
+    decorate: bool,
+    domain: u64,
+) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    domain.hash(&mut hasher);
     for frame in network_stack {
         // The frame-kind discriminant is hashed so a body frame and a registry
         // frame can never coincide by accident once the address drops out of

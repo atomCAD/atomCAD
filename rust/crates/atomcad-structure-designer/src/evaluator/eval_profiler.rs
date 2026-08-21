@@ -280,8 +280,9 @@ pub struct EvalProfile {
 ///
 /// Environment tracking is inherently O(distinct environments), and a `map` over
 /// 10^5 elements produces 10^5 of them; an opt-in profiler may be slow but must
-/// not be the reason a session runs out of memory. At 8 bytes a key plus
-/// hash-set overhead this bound is a few tens of MB.
+/// not be the reason a session runs out of memory. At 16 bytes a key
+/// ([`EvalEnvKey`] is 128-bit) plus hash-set overhead this bound is well under
+/// 100 MB.
 pub const MAX_TRACKED_ENVS: usize = 1_000_000;
 
 /// Ceiling on retained self-check samples.
