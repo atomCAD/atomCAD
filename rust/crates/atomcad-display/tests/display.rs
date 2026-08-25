@@ -16,3 +16,23 @@ mod atomic_color_test;
 
 #[path = "display/atomic_render_style_test.rs"]
 mod atomic_render_style_test;
+
+// Isosurface extraction (doc/design_isosurface_node.md P2). Tables A-E of that
+// document's test plan, sharing fixtures and invariant helpers.
+#[path = "display/isosurface_common.rs"]
+mod isosurface_common;
+
+#[path = "display/isosurface_case_table_test.rs"]
+mod isosurface_case_table_test;
+
+#[path = "display/isosurface_fuzz_test.rs"]
+mod isosurface_fuzz_test;
+
+#[path = "display/isosurface_extract_test.rs"]
+mod isosurface_extract_test;
+
+#[path = "display/isosurface_lattice_test.rs"]
+mod isosurface_lattice_test;
+
+#[path = "display/isosurface_snapshot_test.rs"]
+mod isosurface_snapshot_test;

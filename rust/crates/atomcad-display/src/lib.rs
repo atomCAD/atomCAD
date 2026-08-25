@@ -26,6 +26,7 @@ pub mod csg_to_poly_mesh;
 pub mod gadget;
 pub mod guided_placement_tessellator;
 pub mod half_space_utils;
+pub mod isosurface;
 pub mod poly_mesh;
 pub mod poly_mesh_tessellator;
 pub mod preferences;

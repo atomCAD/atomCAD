@@ -23,3 +23,9 @@ csgrs = { workspace = true }
 geo = { workspace = true }
 glam = { workspace = true }
 nalgebra = { workspace = true }
+
+# `insta` for the isosurface regression snapshots (doc/design_isosurface_node.md
+# P2 table E). This crate had no [dev-dependencies] at all before that.
+[dev-dependencies]
+atomcad-test-support = { path = "../atomcad-test-support" }
+insta = { workspace = true }

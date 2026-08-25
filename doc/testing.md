@@ -87,11 +87,48 @@ point and should be visible in the diff.
 | `atomcad-structure-designer` | `crates/atomcad-structure-designer/tests/structure_designer/` | Network validator, node network operations, network evaluator, nodes, undo, text format, serialization. Also the two scene-tessellation tests (`atomic_impostor_alpha_test.rs`, `atom_label_test.rs`) — `tessellate_scene_content` is a `structure_designer` module, not a `display` one. |
 | `atomcad-structure-designer` (`expr`) | `crates/atomcad-structure-designer/tests/expr/` | Lexer, parser, evaluation, validation. `expr` is a submodule of the crate (design doc D8), so its tests ride along with it. |
 | `atomcad-crystolecule` | `crates/atomcad-crystolecule/tests/crystolecule/` | Atomic structure, unit cell, motif parser, drawing plane, lattice fill, scalar fields and `.cube` import, UFF simulation |
-| `atomcad-display` | `crates/atomcad-display/tests/display/` | Poly-mesh tessellation, CSG→poly-mesh, atom color/render style |
+| `atomcad-display` | `crates/atomcad-display/tests/display/` | Poly-mesh tessellation, CSG→poly-mesh, atom color/render style, isosurface extraction |
 | `atomcad-geo-tree` | `crates/atomcad-geo-tree/tests/geo_tree/` | CSG cache, batched implicit evaluator, SDF evaluation (implicit_eval) |
 | `atomcad-renderer` | `crates/atomcad-renderer/tests/renderer/` | Camera math, label atlas layout, impostor meshes, transparent sort |
 | `atomcad-util` | `crates/atomcad-util/tests/util/` | DAA box, LRU cache |
 | `rust_lib_flutter_cad` | `rust/tests/structure_designer_api/`, `rust/tests/renderer_api/` | The api-level tests of those two subjects: error/validation transport types, `APIDataType` conversion, function-pin role views, atom-edit tool adapters, node-type views; the four axis-resolution tests. |
+
+### Testing a surface extractor
+
+Anything that turns a scalar field into triangles — the isosurface extractor
+today, a dual-contouring or raymarching successor tomorrow — needs three
+assertions that a plausible-looking picture does not give you. They live as
+shared helpers in `crates/atomcad-display/tests/display/isosurface_common.rs`
+so every table of cases gets all of them for free.
+
+1. **Winding.** Assert it by *signed volume* over the whole mesh, not per
+   triangle: a closed outward-wound surface encloses a positive volume, and the
+   global form is immune to the sliver triangles marching cubes routinely
+   emits. An inverted surface renders as slightly-off shading, never as obvious
+   breakage.
+2. **Closedness.** Every directed edge must be matched by its reverse. A holed
+   surface passes every per-vertex check there is — each vertex is still exactly
+   on the isovalue — and only shows up later as "transparency is buggy".
+3. **Face-locality.** The property that makes closure a *theorem* rather than a
+   spot-check: the segments a cell's patch leaves on one of its faces must be a
+   function of that face's four corner signs alone. Two cells sharing a face
+   then cancel edge for edge, and closure over any grid follows by induction.
+   **A per-example closedness count does not imply closure in general** — a case
+   table can be closed on every sphere anyone tries and still open a hole on a
+   configuration a sphere never produces.
+
+The companion pattern is **seeded fuzz**: a fixed range of seeds driving a small
+random grid, replayed identically every run, asserting the invariants above plus
+an even Euler characteristic. Never `rand::random()` — a fuzz failure that
+cannot be replayed is a flake, and this is a suite that has to be able to fail
+loudly in CI. A second row with values drawn from a handful of discrete levels,
+one of which *is* the isolevel, is what exercises the degenerate tie paths that
+continuous random data almost never reaches.
+
+One caveat that shapes every fixture: **the level set is clipped where it leaves
+the sampled box**, so a fixture whose field exceeds the level on a boundary
+plane produces a legitimately open surface. Pick levels above the fixture's
+boundary maximum, and say so in the test.
 
 ### Snapshot Tests (insta)
 Evaluate sample CNND files and compare against golden files:

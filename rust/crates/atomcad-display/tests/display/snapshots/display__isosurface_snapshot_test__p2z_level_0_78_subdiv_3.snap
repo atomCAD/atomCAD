@@ -1,0 +1,11 @@
+---
+source: crates/atomcad-display/tests/display/isosurface_snapshot_test.rs
+expression: summarize(&fine)
+---
+vertices: 484
+triangles: 960
+components: 2
+bounds: [-0.5335, -0.5335, -1.8360] .. [0.5335, 0.5335, 1.8360]
+checksum: -0.0015
+component 0: 480 triangles, centroid [-0.0000, -0.0000, 1.4446], albedo [0.200, 0.400, 0.900]
+component 1: 480 triangles, centroid [-0.0000, -0.0000, -1.4446], albedo [0.900, 0.300, 0.250]

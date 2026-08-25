@@ -467,6 +467,20 @@ induction, for *any* field. This is the property to check, not a boundary-edge
 count on one example: a table can be closed on every sphere anyone tries and
 still violate it on a configuration a sphere never produces.
 
+**Known limit, found in P2: the induction covers *interior* faces only.** A
+level set that reaches the lattice's outer boundary is clipped there, and the
+extractor — which marches exactly the lattice of §Resolution and adds no capping
+layer — leaves it open. It is not reachable from a case-table bug; it is what a
+box too small for the field looks like. Two consequences worth knowing:
+
+- Every test fixture must pick a level above its field's **boundary maximum**,
+  or it is asserting closure against a surface that legitimately has none. The
+  P2 suite computes and records that number for each fixture it uses.
+- If this ever bites a user — a density envelope whose `.cube` box was cut too
+  close — the fix is a boundary cap pass, not a padding layer: padding would
+  change the cell-count formulas of §Resolution that `isosurface_cell_budget` is
+  defined against. Out of scope here.
+
 ### Degeneracies: the `psi == level` tie
 
 Ties are not a corner case. A tie is any sample exactly equal to the level, and
@@ -889,6 +903,18 @@ winding, union-find components in deterministic order; the `Lattice` resolution
 policy — index-space marching on `axes`, integer `subdiv`, the `det < 0` winding
 flip, the `None` fallback; cell-budget check; colormap sampling for both
 `IsosurfaceColoring` arms.
+
+**Status: done.** The case table is *generated* from the face-locality rule
+rather than transcribed — `face_segments` is that rule, and `case_triangles`
+stitches its six faces into loops and fans them — so closure and
+complementary-consistency hold by construction and the 256-mask tests confirm
+rather than establish them. Two findings are recorded above and in
+`crates/atomcad-display/src/AGENTS.md`: the boundary-clipping limit (§Ambiguity),
+and that the coincident-vertex merge must be **quantized with a neighbour probe**
+rather than keyed on exact bits, because `SampledField::sample` round-trips a
+lattice corner through `inv_basis` and returns a tied value a few ULPs off, so
+each cut edge places its own vertex a hair away from the corner in a different
+direction.
 
 This is the largest piece of genuinely tricky code in the design and the only
 one that is fully testable in isolation — no node, no scene, no GPU — so it

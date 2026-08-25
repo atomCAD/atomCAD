@@ -239,10 +239,12 @@ dependencies = [
  "atomcad-crystolecule",
  "atomcad-geo-tree",
  "atomcad-renderer",
+ "atomcad-test-support",
  "atomcad-util",
  "csgrs",
  "geo",
  "glam",
+ "insta",
  "nalgebra",
 ]
 

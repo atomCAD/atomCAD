@@ -1,0 +1,10 @@
+---
+source: crates/atomcad-display/tests/display/isosurface_snapshot_test.rs
+expression: "snapshot(field.clone(), 0.50)"
+---
+vertices: 34
+triangles: 64
+components: 1
+bounds: [-1.4333, -1.0197, -0.7904] .. [1.4333, 1.0197, 1.4331]
+checksum: 13.3102
+component 0: 64 triangles, centroid [-0.0000, -0.0000, 0.3915], albedo [0.200, 0.400, 0.900]

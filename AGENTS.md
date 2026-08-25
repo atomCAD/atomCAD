@@ -8,6 +8,7 @@
 - Working in `rust/crates/atomcad-crystolecule/` or any descendant → Also read `rust/crates/atomcad-crystolecule/src/AGENTS.md`
 - Working in `rust/crates/atomcad-crystolecule/src/simulation/` or any descendant → Also read `rust/crates/atomcad-crystolecule/src/simulation/AGENTS.md`
 - Working in `rust/crates/atomcad-crystolecule/src/simulation/uff/` → Also read `rust/crates/atomcad-crystolecule/src/simulation/uff/AGENTS.md`
+- Working in `rust/crates/atomcad-display/` or any descendant → Also read `rust/crates/atomcad-display/src/AGENTS.md`
 - Working in `rust/crates/atomcad-geo-tree/` or any descendant → Also read `rust/crates/atomcad-geo-tree/src/AGENTS.md`
 - Working in `rust/crates/atomcad-structure-designer/` or any descendant → Also read `rust/crates/atomcad-structure-designer/src/AGENTS.md`
 - Working in `rust/crates/atomcad-structure-designer/src/undo/` or any descendant → Also read `rust/crates/atomcad-structure-designer/src/undo/AGENTS.md`
