@@ -16,6 +16,10 @@
 //!
 //! Design doc: `doc/design_scalar_fields.md`.
 
+pub mod isosurface;
+
+pub use isosurface::{Colormap, IsosurfaceColoring, IsosurfaceData};
+
 use glam::{DMat3, DVec3};
 use thiserror::Error;
 

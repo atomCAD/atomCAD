@@ -960,6 +960,11 @@ enum APIDataTypeBase {
   /// first-class pin type. See `doc/design_scalar_fields.md`.
   scalarField,
 
+  /// A surface extracted from a `ScalarField` at a chosen isolevel, plus its
+  /// paint. Ordinary first-class pin type. See
+  /// `doc/design_isosurface_node.md`.
+  isosurface,
+
   /// The type with exactly one value. Produced by effect nodes; carries no
   /// payload. See `doc/design_node_execution.md`.
   unit,

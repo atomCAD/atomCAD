@@ -493,6 +493,7 @@ mod element_type_eligibility_tests {
             DataType::Motif,
             DataType::Structure,
             DataType::ScalarField,
+            DataType::Isosurface,
             DataType::Unit,
             DataType::Array(Box::new(DataType::Int)),
             DataType::Iterator(Box::new(DataType::Int)),
@@ -540,6 +541,7 @@ mod element_type_eligibility_tests {
                 | DataType::Motif
                 | DataType::Structure
                 | DataType::ScalarField
+                | DataType::Isosurface
                 | DataType::Unit
                 | DataType::Array(_)
                 | DataType::Iterator(_)

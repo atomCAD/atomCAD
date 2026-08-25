@@ -59,6 +59,10 @@ pub enum APIDataTypeBase {
     /// A scalar function of 3D real space (`.cube` grid today). Ordinary
     /// first-class pin type. See `doc/design_scalar_fields.md`.
     ScalarField,
+    /// A surface extracted from a `ScalarField` at a chosen isolevel, plus its
+    /// paint. Ordinary first-class pin type. See
+    /// `doc/design_isosurface_node.md`.
+    Isosurface,
     /// The type with exactly one value. Produced by effect nodes; carries no
     /// payload. See `doc/design_node_execution.md`.
     Unit,

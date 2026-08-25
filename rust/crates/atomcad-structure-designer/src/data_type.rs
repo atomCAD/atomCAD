@@ -146,6 +146,13 @@ pub enum DataType {
     /// implicit conversions to or from anything. See
     /// `doc/design_scalar_fields.md`.
     ScalarField,
+    /// A surface extracted from a `ScalarField` at a chosen isolevel, together
+    /// with the paint applied to it. An ordinary first-class pin type, like
+    /// `ScalarField`: not abstract, no subtyping, no implicit conversions. The
+    /// value carries a *specification*, never a mesh — extraction happens in
+    /// the display conversion at a resolution taken from preferences. See
+    /// `doc/design_isosurface_node.md`.
+    Isosurface,
     /// The type with exactly one value — return type of effect nodes
     /// (`export_atoms`, `foreach`, …). A universal `T → Unit` widening is
     /// added at field-level so any sub-network output can be consumed by an
@@ -344,6 +351,7 @@ impl fmt::Display for DataType {
             DataType::Motif => write!(f, "Motif"),
             DataType::Structure => write!(f, "Structure"),
             DataType::ScalarField => write!(f, "ScalarField"),
+            DataType::Isosurface => write!(f, "Isosurface"),
             DataType::Unit => write!(f, "Unit"),
             DataType::Array(element_type) => {
                 write!(f, "[{}]", element_type)
@@ -1443,6 +1451,7 @@ impl DataTypeParser {
                     "Motif" => Ok(DataType::Motif),
                     "Structure" => Ok(DataType::Structure),
                     "ScalarField" => Ok(DataType::ScalarField),
+                    "Isosurface" => Ok(DataType::Isosurface),
                     "Unit" => Ok(DataType::Unit),
                     // Plain unknown identifiers are NOT silently treated as
                     // record names: the text-format parser uses this as a

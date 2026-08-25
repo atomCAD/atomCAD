@@ -55,7 +55,8 @@ crates/atomcad-crystolecule/src/
 │   └── atomic_structure_decorator.rs  # Display/selection metadata
 ├── motif_bond_inference.rs          # Bond inference on motif fractional coords (cross-cell)
 ├── field/
-│   └── mod.rs                      # ScalarField trait, FieldBounds, GridGeometry, SampledField
+│   ├── mod.rs                      # ScalarField trait, FieldBounds, GridGeometry, SampledField
+│   └── isosurface.rs               # IsosurfaceData/IsosurfaceColoring/Colormap (the surface *spec*, not a mesh)
 ├── io/
 │   ├── cube_loader.rs              # Gaussian .cube import (volumetric scalar data + atom block)
 │   ├── mol_exporter.rs             # MOL V3000 export
@@ -123,6 +124,7 @@ crates/atomcad-crystolecule/src/
 | `SampledField` | `field/mod.rs` | `ScalarField` stored as `f32` samples on a regular grid, trilinearly interpolated |
 | `GridGeometry` | `field/mod.rs` | Origin + three axis vectors + counts. **Node-centered**: the origin IS sample (0,0,0) |
 | `FieldBounds` | `field/mod.rs` | Axis-aligned box, Ångström. The workspace has no general AABB type to reuse |
+| `IsosurfaceData` | `field/isosurface.rs` | A surface to extract at display time: field + level + coloring + alpha. Carries no mesh |
 | `CubeFile` | `io/cube_loader.rs` | Parsed `.cube`: `atoms`, `fields`, and an advisory `units_warning` |
 
 ## Core Concepts
@@ -170,6 +172,32 @@ The `.cube` loader always reads coordinates as Bohr and uses the atom block only
 as a **plausibility check**: implausible interatomic distances set an advisory
 `units_warning` and never rescale the parse (`io/cube_loader.rs` documents why).
 Design doc: `doc/design_scalar_fields.md`.
+
+**Isosurfaces** (`field/isosurface.rs`): `IsosurfaceData` is the *specification*
+of a surface — which field, which level, which paint — and never a mesh. It lives
+here, beside the `ScalarField` it wraps, because **every `NetworkResult` payload
+comes from the domain layer or from `structure_designer` itself**; display types
+enter one stage later, in `NodeOutput`. The extracted mesh (`SurfaceMesh`) and the
+marching-cubes extractor accordingly live in `atomcad-display`, which depends on
+this crate and so consumes `&IsosurfaceData` directly — no twin, no conversion.
+`Colormap` is node data that round-trips through the `.cnnd`, which is the second
+reason it is here: `atomcad-display` has no `serde` dependency and should not
+acquire one to host a persisted enum.
+
+Two rules the type encodes, both easy to undo by accident:
+
+- **Semantic parameters live in the value; quality parameters live in
+  preferences.** Isolevel is here; extraction *resolution* is not — it comes from
+  `GeometryVisualizationPreferences` at the display conversion, exactly as it does
+  for `Blueprint`. Adding a resolution field here would bake a quality setting
+  into the project file.
+- **Narrowing is by consumer.** Values the *renderer* consumes are `f32`/`Vec3`
+  (`alpha`, the two phase colors); values compared against *field samples* stay
+  `f64` (`level`, the colormap `range`), because `ScalarField::sample` returns
+  `f64` and narrowing a threshold would put a rounding difference between the
+  comparison and the data it compares to.
+
+Design doc: `doc/design_isosurface_node.md`.
 
 ## Important Constants (`crystolecule_constants.rs`)
 

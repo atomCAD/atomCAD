@@ -517,6 +517,9 @@ String _apiDataTypeToString(APIDataType dt) {
     case APIDataTypeBase.scalarField:
       base = 'ScalarField';
       break;
+    case APIDataTypeBase.isosurface:
+      base = 'Isosurface';
+      break;
     case APIDataTypeBase.unit:
       base = 'Unit';
       break;

@@ -712,6 +712,37 @@ fn scalar_field_round_trips_through_the_api_boundary() {
     );
 }
 
+/// P1 of `doc/design_isosurface_node.md`. Same silent-degradation risk as the
+/// `ScalarField` pair above: the outbound match ends in
+/// `_ => APIDataTypeBase::Custom`, so a missed arm round-trips through a
+/// `Custom` string instead of failing the build.
+#[test]
+fn isosurface_round_trips_through_the_api_boundary() {
+    // Rust -> API: a first-class base variant, not `Custom`.
+    let api = data_type_to_api_data_type(&DataType::Isosurface);
+    assert!(matches!(api.data_type_base, APIDataTypeBase::Isosurface));
+    assert!(!api.array);
+    assert_eq!(
+        api.custom_data_type, None,
+        "a first-class base must not fall through to the Custom string path"
+    );
+
+    // API -> Rust.
+    assert_eq!(api_data_type_to_data_type(&api), Ok(DataType::Isosurface));
+
+    // ...and back again, unchanged.
+    let api_from_scratch = APIDataType {
+        data_type_base: APIDataTypeBase::Isosurface,
+        custom_data_type: None,
+        array: false,
+        children: vec![],
+    };
+    assert_eq!(
+        api_data_type_to_data_type(&api_from_scratch),
+        Ok(DataType::Isosurface)
+    );
+}
+
 #[test]
 fn scalar_field_array_round_trips_through_the_api_boundary() {
     let array = DataType::Array(Box::new(DataType::ScalarField));

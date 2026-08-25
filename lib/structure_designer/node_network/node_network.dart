@@ -211,6 +211,9 @@ const Map<String, Color> DATA_TYPE_COLORS = {
   // No substring conflict with any key above, so declaration order here is
   // free; `[ScalarField]` and `Iter[ScalarField]` match through the same key.
   'ScalarField': Color(0xFFE57373), // Soft red
+  // `Isosurface` is a `ScalarField` in rendered form, so it takes the same
+  // family a shade deeper. No substring conflict with 'ScalarField'.
+  'Isosurface': Color(0xFFC62828), // Deep red
 
   // Function types (amber family - computational operations)
   '->': Color(0xFFFFA726), // Amber

@@ -9,6 +9,7 @@ use atomcad_crystolecule::atomic_structure::{
 };
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::field::ScalarField;
+use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData};
 use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -255,6 +256,13 @@ pub enum NetworkResult {
     /// needs no `clippy::arc_with_non_send_sync` allowance. See
     /// `doc/design_scalar_fields.md`.
     ScalarField(Arc<dyn ScalarField>),
+    /// A surface specification: a field, an isolevel and the paint to apply,
+    /// with no mesh in it. Marching cubes runs one stage later, in the display
+    /// conversion, at a resolution taken from preferences — so this value is
+    /// resolution-free, exactly as `Blueprint` is. Inline rather than
+    /// `Arc`-wrapped: the payload is two `Arc`s plus scalars, so cloning is
+    /// already cheap. See `doc/design_isosurface_node.md`.
+    Isosurface(IsosurfaceData),
     Array(Vec<NetworkResult>),
     /// Lazy stream value (`Iter[T]`). The enclosed `Walker` is the runtime
     /// state machine produced by iterator-aware nodes (`range`, `map`,
@@ -334,6 +342,7 @@ impl NetworkResult {
             NetworkResult::Motif(_) => Some(DataType::Motif),
             NetworkResult::Structure(_) => Some(DataType::Structure),
             NetworkResult::ScalarField(_) => Some(DataType::ScalarField),
+            NetworkResult::Isosurface(_) => Some(DataType::Isosurface),
             NetworkResult::Function(closure) => Some(DataType::Function(closure.function_type())),
             NetworkResult::Unit => Some(DataType::Unit),
             NetworkResult::Record(fields) => {
@@ -922,6 +931,13 @@ impl NetworkResult {
                 ),
                 None => "ScalarField".to_string(),
             },
+            NetworkResult::Isosurface(data) => {
+                let coloring = match &data.coloring {
+                    IsosurfaceColoring::Phase { .. } => "phase",
+                    IsosurfaceColoring::Field { .. } => "colormap",
+                };
+                format!("Isosurface level={:.6e} ({})", data.level, coloring)
+            }
             NetworkResult::Record(fields) => {
                 let field_strings: Vec<String> = fields
                     .iter()
@@ -1044,6 +1060,36 @@ impl NetworkResult {
                 }
                 out
             }
+            NetworkResult::Isosurface(data) => {
+                let mut out = format!(
+                    "Isosurface:\n  level: {:.6e}\n  alpha: {:.6}\n  field: {}",
+                    data.level,
+                    data.alpha,
+                    describe_field_dims(&*data.field),
+                );
+                match &data.coloring {
+                    IsosurfaceColoring::Phase { positive, negative } => {
+                        out.push_str(&format!(
+                            "\n  coloring: phase\n    positive: ({:.6}, {:.6}, {:.6})\n    negative: ({:.6}, {:.6}, {:.6})",
+                            positive.x, positive.y, positive.z, negative.x, negative.y, negative.z,
+                        ));
+                    }
+                    IsosurfaceColoring::Field {
+                        field,
+                        range,
+                        colormap,
+                    } => {
+                        out.push_str(&format!(
+                            "\n  coloring: {:?}\n    color_field: {}\n    range: {:.6e} .. {:.6e}",
+                            colormap,
+                            describe_field_dims(&**field),
+                            range.0,
+                            range.1,
+                        ));
+                    }
+                }
+                out
+            }
             NetworkResult::Error(msg) => {
                 format!("Error: {}", msg)
             }
@@ -1152,6 +1198,17 @@ impl NetworkResult {
 
             _ => Err(format!("Unsupported CLI parameter type: {}", data_type)),
         }
+    }
+}
+
+/// One-line shape summary of a field: its grid dimensions, or `analytic` when
+/// it has no native grid. Used by the `Isosurface` detail readout, which needs
+/// to describe up to two fields without repeating the whole `ScalarField` block
+/// for each.
+fn describe_field_dims(field: &dyn ScalarField) -> String {
+    match field.native_grid() {
+        Some(grid) => format!("{}x{}x{}", grid.dims[0], grid.dims[1], grid.dims[2]),
+        None => "analytic (no native grid)".to_string(),
     }
 }
 
@@ -1472,6 +1529,13 @@ impl NetworkResult {
 
             // Deep tier: the whole `Arc` pointee, which is heap by definition.
             NetworkResult::ScalarField(field) => field.estimate_memory_bytes(),
+
+            // Deep tier as well, and the one arm whose *contents* the compiler
+            // cannot check: the value can reach the same `Arc` twice (a field
+            // painted with itself), so the per-value dedup lives in
+            // `IsosurfaceData::estimate_field_memory_bytes` rather than being
+            // open-coded as a sum here.
+            NetworkResult::Isosurface(data) => data.estimate_field_memory_bytes(),
 
             // R2: recurse fully. Affordable because the estimator runs only on
             // insert and eviction, never on a memo lookup.
