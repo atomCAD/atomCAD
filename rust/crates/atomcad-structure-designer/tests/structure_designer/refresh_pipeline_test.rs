@@ -210,6 +210,7 @@ fn scene_atom_count(designer: &StructureDesigner, node_id: u64) -> usize {
                 NodeOutput::SurfacePointCloud(_) => "SurfacePointCloud",
                 NodeOutput::SurfacePointCloud2D(_) => "SurfacePointCloud2D",
                 NodeOutput::DrawingPlane(_) => "DrawingPlane",
+                NodeOutput::Isosurface(_) => "Isosurface",
                 NodeOutput::Atomic(..) => unreachable!(),
             }
         ),

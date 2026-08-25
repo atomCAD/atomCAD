@@ -98,6 +98,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIApplyDiffDa
 use crate::api::structure_designer::structure_designer_api_types::APIAtomComposeDiffData;
 use crate::api::structure_designer::structure_designer_api_types::APIAtomCutData;
 use crate::api::structure_designer::structure_designer_api_types::APIBoolData;
+use crate::api::structure_designer::structure_designer_api_types::APIColormap;
 use crate::api::structure_designer::structure_designer_api_types::APICuboidData;
 use crate::api::structure_designer::structure_designer_api_types::APIDiffStats;
 use crate::api::structure_designer::structure_designer_api_types::APIDrawingPlaneData;
@@ -118,6 +119,7 @@ use crate::api::structure_designer::structure_designer_api_types::APIIMat3RowsDa
 use crate::api::structure_designer::structure_designer_api_types::APIIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIntData;
+use crate::api::structure_designer::structure_designer_api_types::APIIsosurfaceData;
 use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3ColsData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagData;
@@ -145,6 +147,7 @@ use crate::api::structure_designer::structure_designer_api_types::{
     APIStructureRotData,
 };
 use crate::api::structure_designer::view_builders;
+use atomcad_crystolecule::field::Colormap;
 use atomcad_crystolecule::io::atom_export::AtomExportFormat;
 use atomcad_crystolecule::patch::CompatibilityReport;
 use atomcad_crystolecule::unit_cell_symmetries::{
@@ -206,6 +209,7 @@ use atomcad_structure_designer::nodes::import_cube::ImportCubeData;
 use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
 use atomcad_structure_designer::nodes::infer_bonds::InferBondsData;
 use atomcad_structure_designer::nodes::int::IntData;
+use atomcad_structure_designer::nodes::isosurface::IsosurfaceNodeData;
 use atomcad_structure_designer::nodes::ivec2::IVec2Data;
 use atomcad_structure_designer::nodes::ivec3::IVec3Data;
 use atomcad_structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
@@ -567,6 +571,10 @@ fn build_zone_view(
             name: param.name.clone(),
             data_type: param.data_type.to_string(),
             multi: param.data_type.is_array(),
+            // A zone-output pin's wires live on `zone_output_arguments`, not on
+            // a body node's `arguments`, and no editor gates on them — report
+            // them as unconnected rather than inventing a second meaning here.
+            connected: false,
             // Zone-output (body destination) pins are not drag-from sources for
             // the add-node popup, so no hint is needed.
             drag_hint_type: None,
@@ -669,6 +677,7 @@ fn build_node_view(
             name: param.name.clone(),
             data_type: data_type.to_string(),
             multi: data_type.is_array(),
+            connected: node.arguments.get(i).is_some_and(|arg| !arg.is_empty()),
             // Lossy-declared pins (e.g. `map.f`'s `AnyFunction`) expose a
             // concrete drag hint so a wire dragged off them infers the new
             // node's types fully. See `doc/design_drag_aware_add_node.md`.
@@ -4132,6 +4141,47 @@ pub fn get_free_move_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeM
     }
 }
 
+/// Colormap conversion is spelled out in both directions rather than derived,
+/// so that adding a ramp to `Colormap` is a compile error here until the Dart
+/// side learns about it too.
+fn to_api_colormap(colormap: Colormap) -> APIColormap {
+    match colormap {
+        Colormap::BlueWhiteRed => APIColormap::BlueWhiteRed,
+    }
+}
+
+fn from_api_colormap(colormap: &APIColormap) -> Colormap {
+    match colormap {
+        APIColormap::BlueWhiteRed => Colormap::BlueWhiteRed,
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_isosurface_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIsosurfaceData> {
+    unsafe {
+        with_cad_instance_or(
+            |cad_instance| {
+                let node_data = cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)?;
+                let data = node_data
+                    .as_any_ref()
+                    .downcast_ref::<IsosurfaceNodeData>()?;
+                Some(APIIsosurfaceData {
+                    level: data.level,
+                    positive_color: to_api_vec3(&data.positive_color),
+                    negative_color: to_api_vec3(&data.negative_color),
+                    alpha: data.alpha,
+                    colormap: to_api_colormap(data.colormap),
+                    color_min: data.color_min,
+                    color_max: data.color_max,
+                })
+            },
+            None,
+        )
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_free_sphere_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIFreeSphereData> {
     unsafe {
@@ -5827,6 +5877,27 @@ pub fn set_free_move_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeMoveD
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, free_move_data);
+            refresh_structure_designer_auto(cad_instance);
+        });
+    }
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_isosurface_data(scope_path: Vec<u64>, node_id: u64, data: APIIsosurfaceData) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let isosurface_data = Box::new(IsosurfaceNodeData {
+                level: data.level,
+                positive_color: from_api_vec3(&data.positive_color),
+                negative_color: from_api_vec3(&data.negative_color),
+                alpha: data.alpha,
+                colormap: from_api_colormap(&data.colormap),
+                color_min: data.color_min,
+                color_max: data.color_max,
+            });
+            cad_instance
+                .structure_designer
+                .set_node_network_data_scoped(&scope_path, node_id, isosurface_data);
             refresh_structure_designer_auto(cad_instance);
         });
     }

@@ -110,26 +110,161 @@ fn scalar_field_is_an_ordinary_concrete_type() {
     ));
 }
 
+/// The pin-hover readout. It is a **block**, not a one-liner: a scalar field
+/// carries no semantic tag, so none of these facts can be inferred from the
+/// others, and this is the only surface a GUI user has — `to_detailed_string`
+/// is reachable only from the CLI/AI `--verbose` path.
 #[test]
-fn display_string_summarizes_without_dumping_samples() {
+fn display_string_reports_the_whole_shape_without_dumping_samples() {
     let shown = ramp_result().to_display_string();
-    assert_eq!(shown, "ScalarField 2x3x4");
+
+    assert!(shown.starts_with("ScalarField"), "got: {shown}");
+    assert!(
+        shown.contains("grid:   2 x 3 x 4 samples (24)"),
+        "got: {shown}"
+    );
+    // 1 Å axes.
+    assert!(
+        shown.contains("step:   1.000 x 1.000 x 1.000 A"),
+        "got: {shown}"
+    );
+    // Node-centered bounds: 2x3x4 samples span 1x2x3 steps, NOT 2x3x4.
+    assert!(
+        shown.contains("extent: 1.00 x 2.00 x 3.00 A"),
+        "got: {shown}"
+    );
+    assert!(
+        shown.contains("box:    (0.00, 0.00, 0.00) .. (1.00, 2.00, 3.00)"),
+        "got: {shown}"
+    );
+    // Ramp min/max: value(0,0,0) = 0, value(1,2,3) = 123.
+    assert!(
+        shown.contains("values: 0.0000e0 .. 1.2300e2"),
+        "got: {shown}"
+    );
+    assert!(shown.contains("memory:"), "got: {shown}");
+
+    // An axis-aligned grid must NOT be flagged as sheared.
+    assert!(!shown.contains("sheared"), "got: {shown}");
+    // No description was attached, so no stray blank line stands in for one.
+    assert_eq!(shown.lines().count(), 7, "got: {shown}");
+
+    // The samples themselves are never printed. The tooltip caps at 15 lines /
+    // 500 chars, and a readout that overflows it loses its own last line.
+    assert!(
+        shown.len() < 400,
+        "the readout is a summary, not a dump: {shown}"
+    );
+    assert!(
+        shown.lines().count() <= 15,
+        "the tooltip truncates past 15 lines"
+    );
 }
 
+/// A non-negative field says so, because it has no negative lobe — the
+/// extractor skips a whole sign pass and the reader should expect one surface
+/// rather than two.
 #[test]
-fn detailed_string_reports_grid_and_value_range() {
+fn display_string_names_the_signedness() {
+    assert!(
+        ramp_result().to_display_string().contains("(non-negative)"),
+        "the ramp runs 0..123"
+    );
+
+    let grid = GridGeometry {
+        origin: DVec3::ZERO,
+        axes: [DVec3::X, DVec3::Y, DVec3::Z],
+        dims: [2, 2, 2],
+    };
+    let signed = SampledField::new(grid, vec![-1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0])
+        .expect("well-formed");
+    assert!(
+        NetworkResult::ScalarField(Arc::new(signed))
+            .to_display_string()
+            .contains("(signed)")
+    );
+}
+
+/// `GridGeometry::spacing` returns three axis *lengths* and is exact only for
+/// an axis-aligned grid — the `.cube` format permits shear. The lengths are
+/// still printed (they are the steps along the axes) but the reader is told
+/// they do not describe a box.
+#[test]
+fn display_string_flags_a_sheared_grid() {
+    let grid = GridGeometry {
+        origin: DVec3::ZERO,
+        axes: [DVec3::X, DVec3::new(0.5, 1.0, 0.0), DVec3::Z],
+        dims: [2, 2, 2],
+    };
+    let sheared = SampledField::new(grid, vec![0.0; 8]).expect("well-formed");
+    assert!(
+        NetworkResult::ScalarField(Arc::new(sheared))
+            .to_display_string()
+            .contains("sheared - axes are not orthogonal")
+    );
+}
+
+/// A description is the only thing that says *what* a field is — the values
+/// alone cannot distinguish an orbital amplitude from a density. It renders
+/// directly under the header, and its absence leaves no blank line.
+#[test]
+fn display_string_carries_the_description_when_there_is_one() {
+    let described = ramp_field().with_description("Total SCF Density\n  MO 5 (HOMO)");
+    let shown = NetworkResult::ScalarField(Arc::new(described)).to_display_string();
+
+    // Blank/whitespace lines are dropped and the rest joined, so a `.cube` whose
+    // second comment line is empty does not produce a dangling separator.
+    assert!(
+        shown.contains("Total SCF Density - MO 5 (HOMO)"),
+        "got: {shown}"
+    );
+    assert_eq!(
+        shown.lines().nth(1).map(str::trim),
+        Some("Total SCF Density - MO 5 (HOMO)"),
+        "the description sits directly under the header: {shown}"
+    );
+}
+
+/// `to_detailed_string` is the same builder plus the grid's origin and axis
+/// vectors. Sharing one source is what stops the CLI readout and the tooltip
+/// drifting apart.
+#[test]
+fn detailed_string_adds_origin_and_axes_to_the_same_block() {
     let detailed = ramp_result().to_detailed_string();
-    assert!(detailed.starts_with("ScalarField:"), "got: {detailed}");
-    assert!(detailed.contains("dims: 2x3x4"), "got: {detailed}");
-    // Ramp min/max: value(0,0,0) = 0, value(1,2,3) = 123.
-    assert!(detailed.contains("value_range:"), "got: {detailed}");
+    let shown = ramp_result().to_display_string();
+
+    // Everything the tooltip shows is here too.
+    for line in shown.lines() {
+        assert!(
+            detailed.contains(line.trim()),
+            "detailed dropped {line:?}: {detailed}"
+        );
+    }
+    assert!(
+        detailed.contains("origin: (0.000000, 0.000000, 0.000000)"),
+        "got: {detailed}"
+    );
+    assert!(
+        detailed.contains("axis a: (1.000000, 0.000000, 0.000000)"),
+        "got: {detailed}"
+    );
+    assert!(
+        detailed.contains("axis b: (0.000000, 1.000000, 0.000000)"),
+        "got: {detailed}"
+    );
+    assert!(
+        detailed.contains("axis c: (0.000000, 0.000000, 1.000000)"),
+        "got: {detailed}"
+    );
+
     let range = ramp_field()
         .value_range()
         .expect("sampled field has a range");
     assert_eq!(range, (0.0, 123.0));
+
     // The samples themselves are never printed.
     assert!(
-        detailed.len() < 400,
+        detailed.len() < 600,
         "detailed string is a summary, not a dump"
     );
 }

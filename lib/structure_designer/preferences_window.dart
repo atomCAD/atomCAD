@@ -38,6 +38,12 @@ class PreferencesKeys {
       Key('pref_hide_coplanar_wireframe_edges_checkbox');
   static const Key showGeometryShellForAtomicCheckbox =
       Key('pref_show_geometry_shell_for_atomic_checkbox');
+  static const Key isosurfaceQualityMultiplierInput =
+      Key('pref_isosurface_quality_multiplier_input');
+  static const Key isosurfaceFallbackSpacingInput =
+      Key('pref_isosurface_fallback_spacing_input');
+  static const Key isosurfaceCellBudgetInput =
+      Key('pref_isosurface_cell_budget_input');
 
   // Atomic structure visualization
   static const Key atomicVisualizationDropdown =
@@ -516,6 +522,85 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                                 ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Isosurface extraction. These are quality settings,
+                          // not document data: changing one re-extracts every
+                          // displayed isosurface without touching the project.
+                          const Divider(),
+                          Text(
+                            'Isosurface extraction',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.small),
+                          FloatInput(
+                            key: PreferencesKeys
+                                .isosurfaceQualityMultiplierInput,
+                            label: 'Quality multiplier',
+                            value: _preferences.geometryVisualizationPreferences
+                                .isosurfaceQualityMultiplier,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.geometryVisualizationPreferences
+                                    .isosurfaceQualityMultiplier = value;
+                              });
+                              _applyPreferences();
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Rounded to a whole-number subdivision of the '
+                            "field's own grid, at least 1. 2 halves the step "
+                            'and costs 8x the cells. Below 1 does not coarsen — '
+                            'the stored grid is the floor.',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+                          FloatInput(
+                            key: PreferencesKeys.isosurfaceFallbackSpacingInput,
+                            label: 'Fallback spacing (Å)',
+                            value: _preferences.geometryVisualizationPreferences
+                                .isosurfaceFallbackSpacing,
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.geometryVisualizationPreferences
+                                    .isosurfaceFallbackSpacing = value;
+                              });
+                              _applyPreferences();
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Cell size used for fields that carry no sample '
+                            'grid of their own.',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+                          IntInput(
+                            key: PreferencesKeys.isosurfaceCellBudgetInput,
+                            label: 'Cell budget',
+                            value: _preferences.geometryVisualizationPreferences
+                                .isosurfaceCellBudget
+                                .toInt(),
+                            onChanged: (value) {
+                              setState(() {
+                                _preferences.geometryVisualizationPreferences
+                                        .isosurfaceCellBudget =
+                                    BigInt.from(value < 0 ? 0 : value);
+                              });
+                              _applyPreferences();
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Upper limit on marching-cubes cells. A surface '
+                            'over the limit is refused with an error on the '
+                            'node rather than freezing the app.',
+                            style: TextStyle(fontSize: 11),
                           ),
                         ],
                       ),

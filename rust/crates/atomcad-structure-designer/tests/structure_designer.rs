@@ -248,6 +248,9 @@ mod import_cif_test;
 #[path = "structure_designer/import_cube_test.rs"]
 mod import_cube_test;
 
+#[path = "structure_designer/isosurface_node_test.rs"]
+mod isosurface_node_test;
+
 #[path = "structure_designer/infer_bonds_test.rs"]
 mod infer_bonds_test;
 

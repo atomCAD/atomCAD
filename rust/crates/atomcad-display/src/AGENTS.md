@@ -15,7 +15,7 @@ the workspace DAG and for why `scene_tessellator` lives one layer up.
 | `csg_to_poly_mesh` | `GeoNode` → `PolyMesh` (csgrs, earcut for sketches) |
 | `poly_mesh` / `poly_mesh_tessellator` | face-centric mesh + its wireframe/solid tessellation |
 | `surface_point_cloud` / `surface_point_tessellator` | SDF surface splatting |
-| `isosurface/` | `IsosurfaceData` → `SurfaceMesh` (marching cubes) |
+| `isosurface/` | `IsosurfaceData` → `SurfaceMesh` (marching cubes), plus `SurfaceMesh` → renderer `Mesh` |
 | `coordinate_system_tessellator`, `unit_cell_wireframe_tessellator` | overlays |
 | `gadget`, `half_space_utils`, `xyz_gadget_utils` | shared gadget geometry, half hit-test |
 | `preferences` | `DisplayPreferences` and friends |
@@ -49,6 +49,10 @@ on ambiguous faces. If you touch `case_table.rs`, the property to preserve is:
 Closure across the whole grid follows from it by induction, for any field.
 `isosurface_case_table_test.rs` checks it directly over all 256 masks; a
 per-example "the sphere came out closed" count does **not** imply it.
+
+`tessellator.rs` is the last hop, `SurfaceMesh` → renderer `Mesh`. It takes no
+`Material`, unlike every other tessellator here: an isosurface carries its color
+per vertex, so a caller-supplied albedo would only be discarded.
 
 Two pitfalls that cost real time:
 

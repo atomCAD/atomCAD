@@ -31,6 +31,15 @@ use thiserror::Error;
 /// cancellation noise.
 pub const DEFAULT_GRADIENT_STEP: f64 = 0.05;
 
+/// Cap on a stored [`ScalarField::description`], in characters.
+///
+/// The description is producer-supplied free text with no length contract —
+/// some writers put a whole basis-set specification in it — and its consumers
+/// are a pin tooltip and a node subtitle. Long enough for the informative case
+/// ("MO 5 (HOMO), B3LYP/6-31G*"), short enough that a pathological one cannot
+/// push everything else out of the readout.
+pub const MAX_DESCRIPTION_CHARS: usize = 120;
+
 /// How far outside a sampled field's box a point may sit and still be treated
 /// as *on* the boundary, in fractional-index units scaled by the axis span.
 ///
@@ -280,6 +289,22 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     /// thought to name.
     fn value_range(&self) -> Option<(f64, f64)>;
 
+    /// Free-text description of what the field *is*, when the source carried
+    /// one. `None` when it did not, which is the honest answer — do not
+    /// synthesize a label from the numbers.
+    ///
+    /// Nothing about a field's *values* says whether they are an orbital
+    /// amplitude, a density or an electrostatic potential, and the thresholds
+    /// those quantities are drawn at differ by orders of magnitude. The only
+    /// place that knowledge exists is the producer's own free text — a `.cube`
+    /// file's two comment lines — so a reader who wants to pick an isolevel
+    /// needs it carried through rather than parsed past.
+    ///
+    /// Defaulted to `None` so an analytic field is not obliged to invent one.
+    fn description(&self) -> Option<&str> {
+        None
+    }
+
     /// Approximate footprint of this field in bytes, including its heap.
     ///
     /// On the trait rather than in a `MemorySizeEstimator` impl because a field
@@ -325,6 +350,13 @@ pub struct SampledField {
     samples: Vec<f32>,
     /// Min and max over `samples`.
     value_range: (f64, f64),
+    /// Free-text label from the source, if it carried one — see
+    /// [`ScalarField::description`]. Set through
+    /// [`SampledField::with_description`] rather than through
+    /// [`SampledField::new`], so that every existing construction site (tests,
+    /// fixtures, analytic samplers) stays untouched and a producer that has no
+    /// label does not have to pass `None` to say so.
+    description: Option<String>,
 }
 
 /// Prints a summary — dims and value range — never the samples themselves.
@@ -391,7 +423,39 @@ impl SampledField {
             inv_basis,
             samples,
             value_range: (min, max),
+            description: None,
         })
+    }
+
+    /// Attach the source's free-text description.
+    ///
+    /// **Normalizes as it stores**, so every reader gets the same shape without
+    /// repeating the cleanup: lines are trimmed, blank ones dropped (a `.cube`
+    /// routinely carries one useful comment line and one empty or boilerplate
+    /// one), the rest joined with `" - "`, and the result truncated to
+    /// [`MAX_DESCRIPTION_CHARS`]. Text that is empty after all that stores as
+    /// `None` — "no description" and "a description that is blank" are the same
+    /// thing to every consumer, and collapsing them here means none of them has
+    /// to check for both.
+    pub fn with_description(mut self, description: &str) -> Self {
+        let joined = description
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" - ");
+        self.description = if joined.is_empty() {
+            None
+        } else if joined.chars().count() > MAX_DESCRIPTION_CHARS {
+            // Truncate on a char boundary — a `.cube` comment is nominally
+            // ASCII but nothing enforces it, and slicing bytes would panic.
+            let mut truncated: String = joined.chars().take(MAX_DESCRIPTION_CHARS).collect();
+            truncated.push('…');
+            Some(truncated)
+        } else {
+            Some(joined)
+        };
+        self
     }
 
     /// The grid this field is stored on.
@@ -554,6 +618,10 @@ impl ScalarField for SampledField {
 
     fn value_range(&self) -> Option<(f64, f64)> {
         Some(self.value_range)
+    }
+
+    fn description(&self) -> Option<&str> {
+        self.description.as_deref()
     }
 
     /// The sample grid dominates; everything else is a handful of inline

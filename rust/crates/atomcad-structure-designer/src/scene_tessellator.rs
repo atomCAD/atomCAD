@@ -4,6 +4,7 @@ use crate::structure_designer_scene::{NodeOutput, StructureDesignerScene};
 use atomcad_display::atomic_tessellator;
 use atomcad_display::coordinate_system_tessellator;
 use atomcad_display::guided_placement_tessellator;
+use atomcad_display::isosurface as isosurface_tessellator;
 use atomcad_display::poly_mesh_tessellator::{
     tessellate_poly_mesh, tessellate_poly_mesh_to_line_mesh,
 };
@@ -353,6 +354,22 @@ fn tessellate_non_lightweight_content(
                             Some(&highlighted_material),
                         );
                     }
+                }
+
+                NodeOutput::Isosurface(surface_mesh) => {
+                    // P3 of `doc/design_isosurface_node.md` is deliberately
+                    // opaque-only: every surface joins the opaque triangle
+                    // mesh, which is `main_mesh` — the mesh the existing
+                    // `triangle_pipeline` draws, and the one the design names
+                    // `isosurface_opaque_mesh`. A second, separately-owned mesh
+                    // for the same pipeline would buy nothing; the split into
+                    // two meshes only starts to mean something when the
+                    // *transparent* one arrives with its own culled pipelines.
+                    //
+                    // Consequence: the node's `alpha` property is stored,
+                    // serialized and editable but has no render effect yet, as
+                    // the design specifies.
+                    isosurface_tessellator::tessellate_surface_mesh(&mut main_mesh, surface_mesh);
                 }
 
                 NodeOutput::DrawingPlane(drawing_plane) => {

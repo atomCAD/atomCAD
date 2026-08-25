@@ -2807,6 +2807,14 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  void setIsosurfaceData(BigInt nodeId, APIIsosurfaceData data) {
+    structure_designer_api.setIsosurfaceData(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain),
+        nodeId: nodeId,
+        data: data);
+    refreshFromKernel();
+  }
+
   void setRelaxData(BigInt nodeId, APIRelaxData data) {
     relax_api.setRelaxData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

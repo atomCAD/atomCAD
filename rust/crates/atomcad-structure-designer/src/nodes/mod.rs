@@ -55,6 +55,7 @@ pub mod infer_bonds;
 pub mod int;
 pub mod intersect;
 pub mod intersect_2d;
+pub mod isosurface;
 pub mod ivec2;
 pub mod ivec3;
 pub mod lattice_symop;

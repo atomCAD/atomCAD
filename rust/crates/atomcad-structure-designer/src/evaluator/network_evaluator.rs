@@ -25,6 +25,7 @@ use crate::structure_designer_scene::{DisplayedPinOutput, NodeOutput, NodeSceneD
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use atomcad_display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
+use atomcad_display::isosurface::{ExtractionSettings, extract_isosurface};
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::csg_cache::CsgConversionCache;
 
@@ -1334,6 +1335,70 @@ impl NetworkEvaluator {
         (output, geo_tree)
     }
 
+    /// Runs marching cubes on an `Isosurface` value — the stage-1 → stage-2
+    /// conversion of `doc/design_isosurface_node.md`.
+    ///
+    /// Deliberately **its own** conversion function rather than a branch of
+    /// `generate_explicit_mesh_output`: that one is CSG-shaped and is only
+    /// reached from the `GeometryVisualization::ExplicitMesh` arms, so routing
+    /// through it would make an isosurface invisible for anyone working in
+    /// `SurfaceSplatting` mode. This one is reached unconditionally.
+    ///
+    /// Extraction is uncached, by design (§No extraction cache): scene
+    /// generation runs at user-action frequency, not per frame, and an
+    /// isosurface has no subtree structure for a `csg_conversion_cache`-style
+    /// recursive cache to harvest.
+    fn generate_isosurface_output(
+        &mut self,
+        result: NetworkResult,
+        node_id: u64,
+        context: &mut NetworkEvaluationContext,
+        geometry_visualization_preferences: &GeometryVisualizationPreferences,
+    ) -> NodeOutput {
+        let NetworkResult::Isosurface(data) = result else {
+            return NodeOutput::None;
+        };
+
+        let settings = ExtractionSettings {
+            quality_multiplier: geometry_visualization_preferences.isosurface_quality_multiplier,
+            fallback_spacing: geometry_visualization_preferences.isosurface_fallback_spacing,
+            cell_budget: geometry_visualization_preferences.isosurface_cell_budget,
+        };
+
+        match extract_isosurface(&data, &settings) {
+            Ok(mesh) => NodeOutput::Isosurface(mesh),
+            Err(error) => {
+                // Reported from the display conversion because node data cannot
+                // see preferences and so cannot know the cell count. Four
+                // details make this reach the UI, and none is optional:
+                //
+                // - key with `context.node_ref(..)`, never a bare id: the scope
+                //   pops happen *after* this conversion, so an `isosurface`
+                //   inside a HOF body keys to the right address;
+                // - `or_insert_with`, never `insert`: if the node already
+                //   failed in `eval`, that error is the root cause and wins;
+                // - record no origin link, which is what makes
+                //   `resolve_root_cause` treat this as a root cause — nothing
+                //   upstream caused a preference breach;
+                // - the message names the cell count, the budget and the
+                //   preference to lower, because none of the three is visible
+                //   from the node.
+                //
+                // It is reported but **not poisoning**: cone-poisoning is
+                // decided at validation time, and by now the `Isosurface` value
+                // has already flowed. The value is fine; only the picture is
+                // missing. `generate_scene_scoped` clears `node_errors` at the
+                // top of each pass, so the entry disappears by itself on the
+                // first pass where the budget fits.
+                context
+                    .node_errors
+                    .entry(context.node_ref(node_id))
+                    .or_insert_with(|| error.to_string());
+                NodeOutput::None
+            }
+        }
+    }
+
     /// Converts a NetworkResult to a NodeOutput based on the data type and visualization preferences.
     #[allow(clippy::too_many_arguments)]
     fn convert_result_to_node_output<'a>(
@@ -1353,6 +1418,18 @@ impl NetworkEvaluator {
             } else {
                 (NodeOutput::None, None)
             }
+        } else if *data_type == DataType::Isosurface {
+            // Unconditional: an isosurface is not CSG geometry, so it must not
+            // be gated on `GeometryVisualization`.
+            (
+                self.generate_isosurface_output(
+                    result,
+                    node_id,
+                    context,
+                    geometry_visualization_preferences,
+                ),
+                None,
+            )
         } else if *data_type == DataType::Geometry2D {
             if geometry_visualization_preferences.geometry_visualization
                 == GeometryVisualization::SurfaceSplatting

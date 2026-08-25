@@ -8,12 +8,19 @@ class FloatInput extends StatefulWidget {
   final ValueChanged<double> onChanged;
   final Key? inputKey;
 
+  /// When false the field is greyed out and refuses focus. Used where a value
+  /// is stored and worth showing but nothing reads it in the current
+  /// configuration — the `isosurface` colormap domain with no `color_field`
+  /// wired, for instance. The value still renders, so it stays inspectable.
+  final bool enabled;
+
   const FloatInput({
     super.key,
     required this.label,
     required this.value,
     required this.onChanged,
     this.inputKey,
+    this.enabled = true,
   });
 
   @override
@@ -70,6 +77,7 @@ class _FloatInputState extends State<FloatInput> {
         Text(widget.label),
         TextField(
           key: widget.inputKey,
+          enabled: widget.enabled,
           decoration: const InputDecoration(
             border: OutlineInputBorder(),
           ),

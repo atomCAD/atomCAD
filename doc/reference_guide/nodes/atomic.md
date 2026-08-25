@@ -67,7 +67,7 @@ Imports **volumetric scalar data** from a Gaussian `.cube` file — the standard
 
 **Output pins**
 
-- `field: ScalarField` — the sampled data. `ScalarField` is a scalar function of 3D space, and it is what a future isosurface node will draw. It renders nothing in the 3D viewport on its own.
+- `field: ScalarField` — the sampled data. `ScalarField` is a scalar function of 3D space; wire it into an [`isosurface`](#isosurface) node to draw it. It renders nothing in the 3D viewport on its own.
 - `molecule: Molecule` — the atoms from the file's atom block, with bonds inferred. This is the atomic structure the field was computed around, and displaying it is the quickest way to confirm a file loaded correctly.
 
 **Coordinates and units**
@@ -83,7 +83,52 @@ Field **values** are passed through unconverted, in whatever atomic unit the sou
 **Typical pipeline**
 
 - *Check the import:* display the `molecule` output pin. You should see the expected structure at the expected size; a molecule about 1.9× too large means the file's units are not what the header implies.
-- *Read the field:* wire `field` into a [`sample_field`](./math_programming.md#sample_field) node together with a `vec3`, and wire the result into `print` to read values off the Console. Nothing renders a field in the viewport yet — visualization is a separate piece of work — so `sample_field` and the `molecule` pin are how you inspect an import.
+- *Draw the field:* wire `field` into an [`isosurface`](#isosurface) node.
+- *Read the field numerically:* wire `field` into a [`sample_field`](./math_programming.md#sample_field) node together with a `vec3`, and wire the result into `print` to read values off the Console.
+- *See what you loaded:* hover the **`field` output pin**. The readout names the file's own comment text, the grid, the step and extent in Ångström, the box the field occupies, the **value range** (and whether it is signed), and the memory it takes. Value readouts live on output pins only — there is nothing to hover on an input pin.
+
+## isosurface
+
+Draws the surface where a scalar field equals a given level — the standard way to picture a molecular orbital, an electron density or an electrostatic potential. Wire an [`import_cube`](#import_cube) `field` output into it and display the node.
+
+![TODO(image): an `isosurface` node wired from `import_cube`, with the two-lobed orbital surface in the viewport](TODO)
+
+**Input pins**
+
+- `field: ScalarField` — **required.** The field whose level set is drawn.
+- `color_field: ScalarField` — optional. Reserved for painting the surface by a second quantity; it has no effect yet.
+- `level: Float` — optional. Overrides the stored `level` property when wired.
+
+**Output pin**
+
+- `surface: Isosurface` — the surface specification. Display the node to see it; nothing downstream consumes an `Isosurface` yet.
+
+**Properties**
+
+| Property | Default | What it does |
+|---|---|---|
+| `level` | `0.02` | Isolevel **magnitude** — see below |
+| Positive color | blue | Color of the `+level` lobe |
+| Negative color | red | Color of the `-level` lobe |
+| Opacity | `0.4` | Stored and saved, but **surfaces currently render fully opaque** |
+| Colormap, range min/max | blue-white-red, `-0.05`…`0.05` | Reserved for `color_field`; disabled while it is unwired |
+
+**The level is a magnitude, not a signed value.** The surface is extracted at `+level` *and* at `-level`, so a signed field such as an orbital shows both lobes at once, painted in the two phase colors. A level of zero or below is an error rather than a choice: at zero the two passes coincide, and a negative level would just be the positive one relabelled. An orbital's overall sign is arbitrary — the same calculation run twice can hand back `psi` or `-psi` — so the **swap button** between the two color swatches is how you match a published figure.
+
+**Two things the node cannot tell you, and both look like breakage**
+
+- *A level above anything in the field draws nothing, silently.* An empty viewport looks exactly like a failed import, and there is no warning. Hover the **`field` output pin of the upstream `import_cube`** — value readouts are on output pins, so there is nothing to hover on the `isosurface` node's own input. That readout carries both halves of what you need: the **value range**, and the file's own **comment text** saying what the quantity is. Typical starting points are ±0.02–0.05 for an orbital amplitude and 0.002 for a density's molecular surface — an order of magnitude apart, which is why one default cannot serve both.
+- *A `color_field` smaller than the surface paints the overhang neutral.* Outside its own box a field reads as `0.0`, which on a symmetric blue-white-red ramp is plain white — a plausible-looking picture that is simply missing data. It is easy to hit, because orbitals and potentials often come from separately-computed files with different boxes. (Not reachable yet: `color_field` has no effect in this version.)
+
+**Resolution is a preference, not part of the document**
+
+Extraction quality lives in *Preferences → Geometry Visualization → Isosurface extraction*, alongside the other geometry-quality knobs, and is described in [the UI guide](../ui.md). Changing it re-extracts every displayed surface and **does not modify your project** — nothing is marked dirty, no undo entry appears, and the saved file is untouched. The `level`, by contrast, is part of the design and is saved with it.
+
+The one preference worth knowing about before you meet it is the **cell budget**. A grid past the budget is refused with a red error on the node naming the cell count, the budget and the multiplier to lower — the node keeps its value, only the picture is missing. That is deliberate: a coarser surface handed to you silently would be worse than a refusal.
+
+**Typical pipeline**
+
+`import_cube` → `isosurface`, then display both the `isosurface` node and `import_cube`'s `molecule` pin. The surface and the atoms should be registered with each other; a surface roughly 1.9× the size of the molecule means the file's units are not what its header implies.
 
 ## materialize
 

@@ -172,16 +172,24 @@ fn detailed_string_reports_level_coloring_and_field_dims() {
     );
 }
 
-/// Promoted from optional to required by `doc/design_isosurface_node.md`: the
-/// value range shown on pin hover is how a user picks a workable `level`, since
-/// a `level` outside the field's range renders nothing and is deliberately
-/// silent.
+/// Required by `doc/design_isosurface_node.md`: the value range is how a user
+/// picks a workable `level`, since a `level` outside the field's range renders
+/// nothing and is deliberately silent.
+///
+/// **This asserts `to_display_string`, not `to_detailed_string`,** and the
+/// distinction is the whole point. The pin-hover tooltip renders
+/// `NodeView.outputPinStrings`, which is built from `to_display_string`;
+/// `to_detailed_string` is reachable only from the CLI/AI `evaluate_node
+/// --verbose` path. An earlier version of this test asserted the detailed
+/// string while its own doc comment claimed to be about pin hover — so the
+/// design's stated prerequisite ("the value range then shows on pin hover")
+/// was false in the GUI and the suite said nothing.
 #[test]
-fn scalar_field_detail_readout_carries_the_value_range() {
+fn scalar_field_hover_readout_carries_the_value_range() {
     let field = ramp_field([2, 3, 4]);
-    let detailed = NetworkResult::ScalarField(field.clone()).to_detailed_string();
-    assert!(detailed.contains("dims: 2x3x4"), "got: {detailed}");
-    assert!(detailed.contains("value_range:"), "got: {detailed}");
+    let shown = NetworkResult::ScalarField(field.clone()).to_display_string();
+    assert!(shown.contains("grid:   2 x 3 x 4"), "got: {shown}");
+    assert!(shown.contains("values:"), "got: {shown}");
     assert!(field.value_range().is_some());
 }
 

@@ -924,13 +924,13 @@ impl NetworkResult {
                     structure.motif_offset.z,
                 )
             }
-            NetworkResult::ScalarField(field) => match field.native_grid() {
-                Some(grid) => format!(
-                    "ScalarField {}x{}x{}",
-                    grid.dims[0], grid.dims[1], grid.dims[2]
-                ),
-                None => "ScalarField".to_string(),
-            },
+            // Deliberately multi-line: this is the string the pin-hover
+            // tooltip shows, and it is the only place a GUI user can learn what
+            // a field contains. `to_detailed_string` is reachable only from the
+            // CLI/AI `evaluate_node --verbose` path, so parking the facts there
+            // would put them out of reach of exactly the person picking an
+            // isolevel. See `describe_scalar_field`.
+            NetworkResult::ScalarField(field) => describe_scalar_field(field.as_ref(), false),
             NetworkResult::Isosurface(data) => {
                 let coloring = match &data.coloring {
                     IsosurfaceColoring::Phase { .. } => "phase",
@@ -1022,44 +1022,10 @@ impl NetworkResult {
                     structure.motif.to_detailed_string(),
                 )
             }
-            NetworkResult::ScalarField(field) => {
-                let mut out = String::from("ScalarField:");
-                match field.native_grid() {
-                    Some(grid) => {
-                        let spacing = grid.spacing();
-                        out.push_str(&format!(
-                            "\n  dims: {}x{}x{}\n  origin: ({:.6}, {:.6}, {:.6})\n  spacing: ({:.6}, {:.6}, {:.6})",
-                            grid.dims[0],
-                            grid.dims[1],
-                            grid.dims[2],
-                            grid.origin.x,
-                            grid.origin.y,
-                            grid.origin.z,
-                            spacing.x,
-                            spacing.y,
-                            spacing.z,
-                        ));
-                    }
-                    None => out.push_str("\n  dims: analytic (no native grid)"),
-                }
-                let bounds = field.suggested_bounds();
-                out.push_str(&format!(
-                    "\n  suggested_bounds: ({:.6}, {:.6}, {:.6}) .. ({:.6}, {:.6}, {:.6})",
-                    bounds.min.x,
-                    bounds.min.y,
-                    bounds.min.z,
-                    bounds.max.x,
-                    bounds.max.y,
-                    bounds.max.z,
-                ));
-                match field.value_range() {
-                    Some((min, max)) => {
-                        out.push_str(&format!("\n  value_range: {:.6e} .. {:.6e}", min, max))
-                    }
-                    None => out.push_str("\n  value_range: unknown"),
-                }
-                out
-            }
+            // Same builder as `to_display_string`, with the grid's origin and
+            // axis vectors added - the two readouts share one source so they
+            // cannot drift, and shear is the one thing only the axes show.
+            NetworkResult::ScalarField(field) => describe_scalar_field(field.as_ref(), true),
             NetworkResult::Isosurface(data) => {
                 let mut out = format!(
                     "Isosurface:\n  level: {:.6e}\n  alpha: {:.6}\n  field: {}",
@@ -1199,6 +1165,153 @@ impl NetworkResult {
             _ => Err(format!("Unsupported CLI parameter type: {}", data_type)),
         }
     }
+}
+
+/// The `ScalarField` readout, shared by `to_display_string` (the pin-hover
+/// tooltip) and `to_detailed_string` (the CLI/AI `--verbose` path).
+///
+/// **One builder, two callers, so the two can never drift.** `verbose` adds the
+/// grid's `origin` and axis vectors; everything else is identical, because a
+/// GUI user picking an isolevel and a CLI user inspecting an import want the
+/// same facts.
+///
+/// Why this is a block rather than the one-liner it used to be: a scalar field
+/// carries no semantic tag, so *nothing* here can be inferred from anything
+/// else. The value range is what makes an isolevel pickable at all (a level
+/// outside it renders an empty surface with no error — the `isosurface` node's
+/// silence is deliberate, see `doc/design_isosurface_node.md` §Errors); the box
+/// is what diagnoses a `color_field` smaller than the surface it paints; and
+/// the description is the only thing that says whether these numbers are an
+/// orbital amplitude or a density, quantities whose usual levels differ by an
+/// order of magnitude.
+fn describe_scalar_field(field: &dyn ScalarField, verbose: bool) -> String {
+    let mut out = String::from("ScalarField");
+
+    if let Some(description) = field.description() {
+        out.push_str("\n  ");
+        out.push_str(description);
+    }
+
+    match field.native_grid() {
+        Some(grid) => {
+            out.push_str(&format!(
+                "\n  grid:   {} x {} x {} samples ({})",
+                grid.dims[0],
+                grid.dims[1],
+                grid.dims[2],
+                group_digits(grid.sample_count() as u128),
+            ));
+
+            // `GridGeometry::spacing` returns three axis *lengths* and is exact
+            // only for an axis-aligned grid — the `.cube` format permits shear.
+            // Print the lengths either way (they are still the step sizes along
+            // the axes) but say so when they do not describe a box, rather than
+            // letting a reader take three numbers for a shape they are not.
+            let step = grid.spacing();
+            out.push_str(&format!(
+                "\n  step:   {:.3} x {:.3} x {:.3} A{}",
+                step.x,
+                step.y,
+                step.z,
+                if is_sheared(&grid) {
+                    "  (sheared - axes are not orthogonal)"
+                } else {
+                    ""
+                },
+            ));
+
+            let extent = grid.bounds().size();
+            out.push_str(&format!(
+                "\n  extent: {:.2} x {:.2} x {:.2} A",
+                extent.x, extent.y, extent.z
+            ));
+
+            if verbose {
+                out.push_str(&format!(
+                    "\n  origin: ({:.6}, {:.6}, {:.6})",
+                    grid.origin.x, grid.origin.y, grid.origin.z
+                ));
+                for (label, axis) in ["a", "b", "c"].iter().zip(grid.axes.iter()) {
+                    out.push_str(&format!(
+                        "\n  axis {}: ({:.6}, {:.6}, {:.6})",
+                        label, axis.x, axis.y, axis.z
+                    ));
+                }
+            }
+        }
+        None => out.push_str("\n  grid:   analytic (no native grid)"),
+    }
+
+    let bounds = field.suggested_bounds();
+    out.push_str(&format!(
+        "\n  box:    ({:.2}, {:.2}, {:.2}) .. ({:.2}, {:.2}, {:.2})",
+        bounds.min.x, bounds.min.y, bounds.min.z, bounds.max.x, bounds.max.y, bounds.max.z
+    ));
+
+    match field.value_range() {
+        Some((min, max)) => out.push_str(&format!(
+            "\n  values: {:.4e} .. {:.4e}  ({})",
+            min,
+            max,
+            // Not cosmetic: a non-negative field has no negative lobe, so the
+            // extractor skips a whole pass and the reader should expect one
+            // surface rather than two.
+            if min >= 0.0 { "non-negative" } else { "signed" },
+        )),
+        // An analytic field has no stored data to scan. Not a failure — say so
+        // rather than omitting the line, so its absence is not read as zero.
+        None => out.push_str("\n  values: unknown (analytic source)"),
+    }
+
+    out.push_str(&format!(
+        "\n  memory: {}",
+        format_bytes(field.estimate_memory_bytes())
+    ));
+
+    out
+}
+
+/// Whether a grid's axis triple is non-orthogonal, i.e. `spacing()` does not
+/// describe a box. The tolerance is on the normalized dot product, so it is
+/// scale-free.
+fn is_sheared(grid: &atomcad_crystolecule::field::GridGeometry) -> bool {
+    const ORTHOGONALITY_TOLERANCE: f64 = 1e-6;
+    for (a, b) in [(0, 1), (0, 2), (1, 2)] {
+        let (u, v) = (grid.axes[a], grid.axes[b]);
+        let denominator = u.length() * v.length();
+        if denominator > 0.0 && (u.dot(v) / denominator).abs() > ORTHOGONALITY_TOLERANCE {
+            return true;
+        }
+    }
+    false
+}
+
+/// Bytes as something a person reads. Binary units, because this reports an
+/// in-memory footprint.
+fn format_bytes(bytes: usize) -> String {
+    const KB: usize = 1024;
+    const MB: usize = KB * 1024;
+    const GB: usize = MB * 1024;
+    match bytes {
+        b if b >= GB => format!("{:.1} GB", b as f64 / GB as f64),
+        b if b >= MB => format!("{:.1} MB", b as f64 / MB as f64),
+        b if b >= KB => format!("{:.1} KB", b as f64 / KB as f64),
+        b => format!("{} B", b),
+    }
+}
+
+/// Thousands separators, for the sample count — six- and seven-digit runs are
+/// unreadable without them.
+fn group_digits(value: u128) -> String {
+    let digits = value.to_string();
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
 }
 
 /// One-line shape summary of a field: its grid dimensions, or `analytic` when

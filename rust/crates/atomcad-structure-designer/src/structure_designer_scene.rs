@@ -4,6 +4,7 @@ use crate::node_network::NodeRef;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
+use atomcad_display::isosurface::SurfaceMesh;
 use atomcad_display::poly_mesh::PolyMesh;
 use atomcad_display::surface_point_cloud::SurfacePointCloud;
 use atomcad_display::surface_point_cloud::SurfacePointCloud2D;
@@ -48,6 +49,14 @@ pub enum NodeOutput {
 
     /// Drawing plane (from drawing plane nodes)
     DrawingPlane(DrawingPlane),
+
+    /// An extracted isosurface: positions, gradient normals, per-vertex albedo
+    /// and the connected components the transparency sort orders. Produced by
+    /// `generate_isosurface_output` from a `NetworkResult::Isosurface`, which
+    /// carries only the *specification* — the marching-cubes run happens at
+    /// this conversion, because it is the first stage that can see the
+    /// extraction preferences.
+    Isosurface(SurfaceMesh),
 
     /// No explicit output (for nodes that don't produce displayable results)
     None,
@@ -412,6 +421,7 @@ impl MemorySizeEstimator for NodeOutput {
             }
             NodeOutput::PolyMesh(poly_mesh) => poly_mesh.estimate_memory_bytes(),
             NodeOutput::DrawingPlane(_drawing_plane) => std::mem::size_of::<DrawingPlane>(),
+            NodeOutput::Isosurface(surface_mesh) => surface_mesh.estimate_memory_bytes(),
             NodeOutput::None => 0,
         };
 

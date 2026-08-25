@@ -91,6 +91,29 @@ pub struct GeometryVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_hide_coplanar_wireframe_edges")]
     pub hide_coplanar_wireframe_edges: bool,
+    /// **Integer** subdivision of a sampled field's native grid for isosurface
+    /// extraction, rounded and clamped to `>= 1`; `2` halves the step. Values
+    /// below `1` do not coarsen — a sampled field's own grid is the floor,
+    /// because at `subdiv == 1` every marching-cubes corner is a stored sample
+    /// read verbatim (the `ScalarField` contract's fidelity fast path). Kept an
+    /// `f64` for UI continuity and rounded at the extraction site.
+    #[frb(non_final)]
+    #[serde(default = "default_isosurface_quality_multiplier")]
+    pub isosurface_quality_multiplier: f64,
+    /// Cell size (Å) used when a field reports no native grid — every analytic
+    /// field. That branch is the one most likely to have been written wrongly
+    /// against a grid, so it is the one that proves the contract.
+    #[frb(non_final)]
+    #[serde(default = "default_isosurface_fallback_spacing")]
+    pub isosurface_fallback_spacing: f64,
+    /// Ceiling on marching-cubes **cells** — not triangles and not bytes. Cells
+    /// are the only one of the three knowable *before* doing the work, so the
+    /// check is pre-flight and refuses rather than hanging the UI. For a sampled
+    /// field the native grid is a natural ceiling and this only bites at a high
+    /// quality multiplier; for an analytic field it is the only guard.
+    #[frb(non_final)]
+    #[serde(default = "default_isosurface_cell_budget")]
+    pub isosurface_cell_budget: u64,
 }
 
 fn default_samples_per_unit_cell() -> i32 {
@@ -120,6 +143,16 @@ fn default_hide_coplanar_wireframe_edges() -> bool {
     true
 }
 
+fn default_isosurface_quality_multiplier() -> f64 {
+    1.0
+}
+fn default_isosurface_fallback_spacing() -> f64 {
+    0.15
+}
+fn default_isosurface_cell_budget() -> u64 {
+    16_000_000
+}
+
 impl Default for GeometryVisualizationPreferences {
     fn default() -> Self {
         Self {
@@ -133,6 +166,9 @@ impl Default for GeometryVisualizationPreferences {
             wireframe_active_color: default_wireframe_active_color(),
             wireframe_inactive_color: default_wireframe_inactive_color(),
             hide_coplanar_wireframe_edges: true,
+            isosurface_quality_multiplier: 1.0,
+            isosurface_fallback_spacing: 0.15,
+            isosurface_cell_budget: 16_000_000,
         }
     }
 }
@@ -700,6 +736,9 @@ impl From<&GeometryVisualizationPreferences> for domain::GeometryVisualizationPr
             wireframe_active_color: (&p.wireframe_active_color).into(),
             wireframe_inactive_color: (&p.wireframe_inactive_color).into(),
             hide_coplanar_wireframe_edges: p.hide_coplanar_wireframe_edges,
+            isosurface_quality_multiplier: p.isosurface_quality_multiplier,
+            isosurface_fallback_spacing: p.isosurface_fallback_spacing,
+            isosurface_cell_budget: p.isosurface_cell_budget as usize,
         }
     }
 }
@@ -717,6 +756,9 @@ impl From<&domain::GeometryVisualizationPreferences> for GeometryVisualizationPr
             wireframe_active_color: (&p.wireframe_active_color).into(),
             wireframe_inactive_color: (&p.wireframe_inactive_color).into(),
             hide_coplanar_wireframe_edges: p.hide_coplanar_wireframe_edges,
+            isosurface_quality_multiplier: p.isosurface_quality_multiplier,
+            isosurface_fallback_spacing: p.isosurface_fallback_spacing,
+            isosurface_cell_budget: p.isosurface_cell_budget as u64,
         }
     }
 }

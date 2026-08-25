@@ -120,7 +120,7 @@ crates/atomcad-crystolecule/src/
 | `CifBond` | `io/cif/structure.rs` | Explicit bond from `_geom_bond_*` with symmetry codes |
 | `CifLoadResult` | `io/cif/mod.rs` | Unit cell + expanded atom sites (fractional coords) |
 | `ExpandedAtomSite` | `io/cif/mod.rs` | Label, atomic number, fractional position |
-| `ScalarField` | `field/mod.rs` | Trait: a scalar function of 3D space. `sample` / `sample_batch` / `gradient`, `data_bounds` / `suggested_bounds`, `native_grid`, `value_range`. `Send + Sync` |
+| `ScalarField` | `field/mod.rs` | Trait: a scalar function of 3D space. `sample` / `sample_batch` / `gradient`, `data_bounds` / `suggested_bounds`, `native_grid`, `value_range`, `description`. `Send + Sync` |
 | `SampledField` | `field/mod.rs` | `ScalarField` stored as `f32` samples on a regular grid, trilinearly interpolated |
 | `GridGeometry` | `field/mod.rs` | Origin + three axis vectors + counts. **Node-centered**: the origin IS sample (0,0,0) |
 | `FieldBounds` | `field/mod.rs` | Axis-aligned box, Ångström. The workspace has no general AABB type to reuse |
@@ -172,6 +172,18 @@ The `.cube` loader always reads coordinates as Bohr and uses the atom block only
 as a **plausibility check**: implausible interatomic distances set an advisory
 `units_warning` and never rescale the parse (`io/cube_loader.rs` documents why).
 Design doc: `doc/design_scalar_fields.md`.
+
+**`description()` is the field's only semantic tag, and it is producer text —
+never derive one.** Nothing about a field's *values* says whether they are an
+orbital amplitude, a density or a potential, yet those are drawn at isolevels an
+order of magnitude apart, so a reader with only numbers cannot pick one. The
+`.cube` comment lines are the sole carrier of that knowledge (the loader used to
+read past them). Normalization — trim, drop blank lines, join, cap at
+`MAX_DESCRIPTION_CHARS` — belongs in `SampledField::with_description`, so every
+producer arrives in the same shape and no consumer has to distinguish "absent"
+from "present but blank". The method defaults to `None`: an analytic field is
+not obliged to invent a label, and inventing one from the numbers would be a
+guess presented as a fact.
 
 **Isosurfaces** (`field/isosurface.rs`): `IsosurfaceData` is the *specification*
 of a surface — which field, which level, which paint — and never a mesh. It lives

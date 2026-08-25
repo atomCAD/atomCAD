@@ -711,6 +711,15 @@ The *Edit > Preferences* menu item opens the Preferences dialog, which contains 
 | Mesh Rendering | Normal calculation method: *Smooth* (interpolated normals), *Sharp* (flat shading), or *Smart (detect sharp edges)* (smooth within groups, sharp at edges). |
 | Show geometry shell on Crystal and Molecule | When enabled, Crystal and Molecule outputs render their geometry shell together with the atoms. Disable to hide the shell when it would obscure the atomic structure. Mirrors the toggle in the Display Preferences panel. |
 
+The panel's **Isosurface extraction** group governs how an [`isosurface`](nodes/atomic.md#isosurface) node's surface is built. These are quality settings, not design data: changing one re-extracts every displayed surface and leaves your project untouched — nothing is marked dirty and no undo entry appears.
+
+| Setting | Description |
+|---------|-------------|
+| Quality multiplier | Rounded to a whole-number subdivision of the field's own sample grid, at least 1. At 1 every corner of the extraction grid is a stored sample read verbatim, which is the most faithful the data allows; 2 halves the step and costs eight times the cells. Values below 1 do **not** coarsen — the field's own grid is the floor. Default 1. |
+| Fallback spacing (Å) | Cell size used for a field that carries no sample grid of its own. Default 0.15 Å. |
+| Cell budget | Upper limit on the number of marching-cubes cells. A surface over the limit is refused, with a red error on the node naming the cell count, the budget and the multiplier to lower; nothing is drawn and the node keeps its value. Checked before any work is done, so an over-large setting costs a message rather than a frozen application. Default 16,000,000. |
+
+
 ### Atomic Structure Visualization
 
 | Setting | Description |

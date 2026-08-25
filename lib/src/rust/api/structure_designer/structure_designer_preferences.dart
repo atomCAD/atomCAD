@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
+// These functions are ignored because they are not marked as `pub`: `default_auto_layout_after_edit`, `default_background_color`, `default_ball_and_stick_cull_depth`, `default_csg_mesh_cache_mb`, `default_csg_sketch_cache_mb`, `default_drawing_plane_grid_color`, `default_drawing_plane_grid_strong_color`, `default_eval_memo_cache_mb`, `default_grid_color`, `default_grid_size`, `default_grid_strong_color`, `default_hide_coplanar_wireframe_edges`, `default_invisible_node_cache_mb`, `default_isosurface_cell_budget`, `default_isosurface_fallback_spacing`, `default_isosurface_quality_multiplier`, `default_label_scale`, `default_lattice_grid_color`, `default_lattice_grid_strong_color`, `default_max_displacement`, `default_samples_per_unit_cell`, `default_scene_alpha`, `default_settle_steps`, `default_sharpness_angle_threshold`, `default_show_axes`, `default_show_geometry_shell_for_atomic`, `default_show_grid`, `default_show_lattice_axes`, `default_space_filling_cull_depth`, `default_steps_per_frame`, `default_true`, `default_unit_cell_wireframe_color`, `default_wireframe_active_color`, `default_wireframe_inactive_color`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 enum AtomicRenderingMethod {
@@ -197,6 +197,26 @@ class GeometryVisualizationPreferences {
   /// wireframe mode (hides interior triangulation lines for better visibility).
   bool hideCoplanarWireframeEdges;
 
+  /// **Integer** subdivision of a sampled field's native grid for isosurface
+  /// extraction, rounded and clamped to `>= 1`; `2` halves the step. Values
+  /// below `1` do not coarsen — a sampled field's own grid is the floor,
+  /// because at `subdiv == 1` every marching-cubes corner is a stored sample
+  /// read verbatim (the `ScalarField` contract's fidelity fast path). Kept an
+  /// `f64` for UI continuity and rounded at the extraction site.
+  double isosurfaceQualityMultiplier;
+
+  /// Cell size (Å) used when a field reports no native grid — every analytic
+  /// field. That branch is the one most likely to have been written wrongly
+  /// against a grid, so it is the one that proves the contract.
+  double isosurfaceFallbackSpacing;
+
+  /// Ceiling on marching-cubes **cells** — not triangles and not bytes. Cells
+  /// are the only one of the three knowable *before* doing the work, so the
+  /// check is pre-flight and refuses rather than hanging the UI. For a sampled
+  /// field the native grid is a natural ceiling and this only bites at a high
+  /// quality multiplier; for an analytic field it is the only guard.
+  BigInt isosurfaceCellBudget;
+
   GeometryVisualizationPreferences({
     required this.geometryVisualization,
     required this.wireframeGeometry,
@@ -208,6 +228,9 @@ class GeometryVisualizationPreferences {
     required this.wireframeActiveColor,
     required this.wireframeInactiveColor,
     required this.hideCoplanarWireframeEdges,
+    required this.isosurfaceQualityMultiplier,
+    required this.isosurfaceFallbackSpacing,
+    required this.isosurfaceCellBudget,
   });
 
   static Future<GeometryVisualizationPreferences> default_() => RustLib
@@ -225,7 +248,10 @@ class GeometryVisualizationPreferences {
       showGeometryShellForAtomic.hashCode ^
       wireframeActiveColor.hashCode ^
       wireframeInactiveColor.hashCode ^
-      hideCoplanarWireframeEdges.hashCode;
+      hideCoplanarWireframeEdges.hashCode ^
+      isosurfaceQualityMultiplier.hashCode ^
+      isosurfaceFallbackSpacing.hashCode ^
+      isosurfaceCellBudget.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -242,7 +268,10 @@ class GeometryVisualizationPreferences {
           showGeometryShellForAtomic == other.showGeometryShellForAtomic &&
           wireframeActiveColor == other.wireframeActiveColor &&
           wireframeInactiveColor == other.wireframeInactiveColor &&
-          hideCoplanarWireframeEdges == other.hideCoplanarWireframeEdges;
+          hideCoplanarWireframeEdges == other.hideCoplanarWireframeEdges &&
+          isosurfaceQualityMultiplier == other.isosurfaceQualityMultiplier &&
+          isosurfaceFallbackSpacing == other.isosurfaceFallbackSpacing &&
+          isosurfaceCellBudget == other.isosurfaceCellBudget;
 }
 
 /// Layout algorithm preference for full network auto-layout operations.

@@ -38,11 +38,14 @@ pub mod case_table;
 pub mod colormap;
 pub mod extract;
 pub mod lattice;
+pub mod tessellator;
 
 pub use colormap::sample_colormap;
 pub use extract::extract_isosurface;
 pub use lattice::Lattice;
+pub use tessellator::tessellate_surface_mesh;
 
+use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::Vec3;
 
 /// Quality knobs for one extraction. These come from
@@ -164,6 +167,20 @@ impl SurfaceMesh {
 
     pub fn vertex_count(&self) -> usize {
         self.positions.len()
+    }
+}
+
+impl MemorySizeEstimator for SurfaceMesh {
+    fn estimate_memory_bytes(&self) -> usize {
+        // Capacities rather than lengths: the extractor reserves ahead of the
+        // fan-out and the slack is real memory the invisible-node cache is
+        // budgeting against.
+        std::mem::size_of::<SurfaceMesh>()
+            + self.positions.capacity() * std::mem::size_of::<Vec3>()
+            + self.normals.capacity() * std::mem::size_of::<Vec3>()
+            + self.albedo.capacity() * std::mem::size_of::<Vec3>()
+            + self.indices.capacity() * std::mem::size_of::<u32>()
+            + self.components.capacity() * std::mem::size_of::<SurfaceComponent>()
     }
 }
 

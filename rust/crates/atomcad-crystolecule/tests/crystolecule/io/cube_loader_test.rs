@@ -5,7 +5,7 @@
 //! literal a reviewer can check by eye, never against whatever the generator
 //! happened to emit.
 
-use atomcad_crystolecule::field::ScalarField;
+use atomcad_crystolecule::field::{MAX_DESCRIPTION_CHARS, ScalarField};
 use atomcad_crystolecule::io::cube_loader::{
     BOHR_TO_ANGSTROM, CubeError, CubeFile, load_cube, load_cube_from_str,
 };
@@ -420,4 +420,79 @@ fn whitespace_and_line_wrapping_in_the_body_do_not_matter() {
     let cube = load_cube_from_str(&reflowed, false).unwrap();
     assert_eq!(cube.fields[0].value_range(), Some((0.0, 234.0)));
     assert_eq!(cube.atoms.get_num_of_atoms(), 1);
+}
+
+// ============================================================================
+// Comment lines -> the field's description
+// ============================================================================
+//
+// The loader used to read past both comment lines and keep nothing. That left a
+// reader with no way to tell an orbital amplitude from a density — quantities
+// whose usual isolevels differ by an order of magnitude — since nothing about
+// the *values* distinguishes them.
+
+#[test]
+fn both_comment_lines_become_the_fields_description() {
+    let cube = load("water_bohr.cube");
+    let description = cube.fields[0]
+        .description()
+        .expect("the fixture carries two comment lines");
+
+    assert!(
+        description.contains("Water, coordinates in Bohr"),
+        "line 1 survives: {description}"
+    );
+    assert!(
+        description.contains("Crude non-negative envelope"),
+        "line 2 survives: {description}"
+    );
+    assert!(
+        description.contains(" - "),
+        "the two lines are joined by a separator: {description}"
+    );
+    assert!(
+        !description.contains('\n'),
+        "the description is one line, so a tooltip cannot be pushed out of shape: {description}"
+    );
+}
+
+#[test]
+fn a_file_with_blank_comment_lines_has_no_description_rather_than_an_empty_one() {
+    // Two whitespace-only comment lines: plenty of producers write one, and a
+    // consumer must not have to distinguish "absent" from "present but blank".
+    let text = "\n   \n\
+                    1    0.000000    0.000000    0.000000\n\
+                    2    1.000000    0.000000    0.000000\n\
+                    2    0.000000    1.000000    0.000000\n\
+                    2    0.000000    0.000000    1.000000\n\
+                    6    6.000000    0.000000    0.000000    0.000000\n\
+                    0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0\n";
+    let cube = load_cube_from_str(text, false).expect("well-formed apart from the blank comments");
+    assert_eq!(
+        cube.fields[0].description(),
+        None,
+        "a blank description collapses to None"
+    );
+}
+
+#[test]
+fn a_pathological_comment_is_truncated_rather_than_flooding_the_readout() {
+    let long = "x".repeat(MAX_DESCRIPTION_CHARS * 3);
+    let text = format!(
+        "{long}\n\n\
+             1    0.000000    0.000000    0.000000\n\
+             2    1.000000    0.000000    0.000000\n\
+             2    0.000000    1.000000    0.000000\n\
+             2    0.000000    0.000000    1.000000\n\
+             6    6.000000    0.000000    0.000000    0.000000\n\
+             0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0\n"
+    );
+    let cube = load_cube_from_str(&text, false).expect("well-formed");
+    let description = cube.fields[0].description().expect("non-blank");
+    assert!(
+        description.chars().count() <= MAX_DESCRIPTION_CHARS + 1,
+        "capped (plus the ellipsis), got {} chars",
+        description.chars().count()
+    );
+    assert!(description.ends_with('\u{2026}'), "truncation is visible");
 }

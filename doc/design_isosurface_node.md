@@ -240,11 +240,34 @@ wrong for a density (`0.002`). Accepted: a field's meaning is not recoverable
 from its numbers, so no fixed default serves both. The percentile-of-magnitude
 alternative stays deferred.
 
-To make level-picking possible, **promote `to_detailed_string` for
-`NetworkResult::ScalarField` from optional (P2 of the sibling doc) to
-required** — the value range then shows on pin hover via existing machinery.
-One match arm, versus an API getter plus a Dart readout for the same
-information.
+To make level-picking possible, the `ScalarField` readout must carry the value
+range, and it must do so **on the pin-hover path**.
+
+> **Corrected in P3.** This section originally said "promote `to_detailed_string`
+> ... the value range then shows on pin hover via existing machinery". That was
+> wrong about the machinery, and the P1 test that was meant to lock it in
+> asserted `to_detailed_string` while its own doc comment claimed to be about
+> hover — so the suite agreed with the mistake. The tooltip renders
+> `NodeView::output_pin_strings`, which is built from **`to_display_string`**;
+> `to_detailed_string` is reachable only from the CLI/AI `evaluate_node
+> --verbose` path. A GUI user could not see the value range at all.
+>
+> Two further facts the original text glossed over. **Value readouts exist only
+> on output pins** — `_buildInputPin` passes no `outputString` — so the pin to
+> hover is the upstream `import_cube`'s `field` output, never the `isosurface`
+> node's own `field` input. And the range alone is not enough: it says *how big*
+> the numbers are, not *what they are*, and an orbital amplitude and a density
+> are drawn an order of magnitude apart. A `.cube`'s two comment lines are the
+> only place that knowledge exists, and the loader was reading past them.
+
+So the requirement is: `ScalarField`'s **`to_display_string`** is a summary block
+— source description, grid, step, extent, box, value range with a signed /
+non-negative tag, and memory — built by one helper that `to_detailed_string`
+also calls (adding origin and axis vectors), so the two cannot drift.
+`ScalarField` gains a `description()` trait method, defaulting to `None`, and
+`SampledField::with_description` normalizes the producer's free text (trim, drop
+blank lines, join, cap). One helper and one retained pair of comment lines,
+versus an API getter plus a Dart readout for the same information.
 
 ### Editor
 
@@ -1016,6 +1039,46 @@ reorder.
 arm building **`isosurface_opaque_mesh` only**, drawn by the existing
 `triangle_pipeline`; `isosurface_editor.dart` and its widget entry; the three
 extraction preferences (`surface_transparency_mode` is P4); reference guide.
+
+**Status: done**, with three decisions worth recording because a reader of the
+plan above would expect otherwise.
+
+- **`isosurface_opaque_mesh` is `main_mesh`.** The design's table says the opaque
+  mesh is drawn by "the existing opaque `triangle_pipeline`, with the rest of the
+  opaque geometry" — and the singleton-mesh model gives exactly one mesh per
+  pipeline, so a *separate* opaque isosurface mesh would be a second `GPUMesh` on
+  the same pipeline with the same uniforms: pure plumbing, buying nothing. P3
+  therefore appends surfaces to `main_mesh`. The two-mesh split of §The opaque
+  fast path becomes real in P4, when the *transparent* mesh arrives with its own
+  culled pipelines and the routing decision has somewhere to route to. Nothing in
+  the renderer changed in P3, which is what "a permanent escape hatch" was meant
+  to buy.
+- **All three input pins are declared now, and `color_field` is inert.** Pin
+  order is `.cnnd` contract: inserting `color_field` ahead of `level` in P5 would
+  silently re-target every saved wire. So the node declares
+  `field` / `color_field` / `level` in the design's order from the start, and P3
+  simply never reads pin 1 — `eval` always emits `IsosurfaceColoring::Phase`.
+  This is the same rule the design already applies to `alpha` (stored, editable,
+  no render effect yet, and the editor says so), extended to a pin.
+- **The `ScalarField` hover readout was rebuilt, and §Errors corrected.** The
+  design's stated prerequisite for level-picking — "the value range shows on pin
+  hover" — was not true: the tooltip is fed by `to_display_string`, which said
+  only `ScalarField 33x33x33`. Fixing it properly meant a summary block shared
+  by both readouts, and a new `ScalarField::description()` carrying the `.cube`
+  comment lines the loader used to discard, because the range says how big the
+  numbers are and only the description says what they are. See the corrected
+  §Errors.
+- **`InputPinView` gained a `connected: bool`.** The editor's "colormap controls
+  disabled unless `color_field` is connected" needs pin connectivity in Dart, and
+  `build_node_view` already computed the set for `get_subtitle`. Surfacing it per
+  pin is additive and reusable; the alternative — walking
+  `model.nodeNetworkView.wires` in the editor — additionally needs the node's
+  scope, which the property panel would have to thread in.
+
+**Not done: step 6 of the manual walkthrough.** The extraction and refresh
+timings require the running application; they are listed with the rest of the
+manual steps for the maintainer, and §No extraction cache still stands
+unmeasured until they are recorded here.
 
 The `alpha` property is stored, serialized and editable in P3 but **has no
 render effect yet** — every surface goes to the opaque mesh regardless. P4 adds

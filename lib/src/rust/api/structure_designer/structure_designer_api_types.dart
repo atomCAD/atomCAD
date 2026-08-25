@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -791,6 +791,16 @@ class APICollectData {
           elementType == other.elementType &&
           limit == other.limit &&
           offset == other.offset;
+}
+
+/// Named color ramp for an `isosurface` node's colormap mode. The Dart-facing
+/// twin of `atomcad_crystolecule::field::Colormap` — one variant, because the
+/// only reachable pairing today is a density colored by an electrostatic
+/// potential.
+enum APIColormap {
+  /// Diverging blue-white-red — the conventional ESP map.
+  blueWhiteRed,
+  ;
 }
 
 class APICommentData {
@@ -2114,6 +2124,66 @@ class APIIntData {
       other is APIIntData &&
           runtimeType == other.runtimeType &&
           value == other.value;
+}
+
+class APIIsosurfaceData {
+  /// Level **magnitude**; the surface is extracted at `+level` and `-level`.
+  /// Must be `> 0`. Overridden by a wired `level` pin.
+  final double level;
+
+  /// 0-1 RGB of the `+level` lobe.
+  final APIVec3 positiveColor;
+
+  /// 0-1 RGB of the `-level` lobe.
+  final APIVec3 negativeColor;
+
+  /// Opacity in `[0, 1]`; `>= 1.0` is opaque. Stored and serialized, with no
+  /// render effect until the transparent draw path lands.
+  final double alpha;
+
+  /// Only consulted while the `color_field` pin is wired.
+  final APIColormap colormap;
+
+  /// Colormap domain minimum. Never auto-fitted — these quantities span
+  /// orders of magnitude around the nuclei, so fitting to the extrema paints
+  /// the whole surface one flat color.
+  final double colorMin;
+
+  /// Colormap domain maximum.
+  final double colorMax;
+
+  const APIIsosurfaceData({
+    required this.level,
+    required this.positiveColor,
+    required this.negativeColor,
+    required this.alpha,
+    required this.colormap,
+    required this.colorMin,
+    required this.colorMax,
+  });
+
+  @override
+  int get hashCode =>
+      level.hashCode ^
+      positiveColor.hashCode ^
+      negativeColor.hashCode ^
+      alpha.hashCode ^
+      colormap.hashCode ^
+      colorMin.hashCode ^
+      colorMax.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIIsosurfaceData &&
+          runtimeType == other.runtimeType &&
+          level == other.level &&
+          positiveColor == other.positiveColor &&
+          negativeColor == other.negativeColor &&
+          alpha == other.alpha &&
+          colormap == other.colormap &&
+          colorMin == other.colorMin &&
+          colorMax == other.colorMax;
 }
 
 class APILatticeSymopData {
@@ -4386,6 +4456,16 @@ class InputPinView {
   final String dataType;
   final bool multi;
 
+  /// Whether this pin currently has at least one incoming wire.
+  ///
+  /// Property editors use it to gate controls whose stored value nothing
+  /// reads in the current wiring — the `isosurface` colormap domain, which
+  /// only matters once `color_field` is wired. It is *not* what decides
+  /// whether a stored value is used at eval: an optional pin whose wire wins
+  /// over the stored property is a per-node rule, and this flag only says a
+  /// wire exists.
+  final bool connected;
+
   /// Optional concrete type the Flutter editor should send as the drag
   /// source when a wire is dragged *off* this pin, overriding `data_type`.
   /// Populated only when the declared `data_type` is deliberately lossy:
@@ -4400,6 +4480,7 @@ class InputPinView {
     required this.name,
     required this.dataType,
     required this.multi,
+    required this.connected,
     this.dragHintType,
   });
 
@@ -4408,6 +4489,7 @@ class InputPinView {
       name.hashCode ^
       dataType.hashCode ^
       multi.hashCode ^
+      connected.hashCode ^
       dragHintType.hashCode;
 
   @override
@@ -4418,6 +4500,7 @@ class InputPinView {
           name == other.name &&
           dataType == other.dataType &&
           multi == other.multi &&
+          connected == other.connected &&
           dragHintType == other.dragHintType;
 }
 

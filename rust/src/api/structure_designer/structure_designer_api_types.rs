@@ -105,6 +105,15 @@ pub struct InputPinView {
     pub name: String,
     pub data_type: String,
     pub multi: bool,
+    /// Whether this pin currently has at least one incoming wire.
+    ///
+    /// Property editors use it to gate controls whose stored value nothing
+    /// reads in the current wiring — the `isosurface` colormap domain, which
+    /// only matters once `color_field` is wired. It is *not* what decides
+    /// whether a stored value is used at eval: an optional pin whose wire wins
+    /// over the stored property is a per-node rule, and this flag only says a
+    /// wire exists.
+    pub connected: bool,
     /// Optional concrete type the Flutter editor should send as the drag
     /// source when a wire is dragged *off* this pin, overriding `data_type`.
     /// Populated only when the declared `data_type` is deliberately lossy:
@@ -713,6 +722,38 @@ pub struct APIXrayData {
     /// Depth (Å) at which atoms have faded to fully transparent. `0` disables
     /// the ramp (uniform `alpha`). Overridden by a wired `fade_depth` pin.
     pub fade_depth: f64,
+}
+
+/// Named color ramp for an `isosurface` node's colormap mode. The Dart-facing
+/// twin of `atomcad_crystolecule::field::Colormap` — one variant, because the
+/// only reachable pairing today is a density colored by an electrostatic
+/// potential.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APIColormap {
+    /// Diverging blue-white-red — the conventional ESP map.
+    BlueWhiteRed,
+}
+
+pub struct APIIsosurfaceData {
+    /// Level **magnitude**; the surface is extracted at `+level` and `-level`.
+    /// Must be `> 0`. Overridden by a wired `level` pin.
+    pub level: f64,
+    /// 0-1 RGB of the `+level` lobe.
+    pub positive_color: APIVec3,
+    /// 0-1 RGB of the `-level` lobe.
+    pub negative_color: APIVec3,
+    /// Opacity in `[0, 1]`; `>= 1.0` is opaque. Stored and serialized, with no
+    /// render effect until the transparent draw path lands.
+    pub alpha: f64,
+    /// Only consulted while the `color_field` pin is wired.
+    pub colormap: APIColormap,
+    /// Colormap domain minimum. Never auto-fitted — these quantities span
+    /// orders of magnitude around the nuclei, so fitting to the extrema paints
+    /// the whole surface one flat color.
+    pub color_min: f64,
+    /// Colormap domain maximum.
+    pub color_max: f64,
 }
 
 pub struct APITagData {

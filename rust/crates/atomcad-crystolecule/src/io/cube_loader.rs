@@ -5,8 +5,8 @@
 //! x-slowest / z-fastest order.
 //!
 //! ```text
-//!  Comment line 1                                <- free text; read past, not retained
-//!  Comment line 2                                <- free text
+//!  Comment line 1                                <- free text; kept as the field's description
+//!  Comment line 2                                <- free text; appended to the same description
 //!    -3   -5.000000  -5.000000  -5.000000        <- natoms (SIGNED), origin xyz, [NVal]
 //!     2    5.000000   0.000000   0.000000        <- N1, step vector along axis 1
 //!     2    0.000000   5.000000   0.000000        <- N2, step vector along axis 2
@@ -110,14 +110,27 @@ pub fn load_cube(file_path: &str, create_bonds: bool) -> Result<CubeFile, CubeEr
 pub fn load_cube_from_str(text: &str, create_bonds: bool) -> Result<CubeFile, CubeError> {
     let mut lines = text.lines();
 
-    // Two free-text comment lines. Read past them; nothing downstream consumes
-    // them (see the design doc on why there is no semantic tag or metadata).
-    lines
+    // Two free-text comment lines. **Retained**, and handed to the field as its
+    // `description`: nothing about a field's *values* says whether they are an
+    // orbital amplitude, a density or a potential, yet the isolevels those are
+    // drawn at differ by orders of magnitude. The producer's own free text is
+    // the only place that knowledge exists, so reading past it — which this
+    // loader used to do — left a reader with no way to tell what they had.
+    //
+    // The two lines are concatenated verbatim here; `SampledField::with_description`
+    // owns the trimming, blank-line dropping and length cap, so every producer
+    // normalizes identically.
+    let comment_1 = lines
         .next()
         .ok_or_else(|| CubeError::Parse("missing comment line 1".to_string()))?;
-    lines
+    let comment_2 = lines
         .next()
         .ok_or_else(|| CubeError::Parse("missing comment line 2".to_string()))?;
+    let description = format!(
+        "{}
+{}",
+        comment_1, comment_2
+    );
 
     // Rule 2: line 3 is the ONE place where line structure matters, because the
     // trailing `NVal` is optional and only the line break tells it apart from
@@ -231,7 +244,7 @@ pub fn load_cube_from_str(text: &str, create_bonds: bool) -> Result<CubeFile, Cu
 
     // Rule 4 holds for free: `samples` was appended in the file's own
     // x-slowest / z-fastest order, which is `SampledField`'s declared layout.
-    let field = SampledField::new(grid, samples)?;
+    let field = SampledField::new(grid, samples)?.with_description(&description);
 
     let units_warning = units_plausibility_warning(&atoms);
 

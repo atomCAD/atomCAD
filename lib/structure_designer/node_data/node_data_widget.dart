@@ -18,6 +18,7 @@ import 'package:flutter_cad/structure_designer/node_data/structure_rot_editor.da
 import 'package:flutter_cad/structure_designer/node_data/free_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_sphere_editor.dart';
+import 'package:flutter_cad/structure_designer/node_data/isosurface_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_edit_editor.dart';
@@ -308,6 +309,20 @@ class NodeDataWidget extends StatelessWidget {
           nodeId: selectedNode.id,
           data: freeSphereData,
           model: model,
+        );
+      case 'isosurface':
+        final isosurfaceData = getIsosurfaceData(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
+        // Pin 1 is `color_field`; its wire is what enables the colormap group.
+        final colorFieldConnected = selectedNode.inputPins.length > 1 &&
+            selectedNode.inputPins[1].connected;
+        return IsosurfaceEditor(
+          nodeId: selectedNode.id,
+          data: isosurfaceData,
+          model: model,
+          colorFieldConnected: colorFieldConnected,
         );
       case 'half_space':
         // Fetch the half space data here in the parent widget

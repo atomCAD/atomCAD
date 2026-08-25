@@ -143,6 +143,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICollectData dco_decode_api_collect_data(dynamic raw);
 
   @protected
+  APIColormap dco_decode_api_colormap(dynamic raw);
+
+  @protected
   APICommentData dco_decode_api_comment_data(dynamic raw);
 
   @protected
@@ -286,6 +289,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData dco_decode_api_int_data(dynamic raw);
+
+  @protected
+  APIIsosurfaceData dco_decode_api_isosurface_data(dynamic raw);
 
   @protected
   APILatticeSymopData dco_decode_api_lattice_symop_data(dynamic raw);
@@ -717,6 +723,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData dco_decode_box_autoadd_api_int_data(dynamic raw);
+
+  @protected
+  APIIsosurfaceData dco_decode_box_autoadd_api_isosurface_data(dynamic raw);
 
   @protected
   APILatticeSymopData dco_decode_box_autoadd_api_lattice_symop_data(
@@ -1321,6 +1330,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIIntData? dco_decode_opt_box_autoadd_api_int_data(dynamic raw);
 
   @protected
+  APIIsosurfaceData? dco_decode_opt_box_autoadd_api_isosurface_data(
+      dynamic raw);
+
+  @protected
   APILatticeSymopData? dco_decode_opt_box_autoadd_api_lattice_symop_data(
       dynamic raw);
 
@@ -1725,6 +1738,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APICollectData sse_decode_api_collect_data(SseDeserializer deserializer);
 
   @protected
+  APIColormap sse_decode_api_colormap(SseDeserializer deserializer);
+
+  @protected
   APICommentData sse_decode_api_comment_data(SseDeserializer deserializer);
 
   @protected
@@ -1886,6 +1902,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData sse_decode_api_int_data(SseDeserializer deserializer);
+
+  @protected
+  APIIsosurfaceData sse_decode_api_isosurface_data(
+      SseDeserializer deserializer);
 
   @protected
   APILatticeSymopData sse_decode_api_lattice_symop_data(
@@ -2397,6 +2417,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIIntData sse_decode_box_autoadd_api_int_data(SseDeserializer deserializer);
+
+  @protected
+  APIIsosurfaceData sse_decode_box_autoadd_api_isosurface_data(
+      SseDeserializer deserializer);
 
   @protected
   APILatticeSymopData sse_decode_box_autoadd_api_lattice_symop_data(
@@ -3115,6 +3139,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIIsosurfaceData? sse_decode_opt_box_autoadd_api_isosurface_data(
+      SseDeserializer deserializer);
+
+  @protected
   APILatticeSymopData? sse_decode_opt_box_autoadd_api_lattice_symop_data(
       SseDeserializer deserializer);
 
@@ -3578,6 +3606,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APICollectData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_colormap(APIColormap self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_comment_data(
       APICommentData self, SseSerializer serializer);
 
@@ -3757,6 +3788,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_api_int_data(APIIntData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_isosurface_data(
+      APIIsosurfaceData self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_lattice_symop_data(
@@ -4291,6 +4326,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_int_data(
       APIIntData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_isosurface_data(
+      APIIsosurfaceData self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_lattice_symop_data(
@@ -5021,6 +5060,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_int_data(
       APIIntData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_isosurface_data(
+      APIIsosurfaceData? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_lattice_symop_data(
