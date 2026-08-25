@@ -10,7 +10,7 @@ Assumes P1–P4 of `design_scalar_fields.md` have landed. Does not assume P5
 (multi-field cubes) or Molden support.
 
 **Deferred:** GPU volume raymarching, slice planes, automatic HOMO/LUMO
-selection, CSG composability.
+selection, CSG composability, extraction caching.
 
 ## Where the extraction happens
 
@@ -23,17 +23,20 @@ in the display conversion, in `atomcad-display`.**
         v
   NetworkResult::Isosurface(IsosurfaceData)     <- network value
   { field, level, coloring, alpha }                resolution-free
+                                                   (atomcad-crystolecule)
         |
         |  atomcad_display::isosurface::extract
-        |  (marching cubes; resolution from preferences; cached)
+        |  (marching cubes; resolution from preferences)
         v
   NodeOutput::Isosurface(SurfaceMesh)           <- scene output
   positions + normals + per-vertex albedo          resolution fixed
-  + component ranges
+  + component ranges + alpha                       (atomcad-display)
         |
-        |  scene_tessellator
+        |  scene_tessellator  (merges every displayed surface;
+        |                      alpha baked per-vertex; splits
+        |                      opaque from transparent)
         v
-  renderer Mesh + component ranges              <- GPU
+  two renderer Meshes + component ranges        <- GPU
 ```
 
 This mirrors the `Blueprint` pipeline, which has three stages, not two:
@@ -47,7 +50,9 @@ This mirrors the `Blueprint` pipeline, which has three stages, not two:
 The stage-1→2 conversion is driven by preferences
 (`GeometryVisualization`, `samples_per_unit_cell`,
 `sharpness_angle_threshold_degree`) and has its own cache
-(`csg_conversion_cache`), separate from the eval memoization. The governing
+(`csg_conversion_cache`), separate from the eval memoization — this design
+deliberately does **not** add an equivalent (§No extraction cache). The
+governing
 rule: **semantic parameters live in the value; quality parameters live in
 preferences.** A `sphere` node's `radius` goes into the value as
 `GeoNodeKind::Sphere { radius }`; resolution does not. Isolevel is semantic,
@@ -55,17 +60,20 @@ extraction resolution is quality.
 
 **Why not output a mesh:**
 
-- **The isolevel slider.** Chemists scrub it constantly. A mesh value re-runs
-  marching cubes inside the evaluator on every tick, invalidating downstream
-  memoization. A lazy value makes `eval` nearly free and confines the expensive
-  work to a display-side cache.
+- **Resolution would have nowhere to come from.** `NodeData::eval`
+  (`node_data.rs:211`) receives no preferences —
+  `GeometryVisualizationPreferences` enters only at the display conversion
+  (`network_evaluator.rs:929` onward). A mesh-outputting node would have to
+  make extraction resolution *node data*, baking a quality setting into the
+  `.cnnd` and breaking the pattern every other geometry-quality knob follows.
+  The alternative is threading preferences through the whole `NodeData` trait.
 - **The implicit form is better downstream.** "Which atoms are inside the
   density envelope" is `sample(p) > level` on a field, and unanswerable on a
-  triangle soup.
-- **Resolution would become uneditable** without re-evaluation — the only
-  quality setting in the application that invalidates the eval cache.
-- **Clone cost.** `NetworkResult` clones on every wire traversal; an 80^3
-  extraction is 100k+ triangles.
+  triangle soup. Forward-looking — no such consumer exists yet.
+
+**What it does not buy:** changing `level` costs a re-extraction either way.
+`level` is node data, so the node re-evaluates and the surface is rebuilt
+whichever representation the value carries.
 
 A general `Mesh` type (for STL import/export, mesh booleans) is a separate
 feature and stays additive.
@@ -81,6 +89,8 @@ validation rule rejecting it elsewhere.
 ## The `Isosurface` value
 
 ```rust
+// atomcad-crystolecule/src/field/isosurface.rs
+
 /// A surface to be extracted at display time. Carries the *specification*,
 /// never the mesh.
 #[derive(Debug, Clone)]
@@ -90,7 +100,7 @@ pub struct IsosurfaceData {
     /// and `-level`.
     pub level: f64,
     pub coloring: IsosurfaceColoring,
-    /// 0..=1. Exactly `1.0` takes the opaque path.
+    /// 0..=1. `>= 1.0` takes the opaque path (§The opaque fast path).
     pub alpha: f32,
 }
 
@@ -124,8 +134,17 @@ signedness (read from `value_range()` at extraction time) decides how many
 components; the enum discriminant decides how they are painted. Neither
 consults the other.
 
-**Inline, not `Arc<IsosurfaceData>`** — two `Arc`s plus scalars is already a
-cheap clone, and `BlueprintData` is inline for the same reason.
+**Inline, not `Arc<IsosurfaceData>`** — at most two `Arc`s plus scalars is
+already a cheap clone, and `BlueprintData` is inline for the same reason.
+
+**Narrowing is selective, and the split is by consumer.** Every property is
+stored as `f64`/`DVec3` at `TextValue::Float` precision. In `eval`, the ones the
+*renderer* consumes narrow to `f32`/`Vec3` — `alpha`, `positive_color`,
+`negative_color` — while the ones compared against *field values* stay `f64`:
+`level`, and `color_min`/`color_max` inside
+`IsosurfaceColoring::Field { range }`. `ScalarField::sample` returns `f64`, so
+narrowing a threshold would introduce a rounding difference between the
+comparison and the data it is compared to.
 
 `Colormap` has one variant because the only reachable pairing today is density
 colored by electrostatic potential. NCI's blue-green-red map has no producer
@@ -134,12 +153,53 @@ form is forward-compatible.
 
 ### Crate placement
 
-`IsosurfaceData`, `IsosurfaceColoring`, `Colormap`, `SurfaceMesh` and the
-extractor live in **`atomcad-display`**, in a new `src/isosurface/` module.
-`atomcad-structure-designer` already depends on `atomcad-display`, which
-already depends on `atomcad-crystolecule`, so `NetworkResult` can carry it and
-it can hold a `ScalarField`. `NodeOutput` already carries display types
-(`PolyMesh`, `SurfacePointCloud`). No back-edge.
+The value and the mesh live in different crates, and the split falls on the
+stage boundary:
+
+| Type | Crate | Module |
+|---|---|---|
+| `IsosurfaceData`, `IsosurfaceColoring`, `Colormap` | `atomcad-crystolecule` | `src/field/isosurface.rs` |
+| `SurfaceMesh`, `SurfaceComponent`, the extractor | `atomcad-display` | `src/isosurface/` |
+
+**The value goes down to `crystolecule`, beside the `ScalarField` it wraps.**
+Two crates have to see it: `atomcad-structure-designer`, because
+`NetworkResult` carries it, and `atomcad-display`, because the extractor
+consumes it. The crates visible to both are `display`, `crystolecule`,
+`geo-tree`, `renderer` and `util` — so `display` would *work* too.
+`crystolecule` is chosen because it preserves an invariant the value layer has
+today: **every `NetworkResult` payload comes from the domain layer or from
+`structure_designer` itself.** `UnitCellStruct`, `DrawingPlane`, `Motif`,
+`Structure` and `Arc<dyn ScalarField>` come from `crystolecule`; `GeoNode`,
+inside `BlueprintData`, from `geo-tree`; `Walker` and `ZoneClosure` from
+`structure_designer`. Not one comes from `display` — display types enter one
+stage later, in `NodeOutput` (`PolyMesh`, `SurfacePointCloud`). An
+`IsosurfaceData` in `display` would be the first exception; in `crystolecule`
+it is the same shape as `BlueprintData` holding a `GeoNode`.
+
+The crate is also already equipped for it. `serde`, `glam` and `thiserror` are
+in `crystolecule`'s manifest, so `Colormap`'s derive is free — and `Colormap`
+is node data that round-trips through the `.cnnd`, so it needs `serde`
+*wherever* it lives; `atomcad-display` has no `serde` dependency and should not
+acquire one to host a persisted enum. RGB paint is not new down there either:
+`AtomInfo` has carried `color: Vec3` (`atomic_constants.rs`) since long before
+this document. And the direction has precedent — the Miller-index arithmetic
+that `half_space_utils` used to carry went the same way, out of the adapter
+layer and down to `crystolecule::miller`
+(`doc/design_push_domain_code_down.md` D5).
+
+**The mesh stays in `atomcad-display`**, which is what that crate is for.
+`SurfaceMesh` is renderer-shaped — positions, normals, per-vertex albedo, alpha,
+index ranges — and `NodeOutput` already carries display types. `display` depends on
+`crystolecule`, so the extractor takes `&IsosurfaceData` directly: no twin, no
+conversion, no back-edge in either direction.
+
+**Rejected: the value in `structure_designer`, with an extractor-input twin in
+`display`.** It keeps the colormap out of the domain crate, at the cost of a
+second struct and a conversion at the call site — the
+`GeometryVisualizationPreferences` shape, which exists in three copies
+(`structure_designer` persisted, `api/` Dart-facing, `display` render-time) for
+exactly that reason. Not worth it for a type whose whole content is a
+`ScalarField` plus seven scalars.
 
 `atomcad-display` has no `AGENTS.md` today; this change adds one and registers
 it in the root `AGENTS.md`.
@@ -162,7 +222,7 @@ it in the root `AGENTS.md`.
 | `level` | `f64` | `0.02` | magnitude; extraction runs at `+level` **and** `-level` |
 | `positive_color` | `DVec3` | `(0.20, 0.40, 0.90)` | 0–1 RGB, matching `apply_style` |
 | `negative_color` | `DVec3` | `(0.90, 0.30, 0.25)` | |
-| `alpha` | `f64` | `0.4` | `1.0` → opaque fast path |
+| `alpha` | `f64` | `0.4` | `>= 1.0` → opaque fast path |
 | `colormap` | `Colormap` | `BlueWhiteRed` | only when `color_field` is wired |
 | `color_min` | `f64` | `-0.05` | only when `color_field` is wired |
 | `color_max` | `f64` | `0.05` | |
@@ -194,20 +254,39 @@ arbitrary, so flipping is how a user matches a published figure), `alpha`
 slider, and colormap range/dropdown **disabled unless `color_field` is
 connected**.
 
-### Errors and warnings
+### Errors
 
 | Condition | Behavior |
 |---|---|
 | `field` unconnected | evaluation error |
 | `level <= 0` | evaluation error — both signs are always drawn, so the sign is not a user choice |
-| `level` exceeds the field's `value_range` magnitude | **non-blocking** warning — an empty render is otherwise indistinguishable from a broken import |
-| surface field's `data_bounds` exceed the color field's | **non-blocking** warning |
+| extraction grid exceeds `isosurface_cell_budget` | error raised from the **display conversion** rather than `eval` (§Preferences); nothing is drawn, the node keeps its value |
 
-The last one matters: `ScalarField` returns `0.0` outside its bounds, so a
-surface extending past the *color* field's box paints as neutral — plain white
-on a blue-white-red map, plausible and wrong. Easy to hit, since orbitals come
-from `.molden` and potentials from `.cube`. Warn, do not add a second
-out-of-bounds convention.
+**Nothing in this node warns, because there is no channel for it to warn
+through.** Amber, non-blocking badges are a *validation*-time concept
+(`ValidationError::warning`, `NodeDataError::warning`), and validation sees only
+node data — never a connected field's contents, never the preferences. The
+evaluation side has exactly one channel,
+`NetworkEvaluationContext::node_errors: HashMap<NodeRef, String>`, and it
+carries no severity: everything in it renders red.
+
+So two conditions that would ideally warn are **deliberately silent**:
+
+- **`level` exceeds the field's `value_range` magnitude.** The surface comes out
+  empty, and an empty render is indistinguishable from a broken import.
+  Mitigated by the promoted `to_detailed_string`: the value range is one hover
+  away on the input pin, which is why that promotion is required rather than
+  optional.
+- **The surface field's `data_bounds` exceed the color field's.** `ScalarField`
+  returns `0.0` outside its bounds, so a surface extending past the *color*
+  field's box paints as neutral — plain white on a blue-white-red map, plausible
+  and wrong. Easy to hit, since orbitals come from `.molden` and potentials from
+  `.cube`. Explained in the reference guide instead (§Documentation touchpoints);
+  do **not** add a second out-of-bounds convention to paper over it.
+
+Both become warnings for free if an evaluation-time severity channel is ever
+added — a separate change to the error subsystem
+(`doc/design_error_management.md`), not something to fold in here.
 
 ## Value plumbing
 
@@ -225,7 +304,7 @@ modifier, no subtyping, no implicit conversions.
 | `evaluator/network_result.rs` `infer_data_type` | `=> Some(DataType::Isosurface)` — **`_ => None` arm, so omitting this compiles and silently mis-infers** |
 | `evaluator/network_result.rs` `to_display_string` | short summary; exhaustive |
 | `evaluator/network_result.rs` `to_detailed_string` | level, coloring mode, field dims |
-| `evaluator/network_result.rs` `heap_of` | see below — **not** a compile error if missed |
+| `evaluator/network_result.rs` `heap_bytes` | see below — a missing arm **is** a compile error, but a wrong one is silent |
 
 **FRB boundary:** `APIDataTypeBase` variant, both conversion arms in
 `structure_designer_api.rs`, then `flutter_rust_bridge_codegen generate`.
@@ -237,12 +316,25 @@ Pin color: `ScalarField` is a soft red (`0xFFE57373`); `Isosurface` is its
 rendered form, so a deeper red — `0xFFC62828`. Eyeball against the live palette
 before committing.
 
-**`heap_of` hazards**, neither caught by the compiler: `SampledField` holds a
-`Vec<f32>` of megabytes, so a missing arm under-reports by the largest payload
-in the tree; and the same `Arc` can appear twice in one value (surface and
-color field) or be shared across results, so naive recursion double-counts.
-Count each distinct pointer once, or exclude shared field storage deliberately
-and say so in a comment.
+**`infer_data_type` is the only site here with no compiler backstop.** Its
+`_ => None` arm swallows a missing variant, and the result is a silently
+mis-inferred pin type. Everything else in the table either fails to build or
+fails a text round-trip. In particular `to_display_string` and
+`NetworkResult::heap_bytes` (`network_result.rs`) are both **exhaustive matches
+with no `_` arm**, so omitting either is a build failure — do not budget
+vigilance for them.
+
+**What `heap_bytes` does need care with is the arm's *contents*, which the
+compiler cannot check.** `SampledField` holds a `Vec<f32>` of megabytes, and
+`IsosurfaceData` can reach the same `Arc` twice — once as `field`, once as
+`IsosurfaceColoring::Field { field }` — so the obvious
+`surface.estimate_memory_bytes() + color.estimate_memory_bytes()` double-counts
+the common case where a user paints a field with itself. **Count each distinct
+`Arc::as_ptr` once within the value.** Sharing *across* results — the same field
+also live as a `NetworkResult::ScalarField` elsewhere in the pass — stays
+double-counted, unchanged from how the existing `ScalarField` deep tier already
+behaves; fixing that would need a pass-wide pointer set, which the estimator has
+no access to. Do not attempt it here.
 
 ### `NodeOutput::Isosurface(SurfaceMesh)`
 
@@ -264,6 +356,13 @@ pub struct SurfaceMesh {
     /// these back-to-front at draw time is what makes multi-lobe transparency
     /// correct.
     pub components: Vec<SurfaceComponent>,
+    /// One value for the whole surface, straight from `IsosurfaceData::alpha`.
+    /// It stays scalar *here* because a `SurfaceMesh` is one node's output.
+    /// `scene_tessellator` reads it twice: to pick which of the two isosurface
+    /// meshes this surface joins (§The opaque fast path), and to bake it onto
+    /// every vertex it contributes, which is the only level at which
+    /// per-surface alpha survives the merge (§Alpha is a vertex attribute, not
+    /// a uniform).
     pub alpha: f32,
 }
 
@@ -277,10 +376,41 @@ pub struct SurfaceComponent {
 
 ## Extraction
 
-In `atomcad-display/src/isosurface/`, invoked from `network_evaluator`'s
-result→`NodeOutput` conversion, cached alongside `csg_conversion_cache`.
-Hand-rolled — no workspace dependency provides it. `rayon` is available and
-`ScalarField: Send + Sync`, so batch sampling can be parallel.
+In `atomcad-display/src/isosurface/`, taking `&IsosurfaceData` (a
+`crystolecule` type — §Crate placement) and invoked from a new
+`generate_isosurface_output` in `network_evaluator`, reached from an
+**unconditional** `DataType::Isosurface` arm of `convert_result_to_node_output`
+(§Preferences).
+Hand-rolled — no workspace dependency provides it. `ScalarField: Send + Sync`,
+so batch sampling *can* be parallel, but note that `rayon` is declared in
+`[workspace.dependencies]` and is **not** currently a dependency of
+`atomcad-display`; using it means adding that edge to the manifest. Do not add
+it speculatively — only if the P3 step 6 timings ask for it.
+
+### No extraction cache
+
+**Do not add one.** Extraction is uncached in this design: every scene
+generation re-extracts.
+
+That is affordable because scene generation happens at user-action frequency —
+network edits, selection changes, preference changes — not per frame.
+`move_camera` touches only the renderer and never calls `generate_scene`, so
+orbiting the camera costs no extraction at all.
+
+The obvious analogy, `csg_conversion_cache`, does not transfer. It keys on
+`GeoNode::hash()` and caches **recursively at every subtree**, so editing one
+leaf of a 50-shape union reuses 49 cached sub-results. An isosurface has no
+subtree structure — one field, one level, one extraction — so there is no
+compositional reuse to harvest, only a top-level repeat when an unrelated edit
+triggers a refresh.
+
+Caching is **out of scope here, not an optimization left to the implementor's
+taste.** It would need a sound key (an `Arc` address is not one: the allocation
+can be freed and the address reused, so the cache would have to hold strong
+references and pin megabytes of field data alive), an eviction policy, and an
+invalidation story. P3 step 6 records the numbers that would say whether any of
+that is warranted. **If they show a problem, that is a separate change with its
+own design — not something to fold into this one.**
 
 ### Why marching cubes
 
@@ -291,10 +421,11 @@ Hand-rolled — no workspace dependency provides it. `rayon` is available and
   it by edge interpolation — a correctness property for something claiming to
   be "the `psi = level` surface".
 - **MC's sliver triangles cost nothing here**, because normals come from the
-  analytic gradient, not from face normals.
+  field's own gradient (§Normals and winding), not from face normals — so a
+  near-degenerate triangle has no ill-conditioned cross product to compute.
 - **DC's adaptivity has little to buy.** The `ScalarField` contract already
-  caps useful resolution at the native grid, and 60–100k triangles for an 80^3
-  field is not a problem.
+  caps useful resolution at the native grid, and a triangle count in the tens
+  of thousands for an 80^3 field is not a problem.
 - **Naive surface nets is the closer rival and loses on one point:** one vertex
   per cell cannot represent two sheets in the same cell, so it welds them,
   merging two lobes into one connected component and corrupting the union-find
@@ -324,23 +455,115 @@ matter. Escape hatch if the case table becomes a time sink: **marching
 tetrahedra** — six tets per cell, unambiguous and closed by construction, at
 ~2x the triangles plus a faint directional bias.
 
-### Resolution
+**The closure property, stated precisely** — because this is what P2 tests
+rather than "looks closed":
 
-```
-native_grid().map(|g| g.spacing() / quality_multiplier)
-             .unwrap_or(preference_spacing)
+> The set of segments a cell's patch leaves on one of its faces is a function of
+> **that face's four corner signs alone**, and of nothing else in the cell.
+
+Two cells sharing a face see the same four signs, so their patch boundaries on
+it coincide edge for edge and cancel. Closure across the whole grid follows by
+induction, for *any* field. This is the property to check, not a boundary-edge
+count on one example: a table can be closed on every sphere anyone tries and
+still violate it on a configuration a sphere never produces.
+
+### Degeneracies: the `psi == level` tie
+
+Ties are not a corner case. A tie is any sample exactly equal to the level, and
+they are routine: level `0.0` against the integer-valued grids of §P2 tables A
+and B, and any level at all on a field with flat or quantized regions.
+
+Note that the **extractor accepts level `0`** even though the *node* rejects
+`level <= 0` (§Errors). The node's rule is about the two sign passes being
+meaningless at zero; the extractor is a layer below it and is tested at zero
+throughout. Do not push the node's validation down into the extractor.
+
+**Rule: a corner is inside when `sign * psi(p) >= level`** — non-strict. This is
+not a taste call: it makes the edge-interpolation denominator **provably
+non-zero**. An edge is only cut when one endpoint is strictly below `level` and
+the other is `>= level`, so `b - a != 0` by construction and
+`t = (level - a) / (b - a)` can never be `0/0`. A strict test leaves the tie
+producing NaN vertices, which propagate through normals and centroids into a mesh
+that renders as nothing with no error anywhere.
+
+**The tie's second effect is subtler and is the one to watch.** With the
+non-strict rule a tied corner puts the vertex exactly *at* the grid corner. Up
+to three cut edges of that cell meet there, and edge-keyed dedup gives each its
+own vertex index — coincident in space, distinct in the index buffer. Union-find
+over vertex indices then refuses to join them, so a surface passing exactly
+through a corner **splits into spurious components**, which is a wrong
+transparency sort and a wrong lobe count from an entirely correct case table.
+Merge coincident vertices (position-keyed, quantized) **before** the union-find
+pass, not after.
+
+**Deterministic emission order.** Emit components sorted by their smallest vertex
+index, and drive vertex dedup from a map with insertion-independent iteration.
+Component *order* feeds nothing but the draw sort at runtime, so it is invisible
+until a snapshot test flakes — and the seeded fuzz of §P2 table B is only
+reproducible if identical input gives byte-identical output.
+
+### Resolution: march the native lattice, not a spacing
+
+**Extraction runs in the field's own index space, on `GridGeometry::axes` —
+never on `GridGeometry::spacing()`.**
+
+```rust
+enum Lattice {
+    /// `native_grid() == Some(g)`. Cell (i,j,k) is the parallelepiped spanned
+    /// by `g.axes[a] / subdiv`, cornered at
+    /// `g.origin + sum_a g.axes[a] * (index_a / subdiv)`.
+    Native { grid: GridGeometry, subdiv: u32 },
+    /// `native_grid() == None`. Axis-aligned cubes of
+    /// `isosurface_fallback_spacing` filling `suggested_bounds()`.
+    Fallback { bounds: FieldBounds, spacing: f64 },
+}
 ```
 
-Default is the field's own grid verbatim — the contract's fidelity fast path,
-since sampling elsewhere blends eight stored values for no gain. The
-`native_grid() == None` fallback (every analytic field, i.e. all future Molden
-support) samples `suggested_bounds()` at a preference spacing; this is the
+with `subdiv = round(isosurface_quality_multiplier)` clamped to `>= 1`.
+
+**Why not a spacing.** `GridGeometry::spacing()` returns three axis *lengths*,
+and its own doc comment says it is "exact only for an axis-aligned grid, so a
+consumer that must handle shear uses `GridGeometry::axes` directly". The
+`.cube` format permits shear and `GridGeometry` was made shear-capable on
+purpose. Rebuilding an axis-aligned lattice out of three lengths silently
+rotates a sheared field's samples into the wrong places and reintroduces exactly
+the eight-value trilinear blending the fidelity fast path exists to avoid — a
+wrong surface, from a field that loaded without complaint. Marching index space
+makes the axis-aligned case fall out unchanged and the sheared case correct,
+for the price of carrying `axes` instead of three floats.
+
+At `subdiv == 1` the `Native` cells are the grid's own cells and every corner
+sample is a stored value read verbatim — the contract's fidelity fast path.
+Making the multiplier an **integer subdivision** rather than a free divisor is
+what preserves that: a non-integer factor puts every corner between stored
+samples even at "quality 1.0". The preference stays an `f64` for UI continuity
+and is rounded here; the editor should say so.
+
+**Winding under shear.** The index-space→world map is
+`m = mat3(axes[0], axes[1], axes[2])`. If `det(m) < 0` the axis triple is
+left-handed and the map mirrors, so triangles emitted counter-clockwise in index
+space come out clockwise in world space, inverting the front/back-face pairing
+the two-pass draw depends on. **Check the determinant once per extraction and
+flip triangle vertex order when it is negative.** Same class of bug — and the
+same fix — as the csgrs `det < 0` winding correction in `structure_invert`;
+`.cube` writers do emit left-handed axis triples.
+
+**The `None` fallback** (every analytic field, i.e. all future Molden support)
+samples `suggested_bounds()` at `isosurface_fallback_spacing`. This is the
 consumer most likely to have been wrongly written against a grid, so it is the
 one that proves the contract.
 
-Cells span adjacent sample points: `dims = [nx, ny, nz]` yields
-`(nx-1)(ny-1)(nz-1)` cells. The node-centered bounds convention makes this
-exact.
+**Cell counts**, which are what `isosurface_cell_budget` is checked against:
+
+| Lattice | Cells |
+|---|---|
+| `Native { grid, subdiv }` | `prod_a ((grid.dims[a] - 1) * subdiv)` |
+| `Fallback { bounds, spacing }` | `prod_a ceil(bounds.size()[a] / spacing)` |
+
+Cells span adjacent sample points, so `dims = [nx, ny, nz]` at `subdiv == 1`
+yields `(nx-1)(ny-1)(nz-1)` — the node-centered bounds convention
+(`GridGeometry::bounds`) makes this exact. The check is pre-flight: both rows
+are computable before a single sample is taken.
 
 ### The two sign passes
 
@@ -350,8 +573,9 @@ lobe in `positive_color`, `-1` the negative lobe in `negative_color`. Folding
 the sign into the comparison is what keeps winding and normals consistent
 without a second code path.
 
-`value_range().min >= 0` short-circuits the negative pass — a pure
-optimization, since it would find no crossings anyway.
+`value_range()` is `Option<(f64, f64)>`: when it is `Some((min, _))` with
+`min >= 0.0`, skip the negative pass — a pure optimization, since it would find
+no crossings anyway. When it is `None` (any analytic field), run both.
 
 ### Normals and winding
 
@@ -362,16 +586,24 @@ samples, so these are exact with respect to the data.
 
 Triangles must be **counter-clockwise viewed from outside**, consistent with
 that normal. This is load-bearing: the two-pass draw is `cull_mode: Front` then
-`Back`, so an inverted component draws near-before-far. The failure looks like
-slightly-off shading, not obvious breakage — same class as the csgrs `det<0`
-winding fix in `structure_invert`.
+`Back`, so an inverted component draws near-before-far, and the failure looks
+like slightly-off shading rather than obvious breakage. Orientation has two
+independent chances to go wrong — the case table's own vertex order, and the
+shear flip of §Resolution — and both land here.
 
 ### Connected components
 
 Union-find over triangle vertex indices, then re-emit triangles grouped so each
-component occupies a contiguous index range, with a centroid per component.
-The two sign passes are separate; components are labeled within each. Requires
-edge-keyed vertex deduplication, or every triangle becomes its own component.
+component occupies a contiguous index range, with a centroid per component, in
+deterministic order (§Degeneracies). The two sign passes are separate;
+components are labeled within each.
+
+Two dedup passes are needed, and skipping either corrupts the labeling in a way
+that only shows up as a transparency bug. **Edge-keyed** dedup first, or every
+triangle becomes its own component. **Position-keyed** merge second, or a
+surface passing exactly through a grid corner splits into spurious components —
+see §Degeneracies for why the tie rule makes that a routine occurrence rather
+than a rarity.
 
 ## Rendering
 
@@ -401,9 +633,27 @@ correctly essentially always. Draw order: components back-to-front by
 view-space z; within each, back faces then front faces. Fixes mode 1; leaves 2
 and 3.
 
+**Known limit: nested components.** Two concentric shells have coincident
+centroids, so their relative order is arbitrary and half the time wrong. Rare in
+practice — it needs a field with an interior extremum inside a closed shell — and
+the fix is a per-component depth range rather than a centroid, which is not worth
+building until something produces one. Recorded because the P2 concentric-shells
+test asserts the component *count*, and a reader would otherwise expect it to
+assert the order too.
+
 The sort happens **at draw time in the renderer**, reordering *draw calls*, not
 indices — so unlike `transparent_sort.rs` there is no index-buffer rewrite. N
 is single digits; it is free.
+
+The sort is over **one flat pool of components spanning every transparent
+surface on screen**, never per surface. The singleton-mesh model (§Alpha is a
+vertex attribute, not a uniform) merges all of them into `isosurface_transparent_mesh`,
+so the `SurfaceComponent` ranges arrive already pooled and which node a component came
+from is not recorded — nor should it be, since two orbitals on screen
+interpenetrate exactly the way two lobes of one orbital do.
+
+The sort must run **per moved frame**, not at tessellation time — the same
+trigger `transparent_sort.rs` uses, and what P4 manual step 3 checks.
 
 ### Pipelines and blend mode
 
@@ -422,29 +672,69 @@ transparent pipelines use. Depth test on, so opaque geometry (drawn first with
 depth writes) occludes correctly; depth write off, or the first transparent
 fragment kills the surface's own second layer.
 
-### The shader delta is one line
+These two serve `isosurface_transparent_mesh` only. The opaque mesh reuses the
+existing `triangle_pipeline` unchanged — no third pipeline is added (§The opaque
+fast path).
+
+### Alpha is a vertex attribute, not a uniform
 
 `mesh.wgsl` ends `return vec4<f32>(color, 1.0);` — opacity is hardcoded.
 Per-vertex albedo already exists on `Vertex`, so the colormap needs nothing;
-alpha is the only missing channel, and it is uniform per surface, so it goes in
-the existing per-mesh `ModelUniform` (group 1) rather than the vertex format:
+alpha is the only missing channel. It goes on the **vertex**:
 
-- `ModelUniform` gains `alpha: f32`
-- `mesh.wgsl` returns `vec4<f32>(color, model.alpha)`
-- `ModelUniform::new()` defaults it to `1.0`, leaving every opaque consumer
-  unchanged
+- `Vertex` (`atomcad-renderer/src/mesh.rs`) gains a trailing `alpha: f32`, and
+  `Vertex::desc()` gains one `Float32` attribute at `shader_location: 5`,
+  offset `size_of::<[f32; 11]>()`
+- `Vertex::new(position, normal, material)` sets `alpha: 1.0`, so all ~51
+  existing call sites and every opaque consumer are untouched; the isosurface
+  tessellator uses a new `Vertex::new_translucent(.., alpha)`
+- `mesh.wgsl` interpolates it through `VertexOutput` and returns
+  `vec4<f32>(color, in.alpha)`
 
-**Padding gotcha.** Two `mat4x4<f32>` is 128 bytes; a bare trailing `f32`
-breaks the 16-byte boundary and the WGSL layout stops matching the `#[repr(C)]`
-struct. Pad explicitly, or declare the slot as a `vec4<f32>`. Issue #269 was
-exactly this bug in `CameraUniform` — wrong output, no error.
+**Rejected: `ModelUniform` (group 1).** This is the obvious placement — alpha is
+one number per surface, and a uniform is where one number per surface belongs —
+and it does not work, because *the renderer has no per-surface mesh.*
+`tessellate_scene_content` builds a **fixed set of singleton meshes**, one per
+pipeline (`main_mesh`, `atom_impostor_mesh`, `transparent_impostor_mesh`, …),
+each merging every displayed node, and `update_all_gpu_meshes` uploads one
+`GPUMesh` — hence one `ModelUniform` — per pipeline. "Per-mesh" therefore means
+**per-pipeline**, not per surface. Two displayed `isosurface` nodes would share
+one alpha, and the opaque fast path makes the mixed case routine rather than
+exotic: one opaque density envelope plus one transparent orbital is a normal
+thing to want on screen at once. Per-vertex alpha varies at any granularity for
+free, costs 4 bytes per vertex on a mesh of tens of thousands, and needs no
+dynamic-offset uniform machinery.
 
-### The opaque fast path
+**This also retires the padding gotcha.** `ModelUniform` stays two
+`mat4x4<f32>` = 128 bytes, already 16-byte aligned, so the WGSL layout keeps
+matching the `#[repr(C)]` struct. Had alpha gone in as a bare trailing `f32` it
+would have broken that boundary silently — issue #269 was exactly this bug in
+`CameraUniform`: wrong output, no error. Vertex attributes have no such rule,
+which is a second reason to prefer them here.
 
-`alpha == 1.0` routes to the existing opaque pipeline: one draw,
-`cull_mode: Back`, depth write on, no sort. This lets P3 ship before any
-transparency work, and gives a permanent escape hatch — a picture whose
-correctness is not in question.
+### The opaque fast path, and why there are two isosurface meshes
+
+`alpha >= 1.0` routes a surface to the opaque path: one draw, `cull_mode: Back`,
+depth write on, no sort. Compare `>=`, not `==`, so a slider landing on
+`0.9999999` still takes it.
+
+**This is a per-surface routing decision made in `scene_tessellator` at merge
+time, and it forces the scene to carry two isosurface meshes rather than one:**
+
+| Mesh | Contents | Drawn by |
+|---|---|---|
+| `isosurface_opaque_mesh` | every displayed surface with `alpha >= 1.0` | the existing opaque `triangle_pipeline`, with the rest of the opaque geometry. Its vertices carry `alpha = 1.0`, so the shader change is a no-op for it |
+| `isosurface_transparent_mesh` | every displayed surface with `alpha < 1.0` | the two culled pipelines, after all opaque content, with the component sort |
+
+The split is not book-keeping, it is forced: the singleton-mesh model gives one
+pipeline per mesh, so a surface cannot choose a pipeline without choosing a mesh.
+A single merged mesh would mean either no fast path at all, or an opaque surface
+drawn through the transparent pipelines with depth writes off — which costs it
+its own self-occlusion.
+
+P3 builds **only the opaque mesh**, which is what lets it ship before any
+transparency work and leaves a permanent escape hatch — a picture whose
+correctness is not in question. P4 adds the second.
 
 ### Not built
 
@@ -472,10 +762,71 @@ Visualization** section.
 
 | Preference | Type | Default | Purpose |
 |---|---|---|---|
-| `isosurface_quality_multiplier` | `f64` | `1.0` | divides native grid spacing; `<1` coarser, `>1` finer |
+| `isosurface_quality_multiplier` | `f64` | `1.0` | **integer** subdivision of the native grid, rounded and clamped to `>= 1` (§Resolution); `2` halves the step. Values below `1` do not coarsen — a sampled field's own grid is the floor |
 | `isosurface_fallback_spacing` | `f64` | `0.15` Å | spacing when `native_grid()` is `None` |
-| `surface_transparency_mode` | enum | `ComponentSorted` | below |
-| `isosurface_cell_budget` | `usize` | `4_000_000` | refuse-and-warn ceiling so a fine multiplier cannot hang the UI |
+| `surface_transparency_mode` | enum | `ComponentSorted` | §Comparison modes; added in P4 |
+| `isosurface_cell_budget` | `usize` | `16_000_000` | ceiling on marching-cubes **cells**; refuses rather than hanging the UI |
+
+**`isosurface_cell_budget` counts cells** on the extraction lattice — not
+triangles and not bytes — by the two formulas in §Resolution. Cells are the only
+one of the three knowable *before* doing the work: both formulas are pure
+functions of the `Lattice`, so the check is pre-flight and costs nothing.
+Triangle count is not known until extraction has already run.
+
+For a sampled field the native grid is a natural ceiling and the budget only
+bites at a high quality multiplier — `16_000_000` clears `subdiv` 2 on a
+standard 80^3 cube (158^3 = 3,944,312 cells) and refuses `subdiv` 4
+(316^3 = 31,554,496). For an
+analytic field there is no natural ceiling at all, so the budget is the only
+guard. **The default is a starting value, not a measured one; revisit it with
+the P3 step 6 timings.**
+
+**The breach must be reported from the display conversion**, by inserting into
+`context.node_errors` — *not* from `get_data_error`, because node data cannot
+see preferences any more than `eval` can, so it cannot know the cell count.
+
+That works, but only because of an ordering that is easy to break:
+`generate_scene_scoped` clears `context.node_errors` at the top of the pass,
+runs evaluation, then runs `convert_result_to_node_output` for pin 0 and for
+each extra pin, and only **after all of that** snapshots
+`node_errors: context.node_errors.clone()` into the `NodeSceneData`. An insert
+from the display conversion therefore reaches the scene, and from there
+`get_all_node_errors` → `harvest_eval_errors` → the red node badge, the error
+panel entry and jump-to-node. Five details, none of them optional:
+
+- **Its own conversion function.** Add `generate_isosurface_output` beside
+  `generate_explicit_mesh_output` and reach it from an **unconditional**
+  `DataType::Isosurface` arm of `convert_result_to_node_output`. Do not route
+  through `generate_explicit_mesh_output`: that one is CSG-shaped and is reached
+  only from the `GeometryVisualization::ExplicitMesh` branches, so a user in
+  `SurfaceSplatting` mode would see no isosurface at all. The arm already has
+  `&mut context` in scope.
+- **Key with `context.node_ref(node_id)`**, never a bare `u64`. The scope pops
+  happen *after* the conversion, so `eval_scope_path` is still correct there and
+  an `isosurface` inside a HOF body keys to the right address.
+- **`entry().or_insert_with(..)`, not `insert`.** The map holds one string per
+  node. If the node already failed in `eval`, that error is the root cause and
+  must win.
+- **Record no origin link.** Leaving `node_error_origins` empty for this node is
+  what makes `resolve_root_cause` treat it as a root cause — correct, since
+  nothing upstream caused a preference breach.
+- **Name all three moving parts in the message**, because none of them is a node
+  property the user can see from the node: the cell count, the budget, and the
+  preference to lower. For example — `extraction grid is 31,554,496 cells, over
+  the 16,000,000 budget; lower isosurface_quality_multiplier (currently 4.0) or
+  raise isosurface_cell_budget`.
+
+It is an error that is **reported but not poisoning**: cone-poisoning is decided
+at validation time, and by the display conversion the `Isosurface` value has
+already flowed. That is the behavior wanted here — the value is fine, only the
+picture is missing. Freshness needs no extra machinery either: the
+clear-at-top-of-pass means the error disappears on the first pass where the
+budget fits.
+
+**Rejected: clamping the multiplier down to fit the budget.** Silently handing
+someone a coarser surface than they asked for is a worse failure than refusing,
+and it would quietly falsify P3 manual step 5, whose whole point is that the
+multiplier visibly controls resolution.
 
 ### Comparison modes and their expiry
 
@@ -514,7 +865,8 @@ Fixtures extend `scripts/make_cube_fixtures.py`.
 ### P1 — value plumbing
 
 **Work:** `IsosurfaceData`, `IsosurfaceColoring`, `Colormap` in
-`atomcad-display/src/isosurface/mod.rs`; `DataType::Isosurface` and every
+`atomcad-crystolecule/src/field/isosurface.rs`, registered in `field/mod.rs`;
+`DataType::Isosurface` and every
 touchpoint above plus codegen and the four Dart sites;
 `NetworkResult::Isosurface` with its four arms; promote
 `to_detailed_string` for `ScalarField`.
@@ -524,54 +876,139 @@ touchpoint above plus codegen and the four Dart sites;
 | `DataType` text round-trip | `from_string` and `Display` agree |
 | `APIDataType` round-trip, both directions | catches a missed FRB arm |
 | `infer_data_type` on a `NetworkResult::Isosurface` | `Some(DataType::Isosurface)` — **the one site with no compiler backstop** |
-| `heap_of` with the same `Arc` as surface and color field | counted once |
+| `heap_bytes` with the same `Arc` as surface and color field | counted once, not twice |
 | `to_detailed_string` on a `ScalarField` | reports dims and value range |
 | Existing registry-validation suite | stays green |
 
 ### P2 — marching cubes extractor (backend only)
 
 **Work:** `isosurface/extract.rs`; the 256-entry table with consistent
-complementary-case resolution and edge-keyed vertex dedup; sign-folded
-comparison, gradient normals, winding, union-find components; resolution policy
-including the `None` fallback; cell-budget check.
+complementary-case resolution and edge-keyed vertex dedup; the non-strict tie
+rule and the coincident-vertex merge; sign-folded comparison, gradient normals,
+winding, union-find components in deterministic order; the `Lattice` resolution
+policy — index-space marching on `axes`, integer `subdiv`, the `det < 0` winding
+flip, the `None` fallback; cell-budget check; colormap sampling for both
+`IsosurfaceColoring` arms.
 
-The critical tests are the ones whose failures are *silent* in a picture.
+This is the largest piece of genuinely tricky code in the design and the only
+one that is fully testable in isolation — no node, no scene, no GPU — so it
+carries the weight of the test plan. **The end-to-end checks on smooth analytic
+fields (table C) are the weakest part of that plan, not the strongest.** A
+sphere exercises perhaps a third of the 256 cases and systematically the easy
+third; every configuration that produces a hole is one a smooth blob rarely
+generates. Tables A and B are where the coverage actually comes from.
+
+**Housekeeping.** Tests live in `crates/atomcad-display/tests/display/` and
+**must be registered in `tests/display.rs`** with a `#[path]` module — an
+unregistered file silently never compiles or runs, the same failure mode the
+workspace `default-members` comment warns about. `atomcad-display` currently has
+**no `[dev-dependencies]` at all**; the snapshot rows below need
+`insta = { workspace = true }` added to its manifest.
+
+**Write the invariants as shared helpers, not per-test assertions:**
+`assert_closed_manifold`, `assert_on_isosurface(mesh, field, level, sign)`,
+`assert_outward_winding`, `assert_components_partition_indices`. Every table
+below then applies all four for free, and the fuzz rows become three lines each.
+The earlier draft named closedness once, against the sphere; it belongs on
+everything.
+
+**A — the case table, directly and exhaustively.** No field, no grid, no
+tolerance-fiddling: one unit cell, corner values `+1` / `-1` from a bitmask,
+level `0`. All 256 run in microseconds.
 
 | Test | Asserts |
 |---|---|
-| Analytic sphere (`r - R`), level 0 | every vertex within tolerance of `R`; triangle count in band |
+| All 256 masks, vertex placement | every emitted vertex lies on a cell edge whose two corners classify oppositely; no vertex on an uncut edge |
+| All 256 masks, patch validity | no degenerate (zero-area) triangle; every interior edge shared by exactly 2 triangles |
+| All 256 masks, **face-locality** | the segments the patch leaves on each of the 6 faces are a function of **that face's 4 corner signs alone** — the closure property from §Ambiguity, and the only test that proves closure for fields nobody thought to try |
+| All 256 complementary pairs | mask `m` and its complement give the **same geometry with reversed winding** — the "resolved consistently" rule, until now stated and unverified |
+| Adjacent-cell pairs, all 2^12 corner combinations | the union of two face-sharing cells has **zero boundary edges on the shared face**. Implied by face-locality; keep it as the concrete corollary, because it fails legibly |
+
+**B — randomized closure fuzz.** The highest-value rows in the plan: they reach
+combinations A and C both miss — asymmetric values, levels away from zero,
+near-ties — and each is three lines once the helpers exist.
+
+| Test | Asserts |
+|---|---|
+| ~2000 fixed seeds, random `5^3` grid, random level in range | closed manifold, even Euler characteristic, every vertex on the isovalue, components partition the index buffer |
+| Same, values drawn from `{-1, 0, +1}` at level `0` | ties on most corners — the degeneracy generator, and what catches the spurious-component split of §Degeneracies |
+| Same, all-equal grid at exactly the level | empty mesh, no NaN, no panic |
+| Determinism | the same seed twice gives byte-identical positions, indices and component order |
+
+Seeds are a fixed list, never `rand::random()`: a fuzz failure that cannot be
+replayed is a flake, and this suite has to be able to fail loudly in CI.
+
+**C — analytic fields.** End-to-end plausibility, now backed by A and B instead
+of carrying the argument alone.
+
+| Test | Asserts |
+|---|---|
+| Analytic sphere (`r - R`), level 0 | every vertex within tolerance of `R`; triangle count in band; **plus all four shared invariants** |
 | Same, normals | parallel to the radial direction, pointing **outward** |
-| Same, **winding** | `cross(v1-v0, v2-v0) . normal > 0` for every triangle |
-| Same, **closedness** | zero boundary edges. **A holed sphere passes the radius, normal and winding tests** — this is the only assertion that catches it |
-| Same, Euler characteristic | `V - E + F == 2`; catches non-manifold welding a boundary count can miss |
-| Ambiguous face configuration | still closed; topology deliberately *not* asserted |
-| Analytic 2p_z, level `L` | exactly two components, centroids on opposite sides of the nodal plane |
+| Same, Euler characteristic | `V - E + F == 2` |
+| **Torus**, genus 1 | one component with `V - E + F == 0` — the sphere's `== 2` catches neither a handle welded shut nor a handle invented |
+| **Two concentric shells** | two components. Also the documented limit of the centroid sort: the centroids coincide, so the draw order between them is arbitrary (§The fix) |
+| Sampled field, normals | agree with **central differences on the stored samples**, not with the analytic gradient — `SampledField` overrides `gradient`, and on a coarse grid the two differ |
+| Analytic 2p_z, level `L` | exactly two components, centroids on opposite sides of the nodal plane; **both passes land on their own `±L`** |
 | Same, colors | `+z` gets `positive_color`, `-z` gets `negative_color` |
 | Two same-sign lobes under one cell apart | still two components — the surface-nets failure mode |
 | Non-negative field | one component; negative pass short-circuits |
 | Level above the field's max magnitude | empty mesh, no panic |
-| Component ranges | contiguous, non-overlapping, covering `indices` exactly |
-| Field with `native_grid() == None` | succeeds at the fallback spacing |
-| Cell budget exceeded | descriptive error, no allocation |
 | Colormap on a linear color field | albedo varies monotonically; out-of-range clamps |
+
+**D — lattice and resolution.**
+
+| Test | Asserts |
+|---|---|
+| Field with `native_grid() == None` | succeeds at the fallback spacing over `suggested_bounds()` |
+| **Sheared** grid, analytic sphere sampled onto it | vertices still within tolerance of `R` — the assertion that fails if `spacing()` was used instead of `axes` |
+| Same, closed and correctly wound | shear must not open the surface or invert it |
+| **Left-handed** axis triple (`det(m) < 0`) | winding matches the outward normal — the flip is applied |
+| `subdiv == 1` on a sampled field | every cell corner equals a stored sample exactly, no interpolation |
+| `subdiv == 2` | cell count is `prod (dims-1)*2`; surface stays closed |
+| `quality_multiplier` of `0.5` and `2.4` | clamp/round to `subdiv` `1` and `2` |
+| Grid with an axis of `dims == 1` | zero cells, empty mesh, no panic — `SampledField::new` accepts it, only `0` is rejected |
+| Cell budget exceeded, both lattice kinds | refuses **before allocating**; message names the cell count and the offending multiplier |
+
+**E — regression snapshots.** `insta`, matching the `node_snapshots` convention.
+Snapshot a *summary* — vertex / triangle / component counts, bounding box,
+per-component centroid, a positions checksum — never the full vertex list, which
+is unreviewable in `cargo insta review` and rewrites wholesale on any harmless
+reorder.
+
+| Test | Asserts |
+|---|---|
+| `water.cube` fixture at two levels | summary stable across refactors |
+| The 2p_z field, both sign passes | summary stable, per component |
 
 ### P3 — node, editor, opaque rendering
 
 **The first user-visible milestone**, deliberately opaque-only.
 
 **Work:** node data, `eval`, registration; `SurfaceMesh`,
-`NodeOutput::Isosurface`, the conversion and its cache; `scene_tessellator`
-arm; `isosurface_editor.dart` and its widget entry; the three extraction
-preferences; reference guide.
+`NodeOutput::Isosurface`, `generate_isosurface_output`; the `scene_tessellator`
+arm building **`isosurface_opaque_mesh` only**, drawn by the existing
+`triangle_pipeline`; `isosurface_editor.dart` and its widget entry; the three
+extraction preferences (`surface_transparency_mode` is P4); reference guide.
+
+The `alpha` property is stored, serialized and editable in P3 but **has no
+render effect yet** — every surface goes to the opaque mesh regardless. P4 adds
+the transparent mesh, the routing between them, and the vertex attribute that
+carries alpha to the shader (§The opaque fast path). Say so in the editor
+tooltip rather than hiding the control, so the `.cnnd` written in P3 is already
+correct.
 
 | Test | Asserts |
 |---|---|
 | Node eval on a fixture | `NetworkResult::Isosurface` with field and level from properties |
 | `level` pin wired | overrides the stored property |
 | `level <= 0` | evaluation error |
-| `level` above the field's range | non-blocking warning; still produces a value |
+| `level` above the field's range | still produces a value; **no** error entry — the empty surface is silent by design (§Errors) |
 | `.cnnd` round-trip | all properties survive, `Colormap` included |
 | Result → `NodeOutput` | expected component count |
+| Cell budget exceeded on a displayed node | after `generate_scene_scoped`, the scene's `node_errors` holds one entry at `NodeRef::top(id)` naming cells, budget and multiplier, and the output is `NodeOutput::None` |
+| Same, node inside a HOF body | the entry is keyed at the **scoped** `NodeRef`, not the bare id |
+| Same, node whose `eval` already errored | the eval error survives — the budget message does not overwrite it |
 
 **Manual walkthrough**
 
@@ -579,26 +1016,38 @@ preferences; reference guide.
    blob enclosing the molecule.
 2. Display the `molecule` pin too. Expect surface and atoms *registered* — a
    1.9x mismatch means a Bohr conversion is wrong.
-3. Scrub `level` up. Expect monotonic shrinking, then an amber warning, not an
-   error.
+3. Scrub `level` up. Expect monotonic shrinking, then an empty viewport with
+   **no** badge — the silence is the designed behavior (§Errors), and the pin
+   hover is where the value range is read.
 4. On a signed orbital, expect two lobes in two colors; the swap button
    exchanges them and changes nothing else.
-5. Change `isosurface_quality_multiplier`. Expect re-tessellation at the new
-   resolution **without the network re-evaluating** — the architectural claim,
-   made visible.
+5. Change `isosurface_quality_multiplier`. Expect the surface to re-extract at
+   the new resolution while **no node data changes** — nothing dirties, no undo
+   entry appears, the `.cnnd` is untouched. That is the architectural claim
+   made visible: resolution lives outside the value.
+6. **Time one extraction** at native resolution on a real 80^3 cube (the
+   existing per-node profiler covers the conversion), then edit an unrelated
+   node in the network and judge whether the refresh visibly hitches. **Record
+   both numbers in this document.** They are the input to any future decision
+   about caching, which §No extraction cache places out of scope for this
+   design.
 
 ### P4 — transparency
 
-**Work:** `ModelUniform` alpha with explicit padding and the `mesh.wgsl`
-return; the two culled pipelines; draw-time component sort;
-`surface_transparency_mode` and its three modes.
+**Work:** the `Vertex` alpha attribute and the `mesh.wgsl` return; the
+`isosurface_transparent_mesh` and the `alpha >= 1.0` split in
+`scene_tessellator`; the two culled pipelines; the per-frame component sort over
+the pooled ranges; `surface_transparency_mode` and its three modes.
 
 | Test | Asserts |
 |---|---|
-| `size_of::<ModelUniform>() % 16 == 0` | the padding gotcha |
-| `ModelUniform::new()` | `alpha == 1.0`, opaque consumers unchanged |
+| `Vertex::new(..)` | `alpha == 1.0` — every existing opaque consumer unchanged |
+| `Vertex::desc()` | attribute count and the trailing offset match `size_of::<Vertex>()`; stride is `size_of::<Vertex>()` |
+| `size_of::<ModelUniform>() == 128` | it did **not** grow — the regression guard on the rejected placement |
 | Component sort | synthetic centroids + view matrix come back farthest-first |
-| `alpha == 1.0` | routes to the opaque pipeline — assert the pipeline, not pixels |
+| Sort across **two** surfaces | components from different `isosurface` nodes interleave by depth, not by node — they share one pooled range list |
+| Two transparent surfaces at different alphas | each keeps its own in the merged mesh — the failure the vertex attribute exists to prevent |
+| `alpha` of `1.0`, `0.9999999`, `0.999` | the first two land in `isosurface_opaque_mesh`, the third in `isosurface_transparent_mesh` — assert the mesh, not pixels |
 
 **Manual walkthrough**
 
@@ -607,44 +1056,62 @@ return; the two culled pipelines; draw-time component sort;
 2. Cycle all three modes at a fixed camera. Expect `SinglePass` to misorder
    visibly, `TwoPass` to fix within lobes but not between them,
    `ComponentSorted` to be correct.
-3. Orbit in `ComponentSorted`. Expect no popping; a pop means the sort is not
-   per-frame.
-4. Show ghost atoms and the surface together. Expect failure mode 3. Record
+3. Orbit in `ComponentSorted`. Expect the ordering to stay correct from every
+   angle; a sort running only at tessellation time looks right from the
+   original viewpoint and wrong from others.
+4. Display **two** `isosurface` nodes at once, at different alphas — say an
+   opaque envelope and a `0.4` orbital, then two transparent orbitals that
+   overlap. Expect each to keep its own alpha and the lobes to interleave by
+   depth. This is the singleton-mesh trap (§Alpha is a vertex attribute, not a
+   uniform) made visible; one surface on screen cannot detect it.
+5. Show ghost atoms and the surface together. Expect failure mode 3. Record
    what it looks like — that is the input to the OIT decision.
-5. **Record the expiry answers here** and delete the losing modes.
+6. **Record the expiry answers here** and delete the losing modes.
 
 ### P5 — color field and colormap
 
 **Work:** `color_field` wiring and `IsosurfaceColoring::Field`; per-vertex
-colormap sampling; the mismatched-bounds warning; editor controls; reference
-guide.
+colormap sampling; editor controls; reference guide — including the
+mismatched-bounds white band, which the guide explains because the node cannot
+(§Errors).
 
 | Test | Asserts |
 |---|---|
 | Color field wired | `Field` arm; unwired reverts to `Phase` |
-| Colormap range | ends map to palette ends; beyond them, clamp |
+| `color_min` / `color_max` properties | reach the value's `range` — the mapping itself is covered in P2 |
 | Signed surface with a color field | still two components, both painted per-vertex |
-| Bounds exceeding the color field's | non-blocking warning; still drawn |
+| Bounds exceeding the color field's | still drawn, no error entry — the white band is documented, not diagnosed (§Errors) |
 
 **Manual walkthrough**
 
 1. Density into `field`, electrostatic potential into `color_field`. Expect the
    classic red/white/blue ESP map.
-2. Pair mismatched boxes deliberately. Expect an amber warning and a visible
-   white band where the surface leaves the color field's box.
+2. Pair mismatched boxes deliberately. Expect a visible white band where the
+   surface leaves the color field's box, and **no** badge explaining it. Check
+   that the reference guide's description matches what you see — that page is
+   the only thing standing between a user and a plausible-but-wrong picture.
 3. Repeat through `atomcad-cli` for the headless path.
 
 **Deliverable: closes the scope of this document.**
 
 ## Documentation touchpoints
 
-- `doc/reference_guide/nodes/atomic.md` — the node (P3, updated P5)
+- `doc/reference_guide/nodes/atomic.md` — the node (P3, updated P5). Must
+  carry the two conditions the node cannot report (§Errors): a `level` above the
+  field's range renders nothing, and a color field smaller than the surface
+  paints the overhang neutral. Both are silent in the UI, so this page is where
+  a user finds out.
 - `doc/reference_guide/node_networks.md` — `Isosurface` pin type and color (P1)
 - `doc/reference_guide/ui.md` — the four preferences (P3, P4)
 - `crates/atomcad-display/src/AGENTS.md` — **new file**: module map,
   Ångström-in/out invariant, outward-winding rule; register it in the root
   `AGENTS.md`
-- `doc/testing.md` — winding **and closedness** assertions as required tests for
-  any surface extractor, noting that a holed surface passes every per-vertex
-  check
+- `crates/atomcad-crystolecule/src/AGENTS.md` — `field/` gains a second module;
+  record that the isosurface *specification* lives beside `ScalarField` while
+  the extracted mesh lives in `atomcad-display` (P1)
+- `doc/testing.md` — the required-test set for any surface extractor: winding,
+  **closedness**, and the **face-locality** property (§Ambiguity), noting that a
+  holed surface passes every per-vertex check and that a per-example closedness
+  count does not imply closure in general. Also record the seeded-fuzz pattern
+  from P2 table B, which is reusable by any future extractor
 - this document — the expiry answers (P4)
