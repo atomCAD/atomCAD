@@ -112,6 +112,34 @@ impl ImportCubeData {
         ])
     }
 
+    /// Node data for a file-name edit that **keeps the parsed payload when the
+    /// name has not actually changed**.
+    ///
+    /// The property setter is called on every focus loss of the path field, not
+    /// only on a real edit, and rebuilding the data unconditionally with
+    /// `loaded: None` therefore threw away a perfectly good payload whenever the
+    /// user clicked away from the node — leaving the node reporting
+    /// "No cube file imported" for a file it had loaded seconds earlier.
+    ///
+    /// That was invisible in undo (`loaded` is `#[serde(skip)]`, so the before
+    /// and after snapshots are byte-identical and no command is pushed) and
+    /// unrecoverable without pressing *Load* again, which is what made it read
+    /// as a random refresh bug.
+    ///
+    /// **`eval` has no reload fallback**, deliberately: unlike `import_cif`,
+    /// which re-reads its file whenever its cache is empty, a cube is
+    /// potentially hundreds of megabytes and `eval` runs on every evaluation
+    /// with no `&mut self` to cache into. Keeping the payload alive across
+    /// no-op writes is therefore the *only* thing standing between the user and
+    /// a reload, which is why this is a method and not an inline `if`.
+    pub fn with_file_name(&self, file_name: Option<String>) -> Self {
+        let unchanged = file_name == self.file_name;
+        Self {
+            loaded: if unchanged { self.loaded.clone() } else { None },
+            file_name,
+        }
+    }
+
     /// The same error on both pins. See the module doc on why a one-element
     /// error output is wrong here.
     fn error(message: String) -> EvalOutput {

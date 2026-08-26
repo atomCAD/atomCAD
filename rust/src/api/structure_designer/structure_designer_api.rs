@@ -6004,10 +6004,20 @@ pub fn set_atom_composediff_data(scope_path: Vec<u64>, node_id: u64, data: APIAt
 pub fn set_import_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIImportXYZData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let import_xyz_data = Box::new(ImportXYZData {
-                file_name: data.file_name.clone(),
-                atomic_structure: None,
-            });
+            // Derive from the node's current data, so a write that does not
+            // change the file name keeps the loaded structure. See
+            // `ImportXYZData::with_file_name`.
+            let import_xyz_data = Box::new(
+                cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)
+                    .and_then(|node_data| node_data.as_any_ref().downcast_ref::<ImportXYZData>())
+                    .map(|current| current.with_file_name(data.file_name.clone()))
+                    .unwrap_or_else(|| ImportXYZData {
+                        file_name: data.file_name.clone(),
+                        atomic_structure: None,
+                    }),
+            );
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, import_xyz_data);
@@ -6018,18 +6028,31 @@ pub fn set_import_xyz_data(scope_path: Vec<u64>, node_id: u64, data: APIImportXY
 
 /// Replaces an `import_cube` node's stored file name.
 ///
-/// The parsed payload is dropped: the new name has not been loaded yet, and
-/// `import_cube` (the action) is what loads it. Validation runs so a units
-/// warning left over from the previous file disappears immediately rather than
-/// lingering in the error list — the refresh paths do not validate.
+/// The parsed payload is dropped when the name actually **changes**: the new
+/// name has not been loaded yet, and `import_cube` (the action) is what loads
+/// it. A write that leaves the name alone keeps the payload — the property
+/// setter fires on every focus loss of the path field, not only on a real
+/// edit, so dropping it unconditionally made a click elsewhere in the network
+/// silently un-import the file. See `ImportCubeData::with_file_name`.
+///
+/// Validation runs so a units warning left over from the previous file
+/// disappears immediately rather than lingering in the error list — the
+/// refresh paths do not validate.
 #[flutter_rust_bridge::frb(sync)]
 pub fn set_import_cube_data(scope_path: Vec<u64>, node_id: u64, data: APIImportCubeData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            let import_cube_data = Box::new(ImportCubeData {
-                file_name: data.file_name.clone(),
-                loaded: None,
-            });
+            let import_cube_data = Box::new(
+                cad_instance
+                    .structure_designer
+                    .get_node_network_data_scoped(&scope_path, node_id)
+                    .and_then(|node_data| node_data.as_any_ref().downcast_ref::<ImportCubeData>())
+                    .map(|current| current.with_file_name(data.file_name.clone()))
+                    .unwrap_or_else(|| ImportCubeData {
+                        file_name: data.file_name.clone(),
+                        loaded: None,
+                    }),
+            );
             cad_instance
                 .structure_designer
                 .set_node_network_data_scoped(&scope_path, node_id, import_cube_data);

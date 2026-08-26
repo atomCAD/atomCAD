@@ -22,6 +22,16 @@ pub struct SetNodeDataCommand {
 }
 
 impl SetNodeDataCommand {
+    /// Directory of the open design file, which relative asset paths resolve
+    /// against. `None` for an unsaved project, where every stored path is
+    /// absolute anyway.
+    fn design_dir(&self, ctx: &UndoContext) -> Option<String> {
+        ctx.node_type_registry
+            .design_file_name
+            .as_ref()
+            .and_then(|path| atomcad_util::path_utils::get_parent_directory(path))
+    }
+
     /// Look up the node_data_loader for this node's type from the registry,
     /// deserialize the given JSON, and set it on the node.
     fn apply_data(&self, ctx: &mut UndoContext, data_json: &Value) {
@@ -42,8 +52,18 @@ impl SetNodeDataCommand {
             return;
         };
 
-        // Deserialize the data
-        let data = match loader(data_json, None) {
+        // Deserialize the data.
+        //
+        // The design directory is **load-bearing**, not decoration: the import
+        // nodes' loaders re-read their file here (the parsed payload is
+        // `#[serde(skip)]`, so it is not in the snapshot), and a stored path is
+        // relative whenever the file sits beside the `.cnnd`. Passing `None`
+        // made `resolve_path` fail for exactly those projects, so undoing any
+        // edit on an `import_cube` / `import_xyz` / `import_cif` node silently
+        // dropped its payload and the node started reporting that nothing had
+        // been imported.
+        let design_dir = self.design_dir(ctx);
+        let data = match loader(data_json, design_dir.as_deref()) {
             Ok(d) => d,
             Err(_) => return,
         };

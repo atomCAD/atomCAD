@@ -149,6 +149,26 @@ impl ImportXYZData {
             atomic_structure: None,
         }
     }
+
+    /// Node data for a file-name edit that **keeps the parsed structure when the
+    /// name has not actually changed**.
+    ///
+    /// Same defect and same reasoning as
+    /// [`ImportCubeData::with_file_name`](super::import_cube::ImportCubeData::with_file_name):
+    /// the property setter fires on every focus loss of the path field, and
+    /// rebuilding with `atomic_structure: None` turned a click elsewhere into
+    /// "No atomic structure imported" for an already-loaded file.
+    pub fn with_file_name(&self, file_name: Option<String>) -> Self {
+        let unchanged = file_name == self.file_name;
+        Self {
+            atomic_structure: if unchanged {
+                self.atomic_structure.clone()
+            } else {
+                None
+            },
+            file_name,
+        }
+    }
 }
 
 /// Special loader for ImportXYZData that loads the atomic structure after deserializing

@@ -390,3 +390,87 @@ fn an_unloaded_node_reports_no_data_error() {
             .is_none()
     );
 }
+
+// ============================================================================
+// with_file_name: a no-op write must not un-import the file
+// ============================================================================
+//
+// The property setter behind the path text field runs on every **focus loss**,
+// not only on a real edit, so "click the node, click another node" issued a
+// write with an unchanged name. Rebuilding the data with `loaded: None` there
+// silently discarded a loaded file, and the node then reported
+// "No cube file imported" for a file it had just read. Nothing recorded it:
+// `loaded` is `#[serde(skip)]`, so the before/after undo snapshots are
+// byte-identical and `set_node_network_data_scoped` pushes no command.
+
+#[test]
+fn an_unchanged_file_name_keeps_the_loaded_payload() {
+    let path = cube_fixture("water_bohr.cube");
+    let cube = atomcad_crystolecule::io::cube_loader::load_cube(&path, true).expect("fixture");
+    let loaded = atomcad_structure_designer::nodes::import_cube::LoadedCube::from_cube_file(cube)
+        .expect("fixture carries a field");
+    let data = ImportCubeData {
+        file_name: Some(path.clone()),
+        loaded: Some(loaded),
+    };
+
+    let rewritten = data.with_file_name(Some(path));
+    assert!(
+        rewritten.loaded.is_some(),
+        "re-writing the same file name must not un-import the file"
+    );
+}
+
+#[test]
+fn a_changed_file_name_drops_the_loaded_payload() {
+    let path = cube_fixture("water_bohr.cube");
+    let cube = atomcad_crystolecule::io::cube_loader::load_cube(&path, true).expect("fixture");
+    let loaded = atomcad_structure_designer::nodes::import_cube::LoadedCube::from_cube_file(cube)
+        .expect("fixture carries a field");
+    let data = ImportCubeData {
+        file_name: Some(path),
+        loaded: Some(loaded),
+    };
+
+    // The payload belongs to the *old* name, so keeping it would make the node
+    // draw one file while naming another — worse than making the user press Load.
+    let rewritten = data.with_file_name(Some(cube_fixture("ramp_3x4x5.cube")));
+    assert!(
+        rewritten.loaded.is_none(),
+        "a different file name must invalidate the payload"
+    );
+    assert!(
+        data.with_file_name(None).loaded.is_none(),
+        "clearing the file name must invalidate the payload too"
+    );
+}
+
+/// End to end through the node: the state after a redundant write still
+/// evaluates to a field rather than to the "No cube file imported" error, which
+/// is what the user actually saw.
+#[test]
+fn a_node_re_set_with_its_own_file_name_still_evaluates() {
+    let mut designer = setup_designer();
+    let path = cube_fixture("water_bohr.cube");
+    let node_id = add_loaded_import_cube_node(&mut designer, &path);
+
+    let current = designer
+        .get_node_network_data(node_id)
+        .and_then(|d| d.as_any_ref().downcast_ref::<ImportCubeData>())
+        .expect("import_cube data")
+        .with_file_name(Some(path));
+    designer.set_node_network_data(node_id, Box::new(current));
+
+    match evaluate_pin(&designer, node_id, 0) {
+        NetworkResult::ScalarField(field) => {
+            assert!(
+                field.value_range().is_some(),
+                "the field survived the write"
+            );
+        }
+        NetworkResult::Error(message) => {
+            panic!("a redundant file-name write un-imported the file: {message}")
+        }
+        other => panic!("unexpected {}", other.to_display_string()),
+    }
+}
