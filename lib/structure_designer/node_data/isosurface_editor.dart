@@ -173,9 +173,9 @@ class IsosurfaceEditor extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Stored and saved with the project, but surfaces currently render '
-              'fully opaque — transparent isosurface rendering is not in yet. '
-              'Setting it now keeps the file correct for when it arrives.',
+              'How see-through the surface is. Lower it to see the molecule '
+              'inside an orbital; exactly 1 draws the surface solid and skips '
+              'the transparency work entirely.',
               style: captionStyle,
             ),
             const SizedBox(height: 16),

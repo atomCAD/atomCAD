@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.10.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 830924451;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -335366284;
 
 // Section: executor
 
@@ -12726,6 +12726,21 @@ fn wire__crate__api__structure_designer__structure_designer_preferences__structu
                      let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_preferences::StructureDesignerPreferences::new())?;   Ok(output_ok)
                 })()) })
 }
+fn wire__crate__api__structure_designer__structure_designer_preferences__surface_transparency_mode_default_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "surface_transparency_mode_default", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || { 
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end(); move |context|  {
+                    transform_result_sse::<_, ()>((move ||  {
+                         let output_ok = Result::<_,()>::Ok(crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::default())?;   Ok(output_ok)
+                    })())
+                } })
+}
 fn wire__crate__api__common_api__sync_gadget_data_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -16208,7 +16223,8 @@ let mut var_hideCoplanarWireframeEdges = <bool>::sse_decode(deserializer);
 let mut var_isosurfaceQualityMultiplier = <f64>::sse_decode(deserializer);
 let mut var_isosurfaceFallbackSpacing = <f64>::sse_decode(deserializer);
 let mut var_isosurfaceCellBudget = <u64>::sse_decode(deserializer);
-return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing, display_camera_target: var_displayCameraTarget, show_geometry_shell_for_atomic: var_showGeometryShellForAtomic, wireframe_active_color: var_wireframeActiveColor, wireframe_inactive_color: var_wireframeInactiveColor, hide_coplanar_wireframe_edges: var_hideCoplanarWireframeEdges, isosurface_quality_multiplier: var_isosurfaceQualityMultiplier, isosurface_fallback_spacing: var_isosurfaceFallbackSpacing, isosurface_cell_budget: var_isosurfaceCellBudget};}
+let mut var_surfaceTransparencyMode = <crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode>::sse_decode(deserializer);
+return crate::api::structure_designer::structure_designer_preferences::GeometryVisualizationPreferences{geometry_visualization: var_geometryVisualization, wireframe_geometry: var_wireframeGeometry, samples_per_unit_cell: var_samplesPerUnitCell, sharpness_angle_threshold_degree: var_sharpnessAngleThresholdDegree, mesh_smoothing: var_meshSmoothing, display_camera_target: var_displayCameraTarget, show_geometry_shell_for_atomic: var_showGeometryShellForAtomic, wireframe_active_color: var_wireframeActiveColor, wireframe_inactive_color: var_wireframeInactiveColor, hide_coplanar_wireframe_edges: var_hideCoplanarWireframeEdges, isosurface_quality_multiplier: var_isosurfaceQualityMultiplier, isosurface_fallback_spacing: var_isosurfaceFallbackSpacing, isosurface_cell_budget: var_isosurfaceCellBudget, surface_transparency_mode: var_surfaceTransparencyMode};}
                 }
 
 impl SseDecode
@@ -18807,6 +18823,21 @@ impl SseDecode
     }
 }
 
+impl SseDecode
+    for crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::SinglePass,
+1 => crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::TwoPass,
+2 => crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::ComponentSorted,
+            _ => unreachable!("Invalid variant for SurfaceTransparencyMode: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for u32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -18943,6 +18974,7 @@ fn pde_ffi_dispatcher_primary_impl(
 317 => wire__crate__api__structure_designer__structure_designer_api_types__node_type_category_order_impl(port, ptr, rust_vec_len, data_len),
 467 => wire__crate__api__structure_designer__structure_designer_preferences__simulation_preferences_default_impl(port, ptr, rust_vec_len, data_len),
 470 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_default_impl(port, ptr, rust_vec_len, data_len),
+472 => wire__crate__api__structure_designer__structure_designer_preferences__surface_transparency_mode_default_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -19409,23 +19441,23 @@ fn pde_ffi_dispatcher_sync_impl(
 468 => wire__crate__api__structure_designer__facet_shell_api__split_symmetry_members_impl(ptr, rust_vec_len, data_len),
 469 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_clone_self_impl(ptr, rust_vec_len, data_len),
 471 => wire__crate__api__structure_designer__structure_designer_preferences__structure_designer_preferences_new_impl(ptr, rust_vec_len, data_len),
-472 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
-473 => wire__crate__api__structure_designer__structure_designer_api__take_load_param_id_repairs_impl(ptr, rust_vec_len, data_len),
-474 => wire__crate__api__structure_designer__structure_designer_api__take_print_log_impl(ptr, rust_vec_len, data_len),
-475 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
-476 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
-477 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
-478 => wire__crate__api__structure_designer__structure_designer_api__toggle_output_pin_display_impl(ptr, rust_vec_len, data_len),
-479 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
-480 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
-481 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
-482 => wire__crate__api__structure_designer__structure_designer_api__undo_impl(ptr, rust_vec_len, data_len),
-483 => wire__crate__api__structure_designer__structure_designer_api__undo_description_impl(ptr, rust_vec_len, data_len),
-484 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
-485 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
-486 => wire__crate__api__structure_designer__structure_designer_api__update_record_type_def_impl(ptr, rust_vec_len, data_len),
-487 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
-488 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
+473 => wire__crate__api__common_api__sync_gadget_data_impl(ptr, rust_vec_len, data_len),
+474 => wire__crate__api__structure_designer__structure_designer_api__take_load_param_id_repairs_impl(ptr, rust_vec_len, data_len),
+475 => wire__crate__api__structure_designer__structure_designer_api__take_print_log_impl(ptr, rust_vec_len, data_len),
+476 => wire__crate__api__structure_designer__structure_designer_api__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
+477 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_and_wires_selection_impl(ptr, rust_vec_len, data_len),
+478 => wire__crate__api__structure_designer__structure_designer_api__toggle_nodes_selection_impl(ptr, rust_vec_len, data_len),
+479 => wire__crate__api__structure_designer__structure_designer_api__toggle_output_pin_display_impl(ptr, rust_vec_len, data_len),
+480 => wire__crate__api__structure_designer__structure_designer_api__toggle_wire_selection_impl(ptr, rust_vec_len, data_len),
+481 => wire__crate__api__structure_designer__structure_designer_api__toggle_wires_selection_impl(ptr, rust_vec_len, data_len),
+482 => wire__crate__api__structure_designer__edit_atom_api__transform_selected_impl(ptr, rust_vec_len, data_len),
+483 => wire__crate__api__structure_designer__structure_designer_api__undo_impl(ptr, rust_vec_len, data_len),
+484 => wire__crate__api__structure_designer__structure_designer_api__undo_description_impl(ptr, rust_vec_len, data_len),
+485 => wire__crate__api__structure_designer__structure_designer_api__update_comment_node_impl(ptr, rust_vec_len, data_len),
+486 => wire__crate__api__structure_designer__facet_shell_api__update_facet_impl(ptr, rust_vec_len, data_len),
+487 => wire__crate__api__structure_designer__structure_designer_api__update_record_type_def_impl(ptr, rust_vec_len, data_len),
+488 => wire__crate__api__structure_designer__structure_designer_api__validate_active_network_impl(ptr, rust_vec_len, data_len),
+489 => wire__crate__api__structure_designer__structure_designer_api__viewport_pick_impl(ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
 }
@@ -24289,7 +24321,8 @@ self.wireframe_inactive_color.into_into_dart().into_dart(),
 self.hide_coplanar_wireframe_edges.into_into_dart().into_dart(),
 self.isosurface_quality_multiplier.into_into_dart().into_dart(),
 self.isosurface_fallback_spacing.into_into_dart().into_dart(),
-self.isosurface_cell_budget.into_into_dart().into_dart()
+self.isosurface_cell_budget.into_into_dart().into_dart(),
+self.surface_transparency_mode.into_into_dart().into_dart()
                 ].into_dart()
                 }
             }
@@ -24948,6 +24981,35 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::structure_designer::structure
                 self
             }
         }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart
+    for crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode
+{
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::SinglePass => 0.into_dart(),
+            Self::TwoPass => 1.into_dart(),
+            Self::ComponentSorted => 2.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode
+{
+}
+impl
+    flutter_rust_bridge::IntoIntoDart<
+        crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode,
+    > for crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode
+{
+    fn into_into_dart(
+        self,
+    ) -> crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode
+    {
+        self
+    }
+}
 // Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart
     for crate::api::structure_designer::structure_designer_api_types::WireIdentifier
@@ -27119,7 +27181,8 @@ impl SseEncode for crate::api::structure_designer::structure_designer_preference
 <bool>::sse_encode(self.hide_coplanar_wireframe_edges, serializer);
 <f64>::sse_encode(self.isosurface_quality_multiplier, serializer);
 <f64>::sse_encode(self.isosurface_fallback_spacing, serializer);
-<u64>::sse_encode(self.isosurface_cell_budget, serializer);}
+<u64>::sse_encode(self.isosurface_cell_budget, serializer);
+<crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode>::sse_encode(self.surface_transparency_mode, serializer);}
                 }
 
 impl SseEncode
@@ -29393,6 +29456,18 @@ impl SseEncode
         <crate::api::structure_designer::structure_designer_preferences::LayoutPreferences>::sse_encode(self.layout_preferences, serializer);
         <crate::api::structure_designer::structure_designer_preferences::SimulationPreferences>::sse_encode(self.simulation_preferences, serializer);
         <crate::api::structure_designer::structure_designer_preferences::MemoryPreferences>::sse_encode(self.memory_preferences, serializer);
+    }
+}
+
+impl SseEncode
+    for crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode
+{
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(match self {crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::SinglePass => { 0 }
+crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::TwoPass => { 1 }
+crate::api::structure_designer::structure_designer_preferences::SurfaceTransparencyMode::ComponentSorted => { 2 }
+ _ => { unimplemented!(""); }}, serializer);
     }
 }
 

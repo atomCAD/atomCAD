@@ -1128,6 +1128,44 @@ correct.
 `scene_tessellator`; the two culled pipelines; the per-frame component sort over
 the pooled ranges; `surface_transparency_mode` and its three modes.
 
+**Status: done**, with four notes, three of them corrections to the plan above.
+
+- **Three pipelines, not two.** §Pipelines and blend mode names two, differing
+  only in `cull_mode` — but `SinglePass`, described separately as "one draw, no
+  culling", needs a `cull_mode: None` pipeline of its own. The two-pass pair is
+  as specified; the control mode adds a third,
+  `create_surface_transparent_pipeline` being called once per cull mode. All
+  three go away together if the comparison modes are deleted on their stated
+  criterion, leaving the two the design names.
+- **`0.9999999` does not survive the `f32`.** §The opaque fast path justifies
+  `>=` over `==` with "a slider landing on `0.9999999` still takes it". It does
+  not: `alpha` is an `f32`, the nearest representable value to `0.9999999` is
+  `0.99999994`, and that is below `1.0` under either comparison. The surface
+  takes the transparent path — harmlessly, since at that opacity it is visually
+  solid, but the example is not the reason for the operator. **What `>=`
+  actually buys is the other side of `1.0`**: a value that rounded *up* past it
+  on the way from the node's `f64` property to the mesh's `f32` would fail `==`
+  and be drawn as a transparent surface with depth writes off, losing its own
+  self-occlusion. The test asserts that, not the example.
+- **The transparent surfaces draw after the ghost impostors.** Failure mode 3
+  says nothing orders fragments between two transparent pipelines, so this is a
+  choice, not a derivation: surfaces last means the ghost atoms are seen
+  *through* the membrane, which is what a surface enclosing a structure is
+  normally for. A ghost genuinely in front of the surface is still composited
+  behind it. That is the picture P4 manual step 5 is meant to record.
+- **`TransparentSurfaceMesh` is a wrapper, not a field on `Mesh`.** The pooled
+  `SurfaceComponentRange` list has to travel with the merged mesh, and putting
+  it on `Mesh` itself would hang a permanently-empty `Vec` on the main,
+  lightweight and gadget meshes while saying nothing about which of them the
+  sort applies to. `atomcad-renderer` declares its own
+  `SurfaceComponentRange` rather than naming `atomcad_display`'s
+  `SurfaceComponent`, since it sits below `atomcad-display` in the DAG.
+
+**Not done: the manual walkthrough** — every step needs the running
+application, including step 6, whose expiry answers are what retire the two
+comparison modes. Those modes therefore stay, and §Comparison modes and their
+expiry stays unanswered, until the maintainer records them here.
+
 | Test | Asserts |
 |---|---|
 | `Vertex::new(..)` | `alpha == 1.0` — every existing opaque consumer unchanged |

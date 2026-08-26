@@ -416,7 +416,7 @@ fn labels_are_emitted_in_both_rendering_methods() {
         AtomicRenderingMethod::Impostors,
         AtomicRenderingMethod::TriangleMesh,
     ] {
-        let (.., label_mesh, _gadget_atoms, _gadget_bonds) = tessellate_scene_content(
+        let (.., label_mesh, _gadget_atoms, _gadget_bonds, _surfaces) = tessellate_scene_content(
             &scene_with_labeled_atom(),
             &test_camera(),
             false, // not lightweight
@@ -434,7 +434,7 @@ fn labels_are_emitted_in_both_rendering_methods() {
 /// The label mesh stays empty in lightweight mode, like the transparent mesh.
 #[test]
 fn label_mesh_is_empty_in_lightweight_mode() {
-    let (.., label_mesh, _gadget_atoms, _gadget_bonds) = tessellate_scene_content(
+    let (.., label_mesh, _gadget_atoms, _gadget_bonds, _surfaces) = tessellate_scene_content(
         &scene_with_labeled_atom(),
         &test_camera(),
         true, // lightweight

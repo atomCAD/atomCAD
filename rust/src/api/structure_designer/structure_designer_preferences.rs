@@ -54,6 +54,23 @@ pub enum MeshSmoothing {
     SmoothingGroupBased,
 }
 
+/// Dart-facing twin of [`domain::SurfaceTransparencyMode`].
+///
+/// **Scaffolding**: `SinglePass` and `TwoPass` exist to be compared against
+/// `ComponentSorted` on the same scene at the same camera, and are to be
+/// deleted once `doc/design_isosurface_node.md` records the answer.
+#[frb]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Default)]
+pub enum SurfaceTransparencyMode {
+    /// One draw, no culling. The control.
+    SinglePass,
+    /// Back faces then front faces, components unordered.
+    TwoPass,
+    /// Components back-to-front, two-pass within each.
+    #[default]
+    ComponentSorted,
+}
+
 #[frb]
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct GeometryVisualizationPreferences {
@@ -114,6 +131,11 @@ pub struct GeometryVisualizationPreferences {
     #[frb(non_final)]
     #[serde(default = "default_isosurface_cell_budget")]
     pub isosurface_cell_budget: u64,
+    /// How transparent isosurfaces are composited. A pure *draw* setting: it
+    /// changes no geometry, so it never re-extracts.
+    #[frb(non_final)]
+    #[serde(default)]
+    pub surface_transparency_mode: SurfaceTransparencyMode,
 }
 
 fn default_samples_per_unit_cell() -> i32 {
@@ -169,6 +191,7 @@ impl Default for GeometryVisualizationPreferences {
             isosurface_quality_multiplier: 1.0,
             isosurface_fallback_spacing: 0.15,
             isosurface_cell_budget: 16_000_000,
+            surface_transparency_mode: SurfaceTransparencyMode::ComponentSorted,
         }
     }
 }
@@ -723,6 +746,30 @@ impl From<&domain::MeshSmoothing> for MeshSmoothing {
     }
 }
 
+impl From<&SurfaceTransparencyMode> for domain::SurfaceTransparencyMode {
+    fn from(v: &SurfaceTransparencyMode) -> Self {
+        match v {
+            SurfaceTransparencyMode::SinglePass => domain::SurfaceTransparencyMode::SinglePass,
+            SurfaceTransparencyMode::TwoPass => domain::SurfaceTransparencyMode::TwoPass,
+            SurfaceTransparencyMode::ComponentSorted => {
+                domain::SurfaceTransparencyMode::ComponentSorted
+            }
+        }
+    }
+}
+
+impl From<&domain::SurfaceTransparencyMode> for SurfaceTransparencyMode {
+    fn from(v: &domain::SurfaceTransparencyMode) -> Self {
+        match v {
+            domain::SurfaceTransparencyMode::SinglePass => SurfaceTransparencyMode::SinglePass,
+            domain::SurfaceTransparencyMode::TwoPass => SurfaceTransparencyMode::TwoPass,
+            domain::SurfaceTransparencyMode::ComponentSorted => {
+                SurfaceTransparencyMode::ComponentSorted
+            }
+        }
+    }
+}
+
 impl From<&GeometryVisualizationPreferences> for domain::GeometryVisualizationPreferences {
     fn from(p: &GeometryVisualizationPreferences) -> Self {
         domain::GeometryVisualizationPreferences {
@@ -739,6 +786,7 @@ impl From<&GeometryVisualizationPreferences> for domain::GeometryVisualizationPr
             isosurface_quality_multiplier: p.isosurface_quality_multiplier,
             isosurface_fallback_spacing: p.isosurface_fallback_spacing,
             isosurface_cell_budget: p.isosurface_cell_budget as usize,
+            surface_transparency_mode: (&p.surface_transparency_mode).into(),
         }
     }
 }
@@ -759,6 +807,7 @@ impl From<&domain::GeometryVisualizationPreferences> for GeometryVisualizationPr
             isosurface_quality_multiplier: p.isosurface_quality_multiplier,
             isosurface_fallback_spacing: p.isosurface_fallback_spacing,
             isosurface_cell_budget: p.isosurface_cell_budget as u64,
+            surface_transparency_mode: (&p.surface_transparency_mode).into(),
         }
     }
 }

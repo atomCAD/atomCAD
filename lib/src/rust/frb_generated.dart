@@ -85,7 +85,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.10.0';
 
   @override
-  int get rustContentHash => 830924451;
+  int get rustContentHash => -335366284;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -1816,6 +1816,9 @@ abstract class RustLibApi extends BaseApi {
 
   StructureDesignerPreferences
       crateApiStructureDesignerStructureDesignerPreferencesStructureDesignerPreferencesNew();
+
+  Future<SurfaceTransparencyMode>
+      crateApiStructureDesignerStructureDesignerPreferencesSurfaceTransparencyModeDefault();
 
   bool crateApiCommonApiSyncGadgetData();
 
@@ -15350,11 +15353,38 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
 
   @override
+  Future<SurfaceTransparencyMode>
+      crateApiStructureDesignerStructureDesignerPreferencesSurfaceTransparencyModeDefault() {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 472, port: port_);
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_surface_transparency_mode,
+        decodeErrorData: null,
+      ),
+      constMeta:
+          kCrateApiStructureDesignerStructureDesignerPreferencesSurfaceTransparencyModeDefaultConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta
+      get kCrateApiStructureDesignerStructureDesignerPreferencesSurfaceTransparencyModeDefaultConstMeta =>
+          const TaskConstMeta(
+            debugName: "surface_transparency_mode_default",
+            argNames: [],
+          );
+
+  @override
   bool crateApiCommonApiSyncGadgetData() {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 472)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 473)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -15378,7 +15408,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 473)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 474)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_String,
@@ -15404,7 +15434,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 474)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 475)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_list_api_print_log_entry,
@@ -15432,7 +15462,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 475)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 476)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -15464,7 +15494,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_list_prim_u_64_strict(nodeIds, serializer);
         sse_encode_list_wire_identifier(wires, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 476)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 477)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15492,7 +15522,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_list_prim_u_64_strict(nodeIds, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 477)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 478)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15523,7 +15553,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_list_prim_u_64_strict(scopePath, serializer);
         sse_encode_u_64(nodeId, serializer);
         sse_encode_i_32(pinIndex, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 478)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 479)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15558,7 +15588,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_i_32(sourceOutputPinIndex, serializer);
         sse_encode_u_64(destinationNodeId, serializer);
         sse_encode_usize(destinationArgumentIndex, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 479)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 480)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -15597,7 +15627,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_wire_identifier(wires, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 480)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 481)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15624,7 +15654,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_transform(absTransform, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 481)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 482)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15649,7 +15679,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 482)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 483)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -15673,7 +15703,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 483)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 484)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_String,
@@ -15706,7 +15736,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_64(nodeId, serializer);
         sse_encode_String(label, serializer);
         sse_encode_String(text, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 484)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 485)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15739,7 +15769,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_64(nodeId, serializer);
         sse_encode_usize(index, serializer);
         sse_encode_box_autoadd_api_facet(facet, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 485)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 486)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_bool,
@@ -15766,7 +15796,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(name, serializer);
         sse_encode_list_api_record_type_field(fields, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 486)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 487)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_api_result,
@@ -15791,7 +15821,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return handler.executeSync(SyncTask(
       callFfi: () {
         final serializer = SseSerializer(generalizedFrbRustBinding);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 487)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 488)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_unit,
@@ -15820,7 +15850,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_box_autoadd_api_vec_3(rayOrigin, serializer);
         sse_encode_box_autoadd_api_vec_3(rayDirection, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 488)!;
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 489)!;
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_api_viewport_pick_result,
@@ -18911,8 +18941,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       dco_decode_geometry_visualization_preferences(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return GeometryVisualizationPreferences(
       geometryVisualization: dco_decode_geometry_visualization(arr[0]),
       wireframeGeometry: dco_decode_bool(arr[1]),
@@ -18927,6 +18957,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       isosurfaceQualityMultiplier: dco_decode_f_64(arr[10]),
       isosurfaceFallbackSpacing: dco_decode_f_64(arr[11]),
       isosurfaceCellBudget: dco_decode_u_64(arr[12]),
+      surfaceTransparencyMode: dco_decode_surface_transparency_mode(arr[13]),
     );
   }
 
@@ -20443,6 +20474,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       simulationPreferences: dco_decode_simulation_preferences(arr[5]),
       memoryPreferences: dco_decode_memory_preferences(arr[6]),
     );
+  }
+
+  @protected
+  SurfaceTransparencyMode dco_decode_surface_transparency_mode(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return SurfaceTransparencyMode.values[raw as int];
   }
 
   @protected
@@ -23669,6 +23706,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_isosurfaceQualityMultiplier = sse_decode_f_64(deserializer);
     var var_isosurfaceFallbackSpacing = sse_decode_f_64(deserializer);
     var var_isosurfaceCellBudget = sse_decode_u_64(deserializer);
+    var var_surfaceTransparencyMode =
+        sse_decode_surface_transparency_mode(deserializer);
     return GeometryVisualizationPreferences(
         geometryVisualization: var_geometryVisualization,
         wireframeGeometry: var_wireframeGeometry,
@@ -23682,7 +23721,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         hideCoplanarWireframeEdges: var_hideCoplanarWireframeEdges,
         isosurfaceQualityMultiplier: var_isosurfaceQualityMultiplier,
         isosurfaceFallbackSpacing: var_isosurfaceFallbackSpacing,
-        isosurfaceCellBudget: var_isosurfaceCellBudget);
+        isosurfaceCellBudget: var_isosurfaceCellBudget,
+        surfaceTransparencyMode: var_surfaceTransparencyMode);
   }
 
   @protected
@@ -26035,6 +26075,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         layoutPreferences: var_layoutPreferences,
         simulationPreferences: var_simulationPreferences,
         memoryPreferences: var_memoryPreferences);
+  }
+
+  @protected
+  SurfaceTransparencyMode sse_decode_surface_transparency_mode(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return SurfaceTransparencyMode.values[inner];
   }
 
   @protected
@@ -28742,6 +28790,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.isosurfaceQualityMultiplier, serializer);
     sse_encode_f_64(self.isosurfaceFallbackSpacing, serializer);
     sse_encode_u_64(self.isosurfaceCellBudget, serializer);
+    sse_encode_surface_transparency_mode(
+        self.surfaceTransparencyMode, serializer);
   }
 
   @protected
@@ -30771,6 +30821,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_layout_preferences(self.layoutPreferences, serializer);
     sse_encode_simulation_preferences(self.simulationPreferences, serializer);
     sse_encode_memory_preferences(self.memoryPreferences, serializer);
+  }
+
+  @protected
+  void sse_encode_surface_transparency_mode(
+      SurfaceTransparencyMode self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected

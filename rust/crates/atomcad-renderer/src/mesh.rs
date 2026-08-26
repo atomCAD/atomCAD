@@ -25,9 +25,24 @@ pub struct Vertex {
     pub albedo: [f32; 3],
     pub roughness: f32,
     pub metallic: f32,
+    /// Opacity, `1.0` for every opaque producer.
+    ///
+    /// Alpha lives on the **vertex** rather than in `ModelUniform` because the
+    /// renderer has no per-surface mesh: `tessellate_scene_content` builds a
+    /// fixed set of singleton meshes, one per pipeline, each merging every
+    /// displayed node, so "per-mesh" means "per-pipeline". Two transparent
+    /// isosurfaces would otherwise share one alpha. Four bytes per vertex buys
+    /// per-surface — indeed per-vertex — opacity with no dynamic-offset uniform
+    /// machinery, and it keeps `ModelUniform` at its two `mat4x4<f32>` (the
+    /// `CameraUniform` padding bug of issue #269 was exactly what a bare
+    /// trailing `f32` on a uniform invites). See
+    /// `doc/design_isosurface_node.md` §Alpha is a vertex attribute.
+    pub alpha: f32,
 }
 
 impl Vertex {
+    /// An **opaque** vertex: `alpha == 1.0`. Every pre-existing producer goes
+    /// through here and is unaffected by the alpha channel.
     pub fn new(position: &Vec3, normal: &Vec3, material: &Material) -> Self {
         Self {
             position: [position.x, position.y, position.z],
@@ -35,6 +50,22 @@ impl Vertex {
             albedo: [material.albedo.x, material.albedo.y, material.albedo.z],
             roughness: material.roughness,
             metallic: material.metallic,
+            alpha: 1.0,
+        }
+    }
+
+    /// Same, with an explicit opacity. Used by the isosurface tessellator to
+    /// bake one surface's alpha onto every vertex it contributes to the merged
+    /// transparent mesh.
+    pub fn new_translucent(
+        position: &Vec3,
+        normal: &Vec3,
+        material: &Material,
+        alpha: f32,
+    ) -> Self {
+        Self {
+            alpha,
+            ..Self::new(position, normal, material)
         }
     }
 
@@ -68,6 +99,12 @@ impl Vertex {
                     shader_location: 4,
                     format: wgpu::VertexFormat::Float32,
                 },
+                // alpha
+                wgpu::VertexAttribute {
+                    offset: std::mem::size_of::<[f32; 11]>() as wgpu::BufferAddress,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32,
+                },
             ],
         }
     }
@@ -76,6 +113,7 @@ impl Vertex {
 /*
  * A Triangle mesh in CPU memory.
  */
+#[derive(Debug)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,

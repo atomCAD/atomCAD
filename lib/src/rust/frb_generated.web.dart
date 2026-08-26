@@ -1596,6 +1596,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  SurfaceTransparencyMode dco_decode_surface_transparency_mode(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
 
   @protected
@@ -3447,6 +3450,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StructureDesignerPreferences sse_decode_structure_designer_preferences(
+      SseDeserializer deserializer);
+
+  @protected
+  SurfaceTransparencyMode sse_decode_surface_transparency_mode(
       SseDeserializer deserializer);
 
   @protected
@@ -5376,6 +5383,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_structure_designer_preferences(
       StructureDesignerPreferences self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_surface_transparency_mode(
+      SurfaceTransparencyMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

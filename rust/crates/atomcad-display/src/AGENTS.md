@@ -54,6 +54,16 @@ per-example "the sphere came out closed" count does **not** imply it.
 `Material`, unlike every other tessellator here: an isosurface carries its color
 per vertex, so a caller-supplied albedo would only be discarded.
 
+It has **two** entry points, and which one a surface goes through is decided by
+`scene_tessellator` from the surface's `alpha`, not here:
+`tessellate_surface_mesh` appends to the opaque `main_mesh` and writes
+`alpha = 1.0`; `tessellate_surface_mesh_transparent` appends to a
+`TransparentSurfaceMesh`, bakes the surface's own alpha onto every vertex, and
+rebases the component ranges onto the pooled list. Per-vertex alpha is not a
+stylistic choice — the renderer holds one mesh per *pipeline*, so two surfaces
+at different opacities share one buffer and nothing coarser than a vertex can
+tell them apart.
+
 Two pitfalls that cost real time:
 
 - **The level set is clipped where it leaves the sampled box.** The extractor

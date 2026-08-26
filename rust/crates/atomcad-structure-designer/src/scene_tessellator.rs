@@ -19,6 +19,7 @@ use atomcad_renderer::line_mesh::LineMesh;
 use atomcad_renderer::mesh::{Material, Mesh};
 use atomcad_renderer::tessellator::tessellator::{TessellationOutput, tessellate_cuboid};
 use atomcad_renderer::transparent_impostor_mesh::TransparentImpostorMesh;
+use atomcad_renderer::transparent_surface_mesh::TransparentSurfaceMesh;
 use glam::f32::Vec3;
 use glam::f64::{DQuat, DVec3};
 
@@ -40,6 +41,7 @@ pub fn tessellate_scene_content(
     LabelMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
+    TransparentSurfaceMesh,
 ) {
     // ===== 1. TESSELLATE LIGHTWEIGHT CONTENT (always) =====
     let (lightweight_mesh, gadget_line_mesh) =
@@ -55,6 +57,7 @@ pub fn tessellate_scene_content(
         label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
+        isosurface_transparent_mesh,
     ) = if !lightweight {
         tessellate_non_lightweight_content(scene, preferences)
     } else {
@@ -69,6 +72,7 @@ pub fn tessellate_scene_content(
             LabelMesh::new(),
             AtomImpostorMesh::new(),
             BondImpostorMesh::new(),
+            TransparentSurfaceMesh::new(),
         )
     };
 
@@ -83,6 +87,7 @@ pub fn tessellate_scene_content(
         label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
+        isosurface_transparent_mesh,
     )
 }
 
@@ -136,6 +141,7 @@ fn tessellate_non_lightweight_content(
     LabelMesh,
     AtomImpostorMesh,
     BondImpostorMesh,
+    TransparentSurfaceMesh,
 ) {
     let mut main_mesh = Mesh::new();
     let mut wireframe_mesh = LineMesh::new();
@@ -149,6 +155,9 @@ fn tessellate_non_lightweight_content(
     // Gadget impostor meshes (kept for API compatibility, currently empty)
     let gadget_atom_impostor_mesh = AtomImpostorMesh::new();
     let gadget_bond_impostor_mesh = BondImpostorMesh::new();
+    // Merged transparent isosurface mesh: every displayed surface with
+    // `alpha < 1.0`, plus the pooled component ranges the renderer sorts.
+    let mut isosurface_transparent_mesh = TransparentSurfaceMesh::new();
 
     let atomic_tessellation_params = atomic_tessellator::AtomicTessellatorParams {
         ball_and_stick_sphere_horizontal_divisions: 12,
@@ -357,19 +366,31 @@ fn tessellate_non_lightweight_content(
                 }
 
                 NodeOutput::Isosurface(surface_mesh) => {
-                    // P3 of `doc/design_isosurface_node.md` is deliberately
-                    // opaque-only: every surface joins the opaque triangle
-                    // mesh, which is `main_mesh` — the mesh the existing
-                    // `triangle_pipeline` draws, and the one the design names
-                    // `isosurface_opaque_mesh`. A second, separately-owned mesh
-                    // for the same pipeline would buy nothing; the split into
-                    // two meshes only starts to mean something when the
-                    // *transparent* one arrives with its own culled pipelines.
+                    // The opaque fast path (§The opaque fast path of
+                    // `doc/design_isosurface_node.md`). This routing decision
+                    // is made *here*, at merge time, and it is what forces two
+                    // isosurface meshes rather than one: the singleton-mesh
+                    // model gives one pipeline per mesh, so a surface cannot
+                    // choose a pipeline without choosing a mesh.
                     //
-                    // Consequence: the node's `alpha` property is stored,
-                    // serialized and editable but has no render effect yet, as
-                    // the design specifies.
-                    isosurface_tessellator::tessellate_surface_mesh(&mut main_mesh, surface_mesh);
+                    // The opaque destination is `main_mesh` itself — the mesh
+                    // the existing `triangle_pipeline` draws — because a
+                    // separately-owned opaque mesh would be a second `GPUMesh`
+                    // on the same pipeline with the same uniforms.
+                    //
+                    // `>=`, not `==`: a slider landing on `0.9999999` still
+                    // takes the fast path, where it belongs.
+                    if surface_mesh.alpha >= 1.0 {
+                        isosurface_tessellator::tessellate_surface_mesh(
+                            &mut main_mesh,
+                            surface_mesh,
+                        );
+                    } else {
+                        isosurface_tessellator::tessellate_surface_mesh_transparent(
+                            &mut isosurface_transparent_mesh,
+                            surface_mesh,
+                        );
+                    }
                 }
 
                 NodeOutput::DrawingPlane(drawing_plane) => {
@@ -414,5 +435,6 @@ fn tessellate_non_lightweight_content(
         label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
+        isosurface_transparent_mesh,
     )
 }

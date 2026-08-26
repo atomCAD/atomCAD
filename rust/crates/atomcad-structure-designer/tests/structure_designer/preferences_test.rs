@@ -5,7 +5,7 @@ use atomcad_structure_designer::preferences::{
     AtomicRenderingMethod, AtomicStructureVisualizationPreferences, BackgroundPreferences,
     GeometryVisualization, GeometryVisualizationPreferences, LayoutAlgorithmPreference,
     LayoutPreferences, MemoryPreferences, MeshSmoothing, NodeDisplayPolicy, NodeDisplayPreferences,
-    PrefColor, SimulationPreferences, StructureDesignerPreferences,
+    PrefColor, SimulationPreferences, StructureDesignerPreferences, SurfaceTransparencyMode,
 };
 
 /// Test round-trip serialization: serialize preferences to JSON and deserialize back.
@@ -362,6 +362,7 @@ fn test_non_default_values_roundtrip() {
             isosurface_quality_multiplier: 2.0,
             isosurface_fallback_spacing: 0.25,
             isosurface_cell_budget: 4_000_000,
+            surface_transparency_mode: SurfaceTransparencyMode::TwoPass,
         },
         node_display_preferences: NodeDisplayPreferences {
             display_policy: NodeDisplayPolicy::PreferFrontier,
@@ -517,6 +518,12 @@ fn test_non_default_values_roundtrip() {
             .geometry_visualization_preferences
             .isosurface_cell_budget,
         4_000_000
+    );
+    assert_eq!(
+        loaded
+            .geometry_visualization_preferences
+            .surface_transparency_mode,
+        SurfaceTransparencyMode::TwoPass
     );
 
     assert_eq!(

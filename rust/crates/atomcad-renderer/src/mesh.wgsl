@@ -25,6 +25,9 @@ struct VertexInput {
     @location(2) albedo: vec3<f32>,
     @location(3) roughness: f32,
     @location(4) metallic: f32,
+    // Per-vertex opacity. Every opaque producer writes 1.0 (`Vertex::new`), so
+    // this is a no-op for every mesh but the transparent isosurface one.
+    @location(5) alpha: f32,
 };
 
 struct VertexOutput {
@@ -34,6 +37,7 @@ struct VertexOutput {
     @location(2) albedo: vec3<f32>,
     @location(3) roughness: f32,
     @location(4) metallic: f32,
+    @location(5) alpha: f32,
 };
 
 // Helper functions for PBR
@@ -81,6 +85,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     output.roughness = input.roughness;
     output.metallic = input.metallic;
     output.albedo = input.albedo;
+    output.alpha = input.alpha;
     return output;
 }
 
@@ -134,5 +139,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     color = color / (color + vec3(1.0));
     color = pow(color, vec3(1.0 / 2.2));
 
-    return vec4<f32>(color, 1.0);
+    // Non-premultiplied source-over, matching both existing transparent
+    // pipelines. Opaque meshes carry `alpha == 1.0` and are unchanged.
+    return vec4<f32>(color, input.alpha);
 }

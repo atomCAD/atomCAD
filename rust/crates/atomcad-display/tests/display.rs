@@ -36,3 +36,6 @@ mod isosurface_lattice_test;
 
 #[path = "display/isosurface_snapshot_test.rs"]
 mod isosurface_snapshot_test;
+
+#[path = "display/isosurface_tessellator_test.rs"]
+mod isosurface_tessellator_test;

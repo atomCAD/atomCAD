@@ -9,9 +9,13 @@ use crate::label_mesh::LabelMesh;
 use crate::label_mesh::LabelVertex;
 use crate::line_mesh::LineMesh;
 use crate::line_mesh::LineVertex;
+use crate::surface_sort::sorted_component_order;
 use crate::transparent_impostor_mesh::TransparentImpostorMesh;
 use crate::transparent_impostor_mesh::TransparentImpostorVertex;
 use crate::transparent_sort::sorted_transparent_indices;
+use crate::transparent_surface_mesh::{
+    SurfaceComponentRange, SurfaceTransparencyMode, TransparentSurfaceMesh,
+};
 use bytemuck;
 use glam::f32::Mat4;
 use glam::f32::Vec3;
@@ -88,6 +92,14 @@ pub struct Renderer {
     atom_impostor_pipeline: RenderPipeline,
     bond_impostor_pipeline: RenderPipeline,
     transparent_impostor_pipeline: RenderPipeline,
+    /// The three transparent-surface pipelines, all reading `mesh.wgsl` with
+    /// `Vertex::desc()` and differing only in `cull_mode`. Alpha blending on,
+    /// depth test on, depth **write off** — or the first transparent fragment
+    /// kills the surface's own second layer. See
+    /// `doc/design_isosurface_node.md` §Pipelines and blend mode.
+    surface_no_cull_pipeline: RenderPipeline,
+    surface_front_cull_pipeline: RenderPipeline,
+    surface_back_cull_pipeline: RenderPipeline,
     /// Atom labels. The only pipeline with a texture, so the only one built on
     /// its own three-group layout (camera, model, atlas) — see
     /// `doc/design_atom_labels.md` §Pipeline changes.
@@ -114,6 +126,19 @@ pub struct Renderer {
     /// The view matrix the current sorted index buffer was built for
     /// (`None` = never sorted). A change forces a re-sort.
     transparent_sorted_view: Option<Mat4>,
+    /// Merged transparent isosurface mesh: every displayed surface with
+    /// `alpha < 1.0`. Surfaces at `alpha >= 1.0` go to `main_mesh` instead and
+    /// are drawn by the opaque `triangle_pipeline`, which is what makes the
+    /// opaque fast path a routing decision rather than a shader branch.
+    isosurface_transparent_mesh: GPUMesh,
+    /// CPU-side pool of that mesh's component ranges, retained so the
+    /// back-to-front component order can be recomputed per moved frame without
+    /// re-tessellating. Written on every transparent-surface upload.
+    isosurface_components: Vec<SurfaceComponentRange>,
+    /// Draw strategy for the mesh above. A preference, pushed in from the api
+    /// layer on every refresh rather than read from a preferences type the
+    /// renderer crate cannot see.
+    surface_transparency_mode: SurfaceTransparencyMode,
     label_mesh: GPUMesh,
     /// The SDF font atlas' bind group (group 2). It lives on the `Renderer`
     /// rather than on the `GPUMesh`: `GPUMesh` knows only its model bind group
@@ -221,6 +246,12 @@ impl Renderer {
         // Merged transparent impostor mesh (x-ray ghost atoms + bonds)
         let transparent_impostor_mesh =
             GPUMesh::new_empty_transparent_impostor_mesh(&device, &model_bind_group_layout);
+
+        // Merged transparent isosurface mesh. An ordinary triangle mesh — same
+        // `Vertex`, same shader as the opaque one; only the pipelines it is
+        // drawn with differ.
+        let isosurface_transparent_mesh =
+            GPUMesh::new_empty_triangle_mesh(&device, &model_bind_group_layout);
 
         // Atom-label glyph quads
         let label_mesh = GPUMesh::new_empty_label_mesh(&device, &model_bind_group_layout);
@@ -393,6 +424,29 @@ impl Renderer {
             &transparent_impostor_shader,
         );
 
+        // One transparent-surface pipeline per cull mode. Three, where the
+        // design names two: it counts the two-pass pair, and the `SinglePass`
+        // control mode it describes separately needs a `cull_mode: None`
+        // pipeline of its own.
+        let surface_no_cull_pipeline = Self::create_surface_transparent_pipeline(
+            &device,
+            &pipeline_layout,
+            &triangle_shader,
+            None,
+        );
+        let surface_front_cull_pipeline = Self::create_surface_transparent_pipeline(
+            &device,
+            &pipeline_layout,
+            &triangle_shader,
+            Some(wgpu::Face::Front),
+        );
+        let surface_back_cull_pipeline = Self::create_surface_transparent_pipeline(
+            &device,
+            &pipeline_layout,
+            &triangle_shader,
+            Some(wgpu::Face::Back),
+        );
+
         let label_pipeline =
             Self::create_label_pipeline(&device, &label_pipeline_layout, &label_shader);
 
@@ -405,6 +459,9 @@ impl Renderer {
             atom_impostor_pipeline,
             bond_impostor_pipeline,
             transparent_impostor_pipeline,
+            surface_no_cull_pipeline,
+            surface_front_cull_pipeline,
+            surface_back_cull_pipeline,
             label_pipeline,
             main_mesh,
             wireframe_mesh,
@@ -414,6 +471,9 @@ impl Renderer {
             atom_impostor_mesh,
             bond_impostor_mesh,
             transparent_impostor_mesh,
+            isosurface_transparent_mesh,
+            isosurface_components: Vec::new(),
+            surface_transparency_mode: SurfaceTransparencyMode::default(),
             transparent_quad_centers: Vec::new(),
             transparent_mesh_generation: 0,
             transparent_sorted_generation: None,
@@ -557,6 +617,79 @@ impl Renderer {
                 conservative: false,
             },
             depth_stencil,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        })
+    }
+
+    /// A transparent-surface pipeline, differing from the opaque
+    /// `triangle_pipeline` in exactly three ways: alpha blending on, depth
+    /// writes off, and a caller-chosen `cull_mode`.
+    ///
+    /// `ALPHA_BLENDING` is non-premultiplied source-over, the same blend both
+    /// existing transparent pipelines use. The depth **test** stays on so
+    /// opaque geometry (drawn first, with depth writes) occludes correctly; the
+    /// depth **write** must stay off or the first transparent fragment would
+    /// kill the surface's own second layer, which is precisely the layer the
+    /// two-pass draw exists to show. No depth bias either: the opaque pipeline
+    /// biases to win coplanar ties against wireframes, and a surface that does
+    /// not write depth has no tie to win.
+    fn create_surface_transparent_pipeline(
+        device: &Device,
+        pipeline_layout: &wgpu::PipelineLayout,
+        triangle_shader: &wgpu::ShaderModule,
+        cull_mode: Option<wgpu::Face>,
+    ) -> RenderPipeline {
+        let label = match cull_mode {
+            None => "Transparent Surface Pipeline (no cull)",
+            Some(wgpu::Face::Front) => "Transparent Surface Pipeline (back faces)",
+            Some(wgpu::Face::Back) => "Transparent Surface Pipeline (front faces)",
+        };
+
+        device.create_render_pipeline(&RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(pipeline_layout),
+            vertex: VertexState {
+                module: triangle_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(FragmentState {
+                module: triangle_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(ColorTargetState {
+                    format: TextureFormat::Bgra8Unorm,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode,
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState {
+                    constant: 0,
+                    slope_scale: 0.0,
+                    clamp: 0.0,
+                },
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -958,6 +1091,7 @@ impl Renderer {
         atom_impostor_mesh: &AtomImpostorMesh,
         bond_impostor_mesh: &BondImpostorMesh,
         transparent_impostor_mesh: &TransparentImpostorMesh,
+        isosurface_transparent_mesh: &TransparentSurfaceMesh,
         label_mesh: &LabelMesh,
         gadget_atom_impostor_mesh: &AtomImpostorMesh,
         gadget_bond_impostor_mesh: &BondImpostorMesh,
@@ -1002,6 +1136,18 @@ impl Renderer {
                 .clone_from(&transparent_impostor_mesh.quad_centers);
             self.transparent_mesh_generation = self.transparent_mesh_generation.wrapping_add(1);
 
+            self.isosurface_transparent_mesh.update_from_mesh(
+                &self.device,
+                &isosurface_transparent_mesh.mesh,
+                "Transparent Isosurfaces",
+            );
+            // The component ranges index the mesh just uploaded, so they must
+            // be replaced together with it. Unlike the impostor sort this one
+            // touches no GPU buffer — it reorders draw calls — so there is no
+            // generation counter to keep in step.
+            self.isosurface_components
+                .clone_from(&isosurface_transparent_mesh.components);
+
             self.label_mesh
                 .update_from_label_mesh(&self.device, label_mesh, "Atom Labels");
 
@@ -1024,6 +1170,8 @@ impl Renderer {
             self.atom_impostor_mesh.set_identity_transform(&self.queue);
             self.bond_impostor_mesh.set_identity_transform(&self.queue);
             self.transparent_impostor_mesh
+                .set_identity_transform(&self.queue);
+            self.isosurface_transparent_mesh
                 .set_identity_transform(&self.queue);
             self.label_mesh.set_identity_transform(&self.queue);
             self.gadget_atom_impostor_mesh
@@ -1166,6 +1314,19 @@ impl Renderer {
                 .set_identity_transform(&self.queue);
             render_pass.set_pipeline(&self.transparent_impostor_pipeline);
             self.render_mesh(&mut render_pass, &self.transparent_impostor_mesh);
+
+            // Transparent isosurfaces last of all. Nothing orders fragments
+            // *between* two transparent pipelines — neither writes depth, so
+            // they composite in draw-call order — and drawing surfaces after
+            // the ghosts is the choice that matches what a surface usually is:
+            // a membrane enclosing the structure, with the ghost atoms seen
+            // through it. A ghost in front of the surface is composited behind
+            // it anyway; that is failure mode 3 of
+            // `doc/design_isosurface_node.md` §Why two-pass alone is not
+            // enough, and the input to any future OIT decision.
+            self.isosurface_transparent_mesh
+                .set_identity_transform(&self.queue);
+            self.draw_transparent_surfaces(&mut render_pass);
         }
 
         // Second render pass for gadgets - clear depth buffer but preserve color
@@ -1273,6 +1434,56 @@ impl Renderer {
     }
 
     // Private helper method to render a GPU mesh
+    /// Draws the merged transparent surface mesh under the current
+    /// [`SurfaceTransparencyMode`].
+    ///
+    /// Not a `render_mesh` call: every mode but `SinglePass` needs more than
+    /// one draw over the same buffers, and `ComponentSorted` needs sub-ranges
+    /// of the index buffer. The sort happens **here**, per frame, rather than
+    /// at tessellation time — a component order computed once looks right from
+    /// the viewpoint it was computed for and wrong from every other. It is a
+    /// permutation of a single-digit-length list, so recomputing it per frame
+    /// is free and needs no laziness (contrast the impostor sort, which
+    /// rewrites and re-uploads an index buffer).
+    fn draw_transparent_surfaces<'a>(&'a self, render_pass: &mut RenderPass<'a>) {
+        let mesh = &self.isosurface_transparent_mesh;
+        if mesh.num_indices == 0 {
+            return;
+        }
+
+        render_pass.set_bind_group(1, &mesh.model_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+        // An empty component pool with a non-empty mesh would draw nothing at
+        // all in `ComponentSorted`, so it falls back to the whole-mesh two-pass
+        // draw. The extractor always emits components, so this is a guard
+        // against a future producer, not a case that happens today.
+        let sorted = self.surface_transparency_mode == SurfaceTransparencyMode::ComponentSorted
+            && !self.isosurface_components.is_empty();
+
+        if self.surface_transparency_mode == SurfaceTransparencyMode::SinglePass {
+            render_pass.set_pipeline(&self.surface_no_cull_pipeline);
+            render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+        } else if sorted {
+            let view = self.camera.build_view_matrix().as_mat4();
+            for index in sorted_component_order(&self.isosurface_components, &view) {
+                let component = self.isosurface_components[index];
+                let range = component.first_index..component.first_index + component.index_count;
+                // Back faces, then front faces, within this component.
+                render_pass.set_pipeline(&self.surface_front_cull_pipeline);
+                render_pass.draw_indexed(range.clone(), 0, 0..1);
+                render_pass.set_pipeline(&self.surface_back_cull_pipeline);
+                render_pass.draw_indexed(range, 0, 0..1);
+            }
+        } else {
+            render_pass.set_pipeline(&self.surface_front_cull_pipeline);
+            render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+            render_pass.set_pipeline(&self.surface_back_cull_pipeline);
+            render_pass.draw_indexed(0..mesh.num_indices, 0, 0..1);
+        }
+    }
+
     fn render_mesh<'a>(&self, render_pass: &mut RenderPass<'a>, mesh: &GPUMesh) {
         if mesh.num_indices > 0 {
             // Set the mesh's model bind group (index 1)
@@ -1293,6 +1504,15 @@ impl Renderer {
             0,
             bytemuck::cast_slice(&[camera_uniform]),
         );
+    }
+
+    /// Sets how the merged transparent surface mesh is drawn.
+    ///
+    /// Pushed in from the api layer on every refresh: this crate sits below
+    /// the preferences types and cannot read them, and a preference change
+    /// triggers a refresh anyway.
+    pub fn set_surface_transparency_mode(&mut self, mode: SurfaceTransparencyMode) {
+        self.surface_transparency_mode = mode;
     }
 
     /// Sets the camera to orthographic or perspective mode

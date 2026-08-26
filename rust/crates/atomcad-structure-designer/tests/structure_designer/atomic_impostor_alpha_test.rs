@@ -442,12 +442,13 @@ fn scene_with_ghost_atoms() -> StructureDesignerScene {
 #[test]
 fn scene_impostor_mode_returns_nonempty_transparent_mesh() {
     let scene = scene_with_ghost_atoms();
-    let (.., transparent, _labels, _gadget_atoms, _gadget_bonds) = tessellate_scene_content(
-        &scene,
-        &test_camera(),
-        false, // not lightweight
-        &display_prefs(AtomicRenderingMethod::Impostors),
-    );
+    let (.., transparent, _labels, _gadget_atoms, _gadget_bonds, _surfaces) =
+        tessellate_scene_content(
+            &scene,
+            &test_camera(),
+            false, // not lightweight
+            &display_prefs(AtomicRenderingMethod::Impostors),
+        );
 
     // Two ghost atoms + one ghost bond (both endpoints ghosted).
     assert_eq!(transparent_quads_of_kind(&transparent, 0), 2, "ghost atoms");
@@ -460,12 +461,13 @@ fn scene_impostor_mode_returns_nonempty_transparent_mesh() {
 #[test]
 fn scene_triangle_mesh_mode_leaves_transparent_empty() {
     let scene = scene_with_ghost_atoms();
-    let (.., transparent, _labels, _gadget_atoms, _gadget_bonds) = tessellate_scene_content(
-        &scene,
-        &test_camera(),
-        false, // not lightweight
-        &display_prefs(AtomicRenderingMethod::TriangleMesh),
-    );
+    let (.., transparent, _labels, _gadget_atoms, _gadget_bonds, _surfaces) =
+        tessellate_scene_content(
+            &scene,
+            &test_camera(),
+            false, // not lightweight
+            &display_prefs(AtomicRenderingMethod::TriangleMesh),
+        );
 
     assert_eq!(
         transparent.vertices.len(),

@@ -44,6 +44,8 @@ class PreferencesKeys {
       Key('pref_isosurface_fallback_spacing_input');
   static const Key isosurfaceCellBudgetInput =
       Key('pref_isosurface_cell_budget_input');
+  static const Key surfaceTransparencyModeDropdown =
+      Key('pref_surface_transparency_mode_dropdown');
 
   // Atomic structure visualization
   static const Key atomicVisualizationDropdown =
@@ -600,6 +602,62 @@ class _PreferencesWindowState extends State<PreferencesWindow> {
                             'Upper limit on marching-cubes cells. A surface '
                             'over the limit is refused with an error on the '
                             'node rather than freezing the app.',
+                            style: TextStyle(fontSize: 11),
+                          ),
+                          const SizedBox(height: AppSpacing.medium),
+
+                          // Draw setting, not an extraction setting: it
+                          // reorders draw calls and re-extracts nothing.
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Surface transparency'),
+                              const SizedBox(height: 4),
+                              DropdownButtonFormField<SurfaceTransparencyMode>(
+                                key: PreferencesKeys
+                                    .surfaceTransparencyModeDropdown,
+                                decoration: const InputDecoration(
+                                  border: OutlineInputBorder(),
+                                  contentPadding:
+                                      AppSpacing.fieldContentPadding,
+                                ),
+                                value: _preferences
+                                    .geometryVisualizationPreferences
+                                    .surfaceTransparencyMode,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value:
+                                        SurfaceTransparencyMode.componentSorted,
+                                    child: Text('Sorted lobes (best)'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: SurfaceTransparencyMode.twoPass,
+                                    child: Text('Two-pass (unsorted)'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: SurfaceTransparencyMode.singlePass,
+                                    child: Text('Single pass (control)'),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _preferences
+                                          .geometryVisualizationPreferences
+                                          .surfaceTransparencyMode = value;
+                                    });
+                                    _applyPreferences();
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'How see-through isosurfaces are composited. The '
+                            'two lower settings are for comparison only; they '
+                            'misorder overlapping lobes. Nothing to see on an '
+                            'opaque surface, or on one with a single lobe.',
                             style: TextStyle(fontSize: 11),
                           ),
                         ],

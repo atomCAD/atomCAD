@@ -22,6 +22,23 @@ pub fn to_api_vec3(v: &DVec3) -> APIVec3 {
     }
 }
 
+/// Domain preference → renderer draw mode.
+///
+/// A third declaration of the same three variants, and deliberately so: the
+/// domain one is the persisted shape, the api one is what Dart sees, and this
+/// target lives in `atomcad-renderer`, which sits below both and cannot name
+/// either. Same twin pattern as `MeshSmoothing` right below.
+fn to_renderer_surface_transparency_mode(
+    mode: &domain_prefs::SurfaceTransparencyMode,
+) -> atomcad_renderer::transparent_surface_mesh::SurfaceTransparencyMode {
+    use atomcad_renderer::transparent_surface_mesh::SurfaceTransparencyMode as RendererMode;
+    match mode {
+        domain_prefs::SurfaceTransparencyMode::SinglePass => RendererMode::SinglePass,
+        domain_prefs::SurfaceTransparencyMode::TwoPass => RendererMode::TwoPass,
+        domain_prefs::SurfaceTransparencyMode::ComponentSorted => RendererMode::ComponentSorted,
+    }
+}
+
 fn to_display_mesh_smoothing(
     smoothing: &domain_prefs::MeshSmoothing,
 ) -> display_prefs::MeshSmoothing {
@@ -483,6 +500,10 @@ pub fn refresh_structure_designer(
         label_mesh,
         gadget_atom_impostor_mesh,
         gadget_bond_impostor_mesh,
+        // Merged transparent isosurface mesh: every displayed surface with
+        // `alpha < 1.0`, plus the pooled component ranges the renderer orders
+        // back-to-front (Phase 4 of design_isosurface_node.md).
+        isosurface_transparent_mesh,
     ) = atomcad_structure_designer::scene_tessellator::tessellate_scene_content(
         &cad_instance
             .structure_designer
@@ -494,6 +515,18 @@ pub fn refresh_structure_designer(
     let tessellate_ms = elapsed_ms(tessellate_start);
 
     let gpu_upload_start = Instant::now();
+    // A draw-time setting, not a mesh input, so it is pushed separately — and
+    // pushed on every refresh, which is what makes a preference change take
+    // effect (`set_structure_designer_preferences` refreshes).
+    cad_instance
+        .renderer
+        .set_surface_transparency_mode(to_renderer_surface_transparency_mode(
+            &cad_instance
+                .structure_designer
+                .preferences
+                .geometry_visualization_preferences
+                .surface_transparency_mode,
+        ));
     cad_instance.renderer.update_all_gpu_meshes(
         &lightweight_mesh,
         &gadget_line_mesh,
@@ -502,6 +535,7 @@ pub fn refresh_structure_designer(
         &atom_impostor_mesh,
         &bond_impostor_mesh,
         &transparent_impostor_mesh,
+        &isosurface_transparent_mesh,
         &label_mesh,
         &gadget_atom_impostor_mesh,
         &gadget_bond_impostor_mesh,

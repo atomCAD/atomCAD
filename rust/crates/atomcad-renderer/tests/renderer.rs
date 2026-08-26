@@ -15,3 +15,8 @@ mod transparent_impostor_mesh_test;
 
 #[path = "renderer/transparent_sort_test.rs"]
 mod transparent_sort_test;
+
+// Vertex alpha and the transparent-surface component sort
+// (doc/design_isosurface_node.md P4).
+#[path = "renderer/surface_alpha_test.rs"]
+mod surface_alpha_test;

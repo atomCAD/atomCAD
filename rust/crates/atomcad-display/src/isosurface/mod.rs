@@ -43,7 +43,7 @@ pub mod tessellator;
 pub use colormap::sample_colormap;
 pub use extract::extract_isosurface;
 pub use lattice::Lattice;
-pub use tessellator::tessellate_surface_mesh;
+pub use tessellator::{tessellate_surface_mesh, tessellate_surface_mesh_transparent};
 
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;
 use glam::Vec3;

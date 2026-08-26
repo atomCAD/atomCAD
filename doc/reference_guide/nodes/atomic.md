@@ -110,10 +110,16 @@ Draws the surface where a scalar field equals a given level — the standard way
 | `level` | `0.02` | Isolevel **magnitude** — see below |
 | Positive color | blue | Color of the `+level` lobe |
 | Negative color | red | Color of the `-level` lobe |
-| Opacity | `0.4` | Stored and saved, but **surfaces currently render fully opaque** |
+| Opacity | `0.4` | How see-through the surface is, `0` (invisible) to `1` (solid) — see below |
 | Colormap, range min/max | blue-white-red, `-0.05`…`0.05` | Reserved for `color_field`; disabled while it is unwired |
 
 **The level is a magnitude, not a signed value.** The surface is extracted at `+level` *and* at `-level`, so a signed field such as an orbital shows both lobes at once, painted in the two phase colors. A level of zero or below is an error rather than a choice: at zero the two passes coincide, and a negative level would just be the positive one relabelled. An orbital's overall sign is arbitrary — the same calculation run twice can hand back `psi` or `-psi` — so the **swap button** between the two color swatches is how you match a published figure.
+
+**Opacity.** A surface at full opacity hides whatever is inside it, which for an orbital is usually the molecule you wanted to see. Lowering *Opacity* makes the lobes translucent and the structure visible through them; the default `0.4` is a good starting point for an orbital, and `1` is right for a density envelope you want read as a solid shape. Exactly `1` takes a faster drawing path with no transparency work at all, so there is no cost to leaving an envelope opaque.
+
+Two overlapping lobes are drawn back to front for the current camera, so their overlap reads correctly from every angle. Two limits are worth knowing: a translucent surface does **not** correctly interleave with [`xray`](#xray)-ghosted atoms — the ghosts are always drawn behind the surface, whichever is actually nearer — and two *nested* surfaces, one closed shell inside another, can be ordered the wrong way round. The first is common enough to notice; the second needs a field with an interior extremum inside a closed shell and is rare in practice. Neither affects an opaque surface.
+
+*Preferences → Geometry Visualization → Isosurface extraction* has a **Surface transparency** setting with two extra comparison modes. They exist to evaluate the default and both draw overlapping lobes wrongly; leave it on *Sorted lobes (best)*.
 
 **Two things the node cannot tell you, and both look like breakage**
 

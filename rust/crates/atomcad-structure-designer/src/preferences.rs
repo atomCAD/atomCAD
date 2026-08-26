@@ -58,6 +58,25 @@ impl PrefColor {
     }
 }
 
+/// How transparent isosurfaces are composited.
+///
+/// Three modes because the question they answer — *is two-pass transparency
+/// good enough, or is a per-triangle sort required?* — is only answerable by
+/// comparing them on the same scene at the same camera. They are **scaffolding**:
+/// `SinglePass` and `TwoPass` are to be deleted once
+/// `doc/design_isosurface_node.md` records the answer. Only informative on a
+/// multi-lobe signed field; a density envelope looks identical in all three.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, Default)]
+pub enum SurfaceTransparencyMode {
+    /// One draw, no culling. The control.
+    SinglePass,
+    /// Back faces then front faces, components unordered.
+    TwoPass,
+    /// Components back-to-front, two-pass within each.
+    #[default]
+    ComponentSorted,
+}
+
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Default)]
 pub enum GeometryVisualization {
     SurfaceSplatting,
@@ -124,6 +143,10 @@ pub struct GeometryVisualizationPreferences {
     /// quality multiplier; for an analytic field it is the only guard.
     #[serde(default = "default_isosurface_cell_budget")]
     pub isosurface_cell_budget: usize,
+    /// How transparent isosurfaces are composited. A pure *draw* setting: it
+    /// changes no geometry, so it never re-extracts.
+    #[serde(default)]
+    pub surface_transparency_mode: SurfaceTransparencyMode,
 }
 
 fn default_samples_per_unit_cell() -> i32 {
@@ -171,6 +194,7 @@ impl Default for GeometryVisualizationPreferences {
             isosurface_quality_multiplier: 1.0,
             isosurface_fallback_spacing: 0.15,
             isosurface_cell_budget: 16_000_000,
+            surface_transparency_mode: SurfaceTransparencyMode::ComponentSorted,
         }
     }
 }

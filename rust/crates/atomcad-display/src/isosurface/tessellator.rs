@@ -13,6 +13,7 @@
 //! fixed here instead.
 
 use atomcad_renderer::mesh::{Material, Mesh, Vertex};
+use atomcad_renderer::transparent_surface_mesh::{SurfaceComponentRange, TransparentSurfaceMesh};
 use glam::f32::Vec3;
 
 /// Slightly glossy, fully dielectric. An isosurface reads as a soft membrane
@@ -23,14 +24,56 @@ const ISOSURFACE_METALLIC: f32 = 0.0;
 
 use super::SurfaceMesh;
 
-/// Appends `surface` to `mesh`, rebasing its indices onto whatever is already
-/// there.
+/// Appends `surface` to the **opaque** `mesh`, rebasing its indices onto
+/// whatever is already there.
 ///
-/// Component ranges are **not** consulted: they exist to order transparent
-/// draws back-to-front, and an opaque surface needs no ordering. When the
-/// transparent path arrives it will read them from the `SurfaceMesh` rather
-/// than from the merged mesh, so nothing is lost by ignoring them here.
+/// The surface's own `alpha` is ignored — a caller reaching this function has
+/// already decided the surface is opaque (`alpha >= 1.0`), and every vertex is
+/// written with `alpha = 1.0` so the shader change is a no-op for the opaque
+/// mesh. Component ranges are not consulted either: they exist to order
+/// transparent draws back-to-front, and an opaque surface needs no ordering.
 pub fn tessellate_surface_mesh(mesh: &mut Mesh, surface: &SurfaceMesh) {
+    append_vertices_and_indices(mesh, surface, 1.0);
+}
+
+/// Appends `surface` to the merged **transparent** surface mesh, baking its
+/// scalar `alpha` onto every vertex it contributes and re-basing its component
+/// ranges onto the pooled list.
+///
+/// Baking alpha per vertex is the only level at which per-surface opacity
+/// survives the merge: the renderer holds one mesh per pipeline, so two
+/// displayed surfaces at different alphas end up in this one buffer and a
+/// per-mesh uniform could only describe one of them.
+///
+/// The component ranges *are* consulted here, unlike in the opaque path — they
+/// are what the per-frame back-to-front draw orders, and pooling them across
+/// surfaces is deliberate: two orbitals on screen interpenetrate exactly the
+/// way two lobes of one orbital do.
+pub fn tessellate_surface_mesh_transparent(
+    target: &mut TransparentSurfaceMesh,
+    surface: &SurfaceMesh,
+) {
+    if surface.is_empty() {
+        return;
+    }
+
+    // Captured before the append: `first_index` values in `surface.components`
+    // are relative to `surface.indices`, so they shift by however many indices
+    // the merged buffer already holds.
+    let index_base = target.mesh.indices.len() as u32;
+    append_vertices_and_indices(&mut target.mesh, surface, surface.alpha);
+
+    target.components.reserve(surface.components.len());
+    for component in &surface.components {
+        target.components.push(SurfaceComponentRange {
+            first_index: index_base + component.first_index,
+            index_count: component.index_count,
+            centroid: component.centroid,
+        });
+    }
+}
+
+fn append_vertices_and_indices(mesh: &mut Mesh, surface: &SurfaceMesh, alpha: f32) {
     if surface.is_empty() {
         return;
     }
@@ -43,10 +86,11 @@ pub fn tessellate_surface_mesh(mesh: &mut Mesh, surface: &SurfaceMesh) {
         // surface rather than a panic in the render path.
         let normal = surface.normals.get(i).copied().unwrap_or(Vec3::Y);
         let albedo = surface.albedo.get(i).copied().unwrap_or(Vec3::splat(0.5));
-        mesh.add_vertex(Vertex::new(
+        mesh.add_vertex(Vertex::new_translucent(
             position,
             &normal,
             &Material::new(&albedo, ISOSURFACE_ROUGHNESS, ISOSURFACE_METALLIC),
+            alpha,
         ));
     }
 
