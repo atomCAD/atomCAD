@@ -174,6 +174,37 @@ impl NodeData for IsosurfaceNodeData {
             ));
         };
 
+        // Pin 1, `color_field`, is optional, so `evaluate_arg` rather than
+        // `evaluate_arg_required`: `NetworkResult::None` is the unwired signal
+        // and means "paint per sign", not "missing input".
+        //
+        // Evaluated in pin order, ahead of `level`, which also fixes the error
+        // precedence when both are bad: the earlier pin's error is the one
+        // reported. Nothing depends on that beyond it being stable.
+        let color_arg =
+            network_evaluator.evaluate_arg(network_stack, node_id, registry, context, 1);
+        let coloring = match color_arg {
+            NetworkResult::None => IsosurfaceColoring::Phase {
+                positive: self.positive_color.as_vec3(),
+                negative: self.negative_color.as_vec3(),
+            },
+            // The domain stays `f64`: it is compared against `sample()` output,
+            // and `color_min > color_max` is not rejected here — `sample_colormap`
+            // maps a degenerate domain to the ramp's midpoint, which is a
+            // legible answer for a value the user is mid-way through typing.
+            NetworkResult::ScalarField(color_field) => IsosurfaceColoring::Field {
+                field: color_field,
+                range: (self.color_min, self.color_max),
+                colormap: self.colormap,
+            },
+            other if other.is_error() => return EvalOutput::single(other),
+            _ => {
+                return EvalOutput::single(NetworkResult::Error(
+                    "isosurface: color_field input is not a ScalarField".to_string(),
+                ));
+            }
+        };
+
         // Pin 2, not pin 1: pin 1 is `color_field`. The pin order is the
         // design's and is fixed — inserting a pin ahead of `level` later would
         // silently re-target every wire in every saved project.
@@ -205,13 +236,7 @@ impl NodeData for IsosurfaceNodeData {
         EvalOutput::single(NetworkResult::Isosurface(IsosurfaceData {
             field,
             level,
-            // Colouring by a second field is not wired up yet; the pin and the
-            // stored colormap domain exist so that the `.cnnd` written today is
-            // already the right shape.
-            coloring: IsosurfaceColoring::Phase {
-                positive: self.positive_color.as_vec3(),
-                negative: self.negative_color.as_vec3(),
-            },
+            coloring,
             alpha: self.alpha as f32,
         }))
     }

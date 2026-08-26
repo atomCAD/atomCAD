@@ -96,7 +96,7 @@ Draws the surface where a scalar field equals a given level — the standard way
 **Input pins**
 
 - `field: ScalarField` — **required.** The field whose level set is drawn.
-- `color_field: ScalarField` — optional. Reserved for painting the surface by a second quantity; it has no effect yet.
+- `color_field: ScalarField` — optional. A **second** field, sampled at every point of the surface to colour it — see *Painting by a second field* below. Unwired, the surface is painted by sign instead.
 - `level: Float` — optional. Overrides the stored `level` property when wired.
 
 **Output pin**
@@ -111,7 +111,7 @@ Draws the surface where a scalar field equals a given level — the standard way
 | Positive color | blue | Color of the `+level` lobe |
 | Negative color | red | Color of the `-level` lobe |
 | Opacity | `0.4` | How see-through the surface is, `0` (invisible) to `1` (solid) — see below |
-| Colormap, range min/max | blue-white-red, `-0.05`…`0.05` | Reserved for `color_field`; disabled while it is unwired |
+| Colormap, range min/max | blue-white-red, `-0.05`…`0.05` | The colour ramp and its domain — used only when `color_field` is wired, and disabled while it is not |
 
 **The level is a magnitude, not a signed value.** The surface is extracted at `+level` *and* at `-level`, so a signed field such as an orbital shows both lobes at once, painted in the two phase colors. A level of zero or below is an error rather than a choice: at zero the two passes coincide, and a negative level would just be the positive one relabelled. An orbital's overall sign is arbitrary — the same calculation run twice can hand back `psi` or `-psi` — so the **swap button** between the two color swatches is how you match a published figure.
 
@@ -124,7 +124,21 @@ Two overlapping lobes are drawn back to front for the current camera, so their o
 **Two things the node cannot tell you, and both look like breakage**
 
 - *A level above anything in the field draws nothing, silently.* An empty viewport looks exactly like a failed import, and there is no warning. Hover the **`field` output pin of the upstream `import_cube`** — value readouts are on output pins, so there is nothing to hover on the `isosurface` node's own input. That readout carries both halves of what you need: the **value range**, and the file's own **comment text** saying what the quantity is. Typical starting points are ±0.02–0.05 for an orbital amplitude and 0.002 for a density's molecular surface — an order of magnitude apart, which is why one default cannot serve both.
-- *A `color_field` smaller than the surface paints the overhang neutral.* Outside its own box a field reads as `0.0`, which on a symmetric blue-white-red ramp is plain white — a plausible-looking picture that is simply missing data. It is easy to hit, because orbitals and potentials often come from separately-computed files with different boxes. (Not reachable yet: `color_field` has no effect in this version.)
+- *A `color_field` smaller than the surface paints the overhang neutral.* Outside its own box a field reads as `0.0`, which on a symmetric blue-white-red ramp is plain white — a plausible-looking picture that is simply missing data. It is easy to hit, because densities and potentials often come from separately-computed files with different boxes. There is no warning, so if part of a surface comes out flat white, suspect the boxes before you suspect the physics: compare the two `field` output-pin readouts, which each name the box they cover.
+
+**Painting by a second field**
+
+Wire a second field into `color_field` and the surface stops being painted by sign: every point on it is coloured by what *that* field reads there. The canonical use is the **electrostatic potential map** — an electron density envelope, coloured by the potential — which is how a chemist reads off where a molecule is electron-rich and where it is electron-poor.
+
+**Which end is which.** The *Blue - White - Red* ramp runs blue at *Range min*, through white at the midpoint, to red at *Range max*. Read literally: **blue is the low end, red is the high end.** For an electrostatic potential entered directly, that puts blue over the electron-rich regions (lone pairs) and red over the electron-poor ones (the hydrogens of a polar bond) — the **opposite way round from most published ESP figures**, which colour electron-rich red. If you want to match a published figure, negate the potential upstream (an [`expr`](./math_programming.md#expr) node computing `-v`) rather than swapping *Range min* and *Range max*: entering them the wrong way round does not reverse the ramp, it flattens the whole surface to the midpoint colour.
+
+![TODO(image): a water density envelope coloured by its electrostatic potential, blue over the oxygen's lone pairs and red over the hydrogens](TODO)
+
+The two fields are independent and need share nothing but a coordinate frame: two separate [`import_cube`](#import_cube) nodes, one into `field` and one into `color_field`, is the usual arrangement. Nothing stops you wiring the *same* field into both, which shades a surface by its own value — uniform on the surface itself, but a quick way to check a colour range.
+
+**The colour range is never fitted for you, and this is the control that matters.** *Range min* and *range max* set which values sit at the two ends of the ramp; anything beyond clamps. It is tempting to expect the range to fit itself to the data, and it deliberately does not: a potential keeps climbing steeply near the nuclei, so its full range is one or two orders of magnitude wider than the span the surface actually covers. Fitting to it would compress every value the surface *has* into the middle of the ramp and paint the whole thing flat white. Set the range from what you want resolved, not from the field's extremes — `±0.05` hartree/e is the conventional starting point for a potential in atomic units, and the ramp saturates outside it by design.
+
+Signedness and colour are independent: a signed field wired into `field` still shows both lobes, and both are painted per-vertex from the colour field. The phase colours and the swap button simply stop being consulted while `color_field` is wired.
 
 **Resolution is a preference, not part of the document**
 

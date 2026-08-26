@@ -151,6 +151,53 @@ colored by electrostatic potential. NCI's blue-green-red map has no producer
 yet. The enum exists so adding one is a one-line change and the serialized
 form is forward-compatible.
 
+### Colormap orientation: open, and inverted with respect to the ESP convention
+
+`BlueWhiteRed` is implemented as its name reads: blue at `range.0`, white at the
+midpoint, red at `range.1`, with the red channel rising monotonically and the
+blue channel falling across the ramp. P2 tested that orientation deliberately
+(`the_colormap_is_monotonic_and_clamps`, `a_color_field_paints_per_vertex`), and
+it is the orientation of matplotlib's `bwr` and of every ramp with this name.
+
+**Applied to an electrostatic potential, that is backwards from the published
+convention.** Chemistry colours *electron-rich* regions red and electron-poor
+regions blue; a potential is *negative* where a molecule is electron-rich, so
+the conventional map is red at the low end. Wiring a potential into
+`color_field` today paints lone pairs blue and polar hydrogens red. Measured on
+the P5 walkthrough fixtures: `V = -0.092` at the lone pairs maps to
+`rgb(0.10, 0.25, 1.00)`, `V = +0.061` at the hydrogens to `rgb(1.00, 0.20, 0.15)`.
+
+The two prose descriptions in this document ("the conventional ESP map" on the
+enum, "the classic red/white/blue ESP map" in the P5 walkthrough) both described
+the *chemistry* convention and so did not match the code; the walkthrough has
+been corrected to describe what the code does, and the reference guide states
+the orientation explicitly rather than leaving a reader to assume the
+convention.
+
+**Not resolved here, because it is a one-line change with three plausible
+answers and no way to pick between them from inside this document:**
+
+1. **Leave it.** The ramp is named for what it does, and a user who wants the
+   chemistry convention negates the potential upstream with an `expr`. Costs a
+   user the surprise once.
+2. **Reverse the constants**, so `BlueWhiteRed` runs red-low to blue-high. Makes
+   the default pairing correct and the enum's name a lie; inverts the three P2
+   assertions, which were written on purpose.
+3. **Add a second variant** (`RedWhiteBlue`) and make it the default for this
+   pairing. Honest, costs a dropdown entry, and is what the enum was built to
+   make cheap — the serialized form is already forward-compatible.
+
+Note that **swapping `color_min` and `color_max` is not a fourth option**: an
+inverted domain fails `max > min` and `sample_colormap` maps the whole surface
+to the midpoint rather than reversing the ramp. That behaviour is itself
+deliberate (a user mid-way through typing a negative minimum should not get a
+red badge) and is pinned by
+`an_inverted_color_domain_is_carried_rather_than_rejected`.
+
+Whichever is chosen, it is a change to `colormap.rs` plus its P2 tests and the
+two documentation spots named above — not to the node, the value, or the
+extractor.
+
 ### Crate placement
 
 The value and the mesh live in different crates, and the split falls on the
@@ -1195,28 +1242,60 @@ expiry stays unanswered, until the maintainer records them here.
    what it looks like — that is the input to the OIT decision.
 6. **Record the expiry answers here** and delete the losing modes.
 
-### P5 — color field and colormap
+### P5 — color field and colormap — **DONE** (walkthrough pending)
 
 **Work:** `color_field` wiring and `IsosurfaceColoring::Field`; per-vertex
 colormap sampling; editor controls; reference guide — including the
 mismatched-bounds white band, which the guide explains because the node cannot
 (§Errors).
 
-| Test | Asserts |
-|---|---|
-| Color field wired | `Field` arm; unwired reverts to `Phase` |
-| `color_min` / `color_max` properties | reach the value's `range` — the mapping itself is covered in P2 |
-| Signed surface with a color field | still two components, both painted per-vertex |
-| Bounds exceeding the color field's | still drawn, no error entry — the white band is documented, not diagnosed (§Errors) |
+**What was actually left to do**, since P1–P4 had already built more of this
+phase than the plan assumed: only the node's `eval` still hardcoded
+`IsosurfaceColoring::Phase`. The value type, the `color_field` pin declaration,
+the node data (`colormap` / `color_min` / `color_max`) with its serde defaults
+and text-format spelling, the extractor's `Field` arm, `sample_colormap`, the
+editor's colormap group with its `colorFieldConnected` gating, and the `.cnnd`
+and text-format round-trip tests were all in place. P5 wired pin 1 into the
+value and added the four test rows below.
+
+`eval` reads pin 1 with `evaluate_arg` (not `evaluate_arg_required`):
+`NetworkResult::None` is the unwired signal and selects `Phase`. It is
+evaluated **in pin order**, ahead of `level`, which fixes error precedence when
+both are bad. The domain is passed through as `f64` — it is compared against
+`sample()` output — and an inverted domain is deliberately *not* rejected.
+
+One thing this phase found and did not change: §Colormap orientation.
+
+| Test | Asserts | Where |
+|---|---|---|
+| Color field wired | `Field` arm; and *removing* the wire reverts to `Phase` — the direction that regresses silently, since the domain stays in the `.cnnd` | `isosurface_node_test.rs` |
+| `color_min` / `color_max` properties | reach the value's `range` unnarrowed, and the field on pin 1 (not pin 0) is the one carried — the mapping itself is covered in P2 | `isosurface_node_test.rs` |
+| An inverted domain | carried verbatim, not normalized and not rejected — pins the "no red badge mid-typing" behaviour that §Colormap orientation depends on | `isosurface_node_test.rs` |
+| Signed surface with a color field | still two components, both painted per-vertex across the ramp rather than one flat color each; geometry unchanged from the `Phase` extraction | `isosurface_extract_test.rs` |
+| Bounds exceeding the color field's | still drawn, **no** error entry, and the overhang is *exactly* the ramp midpoint — all three together, since each alone passes for the wrong reason | `isosurface_node_test.rs` |
 
 **Manual walkthrough**
 
-1. Density into `field`, electrostatic potential into `color_field`. Expect the
-   classic red/white/blue ESP map.
-2. Pair mismatched boxes deliberately. Expect a visible white band where the
-   surface leaves the color field's box, and **no** badge explaining it. Check
-   that the reference guide's description matches what you see — that page is
-   the only thing standing between a user and a plausible-but-wrong picture.
+The three files this needs are written by
+`python scripts/make_cube_fixtures.py manual` into `sample_data/cube/`; what
+they model, and what they deliberately do not, is
+`design_scalar_fields.md` §The colour-map pair.
+
+1. `water_density.cube` into `field` at level `0.002`, `water_esp.cube` into
+   `color_field` with range `-0.08 .. 0.08`. Expect a diverging map: **blue**
+   over the lone-pair side of the oxygen, **red** caps on the two hydrogens,
+   white around the girdle. Note that this is the ramp read literally — blue at
+   `range.0`, red at `range.1` — and so is inverted with respect to the
+   published ESP convention, which colours electron-rich regions red. See
+   §Colormap orientation. Narrow the range to `±0.05` and expect both ends to
+   saturate, which is also what a published map does and is why the range is a
+   control rather than a fitted value.
+2. Swap `color_field` to `water_esp_small.cube`, whose box is half the size
+   while the surface is unchanged. Expect a visible white band where the
+   envelope leaves that box — it reaches past ±1.5 Å along each O–H — and
+   **no** badge explaining it. Check that the reference guide's description
+   matches what you see; that page is the only thing standing between a user
+   and a plausible-but-wrong picture.
 3. Repeat through `atomcad-cli` for the headless path.
 
 **Deliverable: closes the scope of this document.**

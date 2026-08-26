@@ -19,7 +19,7 @@
 
 use std::collections::HashSet;
 
-use atomcad_crystolecule::field::Colormap;
+use atomcad_crystolecule::field::{Colormap, IsosurfaceColoring, ScalarField};
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::evaluator::network_evaluator::{
     NetworkEvaluationContext, NetworkEvaluator, NetworkStackElement,
@@ -33,6 +33,7 @@ use atomcad_structure_designer::nodes::isosurface::IsosurfaceNodeData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer_scene::NodeOutput;
 use atomcad_test_support::fixture_path_str;
+use glam::Vec3;
 use glam::f64::{DVec2, DVec3};
 
 // ============================================================================
@@ -212,6 +213,132 @@ fn a_non_positive_level_is_an_evaluation_error() {
     }
 }
 
+// ----------------------------------------------------------------------------
+// color_field (P5)
+// ----------------------------------------------------------------------------
+
+#[test]
+fn a_wired_color_field_selects_the_field_arm_and_carries_the_stored_domain() {
+    let mut designer = setup_designer();
+    let cube_id = add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("water_bohr.cube"));
+    let color_id =
+        add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("ramp_3x4x5.cube"));
+    let iso_id = add_isosurface_node(
+        &mut designer,
+        &[],
+        IsosurfaceNodeData {
+            color_min: -0.031,
+            color_max: 0.062,
+            colormap: Colormap::BlueWhiteRed,
+            ..Default::default()
+        },
+    );
+    designer.connect_nodes(cube_id, 0, iso_id, 0);
+    // Pin 1 is `color_field`.
+    designer.connect_nodes(color_id, 0, iso_id, 1);
+
+    match evaluate_pin(&designer, iso_id, 0) {
+        NetworkResult::Isosurface(data) => match data.coloring {
+            IsosurfaceColoring::Field {
+                range,
+                colormap,
+                field,
+            } => {
+                assert_eq!(
+                    range,
+                    (-0.031, 0.062),
+                    "the stored domain reaches the value unnarrowed — it is compared                      against f64 field values"
+                );
+                assert_eq!(colormap, Colormap::BlueWhiteRed);
+                assert_eq!(
+                    field.value_range(),
+                    Some((0.0, 234.0)),
+                    "the *color* field is the one on pin 1, not the surface field"
+                );
+            }
+            IsosurfaceColoring::Phase { .. } => {
+                panic!("a wired color_field must select the Field arm")
+            }
+        },
+        other => panic!("expected an Isosurface, got {}", other.to_display_string()),
+    }
+}
+
+/// The other direction, which is the one that would regress silently: a project
+/// saved with a colormap domain must stop painting by it once the wire is gone.
+#[test]
+fn removing_the_color_field_wire_reverts_to_phase() {
+    let mut designer = setup_designer();
+    let cube_id = add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("water_bohr.cube"));
+    let color_id =
+        add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("ramp_3x4x5.cube"));
+    let iso_id = add_isosurface_node(&mut designer, &[], IsosurfaceNodeData::default());
+    designer.connect_nodes(cube_id, 0, iso_id, 0);
+    designer.connect_nodes(color_id, 0, iso_id, 1);
+
+    assert!(
+        matches!(
+            evaluate_pin(&designer, iso_id, 0),
+            NetworkResult::Isosurface(data)
+                if matches!(data.coloring, IsosurfaceColoring::Field { .. })
+        ),
+        "precondition: a wired color_field means the Field arm"
+    );
+
+    assert!(designer.select_wire(color_id, 0, iso_id, 1));
+    designer.delete_selected();
+
+    match evaluate_pin(&designer, iso_id, 0) {
+        NetworkResult::Isosurface(data) => {
+            let defaults = IsosurfaceNodeData::default();
+            assert!(
+                matches!(
+                    data.coloring,
+                    IsosurfaceColoring::Phase { positive, negative }
+                        if positive == defaults.positive_color.as_vec3()
+                            && negative == defaults.negative_color.as_vec3()
+                ),
+                "an unwired color_field paints per sign, with the stored phase colors"
+            );
+        }
+        other => panic!("expected an Isosurface, got {}", other.to_display_string()),
+    }
+}
+
+/// A domain entered the wrong way round is **not** an error. It reaches the
+/// value verbatim and `sample_colormap` maps it to the ramp's midpoint — which
+/// is the state a user is in halfway through typing a negative minimum, where a
+/// red badge would be noise rather than information.
+#[test]
+fn an_inverted_color_domain_is_carried_rather_than_rejected() {
+    let mut designer = setup_designer();
+    let cube_id = add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("water_bohr.cube"));
+    let color_id =
+        add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("ramp_3x4x5.cube"));
+    let iso_id = add_isosurface_node(
+        &mut designer,
+        &[],
+        IsosurfaceNodeData {
+            color_min: 0.05,
+            color_max: -0.05,
+            ..Default::default()
+        },
+    );
+    designer.connect_nodes(cube_id, 0, iso_id, 0);
+    designer.connect_nodes(color_id, 0, iso_id, 1);
+
+    match evaluate_pin(&designer, iso_id, 0) {
+        NetworkResult::Isosurface(data) => assert!(
+            matches!(
+                data.coloring,
+                IsosurfaceColoring::Field { range, .. } if range == (0.05, -0.05)
+            ),
+            "the inverted domain is carried, not normalized and not rejected"
+        ),
+        other => panic!("expected an Isosurface, got {}", other.to_display_string()),
+    }
+}
+
 #[test]
 fn an_unwired_field_is_an_evaluation_error() {
     let mut designer = setup_designer();
@@ -340,6 +467,94 @@ fn a_displayed_signed_field_extracts_both_lobes() {
     assert!(
         mesh.albedo.iter().any(|c| *c == positive) && mesh.albedo.iter().any(|c| *c == negative),
         "both sign passes contributed"
+    );
+}
+
+/// P5's sharp edge, pinned as *intended behaviour* so nobody later "fixes" it
+/// into an error. A color field whose box is smaller than the surface is a
+/// legal, common pairing — orbitals and potentials routinely come from
+/// separately computed files — and outside its box `ScalarField::sample`
+/// returns `0.0` like everywhere else, so the overhang paints as whatever `0.0`
+/// maps to. On a symmetric domain that is the ramp's midpoint: plain white.
+///
+/// Three things are asserted together because each alone would pass for the
+/// wrong reason: the surface is **drawn** (not dropped), there is **no error
+/// entry** (the reference guide is the only warning by design), and the
+/// overhang is **exactly** the midpoint rather than some other neutral.
+#[test]
+fn a_surface_larger_than_its_color_field_is_drawn_neutral_and_silent() {
+    let mut designer = setup_designer();
+    set_extraction_prefs(&mut designer, 1.0, 16_000_000);
+    // Surface: a 2p_z over a box of +/-2 A on every axis.
+    let cube_id =
+        add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("p2z_11x11x11.cube"));
+    // Color: the ramp, whose box is [0,2] x [0,3] x [0,4] A — it does not reach
+    // negative coordinates at all, so a whole half of the surface overhangs it.
+    let color_id =
+        add_loaded_import_cube_node(&mut designer, &[], &cube_fixture("ramp_3x4x5.cube"));
+    let iso_id = add_isosurface_node(
+        &mut designer,
+        &[],
+        IsosurfaceNodeData {
+            level: 0.05,
+            // Wide and symmetric, so the out-of-box `0.0` lands on the midpoint
+            // and in-box values (0..=234) are visibly to one side of it.
+            color_min: -100.0,
+            color_max: 100.0,
+            ..Default::default()
+        },
+    );
+    designer.connect_nodes(cube_id, 0, iso_id, 0);
+    designer.connect_nodes(color_id, 0, iso_id, 1);
+    designer.set_node_display(iso_id, true);
+    full_refresh(&mut designer);
+
+    assert_eq!(
+        designer
+            .last_generated_structure_designer_scene
+            .get_node_error(&[], iso_id),
+        None,
+        "the mismatched box is documented in the reference guide, not diagnosed here"
+    );
+
+    let NodeOutput::Isosurface(mesh) = &designer
+        .last_generated_structure_designer_scene
+        .node_data
+        .get(&NodeRef::top(iso_id))
+        .expect("scene entry")
+        .output
+    else {
+        panic!("the surface must still be drawn");
+    };
+    assert!(
+        !mesh.is_empty(),
+        "the overhang does not suppress the surface"
+    );
+
+    // `sample_colormap(BlueWhiteRed, 0.0, (-100, 100))` is the exact ramp
+    // midpoint, which for this map is white.
+    let neutral = Vec3::ONE;
+    let overhang: Vec<Vec3> = mesh
+        .positions
+        .iter()
+        .zip(&mesh.albedo)
+        .filter(|(p, _)| p.x < -0.5)
+        .map(|(_, c)| *c)
+        .collect();
+    assert!(
+        !overhang.is_empty(),
+        "the fixtures must actually overhang, or this test proves nothing"
+    );
+    assert!(
+        overhang.iter().all(|c| (*c - neutral).length() < 1e-5),
+        "every vertex outside the color field's box paints the ramp midpoint"
+    );
+
+    // And the color field is genuinely being read — an all-neutral surface would
+    // satisfy the check above while meaning the sampling never happened.
+    assert!(
+        mesh.albedo.iter().any(|c| (*c - neutral).length() > 0.05),
+        "vertices inside the color field's box must be painted by its values"
     );
 }
 

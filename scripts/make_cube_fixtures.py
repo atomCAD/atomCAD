@@ -132,6 +132,84 @@ def p2z(points, alpha=0.25, center=(0.0, 0.0, 0.0)):
     return rel[..., 2] * np.exp(-alpha * r2)
 
 
+# --- the colour-map pair: density and electrostatic potential ---------------
+
+# van der Waals radii in Angstrom (Bondi 1964), used only to calibrate the
+# density amplitudes below.
+VDW_ANGSTROM = {1: 1.20, 6: 1.70, 7: 1.55, 8: 1.52}
+
+# The isolevel the amplitudes are calibrated against, and the level the P5
+# walkthrough enters into the node. 0.002 e/bohr^3 is the conventional choice
+# for a molecular "density envelope".
+DENSITY_REFERENCE_LEVEL = 0.002
+
+# A single decay constant for every element. The true asymptotic decay of an
+# electron density is exp(-2*sqrt(2*I)*r) with I the ionisation potential in
+# hartree; I is close to 0.5 Ha across the light main-group elements, so
+# zeta = 1.0 (in inverse Bohr) is a defensible common value.
+DENSITY_ZETA = 1.0
+
+
+def promolecular_density(points, atoms_angstrom):
+    """A crude promolecular density: one decaying exponential per nucleus.
+
+    `rho(r) = sum_i A_i * exp(-2 * zeta * r_i)`, with `r_i` in Bohr, so the
+    result carries the same e/bohr^3 units a real cube writer emits. Each `A_i`
+    is calibrated so the `DENSITY_REFERENCE_LEVEL` contour of an *isolated* atom
+    lands exactly on that element's van der Waals radius -- which is what makes
+    the conventional 0.002 isolevel produce the expected envelope here.
+
+    Valence-only and monotonic: there is no core cusp, so values near a nucleus
+    are far too small to be a real density. Nothing downstream cares. The
+    envelope is the point, and everything this fixture feeds -- the isosurface,
+    the ESP painted on it -- lives well outside the core.
+    """
+    total = np.zeros(points.shape[:-1])
+    for z, x, y, zz in atoms_angstrom:
+        if z not in VDW_ANGSTROM:
+            raise KeyError("no van der Waals radius for Z=%d; add one to VDW_ANGSTROM" % z)
+        amplitude = DENSITY_REFERENCE_LEVEL * math.exp(
+            2.0 * DENSITY_ZETA * VDW_ANGSTROM[z] * ANGSTROM_TO_BOHR
+        )
+        d_bohr = np.linalg.norm(points - np.array([x, y, zz]), axis=-1) * ANGSTROM_TO_BOHR
+        total += amplitude * np.exp(-2.0 * DENSITY_ZETA * d_bohr)
+    return total
+
+
+# TIP3P partial charges for water, in units of e. They sum to zero and
+# reproduce the molecule's dipole closely enough for a picture.
+TIP3P_WATER_CHARGES = [-0.834, 0.417, 0.417]
+
+_erf = np.vectorize(math.erf)
+
+
+def point_charge_esp(points, atoms_angstrom, charges, sigma_bohr=0.5):
+    """Electrostatic potential of a set of Gaussian-smeared point charges.
+
+    `V(r) = sum_i q_i * erf(r_i / sigma) / r_i`, with `r_i` in Bohr, giving
+    hartree/e -- the units a real `cubegen.mep` file carries.
+
+    The smearing is what keeps the file finite. A bare point charge diverges at
+    its own nucleus, and the nuclei here sit *on* grid points, so an undamped
+    formula would write `inf` and poison `value_range()`. `erf(r/sigma)/r`
+    agrees with `1/r` to better than one part in 10^5 beyond `3*sigma`
+    (1.5 Bohr at the default), which is far inside any density envelope, so the
+    damping is invisible everywhere the surface actually samples it.
+
+    A point-charge model is not a real ESP. What it reproduces faithfully is the
+    *shape* on the envelope -- negative over the lone-pair side, positive over
+    the hydrogens -- and a magnitude in the right decade (roughly +/-0.08 Ha/e
+    for water), which is all the colour map needs.
+    """
+    assert len(charges) == len(atoms_angstrom), (len(charges), len(atoms_angstrom))
+    total = np.zeros(points.shape[:-1])
+    for (_z, x, y, zz), q in zip(atoms_angstrom, charges):
+        d_bohr = np.linalg.norm(points - np.array([x, y, zz]), axis=-1) * ANGSTROM_TO_BOHR
+        d_bohr = np.maximum(d_bohr, 1e-12)
+        total += q * _erf(d_bohr / sigma_bohr) / d_bohr
+    return total
+
+
 # --- committed test fixtures ------------------------------------------------
 
 
@@ -246,7 +324,7 @@ def write_xyz(path: Path, atoms_angstrom, comment: str) -> None:
 
 
 def make_manual_files(out_dir: Path) -> None:
-    """The files the P3 and P4 manual walkthroughs load.
+    """The files the P3, P4 and P5 manual walkthroughs load.
 
     Coarser and larger than the committed fixtures — these are for looking at,
     not for asserting against.
@@ -288,6 +366,85 @@ def make_manual_files(out_dir: Path) -> None:
         print("copied", (out_dir / "ramp_3x4x5.cube").relative_to(REPO_ROOT))
     else:
         print("skipped ramp_3x4x5.cube — run the `tests` subcommand first")
+
+    make_colour_map_files(out_dir)
+
+
+def make_colour_map_files(out_dir: Path) -> None:
+    """The matched density / electrostatic-potential pair the P5 walkthrough loads.
+
+    Three files on two grids:
+
+    * `water_density.cube` -- the `field` pin. Non-negative, so the isosurface
+      has one component; the conventional 0.002 isolevel gives the van der Waals
+      envelope.
+    * `water_esp.cube` -- the `color_field` pin, on the **same** grid. Signed.
+      On the 0.002 envelope it runs from -0.092 Ha/e over the lone pairs to
+      +0.061 Ha/e over the hydrogens, so a colour range of +/-0.08 shows the
+      whole ramp and the conventional +/-0.05 saturates both ends the way a
+      published ESP map does. Its `value_range()` is far wider (about -1.4 Ha/e)
+      because the potential still climbs inside the core, which no surface ever
+      samples -- exactly why the design does not auto-fit the colour domain.
+    * `water_esp_small.cube` -- the same potential on a box half the size, for
+      the mismatched-bounds step. The 0.002 envelope reaches past +/-1.5 A along
+      each O-H, so the overhang has no colour field to sample and must render as
+      the neutral midpoint of the map: the white band the reference guide
+      documents and the node deliberately does not report.
+
+    A finer grid than the P3/P4 files above (0.2 A rather than 0.25 A) because
+    these are the first sample files that get *tessellated* -- marching cubes
+    exposes grid coarseness that point sampling never did.
+    """
+    spacing_a = (0.2, 0.2, 0.2)
+    axes_bohr = [
+        (spacing_a[0] * ANGSTROM_TO_BOHR, 0.0, 0.0),
+        (0.0, spacing_a[1] * ANGSTROM_TO_BOHR, 0.0),
+        (0.0, 0.0, spacing_a[2] * ANGSTROM_TO_BOHR),
+    ]
+    atoms_bohr = to_bohr(WATER_ANGSTROM)
+
+    # The full box: -3.0 A to +3.0 A on every axis.
+    origin_a = (-3.0, -3.0, -3.0)
+    dims = (31, 31, 31)
+    points = grid_positions_angstrom(origin_a, spacing_a, dims)
+    origin_bohr = tuple(c * ANGSTROM_TO_BOHR for c in origin_a)
+
+    write_cube(
+        out_dir / "water_density.cube",
+        " Crude promolecular electron density of water, e/bohr^3, coords in Bohr",
+        " P5 walkthrough: isosurface level 0.002 gives the vdW envelope",
+        origin_bohr,
+        axes_bohr,
+        dims,
+        atoms_bohr,
+        promolecular_density(points, WATER_ANGSTROM),
+    )
+    write_cube(
+        out_dir / "water_esp.cube",
+        " Electrostatic potential of water from TIP3P point charges, hartree/e",
+        " P5 walkthrough: color_field for water_density.cube; range +/-0.08",
+        origin_bohr,
+        axes_bohr,
+        dims,
+        atoms_bohr,
+        point_charge_esp(points, WATER_ANGSTROM, TIP3P_WATER_CHARGES),
+    )
+
+    # The deliberately undersized box: -1.5 A to +1.5 A, same spacing and origin
+    # parity, so the mismatch is in extent only.
+    small_origin_a = (-1.5, -1.5, -1.5)
+    small_dims = (16, 16, 16)
+    small_points = grid_positions_angstrom(small_origin_a, spacing_a, small_dims)
+    write_cube(
+        out_dir / "water_esp_small.cube",
+        " The same potential on a box half the size: the mismatched-bounds case",
+        " P5 walkthrough: expect a white band where the surface leaves this box",
+        tuple(c * ANGSTROM_TO_BOHR for c in small_origin_a),
+        axes_bohr,
+        small_dims,
+        atoms_bohr,
+        point_charge_esp(small_points, WATER_ANGSTROM, TIP3P_WATER_CHARGES),
+    )
 
 
 # --- optional realism fixture ----------------------------------------------

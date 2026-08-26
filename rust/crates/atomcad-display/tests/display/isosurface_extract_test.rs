@@ -209,6 +209,68 @@ fn p2z_lobes_take_their_phase_colors() {
     }
 }
 
+/// P5. Signedness and paint are independent: the *number* of components comes
+/// from `value_range()`, the *paint* from the coloring discriminant, and
+/// neither consults the other. `p2z_lobes_take_their_phase_colors` pins the
+/// same field under `Phase`; this is the other half of that 2x2, and it is the
+/// arm a real ESP map takes — a signed field is exactly what a density painted
+/// by a potential is *not*, so without this row the two-component path is only
+/// ever tested unpainted.
+#[test]
+fn a_signed_field_with_a_color_field_keeps_both_lobes_and_paints_per_vertex() {
+    let level = 0.3;
+    let data = IsosurfaceData {
+        field: p2z(),
+        level,
+        coloring: IsosurfaceColoring::Field {
+            field: linear_ramp(),
+            range: (-2.0, 2.0),
+            colormap: Colormap::BlueWhiteRed,
+        },
+        alpha: 1.0,
+    };
+    let mesh = extract_isosurface(&data, &settings_with_spacing(0.25)).expect("within budget");
+
+    assert_eq!(
+        mesh.components.len(),
+        2,
+        "painting by a second field must not change how many lobes are extracted"
+    );
+    assert_finite(&mesh, "signed + color field");
+    assert_eq!(mesh.positions.len(), mesh.albedo.len());
+
+    // Every vertex is the colormap's answer for the ramp at that position — the
+    // paint follows x, not the sign of the surface field.
+    for (position, albedo) in mesh.positions.iter().zip(&mesh.albedo) {
+        let expected = sample_colormap(Colormap::BlueWhiteRed, f64::from(position.x), (-2.0, 2.0));
+        assert!(
+            (*albedo - expected).length() < 1e-5,
+            "vertex at {position:?} painted {albedo:?}, expected {expected:?}"
+        );
+    }
+
+    // Both lobes are painted across the ramp rather than each taking one flat
+    // color: the failure this guards against is a `Field` arm that silently
+    // falls back to per-sign paint for signed fields.
+    for component in 0..2 {
+        let reds: Vec<f32> = component_positions(&mesh, component)
+            .iter()
+            .map(|p| sample_colormap(Colormap::BlueWhiteRed, f64::from(p.x), (-2.0, 2.0)).x)
+            .collect();
+        let lo = reds.iter().copied().fold(f32::INFINITY, f32::min);
+        let hi = reds.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        assert!(
+            hi - lo > 0.1,
+            "lobe {component} is painted one flat color (red {lo}..{hi})"
+        );
+    }
+
+    // Neither is the geometry disturbed by the paint.
+    let unpainted = extract_isosurface(&phase_data(p2z(), level), &settings_with_spacing(0.25))
+        .expect("within budget");
+    assert_eq!(mesh.triangle_count(), unpainted.triangle_count());
+}
+
 #[test]
 fn two_lobes_under_one_cell_apart_stay_two_components() {
     // The surface-nets failure mode: one vertex per cell cannot represent two

@@ -921,13 +921,52 @@ The malformed fixtures (truncated, non-numeric, zero-dim, negative `natoms`) are
 hand-edited copies of a valid one rather than script output — the corruption is
 the point, and it should be visible in the diff.
 
-Files the `manual` subcommand writes, used by the P3 and P4 walkthroughs:
+Files the `manual` subcommand writes, used by the P3 and P4 walkthroughs and by
+P5 of `design_isosurface_node.md`:
 
 | File | Contents | What it exercises |
 |---|---|---|
 | `water.cube` | real water geometry in **Bohr** (O–H 0.958 Å, H–O–H 104.5°), coarse grid, a crude analytic 2p_z on the oxygen | P3: atom block, Bohr→Ångström, bonding |
 | `water_angstrom.cube` | the same geometry written in Ångström | P3: the `units_warning` path |
 | `ramp_3x4x5.cube` | the automated ramp fixture, copied for interactive use | P4: exact expected sample values |
+| `water_density.cube` | crude promolecular density of the same water, e/bohr³, 31³ at 0.2 Å | isosurface P5: the `field` pin; level `0.002` gives the vdW envelope |
+| `water_esp.cube` | electrostatic potential from TIP3P point charges, hartree/e, **same grid** | isosurface P5: the `color_field` pin; range ±0.08 |
+| `water_esp_small.cube` | the same potential on a ±1.5 Å box | isosurface P5: the mismatched-bounds white band |
+
+#### The colour-map pair: what is modelled and what is not
+
+`water_density.cube` and `water_esp.cube` exist because the P5 walkthrough needs
+the classic *density-envelope-painted-by-potential* picture, and §Electrostatic
+potential: a node we will not build for a long time rules out ever computing an
+ESP in-process. Both are analytic and numpy-only — no PySCF, so nothing on the
+critical path acquires a dependency.
+
+Neither is a real quantum-chemical field, and the substitutions are chosen so
+that the part the picture depends on stays right:
+
+- **Density** is a sum of one exponential per nucleus,
+  `A_i * exp(-2 * r_i)` with `r_i` in Bohr. The decay constant is the
+  common asymptotic value for light main-group elements; each `A_i` is
+  calibrated so an *isolated* atom's `0.002` contour lands exactly on its van
+  der Waals radius. On the assembled molecule that puts the envelope at 1.85 Å
+  from the oxygen along the hydrogens and 1.53 Å on the lone-pair side. What it
+  omits is the core cusp — values near a nucleus are orders of magnitude too
+  small — which no isosurface at a density-envelope level ever samples.
+- **Potential** is `q_i * erf(r_i / σ) / r_i` over TIP3P charges, σ = 0.5 Bohr.
+  The Gaussian smearing is load-bearing, not cosmetic: the nuclei sit *on* grid
+  points, so an undamped `1/r` would write `inf` and poison `value_range()`.
+  Beyond `3σ` it is indistinguishable from a bare point charge, so every sample
+  the surface takes is undamped in practice. A point-charge model overestimates
+  the near field by roughly a factor of two against a real MEP, but reproduces
+  the *sign structure* exactly — negative over the lone pairs, positive over the
+  hydrogens — which is the entire content of an ESP map.
+
+One consequence is worth stating because it looks like a bug: the potential's
+`value_range()` reaches about −1.4 hartree/e, twenty times the ±0.08 that the
+surface actually spans, because the potential keeps climbing inside the core.
+That is the concrete case behind the isosurface design's refusal to auto-fit the
+colour domain (`design_isosurface_node.md` §The `Isosurface` value): fitting to
+the extrema here would paint the whole envelope one flat colour.
 
 #### PySCF: optional, and deliberately not on the critical path
 
