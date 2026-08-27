@@ -238,7 +238,10 @@ impl NodeData for ImportCubeData {
     /// The units plausibility warning from the loader, surfaced as a
     /// **non-blocking** error so it reaches the unified error list without
     /// stopping evaluation — the node still produces a usable field.
-    fn get_data_error(&self) -> Option<NodeDataError> {
+    fn get_data_error(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<NodeDataError> {
         self.loaded
             .as_ref()
             .and_then(|loaded| loaded.units_warning.clone())

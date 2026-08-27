@@ -19,15 +19,32 @@
 //!
 //! # Stored-data errors
 //!
-//! `NodeData::get_data_error() -> Option<NodeDataError>` lets a node report a
-//! problem in its own stored data — today the parse failure of a definition
-//! string on `motif` (blocking: no motif to emit), and on `motif_sub` /
-//! `materialize` (warnings: their `eval` no-ops on unparsed data and still emits
-//! a usable value). `validate_zones_recursive`'s Pass A asks every node on every
-//! validate pass and pushes the corresponding `ValidationError`, so these reach
-//! the unified panel list and the F8 cycle with no transient `initial_errors`
-//! plumbing. (`expr` keeps its `initial_errors` route because its errors must be
-//! attached at data-set time, before the parse result is stored.)
+//! `NodeData::get_data_error(&connected_input_pins) -> Option<NodeDataError>`
+//! lets a node report a problem in its own stored data — today the parse failure
+//! of a definition string on `motif` (blocking: no motif to emit), and on
+//! `motif_sub` / `materialize` (warnings: their `eval` no-ops on unparsed data
+//! and still emits a usable value). `validate_zones_recursive`'s Pass A asks
+//! every node on every validate pass and pushes the corresponding
+//! `ValidationError`, so these reach the unified panel list and the F8 cycle
+//! with no transient `initial_errors` plumbing. (`expr` keeps its
+//! `initial_errors` route because its errors must be attached at data-set time,
+//! before the parse result is stored.)
+//!
+//! The argument carries the names of the node's **wired input parameters**, the
+//! same set `NodeData::get_subtitle` receives, so a rule may depend on whether a
+//! value is wired without needing to evaluate anything: `isosurface` uses it to
+//! warn that its `level` pin is ignored in auto mode. It is the only wiring
+//! context available here — the node's own data and its incoming wires, nothing
+//! upstream and no evaluated value.
+//!
+//! Two rules are worth stating because both are easy to get wrong. **A rule that
+//! needs the node's *inputs' values* is not a stored-data error at all** — it is
+//! an evaluation error, because validation runs without evaluating and has no
+//! value to look at. And **a stored rule that `eval` also has to enforce should
+//! live in one function called from both**, not be duplicated: `isosurface`'s
+//! fraction range is checked here (so a node whose `field` is unwired still
+//! reports it) *and* in `eval` (so a wired `level` pin is covered), through one
+//! shared `level_fraction_problem`.
 //!
 //! # Wire cycles
 //!
@@ -1265,7 +1282,20 @@ fn validate_zones_recursive(
         // the *owning HOF*. A broken `motif` inside a body should darken that
         // motif's cone (which the blocking flag already does via D3), not the
         // whole HOF — the same blast-radius argument D3 made for the network.
-        if let Some(data_error) = node.data.get_data_error() {
+        //
+        // The wired-input-pin names are handed over so a rule may depend on
+        // them (`isosurface`'s "the level pin is ignored in auto mode"), built
+        // the same way `structure_designer_api` builds the set for
+        // `get_subtitle`.
+        let connected_input_pins: std::collections::HashSet<String> = node
+            .arguments
+            .iter()
+            .enumerate()
+            .filter(|(_, argument)| !argument.is_empty())
+            .filter_map(|(index, _)| node_type.parameters.get(index))
+            .map(|parameter| parameter.name.clone())
+            .collect();
+        if let Some(data_error) = node.data.get_data_error(&connected_input_pins) {
             let error = if data_error.blocking {
                 ValidationError::new(data_error.message, Some(node_id))
             } else {

@@ -32,6 +32,9 @@ mod field_test;
 #[path = "crystolecule/field_distribution_test.rs"]
 mod field_distribution_test;
 
+#[path = "crystolecule/auto_level_test.rs"]
+mod auto_level_test;
+
 #[path = "crystolecule/field_distribution_zoo_test.rs"]
 mod field_distribution_zoo_test;
 

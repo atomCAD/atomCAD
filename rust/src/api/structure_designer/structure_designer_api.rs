@@ -5886,7 +5886,29 @@ pub fn set_free_move_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeMoveD
 pub fn set_isosurface_data(scope_path: Vec<u64>, node_id: u64, data: APIIsosurfaceData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
+            // `level_mode` / `level_fraction` are **carried over, not taken
+            // from `data`**: this setter replaces the whole node data, and the
+            // Flutter editor does not know about those two properties yet
+            // (`doc/design_isosurface_level.md` P3 gives them controls and
+            // fields on `APIIsosurfaceData`). Without this, editing the opacity
+            // of an `auto` node would silently reset it to the struct default
+            // and move the surface.
+            let (level_mode, level_fraction) = cad_instance
+                .structure_designer
+                .get_node_network_data_scoped(&scope_path, node_id)
+                .and_then(|node_data| {
+                    node_data
+                        .as_any_ref()
+                        .downcast_ref::<IsosurfaceNodeData>()
+                        .map(|existing| (existing.level_mode, existing.level_fraction))
+                })
+                .unwrap_or_else(|| {
+                    let defaults = IsosurfaceNodeData::default();
+                    (defaults.level_mode, defaults.level_fraction)
+                });
             let isosurface_data = Box::new(IsosurfaceNodeData {
+                level_mode,
+                level_fraction,
                 level: data.level,
                 positive_color: from_api_vec3(&data.positive_color),
                 negative_color: from_api_vec3(&data.negative_color),

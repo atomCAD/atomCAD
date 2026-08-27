@@ -11,7 +11,9 @@
 //!   exhaustive, so a missing arm fails the build, but a *wrong* arm is silent.
 //!   An `IsosurfaceData` can reach the same `Arc` twice.
 
-use atomcad_crystolecule::field::isosurface::{Colormap, IsosurfaceColoring, IsosurfaceData};
+use atomcad_crystolecule::field::isosurface::{
+    Colormap, IsosurfaceColoring, IsosurfaceData, LevelBasis,
+};
 use atomcad_crystolecule::field::{GridGeometry, SampledField, ScalarField};
 use atomcad_structure_designer::data_type::DataType;
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
@@ -43,6 +45,7 @@ fn phase_data(field: Arc<dyn ScalarField>) -> IsosurfaceData {
     IsosurfaceData {
         field,
         level: 0.02,
+        level_basis: LevelBasis::Absolute,
         coloring: IsosurfaceColoring::Phase {
             positive: Vec3::new(0.20, 0.40, 0.90),
             negative: Vec3::new(0.90, 0.30, 0.25),
@@ -55,6 +58,7 @@ fn colormapped_data(surface: Arc<dyn ScalarField>, color: Arc<dyn ScalarField>) 
     IsosurfaceData {
         field: surface,
         level: 0.002,
+        level_basis: LevelBasis::Absolute,
         coloring: IsosurfaceColoring::Field {
             field: color,
             range: (-0.05, 0.05),
@@ -138,13 +142,20 @@ fn isosurface_is_an_ordinary_concrete_type() {
 #[test]
 fn display_string_summarizes_level_and_coloring_mode() {
     let phase = NetworkResult::Isosurface(phase_data(ramp_field([2, 3, 4]))).to_display_string();
-    assert!(phase.starts_with("Isosurface "), "got: {phase}");
-    assert!(phase.contains("(phase)"), "got: {phase}");
+    assert!(phase.starts_with("Isosurface\n"), "got: {phase}");
+    assert!(phase.contains("level:"), "got: {phase}");
+    assert!(phase.contains("color:  phase"), "got: {phase}");
+    assert!(phase.contains("field:  2x3x4"), "got: {phase}");
+    // The enclosed fraction is what makes an isovalue legible on an unfamiliar
+    // field, so the *hover* readout carries it - not only the verbose CLI one.
+    // The wording is load-bearing: never "% of the electron density", which
+    // would be false for an orbital amplitude.
+    assert!(phase.contains("of ∫|v|"), "got: {phase}");
 
     let field = ramp_field([2, 3, 4]);
     let mapped =
         NetworkResult::Isosurface(colormapped_data(field.clone(), field)).to_display_string();
-    assert!(mapped.contains("(colormap)"), "got: {mapped}");
+    assert!(mapped.contains("color:  colormap"), "got: {mapped}");
 }
 
 #[test]

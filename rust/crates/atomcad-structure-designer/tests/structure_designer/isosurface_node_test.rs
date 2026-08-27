@@ -29,7 +29,7 @@ use atomcad_structure_designer::node_network::NodeRef;
 use atomcad_structure_designer::nodes::closure::{ClosureData, ClosureKind};
 use atomcad_structure_designer::nodes::float::FloatData;
 use atomcad_structure_designer::nodes::import_cube::{ImportCubeData, LoadedCube};
-use atomcad_structure_designer::nodes::isosurface::IsosurfaceNodeData;
+use atomcad_structure_designer::nodes::isosurface::{IsosurfaceNodeData, LevelMode};
 use atomcad_structure_designer::structure_designer::StructureDesigner;
 use atomcad_structure_designer::structure_designer_scene::NodeOutput;
 use atomcad_test_support::fixture_path_str;
@@ -128,6 +128,7 @@ fn eval_packages_the_wired_field_and_the_stored_level() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             level: 0.031,
             ..Default::default()
         },
@@ -164,6 +165,7 @@ fn a_wired_level_pin_overrides_the_stored_property() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             level: 0.02,
             ..Default::default()
         },
@@ -194,6 +196,7 @@ fn a_non_positive_level_is_an_evaluation_error() {
             &mut designer,
             &[],
             IsosurfaceNodeData {
+                level_mode: LevelMode::Absolute,
                 level,
                 ..Default::default()
             },
@@ -227,6 +230,7 @@ fn a_wired_color_field_selects_the_field_arm_and_carries_the_stored_domain() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             color_min: -0.031,
             color_max: 0.062,
             colormap: Colormap::BlueWhiteRed,
@@ -319,6 +323,7 @@ fn an_inverted_color_domain_is_carried_rather_than_rejected() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             color_min: 0.05,
             color_max: -0.05,
             ..Default::default()
@@ -363,6 +368,7 @@ fn a_level_above_the_fields_range_is_a_value_and_no_error() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             level: 1.0e9,
             ..Default::default()
         },
@@ -421,6 +427,7 @@ fn a_displayed_signed_field_extracts_both_lobes() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             level: 0.05,
             ..Default::default()
         },
@@ -496,6 +503,7 @@ fn a_surface_larger_than_its_color_field_is_drawn_neutral_and_silent() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             level: 0.05,
             // Wide and symmetric, so the out-of-box `0.0` lands on the midpoint
             // and in-box values (0..=234) are visibly to one side of it.
@@ -699,6 +707,7 @@ fn an_eval_error_survives_the_budget_message() {
         &mut designer,
         &[],
         IsosurfaceNodeData {
+            level_mode: LevelMode::Absolute,
             level: -1.0,
             ..Default::default()
         },
@@ -732,7 +741,9 @@ fn every_property_survives_a_text_property_round_trip() {
     use std::collections::HashMap;
 
     let original = IsosurfaceNodeData {
+        level_mode: LevelMode::Fraction,
         level: 0.0123,
+        level_fraction: 0.815,
         positive_color: DVec3::new(0.1, 0.2, 0.3),
         negative_color: DVec3::new(0.4, 0.5, 0.6),
         alpha: 0.75,
@@ -787,6 +798,7 @@ fn the_subtitle_shows_the_level_only_while_the_pin_is_unwired() {
     use atomcad_structure_designer::node_data::NodeData;
 
     let data = IsosurfaceNodeData {
+        level_mode: LevelMode::Absolute,
         level: 0.02,
         ..Default::default()
     };

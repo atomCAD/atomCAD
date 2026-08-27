@@ -88,6 +88,15 @@ validation rule rejecting it elsewhere.
 
 ## The `Isosurface` value
 
+**How `level` is arrived at is a separate design**, `doc/design_isosurface_level.md`:
+the node grew a `level_mode` (`auto` / `absolute` / `fraction`), an enclosed-mass
+coordinate backed by `field::distribution::ValueDistribution`, and an `auto_level`
+rule that picks the number from the field. All three resolve to the single
+absolute magnitude below before anything here sees it, so the value type, the
+extractor, the lattice policy, the tessellator and every renderer path are
+unchanged — the one addition is a `level_basis: LevelBasis` passenger carried for
+the readout, which nothing downstream branches on.
+
 ```rust
 // atomcad-crystolecule/src/field/isosurface.rs
 

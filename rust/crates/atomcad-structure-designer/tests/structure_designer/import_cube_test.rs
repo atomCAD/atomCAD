@@ -315,7 +315,12 @@ fn an_implausible_atom_block_warns_without_costing_the_field() {
             .node_networks
             .get("test")
             .unwrap();
-        network.nodes.get(&node_id).unwrap().data.get_data_error()
+        network
+            .nodes
+            .get(&node_id)
+            .unwrap()
+            .data
+            .get_data_error(&std::collections::HashSet::new())
     }
     .expect("an Ångström-scaled file should produce a units warning");
 
@@ -360,7 +365,12 @@ fn a_plausible_atom_block_produces_no_data_error() {
         .node_networks
         .get("test")
         .unwrap();
-    let error = network.nodes.get(&node_id).unwrap().data.get_data_error();
+    let error = network
+        .nodes
+        .get(&node_id)
+        .unwrap()
+        .data
+        .get_data_error(&std::collections::HashSet::new());
     assert!(
         error.is_none(),
         "a correctly-written Bohr file should be silent, got {:?}",
@@ -386,7 +396,7 @@ fn an_unloaded_node_reports_no_data_error() {
             .get(&node_id)
             .unwrap()
             .data
-            .get_data_error()
+            .get_data_error(&std::collections::HashSet::new())
             .is_none()
     );
 }

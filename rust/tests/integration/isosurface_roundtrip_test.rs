@@ -14,7 +14,7 @@
 
 use atomcad_crystolecule::field::Colormap;
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
-use atomcad_structure_designer::nodes::isosurface::IsosurfaceNodeData;
+use atomcad_structure_designer::nodes::isosurface::{IsosurfaceNodeData, LevelMode};
 use atomcad_structure_designer::serialization::node_networks_serialization::{
     load_node_networks_from_file, save_node_networks_to_file,
 };
@@ -36,7 +36,9 @@ fn isosurface_node_cnnd_roundtrip() {
     designer.set_node_network_data(
         node_id,
         Box::new(IsosurfaceNodeData {
+            level_mode: LevelMode::Fraction,
             level: 0.0035,
+            level_fraction: 0.935,
             positive_color: DVec3::new(0.11, 0.22, 0.33),
             negative_color: DVec3::new(0.44, 0.55, 0.66),
             alpha: 0.85,
@@ -74,7 +76,9 @@ fn isosurface_node_cnnd_roundtrip() {
         .downcast_ref::<IsosurfaceNodeData>()
         .expect("the reloaded node carries IsosurfaceNodeData");
 
+    assert_eq!(data.level_mode, LevelMode::Fraction);
     assert_eq!(data.level, 0.0035);
+    assert_eq!(data.level_fraction, 0.935);
     assert_eq!(data.positive_color, DVec3::new(0.11, 0.22, 0.33));
     assert_eq!(data.negative_color, DVec3::new(0.44, 0.55, 0.66));
     assert_eq!(data.alpha, 0.85);
@@ -98,6 +102,12 @@ fn a_node_saved_without_the_colormap_fields_still_loads() {
     let data: IsosurfaceNodeData =
         serde_json::from_str(json).expect("the pre-colormap shape must still deserialize");
     assert_eq!(data.colormap, Colormap::BlueWhiteRed);
+    // The load-time default is `Absolute`, NOT the enum's `Auto`: a document
+    // written before the level modes existed carries a `level` its author
+    // typed, and defaulting to auto would ignore it and move the surface.
+    // `IsosurfaceNodeData::default()` still gives `Auto`, for a *new* node.
+    assert_eq!(data.level_mode, LevelMode::Absolute);
+    assert_eq!(data.level_fraction, 0.72);
     assert_eq!(data.color_min, -0.05);
     assert_eq!(data.color_max, 0.05);
 }
@@ -133,7 +143,7 @@ fn isosurface_node_text_format_roundtrip() {
     let mut network = empty_network();
 
     let source = r#"
-        iso = isosurface { level: 0.0035, alpha: 0.85, colormap: "blue_white_red", color_min: -0.125, color_max: 0.375 }
+        iso = isosurface { level_mode: "fraction", level: 0.0035, level_fraction: 0.935, alpha: 0.85, colormap: "blue_white_red", color_min: -0.125, color_max: 0.375 }
     "#;
     let result = edit_network(&mut network, &registry, source, true);
     assert!(result.success, "initial edit succeeds: {:?}", result.errors);

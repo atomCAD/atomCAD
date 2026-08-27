@@ -395,7 +395,10 @@ impl NodeData for MaterializeData {
     /// the node still materializes atoms. Surfacing it here folds the
     /// previously badge-only parse error into the unified list
     /// (`doc/design_error_management.md` D9).
-    fn get_data_error(&self) -> Option<NodeDataError> {
+    fn get_data_error(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<NodeDataError> {
         self.error.clone().map(NodeDataError::warning)
     }
 

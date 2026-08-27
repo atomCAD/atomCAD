@@ -46,6 +46,14 @@ pub struct IsosurfaceData {
     /// at `-level`, so the sign is not a user choice — see the node's
     /// validation, which rejects `level <= 0`.
     pub level: f64,
+    /// How [`level`](Self::level) was arrived at — see [`LevelBasis`].
+    ///
+    /// **A readout passenger, not a parameter.** Nothing downstream branches on
+    /// it: the extractor, the lattice policy, the tessellator and every renderer
+    /// path see the resolved `level` and nothing else. It rides here because the
+    /// node resolves the level in `eval` and the pin readout renders the value —
+    /// so this is the one channel that connects them. It is never persisted.
+    pub level_basis: LevelBasis,
     /// How the extracted surface is painted.
     pub coloring: IsosurfaceColoring,
     /// Opacity in `0..=1`. `>= 1.0` takes the opaque fast path in the scene
@@ -121,5 +129,205 @@ impl IsosurfaceData {
             bytes += field.estimate_memory_bytes();
         }
         bytes
+    }
+}
+
+// ============================================================================
+// Choosing the level - `doc/design_isosurface_level.md` Part 2
+// ============================================================================
+
+/// The conventional isovalue for an electron density, `e/bohr^3`.
+///
+/// `Auto` prefers this over any fraction for a non-negative field, because a
+/// *fixed absolute* level tracks the van der Waals envelope better than a fixed
+/// enclosed fraction does: heavier atoms hold more of their density in the core,
+/// so a fixed fraction cuts further in as Z rises (measured `r/r_vdW` spread
+/// 1.097 for the absolute convention against 1.333 for the fraction, across
+/// C/N/O/F).
+pub const DENSITY_LEVEL: f64 = 0.002;
+
+/// The enclosed mass fraction `Auto` reads a field's own scale at.
+///
+/// Calibrated against the simulation team's 16-file cube zoo: it puts both
+/// methyl-radical orbitals inside the conventional 0.02-0.05 band (0.0327 and
+/// 0.0268) and reproduces the density-viz handoff's own worked example for the
+/// T-centre spin density to two figures (3.02e-4 against its 3.4e-4).
+pub const LOCALIZED_FRACTION: f64 = 0.72;
+
+/// How many times [`DENSITY_LEVEL`] the field's own localized scale may reach
+/// before `0.002` is rejected as implausible in this field's units.
+///
+/// **The plausibility window.** ELF (conventionally drawn at ~0.8 of a 0-1
+/// range) and RDG (~0.5) would take `0.002` and swallow the whole box, so the
+/// density convention is checked against `iso_for_fraction(LOCALIZED_FRACTION)`
+/// — the number the other branch would have picked. Across the zoo no real
+/// density exceeds a ratio of 72.4 at any box padding and no impostor drops
+/// below 228; `125` sits just under the geometric midpoint of that gap
+/// (`sqrt(72.4 * 228) = 129`), leaving 1.7x of headroom below and 1.8x above.
+///
+/// The *voxel* share above `0.002` is the obvious alternative statistic and is
+/// deliberately not used: it measures the box rather than the field, moving from
+/// 36.7% to 99.2% for one CH3 density as its padding is cropped, while the ratio
+/// moves by 1.7x across the same crops and never leaves its band.
+pub const MAX_LEVEL_RATIO: f64 = 125.0;
+
+/// A field counts as signed once its minimum falls below this share of its own
+/// magnitude scale.
+///
+/// **A tolerance, not `min >= 0`.** The two `Auto` branches are an order of
+/// magnitude and a half apart - on a real silicon-cluster density the density
+/// branch gives `0.002` and the fraction branch `8.70e-2`, a factor of 43 - so a
+/// raw sign test would turn one voxel of numerical noise at `-1e-12` into a 43x
+/// wrong level, silently. A plane-wave density interpolated onto a grid rings
+/// slightly negative exactly that way. `1e-6` is safe by a wide margin: the
+/// smallest genuine negative lobe in the calibration zoo sits at 2.7% of its
+/// field's scale, four orders of magnitude above this.
+pub const NEGATIVE_TOLERANCE: f64 = 1e-6;
+
+/// Why no level could be resolved. Turned into an evaluation error by the
+/// `isosurface` node, which prefixes its own name.
+///
+/// Every variant is a *field* property, so none of them can be caught by
+/// validation - which sees node data and wires and no field at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LevelResolutionError {
+    /// Fraction mode on a field with no stored samples.
+    AnalyticFieldInFractionMode,
+    /// Auto on a *signed* field with no stored samples. The non-negative case
+    /// has an honest fallback ([`DENSITY_LEVEL`]); a signed one does not, since
+    /// no absolute convention exists for an orbital amplitude that does not
+    /// degrade with delocalization.
+    AnalyticSignedFieldInAutoMode,
+    /// The field is entirely zero, so its total mass is zero and no fraction
+    /// resolves. Reachable from both `Auto` and `Fraction`, and the one
+    /// combination easy to miss: `value_distribution` returns `Some` while both
+    /// of its queries return `None`.
+    AllZeroField,
+}
+
+impl std::fmt::Display for LevelResolutionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LevelResolutionError::AnalyticFieldInFractionMode => write!(
+                f,
+                "fraction mode needs a field with stored samples, and this field is \
+                 analytic (no native grid). Switch the level mode to absolute"
+            ),
+            LevelResolutionError::AnalyticSignedFieldInAutoMode => write!(
+                f,
+                "auto mode has no level to offer for a signed field with no stored \
+                 samples, and this field is analytic (no native grid). Switch the \
+                 level mode to absolute"
+            ),
+            LevelResolutionError::AllZeroField => write!(
+                f,
+                "the field is entirely zero, so no level encloses anything - check \
+                 the upstream import"
+            ),
+        }
+    }
+}
+
+/// The four `Auto` outcomes, in the order the rule tries them.
+///
+/// Carried out of evaluation for the *readout only* - nothing downstream
+/// branches on it. A caller that discards it makes a guess invisible, which is
+/// the failure this type exists to prevent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AutoBasis {
+    /// Non-negative and `0.002` is plausible in this field's units.
+    DensityLike,
+    /// Non-negative, but the plausibility window rejected `0.002` - the field's
+    /// own localized scale is more than [`MAX_LEVEL_RATIO`] times it. ELF and
+    /// RDG land here, and the level they get is adjustable-and-wrong rather than
+    /// nothing-at-all. Do not read this basis as a claim that the level is right.
+    Atypical,
+    /// Signed, so no absolute convention applies and the fraction is the
+    /// coordinate.
+    Signed,
+    /// No distribution to check `0.002` against - an analytic field. The
+    /// convention is taken unchecked.
+    Unchecked,
+}
+
+impl AutoBasis {
+    /// The user-facing string. **The only place these are rendered**, so a
+    /// readout and a panel caption cannot drift apart.
+    pub fn label(self) -> &'static str {
+        match self {
+            AutoBasis::DensityLike => "non-negative, density-like",
+            AutoBasis::Atypical => "non-negative, atypical",
+            AutoBasis::Signed => "signed field",
+            AutoBasis::Unchecked => "non-negative, unchecked",
+        }
+    }
+}
+
+/// How a resolved level was arrived at, for the readout.
+///
+/// **Never persisted**: not in the node's stored data and not in the `.cnnd`. It
+/// is derived on every evaluation, exactly like the level it accompanies, and it
+/// rides along inside [`IsosurfaceData`] only because that is the value the
+/// readout is handed. Nothing downstream of the node branches on it - the
+/// extractor, the tessellator and every renderer path see the resolved
+/// [`IsosurfaceData::level`] and nothing else.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LevelBasis {
+    /// The level was typed (or wired) as a magnitude.
+    Absolute,
+    /// The enclosed fraction that produced it.
+    Fraction(f64),
+    /// Chosen from the field - see [`AutoBasis`].
+    Auto(AutoBasis),
+}
+
+/// Pick an isolevel from the field alone - the `Auto` level mode.
+///
+/// **Signedness picks the coordinate**, and the property that actually drives
+/// the difference is the *nuclear cusp*: a total density has one and holds most
+/// of its electrons in a minuscule volume (useful fractions 0.98-0.999), while
+/// orbitals, spin densities and deformation densities do not (0.5-0.9). Cusped
+/// fields are dominated by densities, which are non-negative, so
+/// [`ScalarField::value_range`] - already read elsewhere for the component count
+/// — separates the two at no cost.
+///
+/// **Known limitation: signed does not imply cusp-free.** A field *derived* from
+/// the density inherits its cusp and can still be signed; the Laplacian of rho
+/// and `sign(lambda2)*rho` both resolve to visibly wrong levels here. Accepted
+/// rather than fixed - both are exotic post-processed fields, wrong at a glance,
+/// with the editor's histogram beside the control. Do not claim they work.
+///
+/// **Auto is volatile by design**: the level moves when the field changes. A
+/// figure that must not change belongs in fraction or absolute mode.
+pub fn auto_level(field: &dyn ScalarField) -> Result<(f64, AutoBasis), LevelResolutionError> {
+    // `None` (an analytic field that does not scan itself) is read as "not known
+    // to be signed", which routes to the same unchecked fallback a non-negative
+    // analytic field takes. That is the honest answer: nothing here can
+    // establish signedness without samples.
+    let signed = field.value_range().is_some_and(|(min, max)| {
+        let scale = min.abs().max(max.abs());
+        min < -NEGATIVE_TOLERANCE * scale
+    });
+
+    let Some(distribution) = field.value_distribution() else {
+        if signed {
+            return Err(LevelResolutionError::AnalyticSignedFieldInAutoMode);
+        }
+        return Ok((DENSITY_LEVEL, AutoBasis::Unchecked));
+    };
+
+    // Both queries return `Option` and neither may be unwrapped: an all-zero
+    // field has `total == 0`, so `value_distribution` is `Some` while this is
+    // `None`.
+    let Some(localized) = distribution.iso_for_fraction(LOCALIZED_FRACTION) else {
+        return Err(LevelResolutionError::AllZeroField);
+    };
+
+    if signed {
+        Ok((localized, AutoBasis::Signed))
+    } else if localized <= MAX_LEVEL_RATIO * DENSITY_LEVEL {
+        Ok((DENSITY_LEVEL, AutoBasis::DensityLike))
+    } else {
+        Ok((localized, AutoBasis::Atypical))
     }
 }

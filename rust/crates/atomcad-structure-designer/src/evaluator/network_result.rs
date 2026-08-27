@@ -9,7 +9,7 @@ use atomcad_crystolecule::atomic_structure::{
 };
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::field::ScalarField;
-use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData};
+use atomcad_crystolecule::field::isosurface::{IsosurfaceColoring, IsosurfaceData, LevelBasis};
 use atomcad_crystolecule::motif::Motif;
 use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
@@ -931,12 +931,21 @@ impl NetworkResult {
             // would put them out of reach of exactly the person picking an
             // isolevel. See `describe_scalar_field`.
             NetworkResult::ScalarField(field) => describe_scalar_field(field.as_ref(), false),
+            // Multi-line for the same reason `ScalarField` is: this is what the
+            // pin-hover tooltip renders, and the enclosed fraction is the whole
+            // point of the level modes — a user who cannot see it has no way to
+            // tell `0.002` from `0.02` on an unfamiliar field.
             NetworkResult::Isosurface(data) => {
                 let coloring = match &data.coloring {
                     IsosurfaceColoring::Phase { .. } => "phase",
                     IsosurfaceColoring::Field { .. } => "colormap",
                 };
-                format!("Isosurface level={:.6e} ({})", data.level, coloring)
+                format!(
+                    "Isosurface\n  level:  {}\n  color:  {}\n  field:  {}",
+                    describe_isosurface_level(data, 4),
+                    coloring,
+                    describe_field_dims(&*data.field),
+                )
             }
             NetworkResult::Record(fields) => {
                 let field_strings: Vec<String> = fields
@@ -1028,8 +1037,8 @@ impl NetworkResult {
             NetworkResult::ScalarField(field) => describe_scalar_field(field.as_ref(), true),
             NetworkResult::Isosurface(data) => {
                 let mut out = format!(
-                    "Isosurface:\n  level: {:.6e}\n  alpha: {:.6}\n  field: {}",
-                    data.level,
+                    "Isosurface:\n  level: {}\n  alpha: {:.6}\n  field: {}",
+                    describe_isosurface_level(data, 6),
                     data.alpha,
                     describe_field_dims(&*data.field),
                 );
@@ -1318,6 +1327,36 @@ fn group_digits(value: u128) -> String {
 /// it has no native grid. Used by the `Isosurface` detail readout, which needs
 /// to describe up to two fields without repeating the whole `ScalarField` block
 /// for each.
+/// The resolved isovalue, what it encloses, and — under `Auto` — how it was
+/// chosen. Shared by both readouts so the two cannot drift.
+///
+/// **`encloses X% of ∫|v|` is load-bearing wording, never "% of the electron
+/// density".** On an orbital amplitude the conventionally enclosed quantity is
+/// `∫|psi|²`, so the friendlier paraphrase would be false. Do not "improve" it.
+/// No unit suffix either: nothing here converts field values or assumes what
+/// they are, and two of the fields this must serve (ELF, RDG) are dimensionless.
+///
+/// The fraction clause is dropped for an analytic field, which has no
+/// distribution to read it from.
+fn describe_isosurface_level(data: &IsosurfaceData, precision: usize) -> String {
+    // Computed from the *resolved* level in every mode, including `Fraction`,
+    // rather than echoing back the requested `f`. The two differ by the mass of
+    // the samples that tie with the chosen isovalue, and what the picture
+    // actually encloses is this one.
+    let mut out = format!("{:.*e}", precision, data.level);
+    if let Some(fraction) = data
+        .field
+        .value_distribution()
+        .and_then(|distribution| distribution.fraction_for_iso(data.level))
+    {
+        out.push_str(&format!("  ·  encloses {:.1}% of ∫|v|", fraction * 100.0));
+    }
+    if let LevelBasis::Auto(basis) = data.level_basis {
+        out.push_str(&format!("  ·  auto: {}", basis.label()));
+    }
+    out
+}
+
 fn describe_field_dims(field: &dyn ScalarField) -> String {
     match field.native_grid() {
         Some(grid) => format!("{}x{}x{}", grid.dims[0], grid.dims[1], grid.dims[2]),

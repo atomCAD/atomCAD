@@ -97,7 +97,7 @@ Draws the surface where a scalar field equals a given level — the standard way
 
 - `field: ScalarField` — **required.** The field whose level set is drawn.
 - `color_field: ScalarField` — optional. A **second** field, sampled at every point of the surface to colour it — see *Painting by a second field* below. Unwired, the surface is painted by sign instead.
-- `level: Float` — optional. Overrides the stored `level` property when wired.
+- `level: Float` — optional. Overrides **whichever level property is live** when wired — the isovalue in *absolute* mode, the enclosed fraction in *fraction* mode. In *auto* mode it is ignored, and the node says so with an amber advisory rather than dropping it silently.
 
 **Output pin**
 
@@ -107,11 +107,45 @@ Draws the surface where a scalar field equals a given level — the standard way
 
 | Property | Default | What it does |
 |---|---|---|
-| `level` | `0.02` | Isolevel **magnitude** — see below |
+| `level_mode` | `auto` | Which coordinate the level is expressed in: `auto`, `absolute` or `fraction` — see below |
+| `level` | `0.02` | Isolevel **magnitude**, live in `absolute` mode |
+| `level_fraction` | `0.72` | Share of the field the surface encloses, live in `fraction` mode |
 | Positive color | blue | Color of the `+level` lobe |
 | Negative color | red | Color of the `-level` lobe |
 | Opacity | `0.4` | How see-through the surface is, `0` (invisible) to `1` (solid) — see below |
 | Colormap, range min/max | blue-white-red, `-0.05`…`0.05` | The colour ramp and its domain — used only when `color_field` is wired, and disabled while it is not |
+
+**Three ways to say what level to draw at**
+
+A scalar field spans something like ten orders of magnitude, and the same number that gives a clean orbital lobe gives a blank screen on a density. So the level has three modes, and the mode is what decides which of the two stored numbers is used.
+
+- **`auto`** (the default for a new node) chooses the level from the field itself, every time the node evaluates. Neither stored number is consulted.
+- **`absolute`** uses the stored `level` as an isovalue in the field's own units. This is the mode for a conventional constant — `0.002` for a density envelope, `0.02`–`0.05` for an orbital amplitude.
+- **`fraction`** uses the stored `level_fraction`: *how much of the field the surface encloses*, as a share of the field's total integrated magnitude, and the isovalue that achieves it is looked up from the data. `0.72` means the surface bounds the region holding 72 % of the field. This is the mode that transfers between fields — the same fraction means the same thing on an orbital and on a spin density, where the same isovalue does not.
+
+The two numbers are stored **separately**, and switching modes never converts one into the other. Set an absolute level, switch to fraction, adjust, switch back, and your `0.002` is still there exactly as you typed it. That is the whole reason there are two properties instead of one reinterpreted number — and it is why the text format always writes both, alongside the mode that says which is live.
+
+**What `auto` decides, and on what basis.** It reads the field's value range and its distribution, and reports which branch it took in the level readout:
+
+| Basis shown | What it means |
+|---|---|
+| `non-negative, density-like` | The field never goes negative and `0.002` is a plausible level in its units, so the density convention is used. |
+| `signed field` | The field has both signs — an orbital, a spin density — where no absolute convention survives, so the level enclosing 72 % of the field is used instead. |
+| `non-negative, atypical` | Non-negative, but `0.002` is nowhere near this field's own scale, so the density convention was rejected and the 72 % level used. **Treat the result as a starting point, not an answer** — this is what an ELF or a reduced density gradient gets, and the level will be adjustable-but-wrong rather than blank. |
+| `non-negative, unchecked` | There were no stored samples to check the convention against, so `0.002` was taken on trust. |
+
+**`auto` is volatile by design.** The level is re-chosen on every evaluation, so it moves when the field changes — a different `.cube` on the `field` pin, or the same file re-imported after a recalculation. That is what makes it a good default and a bad thing to publish from. **Freeze a figure by switching to `absolute` or `fraction` before you rely on it**; both are exact, so the surface does not move at the moment you switch. The only signal that a level is automatic is the passive `auto:` line in the readout — a document reopened against an edited field will show a moved surface with nothing announcing it.
+
+**Reading the level back.** Hover the `surface` output pin and the readout gives the resolved isovalue, what it encloses, and — under `auto` — the basis:
+
+```
+Isosurface
+  level:  2.0000e-3  ·  encloses 99.2% of ∫|v|  ·  auto: non-negative, density-like
+  color:  phase
+  field:  17x15x19
+```
+
+`∫|v|` is the field's total integrated magnitude, so `encloses 99.2%` means the region inside the surface accounts for 99.2 % of it. It is a share of the *field*, not of the box's volume — almost all of any cube file is empty space, and a share of volume would be dominated by it. The phrasing stays deliberately abstract because the field could be anything: on an orbital amplitude the quantity a chemist conventionally encloses is `|psi|²`, not `|psi|`, so calling this "percent of the electron density" would be wrong.
 
 **The level is a magnitude, not a signed value.** The surface is extracted at `+level` *and* at `-level`, so a signed field such as an orbital shows both lobes at once, painted in the two phase colors. A level of zero or below is an error rather than a choice: at zero the two passes coincide, and a negative level would just be the positive one relabelled. An orbital's overall sign is arbitrary — the same calculation run twice can hand back `psi` or `-psi` — so the **swap button** between the two color swatches is how you match a published figure.
 
@@ -123,7 +157,7 @@ Two overlapping lobes are drawn back to front for the current camera, so their o
 
 **Two things the node cannot tell you, and both look like breakage**
 
-- *A level above anything in the field draws nothing, silently.* An empty viewport looks exactly like a failed import, and there is no warning. Hover the **`field` output pin of the upstream `import_cube`** — value readouts are on output pins, so there is nothing to hover on the `isosurface` node's own input. That readout carries both halves of what you need: the **value range**, and the file's own **comment text** saying what the quantity is. Typical starting points are ±0.02–0.05 for an orbital amplitude and 0.002 for a density's molecular surface — an order of magnitude apart, which is why one default cannot serve both.
+- *A level above anything in the field draws nothing, silently.* An empty viewport looks exactly like a failed import, and there is no warning. This is the failure `auto` mode exists to keep you out of, so it is now something you meet only after taking the level over in `absolute` mode. Hover the **`field` output pin of the upstream `import_cube`** — value readouts are on output pins, so there is nothing to hover on the `isosurface` node's own input. That readout carries both halves of what you need: the **value range**, and the file's own **comment text** saying what the quantity is. Typical starting points are ±0.02–0.05 for an orbital amplitude and 0.002 for a density's molecular surface — an order of magnitude apart, which is why one default cannot serve both.
 - *A `color_field` smaller than the surface paints the overhang neutral.* Outside its own box a field reads as `0.0`, which on a symmetric blue-white-red ramp is plain white — a plausible-looking picture that is simply missing data. It is easy to hit, because densities and potentials often come from separately-computed files with different boxes. There is no warning, so if part of a surface comes out flat white, suspect the boxes before you suspect the physics: compare the two `field` output-pin readouts, which each name the box they cover.
 
 **Painting by a second field**

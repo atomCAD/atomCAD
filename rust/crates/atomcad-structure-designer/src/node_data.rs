@@ -279,8 +279,18 @@ pub trait NodeData: Any + AsAny {
     /// every pass there is no transient `initial_errors` plumbing to keep in
     /// sync.
     ///
+    /// `connected_input_pins` carries the *names* of this node's wired input
+    /// parameters, exactly as [`NodeData::get_subtitle`] receives them, so a
+    /// rule may depend on whether a value is wired: `isosurface` warns that its
+    /// `level` pin is ignored in auto mode. It is the only wiring context
+    /// available here — the node's own data and its incoming wires, nothing
+    /// upstream and no evaluated value.
+    ///
     /// Default: `None` — a node with no stored-data failure mode.
-    fn get_data_error(&self) -> Option<NodeDataError> {
+    fn get_data_error(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<NodeDataError> {
         None
     }
 

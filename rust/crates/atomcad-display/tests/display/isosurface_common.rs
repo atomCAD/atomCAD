@@ -28,7 +28,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use atomcad_crystolecule::field::{
-    FieldBounds, GridGeometry, IsosurfaceColoring, IsosurfaceData, SampledField, ScalarField,
+    FieldBounds, GridGeometry, IsosurfaceColoring, IsosurfaceData, LevelBasis, SampledField,
+    ScalarField,
 };
 use atomcad_display::isosurface::{ExtractionSettings, SurfaceMesh, extract_isosurface};
 use glam::{DVec3, Vec3};
@@ -211,6 +212,7 @@ pub fn phase_data(field: Arc<dyn ScalarField>, level: f64) -> IsosurfaceData {
     IsosurfaceData {
         field,
         level,
+        level_basis: LevelBasis::Absolute,
         coloring: IsosurfaceColoring::Phase {
             positive: POSITIVE_COLOR,
             negative: NEGATIVE_COLOR,

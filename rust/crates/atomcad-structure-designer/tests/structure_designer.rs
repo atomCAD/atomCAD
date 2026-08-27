@@ -251,6 +251,9 @@ mod import_cube_test;
 #[path = "structure_designer/import_xyz_test.rs"]
 mod import_xyz_test;
 
+#[path = "structure_designer/isosurface_level_test.rs"]
+mod isosurface_level_test;
+
 #[path = "structure_designer/isosurface_node_test.rs"]
 mod isosurface_node_test;
 

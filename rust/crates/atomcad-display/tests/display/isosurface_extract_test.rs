@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use atomcad_crystolecule::field::{
-    Colormap, GridGeometry, IsosurfaceColoring, IsosurfaceData, ScalarField,
+    Colormap, GridGeometry, IsosurfaceColoring, IsosurfaceData, LevelBasis, ScalarField,
 };
 use atomcad_display::isosurface::{ExtractionSettings, extract_isosurface, sample_colormap};
 use glam::{DVec3, Vec3};
@@ -222,6 +222,7 @@ fn a_signed_field_with_a_color_field_keeps_both_lobes_and_paints_per_vertex() {
     let data = IsosurfaceData {
         field: p2z(),
         level,
+        level_basis: LevelBasis::Absolute,
         coloring: IsosurfaceColoring::Field {
             field: linear_ramp(),
             range: (-2.0, 2.0),
@@ -337,6 +338,7 @@ fn a_color_field_paints_per_vertex() {
     let data = IsosurfaceData {
         field: sphere_bump(),
         level: BUMP_LEVEL,
+        level_basis: LevelBasis::Absolute,
         coloring: IsosurfaceColoring::Field {
             field: linear_ramp(),
             range: (-1.0, 1.0),

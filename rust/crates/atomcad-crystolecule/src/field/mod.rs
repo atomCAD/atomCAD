@@ -20,7 +20,10 @@ pub mod distribution;
 pub mod isosurface;
 
 pub use distribution::{LogHistogram, ValueDistribution};
-pub use isosurface::{Colormap, IsosurfaceColoring, IsosurfaceData};
+pub use isosurface::{
+    AutoBasis, Colormap, DENSITY_LEVEL, IsosurfaceColoring, IsosurfaceData, LOCALIZED_FRACTION,
+    LevelBasis, LevelResolutionError, MAX_LEVEL_RATIO, NEGATIVE_TOLERANCE, auto_level,
+};
 
 use glam::{DMat3, DVec3};
 use std::sync::{Arc, OnceLock};

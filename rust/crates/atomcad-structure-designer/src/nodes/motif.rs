@@ -106,7 +106,10 @@ impl NodeData for MotifData {
     /// puts the failure in the unified error list (`doc/design_error_management.md`
     /// D9) and cone-poisons the node, which makes D8's dedupe drop the
     /// now-redundant eval entry so the badge shows the sentence exactly once.
-    fn get_data_error(&self) -> Option<NodeDataError> {
+    fn get_data_error(
+        &self,
+        _connected_input_pins: &std::collections::HashSet<String>,
+    ) -> Option<NodeDataError> {
         self.error.clone().map(NodeDataError::blocking)
     }
 

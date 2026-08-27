@@ -57,7 +57,7 @@ crates/atomcad-crystolecule/src/
 ├── field/
 │   ├── mod.rs                      # ScalarField trait, FieldBounds, GridGeometry, SampledField
 │   ├── distribution.rs             # ValueDistribution: isovalue <-> enclosed-mass fraction, log histogram
-│   └── isosurface.rs               # IsosurfaceData/IsosurfaceColoring/Colormap (the surface *spec*, not a mesh)
+│   └── isosurface.rs               # IsosurfaceData/IsosurfaceColoring/Colormap (the surface *spec*, not a mesh) + auto_level
 ├── io/
 │   ├── cube_loader.rs              # Gaussian .cube import (volumetric scalar data + atom block)
 │   ├── mol_exporter.rs             # MOL V3000 export
@@ -125,7 +125,8 @@ crates/atomcad-crystolecule/src/
 | `SampledField` | `field/mod.rs` | `ScalarField` stored as `f32` samples on a regular grid, trilinearly interpolated |
 | `GridGeometry` | `field/mod.rs` | Origin + three axis vectors + counts. **Node-centered**: the origin IS sample (0,0,0) |
 | `FieldBounds` | `field/mod.rs` | Axis-aligned box, Ångström. The workspace has no general AABB type to reuse |
-| `IsosurfaceData` | `field/isosurface.rs` | A surface to extract at display time: field + level + coloring + alpha. Carries no mesh |
+| `IsosurfaceData` | `field/isosurface.rs` | A surface to extract at display time: field + level + coloring + alpha, plus the `LevelBasis` the level came from. Carries no mesh |
+| `LevelBasis` / `AutoBasis` | `field/isosurface.rs` | How a resolved level was arrived at — absolute, an enclosed fraction, or one of the four `Auto` outcomes. Readout only, never persisted |
 | `CubeFile` | `io/cube_loader.rs` | Parsed `.cube`: `atoms`, `fields`, and an advisory `units_warning` |
 
 ## Core Concepts
@@ -210,7 +211,29 @@ Two rules the type encodes, both easy to undo by accident:
   `f64` and narrowing a threshold would put a rounding difference between the
   comparison and the data it compares to.
 
-Design doc: `doc/design_isosurface_node.md`.
+**Choosing the level** (`auto_level`, same file): given a field and nothing else,
+pick an isovalue. Signedness — read from `value_range` with a *tolerance*, never
+`min >= 0` — chooses the coordinate: a non-negative field takes the absolute
+`DENSITY_LEVEL` convention if the plausibility window accepts it, everything else
+takes `iso_for_fraction(LOCALIZED_FRACTION)`. Every constant is calibrated
+against a 16-file cube zoo and the evidence lives in the design document, not
+here; the two committed branch fixtures only pin which branch is taken.
+
+Three invariants this half depends on:
+
+- **The distribution is over stored samples, never the extraction lattice**, so a
+  resolved level does not move when the quality preference changes. Anything that
+  makes the level depend on how finely the surface is meshed has reintroduced
+  exactly the quality-parameter-in-the-value problem the split above avoids.
+- **Both `ValueDistribution` queries return `Option` and neither may be
+  unwrapped.** An all-zero field is the combination easy to miss:
+  `value_distribution()` is `Some` while `iso_for_fraction` is `None`.
+- **`LevelBasis` is a readout passenger.** It rides in `IsosurfaceData` because
+  the node resolves the level in `eval` and the pin readout renders the value, so
+  that is the one channel connecting them. Nothing downstream may branch on it,
+  and it is never persisted.
+
+Design docs: `doc/design_isosurface_node.md`, `doc/design_isosurface_level.md`.
 
 ## Important Constants (`crystolecule_constants.rs`)
 
