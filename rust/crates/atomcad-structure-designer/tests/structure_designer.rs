@@ -443,6 +443,9 @@ mod abstract_output_type_test;
 #[path = "structure_designer/hierarchical_records_test.rs"]
 mod hierarchical_records_test;
 
+#[path = "structure_designer/empty_geometry_nodes_test.rs"]
+mod empty_geometry_nodes_test;
+
 #[path = "structure_designer/empty_folders_test.rs"]
 mod empty_folders_test;
 

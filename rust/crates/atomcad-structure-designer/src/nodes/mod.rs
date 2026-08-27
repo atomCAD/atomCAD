@@ -22,6 +22,8 @@ pub mod diff;
 pub mod diff_2d;
 pub mod drawing_plane;
 pub mod edit_atom;
+pub mod empty;
+pub mod empty_2d;
 pub mod enter_structure;
 pub mod exit_structure;
 pub mod export_atoms;

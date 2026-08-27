@@ -24,6 +24,8 @@ use super::nodes::diff::get_node_type as diff_get_node_type;
 use super::nodes::diff_2d::get_node_type as diff_2d_get_node_type;
 use super::nodes::drawing_plane::get_node_type as drawing_plane_get_node_type;
 use super::nodes::edit_atom::edit_atom::get_node_type as edit_atom_get_node_type;
+use super::nodes::empty::get_node_type as empty_get_node_type;
+use super::nodes::empty_2d::get_node_type as empty_2d_get_node_type;
 use super::nodes::enter_structure::get_node_type as enter_structure_get_node_type;
 use super::nodes::exit_structure::get_node_type as exit_structure_get_node_type;
 use super::nodes::export_atoms::get_node_type as export_atoms_get_node_type;
@@ -825,6 +827,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(intersect_2d_get_node_type());
         ret.add_node_type(diff_2d_get_node_type());
         ret.add_node_type(half_plane_get_node_type());
+        ret.add_node_type(empty_2d_get_node_type());
 
         ret.add_node_type(extrude_get_node_type());
         ret.add_node_type(cuboid_get_node_type());
@@ -836,6 +839,7 @@ impl NodeTypeRegistry {
         ret.add_node_type(union_get_node_type());
         ret.add_node_type(intersect_get_node_type());
         ret.add_node_type(diff_get_node_type());
+        ret.add_node_type(empty_get_node_type());
         ret.add_node_type(geo_trans_get_node_type());
         ret.add_node_type(lattice_symop_get_node_type());
         ret.add_node_type(structure_invert_get_node_type());

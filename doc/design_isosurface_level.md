@@ -40,11 +40,19 @@ sorted  = sort(|v| over all samples, DESCENDING)
 cumsum  = prefix sums of sorted
 total   = cumsum[last]
 iso_for_fraction(f)  = sorted[ smallest k with cumsum[k] >= f * total ]
-fraction_for_iso(v)  = cumsum[ position of v in sorted ] / total
+fraction_for_iso(v)  = cumsum[ last k with sorted[k] >= v ] / total
 ```
 
 Accumulating from the largest value down makes the enclosed region
 `{ |v| >= iso }` — exactly what the extracted surface bounds.
+
+**`fraction_for_iso` is a search, not a lookup.** Its argument is almost never a
+stored sample: every caller passes an arbitrary magnitude — a level typed in
+`Absolute` mode, `Auto`'s `DENSITY_LEVEL`, the dual readout in all three modes.
+It is the mass of `{ |v_i| >= v }` over the total, found by binary search on the
+descending array; `0` when `v` exceeds every sample, `1` when it is at or below
+the smallest nonzero one. Reading it as an index into `sorted` — which is what
+"position of v" would mean — is undefined for every real call.
 
 **Mass, not count — the trap this exists to avoid.** On a 96³ box holding one
 `exp(-2r)` blob, mass f = 0.72 gives iso = 2.33e-2 (0.058% of voxels, a
@@ -63,8 +71,9 @@ pub struct ValueDistribution {
     total: f64,
     /// Descending-sorted magnitudes + prefix sums. `None` above EXACT_SAMPLE_LIMIT.
     exact: Option<ExactCumulative>,
-    /// Always present. 2048 log-spaced bins, each carrying mass, COUNT, and
-    /// the running mass above it. Counts are required by the Auto rule.
+    /// Always present. 2048 log-spaced bins, each carrying mass and the
+    /// running mass above it. **No per-bin counts:** nothing needs them — the
+    /// editor plots mass, and the Auto rule is a ratio of two isovalues.
     histogram: LogHistogram,
     nonzero_range: Option<(f64, f64)>,
     /// Exactly-zero samples. Excluded from bins (log space has no home for
@@ -73,14 +82,20 @@ pub struct ValueDistribution {
 }
 ```
 
-Queries: `iso_for_fraction(f)`, `fraction_for_iso(v)`,
-`voxel_fraction_at_or_above(v)`. All return `Option`, `None` when `total == 0`.
+Queries: `iso_for_fraction(f)` and `fraction_for_iso(v)`. Both return `Option`,
+`None` when `total == 0` — an all-zero field has no level to offer, and both
+`Auto` and `Fraction` turn that into a descriptive evaluation error rather than
+a divide by zero.
 
-- `EXACT_SAMPLE_LIMIT = 4_000_000`. Below it, sort and prefix-sum (a 144³ cube
-  is 3.0M samples ≈ 36 MB, exact). Above it, the histogram resolves a
-  percentile to within a bin. **A memory decision, not a speed one:** the exact
-  structure for a 26.6M-voxel cube is ~320 MB, which this machine will not
-  spend. Both branches have real inputs — see Part 6.
+- `EXACT_SAMPLE_LIMIT = 4_000_000`. Below it, sort and prefix-sum; above it,
+  the histogram resolves a percentile to within a bin. **A memory decision, not
+  a speed one**, and the arithmetic depends on a layout worth stating: the
+  magnitudes keep the storage width (`f32`) and only the prefix sums need
+  `f64`, so an exact structure costs **12 bytes per sample**. A 144³ cube is
+  3.0M samples ≈ 36 MB; the zoo's largest, 247x247x164 = 10,005,476 samples,
+  would be 120 MB — affordable once, not once per field in a network holding
+  several, and the fields are `Arc`-shared but the structures are not pooled.
+  Both branches have real inputs — see Part 6.
 - The histogram is built at **every** size, because it is also what the editor
   plots. The exact structure is a refinement on top, not an alternative.
 - **The accumulation exponent is a parameter** (`1` today), not a hardcoded
@@ -147,18 +162,26 @@ Text spellings `auto` / `absolute` / `fraction`, via a `*_to_text` /
 ### `LevelMode::Auto`
 
 ```
-if field.value_range().min >= 0:                        # non-negative: density-like
-    occupancy = distribution.voxel_fraction_at_or_above(DENSITY_LEVEL)
-    if occupancy < MAX_DENSITY_OCCUPANCY:
+r      = field.value_range()
+scale  = max(|r.min|, |r.max|)
+signed = r.min < -NEGATIVE_TOLERANCE * scale
+dist   = field.value_distribution()                     # None for an analytic field
+
+if dist is None:
+    if signed: error                                    # Part 3 — no honest level exists
+    level = DENSITY_LEVEL                               # basis: "non-negative, unchecked"
+elif not signed:
+    localized = dist.iso_for_fraction(LOCALIZED_FRACTION)
+    if localized <= MAX_LEVEL_RATIO * DENSITY_LEVEL:
         level = DENSITY_LEVEL                           # basis: "non-negative, density-like"
     else:
-        level = iso_for_fraction(LOCALIZED_FRACTION)    # basis: "non-negative, atypical"
+        level = localized                               # basis: "non-negative, atypical"
 else:
-    level = iso_for_fraction(LOCALIZED_FRACTION)        # basis: "signed field"
+    level = dist.iso_for_fraction(LOCALIZED_FRACTION)   # basis: "signed field"
 ```
 
-`DENSITY_LEVEL = 0.002`, `LOCALIZED_FRACTION = 0.72`,
-`MAX_DENSITY_OCCUPANCY = 0.45`.
+`DENSITY_LEVEL = 0.002`, `LOCALIZED_FRACTION = 0.72`, `MAX_LEVEL_RATIO = 125`,
+`NEGATIVE_TOLERANCE = 1e-6`.
 
 **Why Auto exists at all:** `node_data_creator` is
 `|| Box::new(IsosurfaceNodeData::default())` — no arguments, no field. A
@@ -172,6 +195,18 @@ spin and deformation densities do not (0.5–0.9). Cusped fields are dominated b
 densities, which are non-negative. Costs no new machinery — `value_range` is
 already read for component count.
 
+**Signedness is a tolerance, not `min >= 0`.** The two branches are an order of
+magnitude and a half apart — on `si-cluster-S3-vacancy` the density branch gives
+`0.002` and the fraction branch `8.70e-2`, a factor of 43 — so a raw sign test
+turns one voxel of numerical noise at `-1e-12` into a 43x wrong level, silently.
+Densities from a Gaussian basis are non-negative by construction, but a
+plane-wave density interpolated onto a grid rings slightly negative, and the zoo
+has no periodic *total* density to catch it. Scaling the tolerance by the
+field's own magnitude costs nothing and closes the class. `1e-6` is safe by a
+wide margin: the smallest genuine negative lobe in the zoo is
+`si-cluster-S3-vacancy_spin`'s, at **2.7% of the field's scale** — four orders
+of magnitude above the tolerance.
+
 **The branches choose different *coordinates*, deliberately.** For densities a
 fixed `0.002` tracks the vdW envelope better than a fixed fraction does
 (measured `r/r_vdW` spread 1.097 vs 1.333 across C/N/O/F: heavier atoms hold
@@ -184,34 +219,56 @@ branches resolve to an absolute magnitude, so this costs nothing structurally.
 #### The plausibility window
 
 `0.002` is not trusted blindly: ELF (conventionally ~0.8 of a 0–1 range) and
-RDG (~0.5) would take it and swallow the box. **The check is on the enclosed
-*voxel* share, not the mass share.** Measured on the zoo:
+RDG (~0.5) would take it and swallow the box. **The check compares `0.002`
+against the field's own localized scale** — `iso_for_fraction(0.72)`, the number
+the other branch would have picked. The question it asks is exactly the one that
+matters: *is `0.002` a plausible level in this field's units at all?* Measured
+on the zoo, with the box cropped about its centre to vary the padding:
 
-| Field | mass at 0.002 | **voxels at 0.002** |
-|---|---|---|
-| ch3 density (4 atoms) | 0.9837 | **36.7%** |
-| ch3cl density (5 atoms) | 0.9879 | **13.6%** |
-| NaCl density, ECP (2 atoms) | 0.9642 | **9.7%** |
-| Si-vacancy density (59 atoms) | 0.9945 | **27.3%** |
-| Si-gemcut density (149 atoms) | 0.9960 | **20.2%** |
-| **ELF** | 0.9995 | **52.1%** |
-| **RDG** | 1.0000 | **100.0%** |
+| Field | `iso@0.72` | ratio to `0.002` | at 0.8x box | at 0.6x box | at 0.5x box |
+|---|---|---|---|---|---|
+| ch3 density (4 atoms) | 6.88e-2 | 34.4 | 36.5 | 45.0 | 56.9 |
+| ch3cl density (5 atoms) | 1.30e-1 | 65.0 | 65.1 | 67.0 | **72.4** |
+| NaCl density, ECP (2 atoms) | 4.30e-2 | 21.5 | 21.6 | 23.5 | 29.0 |
+| Si-vacancy density (59 atoms) | 8.70e-2 | 43.5 | 45.9 | 47.8 | 54.3 |
+| Si-gemcut density (149 atoms) | 8.92e-2 | 44.6 | — | — | — |
+| **ELF** | 4.97e-1 | 248 | 247 | 240 | **228** |
+| **RDG** | 5.43e+2 | 271284 | 8878 | 726 | 371 |
 
-Two reasons the voxel share wins, both of which a mass-based implementation
-would get wrong:
+No density exceeds **72.4** at any padding; no impostor drops below **228**.
+`MAX_LEVEL_RATIO = 125` sits at the geometric midpoint of that gap
+(`sqrt(72.4 * 228) = 129`), leaving 1.7x of headroom below and 1.8x above.
 
-1. **It predicts the actual failure**, which is geometric — the surface
-   swallows the box (ELF), or finds *no crossings at all* and renders nothing
-   (RDG, where every voxel is above the level).
-2. **It does not drift with system size.** The mass share climbs with atom
-   count (0.9945 to 0.9960 from 59 to 149 atoms) and would eventually reject a
-   legitimate density; the voxel share does not (27.3% to 20.2%).
+**Why not the enclosed voxel share, which is the obvious statistic.** It reads
+as the geometric failure directly — the surface swallows the box (ELF at 52.1%
+of voxels above `0.002`) or finds no crossings at all and renders nothing (RDG
+at 100%) against 9.7–36.7% for the densities — and it does not drift with system
+size, where the mass share does (0.9945 to 0.9960 from 59 to 149 atoms). Both
+true, and both beside the point: **the voxel share is a measurement of the box,
+not of the field.** Cropping the padding moves it far harder than changing the
+molecule does.
+
+| Field | as shipped | 0.8x box | 0.6x box | 0.5x box |
+|---|---|---|---|---|
+| ch3 density | 36.7% | **65.2%** | 92.9% | 99.2% |
+| NaCl density | 9.7% | 19.0% | **43.0%** | 59.1% |
+
+A threshold of `0.45` rejects an ordinary CH3 density the moment its box is
+drawn 20% tighter — sending it to `6.88e-2`, **34x** the right level, silently.
+Every file in the zoo carries one padding convention (PySCF's default), so that
+variable is precisely the one the calibration could not see. The ratio moves by
+a factor of 1.7 across the same crops and never leaves its band. It is also
+cheaper: it needs no per-bin counts and no third query, only the
+`iso_for_fraction` the other branch already calls.
 
 **What the window does not buy:** the right level for ELF/RDG. The fallback
 gives ELF `0.497` (convention ~0.8) and RDG `542` (~0.5). It converts "nothing,
 or the whole box" into "adjustable and wrong". The histogram is what actually
-rescues those. *The `0.45` threshold rests on two impostor examples —
-calibrated, not proven.*
+rescues those — and RDG shows why nothing better is on offer here, since its
+fallback is itself padding-junk, swinging from `542` to `0.74` across the crops
+above. *The `125` threshold rests on two impostor examples — calibrated, not
+proven — but it is now calibrated against the confounder as well as the
+examples.*
 
 #### Known limitation: signed does not imply cusp-free
 
@@ -271,9 +328,16 @@ stored documents).
 
 ### Text format
 
-`get_text_properties` emits `level_mode` plus **only the live level property** —
-`level` under `Absolute`, `level_fraction` under `Fraction`, **neither** under
-`Auto`. Never both.
+`get_text_properties` emits `level_mode` **and both level properties, always.**
+
+The temptation is to emit only the live one — `level` under `Absolute`,
+`level_fraction` under `Fraction`, neither under `Auto` — and it is wrong. The
+two properties exist precisely so the dormant one survives a mode toggle
+(§Node data), and the text format is a round-trip path: copy/paste, the CLI, an
+AI edit. Emitting only the live number silently discards the other, so a node
+that has been through the text path fails walkthrough step 5 — the step whose
+whole purpose is to demonstrate why there are two. The cost is one inert-looking
+number, and the `level_mode` beside it says which one is inert.
 
 `set_text_properties` reads `level_mode` first, then applies:
 
@@ -281,8 +345,16 @@ stored documents).
 `level:` implies `Absolute`; `level_fraction:` implies `Fraction`. Without this,
 `isosurface { level: 0.002 }` would store into the dead slot while a defaulted
 `Auto` ignored it and chose its own level. Naming **both** without a mode is an
-error naming both properties, not a silent precedence rule. `Auto` is reachable
-only by naming it, so `isosurface { }` is auto.
+error naming both properties, not a silent precedence rule — and the emitted
+form never trips it, since that always names the mode.
+
+**`Auto` is reachable only by naming it**, so a *newly created* `isosurface { }`
+is auto — from the node's `Default`, not from the text path.
+`set_text_properties` is applied to the **existing** node data and is only
+called when at least one literal property is present
+(`text_format/network_editor.rs`), so `isosurface { }` applied to a node already
+in `Fraction` leaves it in `Fraction`. Omission cannot *set* the mode back to
+auto; `level_mode: auto` can.
 
 ### The `level` pin
 
@@ -300,13 +372,19 @@ inert, which `design_scalar_fields.md` already argued against.
 
 ### Validation
 
-| Mode | Rule |
-|---|---|
-| `Absolute` | `level > 0`, not NaN (unchanged) |
-| `Fraction` | `0 < f < 1`, not NaN, message naming the rule and the value |
-| `Fraction` | field has a distribution, else Part 3 |
-| `Auto` | distribution needed only on the fraction branch; a non-negative analytic field falls back to bare `DENSITY_LEVEL` |
-| `Auto` | wired `level` pin raises the warning above |
+Two passes, not one. **Validation** runs over the network without evaluating
+it, so it sees node data and wires and nothing else; every rule that needs the
+*field* is an **evaluation** error. Splitting them is not bookkeeping — a rule
+filed under the wrong pass either never runs or has no field to run against.
+
+| Pass | Mode | Rule |
+|---|---|---|
+| validation | `Absolute` | `level > 0`, not NaN (unchanged) |
+| validation | `Fraction` | `0 < f < 1`, not NaN, message naming the rule and the value |
+| validation | `Auto` | wired `level` pin raises the non-blocking warning above |
+| eval | `Fraction` | field has a distribution, else the Part 3 error |
+| eval | `Auto` | a non-negative analytic field falls back to bare `DENSITY_LEVEL`, basis `unchecked`; a **signed** one is the Part 3 error |
+| eval | `Fraction`, `Auto` | field is entirely zero (`total == 0`, both queries `None`) — a descriptive error, not a panic and not a silent zero level |
 
 Spell NaN out rather than relying on `!(f > 0.0)`, matching the existing check.
 
@@ -351,15 +429,19 @@ Under `Auto`, append the basis:
   level:  2.0000e-3  ·  encloses 99.2% of ∫|v|  ·  auto: non-negative, density-like
 ```
 
-Bases: `non-negative, density-like` / `signed field` / `non-negative, atypical`.
-The third is the one a user most needs to see.
+Bases: `non-negative, density-like` / `signed field` / `non-negative, atypical`
+/ `non-negative, unchecked` (an analytic field, where the ratio test has no
+distribution to run against). The last two are the ones a user most needs to
+see.
 
 **Wording is load-bearing: `encloses X% of ∫|v|`, never "% of the electron
 density".** On an orbital amplitude the conventional enclosed quantity is
 `∫|psi|²`, so the friendlier paraphrase would be false. Do not "improve" it.
 
-The subtitle shows only the mode and the stored number — `get_subtitle` has no
-evaluation context.
+The subtitle shows the mode and the stored number — `get_subtitle` has no
+evaluation context, so it cannot show a resolved level. Under `Auto` it shows
+**`auto` alone**: neither stored number is live there, and printing one that
+`eval` will not use is worse than printing none.
 
 ## Part 3 — Analytic fields
 

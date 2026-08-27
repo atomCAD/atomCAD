@@ -18,6 +18,7 @@ impl ImplicitGeometry2D for GeoNode {
 
     fn implicit_eval_2d(&self, sample_point: &DVec2) -> f64 {
         match &self.kind {
+            GeoNodeKind::Empty2D => f64::MAX,
             GeoNodeKind::HalfPlane { point1, point2 } => {
                 Self::half_plane_implicit_eval(*point1, *point2, sample_point)
             }
@@ -51,6 +52,7 @@ impl ImplicitGeometry2D for GeoNode {
         results: &mut [f64; BATCH_SIZE],
     ) {
         match &self.kind {
+            GeoNodeKind::Empty2D => results.fill(f64::MAX),
             GeoNodeKind::HalfPlane { point1, point2 } => {
                 Self::half_plane_implicit_eval_batch(*point1, *point2, sample_points, results)
             }
@@ -90,7 +92,8 @@ impl ImplicitGeometry2D for GeoNode {
     fn is2d(&self) -> bool {
         matches!(
             &self.kind,
-            GeoNodeKind::HalfPlane { .. }
+            GeoNodeKind::Empty2D
+                | GeoNodeKind::HalfPlane { .. }
                 | GeoNodeKind::Circle { .. }
                 | GeoNodeKind::Ellipse { .. }
                 | GeoNodeKind::Polygon { .. }
@@ -122,6 +125,7 @@ impl ImplicitGeometry3D for GeoNode {
 
     fn implicit_eval_3d(&self, sample_point: &DVec3) -> f64 {
         match &self.kind {
+            GeoNodeKind::Empty3D => f64::MAX,
             GeoNodeKind::HalfSpace { normal, center } => {
                 Self::half_space_implicit_eval(*normal, *center, sample_point)
             }
@@ -172,6 +176,7 @@ impl ImplicitGeometry3D for GeoNode {
         results: &mut [f64; BATCH_SIZE],
     ) {
         match &self.kind {
+            GeoNodeKind::Empty3D => results.fill(f64::MAX),
             GeoNodeKind::HalfSpace { normal, center } => {
                 Self::half_space_implicit_eval_batch(*normal, *center, sample_points, results)
             }
@@ -232,7 +237,8 @@ impl ImplicitGeometry3D for GeoNode {
     fn is3d(&self) -> bool {
         matches!(
             &self.kind,
-            GeoNodeKind::HalfSpace { .. }
+            GeoNodeKind::Empty3D
+                | GeoNodeKind::HalfSpace { .. }
                 | GeoNodeKind::Sphere { .. }
                 | GeoNodeKind::Ellipsoid { .. }
                 | GeoNodeKind::Extrude { .. }

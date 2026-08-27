@@ -22,6 +22,20 @@ pub struct GeoNode {
 
 #[derive(Clone)]
 enum GeoNodeKind {
+    /// The empty set in 3D: contains no point at all.
+    ///
+    /// This is not a degenerate primitive but a first-class one. `csgrs` cannot
+    /// represent emptiness (a polygon-less mesh reads as the *universe* — see
+    /// `src/AGENTS.md`), so the emptiness lives in the tree instead of being
+    /// discovered numerically by a boolean that happens to cancel. The SDF is
+    /// `f64::MAX` everywhere, the same sentinel a degenerate `Ellipsoid`
+    /// (`lipschitz_scale == 0.0`) or an under-specified `Polygon` already
+    /// returns, and it composes correctly through every operator:
+    /// `min(x, MAX) = x` (union identity), `max(x, MAX) = MAX` (intersection
+    /// annihilator), `max(base, -MAX) = base` (difference no-op).
+    Empty3D,
+    /// The empty set in 2D. See [`GeoNodeKind::Empty3D`].
+    Empty2D,
     HalfSpace {
         normal: DVec3,
         center: DVec3,
@@ -116,6 +130,8 @@ impl GeoNode {
         let child_prefix = "  ".repeat(indent + 1);
 
         match &self.kind {
+            GeoNodeKind::Empty3D => format!("{prefix}Empty3D"),
+            GeoNodeKind::Empty2D => format!("{prefix}Empty2D"),
             GeoNodeKind::HalfSpace { normal, center } => {
                 format!(
                     "{}HalfSpace(normal: {}, center: {})",
@@ -265,6 +281,35 @@ impl GeoNode {
 
     // Constructor methods for all GeoNode variants
     // Each computes the hash at construction time
+
+    /// The empty 3D shape. See [`GeoNodeKind::Empty3D`].
+    pub fn empty_3d() -> Self {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&[0x11]); // variant tag
+
+        Self {
+            kind: GeoNodeKind::Empty3D,
+            hash: hasher.finalize(),
+        }
+    }
+
+    /// The empty 2D shape. See [`GeoNodeKind::Empty3D`].
+    pub fn empty_2d() -> Self {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&[0x12]); // variant tag
+
+        Self {
+            kind: GeoNodeKind::Empty2D,
+            hash: hasher.finalize(),
+        }
+    }
+
+    /// True for the two empty primitives, in either dimension. Callers that fold
+    /// booleans use this to short-circuit; it does **not** report whether a
+    /// composite expression happens to evaluate to nothing.
+    pub fn is_empty_shape(&self) -> bool {
+        matches!(&self.kind, GeoNodeKind::Empty3D | GeoNodeKind::Empty2D)
+    }
 
     pub fn half_space(normal: DVec3, center: DVec3) -> Self {
         let mut hasher = blake3::Hasher::new();
@@ -765,6 +810,9 @@ impl MemorySizeEstimator for GeoNode {
 
         // Recursively estimate the size of the GeoNodeKind
         let kind_size = match &self.kind {
+            // Fieldless leaves
+            GeoNodeKind::Empty3D | GeoNodeKind::Empty2D => 0,
+
             // Leaf nodes - just their stack size
             GeoNodeKind::HalfSpace { .. } => std::mem::size_of::<DVec3>() * 2,
             GeoNodeKind::HalfPlane { .. } => std::mem::size_of::<DVec2>() * 2,

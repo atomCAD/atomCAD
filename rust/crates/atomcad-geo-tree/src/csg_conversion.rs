@@ -53,6 +53,7 @@ impl GeoNode {
 
         // Compute if not cached
         let result = match &self.kind {
+            GeoNodeKind::Empty2D => Some(CSGSketch::new()),
             GeoNodeKind::HalfPlane { point1, point2 } => {
                 Some(Self::half_plane_to_csg(*point1, *point2))
             }
@@ -96,6 +97,7 @@ impl GeoNode {
 
         // Compute if not cached
         let result = match &self.kind {
+            GeoNodeKind::Empty3D => Some(CSGMesh::new()),
             GeoNodeKind::HalfSpace { normal, center } => {
                 Some(Self::half_space_to_csg(*normal, *center, is_root))
             }

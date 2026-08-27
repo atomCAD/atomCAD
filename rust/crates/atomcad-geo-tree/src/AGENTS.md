@@ -21,7 +21,7 @@ crates/atomcad-geo-tree/src/
 | Type | Location | Purpose |
 |------|----------|---------|
 | `GeoNode` | `lib.rs` | Core type: immutable tree of geometric operations with pre-computed BLAKE3 hash |
-| `GeoNodeKind` | `lib.rs` | Enum: primitives (HalfSpace, Sphere, Circle, Ellipsoid, Ellipse, HalfPlane, Polygon) + operations (Union, Intersection, Difference, Transform, Extrude) |
+| `GeoNodeKind` | `lib.rs` | Enum: primitives (Empty2D, Empty3D, HalfSpace, Sphere, Circle, Ellipsoid, Ellipse, HalfPlane, Polygon) + operations (Union, Intersection, Difference, Transform, Extrude) |
 | `ImplicitGeometry3D` | `implicit_geometry.rs` | Trait: `implicit_eval_3d`, `implicit_eval_3d_batch`, `get_gradient`, `is3d` |
 | `ImplicitGeometry2D` | `implicit_geometry.rs` | Trait: `implicit_eval_2d`, `implicit_eval_2d_batch`, `get_gradient_2d`, `is2d` |
 | `BatchedImplicitEvaluator` | `batched_implicit_evaluator.rs` | Accumulates points, evaluates in 1024-point batches, optional rayon parallelism |
@@ -38,6 +38,15 @@ crates/atomcad-geo-tree/src/
 **Batch Evaluation**: `BATCH_SIZE = 1024`. Points are processed in fixed-size arrays for better cache locality and branch prediction. `BatchedImplicitEvaluator` pads to BATCH_SIZE multiples and truncates results. Multi-threading threshold: 2048+ points, max 7 threads (rayon work-stealing).
 
 **CSG Conversion**: Recursively converts GeoNode trees to polygon meshes via `csgrs`. Circle = 36-segment polygon, Sphere = 24x12 mesh. `Ellipsoid` / `Ellipse` build the unit sphere/circle (radius 1.0) and apply one affine map (`basis` columns + `center` translation, scaled once by `scale_to_csg`) via `CSGOps::transform`, so a linear map carries sphere-inscribed vertices to ellipsoid-inscribed vertices at the same tessellation density. Results optionally cached by hash in `CsgConversionCache` with LRU eviction.
+
+**The empty set is a primitive, not an accident**: `Empty2D` / `Empty3D` are
+leaves whose SDF is `f64::MAX` everywhere — the same sentinel a degenerate
+`Ellipsoid` (`lipschitz_scale == 0.0`) or an under-specified `Polygon` already
+returns. That constant composes correctly through every operator with no
+special-casing (`min(x, MAX) = x`, `max(x, MAX) = MAX`, `max(base, -MAX) =
+base`), and finite differences degrade to a zero gradient rather than a NaN.
+Reach for these rather than expressing emptiness as a boolean that cancels: the
+next paragraph is why that is not safe.
 
 **csgrs has no empty set**: a `CSGMesh` with zero polygons is the empty set to
 us, but `csgrs`'s BSP reads it as the *universe* — `Node::from_polygons(&[])`

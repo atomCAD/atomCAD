@@ -130,3 +130,11 @@ The node expression is the following:
 ```
 diff_2d(base, sub) = diff_2d(union_2d(...each base input...), union_2d(...each sub input...))
 ```
+
+## empty_2d
+
+Outputs an **empty 2D geometry** — a shape that contains no points at all. The 2D counterpart of `empty`.
+
+It has a single optional `d_plane` input, like the other 2D primitives; wire in the same drawing plane as the shapes it will be combined with.
+
+It is the neutral value of the 2D Boolean operations: `union_2d(shape, empty_2d)` is `shape`, `intersect_2d(shape, empty_2d)` is empty, and `diff_2d(shape, empty_2d)` is `shape`. Extruding it gives an empty volume.

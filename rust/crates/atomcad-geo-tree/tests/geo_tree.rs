@@ -18,3 +18,6 @@ mod point_invert_test;
 
 #[path = "geo_tree/empty_intersection_test.rs"]
 mod empty_intersection_test;
+
+#[path = "geo_tree/empty_shape_test.rs"]
+mod empty_shape_test;

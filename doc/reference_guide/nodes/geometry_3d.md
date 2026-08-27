@@ -151,6 +151,28 @@ The node expression is the following:
 diff(base, sub) = diff(union(...each base input...), union(...each sub input...))
 ```
 
+## empty
+
+Outputs an **empty volume** — a `Blueprint` that contains no points at all.
+
+It has a single optional `structure` input (defaulting to diamond, like every other 3D primitive). Wire in the same `Structure` you feed the shapes it will be combined with, so the Boolean nodes see a matching lattice.
+
+`empty` is the neutral value of the Boolean operations:
+
+| Expression | Result |
+|---|---|
+| `union(shape, empty)` | `shape` — `empty` is the identity |
+| `intersect(shape, empty)` | `empty` — any intersection with it is empty |
+| `diff(shape, empty)` | `shape` — nothing is subtracted |
+| `materialize(empty)` | no atoms |
+
+Typical uses are a branch of an `if` or `switch` that should contribute no geometry, and a parameterized cutter that must sometimes cut nothing.
+
+Do **not** build an empty volume by intersecting two opposing `half_space` nodes. That was the old workaround, and it is fragile: whether the two halves cancel is decided by floating-point tolerances, and a `materialize` reading a zero-thickness slab can be very slow. Use `empty` instead.
+
+See also `empty_2d`, its 2D counterpart.
+
+
 ## structure_move
 
 Translates a structure-bound object — a `Blueprint` or a `Crystal` — by a relative vector in **discrete lattice space**. The input pin accepts the abstract `HasStructure` type, and the concrete variant flows through unchanged: a `Blueprint` in produces a `Blueprint` out, a `Crystal` in produces a `Crystal` out. `Molecule` inputs are rejected — use `free_move` for free-space translation.
