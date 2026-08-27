@@ -15,3 +15,6 @@ mod ellipsoid_test;
 
 #[path = "geo_tree/point_invert_test.rs"]
 mod point_invert_test;
+
+#[path = "geo_tree/empty_intersection_test.rs"]
+mod empty_intersection_test;

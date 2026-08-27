@@ -381,7 +381,20 @@ impl GeoNode {
 
         let mut result = shapes[0].internal_to_csg_mesh(false, cache.as_deref_mut())?;
         for shape in shapes.iter().skip(1) {
+            // A polygon-less mesh is the *empty set*, but csgrs cannot express
+            // that: `Node::from_polygons(&[])` has no splitting plane, and
+            // `Node::clip_polygons` returns its input untouched when
+            // `plane.is_none()`. An empty operand therefore behaves like the
+            // universe, so `empty.intersection(x)` evaluates to `x` and
+            // `x.intersection(empty)` to `x`. Short-circuit instead: once any
+            // operand is empty the intersection is empty for good.
+            if result.polygons.is_empty() {
+                return Some(CSGMesh::new());
+            }
             let shape_mesh = shape.internal_to_csg_mesh(false, cache.as_deref_mut())?;
+            if shape_mesh.polygons.is_empty() {
+                return Some(CSGMesh::new());
+            }
             result = result.intersection(&shape_mesh);
         }
         Some(result)
@@ -393,6 +406,12 @@ impl GeoNode {
         mut cache: Option<&mut CsgConversionCache>,
     ) -> Option<CSGMesh> {
         let base_csg = base.internal_to_csg_mesh(false, cache.as_deref_mut())?;
+        // Nothing minus anything is nothing. Guarded explicitly for the same
+        // reason as in `intersection_3d_to_csg`: csgrs reads a polygon-less
+        // mesh as the universe rather than as the empty set.
+        if base_csg.polygons.is_empty() {
+            return Some(CSGMesh::new());
+        }
         let sub_csg = sub.internal_to_csg_mesh(false, cache)?;
         Some(base_csg.difference(&sub_csg))
     }

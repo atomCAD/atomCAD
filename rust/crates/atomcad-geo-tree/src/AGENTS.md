@@ -39,6 +39,18 @@ crates/atomcad-geo-tree/src/
 
 **CSG Conversion**: Recursively converts GeoNode trees to polygon meshes via `csgrs`. Circle = 36-segment polygon, Sphere = 24x12 mesh. `Ellipsoid` / `Ellipse` build the unit sphere/circle (radius 1.0) and apply one affine map (`basis` columns + `center` translation, scaled once by `scale_to_csg`) via `CSGOps::transform`, so a linear map carries sphere-inscribed vertices to ellipsoid-inscribed vertices at the same tessellation density. Results optionally cached by hash in `CsgConversionCache` with LRU eviction.
 
+**csgrs has no empty set**: a `CSGMesh` with zero polygons is the empty set to
+us, but `csgrs`'s BSP reads it as the *universe* — `Node::from_polygons(&[])`
+has no splitting plane, and `Node::clip_polygons` returns its input untouched
+in that case. So `empty.intersection(x)` and `x.intersection(empty)` both
+evaluate to `x`, and `empty.difference(x)` to an inside-out `x`. Any new
+boolean fold over meshes must short-circuit on an empty operand the way
+`intersection_3d_to_csg` / `difference_3d_to_csg` do, or a collapsed
+sub-expression will silently resurrect its siblings. The SDF path has no such
+hole (`max`/`min` compose correctly), so the two evaluation modes disagree
+exactly here — a mismatch between the viewport and `materialize` is the
+symptom.
+
 ## Dependencies
 
 ```
