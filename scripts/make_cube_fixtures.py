@@ -37,6 +37,18 @@ TEST_FIXTURE_DIR = REPO_ROOT / "rust" / "tests" / "fixtures" / "cube"
 SAMPLE_DATA_DIR = REPO_ROOT / "sample_data" / "cube"
 
 
+def display_path(path: Path) -> str:
+    """Repo-relative when it can be, absolute otherwise.
+
+    `--out` accepts any directory, including a relative one and one outside the
+    repo, so `Path.relative_to` is not safe here -- it raises on both.
+    """
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def write_cube(
     path: Path,
     comment1: str,
@@ -78,7 +90,7 @@ def write_cube(
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
-    print("wrote", path.relative_to(REPO_ROOT))
+    print("wrote", display_path(path))
 
 
 def grid_positions_angstrom(origin_a, spacing_a, dims):
@@ -130,6 +142,32 @@ def p2z(points, alpha=0.25, center=(0.0, 0.0, 0.0)):
     rel = points - np.array(center)
     r2 = np.sum(rel * rel, axis=-1)
     return rel[..., 2] * np.exp(-alpha * r2)
+
+
+def elf_like(points, atoms_angstrom, sigma=0.8):
+    """A caricature of a *bounded analysis field* — ELF, RDG and their kin.
+
+    `0.5 + 0.5 * max_i exp(-(r_i / sigma)^2)`: non-negative, bounded to
+    [0.5, 1.0], and — the point — nowhere near zero in the vacuum, because a
+    real ELF sits around 0.5 wherever the density looks like a uniform electron
+    gas, empty space included.
+
+    This is what the `isosurface` Auto rule's plausibility window exists to
+    reject. It is *not* a density, so the conventional 0.002 isolevel is
+    meaningless on it and would enclose the entire box. Its
+    `iso_for_fraction(0.72)` is 0.5000 — a ratio of 250 against `DENSITY_LEVEL`,
+    against 9.2 for the promolecular density below and 21-65 for the real cubes
+    in the zoo. See `doc/design_isosurface_level.md` §The plausibility window.
+
+    Not a real ELF, and nothing pretends otherwise: what it reproduces is the
+    one property the window keys on — a field whose own localized scale is
+    orders of magnitude above 0.002.
+    """
+    peak = np.zeros(points.shape[:-1])
+    for _z, x, y, zz in atoms_angstrom:
+        d = np.linalg.norm(points - np.array([x, y, zz]), axis=-1)
+        peak = np.maximum(peak, np.exp(-(d * d) / (sigma * sigma)))
+    return 0.5 + 0.5 * peak
 
 
 # --- the colour-map pair: density and electrostatic potential ---------------
@@ -309,6 +347,91 @@ def make_test_fixtures(out_dir: Path) -> None:
         np.zeros(dims),
     )
 
+    # --- isolevel selection: doc/design_isosurface_level.md -----------------
+    #
+    # One grid for all three, so the density and its ESP are a matched pair:
+    # 0.3 A spacing, 17 x 15 x 19 = 4845 samples, ~66 KB each.
+    #
+    # Three DIFFERENT dimensions, per doc/testing.md: a cubic grid hides axis
+    # transposition. It cannot actually bite here — a value distribution is
+    # invariant under any permutation of its samples, and the density/ESP pair
+    # would transpose together — but the rule costs nothing to keep and the
+    # next fixture added beside these may not be so forgiving.
+    #
+    # Coarse enough to stay a *tiny* committed fixture; fine enough that the
+    # 0.002 envelope is resolved and the ESP percentile on it has converged.
+    # Measured against the same analytic functions at 0.1 A spacing, the
+    # surface p98 moves from 0.0909 here to 0.0899 there — 1%, while the file
+    # would grow 25x.
+    #
+    # `ValueDistribution` itself is tested on fields built in code with
+    # `SampledField::new`, the way `field_test.rs` already does. These three
+    # exist because the *Auto* rule and the colour fit have to run end to end
+    # through the loader at least once, on something shaped like real data.
+    lvl_dims = (17, 15, 19)
+    lvl_origin_a = (-2.4, -2.1, -2.7)
+    lvl_spacing_a = (0.3, 0.3, 0.3)
+    lvl_points = grid_positions_angstrom(lvl_origin_a, lvl_spacing_a, lvl_dims)
+    lvl_origin_bohr = tuple(c * ANGSTROM_TO_BOHR for c in lvl_origin_a)
+    lvl_axes_bohr = [
+        (lvl_spacing_a[0] * ANGSTROM_TO_BOHR, 0.0, 0.0),
+        (0.0, lvl_spacing_a[1] * ANGSTROM_TO_BOHR, 0.0),
+        (0.0, 0.0, lvl_spacing_a[2] * ANGSTROM_TO_BOHR),
+    ]
+    lvl_atoms_bohr = to_bohr(WATER_ANGSTROM)
+
+    # 6. A non-negative density the plausibility window ACCEPTS. Auto must
+    #    resolve it to DENSITY_LEVEL (0.002) with basis "density-like":
+    #    value_range = [1.0876e-07, 6.3508e-01], iso_for_fraction(0.72) =
+    #    1.8393e-02, so the ratio against 0.002 is 9.2 — well under
+    #    MAX_LEVEL_RATIO = 125. Also the `field` pin of the P4 colour-fit test.
+    #
+    #    The ratio is lower than the 21-65 the real zoo densities give, because
+    #    `promolecular_density` is valence-only and has no core cusp. That is
+    #    fine for what this fixture is for — it pins the *branch*, not the
+    #    calibration; the constants are calibrated against the zoo, in the doc.
+    write_cube(
+        out_dir / "water_density_17x15x19.cube",
+        " Crude promolecular electron density of water, e/bohr^3, coords in Bohr",
+        " Auto isolevel: non-negative, ratio 9.2 -> the density branch, level 0.002",
+        lvl_origin_bohr,
+        lvl_axes_bohr,
+        lvl_dims,
+        lvl_atoms_bohr,
+        promolecular_density(lvl_points, WATER_ANGSTROM),
+    )
+
+    # 7. The ESP partner on the SAME grid: the `color_field` pin. Signed, and
+    #    the whole point of the P4 test — its value_range is [-1.4215, 0.5819]
+    #    while on the 0.002 envelope it runs p2 = -0.0909 to p98 = +0.0656.
+    #    Fitting the colour domain to the volume would be 15.6x too wide and
+    #    paint the envelope one flat colour.
+    write_cube(
+        out_dir / "water_esp_17x15x19.cube",
+        " Electrostatic potential of water from TIP3P point charges, hartree/e",
+        " Colour fit: volume range +/-1.42, but only +/-0.09 on the 0.002 envelope",
+        lvl_origin_bohr,
+        lvl_axes_bohr,
+        lvl_dims,
+        lvl_atoms_bohr,
+        point_charge_esp(lvl_points, WATER_ANGSTROM, TIP3P_WATER_CHARGES),
+    )
+
+    # 8. The impostor the window REJECTS. Non-negative like a density, but
+    #    iso_for_fraction(0.72) = 0.5000 — ratio 250, over MAX_LEVEL_RATIO — so
+    #    Auto must fall back to the fraction and report basis "atypical", not
+    #    take 0.002 and swallow the box.
+    write_cube(
+        out_dir / "elf_like_17x15x19.cube",
+        " Caricature of a bounded analysis field (ELF-like), dimensionless 0.5-1.0",
+        " Auto isolevel: non-negative but ratio 250 -> window rejects -> 0.5000",
+        lvl_origin_bohr,
+        lvl_axes_bohr,
+        lvl_dims,
+        lvl_atoms_bohr,
+        elf_like(lvl_points, WATER_ANGSTROM),
+    )
+
 
 def write_xyz(path: Path, atoms_angstrom, comment: str) -> None:
     symbols = {1: "H", 6: "C", 8: "O"}
@@ -317,7 +440,7 @@ def write_xyz(path: Path, atoms_angstrom, comment: str) -> None:
         lines.append("%-3s %14.8f %14.8f %14.8f" % (symbols[z], x, y, zz))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="ascii")
-    print("wrote", path.relative_to(REPO_ROOT))
+    print("wrote", display_path(path))
 
 
 # --- gitignored eyeball files ----------------------------------------------
@@ -363,7 +486,7 @@ def make_manual_files(out_dir: Path) -> None:
     if ramp.exists():
         out_dir.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ramp, out_dir / "ramp_3x4x5.cube")
-        print("copied", (out_dir / "ramp_3x4x5.cube").relative_to(REPO_ROOT))
+        print("copied", display_path(out_dir / "ramp_3x4x5.cube"))
     else:
         print("skipped ramp_3x4x5.cube — run the `tests` subcommand first")
 
@@ -478,7 +601,7 @@ def make_pyscf_fixture(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     target = out_dir / "water_homo.cube"
     cubegen.orbital(mol, str(target), mf.mo_coeff[:, homo_index], nx=20, ny=20, nz=20)
-    print("wrote", target.relative_to(REPO_ROOT))
+    print("wrote", display_path(target))
 
 
 def main() -> None:
