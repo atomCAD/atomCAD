@@ -29,6 +29,12 @@ mod drawing_plane_test;
 #[path = "crystolecule/field_test.rs"]
 mod field_test;
 
+#[path = "crystolecule/field_distribution_test.rs"]
+mod field_distribution_test;
+
+#[path = "crystolecule/field_distribution_zoo_test.rs"]
+mod field_distribution_zoo_test;
+
 #[path = "crystolecule/motif_bond_inference_test.rs"]
 mod motif_bond_inference_test;
 

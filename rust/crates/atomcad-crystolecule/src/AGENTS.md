@@ -56,6 +56,7 @@ crates/atomcad-crystolecule/src/
 ├── motif_bond_inference.rs          # Bond inference on motif fractional coords (cross-cell)
 ├── field/
 │   ├── mod.rs                      # ScalarField trait, FieldBounds, GridGeometry, SampledField
+│   ├── distribution.rs             # ValueDistribution: isovalue <-> enclosed-mass fraction, log histogram
 │   └── isosurface.rs               # IsosurfaceData/IsosurfaceColoring/Colormap (the surface *spec*, not a mesh)
 ├── io/
 │   ├── cube_loader.rs              # Gaussian .cube import (volumetric scalar data + atom block)

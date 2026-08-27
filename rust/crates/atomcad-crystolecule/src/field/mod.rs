@@ -16,11 +16,14 @@
 //!
 //! Design doc: `doc/design_scalar_fields.md`.
 
+pub mod distribution;
 pub mod isosurface;
 
+pub use distribution::{LogHistogram, ValueDistribution};
 pub use isosurface::{Colormap, IsosurfaceColoring, IsosurfaceData};
 
 use glam::{DMat3, DVec3};
+use std::sync::{Arc, OnceLock};
 use thiserror::Error;
 
 /// Fallback finite-difference step for [`ScalarField::gradient`], Ångström.
@@ -289,6 +292,22 @@ pub trait ScalarField: Send + Sync + std::fmt::Debug {
     /// thought to name.
     fn value_range(&self) -> Option<(f64, f64)>;
 
+    /// How the field's magnitude is distributed over its stored samples — the
+    /// coordinate change between an isovalue and the fraction of the field a
+    /// surface at that isovalue encloses. See
+    /// [`distribution::ValueDistribution`].
+    ///
+    /// `None` for any source with no stored samples, which is every analytic
+    /// field — the same answer [`ScalarField::value_range`] and
+    /// [`ScalarField::native_grid`] give, and for the same reason. Consumers
+    /// must handle `None`: `doc/design_isosurface_level.md` Part 3 is what the
+    /// isosurface node does with it.
+    ///
+    /// Defaulted, so a new analytic field kind is not obliged to invent one.
+    fn value_distribution(&self) -> Option<&distribution::ValueDistribution> {
+        None
+    }
+
     /// Free-text description of what the field *is*, when the source carried
     /// one. `None` when it did not, which is the honest answer — do not
     /// synthesize a label from the numbers.
@@ -357,6 +376,23 @@ pub struct SampledField {
     /// fixtures, analytic samplers) stays untouched and a producer that has no
     /// label does not have to pass `None` to say so.
     description: Option<String>,
+    /// Lazily built magnitude distribution — see
+    /// [`ScalarField::value_distribution`].
+    ///
+    /// **Lazy, not eager in `new`:** a field that is only `sample`-probed
+    /// should not pay for a sort, and `cube_loader` builds fields during a file
+    /// load where a multi-second pause is very visible.
+    ///
+    /// **The `Arc` is not decoration.** This type derives `Clone`, and
+    /// `OnceLock<T>: Clone` requires `T: Clone` — so a bare
+    /// `OnceLock<ValueDistribution>` does not compile here, and the two ways of
+    /// making it compile are both worse: deriving `Clone` on the payload makes
+    /// a clone deep-copy up to 120 MB, and hand-writing `Clone` with the cache
+    /// left unset makes it re-sort. With the `Arc`, a clone **shares** the
+    /// cache: no copy, no rebuild. That is sound because a `SampledField` is
+    /// immutable after construction — it exposes no `&mut` accessor to its
+    /// samples — so a clone's distribution is identical by construction.
+    distribution: OnceLock<Arc<distribution::ValueDistribution>>,
 }
 
 /// Prints a summary — dims and value range — never the samples themselves.
@@ -424,6 +460,7 @@ impl SampledField {
             samples,
             value_range: (min, max),
             description: None,
+            distribution: OnceLock::new(),
         })
     }
 
@@ -467,6 +504,19 @@ impl SampledField {
     /// is at index `(i * dims[1] + j) * dims[2] + k`.
     pub fn samples_slice(&self) -> &[f32] {
         &self.samples
+    }
+
+    /// The cached magnitude distribution as a shared handle, building it on
+    /// first call.
+    ///
+    /// [`ScalarField::value_distribution`] is the interface; this exists for
+    /// the two callers that need the `Arc` itself — anything holding the
+    /// distribution past the field's borrow, and the test that asserts a clone
+    /// *shares* the cache rather than rebuilding an equal one.
+    pub fn shared_value_distribution(&self) -> Arc<distribution::ValueDistribution> {
+        self.distribution
+            .get_or_init(|| Arc::new(distribution::ValueDistribution::from_samples(&self.samples)))
+            .clone()
     }
 
     /// Stored value at grid indices, without interpolation. Panics on
@@ -620,13 +670,31 @@ impl ScalarField for SampledField {
         Some(self.value_range)
     }
 
+    /// Built on first call and cached for the field's lifetime — and shared
+    /// with every clone of it.
+    fn value_distribution(&self) -> Option<&distribution::ValueDistribution> {
+        self.shared_value_distribution();
+        self.distribution.get().map(Arc::as_ref)
+    }
+
     fn description(&self) -> Option<&str> {
         self.description.as_deref()
     }
 
     /// The sample grid dominates; everything else is a handful of inline
     /// `f64`s already covered by `size_of::<SampledField>()`.
+    ///
+    /// A **warm** distribution cache is added on top, because it is the one
+    /// other allocation of comparable size (12 bytes per sample) and a
+    /// memory-bounded value cache that could not see it would be blind to
+    /// exactly the payload it exists to bound. A cold cache is not built here:
+    /// asking a field how big it is must not make it bigger.
     fn estimate_memory_bytes(&self) -> usize {
-        std::mem::size_of::<SampledField>() + self.samples.capacity() * std::mem::size_of::<f32>()
+        std::mem::size_of::<SampledField>()
+            + self.samples.capacity() * std::mem::size_of::<f32>()
+            + self
+                .distribution
+                .get()
+                .map_or(0, |distribution| distribution.estimate_memory_bytes())
     }
 }

@@ -98,6 +98,14 @@ a divide by zero.
   Both branches have real inputs — see Part 6.
 - The histogram is built at **every** size, because it is also what the editor
   plots. The exact structure is a refinement on top, not an alternative.
+- **The histogram's `iso_for_fraction` returns the crossing bin's lower edge**,
+  so like the exact path it always encloses *at least* `f` — and so it is
+  biased low by up to one bin rather than scattered around the exact answer.
+  Measured on the zoo's only field above the limit (`si-gemcut-...-S3`, whose
+  nonzero range is ~44 decades, 5.5% per bin): histogram `8.466e-2` against
+  exact `8.922e-2`, ratio **42.3 vs 44.6**. That is one bin, in the direction
+  the convention predicts, and an order of magnitude below the 1.7x gap the
+  plausibility window decides on.
 - **The accumulation exponent is a parameter** (`1` today), not a hardcoded
   `abs`. Sole hook for a future declared field kind, which would use `2` for
   amplitudes.
@@ -150,7 +158,18 @@ claim otherwise.
 
 ### The two queries are not a bijection
 
-- `f → iso → f` round-trips within ±1/N. (Handoff §3.8 test 1.)
+- `f → iso → f` round-trips, and only ever *upward*: `iso_for_fraction`
+  returns the tightest stored magnitude still enclosing `f`, so reading the
+  fraction back overshoots by the mass of the samples that **tie** with it
+  and never undershoots. (Handoff §3.8 test 1.)
+
+  **The overshoot is one tied group, not one sample — ±1/N is the wrong
+  bound.** A field with a flat region has many samples at the identical
+  stored magnitude, and `fraction_for_iso`'s step includes all of them.
+  Measured on the P1 Gaussian oracle, whose octahedral shells are maximally
+  degenerate: **8.9% at 17³ for `f = 0.30`**, against a `1/N` of 0.02%. The
+  bound that does hold at any resolution is `0 <= f' - f <= tied_mass/total`,
+  and that is what P1 asserts.
 - `iso → f → iso` **does not.** Any isovalue between two adjacent sorted samples
   encloses the same set, so `fraction_for_iso` is a step function and
   `iso_for_fraction` returns one representative per step.
@@ -1056,7 +1075,7 @@ round-trip below is the tight check, and it is tight at any resolution.
 | code | Two-level 4×4×4 | the four literal query answers above |
 | code | Two-level 4×4×4, count-weighted comparison | 40% of the mass is 6.25% of the samples — the trap Part 1 exists to avoid |
 | code | Gaussian 65³ against the analytic oracle | four isovalues within 2% |
-| code | `f -> iso -> f`, f in {0.3, 0.5, 0.72, 0.9} | within ±1/N — resolution-free, the tight check |
+| code | `f -> iso -> f`, f in {0.3, 0.5, 0.72, 0.9} | never undershoots, overshoots by at most the tied group's mass — resolution-free, the tight check. **Not** ±1/N (§bijection) |
 | code | Gaussian at 0.25 Å and 0.125 Å | same f gives the same iso within a bin — grid independence |
 | code | Gaussian samples on a sheared grid | identical fraction to the unsheared same samples — the determinant cancels |
 | code | Forced histogram vs exact, same field | agree within one bin |
