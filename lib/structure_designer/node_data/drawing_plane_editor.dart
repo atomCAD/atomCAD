@@ -186,8 +186,8 @@ class DrawingPlaneEditorState extends State<DrawingPlaneEditor> {
                     child: IVec3Input(
                       label: 'Miller Index (numeric)',
                       value: miller,
-                      minimumValue: APIIVec3(
-                          x: -maxMiller, y: -maxMiller, z: -maxMiller),
+                      minimumValue:
+                          APIIVec3(x: -maxMiller, y: -maxMiller, z: -maxMiller),
                       maximumValue:
                           APIIVec3(x: maxMiller, y: maxMiller, z: maxMiller),
                       onChanged: (newValue) =>

@@ -202,6 +202,27 @@ Drag coalescing in `node_network/node_widget.dart`:
 
 Model methods: `StructureDesignerModel.beginMoveNodes()` / `endMoveNodes()`.
 
+The same shape covers **property-panel drags** — a slider, a draggable plot
+marker. Bracket the drag in `model.beginNodeDataDrag(nodeId)` /
+`model.endNodeDataDrag()`; the kernel skips the per-write undo command for that
+node and pushes one covering the whole drag. Do this for **any** new continuous
+control: without it Ctrl+Z walks back through the drag one tick at a time.
+
+**A continuous control must not write node data on every tick.** Every
+`setXxxData` goes through `refresh_structure_designer_auto`, and the FFI is
+`frb(sync)` — the evaluation and any tessellation it triggers run on the UI
+thread. A control whose node is expensive (the `isosurface` level: marching
+cubes over the whole grid, ~0.1 s) freezes the application outright, and the
+intermediate results are never painted. **Hold the dragged value in the widget's
+own state, render the panel from it, and write once in `onChangeEnd`** — see
+`node_data/isosurface_editor.dart`, whose class doc carries the full rationale.
+Also close the session in `dispose()`, or a panel torn down mid-gesture leaves
+the kernel's coalescing session open and swallows the next undo entry.
+
+Evaluating *during* a drag without freezing is `doc/design_background_evaluation.md`
+(Send+Sync-ification, a lock around the global, snapshot eval, a worker thread) —
+five phases, none implemented. Do not attempt it piecemeal from a widget.
+
 ## Execute action & Console panel
 
 Right-click a node → **Execute** triggers a one-shot evaluation pass on that node with the side-effect flag set, gating effect nodes (`export_atoms`, `foreach`, `print` with `execute_only`) to actually fire.

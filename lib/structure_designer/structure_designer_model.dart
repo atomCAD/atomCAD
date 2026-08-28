@@ -2807,6 +2807,20 @@ class StructureDesignerModel extends ChangeNotifier {
     refreshFromKernel();
   }
 
+  /// Called when a property-panel drag that writes node data on every tick
+  /// begins — the `isosurface` level slider and its histogram marker. Every
+  /// [setIsosurfaceData] until [endNodeDataDrag] coalesces into one undo entry,
+  /// so Ctrl-Z undoes the drag rather than walking back through it.
+  void beginNodeDataDrag(BigInt nodeId) {
+    structure_designer_api.beginNodeDataDrag(
+        scopePath: scopeChainToBytes(propertyEditorScopeChain), nodeId: nodeId);
+  }
+
+  /// Called when such a drag ends. Pushes the one undo command covering it.
+  void endNodeDataDrag() {
+    structure_designer_api.endNodeDataDrag();
+  }
+
   void setIsosurfaceData(BigInt nodeId, APIIsosurfaceData data) {
     structure_designer_api.setIsosurfaceData(
         scopePath: scopeChainToBytes(propertyEditorScopeChain),

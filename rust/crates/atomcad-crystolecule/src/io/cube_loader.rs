@@ -44,7 +44,7 @@
 use crate::atomic_constants::{ATOM_INFO, DEFAULT_ATOM_INFO};
 use crate::atomic_structure::AtomicStructure;
 use crate::atomic_structure_utils::auto_create_bonds;
-use crate::field::{FieldError, GridGeometry, SampledField};
+use crate::field::{FieldError, GridGeometry, SampledField, ScalarField};
 use glam::DVec3;
 use std::io;
 use thiserror::Error;
@@ -101,9 +101,54 @@ impl std::fmt::Debug for CubeFile {
 
 /// Load a `.cube` file from disk. Mirrors [`crate::io::xyz_loader::load_xyz`]:
 /// `create_bonds` runs auto-bonding over the atom block.
+///
+/// **The file name is prepended to each field's description**, which
+/// [`load_cube_from_str`] cannot do because it never sees a path. That is not
+/// decoration: a `.cube`'s two comment lines are routinely boilerplate, empty,
+/// or a program banner, while the name a producer chose
+/// (`si-cluster-S3-vacancy_spin.cube`) frequently carries the one fact the
+/// values cannot — *what quantity this is*. A reader deciding whether they are
+/// looking at a density or a spin density needs it, and a field whose comments
+/// say nothing would otherwise offer nothing.
+///
+/// It goes into `description` rather than into a field of its own because that
+/// is already the "what is this" channel: every consumer of a `ScalarField`
+/// renders it, so no reader has to learn about a second one.
 pub fn load_cube(file_path: &str, create_bonds: bool) -> Result<CubeFile, CubeError> {
     let text = std::fs::read_to_string(file_path)?;
-    load_cube_from_str(&text, create_bonds)
+    let mut cube = load_cube_from_str(&text, create_bonds)?;
+    if let Some(name) = source_file_name(file_path) {
+        cube.fields = cube
+            .fields
+            .into_iter()
+            .map(|field| {
+                // `with_description` joins lines with " - " and re-normalizes,
+                // so re-applying it to an already-normalized description is
+                // safe and idempotent.
+                let combined = match field.description() {
+                    Some(existing) => format!(
+                        "{}
+{}",
+                        name, existing
+                    ),
+                    None => name.clone(),
+                };
+                field.with_description(&combined)
+            })
+            .collect();
+    }
+    Ok(cube)
+}
+
+/// The final component of `file_path`, or `None` when there is not one.
+///
+/// **Only the last component.** The readout is a narrow tooltip and a full
+/// path — routinely a hundred characters of directory nobody is reading —
+/// would push the description out of it, which is the opposite of the point.
+fn source_file_name(file_path: &str) -> Option<String> {
+    std::path::Path::new(file_path)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
 }
 
 /// Load a `.cube` file from text already in memory.

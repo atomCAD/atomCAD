@@ -735,7 +735,27 @@ pub enum APIColormap {
     BlueWhiteRed,
 }
 
+/// Which coordinate an `isosurface` node's level is expressed in. The
+/// Dart-facing twin of `atomcad_structure_designer::nodes::isosurface::LevelMode`.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APILevelMode {
+    /// Chosen from the field on every evaluation.
+    Auto,
+    /// `level` is live, read as a magnitude.
+    Absolute,
+    /// `level_fraction` is live, read as an enclosed mass fraction.
+    Fraction,
+}
+
 pub struct APIIsosurfaceData {
+    /// Which of the two numbers below is live — see [`APILevelMode`]. The mode
+    /// dropdown is the only way to leave `Auto`.
+    pub level_mode: APILevelMode,
+    /// Enclosed share of the field's total integrated `|v|`, live under
+    /// `Fraction`. Exclusive `(0, 1)`. Stored alongside `level` rather than
+    /// converted, so a mode toggle loses nothing.
+    pub level_fraction: f64,
     /// Level **magnitude**; the surface is extracted at `+level` and `-level`.
     /// Must be `> 0`. Overridden by a wired `level` pin.
     pub level: f64,

@@ -137,11 +137,11 @@ fn display_string_reports_the_whole_shape_without_dumping_samples() {
         shown.contains("box:    (0.00, 0.00, 0.00) .. (1.00, 2.00, 3.00)"),
         "got: {shown}"
     );
-    // Ramp min/max: value(0,0,0) = 0, value(1,2,3) = 123.
-    assert!(
-        shown.contains("values: 0.0000e0 .. 1.2300e2"),
-        "got: {shown}"
-    );
+    // Ramp min/max: value(0,0,0) = 0, value(1,2,3) = 123. Printed plainly
+    // rather than as `0.0000e0 .. 1.2300e2` — scientific notation is for the
+    // magnitudes that need it, and reading `1.2300e2` as 123 is work the reader
+    // should not have to do (`atomcad_util::number_format`).
+    assert!(shown.contains("values: 0 .. 123"), "got: {shown}");
     assert!(shown.contains("memory:"), "got: {shown}");
 
     // An axis-aligned grid must NOT be flagged as sheared.

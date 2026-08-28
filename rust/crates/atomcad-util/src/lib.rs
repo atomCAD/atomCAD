@@ -15,6 +15,7 @@ pub mod imat3;
 pub mod mat_utils;
 pub mod memory_bounded_lru_cache;
 pub mod memory_size_estimator;
+pub mod number_format;
 pub mod path_utils;
 pub mod serialization_utils;
 pub mod timer;

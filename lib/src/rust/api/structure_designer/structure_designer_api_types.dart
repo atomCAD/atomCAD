@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -2127,6 +2127,15 @@ class APIIntData {
 }
 
 class APIIsosurfaceData {
+  /// Which of the two numbers below is live — see [`APILevelMode`]. The mode
+  /// dropdown is the only way to leave `Auto`.
+  final APILevelMode levelMode;
+
+  /// Enclosed share of the field's total integrated `|v|`, live under
+  /// `Fraction`. Exclusive `(0, 1)`. Stored alongside `level` rather than
+  /// converted, so a mode toggle loses nothing.
+  final double levelFraction;
+
   /// Level **magnitude**; the surface is extracted at `+level` and `-level`.
   /// Must be `> 0`. Overridden by a wired `level` pin.
   final double level;
@@ -2153,6 +2162,8 @@ class APIIsosurfaceData {
   final double colorMax;
 
   const APIIsosurfaceData({
+    required this.levelMode,
+    required this.levelFraction,
     required this.level,
     required this.positiveColor,
     required this.negativeColor,
@@ -2164,6 +2175,8 @@ class APIIsosurfaceData {
 
   @override
   int get hashCode =>
+      levelMode.hashCode ^
+      levelFraction.hashCode ^
       level.hashCode ^
       positiveColor.hashCode ^
       negativeColor.hashCode ^
@@ -2177,6 +2190,8 @@ class APIIsosurfaceData {
       identical(this, other) ||
       other is APIIsosurfaceData &&
           runtimeType == other.runtimeType &&
+          levelMode == other.levelMode &&
+          levelFraction == other.levelFraction &&
           level == other.level &&
           positiveColor == other.positiveColor &&
           negativeColor == other.negativeColor &&
@@ -2266,6 +2281,20 @@ class APILatticeVecsData {
           cellAngleBeta == other.cellAngleBeta &&
           cellAngleGamma == other.cellAngleGamma &&
           crystalSystem == other.crystalSystem;
+}
+
+/// Which coordinate an `isosurface` node's level is expressed in. The
+/// Dart-facing twin of `atomcad_structure_designer::nodes::isosurface::LevelMode`.
+enum APILevelMode {
+  /// Chosen from the field on every evaluation.
+  auto,
+
+  /// `level` is live, read as a magnitude.
+  absolute,
+
+  /// `level_fraction` is live, read as an enclosed mass fraction.
+  fraction,
+  ;
 }
 
 /// One editable input pin of a node that supports inline literal editing,

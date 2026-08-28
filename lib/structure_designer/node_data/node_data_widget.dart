@@ -19,6 +19,7 @@ import 'package:flutter_cad/structure_designer/node_data/free_move_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_rot_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_sphere_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/isosurface_editor.dart';
+import 'package:flutter_cad/src/rust/api/structure_designer/field_distribution_api.dart';
 import 'package:flutter_cad/structure_designer/node_data/free_circle_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/edit_atom_editor.dart';
 import 'package:flutter_cad/structure_designer/node_data/atom_edit_editor.dart';
@@ -318,11 +319,24 @@ class NodeDataWidget extends StatelessWidget {
         // Pin 1 is `color_field`; its wire is what enables the colormap group.
         final colorFieldConnected = selectedNode.inputPins.length > 1 &&
             selectedNode.inputPins[1].connected;
+        // Pin 2 is `level`; a wire there owns the value in every mode.
+        final levelConnected = selectedNode.inputPins.length > 2 &&
+            selectedNode.inputPins[2].connected;
+        // Fetched here, on every rebuild, rather than cached in the editor:
+        // rewiring `field` or reloading the `.cube` must invalidate it, and the
+        // failure mode — a correct-looking histogram belonging to the previous
+        // field — is silent.
+        final distribution = getIsosurfaceLevelDistribution(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
         return IsosurfaceEditor(
           nodeId: selectedNode.id,
           data: isosurfaceData,
           model: model,
           colorFieldConnected: colorFieldConnected,
+          levelConnected: levelConnected,
+          distribution: distribution,
         );
       case 'half_space':
         // Fetch the half space data here in the parent widget

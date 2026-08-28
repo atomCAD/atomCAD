@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'structure_designer_api_types.dart';
 import 'structure_designer_preferences.dart';
 
-// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `from_api_colormap`, `network_result_to_api_literal`, `param_element_color_u32`, `record_element_fields`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `simple_element_row`, `text_value_to_api_literal`, `to_api_colormap`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`, `with_array_data`
+// These functions are ignored because they are not marked as `pub`: `alignment_to_api`, `api_closure_kind_to_closure_kind`, `api_field_editor_hint_to_core`, `api_literal_to_text_value`, `api_to_type_args`, `atom_symbol`, `build_derived_shape_view`, `build_node_view`, `build_wires_for_network`, `build_zone_view`, `closure_kind_to_api_closure_kind`, `compute_last_selected_result_atom_id`, `compute_selection_measurement`, `crystal_system_to_string`, `data_type_to_simple_param_type`, `field_editor_hint_to_api`, `from_api_colormap`, `from_api_level_mode`, `network_result_to_api_literal`, `param_element_color_u32`, `record_element_fields`, `rows_f64_to_vecs`, `rows_i32_to_vecs`, `simple_element_row`, `text_value_to_api_literal`, `to_api_colormap`, `to_api_level_mode`, `type_args_to_api`, `vecs_to_rows_f64`, `vecs_to_rows_i32`, `with_array_data`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `api_data_type_to_data_type`, `build_function_pin_role_views`, `data_type_to_api_data_type`
 
 NodeNetworkView? getNodeNetworkView() => RustLib.instance.api
@@ -1511,10 +1511,16 @@ void setImportXyzData(
 
 /// Replaces an `import_cube` node's stored file name.
 ///
-/// The parsed payload is dropped: the new name has not been loaded yet, and
-/// `import_cube` (the action) is what loads it. Validation runs so a units
-/// warning left over from the previous file disappears immediately rather than
-/// lingering in the error list — the refresh paths do not validate.
+/// The parsed payload is dropped when the name actually **changes**: the new
+/// name has not been loaded yet, and `import_cube` (the action) is what loads
+/// it. A write that leaves the name alone keeps the payload — the property
+/// setter fires on every focus loss of the path field, not only on a real
+/// edit, so dropping it unconditionally made a click elsewhere in the network
+/// silently un-import the file. See `ImportCubeData::with_file_name`.
+///
+/// Validation runs so a units warning left over from the previous file
+/// disappears immediately rather than lingering in the error list — the
+/// refresh paths do not validate.
 void setImportCubeData(
         {required Uint64List scopePath,
         required BigInt nodeId,
@@ -2265,6 +2271,20 @@ void beginEditCommentNode(
 /// Pushes a single undo command if the comment data changed.
 void endEditCommentNode() => RustLib.instance.api
     .crateApiStructureDesignerStructureDesignerApiEndEditCommentNode();
+
+/// Called when a property-panel drag that writes node data on every tick begins
+/// — the `isosurface` level slider and its histogram marker. Everything written
+/// between this and `end_node_data_drag` coalesces into a single undo entry.
+void beginNodeDataDrag(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiBeginNodeDataDrag(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Called when such a drag ends. Pushes the one undo command covering it, or
+/// nothing at all if the drag changed nothing.
+void endNodeDataDrag() => RustLib.instance.api
+    .crateApiStructureDesignerStructureDesignerApiEndNodeDataDrag();
 
 /// Get comment node data for property panel editing
 APICommentData? getCommentData(

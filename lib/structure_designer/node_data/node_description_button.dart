@@ -157,8 +157,7 @@ class _DescriptionDialogState extends State<_DescriptionDialog> {
   void _step(int delta) {
     if (_matchBlocks.isEmpty) return;
     setState(() {
-      _currentMatch =
-          (_currentMatch + delta) % _matchBlocks.length;
+      _currentMatch = (_currentMatch + delta) % _matchBlocks.length;
       if (_currentMatch < 0) _currentMatch += _matchBlocks.length;
     });
     _scrollToCurrentMatch();
@@ -303,8 +302,8 @@ class _DescriptionDialogState extends State<_DescriptionDialog> {
                 fillColor: Colors.black.withValues(alpha: 0.3),
                 hintText: 'Find in description…',
                 hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.search,
-                    size: 16, color: Colors.white54),
+                prefixIcon:
+                    const Icon(Icons.search, size: 16, color: Colors.white54),
                 prefixIconConstraints:
                     const BoxConstraints(minWidth: 32, minHeight: 32),
                 contentPadding:
@@ -375,8 +374,7 @@ MarkdownStyleSheet buildDescriptionMarkdownStyleSheet(
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     p: body,
     a: const TextStyle(color: Color(0xFF81B5FF)),
-    strong:
-        const TextStyle(color: headingColor, fontWeight: FontWeight.bold),
+    strong: const TextStyle(color: headingColor, fontWeight: FontWeight.bold),
     em: body.copyWith(fontStyle: FontStyle.italic),
     listBullet: body,
     h1: TextStyle(

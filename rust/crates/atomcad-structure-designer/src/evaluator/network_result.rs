@@ -15,6 +15,7 @@ use atomcad_crystolecule::structure::Structure;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
 use atomcad_geo_tree::GeoNode;
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;
+use atomcad_util::number_format::format_natural;
 use atomcad_util::transform::Transform2D;
 use glam::f64::DMat3;
 use glam::f64::DVec2;
@@ -1055,11 +1056,11 @@ impl NetworkResult {
                         colormap,
                     } => {
                         out.push_str(&format!(
-                            "\n  coloring: {:?}\n    color_field: {}\n    range: {:.6e} .. {:.6e}",
+                            "\n  coloring: {:?}\n    color_field: {}\n    range: {} .. {}",
                             colormap,
                             describe_field_dims(&**field),
-                            range.0,
-                            range.1,
+                            format_natural(range.0, 7),
+                            format_natural(range.1, 7),
                         ));
                     }
                 }
@@ -1259,9 +1260,9 @@ fn describe_scalar_field(field: &dyn ScalarField, verbose: bool) -> String {
 
     match field.value_range() {
         Some((min, max)) => out.push_str(&format!(
-            "\n  values: {:.4e} .. {:.4e}  ({})",
-            min,
-            max,
+            "\n  values: {} .. {}  ({})",
+            format_natural(min, 5),
+            format_natural(max, 5),
             // Not cosmetic: a non-negative field has no negative lobe, so the
             // extractor skips a whole pass and the reader should expect one
             // surface rather than two.
@@ -1343,7 +1344,7 @@ fn describe_isosurface_level(data: &IsosurfaceData, precision: usize) -> String 
     // rather than echoing back the requested `f`. The two differ by the mass of
     // the samples that tie with the chosen isovalue, and what the picture
     // actually encloses is this one.
-    let mut out = format!("{:.*e}", precision, data.level);
+    let mut out = format_natural(data.level, precision + 1);
     if let Some(fraction) = data
         .field
         .value_distribution()

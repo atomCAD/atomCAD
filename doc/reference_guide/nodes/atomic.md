@@ -123,7 +123,11 @@ A scalar field spans something like ten orders of magnitude, and the same number
 - **`absolute`** uses the stored `level` as an isovalue in the field's own units. This is the mode for a conventional constant — `0.002` for a density envelope, `0.02`–`0.05` for an orbital amplitude.
 - **`fraction`** uses the stored `level_fraction`: *how much of the field the surface encloses*, as a share of the field's total integrated magnitude, and the isovalue that achieves it is looked up from the data. `0.72` means the surface bounds the region holding 72 % of the field. This is the mode that transfers between fields — the same fraction means the same thing on an orbital and on a spin density, where the same isovalue does not.
 
-The two numbers are stored **separately**, and switching modes never converts one into the other. Set an absolute level, switch to fraction, adjust, switch back, and your `0.002` is still there exactly as you typed it. That is the whole reason there are two properties instead of one reinterpreted number — and it is why the text format always writes both, alongside the mode that says which is live.
+**The mode is a unit, not a second level.** There is one level at any moment; the mode says whether you are reading it as a magnitude or as an enclosed fraction, and switching between `absolute` and `fraction` **converts**, so the surface does not move. Switching *to* `auto` is the exception, and the only switch that does move it — auto re-derives the level from the field and consults neither number.
+
+Round trips are lossless where it matters: set an absolute `0.002`, switch to fraction, switch back, and your `0.002` is still there exactly as you typed it. (Behind that is a small subtlety — an enclosed fraction can only resolve to a value the field actually attains, so a blind conversion would hand back `0.00200034…` instead. The node notices that the parked `0.002` still encloses exactly what the surface encloses and keeps it verbatim. Change the fraction in between and you get the honest converted number instead.)
+
+The node does store both numbers, and the text format writes both alongside the mode — with no field wired there is nothing to convert through, so each coordinate needs a parked value. You never see two levels on screen, though: the panel shows one row, for the coordinate the mode makes live.
 
 **What `auto` decides, and on what basis.** It reads the field's value range and its distribution, and reports which branch it took in the level readout:
 
@@ -140,12 +144,102 @@ The two numbers are stored **separately**, and switching modes never converts on
 
 ```
 Isosurface
-  level:  2.0000e-3  ·  encloses 99.2% of ∫|v|  ·  auto: non-negative, density-like
+  level:  0.002  ·  encloses 99.2% of ∫|v|  ·  auto: non-negative, density-like
   color:  phase
   field:  17x15x19
 ```
 
 `∫|v|` is the field's total integrated magnitude, so `encloses 99.2%` means the region inside the surface accounts for 99.2 % of it. It is a share of the *field*, not of the box's volume — almost all of any cube file is empty space, and a share of volume would be dominated by it. The phrasing stays deliberately abstract because the field could be anything: on an orbital amplitude the quantity a chemist conventionally encloses is `|psi|²`, not `|psi|`, so calling this "percent of the electron density" would be wrong.
+
+**The level panel**
+
+The properties panel's *Level* group has one control of record and two readouts.
+
+**The Mode dropdown is the only way to leave `auto`,** and picking `Fraction` or
+`Absolute` **takes over** the level auto had arrived at, so the surface does not
+move at the instant you switch. The same is true switching between the two manual
+modes. Only a switch back *to* `auto` moves the surface — deliberately, since
+that is what asking for an automatic level means.
+
+**One numeric row is on screen at a time, and it is the live coordinate's.** In
+`fraction` mode you get a *Fraction* row; in `absolute` mode an *Absolute* row.
+Under `auto` neither coordinate is live, so there is **no** numeric row — the
+readout below carries both numbers in every mode, which is what makes showing
+only one row lossless. Two consequences worth knowing:
+
+- With a wire on the `level` pin the row is greyed and shows what the wire
+  drives, because the wire owns the value. (In `auto` the wire is ignored
+  entirely, and the node carries an amber advisory saying so.)
+- With no field wired the Mode dropdown stays live — the mode is yours, not the
+  field's — and the row is greyed and blank, because there is no resolved value
+  and the parked number is not what would be used.
+
+The group's height therefore changes a little between modes: `fraction` carries a
+slider, `absolute` a lone box, `auto` neither.
+
+**The fraction slider covers 0.30 to 0.999.** Its travel is linear in the
+*number of nines* rather than in the fraction itself, so about 70 % of it falls
+in 0.9–0.999 where densities live, while the lower end still covers orbitals and
+spin densities (0.5–0.9). Spread evenly in `f`, a slider would put almost nothing
+where the useful values are.
+
+That window is smaller than the property's legal range of `0 < f < 1`, and the
+panel says so rather than lying about it: type a fraction outside the window —
+`0.1`, say — and the slider **disables itself** with its handle at the nearer
+stop while the box stays live and authoritative. Type a value back inside and the
+slider comes back. The box is the control of record in every case. The ends
+cannot be `0` or `1` in any event — `0` encloses nothing and `1` everything, and
+both are rejected.
+
+**The readout line** under the row is identical in all three modes, and is the group's answer of record — it is the one place both coordinates are always shown:
+
+```
+|v| = 0.002  ·  encloses 99.2% of ∫|v|
+```
+
+with an `auto: <basis>` line beneath it while the mode is automatic. It carries
+no unit, deliberately: nothing here converts field values or assumes what they
+are, and two of the fields it has to serve (ELF, a reduced density gradient) are
+dimensionless numbers.
+
+**The histogram** beneath the readout is where the level sits in the data. Its
+horizontal axis is `log10 |v|` — linear would show a single spike — and its bars
+are **mass per bin**, not sample counts: counted by sample, a cube file is
+overwhelmingly vacuum and the plot would say nothing.
+
+**The axis starts where the field's mass does, not at its smallest value.** A
+density decays exponentially away from the nuclei, and the far corners of a
+generous box hold real values around `1e-16`; a single one of them would
+otherwise stretch the axis by twelve empty decades. So the plot drops the
+leading tail once it holds under 0.01 % of `∫|v|`, and says so in a line
+underneath when it has. It never crops past the marker, so a level typed out in
+the tail still shows where it falls, and it never shrinks below three decades.
+This is a zoom, nothing more — the level, the fraction and what `auto` decides
+are all computed over every sample regardless. The rising-then-falling
+curve drawn over the bars is the **cumulative** share of the field at or above
+each magnitude, on its own 0–1 scale; its height where the marker crosses it
+*is* the enclosed fraction, which is what makes a fraction legible against an
+isovalue. The vertical marker is the current level, with the enclosed side
+shaded, and **it is draggable** in `fraction` and `absolute` mode — dragging it
+edits whichever number is live, and the whole drag is a single undo. Under
+`auto` it is inert, like everything else in the group. Exact zeros are reported
+as a count beneath the plot rather than given a bin, since `log10 0` has nowhere
+to go.
+
+The slider's travel is **not** the histogram's axis — one is in fraction space,
+the other in `log10 |v|`. The cumulative curve is the only thing that relates
+them.
+
+**The surface redraws when you let go, not while you drag.** The slider, the
+histogram marker and the *Opacity* slider all track the pointer live — the
+handle, the number and the marker move as you would expect, and the readout
+follows — but the 3D surface is re-extracted once, on release. Extraction is
+marching cubes over the whole grid and runs on the same thread as the interface,
+so redrawing it on every pointer frame would freeze the application without ever
+managing to paint an intermediate surface. One consequence is worth knowing:
+during a fraction drag the isovalue in the readout (and during an absolute drag
+the percentage) is read off the histogram, so it is accurate to about one bar
+until you release, when the exact value replaces it.
 
 **The level is a magnitude, not a signed value.** The surface is extracted at `+level` *and* at `-level`, so a signed field such as an orbital shows both lobes at once, painted in the two phase colors. A level of zero or below is an error rather than a choice: at zero the two passes coincide, and a negative level would just be the positive one relabelled. An orbital's overall sign is arbitrary — the same calculation run twice can hand back `psi` or `-psi` — so the **swap button** between the two color swatches is how you match a published figure.
 

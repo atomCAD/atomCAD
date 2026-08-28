@@ -6,6 +6,7 @@ pub mod atom_edit_api;
 pub mod cli_runner;
 pub mod edit_atom_api;
 pub mod facet_shell_api;
+pub mod field_distribution_api;
 pub mod import_api;
 pub mod import_cif_api;
 pub mod import_cube_api;

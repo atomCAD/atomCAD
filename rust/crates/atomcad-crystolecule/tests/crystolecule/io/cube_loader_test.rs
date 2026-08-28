@@ -496,3 +496,86 @@ fn a_pathological_comment_is_truncated_rather_than_flooding_the_readout() {
     );
     assert!(description.ends_with('\u{2026}'), "truncation is visible");
 }
+
+#[test]
+fn the_file_name_leads_the_description() {
+    // A `.cube`'s comment lines are routinely boilerplate or empty, while the
+    // name a producer chose often carries the one fact the values cannot —
+    // whether this is a density, a spin density or an orbital. It leads because
+    // a truncated description must keep it.
+    let cube = load("water_bohr.cube");
+    let description = cube.fields[0].description().expect("comments plus a name");
+
+    assert!(
+        description.starts_with("water_bohr.cube"),
+        "the file name comes first: {description}"
+    );
+    assert!(
+        description.contains("Water, coordinates in Bohr"),
+        "and the comments survive after it: {description}"
+    );
+    assert!(!description.contains('\n'), "still one line: {description}");
+}
+
+#[test]
+fn only_the_final_path_component_appears() {
+    // The readout is a narrow tooltip; a hundred characters of directory would
+    // push the description out of it.
+    let path = cube_fixture("water_bohr.cube");
+    assert!(
+        path.contains("fixtures"),
+        "the helper hands back a full path, which is what makes this test mean \
+         something: {path}"
+    );
+    let cube = load_cube(&path, false).unwrap();
+    let description = cube.fields[0].description().expect("comments plus a name");
+    assert!(
+        !description.contains("fixtures"),
+        "no directory component leaks in: {description}"
+    );
+}
+
+#[test]
+fn loading_from_text_carries_no_file_name() {
+    // `load_cube_from_str` has no path to take one from, and inventing a
+    // placeholder would be worse than the absence.
+    let text = std::fs::read_to_string(cube_fixture("water_bohr.cube")).unwrap();
+    let cube = load_cube_from_str(&text, false).unwrap();
+    let description = cube.fields[0]
+        .description()
+        .expect("the fixture carries comments");
+    assert!(
+        description.starts_with("Water, coordinates in Bohr"),
+        "the comments lead when there is no name: {description}"
+    );
+}
+
+#[test]
+fn a_file_with_no_usable_comments_still_gets_its_name() {
+    // The case the change exists for: two blank comment lines used to leave the
+    // reader with nothing at all.
+    let directory = std::env::temp_dir().join("atomcad_cube_name_test");
+    std::fs::create_dir_all(&directory).expect("temp dir");
+    let path = directory.join("ch3_homo_alpha.cube");
+    std::fs::write(
+        &path,
+        "\n   \n\
+             1    0.000000    0.000000    0.000000\n\
+             2    1.000000    0.000000    0.000000\n\
+             2    0.000000    1.000000    0.000000\n\
+             2    0.000000    0.000000    1.000000\n\
+             6    6.000000    0.000000    0.000000    0.000000\n\
+             0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0\n",
+    )
+    .expect("write the temp fixture");
+
+    let cube = load_cube(path.to_str().expect("temp path is UTF-8"), false)
+        .expect("well-formed apart from the blank comments");
+    assert_eq!(
+        cube.fields[0].description(),
+        Some("ch3_homo_alpha.cube"),
+        "the name is the whole description when the comments say nothing"
+    );
+
+    let _ = std::fs::remove_file(&path);
+}

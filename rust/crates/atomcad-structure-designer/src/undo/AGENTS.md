@@ -64,6 +64,19 @@ Commands are created inside `StructureDesigner` methods (not the API layer), bec
 
 Node drags use `begin_move_nodes()`/`end_move_nodes()` to coalesce many `move_selected_nodes()` calls into a single `MoveNodesCommand`. The `PendingMove` struct captures start positions.
 
+### Node-Data Drag Coalescing
+
+A property-panel control that writes node data on every tick (a slider, a
+draggable plot marker) would otherwise leave one `SetNodeDataCommand` per tick.
+`begin_node_data_drag(scope_path, node_id)` / `end_node_data_drag()` bracket the
+drag: while a drag is pending, `set_node_network_data_scoped` skips its per-write
+command **for that address only**, and `end` pushes the single command covering
+the whole drag. Keyed on the address rather than `UndoStack::suppress_recording`
+so an unrelated edit landing mid-drag still records; a `begin` with one already
+pending closes the previous session, so a lost `end` (a disposed widget) cannot
+silently disable recording. Flutter calls these from the slider's
+`onChangeStart` / `onChangeEnd`.
+
 ### Node ID Stability
 
 `NodeNetwork::add_node_with_id()` allows redo to recreate nodes with the same ID. Commands that add nodes must save/restore `next_node_id` on undo.

@@ -215,6 +215,12 @@ pub struct StructureDesigner {
     pub pending_comment_edit: Option<super::undo::snapshot::PendingGadgetDrag>,
     // Temporary state during an HOF body resize drag (for undo coalescing)
     pub pending_zone_resize: Option<super::undo::snapshot::PendingZoneResize>,
+    // Temporary state during a property-panel drag that writes node data on
+    // every tick (the `isosurface` level slider and its histogram marker).
+    // While set, `set_node_network_data_scoped` skips its per-call undo command
+    // for *this* node, and `end_node_data_drag` pushes the one command covering
+    // the whole drag. See `doc/design_isosurface_level.md` Part 5 §Plumbing.
+    pub pending_node_data_drag: Option<super::undo::snapshot::PendingGadgetDrag>,
     // Direct editing mode: simplified UI focused on a single atom_edit node
     pub direct_editing_mode: bool,
     // CLI access rules: sparse map of namespace/network prefixes to allowed (true) / denied (false).
@@ -368,6 +374,7 @@ impl StructureDesigner {
             pending_gadget_drag: None,
             pending_comment_edit: None,
             pending_zone_resize: None,
+            pending_node_data_drag: None,
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
             print_log: Vec::new(),
@@ -455,6 +462,111 @@ impl StructureDesigner {
         // to call afterwards, because the memo does not outlive the pass (D10).
         self.last_memo_counts = eval_memo::take();
         result
+    }
+
+    /// Stand up the network stack for `scope_path` and run `f` against the node
+    /// addressed by (`scope_path`, `node_id`), inside one evaluation pass.
+    ///
+    /// Returns `None` when the active network, the scope chain or the node
+    /// cannot be resolved, or when the network is invalid (nothing evaluates
+    /// there, exactly as in [`NetworkEvaluator::generate_scene_scoped`]).
+    fn evaluate_in_scope<R>(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        f: impl FnOnce(
+            &NetworkEvaluator,
+            &[NetworkStackElement<'_>],
+            &NodeTypeRegistry,
+            &mut NetworkEvaluationContext,
+        ) -> R,
+    ) -> Option<R> {
+        let network_name = self.active_node_network_name.clone()?;
+        // This is a **probe**, not a pass: it runs on demand from a property
+        // panel, possibly on every repaint. Everything `with_eval_context`
+        // parks on `self` at end-of-pass therefore has to be put back, or a
+        // panel repaint would clobber the profiling panel's last report and
+        // push a fresh copy of every upstream `print` into the Console.
+        let print_len = self.print_log.len();
+        let saved_profile = self.last_eval_profile.take();
+        let saved_memo_counts = self.last_memo_counts.take();
+        let result = self.with_eval_context(false, |evaluator, registry, _prefs, context| {
+            let root = registry.node_networks.get(&network_name)?;
+            if !root.valid {
+                return None;
+            }
+            // One stack frame and one eval scope per body hop, the same walk
+            // `generate_scene_scoped` does, so body-local wires resolve inside
+            // the body and capture wires reach their ancestor sources.
+            context.eval_scope_path.clear();
+            let mut network_stack = vec![NetworkStackElement::root(root)];
+            let mut network = root;
+            for hof_id in scope_path {
+                let body = network
+                    .nodes
+                    .get(hof_id)
+                    .and_then(|hof| hof.zone.as_deref())?;
+                network_stack.push(NetworkStackElement::body_static(body, *hof_id));
+                context.push_eval_scope(*hof_id);
+                network = body;
+            }
+            if !network.nodes.contains_key(&node_id) {
+                return None;
+            }
+            Some(f(evaluator, &network_stack, registry, context))
+        });
+        self.print_log.truncate(print_len);
+        self.last_eval_profile = saved_profile;
+        self.last_memo_counts = saved_memo_counts;
+        result
+    }
+
+    /// Evaluate one **input argument** of the node addressed by (`scope_path`,
+    /// `node_id`), outside a refresh pass. `NetworkResult::None` means nothing
+    /// is wired into the pin.
+    ///
+    /// **This is not a memo hit.** `eval_memo` is installed and dropped by
+    /// [`Self::with_eval_context`], so an editor-initiated call starts with an
+    /// empty table and re-walks the upstream cone every time. That is cheap for
+    /// the caller this exists for (`field_distribution_api`) for two reasons
+    /// worth knowing rather than rediscovering: a `ScalarField` argument comes
+    /// back as an `Arc` handle rather than a re-read `.cube`, and the value
+    /// distribution behind it is `OnceLock`-cached on the field itself, so the
+    /// sort happens once no matter how often the editor asks. Do not design a
+    /// caller against a cross-call memo that does not exist.
+    pub fn evaluate_node_argument(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        parameter_index: usize,
+    ) -> NetworkResult {
+        self.evaluate_in_scope(
+            scope_path,
+            node_id,
+            |evaluator, stack, registry, context| {
+                evaluator.evaluate_arg(stack, node_id, registry, context, parameter_index)
+            },
+        )
+        .unwrap_or(NetworkResult::None)
+    }
+
+    /// Evaluate one **output pin** of the node addressed by (`scope_path`,
+    /// `node_id`), outside a refresh pass. Same cost note as
+    /// [`Self::evaluate_node_argument`].
+    pub fn evaluate_node_output(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        output_pin_index: i32,
+    ) -> NetworkResult {
+        self.evaluate_in_scope(
+            scope_path,
+            node_id,
+            |evaluator, stack, registry, context| {
+                evaluator.evaluate(stack, node_id, output_pin_index, registry, false, context)
+            },
+        )
+        .unwrap_or(NetworkResult::None)
     }
 
     /// Switches the evaluation memo on or off for subsequent passes (D10).
@@ -4735,8 +4847,17 @@ impl StructureDesigner {
                 .mark_node_data_changed_scoped(scope_path, node_id);
         }
 
-        // Capture after-state and push undo command
+        // Capture after-state and push undo command — unless this write is one
+        // tick of a coalesced property-panel drag on this very node, in which
+        // case `end_node_data_drag` pushes the single command covering it. The
+        // guard is keyed on the address rather than being a global suppression
+        // so that an unrelated edit landing mid-drag still records normally.
+        let coalescing = self
+            .pending_node_data_drag
+            .as_ref()
+            .is_some_and(|pending| pending.node_id == node_id && pending.scope_path == scope_path);
         if let Some(old_json) = old_data_json
+            && !coalescing
             && let Some(new_json) =
                 self.snapshot_node_data_scoped(&network_name, scope_path, node_id)
             && old_json != new_json
@@ -5493,6 +5614,7 @@ impl StructureDesigner {
         self.pending_gadget_drag = None;
         self.pending_comment_edit = None;
         self.pending_zone_resize = None;
+        self.pending_node_data_drag = None;
 
         // Clear evaluation cache
         self.network_evaluator.clear_csg_cache();
@@ -7676,6 +7798,72 @@ impl StructureDesigner {
         }
     }
 
+    /// Called when a property-panel drag that writes node data on every tick
+    /// begins — the `isosurface` level slider and its histogram marker. Captures
+    /// the before-state and suppresses the per-write undo command for **this**
+    /// node until [`Self::end_node_data_drag`] pushes the one that covers the
+    /// whole drag.
+    ///
+    /// A log slider is the canonical undo-flooding case: without this a drag
+    /// from 0.9 to 0.99 leaves one undo entry per tick and Ctrl-Z walks back
+    /// through the drag instead of undoing it.
+    ///
+    /// Idempotent-ish: a `begin` with one already pending closes the previous
+    /// one first, so a drag whose `end` was lost (a disposed widget, a torn-down
+    /// panel) cannot leave undo recording silently disabled.
+    pub fn begin_node_data_drag(&mut self, scope_path: Vec<u64>, node_id: u64) {
+        if self.pending_node_data_drag.is_some() {
+            self.end_node_data_drag();
+        }
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+        let node_type_name = match self
+            .get_scope_network(&scope_path)
+            .and_then(|network| network.nodes.get(&node_id))
+        {
+            Some(node) => node.node_type_name.clone(),
+            None => return,
+        };
+        if let Some(old_data_json) =
+            self.snapshot_node_data_scoped(&network_name, &scope_path, node_id)
+        {
+            self.pending_node_data_drag = Some(super::undo::snapshot::PendingGadgetDrag {
+                network_name,
+                scope_path,
+                node_id,
+                node_type_name,
+                old_data_json,
+            });
+        }
+    }
+
+    /// Called when such a drag ends. Pushes a single `SetNodeDataCommand` if the
+    /// data actually changed; a no-op drag pushes nothing.
+    pub fn end_node_data_drag(&mut self) {
+        let pending = match self.pending_node_data_drag.take() {
+            Some(p) => p,
+            None => return,
+        };
+        if let Some(new_data_json) = self.snapshot_node_data_scoped(
+            &pending.network_name,
+            &pending.scope_path,
+            pending.node_id,
+        ) && pending.old_data_json != new_data_json
+        {
+            self.push_command(super::undo::commands::set_node_data::SetNodeDataCommand {
+                description: format!("Edit {}", pending.node_type_name),
+                network_name: pending.network_name,
+                scope_path: pending.scope_path,
+                node_id: pending.node_id,
+                node_type_name: pending.node_type_name,
+                old_data_json: pending.old_data_json,
+                new_data_json,
+            });
+        }
+    }
+
     /// Set the stored body size of the HOF identified by (`scope_path`,
     /// `node_id`). Direct mutation (no undo command) — wrap a resize drag in
     /// [`begin_zone_resize`] / [`end_zone_resize`] to record a single coalesced
@@ -7986,6 +8174,7 @@ impl StructureDesigner {
         self.pending_gadget_drag = None;
         self.pending_comment_edit = None;
         self.pending_zone_resize = None;
+        self.pending_node_data_drag = None;
 
         // Set active node network to the first network if available, otherwise None
         // Capture camera settings from the newly active network

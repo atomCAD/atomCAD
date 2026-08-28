@@ -32,8 +32,7 @@ class PassivantDropdown extends StatelessWidget {
     // If the stored value is somehow outside the allowed set (e.g. authored via
     // the text format), fall back to hydrogen for display so the dropdown has a
     // valid selection; the eval-time check still surfaces the real error.
-    final selected =
-        kPassivantElements.any((e) => e.$1 == value) ? value : 1;
+    final selected = kPassivantElements.any((e) => e.$1 == value) ? value : 1;
     return DropdownButtonFormField<int>(
       value: selected,
       decoration: InputDecoration(

@@ -176,6 +176,12 @@ impl UndoStack {
         Some(command.refresh_mode())
     }
 
+    /// Number of commands on the stack (the redo tail included). Exposed for
+    /// tests that assert a drag left **one** entry rather than one per tick.
+    pub fn history_len(&self) -> usize {
+        self.history.len()
+    }
+
     pub fn can_undo(&self) -> bool {
         self.cursor > 0
     }

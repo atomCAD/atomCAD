@@ -10,6 +10,7 @@ import 'api/structure_designer/ai_assistant_api.dart';
 import 'api/structure_designer/atom_edit_api.dart';
 import 'api/structure_designer/edit_atom_api.dart';
 import 'api/structure_designer/facet_shell_api.dart';
+import 'api/structure_designer/field_distribution_api.dart';
 import 'api/structure_designer/import_api.dart';
 import 'api/structure_designer/import_cif_api.dart';
 import 'api/structure_designer/import_cube_api.dart';
@@ -168,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDiffStats dco_decode_api_diff_stats(dynamic raw);
 
   @protected
+  APIDistributionState dco_decode_api_distribution_state(dynamic raw);
+
+  @protected
   APIDragSource dco_decode_api_drag_source(dynamic raw);
 
   @protected
@@ -296,6 +300,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APILatticeVecsData dco_decode_api_lattice_vecs_data(dynamic raw);
+
+  @protected
+  APILevelMode dco_decode_api_level_mode(dynamic raw);
 
   @protected
   APILiteralField dco_decode_api_literal_field(dynamic raw);
@@ -477,6 +484,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIValidationError dco_decode_api_validation_error(dynamic raw);
+
+  @protected
+  APIValueDistribution dco_decode_api_value_distribution(dynamic raw);
 
   @protected
   APIVec2 dco_decode_api_vec_2(dynamic raw);
@@ -839,6 +849,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIUntagData dco_decode_box_autoadd_api_untag_data(dynamic raw);
+
+  @protected
+  APIValueDistribution dco_decode_box_autoadd_api_value_distribution(
+      dynamic raw);
 
   @protected
   APIVec2 dco_decode_box_autoadd_api_vec_2(dynamic raw);
@@ -1448,6 +1462,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIUntagData? dco_decode_opt_box_autoadd_api_untag_data(dynamic raw);
 
   @protected
+  APIValueDistribution? dco_decode_opt_box_autoadd_api_value_distribution(
+      dynamic raw);
+
+  @protected
   APIVec2Data? dco_decode_opt_box_autoadd_api_vec_2_data(dynamic raw);
 
   @protected
@@ -1769,6 +1787,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIDiffStats sse_decode_api_diff_stats(SseDeserializer deserializer);
 
   @protected
+  APIDistributionState sse_decode_api_distribution_state(
+      SseDeserializer deserializer);
+
+  @protected
   APIDragSource sse_decode_api_drag_source(SseDeserializer deserializer);
 
   @protected
@@ -1915,6 +1937,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APILatticeVecsData sse_decode_api_lattice_vecs_data(
       SseDeserializer deserializer);
+
+  @protected
+  APILevelMode sse_decode_api_level_mode(SseDeserializer deserializer);
 
   @protected
   APILiteralField sse_decode_api_literal_field(SseDeserializer deserializer);
@@ -2117,6 +2142,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIValidationError sse_decode_api_validation_error(
+      SseDeserializer deserializer);
+
+  @protected
+  APIValueDistribution sse_decode_api_value_distribution(
       SseDeserializer deserializer);
 
   @protected
@@ -2564,6 +2593,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APIUntagData sse_decode_box_autoadd_api_untag_data(
+      SseDeserializer deserializer);
+
+  @protected
+  APIValueDistribution sse_decode_box_autoadd_api_value_distribution(
       SseDeserializer deserializer);
 
   @protected
@@ -3286,6 +3319,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIValueDistribution? sse_decode_opt_box_autoadd_api_value_distribution(
+      SseDeserializer deserializer);
+
+  @protected
   APIVec2Data? sse_decode_opt_box_autoadd_api_vec_2_data(
       SseDeserializer deserializer);
 
@@ -3643,6 +3680,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_diff_stats(APIDiffStats self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_distribution_state(
+      APIDistributionState self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_drag_source(APIDragSource self, SseSerializer serializer);
 
   @protected
@@ -3805,6 +3846,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_lattice_vecs_data(
       APILatticeVecsData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_level_mode(APILevelMode self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_literal_field(
@@ -4025,6 +4069,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_validation_error(
       APIValidationError self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_value_distribution(
+      APIValueDistribution self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -4479,6 +4527,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_untag_data(
       APIUntagData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_value_distribution(
+      APIValueDistribution self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_vec_2(APIVec2 self, SseSerializer serializer);
@@ -5209,6 +5261,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_untag_data(
       APIUntagData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_value_distribution(
+      APIValueDistribution? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_vec_2_data(

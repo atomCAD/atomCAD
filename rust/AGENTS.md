@@ -212,6 +212,21 @@ Rules that follow from that layout:
   `rust_input`** — every `pub fn` in a scanned namespace becomes a Dart API,
   which would drag `NodeTypeRegistry` into codegen as an opaque handle.
 
+## Showing a Number in a Readout
+
+Never format a user-facing magnitude with a bare `{:e}` / `{:.Ne}`. Use
+**`atomcad_util::number_format::format_natural(value, significant_digits)`**: a
+plain decimal while the number is in a range read at a glance
+(`1e-4 <= |v| < 1e6`), scientific outside it, trailing zeros trimmed in both
+forms. Printing `1.2300e2` where `123` would do makes the reader decode an
+exponent for nothing.
+
+**Its Flutter twin is `lib/common/number_format.dart`, and the two must agree** —
+the same quantity appears in a pin readout (here) and in a property panel
+(there). Their test tables mirror each other case for case; change one and you
+change both. `Debug` impls are exempt: they are developer-facing and feed no
+readout.
+
 ## Adding a New Node Type
 
 1. Create `crates/atomcad-structure-designer/src/nodes/my_node.rs`

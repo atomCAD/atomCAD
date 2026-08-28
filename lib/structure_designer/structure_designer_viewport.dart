@@ -647,9 +647,8 @@ class _StructureDesignerViewportState
               .map((entry) => entry.value)
               .firstOrNull;
           if (selectedNode != null) {
-            final data =
-                structure_designer_api.getAtomEditData(
-                    scopePath: Uint64List(0), nodeId: selectedNode.id);
+            final data = structure_designer_api.getAtomEditData(
+                scopePath: Uint64List(0), nodeId: selectedNode.id);
             if (data != null && data.hasSelectedBonds) {
               atom_edit_api.changeSelectedBondsOrder(newOrder: bondOrder);
               widget.graphModel.refreshFromKernel();

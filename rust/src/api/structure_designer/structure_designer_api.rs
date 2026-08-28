@@ -119,7 +119,6 @@ use crate::api::structure_designer::structure_designer_api_types::APIIMat3RowsDa
 use crate::api::structure_designer::structure_designer_api_types::APIIVec2Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIVec3Data;
 use crate::api::structure_designer::structure_designer_api_types::APIIntData;
-use crate::api::structure_designer::structure_designer_api_types::APIIsosurfaceData;
 use crate::api::structure_designer::structure_designer_api_types::APILatticeVecsData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3ColsData;
 use crate::api::structure_designer::structure_designer_api_types::APIMat3DiagData;
@@ -141,6 +140,9 @@ use crate::api::structure_designer::structure_designer_api_types::{
 };
 use crate::api::structure_designer::structure_designer_api_types::{
     APIDataTypeBase, APINetworkWithValidationErrors, APINodeCategoryView, NodeNetworkView,
+};
+use crate::api::structure_designer::structure_designer_api_types::{
+    APIIsosurfaceData, APILevelMode,
 };
 use crate::api::structure_designer::structure_designer_api_types::{
     APILatticeSymopData, APIRotationalSymmetry, APIStructureInvertData, APIStructureMoveData,
@@ -209,7 +211,7 @@ use atomcad_structure_designer::nodes::import_cube::ImportCubeData;
 use atomcad_structure_designer::nodes::import_xyz::ImportXYZData;
 use atomcad_structure_designer::nodes::infer_bonds::InferBondsData;
 use atomcad_structure_designer::nodes::int::IntData;
-use atomcad_structure_designer::nodes::isosurface::IsosurfaceNodeData;
+use atomcad_structure_designer::nodes::isosurface::{IsosurfaceNodeData, LevelMode};
 use atomcad_structure_designer::nodes::ivec2::IVec2Data;
 use atomcad_structure_designer::nodes::ivec3::IVec3Data;
 use atomcad_structure_designer::nodes::lattice_symop::{LatticeSymopData, LatticeSymopEvalCache};
@@ -4156,6 +4158,25 @@ fn from_api_colormap(colormap: &APIColormap) -> Colormap {
     }
 }
 
+/// Level-mode conversion, spelled out in both directions for the same reason as
+/// the colormap above: a variant added to `LevelMode` must not silently map to
+/// something plausible on the Dart side.
+fn to_api_level_mode(mode: LevelMode) -> APILevelMode {
+    match mode {
+        LevelMode::Auto => APILevelMode::Auto,
+        LevelMode::Absolute => APILevelMode::Absolute,
+        LevelMode::Fraction => APILevelMode::Fraction,
+    }
+}
+
+fn from_api_level_mode(mode: &APILevelMode) -> LevelMode {
+    match mode {
+        APILevelMode::Auto => LevelMode::Auto,
+        APILevelMode::Absolute => LevelMode::Absolute,
+        APILevelMode::Fraction => LevelMode::Fraction,
+    }
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn get_isosurface_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIsosurfaceData> {
     unsafe {
@@ -4168,6 +4189,8 @@ pub fn get_isosurface_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIIsos
                     .as_any_ref()
                     .downcast_ref::<IsosurfaceNodeData>()?;
                 Some(APIIsosurfaceData {
+                    level_mode: to_api_level_mode(data.level_mode),
+                    level_fraction: data.level_fraction,
                     level: data.level,
                     positive_color: to_api_vec3(&data.positive_color),
                     negative_color: to_api_vec3(&data.negative_color),
@@ -5886,29 +5909,12 @@ pub fn set_free_move_data(scope_path: Vec<u64>, node_id: u64, data: APIFreeMoveD
 pub fn set_isosurface_data(scope_path: Vec<u64>, node_id: u64, data: APIIsosurfaceData) {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
-            // `level_mode` / `level_fraction` are **carried over, not taken
-            // from `data`**: this setter replaces the whole node data, and the
-            // Flutter editor does not know about those two properties yet
-            // (`doc/design_isosurface_level.md` P3 gives them controls and
-            // fields on `APIIsosurfaceData`). Without this, editing the opacity
-            // of an `auto` node would silently reset it to the struct default
-            // and move the surface.
-            let (level_mode, level_fraction) = cad_instance
-                .structure_designer
-                .get_node_network_data_scoped(&scope_path, node_id)
-                .and_then(|node_data| {
-                    node_data
-                        .as_any_ref()
-                        .downcast_ref::<IsosurfaceNodeData>()
-                        .map(|existing| (existing.level_mode, existing.level_fraction))
-                })
-                .unwrap_or_else(|| {
-                    let defaults = IsosurfaceNodeData::default();
-                    (defaults.level_mode, defaults.level_fraction)
-                });
+            // `level_mode` / `level_fraction` ride on `data` like every other
+            // property: the editor round-trips the whole struct, so a partial
+            // write here would reset whichever half the panel did not send.
             let isosurface_data = Box::new(IsosurfaceNodeData {
-                level_mode,
-                level_fraction,
+                level_mode: from_api_level_mode(&data.level_mode),
+                level_fraction: data.level_fraction,
                 level: data.level,
                 positive_color: from_api_vec3(&data.positive_color),
                 negative_color: from_api_vec3(&data.negative_color),
@@ -8663,6 +8669,31 @@ pub fn end_edit_comment_node() {
     unsafe {
         with_mut_cad_instance(|cad_instance| {
             cad_instance.structure_designer.end_comment_edit();
+        });
+    }
+}
+
+/// Called when a property-panel drag that writes node data on every tick begins
+/// — the `isosurface` level slider and its histogram marker. Everything written
+/// between this and `end_node_data_drag` coalesces into a single undo entry.
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_node_data_drag(scope_path: Vec<u64>, node_id: u64) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance
+                .structure_designer
+                .begin_node_data_drag(scope_path, node_id);
+        });
+    }
+}
+
+/// Called when such a drag ends. Pushes the one undo command covering it, or
+/// nothing at all if the drag changed nothing.
+#[flutter_rust_bridge::frb(sync)]
+pub fn end_node_data_drag() {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            cad_instance.structure_designer.end_node_data_drag();
         });
     }
 }

@@ -26,8 +26,7 @@ class RecordConstructEditor extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
     final schemaChosen = data!.schema.isNotEmpty;
-    final fields =
-        schemaChosen ? model.getRecordConstructFields(nodeId) : null;
+    final fields = schemaChosen ? model.getRecordConstructFields(nodeId) : null;
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Column(

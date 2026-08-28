@@ -334,6 +334,11 @@ would fall to the same wrong fraction. Its payoff is the **label**
 
 #### Handover
 
+> **Superseded by §The mode is a unit, not a second parked value (Part 5).**
+> Every mode switch converts now, not only the ones leaving `Auto`, and a parked
+> number that already describes the current surface is kept verbatim. The rest of
+> this section still describes what leaving `Auto` does.
+
 Switching **Auto to Fraction pre-fills `level_fraction` with the resolved
 fraction**; **Auto to Absolute pre-fills `level` with the resolved magnitude**.
 Both are exact, so the surface does not move. Auto is a starting point the user
@@ -357,6 +362,12 @@ pub struct IsosurfaceNodeData {
     // ... colours, alpha, colormap, colour domain — unchanged
 }
 ```
+
+> **Partly superseded by §The mode is a unit, not a second parked value.** The
+> two properties remain in storage and in the text format, for the no-field and
+> analytic cases, but they are no longer a UI concept: the panel shows one level
+> in one unit, and switching converts. Only the first of the two reasons below
+> survived contact with the walkthrough.
 
 **Two stored numbers, not one reinterpreted**, because `absolute -> fraction ->
 absolute` is lossy (§bijection) and because the two coordinates have *disjoint*
@@ -501,14 +512,14 @@ the resolved level does not move when the quality preference changes.
 
 ```
 Isosurface
-  level:  2.3270e-2  ·  encloses 72.0% of ∫|v|
+  level:  0.023270  ·  encloses 72.0% of ∫|v|
   field:  96 x 96 x 96
 ```
 
 Under `Auto`, append the basis:
 
 ```
-  level:  2.0000e-3  ·  encloses 99.2% of ∫|v|  ·  auto: non-negative, density-like
+  level:  0.002  ·  encloses 99.2% of ∫|v|  ·  auto: non-negative, density-like
 ```
 
 Bases: `non-negative, density-like` / `signed field` / `non-negative, atypical`
@@ -654,6 +665,14 @@ and `FloatInput` exists to implement it:
 > value is stored and worth showing but nothing reads it in the current
 > configuration [...] The value still renders, so it stays inspectable.
 
+> **Superseded by §The mode is a unit, not a second parked value.** The premise
+> below — that a mode is a wire by another name — is the thing that turned out to
+> be wrong. A wire makes a stored value live again *unchanged*, so keeping it
+> visible is informative; a mode switch **converts**, so the other coordinate
+> holds no independent information and showing it puts two disagreeing numbers on
+> screen. The `FloatInput.enabled` contract quoted above is untouched, and still
+> governs the colormap group.
+
 **Both rules extend to the level modes, and this design follows them.** A mode
 is a wire by another name: it decides which stored number is live. So every
 control is present in every mode and the ones that are not live are *disabled,
@@ -676,10 +695,10 @@ narrow. The level group, assembled:
  ┌──────────────────────────────────────────────────────┐
  │ Mode  [ Auto                                    ▾ ]  │
  │                                                      │
- │ Fraction  ───────────────────────●──   [ 0.9920  ]   │  disabled
- │ Absolute                               [ 0.0020  ]   │  disabled
+ │ Fraction  ───────────────────────●──   [ 0.9920  ]   │  Fraction only
+ │ Absolute                               [ 0.0020  ]   │  Absolute only
  │                                                      │
- │ |v| = 2.000e-3  ·  encloses 99.2% of ∫|v|            │
+ │ |v| = 0.002  ·  encloses 99.2% of ∫|v|                │
  │ auto: non-negative, density-like                     │  Auto only
  │                                                      │
  │ ┌──────────────────────────────────────────────────┐ │
@@ -694,7 +713,11 @@ narrow. The level group, assembled:
  <caption>
 ```
 
-Reading order is mode → the two numbers → what they mean → where they sit in the
+*Both rows are drawn above for reference; **only one is ever on screen**, the one
+the mode makes live, and under `Auto` neither is (§The mode is a unit). The
+readout is what carries both numbers in every mode.*
+
+Reading order is mode → the number → what it means → where it sits in the
 data. The **histogram goes last on purpose**: it is an aid, not the control of
 record, so in a short panel it is the thing that scrolls away rather than the
 thing the user came for.
@@ -703,6 +726,12 @@ The rest of the panel — phase colours, opacity, colormap — is unchanged and
 keeps its current order.
 
 ### The level group
+
+> **Superseded in two places by §The mode is a unit, not a second parked value:**
+> the dropdown converts on *every* switch, and the non-live row is **hidden**
+> rather than greyed. Everything else here — the dropdown being the only way to
+> leave `Auto`, the two rejected alternatives, the wired-`level` response —
+> stands.
 
 **Mode** is a dropdown, `Auto` / `Absolute` / `Fraction`, and it is the **only**
 way to leave `Auto`. Switching it performs the §Handover pre-fill from Part 2:
@@ -728,7 +757,9 @@ ambiguity in either direction.
 **Under `Auto` both numeric rows are disabled and display the resolved pair** —
 greyed, inspectable, exactly the `FloatInput.enabled` contract. Not the stored
 numbers, which are dormant and would be misleading: the panel shows what the
-surface is actually being drawn at.
+surface is actually being drawn at. *(Superseded: under `Auto` there is now no
+numeric row at all. The instinct here — never show a dormant number where a live
+one is expected — is exactly what §The mode is a unit generalised.)*
 
 **When the `level` pin is wired, both rows are disabled in every mode**, with
 the caption saying the wire drives the level. The node already behaves this way
@@ -741,6 +772,9 @@ says so; the panel must not imply the number is doing something.
 **With no field wired**, the mode dropdown stays live and both rows are
 disabled and blank — there is no resolved pair to show and the stored numbers
 are not what would be used. The caption carries the reason (§Empty states).
+*(Still true of the one row that is now rendered. This is also the case that
+keeps both properties in storage: with no distribution there is nothing to
+convert through, so a mode switch here changes only the mode.)*
 
 ### The fraction slider
 
@@ -749,21 +783,29 @@ as **Opacity**, ten lines above it in the same file. Consistency here is free
 and its absence would be conspicuous.
 
 ```
-f = 1 - 10^-(0.25 + 2.75 * s),   s in [0, 1]
+f = 1 - 10^-(0.155 + 2.845 * s),   s in [0, 1]
 ```
 
-Spans **f = 0.4377 at s = 0 to f = 0.999 at s = 1**, most travel in 0.9–0.99,
-which is where densities live (Part 2: 0.98–0.999) with room below for orbitals
-(0.5–0.9). 100 divisions is fine across it: the coarsest step is 0.035 in `f` at
-the bottom, where nothing is, and 6.5e-5 at the top, where everything is. It
-does **not** reach the `0.30` the handoff's §3.7 flood animation uses; drop
-`0.25` to `0.155` if that is ever wanted.
+Spans **f = 0.3002 at s = 0 to f = 0.999 at s = 1**. The travel is linear in the
+**number of nines**, not in `f`, which is what puts ~70 % of it in 0.9–0.999
+where densities live (Part 2: 0.98–0.999) while still covering the orbital band
+(0.5–0.9) and reaching the `0.30` the handoff's §3.7 flood animation starts
+from. 100 divisions is fine across it: the coarsest step is 0.046 in `f` at the
+bottom, where nothing is, and 6.6e-5 at the top, where everything is.
+
+**The offset cannot be 0.** `1 - 10^0` is exactly `0`, which validation rejects
+and which means "enclose nothing", so the bottom stop has to sit strictly above
+it; the only question is how far. *(This shipped at `0.25` — bottom stop
+`0.4377` — with a note here that `0.155` would reach the flood animation's
+`0.30`. Taken, at the cost of a 3.5 % coarser step at the top: the span widened
+from `2.75` to `2.845` to keep the top stop at `0.999`, which is a documented
+endpoint.)*
 
 **The window is smaller than the property's legal range, and the slider must
 say so rather than lie about it.** Validation allows `0 < f < 1`, and a value
-outside `[0.4377, 0.999]` arrives easily — from the text format, the CLI, a
-`.cnnd` written by an older build. Rendering it at the left stop makes `0.2`
-indistinguishable from `0.4377`, and the next drag silently doubles it.
+outside `[0.30, 0.999]` arrives easily — from the text format, the CLI, a
+`.cnnd` written by an older build. Rendering it at the left stop makes `0.1`
+indistinguishable from `0.30`, and the next drag silently triples it.
 
 So: **when `f` falls outside the slider's window the slider is disabled**, with
 its handle parked at the nearer stop, and the box stays live and authoritative.
@@ -784,7 +826,7 @@ One line, **identical in all three modes** — same wording, same position,
 directly under the two rows; only the numbers change:
 
 ```
-|v| = 2.000e-3  ·  encloses 99.2% of ∫|v|
+|v| = 0.002  ·  encloses 99.2% of ∫|v|
 ```
 
 with the basis appended on its own line under `Auto`:
@@ -816,7 +858,8 @@ explanation lives.
 
 ### The histogram
 
-- **x**: `log10 |v|` over the nonzero range. Linear shows one spike.
+- **x**: `log10 |v|`, **cropped by mass** — see §The axis is cropped by mass
+  below, which corrects "over the nonzero range" here. Linear shows one spike.
 - **y**: **mass per bin**, not sample count — count-weighted it is one vacuum
   spike, the same failure as the count percentile in Part 1. The axis is
   unlabelled and unscaled: only its shape is meaningful.
@@ -841,6 +884,263 @@ otherwise: one is in fraction space, the other in `log10 |v|`. The cumulative
 curve is the only thing that relates them, which is a second reason it is drawn
 rather than left to the reader.
 
+### The panel says a clause, the description says the paragraph — a P3 correction
+
+Part 5 gives every group a `captionStyle` explanation, and shipped they added up
+to roughly a dozen lines of prose in a 400 px panel — more text than control.
+Reported from the walkthrough as taking too much space, and the diagnosis is
+that the captions were doing a manual's job.
+
+**The rule now: a caption earns its place only if what it says is non-obvious
+*and* fits in a line.** Three survive in the level group — the two-lobe
+consequence of a magnitude, what a fraction is a fraction *of*, and that `auto`
+silently re-picks — plus one-clause empty states. Everything longer moved to the
+**node description**, which is Markdown rendered in a dialog by the ⓘ button
+(`node_description_button.dart`), and which is under no space pressure at all.
+The `expr` node was already using that surface for its syntax reference; this is
+the same trade.
+
+Three specific moves worth recording, because each was load-bearing prose that
+had to land somewhere rather than be deleted:
+
+- **The swap button's rationale** ("an orbital's overall sign is arbitrary")
+  moved into the button's own **tooltip**, where it costs no layout at all and
+  is exactly where a puzzled user points.
+- **"The colour domain is never fitted automatically"** and its whole
+  justification moved to the description. It argues for something the panel does
+  *not* do, which is the least earning kind of caption; the unwired case keeps a
+  one-line "wire `color_field` to paint by a second quantity", which is
+  actionable.
+- **The opacity caption** went entirely. "How see-through the surface is" under
+  a heading reading *Opacity* is the definition of a caption saying nothing.
+
+The histogram's sub-captions are now all **conditional**: each reports something
+the plot is *not* showing — exact zeros, a cropped axis, a binned distribution —
+and none has anything to say in the ordinary case. "No samples are exactly zero"
+was printed on every field and is not news.
+
+### Numbers read plainly unless they need an exponent — a P3 correction
+
+Every magnitude in these readouts was printed in scientific notation
+unconditionally — `{:.4e}` in the pin readout, `toStringAsExponential` in the
+panel. Reported from the walkthrough: `1.2233e-2` says exactly what `0.012233`
+says, with an exponent the reader has to decode first, and the fields this
+serves are full of levels like `0.002` and ranges like `0 .. 123`.
+
+So both sides now switch on the exponent: **plain decimal for
+`1e-4 <= |v| < 1e6`, scientific outside it**, with trailing zeros trimmed in
+either form (`0.002`, not `0.002000` — padding to the requested precision claims
+a precision the number does not have). The bounds are where the notation stops
+earning its keep: `1e-4` is `0.0001`, three leading zeros and still countable;
+`1e-5` is not.
+
+**The rule lives in two places that must agree**, because the same level appears
+in a pin readout (Rust) and in the isosurface panel (Dart):
+`atomcad_util::number_format::format_natural` and
+`lib/common/number_format.dart`'s `formatNatural`. Their test tables mirror each
+other case for case, and a change to either belongs in both — the divergence
+that table caught on the first run is real: **Dart's `toStringAsExponential`
+writes `1e+6` where Rust's `{:e}` writes `1e6`**, so the Dart side strips the
+plus.
+
+Sites converted: the isosurface level in both `to_display_string` and
+`to_detailed_string`, the `ScalarField` hover text's `values:` range, the
+isosurface colour-domain `range:`, the panel's `|v| = …` readout, and the
+histogram's cropped-axis caption. Deliberately left alone: `SampledField`'s
+`Debug` impl, which is developer-facing and feeds no readout.
+
+### The mode is a unit, not a second parked value — a P3 correction
+
+**Two decisions in Part 2 and Part 5 are reversed.** The mode dropdown now
+**converts**, and the panel shows **one** numeric row — the live coordinate's —
+hiding the other entirely rather than greying it.
+
+Found by running the walkthrough. In `Fraction` mode the greyed `Absolute` row
+showed the *stored dormant* `0.02` while the readout two lines below said
+`|v| = 2.327e-2`: two differently-valued absolute levels on screen at once, with
+nothing saying they meant different things. It read as a stale field, and the
+first thing the maintainer did was report it as a bug.
+
+The collision was structural, not cosmetic. §The level group specified **two
+different rules for the same widget**: under `Auto` a non-live row shows the
+*resolved* value ("the panel shows what the surface is actually being drawn at"),
+under a manual mode it shows the *stored* one (walkthrough step 6). Both are
+defensible; together they are not.
+
+#### What replaces them
+
+**`level_mode` selects the unit one quantity is expressed in.** At any moment
+there is one level, and the mode says whether you are reading it as a magnitude
+or as an enclosed fraction. So:
+
+- **Switching converts.** `Absolute ⇄ Fraction` fills the newly-live coordinate
+  from the level currently drawn, and the surface does not move. The handover
+  Part 2 §Handover specified for leaving `Auto` is now simply what every switch
+  does.
+- **Switching *to* `Auto` is the one switch that moves the surface**, back to
+  what the field itself suggests. `Auto` consults neither stored number by
+  design; that is what picking it asks for.
+- **The row for the non-live coordinate is hidden.** Under `Auto`, both are —
+  there is no numeric row at all. Nothing is lost: the readout carries **both**
+  coordinates in every mode, which is what makes hiding them lossless. This is
+  also why the readout stopped being an aid and became the group's answer of
+  record.
+
+The `FloatInput.enabled` contract Part 5 leans on is untouched, and so is the
+colormap group. The distinction is worth stating because it is the reason the
+two groups now differ: a dormant *colour domain* is a value nothing reads right
+now **but a wire would make live again unchanged**, so it stays visible and
+greyed. A dormant *level coordinate* is not that — it is the same quantity in
+the other unit, and after a conversion it holds no independent information.
+
+#### The one real cost, and what it buys back
+
+§The two queries are not a bijection is the argument that survives: `iso → f →
+iso` does not round-trip, because `iso_for_fraction` can only return a *stored
+sample*. Converting unconditionally would hand a typed `0.002` back as
+`0.00200034…` after a trip through fraction mode — and `0.002` is a number
+people quote from papers.
+
+So **a parked number that already describes the current surface is kept
+verbatim**. `APIValueDistribution` carries `stored_level_matches` /
+`stored_fraction_matches`, computed in the kernel as "does this stored
+coordinate enclose the same fraction the surface encloses". Both are compared on
+the **enclosed fraction**, never on the magnitude — every isovalue between two
+adjacent samples encloses the same set, and "same set" is what "the surface did
+not move" means. Exact equality is right rather than a tolerance: every value
+involved comes out of the same two queries over the same samples.
+
+The result is lossless in the case that bites (switch away and back having
+changed nothing) and honest in the case that does not (switch back after
+dragging, and you get the converted value).
+
+The other two arguments Part 2 gave for two properties do not survive:
+
+| Argument | Status |
+|---|---|
+| `0.72` read as an absolute level, or `0.02` as a fraction, is nonsense | Argued against **reinterpreting** one number. This converts. Does not apply |
+| The toggle needs no conversion, no API round-trip, no wired field | Convenience, and outweighed. The conversion is two `f64`s already on a struct the panel fetches anyway |
+| `iso → f → iso` is not a bijection | **Survives** — and is answered by the match flags above |
+
+#### The two properties stay in storage
+
+`IsosurfaceNodeData` keeps both, and the text format still emits both. With no
+field wired — or an analytic one — there is no distribution to convert through,
+and the parked number is the only sane fallback. They simply stop being a **UI**
+concept: nothing shows two level numbers any more, and no user has to hold
+"there are two independent levels" in their head.
+
+#### Degenerate fractions
+
+A derived fraction is clamped into the property's legal open interval
+(`IsosurfaceEditor.FRACTION_EPSILON`). The enclosed fraction is exactly `1.0`
+for any level at or below the smallest sample, and exactly `0.0` above the
+largest, while validation requires `0 < f < 1`. At the top the clamp is sound
+rather than a fudge — `iso_for_fraction` is a step function, so `1 - ε` resolves
+to the same isovalue as `1` would. At the bottom it is not: `0` means the surface
+encloses nothing, and `ε` gives a speck at the field's maximum. That is the
+already-broken "a level above anything in the field draws nothing" state, and a
+speck is a more legible answer than an empty viewport.
+
+#### Layout
+
+The group's height now differs between modes — `Fraction` carries a slider,
+`Absolute` a lone box, `Auto` neither. Part 5's "the panel does not change shape"
+rule is about a **wire** being made, state arriving from outside the panel. A
+mode change is a deliberate action inside it, on the control directly above the
+row, so the change is legible rather than disorienting.
+
+### Drags commit on release — a P3 correction
+
+**As shipped, the fraction slider, the histogram marker and the opacity slider
+write node data once, when the drag ends.** The value under the pointer is held
+in the editor's own state until then, and the panel — slider handle, numeric
+box, marker, readout — renders from it, so the drag is fully live; only the
+*surface* waits for the release.
+
+This contradicts what §The fraction slider and §The histogram imply, and the
+contradiction was found by running the walkthrough below. Writing per tick made
+the application unusable. Every write goes
+`set_isosurface_data` → `refresh_structure_designer_auto`, which re-evaluates
+**and re-extracts the surface** — marching cubes over the whole grid — on the UI
+thread, because the FFI is `frb(sync)` (`CAD_INSTANCE` has no synchronization,
+so there is nowhere else to run it). At the ~0.1 s a modest field costs, a 60 Hz
+pointer stream cannot be serviced: the app froze and the intermediate surfaces
+were never painted anyway, so the cost bought nothing.
+
+Live extraction during a drag is not a tuning problem and is **not** in scope
+here. It needs the whole domain `Send + Sync`, a real lock around the global,
+snapshot evaluation and a worker thread — that is
+`doc/design_background_evaluation.md`, five phases, estimated 5–8 weeks. Once it
+lands, restoring per-tick writes is a three-line change in the editor and the
+undo-coalescing session below is already in place for it.
+
+**One number in the readout is a preview during a drag.** The readout shows both
+coordinates but a drag moves only one, and the kernel has not been asked. The
+other is read off the *cumulative curve the histogram is already drawing* —
+accurate to one bin — and is replaced by the kernel's exact value the instant
+the drag ends. The preview lookups are deliberately separate from anything that
+writes: a previewed number never reaches node data.
+
+**Undo coalescing stays**, even though one write per drag would already give one
+undo entry. `begin_node_data_drag` / `end_node_data_drag` bracket the gesture,
+which keeps the "one drag, one undo entry" contract enforced at the kernel
+rather than resting on the editor happening to write once, and it is what
+per-tick writes would need again. The editor's `dispose` closes an open session,
+so a panel torn down mid-gesture cannot leave recording suppressed.
+
+### The axis is cropped by mass, not fitted to the extremes — a P3 correction
+
+§The histogram says the x axis runs over the field's **nonzero range**, and on a
+real `.cube` that is a useless range to plot. Reported from the walkthrough with
+a screenshot: an axis running `-16 … 2` with the leftmost twelve decades empty,
+the cumulative curve pinned flat at 1.0 across all of them, and every bar
+squeezed into the last fifth of the width.
+
+Nothing was wrong with the data. A Gaussian-basis density decays exponentially
+away from the nuclei and the writer prints every sample in `%13.5E`, so the far
+corners of the box hold genuine values around `1e-16`, and `zero_count` was
+zero — nothing had been excluded. **One** such sample sets `nonzero_min` and
+stretches the axis by twelve decades.
+
+Which is an argument this design already makes one part over. Part 4, on the
+colour domain: *"these quantities span orders of magnitude near the nuclei, so
+fitting to the extremes paints the whole surface one flat colour."* An axis
+fitted to `nonzero_min` has the same defect for the same reason, and the fix is
+the same shape — go by mass.
+
+**The plotted range starts at the tightest magnitude that still leaves no more
+than `PLOT_MASS_CROP` (0.01 %) of `∫|v|` below it**, with two guards:
+
+- **never fewer than `MIN_PLOT_DECADES`**, so a field whose mass sits in one bin
+  gets an axis with context instead of a sliver;
+- **never cropping past the marker**, kept `MARKER_MARGIN` off the left edge. An
+  absolute level typed out in the tail is precisely when the user needs to see
+  where it falls, and an off-plot marker would be the plot lying about the level
+  it exists to locate. **Only when the marker would otherwise fall outside**: a
+  marker drag maps the pointer's x through this very range, so widening for a
+  marker already on the plot would rescale the axis every frame while the finger
+  sat still at the left edge. The range has to be stable under its own output,
+  and there is a test that iterates it to say so.
+
+Three things follow, and they are the reason this is worth writing down rather
+than treating as a rendering tweak:
+
+- **The crop is presentation only.** `ValueDistribution` and both of its queries
+  still cover every sample, so no resolved level, fraction or `Auto` decision
+  moves. Only pixels change.
+- **The bar heights are normalized over the *plotted* bins.** That is the other
+  half of what cropping buys: a peak set by an off-plot bin would flatten
+  everything on screen even after the axis was fixed.
+- **The caption says when a tail was left out**, naming the magnitude the axis
+  starts at and the share left below it. An axis that silently starts above the
+  field's smallest value is a zoom the reader did not ask for; the labels alone
+  do not say that a zoom happened.
+
+The preview lookups the drag readout uses are deliberately **not** cropped: they
+answer questions about values, not about pixels, and cropping them would make a
+number depend on the plot's zoom.
+
 ### The colour group (P4)
 
 The colour domain keeps its current shape and gains two things, both inside the
@@ -861,10 +1161,11 @@ them unchanged:
 ### Empty states
 
 **Three, all normal, none an error:** no field wired; an analytic field (Part 3);
-an upstream not yet evaluated. In each, the mode dropdown stays live, the two
-numeric rows are disabled and blank, the plot is replaced by a single line of
-caption text naming which of the three it is, and the group keeps its height so
-the panel does not jump when a wire is made.
+an upstream not yet evaluated. In each, the mode dropdown stays live, the live
+mode's numeric row is disabled and blank (§The mode is a unit — there is only one
+row, and none under `Auto`), the plot is replaced by a single line of caption
+text naming which of the three it is, and the group keeps its height so the panel
+does not jump when a wire is made.
 
 ### Plumbing
 
@@ -1140,41 +1441,62 @@ must not hide behind that rule:
 | code | `APIValueDistribution` shape, and the three empty states | no field wired / analytic field / upstream not yet evaluated each report themselves, and none is an error |
 | code | **Invalidation across a rewire** | two `get_isosurface_level_distribution` calls, with the `field` pin rewired between them, return *different* distributions. This is the failure §Invalidation calls silent — a correct-looking histogram belonging to the previous field — and it is a Rust assertion at the API seam, not a widget concern |
 | code | Drag **coalescing**, slider and histogram marker | a drag from 0.9 to 0.99 leaves **one** undo entry, not one per tick, from either control. A log slider is the canonical undo-flooding case, and the coalescing rule belongs in the model, where it is testable |
-| code | Mode switch handover | `Auto` → `Fraction` and `Auto` → `Absolute` pre-fill from the *resolved* value, and the dormant property is left untouched — the panel's greyed row still shows what it showed before |
+| code | The drag **preview** lookups | a magnitude and a fraction read back consistently off the cumulative curve, and an empty distribution previews `null` rather than throwing. These are what the readout shows mid-drag (§Drags commit on release); they must never be written into node data |
+| code | **Natural number formatting** | the Rust and Dart twins agree case for case: plain decimals in `[1e-4, 1e6)`, scientific outside, trailing zeros trimmed in both forms, only the mantissa trimmed (`1e-10` keeps its exponent), and no `+` on a positive exponent. Two tables, one rule — they are the thing that would drift silently |
+| code | The **axis crop** | a vacuum tail carrying under 0.01 % of `∫|v|` is dropped; a distribution with mass everywhere is *not* cropped; the marker is never left off-plot; a one-bin mass spike still gets `MIN_PLOT_DECADES`; and a position round-trips to a magnitude over the **cropped** span, which is what a marker drag reads. An axis that quietly starts above the field's smallest value is where a plot begins lying (§The axis is cropped by mass) |
+| code | Mode switch **conversion** | every switch away from `Auto` fills the newly-live coordinate from the resolved value, so `Absolute ⇄ Fraction` never moves the surface; switching **to** `Auto` does move it, back to the field's own level. (Supersedes the handover row this replaces — §The mode is a unit) |
+| code | A typed constant survives a round trip | `Absolute 0.002` → `Fraction` → `Absolute` returns **`0.002`**, not the nearby sample an unconditional conversion would give. Drag the fraction in between and it must return the *converted* value instead — both halves of the `stored_*_matches` rule |
+| code | A mode switch with **no field** | falls back to the parked number for each coordinate, which is why both properties stay in storage even though only one is ever on screen |
 
 **Manual walkthrough**
 
+Steps 1, 2, 5, 6, 9 and 10 were rewritten after the first run — see §The mode is
+a unit, not a second parked value and §Drags commit on release.
+
 1. `import_cube` -> `si-cluster-vacancy/si-cluster-S3-vacancy.cube` ->
-   `isosurface`. **Expect** auto mode, level `0.002`, basis
-   `non-negative, density-like`, a vdW envelope, and the marker where the
-   cumulative curve is about 0.995. Both numeric rows are greyed and show the
-   **resolved** pair, not the stored `0.02`. Tiny spheres at the nuclei instead
-   means auto took the fraction branch — check `value_range().min`.
-2. Set **Mode** to `Fraction`. **Expect** about 0.995 pre-filled, the fraction
-   row live, the absolute row still there and greyed, and **the surface not to
+   `isosurface`. **Expect** auto mode, a vdW envelope, the basis line
+   `auto: non-negative, density-like`, a readout reading `|v| = 0.002 ·
+   encloses …% of ∫|v|`, and the marker where the cumulative curve is about
+   0.995. **No numeric row at all** — under auto neither coordinate is live, and
+   the readout carries both. Tiny spheres at the nuclei instead means auto took
+   the fraction branch — check `value_range().min`.
+2. Set **Mode** to `Fraction`. **Expect** a single *Fraction* row to appear, live,
+   pre-filled with about 0.995, **no absolute row**, and **the surface not to
    move at all**.
-3. Drag the slider toward 0.999. **Expect** the envelope to grow, the isovalue
-   to fall, the marker to track. Then Ctrl-Z once: the fraction returns to its
+3. Drag the slider toward 0.999. **Expect** the fraction, the isovalue and the
+   marker to track the pointer live, and **the envelope to grow when you let
+   go** — not during the drag (§Drags commit on release). The application must
+   stay responsive throughout. Then Ctrl-Z once: the fraction returns to its
    step-2 value in a **single** undo, not a walk back through the drag.
 4. Drag the **histogram marker** instead. **Expect** the same edit through a
-   different control — both numbers update, one undo entry for the drag.
-5. Switch to `Absolute`, type `0.002`. **Expect** the conventional envelope and
-   a readout naming the fraction.
-6. Switch back to `Fraction`. **Expect** the step-4 value exactly — not a
-   conversion of `0.002` — with `0.002` still sitting in the greyed absolute
-   row. This is what the second property buys. The panel's height must not have
-   changed across any of these switches.
-7. Type `0.2` into the fraction box. **Expect** it accepted, and the slider
+   different control — both numbers update live, the surface redraws on release,
+   one undo entry for the drag.
+5. Switch to `Absolute`. **Expect** the fraction row to be replaced by a single
+   *Absolute* row holding the isovalue the fraction resolved to, and **the
+   surface not to move**. Now type `0.002`: the conventional envelope, and a
+   readout naming the fraction it encloses.
+6. Switch back to `Fraction`, then to `Absolute` again. **Expect** the fraction
+   that `0.002` encloses on the way out, **the surface not to move in either
+   direction**, and `0.002` — *exactly*, not `0.00200034…` — back in the absolute
+   row at the end. That last part is what the match flags buy: `iso → f → iso` is
+   not a bijection, so an unconditional conversion would mangle the constant you
+   typed. Then drag the fraction somewhere else and switch to `Absolute` again:
+   this time the number **must** be the converted one, not a resurrected `0.002`.
+7. Type `0.1` into the fraction box. **Expect** it accepted, and the slider
    **disabled with its handle at the left stop** — outside its window, not
-   pretending `0.2` is `0.4377`. Type `0.9`: the slider comes back live.
+   pretending `0.1` is `0.30`. Type `0.9`: the slider comes back live.
 8. Switch to auto, rewire to `..._spin.cube`. **Expect** basis `signed field`
-   and level **1.64e-3** — an exact expected number, not an impression.
+   and level **1.64e-3** — an exact expected number, not an impression. Switching
+   *to* auto is the one switch that may move the surface, and here it should.
 9. Wire anything into `level` while in auto. **Expect** an amber non-blocking
-   warning, an unchanged surface, and both numeric rows greyed — not a red
-   error, not a silently dropped wire.
-10. Delete the `field` wire. **Expect** the mode dropdown still live, both rows
-    blank and greyed, a caption saying there is no field, and the group's height
-    unchanged — no error, no stale histogram, no layout jump.
+   warning, an unchanged surface, and still no numeric row — not a red error, not
+   a silently dropped wire. Switch to `Absolute`: the row appears, **greyed**,
+   showing what the wire drives.
+10. Delete the `field` wire. **Expect** the mode dropdown still live, the live
+    mode's row blank and greyed, a caption saying there is no field, and no
+    error, no stale histogram, no layout jump. Switching modes here changes
+    nothing but the mode — there is no distribution to convert through, so each
+    coordinate keeps its parked number.
 
 ### P4 — Colour domain: surface distribution and fit
 

@@ -162,8 +162,7 @@ class _ViewUpAxisDialogState extends State<_ViewUpAxisDialog> {
 
             // Current axis + lattice source (D5): the fallback is never silent.
             if (info != null) ...[
-              Text('Current: ${info.label}',
-                  style: theme.textTheme.bodyMedium),
+              Text('Current: ${info.label}', style: theme.textTheme.bodyMedium),
               const SizedBox(height: 2),
               Text('Resolving against: ${info.latticeSourceLabel}',
                   style: theme.textTheme.bodySmall

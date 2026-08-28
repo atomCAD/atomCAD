@@ -604,23 +604,59 @@ pub fn get_node_type() -> NodeType {
         name: "isosurface".to_string(),
         // Grouped with `import_cube` rather than under Geometry3D, which would
         // imply a CSG composability this type does not have.
-        description: "Draws the surface where a scalar field (from import_cube) equals a given \
-level - the standard way to picture a molecular orbital, an electron density or an \
-electrostatic potential.
-The level is a magnitude: the surface is extracted at +level AND at -level, so a signed field \
-such as an orbital shows both lobes, painted in the positive and negative colors. Wiring the \
-level input pin overrides the stored value.
-The level mode picks how that number is expressed. 'auto' chooses it from the field itself \
-(0.002 for a non-negative density-like field, otherwise the level enclosing 72% of the field's \
-total integrated magnitude) and is the default for a new node; 'absolute' uses the stored level \
-as an isovalue; 'fraction' uses the stored level_fraction, the share of the field's total \
-integrated magnitude that the surface encloses. Auto is volatile by design - the level moves \
-when the field changes, so a figure that must not change belongs in absolute or fraction mode.
-A level larger than anything in the field produces an empty surface with no error - hover the \
-field output pin of the upstream import_cube node, whose readout carries the field's value range \
-along with the description the file was written with.
-Extraction resolution is not part of the node: it comes from the isosurface preferences, so \
-changing it re-renders without touching the document."
+        // Markdown — rendered by the ⓘ button's dialog
+        // (`node_description_button.dart`). **This is where the isosurface
+        // panel's explanations live.** The panel itself carries at most a
+        // clause per group; anything that needs a paragraph, or that a user
+        // reads once and never again, belongs here or in the reference guide.
+        description: r#"Draws the surface where a scalar field equals a given level — the standard way to picture a molecular orbital, an electron density or an electrostatic potential. Wire an `import_cube` `field` output into it.
+
+## The level is a magnitude
+
+The surface is extracted at **+level and at −level**, so a signed field such as an orbital shows both lobes at once, painted in the two phase colors. Zero or negative is an error rather than a choice: at zero the two passes coincide, and a negative level is just the positive one relabelled.
+
+An orbital's overall sign is arbitrary — the same calculation run twice can hand back `psi` or `−psi` — so the **swap button** beside the color swatches is how you match a published figure.
+
+## Three ways to say what level to draw at
+
+A field spans something like ten orders of magnitude, and the number that gives a clean orbital lobe gives a blank screen on a density. `level_mode` picks which coordinate the level is expressed in:
+
+- **auto** (the default) chooses from the field itself: `0.002` for a non-negative, density-like field, otherwise the level enclosing 72 % of the field's total integrated magnitude. It reports which branch it took in the readout.
+- **absolute** uses the stored `level` as an isovalue, in the field's own units.
+- **fraction** uses the stored `level_fraction`: the share of the field's total integrated magnitude (`∫|v|`) that the surface encloses. This is the coordinate that transfers between fields — the same fraction means the same thing on an orbital and on a spin density, where the same isovalue does not.
+
+The mode is a **unit**, not a second level: switching between absolute and fraction converts, so the surface does not move. Switching back *to* auto is the one switch that does move it.
+
+**Auto is volatile by design.** The level is re-chosen on every evaluation, so it moves when the field changes — a different `.cube`, or the same file re-imported. Freeze a figure by switching to absolute or fraction before you rely on it.
+
+## Reading the histogram
+
+`log10 |v|` across, **mass per bin** up — counted by sample a cube file is overwhelmingly vacuum and the plot would say nothing. The curve over the bars is the cumulative share of the field at or above each magnitude, on its own 0–1 scale; its height where the marker crosses it *is* the enclosed fraction. The marker is draggable in absolute and fraction mode.
+
+The axis starts where the field's mass does, not at its smallest value: one far-corner sample at `1e-16` would otherwise stretch it by twelve empty decades. The caption says when a tail was cropped.
+
+## Editing
+
+Drag controls — the fraction slider, the histogram marker, the opacity slider — **redraw the surface when you release**, not during the drag. Extraction is marching cubes over the whole grid on the interface thread, so redrawing per pointer frame would freeze the application without ever painting an intermediate surface. The numbers track the pointer live throughout, and the whole drag is a single undo step.
+
+## Painting by a second field
+
+Wire a second field into `color_field` and the surface stops being painted by sign: every point is colored by what *that* field reads there. The canonical use is an electron-density envelope colored by the electrostatic potential.
+
+**The color range is never fitted for you, and this is deliberate.** A potential keeps climbing steeply near the nuclei, so its full range is one or two orders of magnitude wider than the span the surface actually covers; fitting to it would compress every value the surface *has* into the middle of the ramp and paint the whole thing flat white. Set the range from what you want resolved — `±0.05` is the conventional starting point for a potential in atomic units.
+
+The *Blue - White - Red* ramp runs blue at *Range min* through white to red at *Range max* — read literally, which is the **opposite** of most published ESP figures. To match one, negate the potential upstream with an `expr` node rather than swapping the two range fields; entering them the wrong way round flattens the surface to the midpoint color instead of reversing the ramp.
+
+## Opacity
+
+How see-through the surface is. Lower it to see the molecule inside an orbital. Exactly `1` takes a faster drawing path with no transparency work, so an opaque envelope costs nothing.
+
+## Two things the node cannot tell you
+
+- **A level above anything in the field draws nothing, silently** — an empty viewport looks exactly like a failed import. This is the failure `auto` exists to keep you out of. Hover the **`field` output pin of the upstream `import_cube`**: its readout carries the value range and the file's own description.
+- **A `color_field` smaller than the surface paints the overhang neutral.** Outside its own box a field reads as `0.0`, which on a symmetric ramp is plain white — a plausible-looking picture that is simply missing data. If part of a surface comes out flat white, compare the two boxes before suspecting the physics.
+
+Extraction resolution is **not** part of the node: it comes from *Preferences → Geometry Visualization → Isosurface extraction*, so changing it re-renders without touching the document."#
             .to_string(),
         summary: Some("Level-set surface of a scalar field".to_string()),
         category: NodeTypeCategory::AtomicStructure,

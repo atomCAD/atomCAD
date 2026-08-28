@@ -14,6 +14,14 @@ class FloatInput extends StatefulWidget {
   /// wired, for instance. The value still renders, so it stays inspectable.
   final bool enabled;
 
+  /// When true the field renders **empty** instead of its value. Only
+  /// meaningful together with `enabled: false`: it is for the case where there
+  /// is no number that would be used and showing the stored one would mislead —
+  /// the `isosurface` level rows with no field wired, for instance. The normal
+  /// disabled case still shows its value, because that value is what a wire or
+  /// a mode change would make live again.
+  final bool blank;
+
   const FloatInput({
     super.key,
     required this.label,
@@ -21,6 +29,7 @@ class FloatInput extends StatefulWidget {
     required this.onChanged,
     this.inputKey,
     this.enabled = true,
+    this.blank = false,
   });
 
   @override
@@ -34,7 +43,7 @@ class _FloatInputState extends State<FloatInput> {
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.value.toString());
+    _controller = TextEditingController(text: _displayText);
     _focusNode = FocusNode();
     _focusNode.addListener(() {
       if (!_focusNode.hasFocus) {
@@ -44,21 +53,28 @@ class _FloatInputState extends State<FloatInput> {
     });
   }
 
+  String get _displayText => widget.blank ? '' : widget.value.toString();
+
   @override
   void didUpdateWidget(FloatInput oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.value != widget.value) {
-      updateTextControllerWithSelection(_controller, widget.value.toString());
+    if (oldWidget.value != widget.value || oldWidget.blank != widget.blank) {
+      updateTextControllerWithSelection(_controller, _displayText);
     }
   }
 
   void _updateValueFromText(String text) {
+    if (widget.blank && text.isEmpty) {
+      // Nothing was typed into a deliberately empty field — leave it empty
+      // rather than writing a fabricated 0.
+      return;
+    }
     final newValue = double.tryParse(text);
     if (newValue != null) {
       widget.onChanged(newValue);
     } else {
       // If parsing fails, restore the previous valid value
-      _controller.text = widget.value.toString();
+      _controller.text = _displayText;
     }
   }
 

@@ -34,8 +34,7 @@ class CustomNodeEditor extends StatelessWidget {
         ),
         fields: params,
         emptyMessage: 'This custom node has no editable parameters.',
-        onSet: (name, value) =>
-            model.setCustomNodeLiteral(nodeId, name, value),
+        onSet: (name, value) => model.setCustomNodeLiteral(nodeId, name, value),
         onClear: (name) => model.clearCustomNodeLiteral(nodeId, name),
         keyPrefix: 'custom_param',
       ),

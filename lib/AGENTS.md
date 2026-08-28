@@ -121,6 +121,22 @@ one problem. It is pure Dart over the generated API data classes — unit-tested
 in `test/error_report_test.dart`, which is the only thing in `test/` and runs in
 well under a second (unlike `integration_test/`, which agents must not run).
 
+### Showing a Number in a Readout
+
+Never reach for `toStringAsExponential` (or a bare `toString`) to print a
+magnitude a user reads. Use **`formatNatural(value, significantDigits)`** from
+`lib/common/number_format.dart`: it prints a plain decimal while the number sits
+in a range read at a glance (`1e-4 <= |v| < 1e6`) and switches to scientific
+outside it, trimming trailing zeros in both forms. `1.2233e-2` and `0.012233`
+say the same thing; only one of them makes the reader decode an exponent.
+
+**It is the twin of `atomcad_util::number_format::format_natural`, and the two
+must agree** — the same quantity is printed in a pin readout (Rust) and in a
+property panel (Dart), and `0.002` against `2e-3` reads as two different
+numbers. Their test tables mirror each other case for case. One divergence is
+already handled and worth knowing about: Dart's `toStringAsExponential` writes
+`1e+6` where Rust's `{:e}` writes `1e6`, so the helper strips the plus.
+
 ### Dialogs Must Be Draggable
 
 All dialogs in this application **must be draggable**. Use the `DraggableDialog` widget from `lib/common/draggable_dialog.dart`.
