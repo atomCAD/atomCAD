@@ -330,6 +330,14 @@ class NodeDataWidget extends StatelessWidget {
           scopePath: scopePath,
           nodeId: selectedNode.id,
         );
+        // The colour group's own distribution, on the same terms and for the
+        // same reason. It is a *scene* read rather than an evaluation — the
+        // mesh it measures is produced by the display conversion — so it also
+        // reports the fourth empty state, "not extracted".
+        final colorDistribution = getIsosurfaceColorDistribution(
+          scopePath: scopePath,
+          nodeId: selectedNode.id,
+        );
         return IsosurfaceEditor(
           nodeId: selectedNode.id,
           data: isosurfaceData,
@@ -337,6 +345,7 @@ class NodeDataWidget extends StatelessWidget {
           colorFieldConnected: colorFieldConnected,
           levelConnected: levelConnected,
           distribution: distribution,
+          colorDistribution: colorDistribution,
         );
       case 'half_space':
         // Fetch the half space data here in the parent widget

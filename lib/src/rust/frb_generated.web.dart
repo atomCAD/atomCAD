@@ -467,6 +467,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISupercellData dco_decode_api_supercell_data(dynamic raw);
 
   @protected
+  APISurfaceDistributionState dco_decode_api_surface_distribution_state(
+      dynamic raw);
+
+  @protected
+  APISurfaceValueDistribution dco_decode_api_surface_value_distribution(
+      dynamic raw);
+
+  @protected
   APISwitchData dco_decode_api_switch_data(dynamic raw);
 
   @protected
@@ -839,6 +847,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISupercellData dco_decode_box_autoadd_api_supercell_data(dynamic raw);
+
+  @protected
+  APISurfaceValueDistribution
+      dco_decode_box_autoadd_api_surface_value_distribution(dynamic raw);
 
   @protected
   APISwitchData dco_decode_box_autoadd_api_switch_data(dynamic raw);
@@ -1450,6 +1462,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   APISupercellData? dco_decode_opt_box_autoadd_api_supercell_data(dynamic raw);
+
+  @protected
+  APISurfaceValueDistribution?
+      dco_decode_opt_box_autoadd_api_surface_value_distribution(dynamic raw);
 
   @protected
   APISwitchData? dco_decode_opt_box_autoadd_api_switch_data(dynamic raw);
@@ -2124,6 +2140,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APISupercellData sse_decode_api_supercell_data(SseDeserializer deserializer);
 
   @protected
+  APISurfaceDistributionState sse_decode_api_surface_distribution_state(
+      SseDeserializer deserializer);
+
+  @protected
+  APISurfaceValueDistribution sse_decode_api_surface_value_distribution(
+      SseDeserializer deserializer);
+
+  @protected
   APISwitchData sse_decode_api_switch_data(SseDeserializer deserializer);
 
   @protected
@@ -2581,6 +2605,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APISupercellData sse_decode_box_autoadd_api_supercell_data(
       SseDeserializer deserializer);
+
+  @protected
+  APISurfaceValueDistribution
+      sse_decode_box_autoadd_api_surface_value_distribution(
+          SseDeserializer deserializer);
 
   @protected
   APISwitchData sse_decode_box_autoadd_api_switch_data(
@@ -3303,6 +3332,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APISupercellData? sse_decode_opt_box_autoadd_api_supercell_data(
       SseDeserializer deserializer);
+
+  @protected
+  APISurfaceValueDistribution?
+      sse_decode_opt_box_autoadd_api_surface_value_distribution(
+          SseDeserializer deserializer);
 
   @protected
   APISwitchData? sse_decode_opt_box_autoadd_api_switch_data(
@@ -4050,6 +4084,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APISupercellData self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_surface_distribution_state(
+      APISurfaceDistributionState self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_surface_value_distribution(
+      APISurfaceValueDistribution self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_switch_data(APISwitchData self, SseSerializer serializer);
 
   @protected
@@ -4513,6 +4555,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_api_supercell_data(
       APISupercellData self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_api_surface_value_distribution(
+      APISurfaceValueDistribution self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_api_switch_data(
@@ -5247,6 +5293,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_api_supercell_data(
       APISupercellData? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_api_surface_value_distribution(
+      APISurfaceValueDistribution? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_api_switch_data(

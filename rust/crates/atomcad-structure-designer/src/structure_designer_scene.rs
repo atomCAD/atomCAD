@@ -4,7 +4,7 @@ use crate::node_network::NodeRef;
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_crystolecule::drawing_plane::DrawingPlane;
 use atomcad_crystolecule::unit_cell_struct::UnitCellStruct;
-use atomcad_display::isosurface::SurfaceMesh;
+use atomcad_display::isosurface::{SurfaceMesh, SurfaceValueDistribution};
 use atomcad_display::poly_mesh::PolyMesh;
 use atomcad_display::surface_point_cloud::SurfacePointCloud;
 use atomcad_display::surface_point_cloud::SurfacePointCloud2D;
@@ -109,6 +109,22 @@ pub struct NodeSceneData {
     /// drops the plane). `None` when the interactive output carries no plane.
     pub construction_plane: Option<DrawingPlane>,
 
+    /// The colour field's area-weighted distribution **over this node's
+    /// extracted surface**, for an `isosurface` node painted by a `color_field`
+    /// (`doc/design_isosurface_level.md` Part 4). `None` for every other node,
+    /// for a phase-coloured surface, and for an extraction that produced no
+    /// mesh.
+    ///
+    /// Derived at scene-generation time for the same reason `unit_cell` and
+    /// `construction_plane` are: it is a semantic property of the node's output
+    /// that the display-level `NodeOutput` cannot be pattern-matched back out
+    /// of. Here it is stronger still — the mesh it describes **does not exist**
+    /// before this stage, because marching cubes is the first step that can see
+    /// the extraction preferences. The editor's colour-domain fit reads it off
+    /// the scene, which is why a hidden node reports *not extracted* rather
+    /// than offering a fit button that does nothing.
+    pub surface_color_distribution: Option<SurfaceValueDistribution>,
+
     /// Whether to render a unit cell wireframe for this node (motif_edit only)
     pub show_unit_cell_wireframe: bool,
 
@@ -129,6 +145,7 @@ impl NodeSceneData {
             node_error_origins: HashMap::new(),
             unit_cell: None,
             construction_plane: None,
+            surface_color_distribution: None,
             show_unit_cell_wireframe: false,
             selected_node_eval_cache: None,
         }
@@ -493,6 +510,14 @@ impl MemorySizeEstimator for NodeSceneData {
             0
         };
 
+        // The surface colour distribution is summary statistics plus two
+        // fixed-length bin vectors — constant in the vertex count.
+        let surface_distribution_size = self
+            .surface_color_distribution
+            .as_ref()
+            .map(|d| d.estimate_memory_bytes())
+            .unwrap_or(0);
+
         // selected_node_eval_cache is a Box<dyn Any> - we can't know its size
         // Estimate conservatively as the size of the Box pointer
         let eval_cache_size = if self.selected_node_eval_cache.is_some() {
@@ -523,6 +548,7 @@ impl MemorySizeEstimator for NodeSceneData {
             + node_output_strings_size
             + node_error_origins_size
             + unit_cell_size
+            + surface_distribution_size
             + eval_cache_size
     }
 }

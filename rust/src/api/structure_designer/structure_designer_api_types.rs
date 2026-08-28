@@ -768,9 +768,12 @@ pub struct APIIsosurfaceData {
     pub alpha: f64,
     /// Only consulted while the `color_field` pin is wired.
     pub colormap: APIColormap,
-    /// Colormap domain minimum. Never auto-fitted — these quantities span
-    /// orders of magnitude around the nuclei, so fitting to the extrema paints
-    /// the whole surface one flat color.
+    /// Colormap domain minimum. Concrete numbers only: the editor's fit button
+    /// writes them from the color field's distribution **on the extracted
+    /// surface**, and nothing re-resolves them afterwards. Fitting to the
+    /// *volume's* extrema is still wrong — these quantities span orders of
+    /// magnitude around the nuclei, and it would paint the whole surface one
+    /// flat color.
     pub color_min: f64,
     /// Colormap domain maximum.
     pub color_max: f64,

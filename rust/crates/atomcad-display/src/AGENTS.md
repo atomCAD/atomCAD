@@ -50,6 +50,18 @@ Closure across the whole grid follows from it by induction, for any field.
 `isosurface_case_table_test.rs` checks it directly over all 256 masks; a
 per-example "the sphere came out closed" count does **not** imply it.
 
+`surface_distribution.rs` is the odd one out here: it produces no geometry at
+all, only the colour field's area-weighted, signed distribution **over an
+extracted mesh's vertices** (`doc/design_isosurface_level.md` Part 4). It lives
+in this crate for the same reason the extractor does — the mesh does not exist
+until this stage — and it is read by the editor's colour-domain fit, which the
+`structure_designer` scene carries up. Two rules it exists to hold: the
+population is the **surface**, never the volume (whose extrema are one or two
+orders of magnitude wider, and fitting to them paints the envelope flat), and
+the weight is **area**, never vertex count (marching cubes puts vertices where
+the geometry is busy). The `MIN_FIT_VERTICES` floor is not a nicety: without it
+the extraction-quality preference could be baked into a saved document.
+
 `tessellator.rs` is the last hop, `SurfaceMesh` → renderer `Mesh`. It takes no
 `Material`, unlike every other tessellator here: an isosurface carries its color
 per vertex, so a caller-supplied albedo would only be discarded.

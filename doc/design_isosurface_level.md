@@ -591,6 +591,12 @@ Fitting to `value_range` would set ±97 and paint the envelope one flat colour.
 This is why `range` carries the comment "Never auto-fitted" — the objection is
 entirely about *volume* extrema, which restricting to the surface removes.
 
+**The "never auto-fitted" prose is user-facing now, and this phase falsifies
+it.** The comment that phrase describes has since become a paragraph in the
+`isosurface` node description *and* in the reference guide. Both must be
+rewritten in the same change as the fit — see Part 7 §P4 §The fit contradicts
+shipped prose.
+
 **Insensitive to the band definition:** sampling at density `0.002 ±10%` and
 `±5%` gives `p98` of 4.0037e-2 and 4.0090e-2 — 0.1% apart across a doubling.
 The answer is a property of the surface, not of the tolerance.
@@ -1143,6 +1149,10 @@ number depend on the plot's zoom.
 
 ### The colour group (P4)
 
+> **Read the five P3 corrections above before this section.** Four of them
+> change what it may assume, and the changes are called out below rather than
+> left for the implementer to collide with.
+
 The colour domain keeps its current shape and gains two things, both inside the
 existing group so the unwired-`color_field` disabling already in place covers
 them unchanged:
@@ -1151,12 +1161,71 @@ them unchanged:
   swap button beside "Phase colors", which is the panel's existing idiom for
   "an action that belongs to this group". Symmetric or span according to the
   colour field's signedness (§Part 4), disabled when the surface is below the
-  vertex floor, with the tooltip saying why.
-- **the span histogram, below the two range fields**: the same widget with three
-  substitutions — the surface-restricted area-weighted distribution as source, a
-  **signed** x axis (linear is fine when the surface range is narrow; ±0.08
-  needs no log), and the domain drawn as a **span** with two handles. The
-  handles edit `color_min` / `color_max`; the fit button sets both.
+  vertex floor, with the tooltip saying why. A tooltip is the right home for
+  that sentence: it costs no layout, which §The panel says a clause makes the
+  governing constraint.
+- **the span histogram, below the two range fields**: the surface-restricted
+  area-weighted distribution, a **signed** x axis (linear is fine when the
+  surface range is narrow; ±0.08 needs no log), and the domain drawn as a
+  **span** with two handles. The handles edit `color_min` / `color_max`; the fit
+  button sets both. Build it as a **sibling** of the level histogram — see below.
+
+#### What this group does *not* inherit from the level group
+
+**The colour rows stay visible and greyed. They are not hidden.** §The mode is a
+unit reversed that for the *level* rows, and the reversal must not be
+generalised. A dormant colour domain is a value nothing reads right now **but
+which a wire would make live again unchanged**, so it stays inspectable and the
+panel keeps its shape when the wire is made. A dormant level coordinate was the
+same quantity in the other unit, which is why hiding it lost nothing. The two
+groups differ for a stated reason; keep them different.
+
+#### The span histogram is a sibling widget, not three substitutions
+
+An earlier draft of this section called it "the same widget with three
+substitutions". That was true of the widget as designed and is not true of the
+widget as built. `IsosurfaceHistogram` has since acquired, all of it log-axis
+machinery:
+
+- a `PlotRange` mapping position ⇄ magnitude in `log10` space,
+- a **mass-based crop** of the leading tail (§The axis is cropped by mass),
+- bar heights normalised over the **plotted** bins,
+- a stability requirement — the range must not move under its own output,
+- a cumulative *mass-at-or-above* overlay whose height *is* the enclosed
+  fraction, which has no counterpart on a paint.
+
+A signed, **linear**, span-with-two-handles plot inherits none of that. Write it
+beside the level one, sharing whatever painter helpers fall out naturally (the
+axis ticks, the label painter), rather than parameterising one widget over two
+coordinate systems and two parameter shapes.
+
+**Decide the crop rather than inheriting it.** The level histogram's rule is
+"drop the leading tail once it holds under `PLOT_MASS_CROP` of `∫|v|`" — a
+statement about a *log* axis and about *mass*, and the colour distribution is
+signed, area-weighted and read with percentiles. The equivalent question is
+which percentile band the axis should span, and the likely answer is the fitted
+band widened by a margin, so a domain set outside it is still visible rather
+than silently off-plot. One property does carry over unchanged, because it is
+not about logs at all: **the axis must never crop a handle out of view, and must
+be stable under its own output** — the handles map the pointer's x through the
+very range they set, so a range that widens for a handle already on the plot
+walks away from a stationary finger.
+
+#### The handles are drag controls
+
+Both fall under §Drags commit on release: hold the dragged value in the editor's
+state, render the panel from it, and write **once** at the gesture's end,
+bracketed by `begin_node_data_drag` / `end_node_data_drag`. A colour-domain edit
+re-runs the display conversion exactly as a level edit does, so per-tick writes
+freeze the application in the same way and for the same reason.
+
+The **fit button** needs no bracket — it is one write.
+
+#### Numbers
+
+`color_min` / `color_max`, and anything the span readout prints, go through
+`format_natural` / `formatNatural` (§Numbers read plainly). A fitted `±0.04`
+must not come back as `4.0000e-2`.
 
 ### Empty states
 
@@ -1166,6 +1235,11 @@ mode's numeric row is disabled and blank (§The mode is a unit — there is only
 row, and none under `Auto`), the plot is replaced by a single line of caption
 text naming which of the three it is, and the group keeps its height so the panel
 does not jump when a wire is made.
+
+**The colour group has a fourth**, because its distribution comes from the
+extracted mesh rather than from the field: *the surface has not been extracted —
+display the node*. Listed here so "three" is not read as the complete set; Part 7
+§P4 §Where the data comes from says why it exists.
 
 ### Plumbing
 
@@ -1190,7 +1264,17 @@ pub fn get_isosurface_color_distribution(scope_path: Vec<u64>, node_id: u64)
 `APIValueDistribution` carries bin edges, per-bin mass, the cumulative curve,
 the nonzero range, the zero count, and the resolved `(iso, fraction, basis)` for
 the node's current setting — so the editor never recomputes a query locally and
-the printed number comes from the same code path as extraction.
+the printed number comes from the same code path as extraction. As built it also
+carries a `state` naming the empty cases, an `is_exact` flag, and the two
+`stored_*_matches` flags §The mode is a unit needs; the entry point is a thin
+wrapper over an `frb(ignore)` core taking the designer explicitly, so the logic
+is testable without the global `CAD_INSTANCE`.
+
+**The colour signature is the same shape and a completely different data
+path** — the mesh it describes does not exist until the display conversion, so
+it cannot use the probe helper below. Part 7 §P4 §Where the data comes from is
+the section to read before implementing it; do not infer the fetch from the
+level one.
 
 **Every edit routes through `_update` -> `model.setIsosurfaceData`**, the path
 the existing two text fields already use, which is how the mode, both numbers
@@ -1504,6 +1588,71 @@ Area-weighted surface-restricted distribution in `atomcad-display`'s extractor
 output; `get_isosurface_color_distribution`; the signed span histogram and the
 symmetric / span fit buttons.
 
+**Start by reading the five P3 corrections in Part 5.** They were written after
+the walkthrough and they change four things this phase would otherwise assume:
+the non-live colour rows stay greyed (they are *not* hidden — §The mode is a
+unit says why the two groups differ), the span handles commit on release, the
+span plot is a sibling widget rather than a reskin of the level histogram, and
+every printed number goes through `format_natural`. Part 5 §The colour group
+(P4) carries the details.
+
+#### Where the data comes from — and why it is not P3's probe
+
+P3 gave the editor `StructureDesigner::evaluate_node_argument` /
+`evaluate_node_output`, so the obvious move is to reuse them. **It does not work
+here**, and the reason is worth knowing before an hour goes into it: those
+return `NetworkResult::Isosurface(IsosurfaceData)`, which is the
+*specification*. The mesh does not exist yet. Marching cubes runs one stage
+later, in the display conversion
+(`NetworkEvaluator::generate_isosurface_output` →
+`atomcad_display::isosurface::extract_isosurface`), because that is the first
+stage that can see the extraction preferences — the split
+`design_isosurface_node.md` opens with.
+
+So the surface-restricted distribution is computed **where the mesh is**: in the
+display conversion, and parked on `NodeSceneData` beside the
+`NodeOutput::Isosurface(mesh)` it is derived from. The API reads the scene.
+Three consequences:
+
+- **It exists only while the node is displayed.** That is a **fourth empty
+  state** for the colour group, alongside Part 5 §Empty states' three: *the
+  surface has not been extracted — display the node*. Say so, rather than
+  offering a fit button that silently does nothing.
+- **Do not recompute it per panel rebuild.** P3's level distribution is fetched
+  from `build`, which is safe only because it hands back an `Arc` handle to a
+  `OnceLock`-cached sort. A re-extraction is the ~0.1 s marching-cubes run that
+  §Drags commit on release exists because of. Compute once per refresh, read
+  many times.
+- **`NodeSceneData` gains a field**, so its `new()`, the `generate_scene` struct
+  literal and the direct-construction sites in
+  `tests/structure_designer/multi_output_unit_test.rs` all need updating — the
+  rule `crates/atomcad-structure-designer/src/AGENTS.md` already states for that
+  struct.
+
+#### Shape of the API
+
+Mirror P3's `field_distribution_api.rs`: a
+`#[flutter_rust_bridge::frb(ignore)] pub fn` core taking the designer
+explicitly, with the `frb(sync)` entry point a thin wrapper over it, so the
+logic is testable without the global `CAD_INSTANCE`.
+`APISurfaceValueDistribution` is a **separate type** from
+`APIValueDistribution` — signed, area-weighted, percentile-queried — and should
+not be forced through the level struct. If P4 does evaluate anything, the probe
+hygiene rule applies: `evaluate_in_scope` saves and restores `print_log`,
+`last_eval_profile` and `last_memo_counts`, and a new evaluation path must do
+the same or a panel repaint spams the Console.
+
+#### The fit contradicts shipped prose
+
+The `isosurface` node description **and** `doc/reference_guide/nodes/atomic.md`
+both argue at length that *"the colour range is never fitted for you, and this
+is deliberate"*. That is true today and stops being true the moment this phase
+lands. **Rewrite both in the same change.** The argument survives in modified
+form — the *volume* extrema are still the wrong thing to fit to, and what the
+button does is fit to the **surface**, which is the whole point of Part 4 — but
+a user who presses a fit button and then reads that the range is never fitted
+has been told the application is broken.
+
 | Tier | Test | Asserts |
 |---|---|---|
 | committed | `water_density_17x15x19` + `water_esp_17x15x19` | surface `p98(\|v\|)` **more than 10x** below the volume's `\|range\|` (measured 0.0909 against 1.4215, **15.6x**), and the symmetric fit lands in 0.05 – 0.12. **Not three significant figures:** the code computes an area-weighted percentile over mesh vertices at a preference-driven resolution, while the numbers here are a voxel-band proxy on the file grid |
@@ -1515,6 +1664,10 @@ symmetric / span fit buttons.
 | code | Fit writes node data | `color_min` / `color_max` concrete; no mode flag in the `.cnnd` |
 | code | Fit is undoable | one undo restores the previous domain, via `setIsosurfaceData` |
 | code | Quality multiplier changed after a fit | the saved domain does not move |
+| code | The **fourth empty state** | an `isosurface` node that is not displayed reports *not extracted* rather than erroring or offering a fit button that does nothing — the distribution lives on the scene, and there is no scene entry for a hidden node |
+| code | The span handles **coalesce** | a two-handle drag leaves **one** undo entry, not one per tick — the same rule §Drags commit on release pins for the level controls, and the same `begin_node_data_drag` bracket |
+| code | The span axis is **stable under its own output** | feeding the range its own handle position must not move it; the handles map the pointer's x through the range they set, so a range that widens for a handle already on the plot walks away from a stationary finger (§The axis is cropped by mass) |
+| code | The fitted numbers **read plainly** | `±0.04` prints as `0.04`, not `4.0000e-2` — the `format_natural` / `formatNatural` twins |
 | *zoo* | `ch3cl` + `ch3cl_esp` | p98 **4.0e-2** against the volume's **9.7e+1** — the 2427x that motivates the whole of Part 4 |
 
 **Manual walkthrough:** `esp-sigma-hole/ch3cl.cube` as `field`,
@@ -1524,6 +1677,20 @@ chlorine along the C–Cl axis. That feature is the acceptance criterion: it
 disappears if the surface is coloured by density, and washes out entirely if the
 domain is fitted to the volume's ±97.
 
+Then four steps the P3 corrections add:
+
+1. **Hide the node** (eye off) and reopen the panel. **Expect** the span plot
+   replaced by a caption saying the surface has not been extracted, and the fit
+   button disabled — not an error, and not a button that does nothing.
+2. **Drag a span handle.** **Expect** the number and the handle to track the
+   pointer live, the surface to recolour **when you release**, the application
+   to stay responsive throughout, and **one** undo entry for the drag.
+3. **Drag a handle to the plot's edge and hold it there.** **Expect** the axis
+   not to creep.
+4. **Check the two numeric rows are still there and greyed** with
+   `color_field` unwired. They are *not* hidden: unlike the level coordinates,
+   a wire would make them live again unchanged.
+
 ## Documentation touchpoints
 
 Per `AGENTS.md`, in the same change as the code:
@@ -1532,8 +1699,19 @@ Per `AGENTS.md`, in the same change as the code:
   fraction means, what auto decides and on what basis, the note that auto is
   volatile and a figure should be frozen in fraction or absolute mode, and the
   readout (P2); the editor's controls — the mode dropdown as the only way to
-  leave auto, why the greyed row still shows a number, and how to read the
+  leave auto, that only the live coordinate's row is shown, and how to read the
   histogram (P3); then the colour fit (P4)
+- **`doc/reference_guide/nodes/atomic.md` and the `isosurface` node's own
+  description, in the P4 change specifically.** Both currently argue that *"the
+  colour range is never fitted for you, and this is deliberate"* — true today,
+  false the moment the fit button ships. The argument survives in modified form
+  (the *volume* extrema are still the wrong thing to fit to; the button fits to
+  the **surface**), but leaving it as written tells a user who just pressed the
+  button that the application is broken. **The node description is the primary
+  home for anything longer than a clause** (§The panel says a clause): it is
+  Markdown, rendered by the ⓘ button, and P4's material — what the two fits do,
+  why the vertex floor exists, the ramp-orientation caveat — belongs there
+  rather than in a panel caption
 - `doc/design_isosurface_node.md` — a pointer here from §The `Isosurface` value
 - `rust/crates/atomcad-crystolecule/src/AGENTS.md` — `field/distribution.rs` in the
   module map, and the invariant that the distribution is over **stored samples**
@@ -1541,6 +1719,15 @@ Per `AGENTS.md`, in the same change as the code:
 - `doc/testing.md` — the two-level and analytic-Gaussian oracles as the pattern
   for distribution fixtures, and the tiering rule: a distribution test builds its
   field in code, a fixture file earns its place only by crossing the loader (P1)
+- `rust/crates/atomcad-structure-designer/src/AGENTS.md` — the new
+  `NodeSceneData` field carrying the surface distribution, in the list of
+  derived-at-`generate_scene` state, beside `unit_cell` and
+  `construction_plane`. That section already states the rule this follows: a
+  semantic property of a node's output must be derived at scene time rather than
+  pattern-matched off the lossy `NodeOutput` afterwards (P4)
+- `lib/structure_designer/node_data/AGENTS.md` — the span histogram as a
+  **sibling** of `isosurface_histogram.dart`, and why the colour rows stay
+  greyed where the level rows are hidden (P4)
 - `scripts/make_cube_fixtures.py` — already extended: `elf_like`, and the three
   committed fixtures the `tests` subcommand now writes. Their header comments
   carry the measured values the Rust tests assert, so regenerating and

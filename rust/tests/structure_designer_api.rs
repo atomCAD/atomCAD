@@ -36,6 +36,9 @@ mod eval_error_snapshot_test;
 #[path = "structure_designer_api/function_pin_api_test.rs"]
 mod function_pin_api_test;
 
+#[path = "structure_designer_api/isosurface_color_distribution_test.rs"]
+mod isosurface_color_distribution_test;
+
 #[path = "structure_designer_api/isosurface_distribution_test.rs"]
 mod isosurface_distribution_test;
 

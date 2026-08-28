@@ -39,3 +39,8 @@ mod isosurface_snapshot_test;
 
 #[path = "display/isosurface_tessellator_test.rs"]
 mod isosurface_tessellator_test;
+
+// The surface-restricted colour distribution and the two fits
+// (doc/design_isosurface_level.md Part 4).
+#[path = "display/isosurface_surface_distribution_test.rs"]
+mod isosurface_surface_distribution_test;

@@ -643,9 +643,24 @@ Drag controls — the fraction slider, the histogram marker, the opacity slider 
 
 Wire a second field into `color_field` and the surface stops being painted by sign: every point is colored by what *that* field reads there. The canonical use is an electron-density envelope colored by the electrostatic potential.
 
-**The color range is never fitted for you, and this is deliberate.** A potential keeps climbing steeply near the nuclei, so its full range is one or two orders of magnitude wider than the span the surface actually covers; fitting to it would compress every value the surface *has* into the middle of the ramp and paint the whole thing flat white. Set the range from what you want resolved — `±0.05` is the conventional starting point for a potential in atomic units.
+## Fitting the color range
 
-The *Blue - White - Red* ramp runs blue at *Range min* through white to red at *Range max* — read literally, which is the **opposite** of most published ESP figures. To match one, negate the potential upstream with an `expr` node rather than swapping the two range fields; entering them the wrong way round flattens the surface to the midpoint color instead of reversing the ramp.
+The **fit button** beside the *Colormap* heading fills *Range min* and *Range max* from the color field's values **on the surface itself**.
+
+*Fitting to the field's own extremes would be useless, and that distinction is the whole point.* A potential keeps climbing steeply near the nuclei, so its range over the **whole box** is one or two orders of magnitude wider than the span the surface covers — measured on a real methyl chloride, `+97` against `+0.040`. Fitting to that would compress every value the surface *has* into the middle of the ramp and paint the envelope flat white. So the fit measures the surface: the color field at the extracted vertices, weighted by **area** rather than by vertex count, because marching cubes puts vertices where the geometry is busy and a crumpled patch would otherwise dominate the answer.
+
+- A **signed** color field fits **symmetrically**, `±q` at the 98th percentile of `|v|`. Symmetry is not cosmetic: the ramp is diverging and its white must sit on zero, or the sign can no longer be read off the picture.
+- A **non-negative** color field fits to the 2nd–98th percentile.
+
+It writes two ordinary numbers, one undo step, saved with the design — and it never re-fits itself. A color map is comparable between two figures only when the domain is the *same number*, so an automatic per-field fit would silently give two ESP maps two scales. This is the opposite of the level, where the fraction is meant to be invariant and *should* re-resolve.
+
+**The fit is refused on a surface too coarse to measure**, and says so in the button's tooltip rather than writing a plausible wrong number. The statistic comes off the extracted mesh, whose resolution is a *preference*, and below a few hundred vertices the answer starts to wander — that floor is the one thing keeping a quality setting out of your saved document. Raise the extraction quality and press it again.
+
+The **span plot** under the two fields is where those values sit: a signed, linear axis, bar height the surface *area* carrying each value, and the domain drawn as a span with a handle at each end. The handles commit on release, like every other drag control here.
+
+The *Blue - White - Red* ramp runs blue at *Range min* through white to red at *Range max* — read literally, which is the **opposite** of most published ESP figures. To match one, negate the potential upstream with an `expr` node rather than swapping the two range fields; entering them the wrong way round flattens the surface to the midpoint color instead of reversing the ramp. A correctly fitted domain with inverted hues is more misleading than an unfitted one, so this is worth knowing before you press the button.
+
+With `color_field` unwired the two numbers stay visible and greyed rather than hidden: a wire would make them live again unchanged, unlike a dormant level coordinate, which is the same quantity in the other unit.
 
 ## Opacity
 
@@ -653,7 +668,7 @@ How see-through the surface is. Lower it to see the molecule inside an orbital. 
 
 ## Two things the node cannot tell you
 
-- **A level above anything in the field draws nothing, silently** — an empty viewport looks exactly like a failed import. This is the failure `auto` exists to keep you out of. Hover the **`field` output pin of the upstream `import_cube`**: its readout carries the value range and the file's own description.
+- **A level above anything in the field draws nothing, silently** — an empty viewport looks exactly like a failed import. This is the failure `auto` exists to keep you out of. Hover the **`field` output pin of the upstream `import_cube`**: its readout carries the value range, the file name and the file's own comment text.
 - **A `color_field` smaller than the surface paints the overhang neutral.** Outside its own box a field reads as `0.0`, which on a symmetric ramp is plain white — a plausible-looking picture that is simply missing data. If part of a surface comes out flat white, compare the two boxes before suspecting the physics.
 
 Extraction resolution is **not** part of the node: it comes from *Preferences → Geometry Visualization → Isosurface extraction*, so changing it re-renders without touching the document."#

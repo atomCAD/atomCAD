@@ -38,11 +38,15 @@ pub mod case_table;
 pub mod colormap;
 pub mod extract;
 pub mod lattice;
+pub mod surface_distribution;
 pub mod tessellator;
 
 pub use colormap::sample_colormap;
 pub use extract::extract_isosurface;
 pub use lattice::Lattice;
+pub use surface_distribution::{
+    MIN_FIT_VERTICES, SurfaceValueDistribution, surface_color_distribution,
+};
 pub use tessellator::{tessellate_surface_mesh, tessellate_surface_mesh_transparent};
 
 use atomcad_util::memory_size_estimator::MemorySizeEstimator;

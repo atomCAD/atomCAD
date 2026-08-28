@@ -298,6 +298,27 @@ site goes through **`StructureDesigner::fresh_scene()`**, never a bare
 is the worst kind: the setting visibly works when you change it and stops
 working a moment later, with nothing to attribute it to.
 
+**A semantic property of a node's output that the display conversion destroys
+must be derived at `generate_scene` time and parked on `NodeSceneData`** — never
+pattern-matched back out of the lossy `NodeOutput` afterwards. Three fields do
+this today: `unit_cell`, `construction_plane` (a `Geometry2D` becomes a point
+cloud and drops its plane), and `surface_color_distribution` — the `isosurface`
+colour field's area-weighted distribution over the extracted mesh
+(`doc/design_isosurface_level.md` Part 4).
+
+The third is the strongest case for the rule, because the thing it describes
+**does not exist** before this stage: `IsosurfaceData` is a specification and
+marching cubes runs here, in the display conversion, since that is the first step
+that can see the extraction preferences. Two consequences worth knowing before
+adding another such field: it is computed **once per scene generation** and read
+many times (a re-extraction is ~0.1 s), and it exists **only while the node is
+displayed** — which is why the editor's colour-domain fit reports *not extracted*
+for a hidden node instead of offering a button that does nothing. Adding a field
+means updating `NodeSceneData::new()`, the `generate_scene` struct literal, the
+`MemorySizeEstimator` impl (the invisible-node cache budgets against it) and the
+direct-construction sites in
+`tests/structure_designer/multi_output_unit_test.rs`.
+
 ## User preferences: three files and two apply sites
 
 A new preferences *section* touches, in order: `preferences.rs` here (the domain

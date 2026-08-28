@@ -6,9 +6,9 @@
 import '../../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `empty`, `from_distribution`, `with_resolved`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `eq`, `fmt`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `describe_field`, `isosurface_level_distribution`
+// These functions are ignored because they are not marked as `pub`: `empty`, `empty`, `from_distribution`, `from_distribution`, `with_resolved`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `eq`, `eq`, `fmt`, `fmt`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `describe_field`, `isosurface_color_distribution`, `isosurface_level_distribution`
 
 /// Flutter entry point for [`isosurface_level_distribution`].
 ///
@@ -21,6 +21,17 @@ APIValueDistribution? getIsosurfaceLevelDistribution(
         {required Uint64List scopePath, required BigInt nodeId}) =>
     RustLib.instance.api
         .crateApiStructureDesignerFieldDistributionApiGetIsosurfaceLevelDistribution(
+            scopePath: scopePath, nodeId: nodeId);
+
+/// Flutter entry point for [`isosurface_color_distribution`].
+///
+/// Called from `build` like its level sibling, so any network change
+/// invalidates it. Unlike the sibling it is a pure read of the last generated
+/// scene, so the cost is a hash lookup and two vector clones.
+APISurfaceValueDistribution? getIsosurfaceColorDistribution(
+        {required Uint64List scopePath, required BigInt nodeId}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerFieldDistributionApiGetIsosurfaceColorDistribution(
             scopePath: scopePath, nodeId: nodeId);
 
 /// Why the editor has no distribution to plot. Three of the four are **normal**
@@ -40,6 +51,139 @@ enum APIDistributionState {
   /// what, when there is anything to say.
   notEvaluated,
   ;
+}
+
+/// Why the colour group has no distribution to plot.
+///
+/// **Four states, not three**, and the extra one is what distinguishes this
+/// from the level's [`APIDistributionState`]: the colour distribution is a
+/// statistic of the *extracted mesh*, which does not exist until the display
+/// conversion runs, so a node nobody is displaying has nothing to report.
+enum APISurfaceDistributionState {
+  /// A real distribution over the surface's vertices.
+  available,
+
+  /// Nothing is wired into `color_field`, so the surface is painted by phase
+  /// and there is no second quantity to describe.
+  noColorField,
+
+  /// The surface has not been extracted: the node is not displayed, the
+  /// extraction was refused, or the level encloses nothing. `message` says
+  /// which.
+  notExtracted,
+  ;
+}
+
+/// The colour field's distribution over one extracted surface, and the domain a
+/// fit would write.
+///
+/// **A separate type from [`APIValueDistribution`], deliberately.** Every axis
+/// of the two differs — population, weight, sign, parameter shape, query — and
+/// forcing a signed area-weighted interval statistic through a magnitude-mass
+/// struct would misname every field. See `doc/design_isosurface_level.md`
+/// Part 4's table.
+class APISurfaceValueDistribution {
+  /// Which of the three states below the rest of this struct describes.
+  final APISurfaceDistributionState state;
+
+  /// Panel caption for the two empty states — a clause, not a paragraph.
+  /// Empty when `state` is `Available`.
+  final String message;
+
+  /// Bin edges as **signed values**, ascending and linearly spaced;
+  /// `bin_weight.len() + 1` entries. Linear rather than log because a colour
+  /// domain crosses zero, which no log axis can.
+  final Float64List binEdges;
+
+  /// Surface **area** in each bin, not a vertex count — marching cubes puts
+  /// vertices where the geometry is busy, not where the area is.
+  final Float64List binWeight;
+
+  /// Smallest colour value anywhere on the surface.
+  final double valueMin;
+
+  /// Largest colour value anywhere on the surface.
+  final double valueMax;
+
+  /// Area-weighted 2nd percentile — the span fit's low end, and the axis's.
+  final double p2;
+
+  /// Area-weighted 98th percentile.
+  final double p98;
+
+  /// Surface vertices the statistics were taken over.
+  final BigInt vertexCount;
+
+  /// Whether the colour field takes negative values, which is what picks the
+  /// symmetric fit over the span one.
+  final bool isSigned;
+
+  /// Low end of the domain the fit button would write. Meaningless unless
+  /// `can_fit`.
+  final double fitMin;
+
+  /// High end of the same. Meaningless unless `can_fit`.
+  final double fitMax;
+
+  /// Whether the fit button is offerable at all.
+  final bool canFit;
+
+  /// Why not, when `can_fit` is false — the button's tooltip. Empty otherwise.
+  final String fitBlockedReason;
+
+  const APISurfaceValueDistribution({
+    required this.state,
+    required this.message,
+    required this.binEdges,
+    required this.binWeight,
+    required this.valueMin,
+    required this.valueMax,
+    required this.p2,
+    required this.p98,
+    required this.vertexCount,
+    required this.isSigned,
+    required this.fitMin,
+    required this.fitMax,
+    required this.canFit,
+    required this.fitBlockedReason,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^
+      message.hashCode ^
+      binEdges.hashCode ^
+      binWeight.hashCode ^
+      valueMin.hashCode ^
+      valueMax.hashCode ^
+      p2.hashCode ^
+      p98.hashCode ^
+      vertexCount.hashCode ^
+      isSigned.hashCode ^
+      fitMin.hashCode ^
+      fitMax.hashCode ^
+      canFit.hashCode ^
+      fitBlockedReason.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APISurfaceValueDistribution &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          message == other.message &&
+          binEdges == other.binEdges &&
+          binWeight == other.binWeight &&
+          valueMin == other.valueMin &&
+          valueMax == other.valueMax &&
+          p2 == other.p2 &&
+          p98 == other.p98 &&
+          vertexCount == other.vertexCount &&
+          isSigned == other.isSigned &&
+          fitMin == other.fitMin &&
+          fitMax == other.fitMax &&
+          canFit == other.canFit &&
+          fitBlockedReason == other.fitBlockedReason;
 }
 
 /// The `isosurface` level histogram, the cumulative curve, and the resolved

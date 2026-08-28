@@ -187,6 +187,17 @@ from "present but blank". The method defaults to `None`: an analytic field is
 not obliged to invent a label, and inventing one from the numbers would be a
 guess presented as a fact.
 
+The **source file name is prepended** to that text, by `cube_loader::load_cube`
+and not by `load_cube_from_str` — only the former has a path. It is the same
+channel rather than a field of its own because it answers the same question, and
+a second accessor would mean every consumer learning about it. It leads, so a
+truncated description keeps it, and only the **final path component** goes in: a
+readout is a narrow tooltip and a directory prefix would push the comments out
+of it. This matters more than it sounds: a `.cube`'s comment lines are routinely
+a program banner or blank, while the name a producer chose
+(`si-cluster-S3-vacancy_spin.cube`) is often the only place the quantity is
+named at all.
+
 **Isosurfaces** (`field/isosurface.rs`): `IsosurfaceData` is the *specification*
 of a surface — which field, which level, which paint — and never a mesh. It lives
 here, beside the `ScalarField` it wraps, because **every `NetworkResult` payload

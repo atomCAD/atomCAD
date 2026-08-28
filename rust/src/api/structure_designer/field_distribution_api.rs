@@ -15,9 +15,12 @@
 
 use crate::api::api_common::with_mut_cad_instance_or;
 use atomcad_crystolecule::field::{LevelBasis, ScalarField, distribution::ValueDistribution};
+use atomcad_display::isosurface::{MIN_FIT_VERTICES, SurfaceValueDistribution};
 use atomcad_structure_designer::evaluator::network_result::NetworkResult;
+use atomcad_structure_designer::node_network::NodeRef;
 use atomcad_structure_designer::nodes::isosurface::IsosurfaceNodeData;
 use atomcad_structure_designer::structure_designer::StructureDesigner;
+use atomcad_structure_designer::structure_designer_scene::NodeOutput;
 use std::sync::Arc;
 
 /// Why the editor has no distribution to plot. Three of the four are **normal**
@@ -296,6 +299,214 @@ pub fn get_isosurface_level_distribution(
             |cad_instance| {
                 isosurface_level_distribution(
                     &mut cad_instance.structure_designer,
+                    &scope_path,
+                    node_id,
+                )
+            },
+            None,
+        )
+    }
+}
+
+// ============================================================================
+// The colour domain — `doc/design_isosurface_level.md` Part 4
+// ============================================================================
+
+/// Why the colour group has no distribution to plot.
+///
+/// **Four states, not three**, and the extra one is what distinguishes this
+/// from the level's [`APIDistributionState`]: the colour distribution is a
+/// statistic of the *extracted mesh*, which does not exist until the display
+/// conversion runs, so a node nobody is displaying has nothing to report.
+#[flutter_rust_bridge::frb]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum APISurfaceDistributionState {
+    /// A real distribution over the surface's vertices.
+    Available,
+    /// Nothing is wired into `color_field`, so the surface is painted by phase
+    /// and there is no second quantity to describe.
+    NoColorField,
+    /// The surface has not been extracted: the node is not displayed, the
+    /// extraction was refused, or the level encloses nothing. `message` says
+    /// which.
+    NotExtracted,
+}
+
+/// The colour field's distribution over one extracted surface, and the domain a
+/// fit would write.
+///
+/// **A separate type from [`APIValueDistribution`], deliberately.** Every axis
+/// of the two differs — population, weight, sign, parameter shape, query — and
+/// forcing a signed area-weighted interval statistic through a magnitude-mass
+/// struct would misname every field. See `doc/design_isosurface_level.md`
+/// Part 4's table.
+pub struct APISurfaceValueDistribution {
+    /// Which of the three states below the rest of this struct describes.
+    pub state: APISurfaceDistributionState,
+    /// Panel caption for the two empty states — a clause, not a paragraph.
+    /// Empty when `state` is `Available`.
+    pub message: String,
+
+    /// Bin edges as **signed values**, ascending and linearly spaced;
+    /// `bin_weight.len() + 1` entries. Linear rather than log because a colour
+    /// domain crosses zero, which no log axis can.
+    pub bin_edges: Vec<f64>,
+    /// Surface **area** in each bin, not a vertex count — marching cubes puts
+    /// vertices where the geometry is busy, not where the area is.
+    pub bin_weight: Vec<f64>,
+    /// Smallest colour value anywhere on the surface.
+    pub value_min: f64,
+    /// Largest colour value anywhere on the surface.
+    pub value_max: f64,
+    /// Area-weighted 2nd percentile — the span fit's low end, and the axis's.
+    pub p2: f64,
+    /// Area-weighted 98th percentile.
+    pub p98: f64,
+    /// Surface vertices the statistics were taken over.
+    pub vertex_count: u64,
+    /// Whether the colour field takes negative values, which is what picks the
+    /// symmetric fit over the span one.
+    pub is_signed: bool,
+
+    /// Low end of the domain the fit button would write. Meaningless unless
+    /// `can_fit`.
+    pub fit_min: f64,
+    /// High end of the same. Meaningless unless `can_fit`.
+    pub fit_max: f64,
+    /// Whether the fit button is offerable at all.
+    pub can_fit: bool,
+    /// Why not, when `can_fit` is false — the button's tooltip. Empty otherwise.
+    pub fit_blocked_reason: String,
+}
+
+impl APISurfaceValueDistribution {
+    fn empty(state: APISurfaceDistributionState, message: &str) -> Self {
+        Self {
+            state,
+            message: message.to_string(),
+            bin_edges: Vec::new(),
+            bin_weight: Vec::new(),
+            value_min: 0.0,
+            value_max: 0.0,
+            p2: 0.0,
+            p98: 0.0,
+            vertex_count: 0,
+            is_signed: false,
+            fit_min: 0.0,
+            fit_max: 0.0,
+            can_fit: false,
+            fit_blocked_reason: message.to_string(),
+        }
+    }
+
+    fn from_distribution(distribution: &SurfaceValueDistribution) -> Self {
+        let (value_min, value_max) = distribution.value_range();
+        let fit = distribution.fit();
+        // The refusal is a sentence rather than a flag because the button's
+        // tooltip is the only place it can be said: a surface too coarse to fit
+        // still plots, so nothing else on screen would explain a dead button.
+        let fit_blocked_reason = match fit {
+            Some(_) => String::new(),
+            None if distribution.vertex_count() < MIN_FIT_VERTICES => format!(
+                "Surface too coarse to fit: {} vertices, {} needed. \
+                 Raise the isosurface extraction quality in Preferences.",
+                distribution.vertex_count(),
+                MIN_FIT_VERTICES
+            ),
+            None => "The colour field is constant over this surface — \
+                     there is no range to fit."
+                .to_string(),
+        };
+        Self {
+            state: APISurfaceDistributionState::Available,
+            message: String::new(),
+            bin_edges: distribution.bin_edges().to_vec(),
+            bin_weight: distribution.bin_weight().to_vec(),
+            value_min,
+            value_max,
+            p2: distribution.p2(),
+            p98: distribution.p98(),
+            vertex_count: distribution.vertex_count() as u64,
+            is_signed: distribution.is_signed(),
+            fit_min: fit.map_or(0.0, |(min, _)| min),
+            fit_max: fit.map_or(0.0, |(_, max)| max),
+            can_fit: fit.is_some(),
+            fit_blocked_reason,
+        }
+    }
+}
+
+/// The distribution behind an `isosurface` node's **colour domain**, computed
+/// against an explicit designer.
+///
+/// **This is a scene read, not an evaluation**, and that is the whole shape of
+/// it. The mesh the statistic describes is produced by the display conversion
+/// (`generate_isosurface_output` -> `extract_isosurface`), one stage after the
+/// value the level distribution's probe re-evaluates — so `evaluate_node_output`
+/// would hand back the `IsosurfaceData` *specification*, which has no vertices.
+/// Reading the scene instead also means there is no `print_log` / profiling
+/// state to save and restore, and no evaluation cost per panel rebuild.
+///
+/// `None` only when (`scope_path`, `node_id`) is not an `isosurface` node.
+#[flutter_rust_bridge::frb(ignore)]
+pub fn isosurface_color_distribution(
+    designer: &StructureDesigner,
+    scope_path: &[u64],
+    node_id: u64,
+) -> Option<APISurfaceValueDistribution> {
+    designer
+        .get_node_network_data_scoped(scope_path, node_id)?
+        .as_any_ref()
+        .downcast_ref::<IsosurfaceNodeData>()?;
+
+    let scene_node = designer
+        .last_generated_structure_designer_scene
+        .node_data
+        .get(&NodeRef::scoped(scope_path, node_id));
+
+    Some(match scene_node {
+        None => APISurfaceValueDistribution::empty(
+            APISurfaceDistributionState::NotExtracted,
+            "Display the node to measure its surface.",
+        ),
+        Some(scene) => match (&scene.surface_color_distribution, &scene.output) {
+            (Some(distribution), _) => APISurfaceValueDistribution::from_distribution(distribution),
+            (None, NodeOutput::Isosurface(mesh)) if mesh.is_empty() => {
+                APISurfaceValueDistribution::empty(
+                    APISurfaceDistributionState::NotExtracted,
+                    "This level encloses nothing — the surface is empty.",
+                )
+            }
+            (None, NodeOutput::Isosurface(_)) => APISurfaceValueDistribution::empty(
+                APISurfaceDistributionState::NoColorField,
+                "Wire `color_field` to paint the surface by a second quantity.",
+            ),
+            // Extraction produced no mesh at all — the cell-budget refusal is
+            // the reachable case, and it already reports itself as a red error
+            // on the node, so this caption stays short.
+            (None, _) => APISurfaceValueDistribution::empty(
+                APISurfaceDistributionState::NotExtracted,
+                "The surface was not extracted.",
+            ),
+        },
+    })
+}
+
+/// Flutter entry point for [`isosurface_color_distribution`].
+///
+/// Called from `build` like its level sibling, so any network change
+/// invalidates it. Unlike the sibling it is a pure read of the last generated
+/// scene, so the cost is a hash lookup and two vector clones.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_isosurface_color_distribution(
+    scope_path: Vec<u64>,
+    node_id: u64,
+) -> Option<APISurfaceValueDistribution> {
+    unsafe {
+        with_mut_cad_instance_or(
+            |cad_instance| {
+                isosurface_color_distribution(
+                    &cad_instance.structure_designer,
                     &scope_path,
                     node_id,
                 )

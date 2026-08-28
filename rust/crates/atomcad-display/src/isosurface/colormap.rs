@@ -1,8 +1,13 @@
 //! Turning a color field's value into per-vertex albedo.
 //!
-//! The domain is never auto-fitted — see
+//! The domain arrives as two concrete numbers and is used verbatim — nothing
+//! here fits anything. The editor's fit button
+//! (`doc/design_isosurface_level.md` Part 4) writes those numbers from the
+//! **surface's** own distribution, which
+//! [`surface_distribution`](super::surface_distribution) computes beside the
+//! mesh; fitting to the *volume's* extrema stays wrong for the reason
 //! [`IsosurfaceColoring::Field::range`](atomcad_crystolecule::field::IsosurfaceColoring)
-//! for why. Out-of-domain values clamp to the ramp's ends, which is also what a
+//! gives. Out-of-domain values clamp to the ramp's ends, which is also what a
 //! surface extending past the *color* field's box gets: `ScalarField::sample`
 //! returns `0.0` there, so the overhang paints as whatever `0.0` maps to
 //! (neutral, for a symmetric ESP domain). That is a documented sharp edge of

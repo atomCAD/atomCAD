@@ -97,6 +97,13 @@ extractor, the lattice policy, the tessellator and every renderer path are
 unchanged — the one addition is a `level_basis: LevelBasis` passenger carried for
 the readout, which nothing downstream branches on.
 
+**The same design's Part 4 also touches the *colour* domain**, and there the
+change is not confined to the node: `IsosurfaceColoring::Field::range` gains a
+fit, measured on the extracted mesh's own vertices and computed in
+`atomcad-display` beside `extract_isosurface` (`isosurface::surface_distribution`),
+parked on `NodeSceneData`. The value type is still two hand-written numbers —
+the fit is an editor action, not a mode — so nothing here branches on it either.
+
 ```rust
 // atomcad-crystolecule/src/field/isosurface.rs
 
@@ -120,9 +127,11 @@ pub enum IsosurfaceColoring {
     /// Color field supplied — per-vertex colormap over `range`.
     Field {
         field: Arc<dyn ScalarField>,
-        /// Colormap domain. Never auto-fitted: these quantities span orders of
-        /// magnitude around the nuclei, so fitting to extrema paints the whole
-        /// surface one flat color.
+        /// Colormap domain. Never fitted to the *volume's* extrema: these
+        /// quantities span orders of magnitude around the nuclei, so that
+        /// would paint the whole surface one flat color. Fitting it to the
+        /// **surface** is a later addition — `design_isosurface_level.md`
+        /// Part 4.
         range: (f64, f64),
         colormap: Colormap,
     },

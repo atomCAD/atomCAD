@@ -81,9 +81,16 @@ pub enum IsosurfaceColoring {
         /// quantity from the surface field (density painted by electrostatic
         /// potential), but nothing stops it being the same `Arc`.
         field: Arc<dyn ScalarField>,
-        /// Colormap domain, `(min, max)`. **Never auto-fitted**: these
-        /// quantities span orders of magnitude around the nuclei, so fitting to
-        /// the extrema paints the whole surface one flat color.
+        /// Colormap domain, `(min, max)`. **Never fitted to the field's own
+        /// extrema**: these quantities span orders of magnitude around the
+        /// nuclei, so fitting to the volume's range paints the whole surface
+        /// one flat color.
+        ///
+        /// It *is* fittable to the **surface** — the editor's fit button
+        /// (`doc/design_isosurface_level.md` Part 4) measures the color field at
+        /// the extracted vertices and writes two concrete numbers here. That is
+        /// an editor action, not a mode: nothing in this value records where the
+        /// numbers came from, and nothing re-resolves them.
         range: (f64, f64),
         colormap: Colormap,
     },

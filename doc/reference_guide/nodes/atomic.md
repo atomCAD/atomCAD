@@ -85,7 +85,9 @@ Field **values** are passed through unconverted, in whatever atomic unit the sou
 - *Check the import:* display the `molecule` output pin. You should see the expected structure at the expected size; a molecule about 1.9× too large means the file's units are not what the header implies.
 - *Draw the field:* wire `field` into an [`isosurface`](#isosurface) node.
 - *Read the field numerically:* wire `field` into a [`sample_field`](./math_programming.md#sample_field) node together with a `vec3`, and wire the result into `print` to read values off the Console.
-- *See what you loaded:* hover the **`field` output pin**. The readout names the file's own comment text, the grid, the step and extent in Ångström, the box the field occupies, the **value range** (and whether it is signed), and the memory it takes. Value readouts live on output pins only — there is nothing to hover on an input pin.
+- *See what you loaded:* hover the **`field` output pin**. The readout names the **file name** and the file's own comment text, the grid, the step and extent in Ångström, the box the field occupies, the **value range** (and whether it is signed), and the memory it takes. Value readouts live on output pins only — there is nothing to hover on an input pin.
+
+  The file name leads that first line deliberately. A `.cube`'s two comment lines are often a program banner, or blank; the name a producer chose — `si-cluster-S3-vacancy_spin.cube` — frequently carries the one thing the numbers cannot say, which is *what quantity this is*.
 
 ## isosurface
 
@@ -251,7 +253,7 @@ Two overlapping lobes are drawn back to front for the current camera, so their o
 
 **Two things the node cannot tell you, and both look like breakage**
 
-- *A level above anything in the field draws nothing, silently.* An empty viewport looks exactly like a failed import, and there is no warning. This is the failure `auto` mode exists to keep you out of, so it is now something you meet only after taking the level over in `absolute` mode. Hover the **`field` output pin of the upstream `import_cube`** — value readouts are on output pins, so there is nothing to hover on the `isosurface` node's own input. That readout carries both halves of what you need: the **value range**, and the file's own **comment text** saying what the quantity is. Typical starting points are ±0.02–0.05 for an orbital amplitude and 0.002 for a density's molecular surface — an order of magnitude apart, which is why one default cannot serve both.
+- *A level above anything in the field draws nothing, silently.* An empty viewport looks exactly like a failed import, and there is no warning. This is the failure `auto` mode exists to keep you out of, so it is now something you meet only after taking the level over in `absolute` mode. Hover the **`field` output pin of the upstream `import_cube`** — value readouts are on output pins, so there is nothing to hover on the `isosurface` node's own input. That readout carries both halves of what you need: the **value range**, and the **file name and comment text** saying what the quantity is. Typical starting points are ±0.02–0.05 for an orbital amplitude and 0.002 for a density's molecular surface — an order of magnitude apart, which is why one default cannot serve both.
 - *A `color_field` smaller than the surface paints the overhang neutral.* Outside its own box a field reads as `0.0`, which on a symmetric blue-white-red ramp is plain white — a plausible-looking picture that is simply missing data. It is easy to hit, because densities and potentials often come from separately-computed files with different boxes. There is no warning, so if part of a surface comes out flat white, suspect the boxes before you suspect the physics: compare the two `field` output-pin readouts, which each name the box they cover.
 
 **Painting by a second field**
@@ -264,7 +266,22 @@ Wire a second field into `color_field` and the surface stops being painted by si
 
 The two fields are independent and need share nothing but a coordinate frame: two separate [`import_cube`](#import_cube) nodes, one into `field` and one into `color_field`, is the usual arrangement. Nothing stops you wiring the *same* field into both, which shades a surface by its own value — uniform on the surface itself, but a quick way to check a colour range.
 
-**The colour range is never fitted for you, and this is the control that matters.** *Range min* and *range max* set which values sit at the two ends of the ramp; anything beyond clamps. It is tempting to expect the range to fit itself to the data, and it deliberately does not: a potential keeps climbing steeply near the nuclei, so its full range is one or two orders of magnitude wider than the span the surface actually covers. Fitting to it would compress every value the surface *has* into the middle of the ramp and paint the whole thing flat white. Set the range from what you want resolved, not from the field's extremes — `±0.05` hartree/e is the conventional starting point for a potential in atomic units, and the ramp saturates outside it by design.
+**The colour range is the control that matters, and there is a button that sets it for you.** *Range min* and *range max* set which values sit at the two ends of the ramp; anything beyond clamps. The **fit button** beside the *Colormap* heading fills both in from the colour field's values **on the surface itself** — press it once and the domain is the one the picture actually needs.
+
+*Fitting to the field's own extremes would be useless, and that distinction is the whole point.* A potential keeps climbing steeply near the nuclei, so its range over the **whole box** is one or two orders of magnitude wider than the span the surface covers — on a real methyl-chloride pair, `+97` against `+0.040`. Fitting to that would compress every value the surface *has* into the middle of the ramp and paint the envelope flat white. So the fit measures the *surface*: the values at the extracted vertices, weighted by area rather than by vertex count, because marching cubes puts vertices where the geometry is busy and a crumpled patch would otherwise dominate.
+
+- A **signed** colour field (a potential) fits **symmetrically**, `±q`. That is not cosmetic: the blue-white-red ramp is diverging, and its white has to sit on zero or the sign can no longer be read off the picture.
+- A **non-negative** colour field fits to the 2nd–98th percentile on the surface.
+
+The fit writes two ordinary numbers into the document, exactly as if you had typed them. It is one undo step, it is saved with the design, and it does **not** re-fit itself later — a colour map is only comparable between two figures when the domain is the *same number*, so re-fitting per field would silently give two ESP maps two scales. Changing the extraction quality afterwards therefore leaves the domain exactly where it was.
+
+**The fit is refused on a surface that is too coarse to measure**, with the button disabled and the reason in its tooltip. The statistic is read off the extracted mesh, whose resolution comes from a preference, so below a few hundred vertices the answer starts to wander — and a plausible wrong number written into a saved file is worse than a refusal. Raise *Preferences → Geometry Visualization → Isosurface extraction* quality and press it again.
+
+**The span plot** beneath the two fields shows where the colour field's values sit on the surface: a signed, linear axis, bar height the surface *area* carrying each value, and the current domain drawn as a shaded span with a handle at each end. The handles are draggable — the numbers track the pointer and the surface recolours when you let go, the same commit-on-release rule the level controls follow — and the axis covers the surface's percentile band widened a little, so a domain set outside it is still visible rather than silently off the plot.
+
+Typing the range by hand is still the right move when you are matching a published figure or comparing two designs: `±0.05` hartree/e is the conventional domain for a potential in atomic units, and the ramp saturates outside it by design.
+
+With `color_field` unwired the two numbers stay on screen, greyed. They are not hidden, because a wire would make them live again unchanged — unlike the level rows, where the dormant number is the same quantity in the other unit.
 
 Signedness and colour are independent: a signed field wired into `field` still shows both lobes, and both are painted per-vertex from the colour field. The phase colours and the swap button simply stop being consulted while `color_field` is wired.
 

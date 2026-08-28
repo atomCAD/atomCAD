@@ -8,6 +8,7 @@ import 'package:flutter_cad/inputs/float_input.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/field_distribution_api.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_api_types.dart';
 import 'package:flutter_cad/structure_designer/node_data/isosurface_histogram.dart';
+import 'package:flutter_cad/structure_designer/node_data/isosurface_span_histogram.dart';
 import 'package:flutter_cad/structure_designer/node_data/node_editor_header.dart';
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 
@@ -44,10 +45,13 @@ import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 ///
 /// # Continuous controls commit on release, not per tick
 ///
-/// The three drag controls here — the fraction slider, the histogram marker and
-/// the opacity slider — write node data **once, when the drag ends**. In
-/// between, the dragged value lives in this widget's state and the panel renders
-/// from it (§`_preview…`).
+/// The drag controls here — the fraction slider, the histogram marker, the
+/// opacity slider and the colour-domain span handles — write node data **once,
+/// when the drag ends**. In between, the dragged value lives in this widget's
+/// state and the panel renders from it (§`_preview…`).
+///
+/// **The fit button is not one of them** and needs no bracket: it is a single
+/// write, so it is already a single undo entry.
 ///
 /// Writing per tick is what the design originally called for, and it made the
 /// application unusable. Every write goes through
@@ -122,6 +126,12 @@ class IsosurfaceEditor extends StatefulWidget {
   /// previous field. Null only when the node could not be resolved at all.
   final APIValueDistribution? distribution;
 
+  /// The colour field's distribution **over the extracted surface**, refetched
+  /// alongside it. Where [distribution] describes the field, this one describes
+  /// the picture: it exists only while the node is displayed, because the mesh
+  /// it is measured on is produced by the display conversion.
+  final APISurfaceValueDistribution? colorDistribution;
+
   const IsosurfaceEditor({
     super.key,
     required this.nodeId,
@@ -130,6 +140,7 @@ class IsosurfaceEditor extends StatefulWidget {
     required this.colorFieldConnected,
     required this.levelConnected,
     required this.distribution,
+    required this.colorDistribution,
   });
 
   static double get sliderFractionMin =>
@@ -176,10 +187,17 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
   double? _previewLevel;
   double? _previewAlpha;
 
+  /// The colour domain under the pointer while a span-handle drag is in flight.
+  /// A pair rather than two independents: the handles are the two ends of one
+  /// value, and the drag writes both at once so the `max > min` guard can never
+  /// be violated by a half-applied edit.
+  (double, double)? _previewColorSpan;
+
   bool get _dragging =>
       _previewFraction != null ||
       _previewLevel != null ||
-      _previewAlpha != null;
+      _previewAlpha != null ||
+      _previewColorSpan != null;
 
   @override
   void dispose() {
@@ -202,10 +220,12 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
     final fraction = _previewFraction;
     final level = _previewLevel;
     final alpha = _previewAlpha;
+    final colorSpan = _previewColorSpan;
     setState(() {
       _previewFraction = null;
       _previewLevel = null;
       _previewAlpha = null;
+      _previewColorSpan = null;
     });
     if (fraction != null) {
       _update(levelFraction: fraction);
@@ -213,8 +233,22 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
       _update(level: level);
     } else if (alpha != null) {
       _update(alpha: alpha);
+    } else if (colorSpan != null) {
+      _update(colorMin: colorSpan.$1, colorMax: colorSpan.$2);
     }
     widget.model.endNodeDataDrag();
+  }
+
+  /// Write the fitted colour domain.
+  ///
+  /// **One write, no bracket.** The fit is a single edit, so it is already a
+  /// single undo entry — the `begin`/`end` coalescing the drags need would only
+  /// wrap it in an empty session. It routes through the same
+  /// `_update` -> `model.setIsosurfaceData` path the two text fields use, which
+  /// is how it becomes undoable without being special.
+  void _fitColorRange(APISurfaceValueDistribution distribution) {
+    if (!distribution.canFit) return;
+    _update(colorMin: distribution.fitMin, colorMax: distribution.fitMax);
   }
 
   void _update({
@@ -384,6 +418,47 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
     }
   }
 
+  /// The fit button's tooltip — the only place the *why* of the fit is sayable
+  /// in the panel, and the only place a refusal can explain itself.
+  ///
+  /// The button is beside a heading, so there is no room for a caption; a
+  /// tooltip costs no layout, which §The panel says a clause makes the
+  /// governing constraint. The paragraphs — what the two fits do, why the
+  /// vertex floor exists, the ramp-orientation caveat — are in the node
+  /// description.
+  String _fitTooltip(APISurfaceValueDistribution? d) {
+    if (!widget.colorFieldConnected) {
+      return 'Fit the colour range.\n'
+          'Wire `color_field` first — nothing reads the range until you do.';
+    }
+    if (d == null) return 'Fit the colour range to the surface.';
+    if (!d.canFit) {
+      return 'Fit the colour range to the surface.\n'
+          '${d.fitBlockedReason.isEmpty ? d.message : d.fitBlockedReason}';
+    }
+    final shape = d.isSigned
+        ? 'Symmetric, so the ramp\'s white stays on zero'
+        : 'The 2nd to 98th percentile';
+    return 'Fit the colour range to this surface.\n'
+        '$shape: ${formatNatural(d.fitMin, 3)} … ${formatNatural(d.fitMax, 3)}.\n'
+        'Measured on the surface, not on the whole box — the field\'s volume '
+        'extrema are one or two orders of magnitude wider.';
+  }
+
+  /// The one caption under the colour group — at most a line, same rule as the
+  /// level group's.
+  ///
+  /// **Empty in every empty state**, because the plot's own box already carries
+  /// that sentence and the panel must not say a thing twice.
+  String _colorCaption(APISurfaceValueDistribution? d) {
+    if (d == null || d.state != APISurfaceDistributionState.available) {
+      return '';
+    }
+    return d.isSigned
+        ? 'Fit is symmetric, so the ramp\'s white sits on zero.'
+        : 'Fit spans the 2nd–98th percentile on the surface.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final current = widget.data;
@@ -421,6 +496,15 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
     final sliderPosition =
         IsosurfaceEditor.sliderPositionForFraction(fractionShown);
     final readout = _readoutLine(shownLevel, shownFraction);
+
+    final colorDistribution = widget.colorDistribution;
+    final colorMinShown = _previewColorSpan?.$1 ?? current.colorMin;
+    final colorMaxShown = _previewColorSpan?.$2 ?? current.colorMax;
+    // The fit needs a wire *and* a surface: without the wire nothing reads the
+    // domain, and without the surface there is nothing to measure it on.
+    final canFit = widget.colorFieldConnected &&
+        colorDistribution != null &&
+        colorDistribution.canFit;
 
     return Padding(
       padding: const EdgeInsets.all(8.0),
@@ -644,13 +728,34 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
               ],
             ),
             const SizedBox(height: 16),
-            Text(
-              'Colormap',
-              style: headingStyle?.copyWith(
-                color: widget.colorFieldConnected
-                    ? null
-                    : Theme.of(context).disabledColor,
-              ),
+            Row(
+              children: [
+                Text(
+                  'Colormap',
+                  style: headingStyle?.copyWith(
+                    color: widget.colorFieldConnected
+                        ? null
+                        : Theme.of(context).disabledColor,
+                  ),
+                ),
+                const Spacer(),
+                // Beside the heading, the same placement as the swap button
+                // beside "Phase colors" — the panel's existing idiom for an
+                // action belonging to a group. The tooltip is where the *why*
+                // lives: it costs no layout, which is what makes it the right
+                // home for a sentence the panel itself has no room for.
+                Tooltip(
+                  message: _fitTooltip(colorDistribution),
+                  child: IconButton(
+                    key: const Key('isosurface_fit_color_range'),
+                    icon: const Icon(Icons.straighten),
+                    iconSize: 18,
+                    visualDensity: VisualDensity.compact,
+                    onPressed:
+                        canFit ? () => _fitColorRange(colorDistribution) : null,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             DropdownButtonFormField<APIColormap>(
@@ -675,12 +780,19 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
                   : null,
             ),
             const SizedBox(height: 8),
+            // **These two rows stay visible and greyed. They are not hidden.**
+            // The level group hides its dormant row, and that reversal must not
+            // be generalised: a dormant colour domain is a value nothing reads
+            // right now *but which a wire would make live again unchanged*, so
+            // it stays inspectable and the panel keeps its shape when the wire
+            // is made. A dormant level coordinate was the same quantity in the
+            // other unit, which is why hiding it lost nothing.
             Row(
               children: [
                 Expanded(
                   child: FloatInput(
                     label: 'Range min',
-                    value: current.colorMin,
+                    value: colorMinShown,
                     enabled: widget.colorFieldConnected,
                     onChanged: (value) => _update(colorMin: value),
                   ),
@@ -689,20 +801,35 @@ class _IsosurfaceEditorState extends State<IsosurfaceEditor> {
                 Expanded(
                   child: FloatInput(
                     label: 'Range max',
-                    value: current.colorMax,
+                    value: colorMaxShown,
                     enabled: widget.colorFieldConnected,
                     onChanged: (value) => _update(colorMax: value),
                   ),
                 ),
               ],
             ),
-            if (!widget.colorFieldConnected) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Wire `color_field` to paint the surface by a second quantity.',
-                style: captionStyle,
+            const SizedBox(height: 8),
+            if (colorDistribution != null)
+              IsosurfaceSpanHistogram(
+                distribution: colorDistribution,
+                colorMin: colorMinShown,
+                colorMax: colorMaxShown,
+                draggable: widget.colorFieldConnected &&
+                    colorDistribution.state ==
+                        APISurfaceDistributionState.available,
+                onDragStart: _beginDrag,
+                onDragUpdate: (min, max) =>
+                    setState(() => _previewColorSpan = (min, max)),
+                onDragEnd: _endDrag,
+                // With no wire the scene may report "display the node", which is
+                // true but not the thing to do about it.
+                emptyMessage: widget.colorFieldConnected
+                    ? null
+                    : 'Wire `color_field` to paint the surface by a second '
+                        'quantity.',
               ),
-            ],
+            const SizedBox(height: 4),
+            Text(_colorCaption(colorDistribution), style: captionStyle),
           ],
         ),
       ),

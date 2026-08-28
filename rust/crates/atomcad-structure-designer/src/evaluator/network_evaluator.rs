@@ -25,7 +25,9 @@ use crate::structure_designer_scene::{DisplayedPinOutput, NodeOutput, NodeSceneD
 use atomcad_crystolecule::atomic_structure::AtomicStructure;
 use atomcad_display::csg_to_poly_mesh::convert_csg_mesh_to_poly_mesh;
 use atomcad_display::csg_to_poly_mesh::convert_csg_sketch_to_poly_mesh;
-use atomcad_display::isosurface::{ExtractionSettings, extract_isosurface};
+use atomcad_display::isosurface::{
+    ExtractionSettings, extract_isosurface, surface_color_distribution,
+};
 use atomcad_geo_tree::GeoNode;
 use atomcad_geo_tree::csg_cache::CsgConversionCache;
 
@@ -1102,6 +1104,18 @@ impl NetworkEvaluator {
             .get(0)
             .get_alignment_reason()
             .map(|s| s.to_string());
+        // The isosurface *specification*, kept alive across the conversion that
+        // consumes it. Cloning it is two `Arc` bumps and a handful of scalars —
+        // the field data itself is shared, not copied. It is needed on the far
+        // side because the surface colour distribution
+        // (`doc/design_isosurface_level.md` Part 4) is a statistic of the
+        // *extracted mesh* under *this* coloring, and neither half is
+        // recoverable from the other alone: `NodeOutput::Isosurface` has dropped
+        // the colour field, and `IsosurfaceData` has no vertices.
+        let isosurface_spec = match &display_result_0 {
+            NetworkResult::Isosurface(data) => Some(data.clone()),
+            _ => None,
+        };
         let (output, geo_tree) = self.convert_result_to_node_output(
             display_result_0,
             &display_type_0,
@@ -1112,6 +1126,13 @@ impl NetworkEvaluator {
             context,
             geometry_visualization_preferences,
         );
+        // Computed once per scene generation, never per panel rebuild: a
+        // re-extraction is the ~0.1 s marching-cubes run that the editor's
+        // commit-on-release rule exists because of.
+        let surface_color_distribution = match (&output, &isosurface_spec) {
+            (NodeOutput::Isosurface(mesh), Some(spec)) => surface_color_distribution(mesh, spec),
+            _ => None,
+        };
 
         // Build pin_outputs for ALL output pins (not just displayed ones).
         // This makes NodeSceneData cache-safe: pin display can be toggled
@@ -1210,6 +1231,7 @@ impl NetworkEvaluator {
             node_error_origins: context.node_error_origins.clone(),
             unit_cell,
             construction_plane,
+            surface_color_distribution,
             show_unit_cell_wireframe,
             selected_node_eval_cache: context.selected_node_eval_cache.take(),
         }
