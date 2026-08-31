@@ -24,8 +24,9 @@
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::node_network::{Argument, NodeNetwork};
+use crate::node_network::{Argument, ArgumentKind, NodeNetwork, Wire};
 use crate::node_type_registry::NodeTypeRegistry;
+use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData, WireAnchor};
 use crate::nodes::parameter::ParameterData;
 use crate::text_format::TextValue;
 use crate::text_format::auto_layout;
@@ -99,6 +100,30 @@ struct PendingConnection {
     source_refs: Vec<SourceRef>,
 }
 
+/// One comment anchor target, still in name form.
+#[derive(Debug, Clone)]
+enum PendingAnchorTarget {
+    /// `on: mybox`
+    Node(String),
+    /// `on: mybox -> union.a`. The source output pin is deliberately not
+    /// carried: a wire is identified by its destination slot plus its source
+    /// *node*, so a pin qualifier on the way in is decoration.
+    Wire {
+        source: String,
+        dest: String,
+        dest_param: String,
+    },
+}
+
+/// A comment's `on:` anchors, resolved after the connection pass — names only
+/// map to ids once every node exists, and a wire anchor additionally needs the
+/// wire itself, which that pass is what creates.
+#[derive(Debug, Clone)]
+struct PendingAnchors {
+    comment_name: String,
+    targets: Vec<PendingAnchorTarget>,
+}
+
 /// Edits a node network based on text format commands.
 pub struct NetworkEditor<'a> {
     network: &'a mut NodeNetwork,
@@ -113,6 +138,8 @@ pub struct NetworkEditor<'a> {
     pending_connections: Vec<PendingConnection>,
     /// Nodes that should be visible after edit
     visible_nodes: Vec<String>,
+    /// Comment anchors to resolve after the connection pass
+    pending_anchors: Vec<PendingAnchors>,
     /// Result tracking
     result: EditResult,
 }
@@ -128,6 +155,7 @@ impl<'a> NetworkEditor<'a> {
             new_node_count: 0,
             pending_connections: Vec::new(),
             visible_nodes: Vec::new(),
+            pending_anchors: Vec::new(),
             result: EditResult::new(),
         }
     }
@@ -167,6 +195,9 @@ impl<'a> NetworkEditor<'a> {
 
         // Step 4: Second pass - wire connections
         self.wire_pending_connections();
+
+        // Step 4b: Comment anchors, which need the wires the previous step made
+        self.apply_pending_anchors();
 
         // Step 5: Process visibility
         self.apply_visibility();
@@ -383,7 +414,9 @@ impl<'a> NetworkEditor<'a> {
                     self.collect_source_refs_for_layout(item, connections);
                 }
             }
-            PropertyValue::Literal(_) => {}
+            // An anchor is documentation, never a dependency edge (D7), so it
+            // must not pull a comment towards its target during layout either.
+            PropertyValue::WireRef { .. } | PropertyValue::Literal(_) => {}
         }
     }
 
@@ -418,7 +451,9 @@ impl<'a> NetworkEditor<'a> {
                     .collect();
                 converted.map(TextValue::Array)
             }
-            PropertyValue::NodeRef(..) | PropertyValue::FunctionRef(_) => None,
+            PropertyValue::NodeRef(..)
+            | PropertyValue::FunctionRef(_)
+            | PropertyValue::WireRef { .. } => None,
         }
     }
 
@@ -467,8 +502,11 @@ impl<'a> NetworkEditor<'a> {
         let mut literal_props: HashMap<String, TextValue> = HashMap::new();
 
         for (prop_name, prop_value) in properties {
-            // Skip special properties
-            if prop_name == "visible" {
+            // Skip special properties. Neither is `NodeData` state: `visible`
+            // lives in `NodeNetwork.displayed_nodes` and `on` (comment anchors)
+            // is a list of node ids, so both are handled in the
+            // connection-collection pass, which can see the whole network.
+            if prop_name == "visible" || prop_name == ANCHOR_PROPERTY {
                 continue;
             }
 
@@ -534,7 +572,7 @@ impl<'a> NetworkEditor<'a> {
     fn collect_connections(
         &mut self,
         dest_node_name: &str,
-        _node_id: u64,
+        node_id: u64,
         properties: &[(String, PropertyValue)],
     ) {
         for (prop_name, prop_value) in properties {
@@ -543,6 +581,14 @@ impl<'a> NetworkEditor<'a> {
                 if let PropertyValue::Literal(TextValue::Bool(true)) = prop_value {
                     self.visible_nodes.push(dest_node_name.to_string());
                 }
+                continue;
+            }
+
+            // Handle comment anchors. Like `visible`, this has to be taken out
+            // before the generic reference handling below, which would
+            // otherwise try to wire `on` to a parameter that does not exist.
+            if prop_name == ANCHOR_PROPERTY {
+                self.collect_anchors(dest_node_name, node_id, prop_value);
                 continue;
             }
 
@@ -576,7 +622,8 @@ impl<'a> NetworkEditor<'a> {
                 .iter()
                 .flat_map(|item| self.extract_source_refs(item))
                 .collect(),
-            PropertyValue::Literal(_) => vec![],
+            // A wire reference names an existing wire; it never creates one.
+            PropertyValue::WireRef { .. } | PropertyValue::Literal(_) => vec![],
         }
     }
 
@@ -724,6 +771,158 @@ impl<'a> NetworkEditor<'a> {
             "Parameter '{}' not found on node type '{}'",
             param_name, node.node_type_name
         ))
+    }
+
+    /// Collect a comment's `on:` anchors for the post-wiring pass.
+    ///
+    /// Accepts a single reference or an array of them; anything else warns and
+    /// is skipped, matching how unknown properties are reported.
+    fn collect_anchors(&mut self, comment_name: &str, node_id: u64, prop_value: &PropertyValue) {
+        let is_comment = self
+            .network
+            .nodes
+            .get(&node_id)
+            .is_some_and(|node| node.data.as_any_ref().is::<CommentData>());
+        if !is_comment {
+            self.result.add_warning(format!(
+                "'{}' is only supported on comment nodes; ignored on '{}'",
+                ANCHOR_PROPERTY, comment_name
+            ));
+            return;
+        }
+
+        let items: Vec<&PropertyValue> = match prop_value {
+            PropertyValue::Array(items) => items.iter().collect(),
+            single => vec![single],
+        };
+
+        let mut targets = Vec::new();
+        for item in items {
+            match item {
+                PropertyValue::NodeRef(name, None) => {
+                    targets.push(PendingAnchorTarget::Node(name.clone()))
+                }
+                PropertyValue::NodeRef(name, Some(pin)) => self.result.add_warning(format!(
+                    "Comment anchor '{}.{}' on '{}' dropped: a node anchor takes no output pin",
+                    name, pin, comment_name
+                )),
+                PropertyValue::WireRef {
+                    source,
+                    dest,
+                    dest_param,
+                    ..
+                } => targets.push(PendingAnchorTarget::Wire {
+                    source: source.clone(),
+                    dest: dest.clone(),
+                    dest_param: dest_param.clone(),
+                }),
+                _ => self.result.add_warning(format!(
+                    "Comment anchor on '{}' dropped: expected a node reference or a wire reference (`source -> dest.param`)",
+                    comment_name
+                )),
+            }
+        }
+
+        // Pushed even when empty: `on: []` is how a text edit clears anchors.
+        self.pending_anchors.push(PendingAnchors {
+            comment_name: comment_name.to_string(),
+            targets,
+        });
+    }
+
+    /// Resolve collected comment anchors to ids and store them on the comments.
+    ///
+    /// Runs after wiring, so a wire anchor can be checked against the wire it
+    /// names. An anchor that does not resolve warns and is dropped rather than
+    /// re-pointed at whatever is nearby (D6).
+    fn apply_pending_anchors(&mut self) {
+        let pending = std::mem::take(&mut self.pending_anchors);
+
+        for entry in pending {
+            let Some(&comment_id) = self.name_to_id.get(&entry.comment_name) else {
+                self.result.add_warning(format!(
+                    "Comment '{}' not found; its anchors were dropped",
+                    entry.comment_name
+                ));
+                continue;
+            };
+
+            let mut anchors = Vec::new();
+            for target in &entry.targets {
+                match self.resolve_pending_anchor(target) {
+                    Ok(anchor) => anchors.push(anchor),
+                    Err(e) => self.result.add_warning(format!(
+                        "Comment anchor on '{}' dropped: {}",
+                        entry.comment_name, e
+                    )),
+                }
+            }
+
+            if let Some(node) = self.network.nodes.get_mut(&comment_id)
+                && let Some(data) = node.data.as_any_mut().downcast_mut::<CommentData>()
+            {
+                data.anchors = anchors;
+            }
+        }
+    }
+
+    /// Turn one name-form anchor target into a `CommentAnchor`.
+    fn resolve_pending_anchor(
+        &self,
+        target: &PendingAnchorTarget,
+    ) -> Result<CommentAnchor, String> {
+        match target {
+            PendingAnchorTarget::Node(name) => {
+                let node_id = *self
+                    .name_to_id
+                    .get(name)
+                    .ok_or_else(|| format!("unknown node '{}'", name))?;
+                Ok(CommentAnchor::Node(node_id))
+            }
+            PendingAnchorTarget::Wire {
+                source,
+                dest,
+                dest_param,
+            } => {
+                let source_id = *self
+                    .name_to_id
+                    .get(source)
+                    .ok_or_else(|| format!("unknown source node '{}'", source))?;
+                let dest_id = *self
+                    .name_to_id
+                    .get(dest)
+                    .ok_or_else(|| format!("unknown destination node '{}'", dest))?;
+                let (param_index, _) = self.get_param_index(dest_id, dest_param)?;
+                let dest_node = self
+                    .network
+                    .nodes
+                    .get(&dest_id)
+                    .ok_or_else(|| format!("destination node '{}' not found", dest))?;
+                let incoming = dest_node
+                    .arguments
+                    .get(param_index)
+                    .and_then(|arg| {
+                        arg.incoming_wires
+                            .iter()
+                            .find(|w| w.source_node_id == source_id)
+                    })
+                    .ok_or_else(|| {
+                        format!("no wire from '{}' to '{}.{}'", source, dest, dest_param)
+                    })?;
+                let wire = Wire {
+                    source_node_id: incoming.source_node_id,
+                    source_pin: incoming.source_pin,
+                    source_scope_depth: incoming.source_scope_depth,
+                    destination_node_id: dest_id,
+                    destination_argument_index: param_index,
+                    destination_argument_kind: ArgumentKind::External,
+                };
+                Ok(CommentAnchor::Wire(WireAnchor::from_wire(
+                    &wire,
+                    self.network,
+                )))
+            }
+        }
     }
 
     /// Apply visibility settings to nodes.

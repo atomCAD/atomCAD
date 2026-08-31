@@ -198,6 +198,41 @@ int1 = int { value: 42 }
 
 **Design rationale**: Defaulting to invisible keeps the format compact. The AI must be deliberate when it wants to display something. This avoids cluttering the viewport with intermediate computation nodes.
 
+## Comment Anchors
+
+A `comment` node's `on` property records what the note documents — a node, or a
+single wire — so the association survives an edit or an automatic re-layout
+instead of living only in the reader's head:
+
+```
+note1 = Comment { text: "the chassis", on: mybox }
+note2 = Comment { text: "passivation", on: mybox -> union.a }
+note3 = Comment { text: "the diff branch", on: edit1.diff -> applied.diff }
+note4 = Comment { text: "both", on: [mybox, sphere1 -> union.a] }
+```
+
+- `on: <node>` — a **node anchor**.
+- `on: <source>[.<pin>] -> <dest>.<param>` — a **wire anchor**. The source side
+  is an ordinary node reference (optionally qualified by an output pin name);
+  the destination side names the receiving parameter. This is what makes a note
+  about one branch of a fan-out expressible: an anchor on `mybox` alone cannot
+  say *which* consumer the note is about.
+- An array holds several anchors, mixing both forms freely.
+- `on: []` clears a comment's anchors.
+
+`on` is only accepted on `comment` nodes, and an anchor may only name a node or
+wire in the **same network** as the comment.
+
+**Query behavior**: Only anchored comments include `on`. A single anchor is
+written bare, several as an array.
+
+**Edit behavior**: An anchor that cannot be resolved — an unknown name, or a
+wire that does not exist between the two named endpoints — produces a **warning
+and is dropped**, never re-pointed at something nearby. A leader line pointing
+at the wrong wire is documentation that actively lies, so the only two outcomes
+are "the same target" or "no anchor". A comment statement that says nothing
+about `on` leaves its existing anchors alone.
+
 ## Type Annotations
 
 Some nodes have dynamic types that must be specified explicitly:

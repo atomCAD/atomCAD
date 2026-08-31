@@ -16,6 +16,15 @@ use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// The text-format property name a comment's anchors round-trip through.
+///
+/// Anchors are network-level state, not a `NodeData` property: writing one
+/// needs node *names*, and `set_text_properties` only ever sees a
+/// `HashMap<String, TextValue>`. So `on` follows the `visible` precedent —
+/// emitted by the serializer from resolved anchors, and intercepted by the
+/// network editor before the literal-property pass.
+pub const ANCHOR_PROPERTY: &str = "on";
+
 /// What a comment node documents: a node, or a single wire.
 ///
 /// Anchors are **scope-local** (`doc/design_wire_annotations.md` D5): the

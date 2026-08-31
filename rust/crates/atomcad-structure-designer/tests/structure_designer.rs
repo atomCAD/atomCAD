@@ -547,3 +547,6 @@ mod refresh_profile_test;
 
 #[path = "structure_designer/comment_anchors_test.rs"]
 mod comment_anchors_test;
+
+#[path = "structure_designer/comment_anchors_text_format_test.rs"]
+mod comment_anchors_text_format_test;

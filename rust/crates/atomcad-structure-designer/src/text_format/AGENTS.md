@@ -36,6 +36,29 @@ output result
 - **Matrices:** `m: ((1, 0, 0), (0, 1, 0), (0, 0, 1))` — nested tuples, row-major. Parsed as `IMat3` or `Mat3` based on the target pin's declared type.
 - **Strings:** `name: "hello"` or `name: '''multi-line'''`
 - **Multi-output pin refs:** `input: atom_edit.diff` (selects pin by name). Unqualified `input: atom_edit` defaults to pin 0. Serializer emits `.pinname` only for pin index > 0.
+- **Comment anchors:** `on: mybox` (node) or `on: mybox -> union.a` (wire, `->` is a lexer token), or an array mixing both. See `doc/node_network_text_format.md`.
+
+## Network-level properties (`visible`, `on`)
+
+Two properties inside a node's braces are **not** `NodeData` state and so cannot
+go through `get_text_properties` / `set_text_properties` — the latter receives
+only a `HashMap<String, TextValue>` and can resolve neither a node id nor a node
+name. `visible` lives in `NodeNetwork.displayed_nodes`; `on` (comment anchors,
+`doc/design_wire_annotations.md`) is a list of node ids. Both follow the same
+three-site shape, and a third such property must too:
+
+1. **`network_serializer.rs`** — an extra pass in `serialize_node` that emits the
+   property from network state, turning ids back into names.
+2. **`network_editor.rs::apply_literal_properties`** — skip the name, so it is
+   neither fed to `set_text_properties` nor reported as an unknown property.
+3. **`network_editor.rs::collect_connections`** — intercept it *before* the
+   generic reference handling, which would otherwise try to wire it to a
+   parameter of that name. Park it in a pending list resolved in a later pass,
+   once every node exists and names map to ids.
+
+Anchors additionally resolve **after** `wire_pending_connections`, not with the
+`visible` pass: a wire anchor names a wire, and that is the pass which creates
+it.
 
 ## NetworkEditor (network_editor.rs)
 

@@ -62,6 +62,7 @@ pub enum Token {
     At,           // @
     Dot,          // .
     Hash,         // #
+    Arrow,        // -> (destination side of a wire reference)
     Output,       // output keyword
     Delete,       // delete keyword
     Description,  // description keyword
@@ -113,6 +114,18 @@ pub enum PropertyValue {
     NodeRef(String, Option<String>),
     /// A function pin reference: `@node_name`
     FunctionRef(String),
+    /// A wire reference: `source -> dest.param`, with the source side
+    /// optionally qualified by an output pin name (`source.pin -> dest.param`).
+    ///
+    /// Wires are not stored objects — they are assembled from the incoming
+    /// wires on the destination — so a wire is named from its destination
+    /// slot, with the source identifying which of that slot's wires is meant.
+    WireRef {
+        source: String,
+        source_pin: Option<String>,
+        dest: String,
+        dest_param: String,
+    },
     /// Array of references or values: `[sphere1, box1]`
     Array(Vec<PropertyValue>),
 }
@@ -357,6 +370,20 @@ impl Lexer {
                 }
                 Ok(TokenInfo {
                     token: Token::Identifier(content),
+                    line,
+                    column,
+                })
+            }
+
+            // `->` must be tested before the number rule; the number rule
+            // only claims a `-` that is followed by a digit, so the two
+            // cannot collide, but keeping the order explicit is cheaper than
+            // re-deriving that each time.
+            Some('-') if self.peek_ahead(1) == Some('>') => {
+                self.advance();
+                self.advance();
+                Ok(TokenInfo {
+                    token: Token::Arrow,
                     line,
                     column,
                 })
@@ -830,6 +857,12 @@ impl Parser {
                 // Function reference: @node_name
                 self.bump();
                 let name = self.expect_identifier()?;
+                if self.peek() == &Token::Arrow {
+                    // `@f -> apply1.f`: a wire whose source is a function
+                    // pin. A wire is identified by its source *node*, so the
+                    // `@` carries no extra information here and is dropped.
+                    return self.parse_wire_ref_tail(name, None);
+                }
                 Ok(PropertyValue::FunctionRef(name))
             }
             Token::LeftBracket => {
@@ -872,6 +905,11 @@ impl Parser {
                     } else {
                         None
                     };
+                    if self.peek() == &Token::Arrow {
+                        // `source -> dest.param`: a wire reference, where the
+                        // part parsed so far is its source side.
+                        return self.parse_wire_ref_tail(name, pin_name);
+                    }
                     // It's a node reference, optionally qualified with a pin name
                     Ok(PropertyValue::NodeRef(name, pin_name))
                 }
@@ -913,6 +951,25 @@ impl Parser {
                 ))
             }
         }
+    }
+
+    /// Parse the destination half of a wire reference, having already
+    /// consumed its source half: `-> dest.param`.
+    fn parse_wire_ref_tail(
+        &mut self,
+        source: String,
+        source_pin: Option<String>,
+    ) -> Result<PropertyValue, ParseError> {
+        self.expect(&Token::Arrow)?;
+        let dest = self.expect_identifier()?;
+        self.expect(&Token::Dot)?;
+        let dest_param = self.expect_identifier()?;
+        Ok(PropertyValue::WireRef {
+            source,
+            source_pin,
+            dest,
+            dest_param,
+        })
     }
 
     /// Parse a vector literal: `(x, y)` or `(x, y, z)`, or a 3x3 matrix

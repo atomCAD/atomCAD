@@ -103,6 +103,10 @@ output union1
 
 # Delete a node
 delete sphere1
+
+# Anchor a comment to what it documents: a node, or one wire
+note1 = Comment { text: "the chassis", on: cuboid1 }
+note2 = Comment { text: "the union branch", on: sphere1 -> union1.shapes }
 ```
 
 **Parameter values:**

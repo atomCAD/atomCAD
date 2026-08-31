@@ -14,8 +14,9 @@
 
 use super::parser::Parser;
 use super::serializer::format_string;
-use crate::node_network::NodeNetwork;
+use crate::node_network::{ArgumentKind, NodeNetwork};
 use crate::node_type_registry::NodeTypeRegistry;
+use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData};
 use std::borrow::Cow;
 use std::collections::HashSet;
 
@@ -274,6 +275,27 @@ impl<'a> NetworkSerializer<'a> {
             properties.push(("visible".to_string(), "true".to_string()));
         }
 
+        // Fourth pass: comment anchors. Like `visible`, these are not a
+        // `NodeData` text property — they are node *ids*, and only the
+        // network can turn those back into names — so they are emitted here.
+        // An anchor that no longer resolves is simply not written; repair
+        // drops such anchors anyway (D6), so the two agree.
+        if let Some(comment) = node.data.as_any_ref().downcast_ref::<CommentData>() {
+            let refs: Vec<String> = comment
+                .anchors
+                .iter()
+                .filter_map(|anchor| self.format_anchor(anchor))
+                .collect();
+            match refs.len() {
+                0 => {}
+                1 => properties.push((ANCHOR_PROPERTY.to_string(), refs[0].clone())),
+                _ => properties.push((
+                    ANCHOR_PROPERTY.to_string(),
+                    format!("[{}]", refs.join(", ")),
+                )),
+            }
+        }
+
         // Format the node. The LHS name and the RHS node type are both
         // identifier positions and must be quoted if they contain reserved
         // characters (relevant for custom networks with relaxed names used as
@@ -288,6 +310,47 @@ impl<'a> NetworkSerializer<'a> {
                 .map(|(k, v)| format!("{}: {}", k, v))
                 .collect();
             format!("{} = {} {{ {} }}", lhs, rhs, props_str.join(", "))
+        }
+    }
+
+    /// Format one comment anchor as a text-format reference, or `None` when
+    /// it cannot be written: a dangling anchor, a node without a name, or a
+    /// wire the text format has no projection for.
+    fn format_anchor(&self, anchor: &CommentAnchor) -> Option<String> {
+        match anchor {
+            CommentAnchor::Node(node_id) => {
+                Some(format_identifier(self.get_node_name(*node_id)?).into_owned())
+            }
+            CommentAnchor::Wire(wire_anchor) => {
+                let wire = wire_anchor.resolve(self.network)?;
+                // A `ZoneOutput` wire terminates at an HOF body return, and
+                // its source lives inside that body — a scope the text format
+                // does not project at all, so there is no name to write.
+                if wire.destination_argument_kind != ArgumentKind::External {
+                    return None;
+                }
+                let source_name = self.get_node_name(wire.source_node_id)?;
+                let source = self.format_reference(
+                    source_name,
+                    wire.source_pin_index()?,
+                    wire.source_node_id,
+                );
+                let dest_name = self.get_node_name(wire.destination_node_id)?;
+                let dest_node = self.network.nodes.get(&wire.destination_node_id)?;
+                let param_name = self
+                    .registry
+                    .get_node_type_for_node(dest_node)?
+                    .parameters
+                    .get(wire.destination_argument_index)?
+                    .name
+                    .clone();
+                Some(format!(
+                    "{} -> {}.{}",
+                    source,
+                    format_identifier(dest_name),
+                    format_identifier(&param_name)
+                ))
+            }
         }
     }
 
