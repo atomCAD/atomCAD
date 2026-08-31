@@ -97,6 +97,60 @@ fixed. This is a prerequisite of the first phase.
 "while we're here" improvements. The output differs from the input only where
 the delta forced it to.
 
+**D9 — On the incremental path, comment nodes are ordinary nodes.** They are
+obstacles at their real `CommentData` size, they are pushed by the cascade, and
+they translate with a half-plane shift — exactly like any other existing node.
+There is **no** comment placement pass, and `place_comments` is not called and
+not modified.
+
+This deliberately diverges from `design_wire_annotations.md`, where comments are
+excluded from layout (its D8) and re-placed by rule afterwards, never displacing
+graph nodes. That treatment is right for a *full reflow*, where the graph has
+just been re-derived and a comment's stored position is stale — and it stays in
+force there, unchanged.
+
+It is wrong here, for a reason that only became true once #427 landed:
+**the dashed leader line now carries the association explicitly, so a comment's
+position no longer encodes it.** Before anchors, proximity *was* the
+association, which is why guarding it mattered. Now drift is cosmetic, visible,
+and fixable with one drag; no information is lost.
+
+Treating them as ordinary nodes is also strictly better on this path:
+
+- a colliding comment is displaced by the *minimum* amount, with vertical
+  ordering preserved, instead of being relocated to a four-sides candidate or
+  banished to the gutter;
+- it cannot overlap anything, because the cascade guarantees that for every node
+  it touches;
+- it requires **no change to the landed Phase 5 code**;
+- and it obeys D3, which a re-derivation would violate — a comment the human
+  positioned is a position the human chose.
+
+The measured cascade figures in [Step 4](#step-4--fit-the-block-in-the-collision-primitive)
+already reflect this rule: that simulation used real comment dimensions and
+treated comments as ordinary obstacles.
+
+**D10 — A drifted comment is pulled back to its anchor, if the spot is free.**
+D9 lets an anchored comment and its anchor be displaced differently, which
+stretches the leader line. A final pass (see [Step 7](#step-7--restore-drifted-comments))
+tries to restore the comment's original offset from its anchor exactly, and
+accepts the result only if it is collision-free. All-or-nothing: no partial
+moves, no second-choice positions.
+
+This is cheap, has **no tuning constant**, and cannot make anything worse — the
+target restores the offset the human chose, the pass only runs when the distance
+actually grew, and a colliding target is simply abandoned.
+
+It replaces a ratio heuristic considered earlier ("if the distance grew beyond
+~120%, try to shorten it"). Exact restoration is strictly better: the ratio form
+needs a threshold *and* a rule for how far to move, and it can only ever
+approximate the placement it is trying to recover.
+
+It is not a violation of D8. D8 forbids a post-pass that *improves* the drawing;
+this one only undoes disturbance **this edit caused**, to a node this edit
+already moved, in the direction of where the human had put it. That is squarely
+"repair only what this edit broke", running restoratively.
+
 ---
 
 ## The edit delta
@@ -141,7 +195,7 @@ not `added`. This makes the design work for both edit modes and costs one
 
 ## Algorithm
 
-Five steps, in order. Each is small.
+Seven steps, in order. Each is small.
 
 ### Step 1 — Remove
 
@@ -221,6 +275,8 @@ Two mechanisms, tried in order:
 down and up in increments of `VERTICAL_GAP` — within a bounded window
 (`SLIDE_WINDOW`, suggested: two node heights). Nothing existing moves. If a free
 `y` is found, done.
+
+Comments are ordinary obstacles here, at their real `CommentData` size (D9).
 
 **(4b) Push the wavefront open.** Otherwise place the block at its target `y`
 and displace the kept nodes that are in the way — a vertical Force-Scan:
@@ -304,6 +360,72 @@ kept, if `source.x + width(source) + GAP > dest.x`, then
 edit are left alone — that is the baseline rule, and the measurement says 177 of
 them exist.
 
+### Step 6 — New comment nodes
+
+Existing comments need no step at all: they are ordinary nodes throughout
+(D9). The only comment-specific rule is the *initial* position of a comment the
+edit **created**, which by definition has no prior position to preserve.
+
+- **Anchored** (`note1 = comment { text: "…", on: mybox }` — the text format
+  gained `on:` in `design_wire_annotations.md` Phase 2): place it at the first
+  collision-free position among the four sides of its anchor's box, using the
+  landed `anchor_placement_box` and `surrounding_candidates` helpers, then fall
+  back to Step 4 like any other block. Here the four-sides rule is exactly
+  right: there is no human intent to override.
+- **Unanchored:** it is an anchorless block, and Step 3's "`U` and `D` both
+  empty" case already covers it — right of the drawing's bounding box.
+
+Neither case requires touching `place_comments`, which keeps serving the
+full-reflow path unchanged.
+
+### Step 7 — Restore drifted comments
+
+A final pass over anchored comments only, in ascending node id order (D10).
+Let `anchor_box(positions)` be the landed `anchor_placement_box` resolving
+`anchors[0]` — a node's box, or a wire's Bezier midpoint as a zero-size box.
+
+```
+for each anchored comment c, by ascending id:
+    a_before = anchor_box(pre-edit positions).center()
+    a_after  = anchor_box(settled positions).center()
+
+    d_before = |c.center_before − a_before|
+    d_after  = |c.center_after  − a_after |
+    if d_after <= d_before:            skip     # no drift, or it drifted closer
+
+    target = a_after + (c.pos_before − a_before)   # restores the offset exactly
+    if target collides with any node in the settled layout (c excluded):  skip
+
+    c.pos = target
+    update the obstacle set
+```
+
+Four properties, none of which need arguing about:
+
+- **It never moves a comment away from its anchor.** `target` reproduces the
+  original offset, so its distance is exactly `d_before`, and the pass only runs
+  when `d_after > d_before`.
+- **It never creates an overlap.** A colliding target is abandoned outright.
+- **It never touches anything else.** Only comments, only drifted ones, and only
+  their own position.
+- **It has no constants and cannot loop.** One collision test per drifted
+  anchored comment.
+
+An unresolvable `anchors[0]` skips, as everywhere else. A comment whose anchor
+did not move has `d_after == d_before` unless the *comment* was pushed, which is
+exactly the case worth repairing.
+
+The motivating case is `shift_half_plane`: it splits the drawing at a threshold,
+so a comment sitting just left of the line stays while its anchor moves right by
+`dx`. The drift is guaranteed, the fix is a translation by `dx`, and the target
+is usually free because the region it moves into was vacated by the same shift.
+
+*Possible later refinement, deliberately not specified:* when `target` collides,
+sample a few points along the segment from the settled position toward `target`
+and take the furthest free one. It recovers partial ground in the cases this
+pass currently abandons, at the cost of turning an all-or-nothing rule into one
+with a sample count.
+
 ### The `shift_half_plane` primitive
 
 ```rust
@@ -353,28 +475,32 @@ but that makes the reflow destroy intent in a second, less obvious way. See
 
 ## Prerequisite: real node sizes
 
-Every collision test above needs a node's actual box. Today both layout
-algorithms size nodes with `node_layout::estimate_node_height(params, outputs,
-subtitle)`, which for a comment yields **83 px** against a real default of
-**100** and routine resized values of **300+**, and which does not model HOF
-bodies (`body_width` / `body_height`) at all. Placing correctly while sizing
-wrongly produces overlaps in a tidier arrangement.
+Every collision test above needs a node's actual box.
+`layout/common.rs::node_height` / `node_size` — landed with
+`design_wire_annotations.md` Phase 5 — already returns real `CommentData`
+dimensions for comments and the `estimate_node_height(params, outputs,
+subtitle)` estimate otherwise, so **the comment half of this is done** and this
+design uses those functions rather than adding its own.
 
-A single `fn node_box(node, registry) -> DVec2` that returns the real dimensions
-for comments and HOF bodies, and the estimate otherwise, is a prerequisite of
-Phase 2. `design_wire_annotations.md` Phase 5 needs the same fix and should
-share it.
+What remains: **HOF bodies are still unsized.** A node with a `zone` falls
+through to the parameter-count estimate and its `body_width` / `body_height` —
+which can be many hundreds of pixels — are ignored. A block placed next to a
+collapsed-vs-expanded HOF will overlap it. Extending `node_size` to return the
+body box for an expanded HOF is a prerequisite of Phase 2, and it improves
+`place_comments` on the full-reflow path for free.
 
 ---
 
 ## Interaction with other subsystems
 
-**Comment nodes (#427).** Comments are graph isolates; they never join a block
-and are excluded from Step 2. Once `design_wire_annotations.md` lands,
-an **anchored** comment follows its anchor: if the anchor moved by `Δ` in this
-pass, the comment moves by `Δ` too. An unanchored comment moves only when a band
-push displaces it. This is strictly better than that document's D9 scaffolding
-and supersedes it — D10 anticipated exactly this replacement.
+**Comment nodes (#427, landed).** Existing comments are ordinary nodes on this
+path (D9) — obstacles, pushable, shiftable — so they can neither overlap nor be
+gratuitously relocated, and `place_comments` is left untouched for the
+full-reflow path. Only a comment the edit *created* needs a rule, and that is
+[Step 6](#step-6--new-comment-nodes). An anchored comment may drift from its
+anchor when the two are pushed differently; [Step 7](#step-7--restore-drifted-comments)
+pulls it back when the original spot is free, and the leader line keeps the
+association legible when it is not.
 
 **HOF bodies.** Layout does not recurse into `node.zone` today (verified: no
 mention of `zone` or `walk_all_nodes` anywhere in `layout/`). The delta and this
@@ -399,9 +525,10 @@ and the full reflow is only ever user-invoked. See open question 1.
 
 ### Phase 1 — Foundations
 `Node.hand_moved` with `#[serde(default)]`, set from the drag path, persisted
-and undoable. `node_box()` returning real sizes. Deterministic id ordering
-throughout `layout/` (D7). `LayoutSnapshot` + `diff_networks` producing an
-`EditDelta`, with tests but not yet wired to anything.
+and undoable. `node_size` extended to return the body box for an expanded HOF.
+Deterministic id ordering throughout `layout/` (D7). `LayoutSnapshot` +
+`diff_networks` producing an `EditDelta`, with tests but not yet wired to
+anything.
 
 *Tests:* delta correctly classifies add / modify / remove / rewire; a value-only
 change produces an empty delta; `hand_moved` round-trips through `.cnnd` and
@@ -417,7 +544,10 @@ falls below the drawing. `shift_half_plane` for the no-horizontal-room case.
 20-node connected addition is laid out internally by Sugiyama and placed as one
 block with no existing node moving; an addition with no anchors goes right of
 the drawing; a block needing a new column shifts the half-plane and nothing
-reorders.
+reorders; an existing comment that nothing collides with stays at its **exact**
+original position, on whichever side of its anchor the human put it (D9 — the
+four-sides rule must not fire); a newly created `on:`-anchored comment lands
+beside its anchor (Step 6).
 
 ### Phase 3 — Band push and repair
 Step 4b Force-Scan band push with cascade, the `hand_moved` tiebreakers, and
@@ -429,7 +559,13 @@ column; the cascade pushes a node whose x-interval overlaps a *pushed* node but
 not `R` (the widening case — the narrow reading of the closure fails this one);
 a node that grew pushes its neighbours down and nothing else; a rewire that
 points backward shifts the half-plane; a wire that was **already** backward
-before the edit is not touched. Plus a generous guard assertion — no cascade
+before the edit is not touched; a 400x300 comment in the band is pushed like any
+other node, by the minimum amount, and never ends up overlapped (D9);
+**Step 7** — a comment left behind by a half-plane shift is pulled back to its
+exact original offset; a drifted comment whose original spot is now occupied
+stays where the cascade left it; a comment that drifted *closer* to its anchor
+is not moved; a comment with an unresolvable anchor is skipped; the pass never
+introduces an overlap. Plus a generous guard assertion — no cascade
 pushes more than ~20 nodes — to catch a regression, not to bound behaviour.
 
 ### Phase 4 — Wiring it up
@@ -474,3 +610,6 @@ Recursion into HOF bodies if Phase 4 leaves it out.
 6. **Does `replace` mode get name-matching in v1?** It is cheap and makes the
    feature work regardless of which mode the AI uses, but it needs a rule for
    nodes without a `custom_name`.
+7. **Should Step 7 fall back to a partial move when the exact target
+   collides?** Specified as all-or-nothing. The interpolation refinement is
+   noted in Step 7; it recovers more cases but introduces a sample count.
