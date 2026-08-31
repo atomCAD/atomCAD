@@ -544,3 +544,6 @@ mod eval_profiler_test;
 
 #[path = "structure_designer/refresh_profile_test.rs"]
 mod refresh_profile_test;
+
+#[path = "structure_designer/comment_anchors_test.rs"]
+mod comment_anchors_test;

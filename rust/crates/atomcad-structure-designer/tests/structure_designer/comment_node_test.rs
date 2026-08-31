@@ -31,6 +31,7 @@ fn test_comment_serialization_roundtrip() {
         text: "Test content with special chars: <>&\"'".to_string(),
         width: 250.0,
         height: 150.0,
+        anchors: Vec::new(),
     };
 
     let json = serde_json::to_value(&original).unwrap();
@@ -49,6 +50,7 @@ fn test_comment_data_with_multiline_text() {
         text: "Line 1\nLine 2\nLine 3".to_string(),
         width: 300.0,
         height: 200.0,
+        anchors: Vec::new(),
     };
 
     let json = serde_json::to_value(&data).unwrap();
@@ -64,6 +66,7 @@ fn test_comment_data_with_empty_fields() {
         text: String::new(),
         width: 100.0,
         height: 60.0,
+        anchors: Vec::new(),
     };
 
     let json = serde_json::to_value(&data).unwrap();

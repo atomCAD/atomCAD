@@ -403,6 +403,7 @@ fn test_comment_data_text_properties() {
         text: "Description text".to_string(),
         width: 200.0,
         height: 100.0,
+        anchors: Vec::new(),
     };
     let props = data.get_text_properties();
 
@@ -740,6 +741,7 @@ fn test_comment_roundtrip() {
         text: "Description".to_string(),
         width: 150.0,
         height: 75.0,
+        anchors: Vec::new(),
     });
 }
 
