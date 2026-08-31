@@ -63,6 +63,28 @@ If the anchored wire is disconnected, or the anchored node deleted, the anchor
 is dropped and the leader line disappears; it is never silently re-pointed at
 something else. Undoing the deletion brings the anchor back.
 
+**Notes and automatic layout**
+
+*Edit > Auto-Layout Network* rearranges the graph, and notes are placed against
+it afterwards rather than being treated as nodes in it:
+
+- An **anchored** note is placed next to whatever its anchor points at — beside
+  the node, or beside the wire's midpoint. When there is no room there (a
+  laid-out graph has only about 50 px between columns and 30 px between nodes,
+  far less than a note needs), it goes to the nearest margin above or below the
+  drawing, lined up with its subject, with the leader line pointing back in.
+  That is deliberate: annotations in the margin with leaders into the drawing is
+  the normal drafting arrangement.
+- An **unanchored** note keeps its position relative to the drawing's top-left
+  corner, so a note stays with its graph even when the whole graph is moved to
+  the canvas origin. If something else has since been placed there, it falls to
+  the margin like any other note.
+
+Notes are always placed at their real size, they never push graph nodes out of
+the way, and they never overlap a node or each other. A note anchored deep
+inside a wide graph can end up with a long leader line to the margin; anchor it
+and it will at least point at the right thing.
+
 Anchors can also be written by hand (or by an AI assistant) in the network text
 editor via the comment's `on:` property — see *Comment anchors* in
 [`doc/node_network_text_format.md`](../../node_network_text_format.md). A note

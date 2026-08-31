@@ -27,13 +27,12 @@ use crate::node_layout;
 use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
 
-use super::common::compute_node_depths;
+use super::common::{
+    COLUMN_WIDTH, START_X, START_Y, VERTICAL_GAP, compute_node_depths, graph_node_ids,
+    place_comments,
+};
 
 // Layout constants
-const START_X: f64 = 100.0;
-const START_Y: f64 = 100.0;
-const COLUMN_WIDTH: f64 = 210.0; // NODE_WIDTH (160) + horizontal gap (50)
-const VERTICAL_GAP: f64 = 30.0;
 const COMPONENT_GAP: f64 = 80.0;
 
 // =============================================================================
@@ -140,13 +139,20 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
     // Find connected components and lay them out separately
     let components = find_connected_components(network);
 
-    if components.len() == 1 {
+    let mut positions = if components.len() == 1 {
         // Single component: use standard layout
-        return layout_single_component(network, registry, &components[0]);
-    }
+        layout_single_component(network, registry, &components[0])
+    } else {
+        // Multiple components (or none at all, in a comment-only network): lay
+        // out each and stack vertically
+        layout_with_components(network, registry, &components)
+    };
 
-    // Multiple components: lay out each and stack vertically
-    layout_with_components(network, registry, &components)
+    // Comments are not part of any component (D8); place them against the
+    // laid-out graph (`doc/design_wire_annotations.md` D9).
+    place_comments(network, registry, &mut positions);
+
+    positions
 }
 
 // =============================================================================
@@ -157,12 +163,19 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
 ///
 /// Returns a vector of HashSets, each containing the node IDs in a component.
 /// Components are sorted by size (largest first).
+///
+/// **Comment nodes are excluded entirely** (`doc/design_wire_annotations.md`
+/// D8). Having no wires, each would otherwise form its own singleton component
+/// and be stacked below the whole graph — and, tying on size against every other
+/// singleton, in an order that comes from `HashMap` iteration and so differs per
+/// process. `place_comments` positions them after the graph is laid out instead.
 fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
+    let graph_nodes = graph_node_ids(network);
     let mut visited: HashSet<u64> = HashSet::new();
     let mut components: Vec<HashSet<u64>> = Vec::new();
 
     for &node_id in network.nodes.keys() {
-        if visited.contains(&node_id) {
+        if visited.contains(&node_id) || !graph_nodes.contains(&node_id) {
             continue;
         }
 
@@ -183,7 +196,7 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
                 for arg in &node.arguments {
                     for wire in &arg.incoming_wires {
                         let source_id = wire.source_node_id;
-                        if !component.contains(&source_id) {
+                        if !component.contains(&source_id) && graph_nodes.contains(&source_id) {
                             queue.push_back(source_id);
                         }
                     }
@@ -192,6 +205,9 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
 
             // Output connections (nodes that use this node as input)
             for (&other_id, other_node) in &network.nodes {
+                if !graph_nodes.contains(&other_id) {
+                    continue;
+                }
                 for arg in &other_node.arguments {
                     if arg.has_source(current) && !component.contains(&other_id) {
                         queue.push_back(other_id);
@@ -253,7 +269,7 @@ fn component_bounding_box(
     let mut max_y = f64::MIN;
 
     for (&node_id, &pos) in positions {
-        let height = get_node_height(node_id, network, registry);
+        let height = super::common::node_height(node_id, network, registry);
         min_y = min_y.min(pos.y);
         max_y = max_y.max(pos.y + height);
     }
@@ -596,7 +612,7 @@ fn assign_coordinates(
             match node {
                 LayerNode::Real(id) => {
                     positions.insert(id, DVec2::new(x, y));
-                    y += get_node_height(id, network, registry) + VERTICAL_GAP;
+                    y += super::common::node_height(id, network, registry) + VERTICAL_GAP;
                 }
                 LayerNode::Dummy(_, _, _) => {
                     // Dummy nodes get positions for edge routing (stored separately)
@@ -630,7 +646,7 @@ fn calculate_layer_height(
     for &node in &layer.nodes {
         match node {
             LayerNode::Real(id) => {
-                total_height += get_node_height(id, network, registry);
+                total_height += super::common::node_height(id, network, registry);
                 node_count += 1;
             }
             LayerNode::Dummy(_, _, _) => {
@@ -720,7 +736,7 @@ fn can_move_to_y(
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
 ) -> bool {
-    let node_height = get_node_height(node_id, network, registry);
+    let node_height = super::common::node_height(node_id, network, registry);
     let proposed_pos = DVec2::new(
         positions.get(&node_id).map(|p| p.x).unwrap_or(START_X),
         target_y,
@@ -735,7 +751,7 @@ fn can_move_to_y(
             }
 
             if let Some(&other_pos) = positions.get(&other_id) {
-                let other_height = get_node_height(other_id, network, registry);
+                let other_height = super::common::node_height(other_id, network, registry);
                 let other_size = DVec2::new(node_layout::NODE_WIDTH, other_height);
 
                 if node_layout::nodes_overlap(
@@ -757,20 +773,6 @@ fn can_move_to_y(
 // =============================================================================
 // Utility Functions
 // =============================================================================
-
-/// Get the estimated height of a node.
-fn get_node_height(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> f64 {
-    let node = match network.nodes.get(&node_id) {
-        Some(n) => n,
-        None => return node_layout::estimate_node_height(0, 1, true),
-    };
-
-    let node_type = registry.get_node_type(&node.node_type_name);
-    let num_params = node_type.map(|nt| nt.parameters.len()).unwrap_or(0);
-    let num_outputs = node_type.map(|nt| nt.output_pin_count()).unwrap_or(1);
-
-    node_layout::estimate_node_height(num_params, num_outputs, true)
-}
 
 // =============================================================================
 // Public Utilities for Testing

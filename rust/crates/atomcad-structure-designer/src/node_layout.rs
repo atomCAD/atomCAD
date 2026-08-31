@@ -33,6 +33,10 @@ const SUBTITLE_HEIGHT: f64 = 20.0;
 /// Vertical padding at the bottom of the node
 const PADDING: f64 = 8.0;
 
+/// Vertical offset from a node's top edge to the centre of its first pin row.
+/// Matches Flutter's `BASE_NODE_VERT_WIRE_OFFSET` in `node_network.dart`.
+pub const FIRST_PIN_OFFSET: f64 = 33.0;
+
 /// Default vertical gap between nodes for comfortable spacing
 pub const DEFAULT_VERTICAL_GAP: f64 = 20.0;
 
@@ -95,6 +99,29 @@ pub fn estimate_node_size(
 #[inline]
 pub fn get_node_width() -> f64 {
     NODE_WIDTH
+}
+
+/// Estimated position of an input pin on a node whose top-left is `node_pos`.
+///
+/// Input pins sit on the node's left edge, one row per parameter. This is an
+/// *estimate* in the same sense as [`estimate_node_height`] - the authoritative
+/// geometry lives in Flutter's `ScopeResolver` - and is accurate enough for
+/// layout decisions such as where a wire's midpoint falls.
+pub fn input_pin_position(node_pos: DVec2, pin_index: usize) -> DVec2 {
+    DVec2::new(
+        node_pos.x,
+        node_pos.y + FIRST_PIN_OFFSET + pin_index as f64 * PER_PARAM_HEIGHT,
+    )
+}
+
+/// Estimated position of an output pin on a node whose top-left is `node_pos`.
+///
+/// Output pins sit on the node's right edge; see [`input_pin_position`].
+pub fn output_pin_position(node_pos: DVec2, pin_index: usize) -> DVec2 {
+    DVec2::new(
+        node_pos.x + NODE_WIDTH,
+        node_pos.y + FIRST_PIN_OFFSET + pin_index as f64 * PER_PARAM_HEIGHT,
+    )
 }
 
 // =============================================================================

@@ -20,17 +20,12 @@ use std::collections::HashMap;
 
 use glam::DVec2;
 
-use crate::node_layout;
 use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
 
-use super::common::compute_node_depths;
-
-// Layout constants
-const START_X: f64 = 100.0;
-const START_Y: f64 = 100.0;
-const COLUMN_WIDTH: f64 = 210.0; // NODE_WIDTH (160) + horizontal gap (50)
-const VERTICAL_GAP: f64 = 30.0;
+use super::common::{
+    COLUMN_WIDTH, START_X, START_Y, VERTICAL_GAP, compute_node_depths, is_comment, place_comments,
+};
 
 /// Compute positions for all nodes using the topological grid layout algorithm.
 ///
@@ -52,8 +47,12 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
         return HashMap::new();
     }
 
-    // Step 1: Compute depths
-    let depths = compute_node_depths(network);
+    // Step 1: Compute depths, over the graph nodes alone. Comments never take
+    // part in layer assignment (`doc/design_wire_annotations.md` D8) — they
+    // would otherwise land at depth 0 and, having no consumers, be pushed to the
+    // bottom of the leftmost column, interleaved with real source nodes.
+    let mut depths = compute_node_depths(network);
+    depths.retain(|node_id, _| network.nodes.get(node_id).is_some_and(|n| !is_comment(n)));
 
     // Step 2: Group nodes by depth into columns
     let mut columns = group_by_depth(&depths);
@@ -62,7 +61,12 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
     order_columns(&mut columns, network);
 
     // Step 4: Assign final coordinates
-    assign_positions(&columns, network, registry)
+    let mut positions = assign_positions(&columns, network, registry);
+
+    // Step 5: Place the comments against the laid-out graph (D9).
+    place_comments(network, registry, &mut positions);
+
+    positions
 }
 
 /// Group nodes into columns based on their computed depth.
@@ -288,7 +292,7 @@ fn assign_positions(
             positions.insert(node_id, DVec2::new(x, y));
 
             // Move Y down for next node
-            let node_height = get_node_height(node_id, network, registry);
+            let node_height = super::common::node_height(node_id, network, registry);
             y += node_height + VERTICAL_GAP;
         }
     }
@@ -308,24 +312,10 @@ fn calculate_column_height(
 
     let total_node_height: f64 = column
         .iter()
-        .map(|&id| get_node_height(id, network, registry))
+        .map(|&id| super::common::node_height(id, network, registry))
         .sum();
 
     let gaps = (column.len() - 1) as f64 * VERTICAL_GAP;
 
     total_node_height + gaps
-}
-
-/// Get the estimated height of a node.
-fn get_node_height(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> f64 {
-    let node = match network.nodes.get(&node_id) {
-        Some(n) => n,
-        None => return node_layout::estimate_node_height(0, 1, true),
-    };
-
-    let node_type = registry.get_node_type(&node.node_type_name);
-    let num_params = node_type.map(|nt| nt.parameters.len()).unwrap_or(0);
-    let num_outputs = node_type.map(|nt| nt.output_pin_count()).unwrap_or(1);
-
-    node_layout::estimate_node_height(num_params, num_outputs, true)
 }

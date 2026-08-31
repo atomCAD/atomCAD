@@ -550,3 +550,6 @@ mod comment_anchors_test;
 
 #[path = "structure_designer/comment_anchors_text_format_test.rs"]
 mod comment_anchors_text_format_test;
+
+#[path = "structure_designer/layout_comments_test.rs"]
+mod layout_comments_test;
