@@ -14,6 +14,7 @@ undo/
     ├── connect_wire.rs, move_nodes.rs
     ├── composite.rs                # Bundles N child commands into one undo step
     ├── set_node_data.rs, set_return_node.rs, set_node_display.rs
+    ├── set_comment_anchors.rs      # A comment node's anchor list (wire annotations)
     ├── duplicate_node.rs, paste_nodes.rs
     ├── add_network.rs, delete_network.rs, rename_network.rs
     ├── text_edit_network.rs, factor_selection.rs

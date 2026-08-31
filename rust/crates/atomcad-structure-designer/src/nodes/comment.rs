@@ -99,6 +99,28 @@ impl CommentAnchor {
             }
         }
     }
+
+    /// Rewrite this anchor's node ids through a copy/paste/duplicate
+    /// `old_to_new` map, or `None` if a referenced node was **not** part of the
+    /// copied set.
+    ///
+    /// Dropping in that case is the point: pasting a lone comment must not
+    /// leave it pointing at whatever unrelated node in the destination network
+    /// happens to share the original's id. A wire anchor needs *both* of its
+    /// endpoints copied — the destination alone is not enough, since the wire
+    /// itself is dropped when its source was left behind.
+    pub fn remap(&self, old_to_new: &HashMap<u64, u64>) -> Option<Self> {
+        match self {
+            CommentAnchor::Node(node_id) => {
+                old_to_new.get(node_id).copied().map(CommentAnchor::Node)
+            }
+            CommentAnchor::Wire(wire_anchor) => Some(CommentAnchor::Wire(WireAnchor {
+                destination_node_id: *old_to_new.get(&wire_anchor.destination_node_id)?,
+                source_node_id: *old_to_new.get(&wire_anchor.source_node_id)?,
+                ..wire_anchor.clone()
+            })),
+        }
+    }
 }
 
 impl WireAnchor {
@@ -304,4 +326,50 @@ pub fn get_node_type() -> NodeType {
         node_data_saver: generic_node_data_saver::<CommentData>,
         node_data_loader: generic_node_data_loader::<CommentData>,
     }
+}
+
+/// Drop every anchor in `network` whose target no longer resolves
+/// (`doc/design_wire_annotations.md` D6), and report what was lost.
+///
+/// The return value is one `(node_id, before, after)` entry per comment whose
+/// anchor list actually changed — exactly what an undo command needs. Callers
+/// that only want the cleanup (`repair_node_network`) ignore it.
+///
+/// Non-recursive: it repairs the comments of `network` itself. Body comments
+/// are reached by the caller recursing into zones (`repair_node_network` does),
+/// or ride a whole-body snapshot (the zone-scoped delete path does).
+pub type AnchorChange = (u64, Vec<CommentAnchor>, Vec<CommentAnchor>);
+
+pub fn drop_dangling_anchors(network: &mut NodeNetwork) -> Vec<AnchorChange> {
+    // Resolution needs an immutable view of the whole network while the comment
+    // being fixed lives inside it, so compute first, apply after.
+    let mut changed: Vec<(u64, Vec<CommentAnchor>, Vec<CommentAnchor>)> = Vec::new();
+    for (&node_id, node) in &network.nodes {
+        let Some(comment) = node.data.as_any_ref().downcast_ref::<CommentData>() else {
+            continue;
+        };
+        if comment.anchors.is_empty() {
+            continue;
+        }
+        let kept: Vec<CommentAnchor> = comment
+            .anchors
+            .iter()
+            .filter(|anchor| anchor.resolve(network).is_some())
+            .cloned()
+            .collect();
+        if kept.len() != comment.anchors.len() {
+            changed.push((node_id, comment.anchors.clone(), kept));
+        }
+    }
+
+    let mut applied = Vec::with_capacity(changed.len());
+    for (node_id, before, kept) in changed {
+        if let Some(node) = network.nodes.get_mut(&node_id)
+            && let Some(comment) = node.data.as_any_mut().downcast_mut::<CommentData>()
+        {
+            comment.anchors = kept.clone();
+            applied.push((node_id, before, kept));
+        }
+    }
+    applied
 }

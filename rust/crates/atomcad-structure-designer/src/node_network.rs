@@ -3,6 +3,7 @@ use crate::canvas_viewport::CanvasViewport;
 use crate::node_data::NodeData;
 use crate::node_network_gadget::NodeNetworkGadget;
 use crate::node_type::{NodeType, OutputPinDefinition};
+use crate::nodes::comment::CommentData;
 use crate::nodes::parameter::ParameterData;
 use crate::structure_designer::StructureDesigner;
 use glam::f64::DVec2;
@@ -1372,6 +1373,26 @@ impl NodeNetwork {
         for &new_id in &new_ids {
             if let Some(body) = self.nodes.get_mut(&new_id).and_then(|node| node.zone_mut()) {
                 remap_body_wires_to_pasted_scope(body, 1, &old_to_new);
+            }
+        }
+
+        // Step 4 — Remap comment anchors. They are node ids riding invisibly
+        // inside the cloned `NodeData`, so without this a pasted comment keeps
+        // pointing at the *source* network's ids — which in this network name
+        // whatever unrelated nodes happen to share them. An anchor whose target
+        // was not part of the copied set is dropped
+        // (`doc/design_wire_annotations.md` §"Repair, copy/paste and deletion").
+        for &new_id in &new_ids {
+            if let Some(comment) = self
+                .nodes
+                .get_mut(&new_id)
+                .and_then(|node| node.data.as_any_mut().downcast_mut::<CommentData>())
+            {
+                comment.anchors = comment
+                    .anchors
+                    .iter()
+                    .filter_map(|anchor| anchor.remap(&old_to_new))
+                    .collect();
             }
         }
 

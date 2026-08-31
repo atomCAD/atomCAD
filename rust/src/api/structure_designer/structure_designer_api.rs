@@ -17,6 +17,7 @@ use super::structure_designer_api_types::APIClosureData;
 use super::structure_designer_api_types::APIClosureKind;
 use super::structure_designer_api_types::APICollapseMode;
 use super::structure_designer_api_types::APICollectData;
+use super::structure_designer_api_types::APICommentAnchor;
 use super::structure_designer_api_types::APICommentData;
 use super::structure_designer_api_types::APICompatibilityReport;
 use super::structure_designer_api_types::APIDataType;
@@ -8714,10 +8715,36 @@ pub fn get_comment_data(scope_path: Vec<u64>, node_id: u64) -> Option<APIComment
                     text: comment_data.text.clone(),
                     width: comment_data.width,
                     height: comment_data.height,
+                    anchors: comment_data.anchors.iter().map(Into::into).collect(),
                 })
             },
             None,
         )
+    }
+}
+
+/// Set a comment node's anchors — what the note documents
+/// (`doc/design_wire_annotations.md`).
+///
+/// Replaces the whole list, so clearing it (the *Remove anchor* action) is an
+/// empty `anchors`. Unlike the other comment mutators this one is directly
+/// undoable and needs no `begin_edit_comment_node` / `end_edit_comment_node`
+/// bracketing: setting an anchor is a single discrete action, not a drag.
+///
+/// An anchor that does not resolve in the comment's own scope is silently
+/// omitted (D5/D6) — an anchor is scope-local, and a leader line pointing at
+/// something that is not there is worse than no leader line.
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_comment_anchors(scope_path: Vec<u64>, node_id: u64, anchors: Vec<APICommentAnchor>) {
+    unsafe {
+        with_mut_cad_instance(|cad_instance| {
+            let domain_anchors = anchors.iter().map(Into::into).collect();
+            cad_instance.structure_designer.set_comment_anchors(
+                &scope_path,
+                node_id,
+                domain_anchors,
+            );
+        });
     }
 }
 

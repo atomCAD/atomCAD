@@ -14,6 +14,159 @@ part of 'structure_designer_api_types.dart';
 T _$identity<T>(T value) => value;
 
 /// @nodoc
+mixin _$APICommentAnchor {
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is APICommentAnchor);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  String toString() {
+    return 'APICommentAnchor()';
+  }
+}
+
+/// @nodoc
+class $APICommentAnchorCopyWith<$Res> {
+  $APICommentAnchorCopyWith(
+      APICommentAnchor _, $Res Function(APICommentAnchor) __);
+}
+
+/// @nodoc
+
+class APICommentAnchor_Node extends APICommentAnchor {
+  const APICommentAnchor_Node({required this.nodeId}) : super._();
+
+  final BigInt nodeId;
+
+  /// Create a copy of APICommentAnchor
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APICommentAnchor_NodeCopyWith<APICommentAnchor_Node> get copyWith =>
+      _$APICommentAnchor_NodeCopyWithImpl<APICommentAnchor_Node>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APICommentAnchor_Node &&
+            (identical(other.nodeId, nodeId) || other.nodeId == nodeId));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, nodeId);
+
+  @override
+  String toString() {
+    return 'APICommentAnchor.node(nodeId: $nodeId)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APICommentAnchor_NodeCopyWith<$Res>
+    implements $APICommentAnchorCopyWith<$Res> {
+  factory $APICommentAnchor_NodeCopyWith(APICommentAnchor_Node value,
+          $Res Function(APICommentAnchor_Node) _then) =
+      _$APICommentAnchor_NodeCopyWithImpl;
+  @useResult
+  $Res call({BigInt nodeId});
+}
+
+/// @nodoc
+class _$APICommentAnchor_NodeCopyWithImpl<$Res>
+    implements $APICommentAnchor_NodeCopyWith<$Res> {
+  _$APICommentAnchor_NodeCopyWithImpl(this._self, this._then);
+
+  final APICommentAnchor_Node _self;
+  final $Res Function(APICommentAnchor_Node) _then;
+
+  /// Create a copy of APICommentAnchor
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? nodeId = null,
+  }) {
+    return _then(APICommentAnchor_Node(
+      nodeId: null == nodeId
+          ? _self.nodeId
+          : nodeId // ignore: cast_nullable_to_non_nullable
+              as BigInt,
+    ));
+  }
+}
+
+/// @nodoc
+
+class APICommentAnchor_Wire extends APICommentAnchor {
+  const APICommentAnchor_Wire({required this.anchor}) : super._();
+
+  final APIWireAnchor anchor;
+
+  /// Create a copy of APICommentAnchor
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $APICommentAnchor_WireCopyWith<APICommentAnchor_Wire> get copyWith =>
+      _$APICommentAnchor_WireCopyWithImpl<APICommentAnchor_Wire>(
+          this, _$identity);
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is APICommentAnchor_Wire &&
+            (identical(other.anchor, anchor) || other.anchor == anchor));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, anchor);
+
+  @override
+  String toString() {
+    return 'APICommentAnchor.wire(anchor: $anchor)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $APICommentAnchor_WireCopyWith<$Res>
+    implements $APICommentAnchorCopyWith<$Res> {
+  factory $APICommentAnchor_WireCopyWith(APICommentAnchor_Wire value,
+          $Res Function(APICommentAnchor_Wire) _then) =
+      _$APICommentAnchor_WireCopyWithImpl;
+  @useResult
+  $Res call({APIWireAnchor anchor});
+}
+
+/// @nodoc
+class _$APICommentAnchor_WireCopyWithImpl<$Res>
+    implements $APICommentAnchor_WireCopyWith<$Res> {
+  _$APICommentAnchor_WireCopyWithImpl(this._self, this._then);
+
+  final APICommentAnchor_Wire _self;
+  final $Res Function(APICommentAnchor_Wire) _then;
+
+  /// Create a copy of APICommentAnchor
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? anchor = null,
+  }) {
+    return _then(APICommentAnchor_Wire(
+      anchor: null == anchor
+          ? _self.anchor
+          : anchor // ignore: cast_nullable_to_non_nullable
+              as APIWireAnchor,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$APIFieldEditorHint {
   @override
   bool operator ==(Object other) {

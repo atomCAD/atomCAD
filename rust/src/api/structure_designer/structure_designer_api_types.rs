@@ -5,6 +5,7 @@ use crate::api::common_api_types::APIVec2;
 use crate::api::common_api_types::APIVec3;
 use atomcad_structure_designer::evaluator::network_evaluator::PrintLogEntry;
 use atomcad_structure_designer::last_directories::FileDialogPurpose as DomainFileDialogPurpose;
+use atomcad_structure_designer::node_network::ArgumentKind as DomainArgumentKind;
 use atomcad_structure_designer::node_network::CollapseMode;
 use atomcad_structure_designer::node_network::FunctionPinDisposition;
 use atomcad_structure_designer::node_network::FunctionPinRole;
@@ -16,6 +17,9 @@ use atomcad_structure_designer::nodes::atom_edit::atom_edit::{
     PointerDownResultKind as DomainPointerDownResultKind,
     PointerMoveResult as DomainPointerMoveResult,
     PointerMoveResultKind as DomainPointerMoveResultKind, PointerUpResult as DomainPointerUpResult,
+};
+use atomcad_structure_designer::nodes::comment::{
+    CommentAnchor as DomainCommentAnchor, WireAnchor as DomainWireAnchor,
 };
 use atomcad_structure_designer::structure_designer::{
     ExecuteResult as DomainExecuteResult, NodeEvaluationResult as DomainNodeEvaluationResult,
@@ -419,6 +423,24 @@ pub enum APIArgumentKind {
     /// Sourced from destination's `zone_output_arguments` (body-return wires
     /// from a body node's output into its containing HOF's zone-output pin).
     ZoneOutput,
+}
+
+impl From<DomainArgumentKind> for APIArgumentKind {
+    fn from(kind: DomainArgumentKind) -> Self {
+        match kind {
+            DomainArgumentKind::External => APIArgumentKind::External,
+            DomainArgumentKind::ZoneOutput => APIArgumentKind::ZoneOutput,
+        }
+    }
+}
+
+impl From<APIArgumentKind> for DomainArgumentKind {
+    fn from(kind: APIArgumentKind) -> Self {
+        match kind {
+            APIArgumentKind::External => DomainArgumentKind::External,
+            APIArgumentKind::ZoneOutput => DomainArgumentKind::ZoneOutput,
+        }
+    }
 }
 
 /// Discriminator for which side of an HOF node a wire's source pin sits on.
@@ -1516,6 +1538,73 @@ pub struct APICommentData {
     pub text: String,
     pub width: f64,
     pub height: f64,
+    /// What this comment documents — empty for a free-floating note. The
+    /// canvas draws one dashed leader line per entry
+    /// (`doc/design_wire_annotations.md`).
+    pub anchors: Vec<APICommentAnchor>,
+}
+
+/// Flutter-facing mirror of [`DomainCommentAnchor`]. Per the FRB rule this is a
+/// **twin type declared here**, not a re-export of the domain enum — a
+/// `pub use` is invisible to codegen and would degrade silently to an opaque
+/// handle.
+///
+/// Only ids travel: Flutter already has node positions and the wire list, so it
+/// can locate both ends of a leader line without any resolved geometry.
+#[derive(Clone, PartialEq, Eq)]
+pub enum APICommentAnchor {
+    /// The comment documents a whole node.
+    Node { node_id: u64 },
+    /// The comment documents one wire.
+    Wire { anchor: APIWireAnchor },
+}
+
+/// Flutter-facing mirror of [`DomainWireAnchor`] — a wire addressed from its
+/// **destination** side, since wires are assembled rather than stored.
+///
+/// `destination_param_id` is authoritative over `destination_argument_index`
+/// when present; it is set only for the dynamic-arity node types, whose slot
+/// indices can shift. Flutter passes both back verbatim and does not interpret
+/// the precedence itself.
+#[derive(Clone, PartialEq, Eq)]
+pub struct APIWireAnchor {
+    pub destination_node_id: u64,
+    pub destination_argument_kind: APIArgumentKind,
+    pub destination_argument_index: usize,
+    pub destination_param_id: Option<u64>,
+    pub source_node_id: u64,
+}
+
+impl From<&DomainCommentAnchor> for APICommentAnchor {
+    fn from(anchor: &DomainCommentAnchor) -> Self {
+        match anchor {
+            DomainCommentAnchor::Node(node_id) => APICommentAnchor::Node { node_id: *node_id },
+            DomainCommentAnchor::Wire(wire) => APICommentAnchor::Wire {
+                anchor: APIWireAnchor {
+                    destination_node_id: wire.destination_node_id,
+                    destination_argument_kind: wire.destination_argument_kind.into(),
+                    destination_argument_index: wire.destination_argument_index,
+                    destination_param_id: wire.destination_param_id,
+                    source_node_id: wire.source_node_id,
+                },
+            },
+        }
+    }
+}
+
+impl From<&APICommentAnchor> for DomainCommentAnchor {
+    fn from(anchor: &APICommentAnchor) -> Self {
+        match anchor {
+            APICommentAnchor::Node { node_id } => DomainCommentAnchor::Node(*node_id),
+            APICommentAnchor::Wire { anchor } => DomainCommentAnchor::Wire(DomainWireAnchor {
+                destination_node_id: anchor.destination_node_id,
+                destination_argument_kind: anchor.destination_argument_kind.into(),
+                destination_argument_index: anchor.destination_argument_index,
+                destination_param_id: anchor.destination_param_id,
+                source_node_id: anchor.source_node_id,
+            }),
+        }
+    }
 }
 
 pub struct APIApplyDiffData {

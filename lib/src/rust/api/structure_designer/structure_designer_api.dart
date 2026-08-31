@@ -2293,6 +2293,25 @@ APICommentData? getCommentData(
         .crateApiStructureDesignerStructureDesignerApiGetCommentData(
             scopePath: scopePath, nodeId: nodeId);
 
+/// Set a comment node's anchors — what the note documents
+/// (`doc/design_wire_annotations.md`).
+///
+/// Replaces the whole list, so clearing it (the *Remove anchor* action) is an
+/// empty `anchors`. Unlike the other comment mutators this one is directly
+/// undoable and needs no `begin_edit_comment_node` / `end_edit_comment_node`
+/// bracketing: setting an anchor is a single discrete action, not a drag.
+///
+/// An anchor that does not resolve in the comment's own scope is silently
+/// omitted (D5/D6) — an anchor is scope-local, and a leader line pointing at
+/// something that is not there is worse than no leader line.
+void setCommentAnchors(
+        {required Uint64List scopePath,
+        required BigInt nodeId,
+        required List<APICommentAnchor> anchors}) =>
+    RustLib.instance.api
+        .crateApiStructureDesignerStructureDesignerApiSetCommentAnchors(
+            scopePath: scopePath, nodeId: nodeId, anchors: anchors);
+
 /// Evaluate a node and return its result string.
 ///
 /// # Arguments

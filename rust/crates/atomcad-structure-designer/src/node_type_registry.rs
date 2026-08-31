@@ -3043,47 +3043,7 @@ impl NodeTypeRegistry {
         // Only this network's own nodes: body comments are covered because the
         // zone-body recursion above re-enters `repair_node_network` for each
         // body, which runs this same pass there.
-        Self::drop_dangling_comment_anchors(network);
-    }
-
-    /// Drop each comment node's anchors whose target no longer resolves in
-    /// `network` (`doc/design_wire_annotations.md` D6: dangling anchors are
-    /// dropped, never re-resolved). Non-recursive — see the call site.
-    ///
-    /// The `destination_param_id` precedence inside `CommentAnchor::resolve`
-    /// means a pin reorder on a dynamic-arity node *remaps* the anchor rather
-    /// than dropping it; only a genuinely gone wire or node drops.
-    fn drop_dangling_comment_anchors(network: &mut NodeNetwork) {
-        use crate::nodes::comment::{CommentAnchor, CommentData};
-
-        // Resolution needs an immutable view of the whole network while the
-        // comment being fixed lives inside it, so compute first, apply after.
-        let mut surviving: Vec<(u64, Vec<CommentAnchor>)> = Vec::new();
-        for (&node_id, node) in &network.nodes {
-            let Some(comment) = node.data.as_any_ref().downcast_ref::<CommentData>() else {
-                continue;
-            };
-            if comment.anchors.is_empty() {
-                continue;
-            }
-            let kept: Vec<CommentAnchor> = comment
-                .anchors
-                .iter()
-                .filter(|anchor| anchor.resolve(network).is_some())
-                .cloned()
-                .collect();
-            if kept.len() != comment.anchors.len() {
-                surviving.push((node_id, kept));
-            }
-        }
-
-        for (node_id, kept) in surviving {
-            if let Some(node) = network.nodes.get_mut(&node_id)
-                && let Some(comment) = node.data.as_any_mut().downcast_mut::<CommentData>()
-            {
-                comment.anchors = kept;
-            }
-        }
+        crate::nodes::comment::drop_dangling_anchors(network);
     }
 
     /// Repair body wires inside `body` (owned by HOF `hof_id`). Drops

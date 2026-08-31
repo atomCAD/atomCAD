@@ -9,7 +9,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:freezed_annotation/freezed_annotation.dart' hide protected;
 part 'structure_designer_api_types.freezed.dart';
 
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `hash`
 
 /// Result of add_bond_pointer_move. Contains all info Flutter needs to draw
 /// the rubber-band preview line as a 2D overlay.
@@ -803,22 +803,47 @@ enum APIColormap {
   ;
 }
 
+@freezed
+sealed class APICommentAnchor with _$APICommentAnchor {
+  const APICommentAnchor._();
+
+  /// The comment documents a whole node.
+  const factory APICommentAnchor.node({
+    required BigInt nodeId,
+  }) = APICommentAnchor_Node;
+
+  /// The comment documents one wire.
+  const factory APICommentAnchor.wire({
+    required APIWireAnchor anchor,
+  }) = APICommentAnchor_Wire;
+}
+
 class APICommentData {
   final String label;
   final String text;
   final double width;
   final double height;
 
+  /// What this comment documents — empty for a free-floating note. The
+  /// canvas draws one dashed leader line per entry
+  /// (`doc/design_wire_annotations.md`).
+  final List<APICommentAnchor> anchors;
+
   const APICommentData({
     required this.label,
     required this.text,
     required this.width,
     required this.height,
+    required this.anchors,
   });
 
   @override
   int get hashCode =>
-      label.hashCode ^ text.hashCode ^ width.hashCode ^ height.hashCode;
+      label.hashCode ^
+      text.hashCode ^
+      width.hashCode ^
+      height.hashCode ^
+      anchors.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -828,7 +853,8 @@ class APICommentData {
           label == other.label &&
           text == other.text &&
           width == other.width &&
-          height == other.height;
+          height == other.height &&
+          anchors == other.anchors;
 }
 
 /// Welded/orphaned/over-coordination stats from a `patch_latticefill` apply,
@@ -2153,9 +2179,12 @@ class APIIsosurfaceData {
   /// Only consulted while the `color_field` pin is wired.
   final APIColormap colormap;
 
-  /// Colormap domain minimum. Never auto-fitted — these quantities span
-  /// orders of magnitude around the nuclei, so fitting to the extrema paints
-  /// the whole surface one flat color.
+  /// Colormap domain minimum. Concrete numbers only: the editor's fit button
+  /// writes them from the color field's distribution **on the extracted
+  /// surface**, and nothing re-resolves them afterwards. Fitting to the
+  /// *volume's* extrema is still wrong — these quantities span orders of
+  /// magnitude around the nuclei, and it would paint the whole surface one
+  /// flat color.
   final double colorMin;
 
   /// Colormap domain maximum.
@@ -4004,6 +4033,48 @@ sealed class APIViewportPickResult with _$APIViewportPickResult {
 
   /// Ray missed everything — proceed with normal click handling.
   const factory APIViewportPickResult.noHit() = APIViewportPickResult_NoHit;
+}
+
+/// Flutter-facing mirror of [`DomainWireAnchor`] — a wire addressed from its
+/// **destination** side, since wires are assembled rather than stored.
+///
+/// `destination_param_id` is authoritative over `destination_argument_index`
+/// when present; it is set only for the dynamic-arity node types, whose slot
+/// indices can shift. Flutter passes both back verbatim and does not interpret
+/// the precedence itself.
+class APIWireAnchor {
+  final BigInt destinationNodeId;
+  final APIArgumentKind destinationArgumentKind;
+  final BigInt destinationArgumentIndex;
+  final BigInt? destinationParamId;
+  final BigInt sourceNodeId;
+
+  const APIWireAnchor({
+    required this.destinationNodeId,
+    required this.destinationArgumentKind,
+    required this.destinationArgumentIndex,
+    this.destinationParamId,
+    required this.sourceNodeId,
+  });
+
+  @override
+  int get hashCode =>
+      destinationNodeId.hashCode ^
+      destinationArgumentKind.hashCode ^
+      destinationArgumentIndex.hashCode ^
+      destinationParamId.hashCode ^
+      sourceNodeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is APIWireAnchor &&
+          runtimeType == other.runtimeType &&
+          destinationNodeId == other.destinationNodeId &&
+          destinationArgumentKind == other.destinationArgumentKind &&
+          destinationArgumentIndex == other.destinationArgumentIndex &&
+          destinationParamId == other.destinationParamId &&
+          sourceNodeId == other.sourceNodeId;
 }
 
 class APIXrayData {

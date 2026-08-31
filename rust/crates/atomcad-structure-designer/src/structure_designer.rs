@@ -32,6 +32,7 @@ use crate::node_data::DragDirection;
 use crate::node_data::NodeData;
 use crate::node_dependency_analysis::compute_downstream_dependents;
 use crate::node_type::{generic_node_data_loader, generic_node_data_saver};
+use crate::nodes::comment::{CommentAnchor, CommentData};
 use crate::nodes::edit_atom::edit_atom::get_selected_edit_atom_data_mut;
 use crate::preferences::MemoryPreferences;
 use crate::preferences::StructureDesignerPreferences;
@@ -6851,6 +6852,12 @@ impl StructureDesigner {
 
             if let Some(network) = self.get_scope_network_mut(scope_path) {
                 network.delete_selected();
+                // A body-internal deletion can orphan a body comment's anchors
+                // (`doc/design_wire_annotations.md` D6). No separate undo
+                // command is needed here: `build_zone_body_command` takes a
+                // fresh whole-body after-snapshot below, so the cleared list
+                // rides along with the edit.
+                crate::nodes::comment::drop_dangling_anchors(network);
             }
             self.set_dirty(true);
             // A body-internal delete changes what the enclosing HOF emits, so
@@ -7074,12 +7081,18 @@ impl StructureDesigner {
         }
 
         // Perform the deletion
+        let mut orphaned_anchors: Vec<crate::nodes::comment::AnchorChange> = Vec::new();
         if let Some(node_network) = self
             .node_type_registry
             .node_networks
             .get_mut(&node_network_name)
         {
             node_network.delete_selected();
+            // Deleting a target node or wire leaves anchors on comments that
+            // are NOT in the delete set (`doc/design_wire_annotations.md` D6).
+            // Cleared here; the before-state is bundled into the same undo step
+            // below, since no delete-command snapshot covers those comments.
+            orphaned_anchors = crate::nodes::comment::drop_dangling_anchors(node_network);
             // Mark design as dirty since we deleted something
             self.set_dirty(true);
             // TODO: we do a full refresh for now,
@@ -7155,21 +7168,38 @@ impl StructureDesigner {
             for (hof_id, old_sizes) in &reflow_targets {
                 scoped_moves.extend(self.reflow_for_footprint_change(&[], *hof_id, old_sizes));
             }
-            if scoped_moves.is_empty() {
+            // Children to bundle with the deletion so the whole thing is one
+            // undo step: the reflow moves, plus one anchor-clear per comment the
+            // deletion orphaned.
+            let mut children: Vec<Box<dyn UndoCommand>> = Vec::new();
+            for sm in scoped_moves {
+                children.push(Box::new(
+                    super::undo::commands::move_nodes::MoveNodesCommand {
+                        network_name: node_network_name.clone(),
+                        scope_path: sm.scope_path,
+                        moves: sm.moves,
+                        description: "Reflow neighbours".to_string(),
+                    },
+                ));
+            }
+            for (comment_id, old_anchors, new_anchors) in orphaned_anchors {
+                children.push(Box::new(
+                    super::undo::commands::set_comment_anchors::SetCommentAnchorsCommand {
+                        network_name: node_network_name.clone(),
+                        scope_path: Vec::new(),
+                        node_id: comment_id,
+                        old_anchors,
+                        new_anchors,
+                        description: "Clear comment anchor".to_string(),
+                    },
+                ));
+            }
+            if children.is_empty() {
                 self.undo_stack.push(delete_command);
             } else {
                 let description = delete_command.description().to_string();
                 let mut commands: Vec<Box<dyn UndoCommand>> = vec![delete_command];
-                for sm in scoped_moves {
-                    commands.push(Box::new(
-                        super::undo::commands::move_nodes::MoveNodesCommand {
-                            network_name: node_network_name.clone(),
-                            scope_path: sm.scope_path,
-                            moves: sm.moves,
-                            description: "Reflow neighbours".to_string(),
-                        },
-                    ));
-                }
+                commands.extend(children);
                 self.undo_stack.push(Box::new(
                     super::undo::commands::composite::CompositeCommand {
                         commands,
@@ -7742,6 +7772,75 @@ impl StructureDesigner {
                 new_data_json,
             });
         }
+    }
+
+    /// Set a comment node's anchors — what the note documents
+    /// (`doc/design_wire_annotations.md`).
+    ///
+    /// Anchors that do not resolve in the comment's own scope are **rejected
+    /// here**, not stored and cleaned up later: D5 makes anchors scope-local
+    /// and D6 makes a dangling one a drop, so a caller naming a node in another
+    /// network — or a wire that no longer exists — gets the anchor silently
+    /// omitted rather than a leader line that will vanish on the next repair.
+    ///
+    /// A no-op change pushes nothing, and the command is `Lightweight`: an
+    /// anchor changes nothing evaluable (D7).
+    pub fn set_comment_anchors(
+        &mut self,
+        scope_path: &[u64],
+        node_id: u64,
+        anchors: Vec<CommentAnchor>,
+    ) {
+        let network_name = match &self.active_node_network_name {
+            Some(name) => name.clone(),
+            None => return,
+        };
+
+        let (old_anchors, new_anchors) = {
+            let Some(network) = self.get_scope_network(scope_path) else {
+                return;
+            };
+            let Some(node) = network.nodes.get(&node_id) else {
+                return;
+            };
+            let Some(comment) = node.data.as_any_ref().downcast_ref::<CommentData>() else {
+                return;
+            };
+            let resolvable: Vec<CommentAnchor> = anchors
+                .into_iter()
+                .filter(|anchor| anchor.resolve(network).is_some())
+                .collect();
+            (comment.anchors.clone(), resolvable)
+        };
+        if old_anchors == new_anchors {
+            return;
+        }
+
+        {
+            let Some(network) = self.get_scope_network_mut(scope_path) else {
+                return;
+            };
+            let Some(comment) = network
+                .nodes
+                .get_mut(&node_id)
+                .and_then(|node| node.data.as_any_mut().downcast_mut::<CommentData>())
+            else {
+                return;
+            };
+            comment.anchors = new_anchors.clone();
+        }
+
+        self.set_dirty(true);
+        self.push_command(
+            super::undo::commands::set_comment_anchors::SetCommentAnchorsCommand {
+                network_name,
+                scope_path: scope_path.to_vec(),
+                node_id,
+                old_anchors,
+                new_anchors,
+                description: "Set comment anchor".to_string(),
+            },
+        );
     }
 
     /// Called when a comment node text field gains focus or resize drag begins.

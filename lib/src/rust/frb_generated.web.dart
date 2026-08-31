@@ -147,6 +147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIColormap dco_decode_api_colormap(dynamic raw);
 
   @protected
+  APICommentAnchor dco_decode_api_comment_anchor(dynamic raw);
+
+  @protected
   APICommentData dco_decode_api_comment_data(dynamic raw);
 
   @protected
@@ -517,6 +520,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIViewportPickResult dco_decode_api_viewport_pick_result(dynamic raw);
 
   @protected
+  APIWireAnchor dco_decode_api_wire_anchor(dynamic raw);
+
+  @protected
   APIXrayData dco_decode_api_xray_data(dynamic raw);
 
   @protected
@@ -881,6 +887,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIVec3Data dco_decode_box_autoadd_api_vec_3_data(dynamic raw);
 
   @protected
+  APIWireAnchor dco_decode_box_autoadd_api_wire_anchor(dynamic raw);
+
+  @protected
   APIXrayData dco_decode_box_autoadd_api_xray_data(dynamic raw);
 
   @protected
@@ -1030,6 +1039,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APICandidateNode> dco_decode_list_api_candidate_node(dynamic raw);
+
+  @protected
+  List<APICommentAnchor> dco_decode_list_api_comment_anchor(dynamic raw);
 
   @protected
   List<APIDataType> dco_decode_list_api_data_type(dynamic raw);
@@ -1778,6 +1790,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   APIColormap sse_decode_api_colormap(SseDeserializer deserializer);
 
   @protected
+  APICommentAnchor sse_decode_api_comment_anchor(SseDeserializer deserializer);
+
+  @protected
   APICommentData sse_decode_api_comment_data(SseDeserializer deserializer);
 
   @protected
@@ -2192,6 +2207,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   APIViewportPickResult sse_decode_api_viewport_pick_result(
       SseDeserializer deserializer);
+
+  @protected
+  APIWireAnchor sse_decode_api_wire_anchor(SseDeserializer deserializer);
 
   @protected
   APIXrayData sse_decode_api_xray_data(SseDeserializer deserializer);
@@ -2645,6 +2663,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  APIWireAnchor sse_decode_box_autoadd_api_wire_anchor(
+      SseDeserializer deserializer);
+
+  @protected
   APIXrayData sse_decode_box_autoadd_api_xray_data(
       SseDeserializer deserializer);
 
@@ -2817,6 +2839,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<APICandidateNode> sse_decode_list_api_candidate_node(
+      SseDeserializer deserializer);
+
+  @protected
+  List<APICommentAnchor> sse_decode_list_api_comment_anchor(
       SseDeserializer deserializer);
 
   @protected
@@ -3687,6 +3713,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_api_colormap(APIColormap self, SseSerializer serializer);
 
   @protected
+  void sse_encode_api_comment_anchor(
+      APICommentAnchor self, SseSerializer serializer);
+
+  @protected
   void sse_encode_api_comment_data(
       APICommentData self, SseSerializer serializer);
 
@@ -4137,6 +4167,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_api_viewport_pick_result(
       APIViewportPickResult self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_api_wire_anchor(APIWireAnchor self, SseSerializer serializer);
 
   @protected
   void sse_encode_api_xray_data(APIXrayData self, SseSerializer serializer);
@@ -4595,6 +4628,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       APIVec3Data self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_api_wire_anchor(
+      APIWireAnchor self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_api_xray_data(
       APIXrayData self, SseSerializer serializer);
 
@@ -4774,6 +4811,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_api_candidate_node(
       List<APICandidateNode> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_api_comment_anchor(
+      List<APICommentAnchor> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_api_data_type(

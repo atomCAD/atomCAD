@@ -1,6 +1,9 @@
 use atomcad_structure_designer::data_type::DataType;
-use atomcad_structure_designer::node_network::{CollapseMode, FunctionPinRole, SourcePin};
+use atomcad_structure_designer::node_network::{
+    ArgumentKind, CollapseMode, FunctionPinRole, SourcePin,
+};
 use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+use atomcad_structure_designer::nodes::comment::{CommentAnchor, CommentData, WireAnchor};
 use atomcad_structure_designer::nodes::expr::{ExprData, ExprParameter};
 use atomcad_structure_designer::nodes::float::FloatData;
 use atomcad_structure_designer::nodes::structure_move::StructureMoveData;
@@ -3249,5 +3252,324 @@ fn undo_redo_consumer_connect_round_trips_supplied_required_warning() {
     assert!(
         has_warning(&designer),
         "undoing the wire deletion restores consumption, and the warning"
+    );
+}
+
+// ===== SetCommentAnchors command tests (doc/design_wire_annotations.md P3) ===
+
+/// Read a comment node's anchors.
+fn anchors_of(
+    designer: &StructureDesigner,
+    network_name: &str,
+    comment_id: u64,
+) -> Vec<CommentAnchor> {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .expect("network must exist")
+        .nodes
+        .get(&comment_id)
+        .expect("comment node must exist")
+        .data
+        .as_any_ref()
+        .downcast_ref::<CommentData>()
+        .expect("node must be a comment")
+        .anchors
+        .clone()
+}
+
+/// The one node of `node_type_name` among `ids`.
+fn only_of_type(designer: &StructureDesigner, ids: &[u64], node_type_name: &str) -> u64 {
+    let network = &designer.node_type_registry.node_networks["test"];
+    let matches: Vec<u64> = ids
+        .iter()
+        .copied()
+        .filter(|id| network.nodes[id].node_type_name == node_type_name)
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "expected exactly one {node_type_name} among {ids:?}"
+    );
+    matches[0]
+}
+
+/// A wire anchor in the built-in-destination shape: the pin layout is fixed, so
+/// the slot is addressed by index and carries no persistent parameter id.
+fn wire_anchor(dest: u64, arg_index: usize, source: u64) -> CommentAnchor {
+    CommentAnchor::Wire(WireAnchor {
+        destination_node_id: dest,
+        destination_argument_kind: ArgumentKind::External,
+        destination_argument_index: arg_index,
+        destination_param_id: None,
+        source_node_id: source,
+    })
+}
+
+/// `float -> sphere`, plus a free-floating comment. Returns
+/// `(float, sphere, comment)`.
+fn setup_anchor_scene(designer: &mut StructureDesigner) -> (u64, u64, u64) {
+    let float_id = designer.add_node("float", DVec2::ZERO);
+    let sphere_id = designer.add_node("sphere", DVec2::new(200.0, 0.0));
+    designer.connect_nodes(float_id, 0, sphere_id, 0);
+    let comment_id = designer.add_node("Comment", DVec2::new(0.0, 200.0));
+    (float_id, sphere_id, comment_id)
+}
+
+#[test]
+fn undo_set_comment_anchor_on_wire() {
+    let mut designer = setup_designer_with_network("test");
+    let (float_id, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_comment_anchors(&[], comment_id, vec![wire_anchor(sphere_id, 0, float_id)]);
+    });
+    // The helper leaves the designer in its pre-action state, so redo once more
+    // to inspect what the command actually installs.
+    assert!(designer.redo());
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![wire_anchor(sphere_id, 0, float_id)],
+        "redo must leave the anchor set"
+    );
+}
+
+#[test]
+fn undo_set_comment_anchor_on_node() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+    });
+}
+
+/// "Remove anchor" is a `set` with an empty list, and it undoes like any other.
+#[test]
+fn undo_clear_comment_anchors() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+    designer.undo_stack.clear();
+
+    assert_undo_redo_roundtrip(&mut designer, |d| {
+        d.set_comment_anchors(&[], comment_id, vec![]);
+    });
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![CommentAnchor::Node(sphere_id)],
+        "the helper's closing undo must bring the anchor back"
+    );
+    assert!(designer.redo());
+    assert!(
+        anchors_of(&designer, "test", comment_id).is_empty(),
+        "clearing must survive the redo"
+    );
+}
+
+/// D5/D6 at the setter: an anchor that does not resolve in the comment's own
+/// scope is never stored, so it can never draw a leader line that lies.
+#[test]
+fn set_comment_anchors_omits_unresolvable_targets() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    let absent = 9999;
+
+    designer.set_comment_anchors(
+        &[],
+        comment_id,
+        vec![
+            CommentAnchor::Node(absent),
+            // Right destination, but no wire from `absent` terminates there.
+            wire_anchor(sphere_id, 0, absent),
+            CommentAnchor::Node(sphere_id),
+        ],
+    );
+
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![CommentAnchor::Node(sphere_id)],
+        "only the resolvable anchor should be stored"
+    );
+}
+
+/// A no-op set must not leave an undo entry.
+#[test]
+fn set_comment_anchors_no_op_pushes_nothing() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+    designer.undo_stack.clear();
+
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+    assert!(
+        !designer.undo(),
+        "re-setting the same anchors must push no command"
+    );
+}
+
+/// The deletion gotcha: the comment is **not** in the delete set, so no
+/// delete-command snapshot covers it. Without the bundled
+/// `SetCommentAnchorsCommand` undo would restore the wire and leave the
+/// association gone.
+#[test]
+fn undo_delete_anchored_wire_restores_the_anchor() {
+    let mut designer = setup_designer_with_network("test");
+    let (float_id, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    let anchor = wire_anchor(sphere_id, 0, float_id);
+    designer.set_comment_anchors(&[], comment_id, vec![anchor.clone()]);
+    designer.undo_stack.clear();
+
+    designer.select_wire(float_id, 0, sphere_id, 0);
+    designer.delete_selected();
+    assert!(
+        anchors_of(&designer, "test", comment_id).is_empty(),
+        "deleting the anchored wire must clear the now-dangling anchor"
+    );
+
+    assert!(designer.undo(), "the delete must be undoable");
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![anchor],
+        "one undo must restore both the wire and the association"
+    );
+
+    assert!(designer.redo());
+    assert!(
+        anchors_of(&designer, "test", comment_id).is_empty(),
+        "redo must clear it again"
+    );
+}
+
+/// Same, for the node-anchor variant, and asserting the *single*-step property
+/// explicitly: the delete and the anchor clear are one `CompositeCommand`.
+#[test]
+fn undo_delete_anchored_node_is_one_step() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+    designer.undo_stack.clear();
+
+    designer.select_node(sphere_id);
+    designer.delete_selected();
+    assert!(anchors_of(&designer, "test", comment_id).is_empty());
+
+    assert!(designer.undo());
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![CommentAnchor::Node(sphere_id)],
+        "the node and its anchor must come back together"
+    );
+    assert!(
+        !designer.undo(),
+        "delete + anchor clear must be a single undo step"
+    );
+}
+
+/// Copying a comment **with** its target rewrites the anchor onto the copies.
+#[test]
+fn paste_comment_with_target_remaps_the_anchor() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+
+    designer.select_nodes(vec![sphere_id, comment_id]);
+    designer.copy_selection();
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0));
+
+    let new_comment = only_of_type(&designer, &pasted, "Comment");
+    let new_sphere = only_of_type(&designer, &pasted, "sphere");
+    assert_eq!(
+        anchors_of(&designer, "test", new_comment),
+        vec![CommentAnchor::Node(new_sphere)],
+        "the pasted anchor must point at the pasted sphere, not the original"
+    );
+}
+
+/// Copying a comment **without** its target drops the anchor. Keeping the raw
+/// id would silently re-point the note at whatever unrelated node in the
+/// destination network happens to share it.
+#[test]
+fn paste_comment_without_target_drops_the_anchor() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+
+    designer.select_nodes(vec![comment_id]);
+    designer.copy_selection();
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0));
+
+    assert_eq!(pasted.len(), 1, "only the comment was copied");
+    assert!(
+        anchors_of(&designer, "test", pasted[0]).is_empty(),
+        "an anchor whose target was left behind must drop"
+    );
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![CommentAnchor::Node(sphere_id)],
+        "the original comment keeps its anchor"
+    );
+}
+
+/// A wire anchor needs **both** endpoints copied: the wire itself does not
+/// survive a copy that leaves its source behind, so neither can the anchor.
+#[test]
+fn paste_comment_with_partial_wire_endpoints_drops_the_anchor() {
+    let mut designer = setup_designer_with_network("test");
+    let (float_id, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![wire_anchor(sphere_id, 0, float_id)]);
+
+    designer.select_nodes(vec![sphere_id, comment_id]);
+    designer.copy_selection();
+    let pasted = designer.paste_at_position(DVec2::new(0.0, 400.0));
+
+    let new_comment = only_of_type(&designer, &pasted, "Comment");
+    assert!(
+        anchors_of(&designer, "test", new_comment).is_empty(),
+        "the source node was not copied, so the wire anchor must drop"
+    );
+}
+
+/// `duplicate_node` is a **different path** from copy/paste: it does not build
+/// an `old_to_new` map, it lands in the *same* network, and it keeps the
+/// original's incoming wires. The not-in-the-copied-set hazard therefore cannot
+/// arise — the anchor's ids still designate the very nodes they always did — so
+/// the duplicate keeps the anchor, exactly as it keeps its wires.
+#[test]
+fn duplicate_comment_keeps_its_anchor() {
+    let mut designer = setup_designer_with_network("test");
+    let (_, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    designer.set_comment_anchors(&[], comment_id, vec![CommentAnchor::Node(sphere_id)]);
+
+    let copy_id = designer.duplicate_node(comment_id);
+    assert_ne!(copy_id, 0, "duplication must succeed");
+    assert_eq!(
+        anchors_of(&designer, "test", copy_id),
+        vec![CommentAnchor::Node(sphere_id)],
+        "the duplicate documents the same node as the original"
+    );
+}
+
+/// A comment that is *itself* deleted keeps its anchors through undo — they
+/// ride inside `NodeSnapshot.node_data_json` for free.
+#[test]
+fn undo_delete_of_the_comment_itself_restores_its_anchors() {
+    let mut designer = setup_designer_with_network("test");
+    let (float_id, sphere_id, comment_id) = setup_anchor_scene(&mut designer);
+    let anchor = wire_anchor(sphere_id, 0, float_id);
+    designer.set_comment_anchors(&[], comment_id, vec![anchor.clone()]);
+    designer.undo_stack.clear();
+
+    designer.select_node(comment_id);
+    designer.delete_selected();
+    assert!(designer.undo());
+
+    assert_eq!(
+        anchors_of(&designer, "test", comment_id),
+        vec![anchor],
+        "the restored comment must come back with its anchor"
     );
 }
