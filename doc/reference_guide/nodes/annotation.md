@@ -32,6 +32,43 @@ The `Label` and `Text` fields in the properties panel on the right still work
 and stay in sync with in-place edits — the two are just different ways to reach
 the same note. Note text is plain text; it is not formatted as Markdown.
 
+**Anchoring a note to what it documents**
+
+A note can be *anchored* to a wire or to a node. The association is drawn as a
+dashed grey leader line from the note's edge to its subject, and — unlike mere
+proximity on the canvas — it is stored with the design, so it survives moving
+things around, automatic layout, saving and reloading.
+
+- **To anchor:** drag the small handle in the note's **bottom-left** corner (the
+  link icon, opposite the resize handle) and drop it on a wire or on a node.
+  Dropping on empty space changes nothing. A note can only be anchored to a
+  wire or node in the same place it lives itself — a note inside a
+  higher-order function's body anchors to things in that body, not outside it.
+- **To re-aim:** drag the handle onto a different target. The previous anchor
+  is replaced.
+- **To remove:** **click** the handle — once a note is anchored the handle turns
+  orange and its icon becomes a broken link, and a plain click detaches it.
+  Right-click → **Remove anchor** does the same thing.
+
+Releasing an anchoring drag over empty space leaves the note as it was; it is a
+cancel, not a detach. (Wires are thin targets, so missing one is easy — the note
+keeps its existing anchor and you can simply try again.)
+
+The leader line ends at the midpoint of an anchored wire, or at the border of
+an anchored node. Anchoring is undoable (`Ctrl+Z`) and has no effect whatsoever
+on evaluation — an anchor is documentation, never a connection, and it never
+makes its target count as "used".
+
+If the anchored wire is disconnected, or the anchored node deleted, the anchor
+is dropped and the leader line disappears; it is never silently re-pointed at
+something else. Undoing the deletion brings the anchor back.
+
+Anchors can also be written by hand (or by an AI assistant) in the network text
+editor via the comment's `on:` property — see *Comment anchors* in
+[`doc/node_network_text_format.md`](../../node_network_text_format.md). A note
+authored that way may carry several anchors and draws one leader line per
+anchor; the drag handle sets a single anchor.
+
 ## parameter
 
 Defines an input parameter for a subnetwork. When placed inside a node network that is used as a custom node, each `parameter` node becomes an input pin on the resulting custom node. See the [Subnetworks](../node_networks.md#subnetworks) section for details and examples.

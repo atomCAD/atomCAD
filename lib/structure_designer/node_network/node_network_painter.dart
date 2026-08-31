@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ClipOp;
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,22 @@ const double WIRE_DASH_MOTIF_UNALIGNED_ON = 10.0;
 const double WIRE_DASH_MOTIF_UNALIGNED_OFF = 4.0;
 const double WIRE_DASH_LATTICE_UNALIGNED_ON = 3.0;
 const double WIRE_DASH_LATTICE_UNALIGNED_OFF = 3.0;
+
+// Comment-anchor leader lines (`doc/design_wire_annotations.md` Rendering).
+// A short, tight dash in a muted grey, deliberately unlike every wire dash
+// above: a leader line documents the drawing, it does not carry data, and it
+// must never read as one.
+const double ANCHOR_LEADER_DASH_ON = 4.0;
+const double ANCHOR_LEADER_DASH_OFF = 4.0;
+const double ANCHOR_LEADER_WIDTH = 1.2;
+const double ANCHOR_LEADER_WIDTH_SELECTED = 2.0;
+const Color ANCHOR_LEADER_COLOR = Color(0xFF8D8D8D);
+const Color ANCHOR_LEADER_COLOR_SELECTED = Color(0xFFE08000);
+
+/// Radius of the dot marking a leader line's target end. On a wire anchor it
+/// is the only thing that says *which* wire; on a node anchor it sits on the
+/// target node's border.
+const double ANCHOR_LEADER_DOT_RADIUS = 3.0;
 
 class WireHitResult {
   final BigInt sourceNodeId;
@@ -197,6 +214,8 @@ class NodeNetworkPainter extends CustomPainter {
 
       _drawWiresAtScope(
           resolver, resolver.root.wires, const <BigInt>[], canvas, paint);
+      _drawAnchorLeaders(resolver, resolver.root.nodes, resolver.root.wires,
+          const <BigInt>[], canvas);
       return;
     }
 
@@ -219,6 +238,9 @@ class NodeNetworkPainter extends CustomPainter {
       }
       _drawWiresInZone(resolver, zone, innerChain, canvas, paint);
     }
+
+    // The anchor rubber band, above body wires like the dragged wire below.
+    _drawDraggedAnchor(resolver, canvas);
 
     // Draw dragged wire on top of body wires.
     if (graphModel.draggedWire != null) {
@@ -262,6 +284,7 @@ class NodeNetworkPainter extends CustomPainter {
     Paint paint,
   ) {
     _drawWiresAtScope(resolver, zone.wires, scopeChain, canvas, paint);
+    _drawAnchorLeaders(resolver, zone.nodes, zone.wires, scopeChain, canvas);
     for (final node in zone.nodes.values) {
       final inner = node.zone;
       if (inner == null) continue;
@@ -387,6 +410,149 @@ class NodeNetworkPainter extends CustomPainter {
           _drawSelected(c.wire.selected), null);
     }
     canvas.restore();
+  }
+
+  // ===== COMMENT ANCHOR LEADER LINES =====
+  // doc/design_wire_annotations.md Rendering.
+
+  /// Draw one dashed leader line per anchor of every comment stored at
+  /// [scopeChain], from the note's border to what it documents.
+  ///
+  /// Anchors are scope-local (D5), so [nodes] and [wires] are that one scope's
+  /// collections — a leader never leaves the network its note lives in.
+  /// `NodeView` publishes anchors already **resolved** (dangling ones dropped,
+  /// wire slot indices re-derived), so this only has to locate the target and
+  /// draw.
+  void _drawAnchorLeaders(
+    ScopeResolver resolver,
+    Map<BigInt, NodeView> nodes,
+    List<WireView> wires,
+    List<BigInt> scopeChain,
+    Canvas canvas,
+  ) {
+    for (final comment in nodes.values) {
+      if (comment.commentAnchors.isEmpty) continue;
+      final commentRect = _commentScreenRect(resolver, comment, scopeChain);
+      final selected = _drawSelected(comment.selected);
+      for (final anchor in comment.commentAnchors) {
+        final target = _anchorTargetPoint(
+            resolver, anchor, nodes, wires, scopeChain, commentRect.center);
+        if (target == null) continue;
+        _drawLeader(canvas, commentRect, target, selected);
+      }
+    }
+  }
+
+  /// Screen rect of one note. Comments carry their own footprint rather than
+  /// the pin-derived node size, which is exactly what
+  /// `ScopeResolver.effectiveNodeSizeScreen` special-cases for them.
+  Rect _commentScreenRect(
+      ScopeResolver resolver, NodeView comment, List<BigInt> scopeChain) {
+    final origin =
+        resolver.scopedToScreen(scopeChain, apiVec2ToOffset(comment.position));
+    return origin & resolver.effectiveNodeSizeScreen(comment, scopeChain);
+  }
+
+  /// Where an anchor's leader line ends: a point on the target node's border
+  /// facing [commentCenter], or the midpoint of the target wire.
+  ///
+  /// Null when the target is not *drawable* in this frame — a node id absent
+  /// from this scope's map, or a wire whose endpoints don't resolve. The
+  /// resolved-anchor guarantee covers existence, not drawability.
+  Offset? _anchorTargetPoint(
+    ScopeResolver resolver,
+    APICommentAnchor anchor,
+    Map<BigInt, NodeView> nodes,
+    List<WireView> wires,
+    List<BigInt> scopeChain,
+    Offset commentCenter,
+  ) {
+    switch (anchor) {
+      case APICommentAnchor_Node(:final nodeId):
+        final target = nodes[nodeId];
+        if (target == null) return null;
+        final rect = resolver.scopedToScreen(
+                scopeChain, apiVec2ToOffset(target.position)) &
+            resolver.effectiveNodeSizeScreen(target, scopeChain);
+        return _borderPointToward(rect, commentCenter);
+      case APICommentAnchor_Wire(anchor: final wireAnchor):
+        final wire = _findAnchoredWire(wires, wireAnchor);
+        if (wire == null) return null;
+        final source =
+            resolver.tryPinScreenPosition(_wireSourcePin(wire, scopeChain));
+        final dest =
+            resolver.tryPinScreenPosition(_wireDestPin(wire, scopeChain));
+        if (source == null || dest == null) return null;
+        // The wire's cubic Bezier at t = 0.5. Both control points are offset
+        // from their own endpoint along x only, by the same amount in opposite
+        // directions, so the midpoint reduces exactly to the endpoints' mean —
+        // no need to walk the path.
+        return (source.$1 + dest.$1) / 2;
+    }
+  }
+
+  /// The wire an [APIWireAnchor] designates within one scope's wire list.
+  ///
+  /// A wire is identified from its destination side plus its source node id
+  /// (D4); `source_pin` / `source_scope_depth` are properties of the resolved
+  /// wire, not part of its identity. The index compared here is the one Rust
+  /// resolved, so a pin reorder on a dynamic-arity destination is already
+  /// folded in.
+  WireView? _findAnchoredWire(List<WireView> wires, APIWireAnchor anchor) {
+    for (final wire in wires) {
+      if (wire.destNodeId == anchor.destinationNodeId &&
+          wire.sourceNodeId == anchor.sourceNodeId &&
+          wire.destinationArgumentKind == anchor.destinationArgumentKind &&
+          wire.destParamIndex == anchor.destinationArgumentIndex) {
+        return wire;
+      }
+    }
+    return null;
+  }
+
+  /// The point on [rect]'s border along the ray from its centre toward
+  /// [toward]. Used at both ends of a leader line so it starts and stops at
+  /// the boxes' edges instead of disappearing underneath them.
+  Offset _borderPointToward(Rect rect, Offset toward) {
+    final center = rect.center;
+    final d = toward - center;
+    if (d.dx == 0 && d.dy == 0) return center;
+    // Largest t for which center + t*d is still inside the box on both axes.
+    final tx = d.dx == 0 ? double.infinity : (rect.width / 2) / d.dx.abs();
+    final ty = d.dy == 0 ? double.infinity : (rect.height / 2) / d.dy.abs();
+    return center + d * math.min(tx, ty);
+  }
+
+  void _drawLeader(
+      Canvas canvas, Rect commentRect, Offset target, bool commentSelected) {
+    final start = _borderPointToward(commentRect, target);
+    final color =
+        commentSelected ? ANCHOR_LEADER_COLOR_SELECTED : ANCHOR_LEADER_COLOR;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth =
+          commentSelected ? ANCHOR_LEADER_WIDTH_SELECTED : ANCHOR_LEADER_WIDTH
+      ..style = PaintingStyle.stroke;
+    final path = Path()
+      ..moveTo(start.dx, start.dy)
+      ..lineTo(target.dx, target.dy);
+    canvas.drawPath(
+        _dashedPath(path, ANCHOR_LEADER_DASH_ON, ANCHOR_LEADER_DASH_OFF),
+        paint);
+    canvas.drawCircle(target, ANCHOR_LEADER_DOT_RADIUS, Paint()..color = color);
+  }
+
+  /// The rubber band of an anchor drag in progress: the same dashed leader,
+  /// from the note being anchored to the pointer. Painted in the overlay pass
+  /// so it stays visible over HOF body backgrounds, and repainted off
+  /// `model.dragRepaint` like every other drag-tracking canvas element.
+  void _drawDraggedAnchor(ScopeResolver resolver, Canvas canvas) {
+    final drag = graphModel.draggedCommentAnchor;
+    if (drag == null) return;
+    final comment = resolver.findNodeInScope(drag.scopeChain, drag.nodeId);
+    if (comment == null) return;
+    _drawLeader(canvas, _commentScreenRect(resolver, comment, drag.scopeChain),
+        drag.endPosition, true);
   }
 
   void _drawWiresAtScope(

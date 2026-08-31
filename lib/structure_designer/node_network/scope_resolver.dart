@@ -742,6 +742,14 @@ class ScopeResolver {
     return result;
   }
 
+  /// The node with [nodeId] in the network at [scopeChain], or null if either
+  /// the chain or the id doesn't resolve. Public counterpart of the wire
+  /// endpoint lookup — for callers that hold a `(scopeChain, nodeId)` pair
+  /// from the model (a drag in progress, a context-menu target) rather than a
+  /// [NodeView] they were handed.
+  NodeView? findNodeInScope(List<BigInt> scopeChain, BigInt nodeId) =>
+      _resolveNode(scopeChain, nodeId);
+
   NodeView? _resolveNode(List<BigInt> scopeChain, BigInt nodeId) {
     if (scopeChain.isEmpty) {
       return root.nodes[nodeId];

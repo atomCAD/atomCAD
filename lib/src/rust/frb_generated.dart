@@ -19702,8 +19702,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NodeView dco_decode_node_view(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 24)
-      throw Exception('unexpected arr length: expect 24 but see ${arr.length}');
+    if (arr.length != 25)
+      throw Exception('unexpected arr length: expect 25 but see ${arr.length}');
     return NodeView(
       id: dco_decode_u_64(arr[0]),
       nodeTypeName: dco_decode_String(arr[1]),
@@ -19726,9 +19726,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       commentText: dco_decode_opt_String(arr[18]),
       commentWidth: dco_decode_opt_box_autoadd_f_64(arr[19]),
       commentHeight: dco_decode_opt_box_autoadd_f_64(arr[20]),
-      closureCustomLabel: dco_decode_opt_String(arr[21]),
-      zone: dco_decode_opt_box_autoadd_zone_view(arr[22]),
-      derivedShape: dco_decode_opt_box_autoadd_api_derived_shape_view(arr[23]),
+      commentAnchors: dco_decode_list_api_comment_anchor(arr[21]),
+      closureCustomLabel: dco_decode_opt_String(arr[22]),
+      zone: dco_decode_opt_box_autoadd_zone_view(arr[23]),
+      derivedShape: dco_decode_opt_box_autoadd_api_derived_shape_view(arr[24]),
     );
   }
 
@@ -24903,6 +24904,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_commentText = sse_decode_opt_String(deserializer);
     var var_commentWidth = sse_decode_opt_box_autoadd_f_64(deserializer);
     var var_commentHeight = sse_decode_opt_box_autoadd_f_64(deserializer);
+    var var_commentAnchors = sse_decode_list_api_comment_anchor(deserializer);
     var var_closureCustomLabel = sse_decode_opt_String(deserializer);
     var var_zone = sse_decode_opt_box_autoadd_zone_view(deserializer);
     var var_derivedShape =
@@ -24929,6 +24931,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         commentText: var_commentText,
         commentWidth: var_commentWidth,
         commentHeight: var_commentHeight,
+        commentAnchors: var_commentAnchors,
         closureCustomLabel: var_closureCustomLabel,
         zone: var_zone,
         derivedShape: var_derivedShape);
@@ -29989,6 +29992,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.commentText, serializer);
     sse_encode_opt_box_autoadd_f_64(self.commentWidth, serializer);
     sse_encode_opt_box_autoadd_f_64(self.commentHeight, serializer);
+    sse_encode_list_api_comment_anchor(self.commentAnchors, serializer);
     sse_encode_opt_String(self.closureCustomLabel, serializer);
     sse_encode_opt_box_autoadd_zone_view(self.zone, serializer);
     sse_encode_opt_box_autoadd_api_derived_shape_view(

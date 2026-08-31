@@ -7806,9 +7806,14 @@ impl StructureDesigner {
             let Some(comment) = node.data.as_any_ref().downcast_ref::<CommentData>() else {
                 return;
             };
+            // Canonicalized, not merely filtered: the Flutter canvas addresses
+            // a wire by slot *index* only (it never sees persistent parameter
+            // ids), so rebuilding each anchor from the wire it resolves to is
+            // what attaches `destination_param_id` on a dynamic-arity
+            // destination — without which D4's remap-on-reorder never fires.
             let resolvable: Vec<CommentAnchor> = anchors
                 .into_iter()
-                .filter(|anchor| anchor.resolve(network).is_some())
+                .filter_map(|anchor| anchor.canonicalized(network))
                 .collect();
             (comment.anchors.clone(), resolvable)
         };

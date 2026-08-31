@@ -356,6 +356,67 @@ fn wire_anchor_survives_a_pin_reorder_on_a_dynamic_arity_node() {
     }
 }
 
+/// The canvas addresses a wire by slot **index** only — it never sees
+/// persistent parameter ids — so `set_comment_anchors` canonicalizes what it
+/// is handed. Without that, an anchor authored by the Phase 4 drag gesture
+/// would silently forfeit D4's remap-on-reorder and start pointing at whatever
+/// field slid into its slot.
+#[test]
+fn set_comment_anchors_canonicalizes_an_index_only_wire_anchor() {
+    let mut designer = setup("Main");
+    designer.add_record_type_def(triple_def()).unwrap();
+
+    let source = designer.add_node("int", DVec2::new(0.0, 0.0));
+    let holder = designer.add_node("record_construct", DVec2::new(200.0, 0.0));
+    set_record_construct(&mut designer, "Main", holder, "Triple");
+    let comment = designer.add_node("Comment", DVec2::new(0.0, 200.0));
+    wire(&mut designer, "Main", source, 0, holder, 0); // field `a`
+
+    let id_a = field_id(&designer, "Triple", "a");
+    let id_b = field_id(&designer, "Triple", "b");
+    let id_c = field_id(&designer, "Triple", "c");
+
+    // What the drag gesture sends: the resolved slot index, no param id.
+    designer.set_comment_anchors(&[], comment, vec![index_anchor(holder, 0, source)]);
+
+    assert_eq!(
+        anchors_of(&designer, "Main", comment),
+        vec![CommentAnchor::Wire(WireAnchor {
+            destination_node_id: holder,
+            destination_argument_kind: ArgumentKind::External,
+            destination_argument_index: 0,
+            destination_param_id: Some(id_a.0),
+            source_node_id: source,
+        })],
+        "the stored anchor must have picked up field `a`'s persistent id"
+    );
+
+    // And the id is load-bearing: reorder Triple to [c, a, b].
+    designer
+        .update_record_type_def_with_ids(
+            "Triple",
+            vec![
+                existing(id_c, "c", DataType::Int),
+                existing(id_a, "a", DataType::Int),
+                existing(id_b, "b", DataType::Int),
+            ],
+        )
+        .unwrap();
+
+    let kept = anchors_of(&designer, "Main", comment);
+    assert_eq!(kept.len(), 1, "the canonicalized anchor must survive");
+    match kept[0]
+        .resolve(network(&designer, "Main"))
+        .expect("it must still resolve")
+    {
+        ResolvedAnchor::Wire(w) => assert_eq!(
+            w.destination_argument_index, 1,
+            "it must follow field `a` to its new slot"
+        ),
+        other => panic!("expected a wire anchor, got {:?}", other),
+    }
+}
+
 #[test]
 fn wire_anchor_drops_when_its_destination_field_is_deleted() {
     let mut designer = setup("Main");

@@ -164,6 +164,43 @@ Wires use cubic Bezier curves with data-type-based coloring:
 - Hit testing uses expanded area for easier clicking
 - Pin positions calculated differently per zoom level
 
+## Comment anchor leader lines
+
+A comment note can be *anchored* to a wire or a node it documents
+(`doc/design_wire_annotations.md`); the association is drawn as a dashed grey
+leader line from the note's border to the wire's Bezier midpoint or the target
+node's border. Three things about it are easy to get wrong:
+
+1. **It is painted by `NodeNetworkPainter`, not by a widget** — bottom layer for
+   top-level notes (beside the top-level wires), overlay layer for body notes
+   (beside the body wires, so it clears the HOF's opaque body background), and
+   the drag rubber band in the overlay. That is what puts it in the exported
+   PNG as well as on screen: both canvases build the same painter layers. It
+   also inherits `repaint: model.dragRepaint`, so a leader tracks a dragged note
+   or a dragged target with no rebuild, and `hideSelection` through
+   `_drawSelected`.
+2. **Flutter never resolves an anchor.** `NodeView.commentAnchors` arrives
+   already resolved by Rust — dangling anchors dropped, wire slot indices
+   re-derived through the `destination_param_id` precedence — so the painter
+   only has to match the published index against the scope's wire list. Do not
+   reimplement that precedence here, and do not filter anchors client-side.
+3. **The drag gesture sends no parameter id.** `_anchorAtDropPosition`
+   (`comment_node_widget.dart`) builds a `WireAnchor` with
+   `destinationParamId: null`; `StructureDesigner::set_comment_anchors`
+   canonicalizes it and fills the id in. A future caller that constructs anchors
+   itself gets the same treatment for free — but only by going through that
+   setter.
+
+The handle lives in the note's bottom-left corner with its own
+`GestureDetector`, mirroring the resize handle (see the focus-steal trap above:
+a dedicated handle, and inert while the note is open for in-place editing).
+**Drag anchors; a plain click on an already-anchored handle detaches.**
+Dropping on empty space deliberately does *nothing* — a wire is a ~10 px hit
+band, so a miss is the common outcome of an anchoring drag and must not be
+indistinguishable from an intentional detach; empty space is also already the
+*constructive* gesture for a dragged wire (it opens the Add Node popup). Both
+the handle click and the context menu route through `_removeAnchor`.
+
 ## Data Type Colors
 
 | Type | Color Family |

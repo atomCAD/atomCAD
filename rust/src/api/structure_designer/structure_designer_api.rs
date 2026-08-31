@@ -723,16 +723,28 @@ fn build_node_view(
     }
     let subtitle = node.data.get_subtitle(&connected_input_pins);
 
-    let (comment_label, comment_text, comment_width, comment_height) =
+    let (comment_label, comment_text, comment_width, comment_height, comment_anchors) =
         if let Some(comment_data) = node.data.as_any_ref().downcast_ref::<CommentData>() {
             (
                 Some(comment_data.label.clone()),
                 Some(comment_data.text.clone()),
                 Some(comment_data.width),
                 Some(comment_data.height),
+                // Published resolved, not verbatim: the canvas locates a wire
+                // anchor's wire by destination slot index, which is only the
+                // stored index when no pin has moved. Resolving here keeps
+                // D4's `destination_param_id` precedence in the one place that
+                // implements it, and drops anchors whose target is gone so a
+                // leader line never outlives what it points at.
+                comment_data
+                    .anchors
+                    .iter()
+                    .filter_map(|anchor| anchor.canonicalized(node_network))
+                    .map(|anchor| APICommentAnchor::from(&anchor))
+                    .collect(),
             )
         } else {
-            (None, None, None, None)
+            (None, None, None, None, Vec::new())
         };
 
     let closure_custom_label = node
@@ -861,6 +873,7 @@ fn build_node_view(
         comment_text,
         comment_width,
         comment_height,
+        comment_anchors,
         closure_custom_label,
         zone,
         derived_shape,

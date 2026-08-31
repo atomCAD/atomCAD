@@ -17324,6 +17324,9 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
         let mut var_commentText = <Option<String>>::sse_decode(deserializer);
         let mut var_commentWidth = <Option<f64>>::sse_decode(deserializer);
         let mut var_commentHeight = <Option<f64>>::sse_decode(deserializer);
+        let mut var_commentAnchors = <Vec<
+            crate::api::structure_designer::structure_designer_api_types::APICommentAnchor,
+        >>::sse_decode(deserializer);
         let mut var_closureCustomLabel = <Option<String>>::sse_decode(deserializer);
         let mut var_zone = <Option<
             crate::api::structure_designer::structure_designer_api_types::ZoneView,
@@ -17353,6 +17356,7 @@ impl SseDecode for crate::api::structure_designer::structure_designer_api_types:
             comment_text: var_commentText,
             comment_width: var_commentWidth,
             comment_height: var_commentHeight,
+            comment_anchors: var_commentAnchors,
             closure_custom_label: var_closureCustomLabel,
             zone: var_zone,
             derived_shape: var_derivedShape,
@@ -25232,6 +25236,7 @@ impl flutter_rust_bridge::IntoDart
             self.comment_text.into_into_dart().into_dart(),
             self.comment_width.into_into_dart().into_dart(),
             self.comment_height.into_into_dart().into_dart(),
+            self.comment_anchors.into_into_dart().into_dart(),
             self.closure_custom_label.into_into_dart().into_dart(),
             self.zone.into_into_dart().into_dart(),
             self.derived_shape.into_into_dart().into_dart(),
@@ -28522,6 +28527,7 @@ impl SseEncode for crate::api::structure_designer::structure_designer_api_types:
         <Option<String>>::sse_encode(self.comment_text, serializer);
         <Option<f64>>::sse_encode(self.comment_width, serializer);
         <Option<f64>>::sse_encode(self.comment_height, serializer);
+        <Vec<crate::api::structure_designer::structure_designer_api_types::APICommentAnchor>>::sse_encode(self.comment_anchors, serializer);
         <Option<String>>::sse_encode(self.closure_custom_label, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::ZoneView>>::sse_encode(self.zone, serializer);
         <Option<crate::api::structure_designer::structure_designer_api_types::APIDerivedShapeView>>::sse_encode(self.derived_shape, serializer);

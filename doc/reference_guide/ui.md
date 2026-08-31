@@ -180,6 +180,14 @@ Left-click a node and drag to move it.
 **Edit a comment note in place**
 Double-click a [comment](./nodes/annotation.md#comment) node — the yellow sticky note — to type into it directly on the canvas, rather than going to the Node Properties panel. Double-click its title bar to edit the title, its body to edit the text; the cursor lands on the character you clicked. Click outside to finish, or press `Esc` to discard. The panel fields still work and stay in sync.
 
+**Anchor a comment note to a wire or a node**
+Drag the link handle in a [comment](./nodes/annotation.md#comment) note's
+bottom-left corner onto a wire or a node to record what the note documents; a
+dashed grey leader line then ties the two together and follows them both when
+either is moved or when the network is re-laid-out. Click the handle again to
+detach the note (right-click → **Remove anchor** does the same). See
+[Anchoring a note](./nodes/annotation.md#comment) for the details.
+
 **Connect pins**
 Left-click and drag from an output pin to an input pin to create a wire. To disconnect a wire, select it and press `Del` (see Selection below).
 

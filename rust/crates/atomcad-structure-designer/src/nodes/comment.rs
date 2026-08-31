@@ -100,6 +100,26 @@ impl CommentAnchor {
         }
     }
 
+    /// Re-derive this anchor's stored form from the target it currently
+    /// designates, or `None` if it is dangling.
+    ///
+    /// The difference from [`resolve`](Self::resolve) is that the result is a
+    /// `CommentAnchor` again, rebuilt through [`WireAnchor::from_wire`] — so a
+    /// wire anchor written by a caller that knows only the slot *index*
+    /// (the Flutter canvas, which never sees persistent parameter ids) comes
+    /// back carrying `destination_param_id` when the destination has one, and
+    /// an anchor whose slot moved comes back addressing the slot it moved to.
+    /// Callers that store or publish anchors should canonicalize first,
+    /// otherwise D4's remap-on-reorder precedence is silently unavailable.
+    pub fn canonicalized(&self, network: &NodeNetwork) -> Option<Self> {
+        match self.resolve(network)? {
+            ResolvedAnchor::Node(node_id) => Some(CommentAnchor::Node(node_id)),
+            ResolvedAnchor::Wire(wire) => {
+                Some(CommentAnchor::Wire(WireAnchor::from_wire(&wire, network)))
+            }
+        }
+    }
+
     /// Rewrite this anchor's node ids through a copy/paste/duplicate
     /// `old_to_new` map, or `None` if a referenced node was **not** part of the
     /// copied set.

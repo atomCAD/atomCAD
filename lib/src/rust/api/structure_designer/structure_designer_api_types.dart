@@ -4688,6 +4688,14 @@ class NodeView {
   final double? commentWidth;
   final double? commentHeight;
 
+  /// What this comment documents (`doc/design_wire_annotations.md`), already
+  /// **resolved** against the containing network: dangling anchors are
+  /// dropped and a wire anchor's `destination_argument_index` is the slot the
+  /// wire actually occupies now, so the canvas can match it against the
+  /// scope's wire list without re-implementing D4's param-id precedence.
+  /// Empty for non-comment nodes and for free-floating notes.
+  final List<APICommentAnchor> commentAnchors;
+
   /// User-supplied free-form label for `closure` nodes (populated from
   /// `ClosureData::custom_label`). `None` for all other node types and for
   /// closures without a label. Drives the title-bar `<label> · ƒ <sig>`
@@ -4730,6 +4738,7 @@ class NodeView {
     this.commentText,
     this.commentWidth,
     this.commentHeight,
+    required this.commentAnchors,
     this.closureCustomLabel,
     this.zone,
     this.derivedShape,
@@ -4758,6 +4767,7 @@ class NodeView {
       commentText.hashCode ^
       commentWidth.hashCode ^
       commentHeight.hashCode ^
+      commentAnchors.hashCode ^
       closureCustomLabel.hashCode ^
       zone.hashCode ^
       derivedShape.hashCode;
@@ -4788,6 +4798,7 @@ class NodeView {
           commentText == other.commentText &&
           commentWidth == other.commentWidth &&
           commentHeight == other.commentHeight &&
+          commentAnchors == other.commentAnchors &&
           closureCustomLabel == other.closureCustomLabel &&
           zone == other.zone &&
           derivedShape == other.derivedShape;

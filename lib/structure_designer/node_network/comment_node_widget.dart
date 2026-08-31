@@ -11,11 +11,18 @@ import 'package:flutter_cad/src/rust/api/structure_designer/structure_designer_a
     as sd_api;
 import 'package:flutter_cad/structure_designer/structure_designer_model.dart';
 import 'package:flutter_cad/structure_designer/node_network/node_network.dart';
+import 'package:flutter_cad/structure_designer/node_network/node_network_painter.dart';
 import 'package:flutter_cad/structure_designer/node_network/scope_resolver.dart';
 
 const double COMMENT_MIN_WIDTH = 100.0;
 const double COMMENT_MIN_HEIGHT = 60.0;
 const double COMMENT_RESIZE_HANDLE_SIZE = 12.0;
+
+/// Side of the square anchor handle in the note's bottom-left corner — the
+/// grab point for "what does this note document?"
+/// (`doc/design_wire_annotations.md` Interaction). Same size as the resize
+/// handle it mirrors across the note's bottom edge.
+const double COMMENT_ANCHOR_HANDLE_SIZE = 12.0;
 const Color COMMENT_BACKGROUND_COLOR = Color(0xCCFFF9C4);
 const Color COMMENT_BORDER_COLOR = Color(0xFF9E9E9E);
 const Color COMMENT_HEADER_COLOR = Color(0xFFFFEB3B);
@@ -242,6 +249,16 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
                   ],
                 ),
               ),
+              // Bottom-LEFT: the anchor handle, mirroring the resize handle
+              // across the note's bottom edge. Hidden while the note is open
+              // for in-place editing, where every pointer gesture inside the
+              // note belongs to the text fields.
+              if (!_isEditing)
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: _buildAnchorHandle(context, scale),
+                ),
               Positioned(
                 right: 0,
                 bottom: 0,
@@ -377,6 +394,189 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
         child: Text(_text, key: _bodyTextKey, style: style),
       ),
     );
+  }
+
+  // ===== ANCHORING (doc/design_wire_annotations.md) =====
+
+  /// The anchor handle: drag it onto a wire or a node to say what this note
+  /// documents, or — once it is anchored — click it to detach. It carries its
+  /// own [GestureDetector] so its pan never reaches the note's move-drag — the
+  /// same arrangement the resize handle uses, and the reason the note is not
+  /// simply given a second set of pan callbacks.
+  ///
+  /// **Detaching is a click, deliberately not a drop on empty space.** A wire
+  /// is a ~10 px hit band, so missing one is the *common* outcome of an
+  /// anchoring drag; making the miss destroy the anchor would make an accident
+  /// and an intention indistinguishable. Empty space is also already spoken for
+  /// on this canvas in the opposite direction — dropping a *wire* there opens
+  /// the Add Node popup — so it cannot read as "detach" here.
+  Widget _buildAnchorHandle(BuildContext context, double scale) {
+    final anchored = widget.node.commentAnchors.isNotEmpty;
+    return Listener(
+      onPointerDown: (event) {
+        // Swallowed so the canvas doesn't start a rectangle selection.
+      },
+      behavior: HitTestBehavior.opaque,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.precise,
+        child: Tooltip(
+          message: anchored
+              ? "Click to remove this note's anchor,\nor drag onto a new target"
+              : 'Drag onto a wire or node to say what this note is about',
+          waitDuration: const Duration(milliseconds: 600),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            // Null when there is nothing to detach, so the tap falls through
+            // to the note's own selection handling.
+            onTap: anchored ? () => _removeAnchor(context) : null,
+            onPanStart: (details) => _startAnchorDrag(context, details),
+            onPanUpdate: (details) => _updateAnchorDrag(context, details),
+            onPanEnd: (details) => _endAnchorDrag(context, details),
+            onPanCancel: () => _cancelAnchorDrag(context),
+            child: Container(
+              width: COMMENT_ANCHOR_HANDLE_SIZE * scale,
+              height: COMMENT_ANCHOR_HANDLE_SIZE * scale,
+              decoration: BoxDecoration(
+                color: (anchored ? ANCHOR_LEADER_COLOR_SELECTED : Colors.grey)
+                    .withValues(alpha: 0.5),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(3.0),
+                ),
+              ),
+              // The icon shows what a click would *do*, not what the state is
+              // — the orange tint already says "anchored".
+              child: Icon(
+                anchored ? Icons.link_off : Icons.link,
+                size: 8.0 * scale,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Detach the note from what it documents. Undoable like any other anchor
+  /// change; also reachable from the note's context menu.
+  void _removeAnchor(BuildContext context) {
+    // Same reason as in [_startAnchorDrag]: the note's `onTapDown` already
+    // fired for this press, and two detach clicks in a row must not add up to
+    // a double-click that opens the in-place editor.
+    _lastTapTimestamp = null;
+    Provider.of<StructureDesignerModel>(context, listen: false)
+        .setCommentAnchors(widget.node.id, const [],
+            scopeChain: widget.scopeChain);
+  }
+
+  /// The canvas widget's render box, used to turn a drag's global position
+  /// into the canvas-local (screen) coordinates every hit test and the
+  /// painter's rubber band speak. Null in the detached tree the image export
+  /// builds — which has no interaction anyway.
+  RenderBox? _findCanvasRenderBox(BuildContext context) {
+    RenderBox? result;
+    context.visitAncestorElements((element) {
+      if (element.widget is NodeNetwork) {
+        result = element.renderObject as RenderBox?;
+        return false;
+      }
+      return true;
+    });
+    return result;
+  }
+
+  void _startAnchorDrag(BuildContext context, DragStartDetails details) {
+    // The note's `onTapDown` has already fired for this press (it runs on the
+    // 100 ms deadline, before the arena hands the gesture to this handle), so
+    // it recorded a tap. Forget it, or re-aiming the anchor twice in quick
+    // succession reads as a double-click and opens the in-place editor.
+    _lastTapTimestamp = null;
+
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    // Anchoring a note is working on it; the drag never taps the note, so the
+    // ordinary selection path doesn't run.
+    model.setActiveScopeChain(widget.scopeChain);
+    if (!widget.node.selected || !widget.node.active) {
+      model.setSelectedNode(widget.node.id, scopeChain: widget.scopeChain);
+    }
+    _updateAnchorDrag(context, null, globalPosition: details.globalPosition);
+  }
+
+  void _updateAnchorDrag(BuildContext context, DragUpdateDetails? details,
+      {Offset? globalPosition}) {
+    final box = _findCanvasRenderBox(context);
+    if (box == null) return;
+    final global = globalPosition ?? details!.globalPosition;
+    Provider.of<StructureDesignerModel>(context, listen: false)
+        .dragCommentAnchor(
+            widget.node.id, widget.scopeChain, box.globalToLocal(global));
+  }
+
+  void _cancelAnchorDrag(BuildContext context) {
+    Provider.of<StructureDesignerModel>(context, listen: false)
+        .cancelDragCommentAnchor();
+  }
+
+  /// Resolve the drop. A node under the pointer wins over a wire — nodes are
+  /// the larger, more deliberate target and they render on top of the
+  /// top-level wires. Dropping on empty space, on the note itself, or on
+  /// anything in another scope (D5) cancels and leaves the note as it was.
+  void _endAnchorDrag(BuildContext context, DragEndDetails details) {
+    final model = Provider.of<StructureDesignerModel>(context, listen: false);
+    final drag = model.draggedCommentAnchor;
+    model.cancelDragCommentAnchor();
+    if (drag == null) return;
+
+    final anchor = _anchorAtDropPosition(model, drag.endPosition);
+    if (anchor == null) return;
+    // The first implementation keeps one anchor per note: the handle sets
+    // `anchors[0]`, replacing whatever was there. The model is a list so that
+    // multi-anchor notes (authorable in the text format today) need no
+    // migration later.
+    model.setCommentAnchors(widget.node.id, [anchor],
+        scopeChain: widget.scopeChain);
+  }
+
+  /// The anchor a drop at [position] (canvas-local screen coordinates)
+  /// designates, or null if it designates nothing anchorable.
+  APICommentAnchor? _anchorAtDropPosition(
+      StructureDesignerModel model, Offset position) {
+    // Positions have not moved during the drag, so the frame's shared resolver
+    // is still the right coordinate authority.
+    final hitNode = widget.resolver.findNodeAtScreenPosition(position);
+    if (hitNode != null) {
+      if (!_sameScope(hitNode.scopeChain, widget.scopeChain)) return null;
+      if (hitNode.node.id == widget.node.id) return null;
+      return APICommentAnchor.node(nodeId: hitNode.node.id);
+    }
+
+    // One-shot resolver, the sanctioned pattern for event handlers.
+    final hitWire = NodeNetworkPainter(model,
+            panOffset: widget.panOffset, zoomLevel: widget.zoomLevel)
+        .findWireAtPosition(position);
+    if (hitWire == null) return null;
+    if (!_sameScope(hitWire.scopeChain, widget.scopeChain)) return null;
+    return APICommentAnchor.wire(
+      anchor: APIWireAnchor(
+        destinationNodeId: hitWire.destNodeId,
+        // `findWireAtPosition` only ever reports selectable wires, which are
+        // exactly the `External`-destination ones.
+        destinationArgumentKind: APIArgumentKind.external_,
+        destinationArgumentIndex: hitWire.destParamIndex,
+        // The canvas doesn't know about persistent parameter ids; the kernel
+        // fills one in when the destination carries one (D4).
+        destinationParamId: null,
+        sourceNodeId: hitWire.sourceNodeId,
+      ),
+    );
+  }
+
+  static bool _sameScope(List<BigInt> a, List<BigInt> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   // ===== IN-PLACE EDITING (issue #421) =====
@@ -687,6 +887,11 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
           value: 'edit',
           child: Text('Edit note (double-click)'),
         ),
+        if (widget.node.commentAnchors.isNotEmpty)
+          PopupMenuItem(
+            value: 'remove_anchor',
+            child: Text('Remove anchor'),
+          ),
         PopupMenuItem(
           value: 'duplicate',
           child: Text('Duplicate node (Ctrl+D)'),
@@ -697,6 +902,8 @@ class _CommentNodeWidgetState extends State<CommentNodeWidget> {
       if (value == 'edit') {
         _enterEditMode(
             _label.isEmpty ? _CommentField.text : _CommentField.label);
+      } else if (value == 'remove_anchor') {
+        _removeAnchor(context);
       } else if (value == 'duplicate') {
         final model =
             Provider.of<StructureDesignerModel>(context, listen: false);

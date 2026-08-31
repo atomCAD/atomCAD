@@ -132,6 +132,27 @@ class DraggedWire {
   DraggedWire(this.startPin, this.wireEndPosition);
 }
 
+/// An anchor drag in progress: the user is pulling a leader line off a comment
+/// note toward whatever it should document
+/// (`doc/design_wire_annotations.md` Interaction).
+///
+/// Only the note's identity is held — the far end is wherever the pointer is.
+/// Like [DraggedWire] this is painted exclusively by the overlay
+/// [NodeNetworkPainter], so it rides the [StructureDesignerModel.dragRepaint]
+/// fast path and never triggers a rebuild.
+class DraggedCommentAnchor {
+  /// The comment the drag started on, and the scope it lives in. Anchors are
+  /// scope-local (D5), so the drop is rejected unless the target's scope chain
+  /// matches this one.
+  final BigInt nodeId;
+  final List<BigInt> scopeChain;
+
+  /// Current pointer position, in canvas-local (screen) coordinates.
+  Offset endPosition;
+
+  DraggedCommentAnchor(this.nodeId, this.scopeChain, this.endPosition);
+}
+
 /// Callback signature for wire drop in empty space.
 /// Called when a wire is dragged from a pin and dropped in empty space.
 typedef WireDropCallback = void Function(
@@ -204,6 +225,10 @@ class StructureDesignerModel extends ChangeNotifier {
   APIAtomEditTool? activeAtomEditTool = APIAtomEditTool.default_;
   int? atomEditSelectedElement;
   DraggedWire? draggedWire; // not null if there is a wire dragging in progress
+
+  /// Not null while a comment's anchor handle is being dragged toward a
+  /// target. See [DraggedCommentAnchor].
+  DraggedCommentAnchor? draggedCommentAnchor;
 
   /// The comment note currently being edited **in place** on the canvas
   /// (`node_network/comment_node_widget.dart`), or null when none is.
@@ -1187,6 +1212,41 @@ class StructureDesignerModel extends ChangeNotifier {
       draggedWire = null;
       dragRepaint.value++;
     }
+  }
+
+  /// Update the anchor rubber band during a drag off a comment's anchor
+  /// handle. Same fast path as [dragWire]: the band is painted only by the
+  /// overlay painter, so a [dragRepaint] tick suffices.
+  void dragCommentAnchor(
+      BigInt nodeId, List<BigInt> scopeChain, Offset endPosition) {
+    draggedCommentAnchor ??=
+        DraggedCommentAnchor(nodeId, scopeChain, endPosition);
+    draggedCommentAnchor!.endPosition = endPosition;
+    dragRepaint.value++;
+  }
+
+  void cancelDragCommentAnchor() {
+    if (draggedCommentAnchor != null) {
+      draggedCommentAnchor = null;
+      dragRepaint.value++;
+    }
+  }
+
+  /// Replace what a comment node documents
+  /// (`doc/design_wire_annotations.md`). An empty list clears the anchor.
+  ///
+  /// Undoable in the kernel as a single step, and inert with respect to
+  /// evaluation (D7) — the refresh is only here to repaint the leader lines.
+  /// The kernel silently drops anchors that don't resolve in the comment's own
+  /// scope, so a stale target can't be written.
+  void setCommentAnchors(BigInt nodeId, List<APICommentAnchor> anchors,
+      {List<BigInt> scopeChain = const []}) {
+    structure_designer_api.setCommentAnchors(
+      scopePath: scopeChainToBytes(scopeChain),
+      nodeId: nodeId,
+      anchors: anchors,
+    );
+    refreshFromKernel();
   }
 
   /// Handles wire drop in empty space by invoking the callback.
