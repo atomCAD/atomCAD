@@ -6,27 +6,42 @@
 **Depended on `doc/design_hof_body_text_format.md`, which has landed** (all five
 phases). Before it, the text format did not project HOF zone bodies at all, so a
 snapshot was blind to the 141 body nodes in the corpus and a body edit was
-invisible in the diff. Two consequences for this design, now in force:
+invisible in the diff. Five consequences for this design, all in force, all
+folded into the decisions below rather than left as a footnote:
 
 - a zone-bearing node's statement is **multi-line** (that design's D14), so the
-  *By node* splitter below must brace-match rather than assume one statement per
-  line;
-- `EditResult` reports **full paths** (`m1/a`, not `a`), which is what the
-  *By node* diff must key on — two bodies may each contain a node named `a`.
+  *By node* splitter must brace-match rather than assume one statement per line
+  — and, because each body scope has its **own** topological sort, it must also
+  **recurse into bodies** rather than treat a body-bearing statement as one
+  opaque block (D4);
+- **names are unique per scope, not globally**, so every name-keyed structure
+  here — the *By node* diff keys and, less obviously, the position map behind
+  `LayoutOutcome` — must be keyed by **path** (`m1/d`), never by bare name (D9);
+- `EditResult` reports **full paths** (`m1/a`, not `a`), which is exactly the
+  key the *By node* diff needs;
+- `EditResult.success` now means *parsed, applied **and validates*** (that
+  design's D15), which is a **network-wide** verdict and no longer answers "did
+  this edit work". The record keeps both halves (D8);
+- positions are now **carried across a `--replace`** by that design's D8
+  name-match snapshot, so a replace is no longer automatically
+  layout-destructive. That is what makes Phase 2's "a `--replace` of an
+  unchanged script yields an empty *By node* diff" test meaningful for a
+  body-bearing network, which it could not have been before.
 
-A third consequence is about what this design is *not* for. That design's
+A sixth consequence is about what this design is *not* for. That design's
 Phase 5 made `ai_edit_network` push a `TextEditNetworkCommand`, so an AI edit is
 now one undo step and the "unrecoverable" half of the problem below is solved.
 The log's job is unchanged and unduplicated: undo restores *state*, while this
 design records *what was submitted, when, with which flags, and what came back*
 — including the entries an undo deliberately does not erase (D6).
 
-Both are recorded here so the diff viewer is built against the final format
-rather than retrofitted. Nothing else in this design changes.
+All of it is recorded here so the diff viewer is built against the final format
+rather than retrofitted.
 
 **Problem.** The AI edit surface (`ai_edit_network`, reached as
-`atomcad-cli edit [--replace]`) is the only mutation path in the application
-that leaves **no trace**. After a session of AI editing, the maintainer can see
+`atomcad-cli edit [--replace]`) leaves **no record of itself**. It leaves an
+undo step, since Phase 5 above — but an undo step is a way back, not a way to
+look. After a session of AI editing, the maintainer can see
 the *current* network and nothing else: not what the AI submitted, not what the
 network looked like before, not whether `--replace` was used, not what warnings
 or errors the CLI handed back, and — the reason this document exists now — not
@@ -105,24 +120,48 @@ surface, and it is the one the AI is most likely to have handled badly.
 > design. `serialize_network` is the only function of that name in the tree, but
 > the names are close enough to be worth pinning down once, here.
 
-`text_format::serialize_network` is called immediately before the edit and
-immediately after validation. This one decision is what makes the whole feature
-work in `--replace` mode: replace destroys node identity entirely, so any
-identity-based delta degenerates to "everything was deleted and everything was
-created", but the *text* is comparable regardless of how the edit was performed.
-One representation covers both modes, and the diff the maintainer reads is the
-same diff in both.
+`text_format::serialize_network` is called immediately before the edit and once
+after validation and layout. This one decision is what makes the whole feature
+work in `--replace` mode: replace mints a fresh node id for every node
+(`clear_network` does not reset `next_node_id`), so any **id**-based delta
+degenerates to "everything was deleted and everything was created", but the
+*text* is comparable regardless of how the edit was performed. One
+representation covers both modes, and the diff the maintainer reads is the same
+diff in both. (`design_hof_body_text_format.md` D8 does carry *names* and
+positions across a replace, which is what keeps the drawing intact — but the ids
+underneath are still new, so text remains the right comparison surface.)
 
 It also means the diff is in the AI's own dialect: a snapshot is exactly what
-`query` would have returned at that moment, so an entry's "before" text can be
-fed straight back to `edit --replace`, and any gap between what the AI meant and
-what the network became is visible in the same syntax the skill document is
-written in. A `.cnnd` JSON diff would be unreadable for that purpose.
+`query` would have returned at that moment, so an entry's "before" text can —
+unless it is flagged incomplete, below — be fed straight back to
+`edit --replace`, and any gap between what the AI meant and what the network
+became is visible in the same syntax the skill document is written in. A
+`.cnnd` JSON diff would be unreadable for that purpose.
 
 The snapshot is deterministic: `NetworkSerializer::topological_sort` seeds its
 DFS from node ids sorted ascending, and the dependency and entry orderings are
-sorted too, so the same network serializes byte-identically across runs. Without
-that property a diff would be pure noise; it happens to already hold.
+sorted too, so the same network serializes byte-identically across runs. Each
+zone body is sorted by the same function on its own scope, so bodies inherit the
+property. Without it a diff would be pure noise; it happens to already hold.
+
+**A snapshot can be truncated, and the record says so.** `serialize` aborts at a
+wire cycle: at the root scope `serialize_scope` returns `false` and `serialize`
+returns early, dropping every remaining statement *and* the footer
+(`network_serializer.rs:151-153`), leaving a `# Error: Cycle detected …` comment
+in their place. Inside a body the failure is swallowed — `serialize_body`
+ignores the return value, so the braces stay balanced — but the block reduces to
+that same comment, and since a body block is **total** (`design_hof_body_text_format.md`
+D5), feeding such a snapshot back to `edit --replace` would *empty* the body
+rather than restore it.
+
+Both cases are silent by construction, and both would be misread: a truncated
+snapshot makes the *By node* diff report a mass deletion that never happened. So
+each snapshot carries a `complete` flag — set by testing the serialized text for
+the `# Error:` marker, which is the serializer's only failure channel — and the
+panel banners an incomplete entry, disables "feed this back to `--replace`" for
+it, and marks its diff untrustworthy. Cycles are rare (the editor and the canvas
+both refuse to create one), which is exactly why an unflagged truncation would
+go unnoticed for a long time.
 
 **D3 — The AI text format carries no positions, so it cannot show layout.**
 Verified: `text_format`'s serializer emits no node coordinates (the `.cnnd`
@@ -138,12 +177,41 @@ topologically sorted, so inserting one upstream node can shift every downstream
 statement, and the line diff reports a large move as a large change.
 
 *By node* avoids it. Every statement in the text format begins
-`name = type { … }`, so the output splits cleanly into per-node blocks keyed by
-name. Diffing the **set** of blocks — added / removed / changed / unchanged,
-listed in name order — is stable against reordering and is the view that answers
-"what did this edit do". *Text* is kept as the literal unified diff, because
-sometimes the literal truth is what is wanted (and because header, footer and
-`output` statements live outside any node block).
+`name = type { … }`, so the output splits into per-node blocks — keyed by the
+node's **path**, for the reason the next paragraph gives. Diffing the **set** of
+blocks — added / removed / changed / unchanged, listed in key order — is stable
+against reordering and is the view that answers "what did
+this edit do". *Text* is kept as the literal unified diff, because sometimes the
+literal truth is what is wanted (and because header, footer and `output`
+statements live outside any node block).
+
+**The split is recursive, and the key is a path.** A zone-bearing node's
+statement spans lines and contains a whole nested scope, so brace-matching alone
+would put an entire body inside its owner's block — and the false-positive mode
+would come straight back one scope down, because **each body scope runs its own
+`topological_sort`** (`network_serializer.rs:241-258` is called per scope). One
+node inserted into a 19-node body would reorder that body's statements and
+report the whole `map` as changed. So the splitter descends into every
+`body { … }` block and emits a block per body node too, keyed by its path:
+
+- a top-level node → `m1`;
+- a node in `m1`'s body → `m1/d`;
+- a node two bodies deep → `outer/inner/p`.
+
+An owner's own block then holds only its own properties and the literal
+`body { … }` framing, not its children's text, so "the AI changed one node
+inside a body" renders as one changed `m1/d` block and nothing else.
+
+Two things fall out for free. The keys are **exactly** `EditResult`'s paths
+(`design_hof_body_text_format.md` D10), so a row in the diff and a name in the
+result are the same string — the panel can cross-link them without a second
+convention. And the keys are unambiguous where bare names are not: two bodies
+may each contain a node called `a`, and `m1/a` / `m2/a` keep them apart.
+
+A body's own `output` statement belongs to its **owner** (D5 over there: it
+writes the parent's `zone_output_arguments`), so it stays in the owner's block
+rather than going to the "other" bucket, where only the root scope's header,
+footer and `output` belong.
 
 **D5 — Diffs are computed on demand, not at record time.** The record stores
 snapshots; `ai_history_diff(seq, mode)` computes when the panel asks. Keeps the
@@ -162,23 +230,90 @@ panel draws a marker between the rows: *"this network changed outside `edit`
 since the previous entry."*
 
 The wording is deliberate. `ai_edit_network` is the only choke point for **text
-edits**, but `/networks/rename`, `/load` and `/new`
-(`ai_assistant/http_server.dart:931, 1008, 1118`) also mutate — and a rename
-changes the `# Network:` header line, so the next edit would trip the marker
-about something the CLI itself did. Phase 1 therefore records those three
-endpoints as well (they are single call sites), and the marker claims only what
+edits**, but it is not the only CLI route that changes what a snapshot says.
+Checked against the route table (`ai_assistant/http_server.dart:160-199`), four
+endpoints do:
+
+| Endpoint | What it changes in the snapshot |
+|---|---|
+| `/networks/rename` (`:931`) | the `# Network:` header line |
+| `/load` (`:1008`) | everything |
+| `/new` (`:1118`) | everything |
+| `/display?node-policy=…` (`:516`) | every `visible:` property |
+
+The fourth is the non-obvious one and was missed on the first pass:
+`node-policy` reaches `set_preferences`, which calls `apply_node_display_policy`
+(`structure_designer.rs:7611`) and rewrites the active network's
+`displayed_nodes` — and `visible:` **is** in the text format. Phase 1 therefore
+records all four (each is a single call site), and the marker claims only what
 it can prove: the state changed between two `edit` calls.
+
+The rest of the route table is genuinely safe. `/networks/activate` changes
+which network is active, but the comparison is keyed **per network**, so it
+cannot trip the marker; `/networks/add` and `/networks/delete` do not touch the
+active network's text (deleting the active one shows up instead as the "no
+active network" failed entry, D1). And — the case that would have made the
+marker useless — `refresh_structure_designer_auto` does **not** reapply the
+display policy (`StructureDesigner::refresh`, `structure_designer.rs:1573-1654`,
+contains no such call; the policy is applied by the individual mutation methods,
+which `text_edit_network` bypasses). So two consecutive AI edits with nothing
+between them do not diverge.
 
 This is what makes the log honest without logging GUI edits. Human drags, GUI
 node edits, undos and file loads all show up as a gap in the right place, at the
 cost of one string comparison. It also directly serves the maintainer's stated
 workflow: knowing whether the AI or the human made a given change.
 
-**D8 — Request and response are recorded verbatim.** The exact `code` string
-submitted, the `replace` flag, and the full `EditResult` (created / updated /
-deleted node names, connections made, errors, warnings). No summarizing at
-record time — a summary written now cannot answer a question thought of later.
-This is the raw material for uses 2 and 3 above.
+**Undo is now the likeliest source of divergence, and the marker should say
+so.** Since `design_hof_body_text_format.md` Phase 5, an AI edit is one undo
+step, so Ctrl+Z after an AI edit is a state change between two `edit` calls —
+correctly flagged, but *"this network changed outside `edit`"* reads oddly for
+"the user reverted your last edit". The undo stack knows: the command pushed by
+`ai_edit_network` carries the description `"AI edit network"`. When the flagged
+gap is explained by an undo or redo of such a command, the marker reads
+*"— edit #N undone —"*; otherwise it keeps the general wording. This is a panel
+string and a lookup, not a second detection mechanism: `diverged` is still set
+by the one string comparison.
+
+**D8 — Request and response are recorded verbatim, and "success" is recorded as
+two facts, not one.** The exact `code` string submitted, the `replace` flag, and
+the **whole** `EditResult` — which is `nodes_created` / `nodes_updated` /
+`nodes_deleted` (full paths), `connections_made`, `errors`, `warnings`, **and
+`description_set` / `summary_set` / `output_set`**
+(`text_format/network_editor.rs:112-133`). Those last three are easy to forget
+and are not decoration: `output_set` is how "the AI re-pointed the network's
+return node" is visible at all, and it is one of the changes the *By node* diff
+files under "other". No summarizing at record time — a summary written now
+cannot answer a question thought of later. This is the raw material for uses 2
+and 3 above.
+
+**The two verdicts.** `EditResult.success` used to mean "parsed and applied";
+since `design_hof_body_text_format.md` D15 it means "parsed, applied **and**
+validates", because `ai_edit_network` now folds
+`collect_scoped_validation_errors(network)` into the result. That verdict is
+computed over the **whole network**, not over the cone the edit touched — so a
+network that was *already* blocking-invalid before the edit makes every
+subsequent AI edit report `success: false`, however clean the edit was. Read as
+a log, a single `success` glyph would then be answering "is the network valid
+right now" instead of "did this edit work", and the two questions diverge
+exactly when the maintainer most needs them apart: mid-repair, when the AI is
+making progress through a broken network.
+
+So the record keeps both, and both already exist at the call site —
+`ai_edit_network` computes `edit_applied` (the editor's own verdict, captured
+before the fold) and then the post-fold `result.success`:
+
+- `applied` — the statements parsed and were applied. This is the AI's own
+  performance, and the one uses 2 and 3 are about.
+- `success` — the network validates afterwards. This is the state of the
+  drawing, and the one that tells the maintainer whether it is safe to stop.
+
+The row shows `applied` as the primary glyph and `success` as a secondary
+badge, so "my edit landed but the network is still broken elsewhere" is one
+glance. Expect that combination to be common rather than exceptional: an HOF
+node created without a body and without a wired `f:` is blocking-invalid by
+construction, so the ordinary two-step of creating a `map` and then filling its
+body produces `applied: true, success: false` on the first step every time.
 
 **D9 — The layout outcome is recorded per edit.** A `LayoutOutcome` alongside
 the snapshots:
@@ -186,7 +321,7 @@ the snapshots:
 - which path ran — `None` / `FullReflow` / `Incremental`;
 - total node count, number of nodes whose position changed, maximum
   displacement;
-- the list of moved nodes, by **name**, with before and after positions;
+- the list of moved nodes, by **path**, with before and after positions;
 - once `design_incremental_layout.md` Phase 1 lands, the `EditDelta` counts
   (added / modified / removed, added and removed wires), so a moved node can be
   read against whether the edit had any business touching it.
@@ -198,11 +333,47 @@ small: on a well-behaved incremental edit it is nearly empty, which is exactly
 the signal being looked for. On a full reflow it is every node, which is also
 exactly the signal.
 
+**By path, and over bodies too — sharing the walk the editor already has.** A
+bare-name position map is now simply wrong: body names are unique *per scope*,
+so `m1/d` and `m2/d` collide into one entry and the log reports the wrong node
+as moved, or none. The key is a `Vec<String>` path, and the walk covers every
+zone body at every depth.
+
+That walk exists. `design_hof_body_text_format.md` D8 needed the same map for
+the same reason, and `NetworkEditor::snapshot_positions`
+(`text_format/network_editor.rs:375-396`) builds `(name path) → position` over
+the whole network, keyed on `type NamePath = Vec<String>` (`:71`). **Promote it
+to a shared helper and call it from both places** rather than writing a second
+path-key implementation. Two of them would drift, and the D9 numbers are only
+meaningful if they are keyed identically to the identity match they are
+measuring.
+
+**`LayoutPath::None` does not mean "nothing moved".** `layout::layout_network`
+(`layout/mod.rs:64-77`) iterates `network.nodes` and stops there — it does not
+descend into `node.zone`, so **body nodes are never reflowed**. They still move:
+a body node whose name does not match D8's pre-edit snapshot is placed by
+`auto_layout::calculate_new_node_position` at creation time
+(`text_format/network_editor.rs:636-641`). So a body edit can produce a long
+`moved` list with `path: None`, which under a naive reading of this field would
+say "no layout ran, therefore nothing was disturbed" about an edit that just
+rearranged a 19-node body.
+
+The record therefore states the distinction rather than implying it: `path`
+describes what the **layout pass** did to the root scope, and a move inside a
+body is attributed to creation-time placement, not to layout. The panel's Layout
+tab groups moved nodes by scope for the same reason. When
+`design_incremental_layout.md` extends layout into bodies, `path` becomes
+per-scope and this note becomes a historical footnote — but until then, an
+unqualified `None` would be actively misleading.
+
 **D10 — Memory only, capped, exportable.** Not written to `.cnnd`, per the
 requirement. A ring buffer with two limits — entry count and total snapshot
-bytes — evicting oldest-first. Export to a file is how a session leaves the
-process; it is the feature, not an afterthought, because every downstream use
-(refine the skill, compare models) happens outside the application.
+bytes — evicting oldest-first. Snapshots are a few percent larger than they
+would have been before bodies were projected (141 body nodes against 2,303 in
+the corpus), which is well inside the guess the caps already are. Export to a
+file is how a session leaves the process; it is the feature, not an
+afterthought, because every downstream use (refine the skill, compare models)
+happens outside the application.
 
 **D11 — A bottom-docked panel, not a dialog.** The Console and Profiler panels
 already establish the pattern — state on `StructureDesignerModel`, a *View*
@@ -246,12 +417,24 @@ pub struct AiEditRecord {
     /// Exactly what the AI submitted.
     pub code: String,
 
-    /// Exactly what it got back.
+    /// Exactly what it got back — the whole `EditResult`, D8.
+    ///
+    /// The two verdicts are kept apart: `applied` is the editor's own
+    /// (`edit_applied` at the call site), `success` is that folded with
+    /// `validate_network`'s whole-network verdict (D15 over in
+    /// `design_hof_body_text_format.md`). `applied && !success` is the
+    /// ordinary "my edit landed, the network is still broken elsewhere".
+    pub applied: bool,
     pub success: bool,
+    /// Node **paths** (`m1/a`), not bare names — D10 over there.
     pub nodes_created: Vec<String>,
     pub nodes_updated: Vec<String>,
     pub nodes_deleted: Vec<String>,
     pub connections_made: Vec<String>,
+    /// The three `EditResult` fields it is easy to drop on the floor.
+    pub description_set: Option<String>,
+    pub summary_set: Option<String>,
+    pub output_set: Option<String>,
     pub errors: Vec<String>,
     pub warnings: Vec<String>,
 
@@ -259,9 +442,19 @@ pub struct AiEditRecord {
     /// Empty on the early-return paths.
     pub before_text: String,
     pub after_text: String,
+    /// False when the serializer aborted on a wire cycle, so the text above is
+    /// truncated (root scope) or has a gutted body block (D2). An incomplete
+    /// snapshot is not valid `edit --replace` input and its diff is not
+    /// trustworthy; the panel says so.
+    pub before_complete: bool,
+    pub after_complete: bool,
 
     /// The previous entry for this network ended in a different state (D7).
     pub diverged: bool,
+    /// Set when the gap is explained by an undo/redo of an `"AI edit network"`
+    /// command, which is the common case now that AI edits are undoable (D7).
+    /// Changes the marker's wording, not its detection.
+    pub diverged_by_undo: bool,
 
     pub layout: LayoutOutcome,
 }
@@ -269,7 +462,11 @@ pub struct AiEditRecord {
 pub enum LayoutPath { None, FullReflow, Incremental }
 
 pub struct LayoutOutcome {
+    /// What the layout pass did to the **root scope**. Body nodes are never
+    /// reflowed (`layout_network` does not descend into `Node.zone`), so
+    /// `None` here is compatible with a non-empty `moved` (D9).
     pub path: LayoutPath,
+    /// Every node in the network, bodies included.
     pub node_count: usize,
     pub moved: Vec<MovedNode>,     // only nodes whose position changed
     pub max_displacement: f64,
@@ -277,7 +474,10 @@ pub struct LayoutOutcome {
     pub delta: Option<DeltaCounts>,
 }
 
-pub struct MovedNode { pub name: String, pub before: DVec2, pub after: DVec2 }
+/// `path` is the scoped node path — `["m1", "d"]`, rendered `m1/d`. Never a
+/// bare name: body names are unique per scope only, so `m1/d` and `m2/d` are
+/// different nodes (D9). Same key, same type as the editor's `NamePath`.
+pub struct MovedNode { pub path: Vec<String>, pub before: DVec2, pub after: DVec2 }
 
 pub struct AiEditLog {
     records: VecDeque<AiEditRecord>,
@@ -297,32 +497,42 @@ constants.
 1. resolve network name        → on failure: push a failed record, return
 2. check the CLI write lock    → on failure: push a failed record, return
 3. before_text = text_format::serialize_network(network, registry, name)
-   before_positions = {custom_name → position}
-4. (existing) remove from registry, text_edit_network, reinsert, validate
+   before_positions = {name path → position}         # the shared walk, D9
+4. (existing) remove from registry, undo before-snapshot, text_edit_network,
+   reinsert, validate, fold the verdict into the result (D15)
+   — capture `edit_applied` here as `applied` (D8)
 5. (existing) layout pass, if enabled
 6. after_text = text_format::serialize_network(...)
-   after_positions = {custom_name → position}   → LayoutOutcome
+   after_positions = {name path → position}          → LayoutOutcome
 7. push the record
-8. (existing) mark_full_refresh, set_dirty, refresh
+8. (existing) undo after-snapshot + push_command, mark_full_refresh, set_dirty,
+   refresh
 ```
 
 Steps 3 and 6 each borrow the registry twice immutably — the network and the
 registry it lives in — which is exactly what `ai_query_network` already does.
-The snapshots bracket validation and layout, so a partially-applied edit (some
-statements succeeded, a later one failed) shows its real partial effect rather
-than nothing.
+Step 3 must run **before** the network is removed from the registry in step 4,
+and step 6 **outside** the remove/reinsert window step 8 opens for the undo
+after-snapshot; neither is a constraint, just a placement. The snapshots bracket
+validation and layout, so a partially-applied edit (some statements succeeded, a
+later one failed) shows its real partial effect rather than nothing.
 
-**Positions are keyed by name, never by node id.** `clear_network`
-(`text_format/network_editor.rs:220`) removes every node without resetting
-`next_node_id`, so a `--replace` rebuild mints fresh, higher ids for everything
-and an id-keyed comparison matches nothing — reporting "nothing moved" on the
-single most layout-destructive kind of edit. Name keying is the same match
-`design_incremental_layout.md` specifies for replace mode; a name present only
-after the edit is a new node, not a moved one.
+**Do not confuse the two snapshot pairs.** Step 4 and step 8 already take
+`node_network_to_serializable` snapshots — those are the *undo command's*, in
+the `.cnnd` representation, and they exist to be restored. This design's are the
+text-format pair of D2, and they exist to be read. Four serializations per edit
+sounds like a lot and is not: the two added here are the only new cost, on a
+path that already runs `validate_network`, a layout pass and a full refresh.
 
-Two `text_format::serialize_network` calls per edit is the entire runtime cost,
-on a path that already runs `validate_network`, a layout pass and a full
-refresh.
+**Positions are keyed by path, never by node id and never by bare name.**
+`clear_network` (`text_format/network_editor.rs:400`) removes every node without
+resetting `next_node_id`, so a `--replace` rebuild mints fresh, higher ids for
+everything and an id-keyed comparison matches nothing — reporting "nothing
+moved" on the single most layout-destructive kind of edit. And a *bare-name* key
+collides across scopes now that bodies exist (D9). The path key is the same
+match `design_hof_body_text_format.md` D8 and `design_incremental_layout.md`
+both specify, computed by the same promoted helper; a path present only after
+the edit is a new node, not a moved one.
 
 ---
 
@@ -330,17 +540,42 @@ refresh.
 
 Both views live in the domain crate and are computed on demand (D5).
 
-**By node.** Split each snapshot into `(name → statement block)` maps by
-matching the leading `name =` of each statement, keeping non-statement lines
-(header comment, `output …`, footer) in a small "preamble/other" bucket. Then:
+**By node.** Split each snapshot into a `(path → statement block)` map, keeping
+the root scope's non-statement lines (header comment, `output …`, footer) in a
+small "preamble/other" bucket.
 
-- `name` in after only → **added**
-- `name` in before only → **removed**
+The split is a small recursive scan, not a line filter, because a statement can
+span lines (D14 over there):
+
+1. At the current indent level, a statement starts at a line matching
+   `<identifier> =` and ends at its brace-matched `}` — or at end of line, for
+   the great majority of nodes that carry no body and still serialize on one
+   line.
+2. If the statement contains a `body {` block, recurse into it with the current
+   path extended by this node's name, and **remove the block's inner text from
+   the owner's own block**, leaving the `body { … }` framing. The owner's block
+   is then its own properties plus the body's `output` statement, which belongs
+   to the owner (it writes the parent's `zone_output_arguments`).
+3. Identifiers are read with the format's own rules — backtick-quoted names
+   (`` `a/b` ``) are one segment, and `/` inside backticks is not a separator.
+
+Then, over the resulting maps:
+
+- path in after only → **added**
+- path in before only → **removed**
 - present in both, block text differs → **changed**, with a line diff *within*
   the block
 - present in both, identical → **unchanged**, collapsed
 
-Ordering is by name, ascending, so the view is stable across edits.
+Ordering is by path, ascending, so the view is stable across edits and a body's
+entries sort directly under their owner.
+
+Two properties are worth stating because they are the point of the recursion:
+inserting a node into a body changes exactly one key (`m1/new`) and leaves its
+19 siblings unchanged, even though the body's own topological sort reordered
+their lines; and a snapshot flagged incomplete (D2) is diffed but rendered
+behind a warning, since a truncated `after_text` would otherwise fill the
+*removed* column with nodes that still exist.
 
 **Text.** A unified line diff over the two snapshots with the standard three
 lines of context, unchanged runs collapsed.
@@ -351,15 +586,21 @@ as a direct dependency of `atomcad-structure-designer` adds no new code to the
 tree.
 
 **What to strip, precisely.** The volatile part is the **footer**, not the
-header: `serialize` ends with `
-# N nodes` (`network_serializer.rs:113-117`),
-which churns on every edit that changes the node count. That line is dropped
-from both snapshots before diffing. The **header** is `# Network: <name>`
-(`network_serializer.rs:59-61`), which changes only on a rename and is worth
-seeing; and the `description "…"` / `summary "…"` lines that follow it are real,
-AI-editable statements that must stay **in** the diff. In *By node* the header
-and footer land in the "other" bucket; the `description` and `summary`
-statements are diffed there too.
+header: `serialize` ends with `\n# N nodes` (`network_serializer.rs:155-158`),
+which churns on every edit that changes the node count — and the count now
+includes body nodes (`count_nodes` recurses through `Node.zone`,
+`network_serializer.rs:163-176`), so a body-only edit churns it too. That line
+is dropped from both snapshots before diffing. The **header** is
+`# Network: <name>` (`network_serializer.rs:114-116`), which changes only on a
+rename and is worth seeing; and the `description "…"` / `summary "…"` lines that
+follow it are real, AI-editable statements that must stay **in** the diff. In
+*By node* the header and footer land in the "other" bucket; the `description`
+and `summary` statements are diffed there too.
+
+Nothing else needs stripping. An **empty** body emits no block at all —
+`serialize_body` returns `None` when the body has no nodes and no zone-output
+wire (`network_serializer.rs:484-491`) — so a `body { }` never appears in a
+snapshot and the splitter never has to special-case one.
 
 ---
 
@@ -372,6 +613,9 @@ A new FRB module `rust/src/api/structure_designer/ai_history_api.rs`.
 > trap `project_atom_tags` hit.
 
 ```rust
+/// Bumped on every push, and on `clear`. The refresh gate of D12 — without
+/// it `refreshFromKernel` has no cheap way to know the list is unchanged.
+#[frb(sync)] pub fn ai_history_version() -> u64;
 #[frb(sync)] pub fn ai_history_list() -> Vec<APIAiEditSummary>;
 #[frb(sync)] pub fn ai_history_detail(seq: u64) -> Option<APIAiEditDetail>;
 #[frb(sync)] pub fn ai_history_diff(seq: u64, by_node: bool) -> Option<APIAiDiff>;
@@ -383,12 +627,14 @@ A new FRB module `rust/src/api/structure_designer/ai_history_api.rs`.
 ```
 
 `APIAiEditSummary` carries what a list row needs and nothing more: `seq`,
-`timestamp_ms`, `network_name`, `replace`, `success`, counts of
-created/updated/deleted, error and warning counts, `diverged`, `moved_count`
-(D12).
+`timestamp_ms`, `network_name`, `replace`, **`applied` and `success`** (the two
+verdicts of D8), counts of created/updated/deleted, error and warning counts,
+`diverged`, `diverged_by_undo`, `snapshots_complete`, `moved_count` (D12).
 
-`APIAiDiff` is a list of hunks, each `{ kind, node_name, lines }` where a line
+`APIAiDiff` is a list of hunks, each `{ kind, node_path, lines }` where a line
 is `{ tag: Same|Add|Remove, text }` — rendered, not re-parsed, by Dart.
+`node_path` is the scoped path string (`m1/d`), the same key `EditResult` uses,
+so the *Diff* and *Result* tabs name a node identically.
 
 Export writes through the standard file-save path so it picks up the
 last-directory behaviour from `project_issue_420_last_directories`. JSON is the
@@ -403,22 +649,33 @@ convenience for pasting a session into a skill-refinement conversation.
 
 ```
 ┌ AI History ──────────────────────────────── [label: ______] [Export] [Clear] [x] ┐
-│ #14 14:07:31 ✔ beam        +3 ~1 −0   ⌂2                │  ┌ Diff │ Request │ Result │ Layout ┐ │
-│ ── changed outside the CLI ──────────────               │  │ (•) By node  ( ) Text     [⤢]  │ │
-│ #13 14:05:02 ✖ beam  REPL  ⚠1 ✖1                        │  │ + tip1 = sphere { … }          │ │
-│ #12 14:03:22 ✔ tool_holder +9 ~0 −2   ⌂9                │  │ ~ union1 = union { shapes: … } │ │
+│ #14 14:07:31 ✔  beam        +3 ~1 −0   ⌂2               │  ┌ Diff │ Request │ Result │ Layout ┐ │
+│ ── edit #13 undone ──────────────────────               │  │ (•) By node  ( ) Text     [⤢]  │ │
+│ #13 14:05:02 ✔⚠ beam        +1 ~0 −0   ⌂0               │  │ + m1/tip1 = sphere { … }       │ │
+│ #12 14:03:22 ✖  tool_holder REPL  ⚠1 ✖1                 │  │ ~ m1/union1 = union { … }      │ │
+│ ── changed outside the CLI ──────────────               │  │   union1 = union { shapes: … } │ │
+│ #11 14:01:10 ✔  tool_holder +9 ~0 −2   ⌂9               │  │                                │ │
 └──────────────────────────────────────────────────────────┴────────────────────────────────────┘
 ```
 
-- **Row:** sequence, time, success glyph, network name, a **REPL** badge when
+- **Row:** sequence, time, the **two verdicts** of D8 — `applied` as the primary
+  glyph (✔/✖) and a `⚠` badge for `applied && !success`, i.e. "your edit landed,
+  the network is invalid elsewhere" — network name, a **REPL** badge when
   `replace` was used (unmissable, per the requirement), created/updated/deleted
-  counts, a `⌂` moved-node count, and error/warning badges. Failed entries are
-  tinted.
-- **Divergence marker** between rows when `diverged` (D7).
-- **Detail tabs:** *Diff* (By node / Text toggle, `⤢` expands to a dialog),
-  *Request* (the submitted script, monospace, selectable), *Result* (errors,
-  warnings, connections made), *Layout* (path, moved count, max displacement,
-  the moved-node table).
+  counts, a `⌂` moved-node count, and error/warning badges. Entries whose edit
+  did not apply are tinted.
+- **Divergence marker** between rows when `diverged` (D7), reading
+  *"edit #N undone"* when `diverged_by_undo` and *"changed outside the CLI"*
+  otherwise.
+- An **incomplete-snapshot banner** on an entry whose serialization was
+  truncated by a wire cycle (D2), which greys the diff and says why.
+- **Detail tabs:** *Diff* (By node / Text toggle, `⤢` expands to a dialog; rows
+  are keyed by path, so body nodes read `m1/d`), *Request* (the submitted
+  script, monospace, selectable), *Result* (errors, warnings, connections made,
+  and the `description` / `summary` / `output` assignments), *Layout* (path,
+  moved count, max displacement, and the moved-node table **grouped by scope**,
+  with the D9 note that body moves come from creation-time placement rather than
+  the layout pass).
 - Error and warning text follows `project_issue_359_copyable_errors`:
   persistent text is selectable.
 - Toolbar: session label field (D13), Export, Clear.
@@ -428,11 +685,13 @@ convenience for pasting a session into a skill-refinement conversation.
 On `StructureDesignerModel`: `aiHistory: List<APIAiEditSummary>`,
 `aiHistoryPanelVisible`, `selectedAiHistorySeq`, `unreadAiEditCount`.
 
-`refreshFromKernel()` calls `ai_history_list()` — cheap by D12 — and bumps
-`unreadAiEditCount` when the panel is hidden, mirroring the Console panel's
-unread dot. That refresh already fires after every AI edit via
-`main.dart`'s `_aiServer.onNetworkEdited`, so the panel updates live while the
-AI works.
+`refreshFromKernel()` calls `ai_history_version()` — a `u64` compare, per D12 —
+and only re-fetches `ai_history_list()` when it changed *and* the panel is
+visible. The version bump is also what raises `unreadAiEditCount` while the
+panel is hidden, so the unread dot costs nothing but the compare, mirroring the
+Console panel's. That refresh already fires after every AI edit via
+`main.dart:162`'s `_aiServer.onNetworkEdited`, so the panel updates live while
+the AI works.
 
 *View > Show/Hide AI History*, next to the Console and Profiler entries in
 `structure_designer.dart`. No new global keyboard shortcut (open question 4).
@@ -444,18 +703,33 @@ AI works.
 ### Phase 1 — Recording core
 `AiEditRecord` / `AiEditLog` on `StructureDesigner`, the ring-buffer caps, the
 snapshot capture and `LayoutOutcome` computation in `ai_edit_network`, including
-all three early-return paths and the divergence flag.
+all three early-return paths and the divergence flag. `NetworkEditor::snapshot_positions`
+is promoted to a shared path-keyed helper and called from both places (D9), and
+the four non-`edit` mutating endpoints record entries too (D7).
 
 *Tests:* a merge edit records both snapshots and the submitted code verbatim; a
 `--replace` edit records `replace = true` and two comparable snapshots; a
 write-locked edit records a failed entry with the lock message and empty
 snapshots; a syntactically broken script records the errors *and* whatever
 partial state resulted; an edit that follows a GUI change sets `diverged`, and
-two consecutive AI edits do not; the entry-count cap evicts oldest-first; the
-byte cap evicts on a large snapshot; the log is absent from a saved `.cnnd` and
-survives a load (open question 3 decides which); `LayoutOutcome.moved` is empty
-when `auto_layout_after_edit` is off and non-empty for a reflow that moved
-something.
+two consecutive AI edits do not; a `/display?node-policy=` call between two
+edits sets `diverged` (the endpoint that was missed on the first pass); the
+entry-count cap evicts oldest-first; the byte cap evicts on a large snapshot;
+the log is absent from a saved `.cnnd` and survives a load (open question 3
+decides which); `LayoutOutcome.moved` is empty when `auto_layout_after_edit` is
+off and non-empty for a reflow that moved something.
+
+*Tests for the parts the HOF bodies added:* an edit that moves a body node
+records it as `m1/d`, and two bodies each containing a moved `d` record **two**
+distinct entries rather than one (the bare-name collision D9 exists to prevent);
+an edit that only rebuilds a body records `LayoutPath::None` **with** a
+non-empty `moved` (body nodes are not reflowed — `layout_network` does not
+descend into `Node.zone`); an edit that creates an HOF node with no body and no
+`f:` records `applied: true, success: false`; an edit applied to a network that
+was *already* blocking-invalid also records `applied: true, success: false`,
+and the two are distinguishable in the row; `description_set` / `summary_set` /
+`output_set` survive into the record; a network containing a wire cycle records
+`before_complete: false` and is not offered for replay.
 
 ### Phase 2 — Diff engine and API
 The *By node* and *Text* diffs, `similar` promoted to a workspace dependency,
@@ -468,7 +742,21 @@ that would fail on a naive line diff); a `--replace` of an unchanged script
 yields an empty *By node* diff — the direct analogue of
 `design_incremental_layout.md`'s name-match test; a property change shows a
 line-level diff inside the block; a deleted node appears as removed; the
-serializer header never appears as a change.
+serializer header never appears as a change; the footer never does either, on a
+body-only edit that changes the node count.
+
+*Tests for the recursive split:* a change to one node inside a body yields
+exactly one changed block keyed `m1/d`, and the owner's `m1` block is
+**unchanged**; inserting a node into a body reorders that body's topological
+output but still yields one added block and no changed siblings (the same
+false-positive mode as the top-level test, one scope down — this is the test a
+brace-matching-only splitter fails); a node named `a` in each of two bodies
+yields `m1/a` and `m2/a` as separate keys; a nested body reaches
+`outer/inner/p`; a `--replace` of an unchanged body-bearing script yields an
+empty *By node* diff, which is only possible because positions and identities
+are carried by `design_hof_body_text_format.md` D8; a body's `output` statement
+shows as a change to the **owner's** block, not as an orphan in the "other"
+bucket; a backtick-quoted name containing `/` stays one path segment.
 
 ### Phase 3 — Panel
 The panel, the list, the four detail tabs, the *View* menu entry, the unread
@@ -482,9 +770,12 @@ edits are recorded and how to export them.
 
 *Manual verification* (per `feedback_manual_test_for_editor_ui`): run an AI
 session against a hand-drawn network with the panel open; confirm merge vs.
-replace are distinguishable at a glance; make a GUI edit between two AI edits
-and confirm the divergence marker; trigger a CLI error and read it in the panel;
-export and re-read the JSON.
+replace are distinguishable at a glance; edit one node inside a `closure` or
+`map` body through a path statement against `from_mechadense.cnnd` and confirm
+the diff names `m1/d` alone, with the owner and the siblings unchanged; make a
+GUI edit between two AI edits and confirm the divergence marker, then undo an AI
+edit and confirm the marker says so instead; trigger a CLI error and read it in
+the panel; export and re-read the JSON.
 
 ### Phase 5 (later) — Wider capture
 Log non-edit CLI traffic (`/query`, `/screenshot`, `/networks/*`, `/load`,
@@ -506,9 +797,23 @@ sentence the whole design is trying to make true. The recording is deliberately
 written so that it works before that design lands (`path: FullReflow`,
 `delta: None`) and gains fidelity when it does.
 
-**Undo.** None. The log is not document state and takes no undo command (D6).
-It is exempt from `feedback_persisted_mutations_must_be_undoable` for the same
-reason `print_log` is: nothing about it is persisted.
+**HOF bodies (`design_hof_body_text_format.md`, landed).** Everything this
+design records is now scope-aware, and in every case the key is a **path**: the
+*By node* diff keys (D4), the `LayoutOutcome` position map (D9), and
+`EditResult`'s own node lists (that design's D10). One promoted helper —
+`snapshot_positions` — supplies the position half to both designs, so the
+identity match and its measurement cannot disagree. Two of that design's
+properties are load-bearing here and worth naming: `success` is now a
+whole-network verdict, which is why D8 records two of them; and positions
+survive a `--replace`, which is what makes an empty-diff replace test possible
+at all.
+
+**Undo.** The log takes no undo command: it is not document state, and it is
+exempt from `feedback_persisted_mutations_must_be_undoable` for the same reason
+`print_log` is — nothing about it is persisted. Undoing an AI edit therefore
+leaves its entry standing (D6), and shows up as a divergence marker on the
+*next* entry, worded to say an edit was undone rather than that something
+unknown happened (D7). That is the only place the two systems touch.
 
 **CLI write lock.** Rejected edits are recorded (D1). Worth stating in
 `headless_cli.md`: locking a network does not hide the attempts.
