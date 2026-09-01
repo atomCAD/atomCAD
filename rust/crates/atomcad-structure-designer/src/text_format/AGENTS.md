@@ -141,9 +141,8 @@ Converts a `NodeNetwork` back to text format:
 ## Zone bodies (`body { … }`)
 
 `doc/design_hof_body_text_format.md`. The serializer, the parser and the editor
-are all scope-aware: `query` projects bodies and `edit` accepts them. **Path
-addressing (`m1/x = …`) is Phase 3 and does not exist yet** — a body is edited
-by restating its block.
+are all scope-aware: `query` projects bodies and `edit` accepts them, either as
+a whole block or one node at a time through a path (`m1/x = …`).
 
 A zone-owning node's statement becomes multi-line, with the body block as its
 last property-position item:
@@ -205,9 +204,50 @@ Two things the editor must keep doing:
   makes the owner's resolved `NodeType::zone_input_pins` current by then).
   Do not "tidy" the body into the property list.
 
-Zone init is **eager**: `apply_body` calls `ensure_zone_init` itself rather
+Zone init is **eager**: `ensure_zone` calls `ensure_zone_init` itself rather
 than leaving it to validation, which runs long after the editor returns and so
 would give the body statements nowhere to land.
+
+### Path addressing: `m1/x = …`
+
+The second edit granularity. **The prefix selects the scope, the last segment
+names the node in it** — one rule, applied to all three statement forms:
+
+```
+m1/d = mul { a: $element, b: ^scale }   # update (or create) one body node
+output m1/d                              # re-point m1's zone-output wire
+delete m1/e                              # remove one body node
+outer/inner/n = add { a: $element, b: ^^base }
+```
+
+The separator is `/`, never `.`: `.` already means pin access in value
+position, so `output m1.d` would be ambiguous. Paths split on the `/` *token*,
+so a backtick-quoted segment containing a slash (`` m1/`a/b` ``) is still one
+segment.
+
+Three things follow, and they are the whole semantics:
+
+- **A block replaces, a path merges.** `m1 = map { body { … } }` is total over
+  the body *and* over the zone-output wire; `m1/x = …` touches `x` and leaves
+  every sibling's id and position alone. Ordering within one script is
+  significant and needs no special rule — the block wipes, a later path
+  statement merges into the result.
+- **Everything inside a path statement is relative to the scope it lands on.**
+  Bare names resolve in the addressed body, `$…` are *its* zone inputs and
+  `^…` walks outward from *it*, so `m1/x = …` and the same statement written
+  inside `m1`'s block mean exactly the same thing. `resolve_path_scope` walks
+  the prefix and then hands the ordinary per-scope machinery a deeper scope;
+  nothing downstream knows a path was involved.
+- **A path never creates the HOF it addresses**, and never guesses: a segment
+  that names no node, or names one that owns no body, is an error rather than a
+  silent no-op. `output m1/x` inside a body block is *not* that block's own
+  `output` — the block's is the unqualified one, and a path-addressed
+  assignment mentions its **first segment**, which is what stops the enclosing
+  block from deleting the body the next statement reaches into.
+
+The serializer still emits only the block form (D9): paths are input-only
+sugar, so `query` output stays single-valued and one node keeps one statement
+shape.
 
 ## Auto-Layout (auto_layout.rs)
 

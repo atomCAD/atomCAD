@@ -214,11 +214,11 @@ fn parser_accepts_quoted_function_ref() {
 fn parser_accepts_quoted_output_and_delete() {
     let stmts = Parser::parse("output `lib.x_rect`\ndelete `lib.x_rect`").unwrap();
     match &stmts[0] {
-        Statement::Output { node_name } => assert_eq!(node_name, "lib.x_rect"),
+        Statement::Output { node_name, .. } => assert_eq!(node_name, "lib.x_rect"),
         _ => panic!("expected output"),
     }
     match &stmts[1] {
-        Statement::Delete { node_name } => assert_eq!(node_name, "lib.x_rect"),
+        Statement::Delete { node_name, .. } => assert_eq!(node_name, "lib.x_rect"),
         _ => panic!("expected delete"),
     }
 }

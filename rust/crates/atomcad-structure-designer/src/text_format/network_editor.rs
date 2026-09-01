@@ -465,20 +465,30 @@ impl<'a> NetworkEditor<'a> {
         for stmt in statements {
             match stmt {
                 Statement::Assignment {
+                    scope_path,
                     name,
                     node_type,
                     properties,
                     body,
                 } => {
-                    if let Err(e) = self.process_assignment(
-                        scope,
-                        name_path,
-                        name,
-                        node_type,
-                        properties,
-                        body.as_deref(),
-                    ) {
-                        self.result.add_error(e);
+                    // A path prefix only moves the statement into another
+                    // scope; everything after that is the ordinary path (D7).
+                    // An assignment *merges* into the body it addresses — it
+                    // is the block form, not the path form, that is total.
+                    match self.resolve_path_scope(scope, name_path, scope_path) {
+                        Ok((scope, name_path)) => {
+                            if let Err(e) = self.process_assignment(
+                                &scope,
+                                &name_path,
+                                name,
+                                node_type,
+                                properties,
+                                body.as_deref(),
+                            ) {
+                                self.result.add_error(e);
+                            }
+                        }
+                        Err(e) => self.result.add_error(e),
                     }
                 }
                 Statement::Description { text } => {
@@ -502,19 +512,51 @@ impl<'a> NetworkEditor<'a> {
                     }
                 }
                 Statement::Comment(_) => {}
-                Statement::Delete { node_name } => self.deferred.push(DeferredOp::Delete {
-                    scope: scope.to_vec(),
-                    name: node_name.clone(),
-                    path: path_string(name_path, node_name),
-                }),
-                Statement::Output { node_name } => {
+                Statement::Delete {
+                    scope_path,
+                    node_name,
+                } => match self.resolve_path_scope(scope, name_path, scope_path) {
+                    Ok((scope, name_path)) => self.deferred.push(DeferredOp::Delete {
+                        scope,
+                        name: node_name.clone(),
+                        path: path_string(&name_path, node_name),
+                    }),
+                    Err(e) => self.result.add_error(e),
+                },
+                Statement::Output {
+                    scope_path,
+                    node_name,
+                } => {
                     // The same keyword means two things, and the position is
                     // what disambiguates them: at the top level it names the
                     // network's return node; inside a body it names the source
                     // of the **owning node's** `zone_output_arguments`, which
                     // `apply_body` records — it has to see the block as a
                     // whole, because an *absent* `output` is meaningful too.
-                    if scope.is_empty() {
+                    //
+                    // A path prefix is the second meaning written from
+                    // outside: `output m1/x` re-points `m1`'s zone-output wire
+                    // and touches nothing else — unlike a block, it is not
+                    // total over the body (D7).
+                    if !scope_path.is_empty() {
+                        match self.resolve_path_scope(scope, name_path, scope_path) {
+                            Ok((body_scope, body_name_path)) => {
+                                // `resolve_path_scope` walked at least one
+                                // segment, so both are non-empty.
+                                let (owner_id, owner_scope) = body_scope
+                                    .split_last()
+                                    .expect("a non-empty path prefix yields a body scope");
+                                self.deferred.push(DeferredOp::ZoneOutput {
+                                    owner_scope: owner_scope.to_vec(),
+                                    owner_id: *owner_id,
+                                    owner_path: body_name_path.join(&PATH_SEPARATOR.to_string()),
+                                    body_scope: body_scope.clone(),
+                                    source_name: Some(node_name.clone()),
+                                });
+                            }
+                            Err(e) => self.result.add_error(e),
+                        }
+                    } else if scope.is_empty() {
                         self.deferred.push(DeferredOp::Output {
                             name: node_name.clone(),
                         });
@@ -735,28 +777,16 @@ impl<'a> NetworkEditor<'a> {
     // Pass 1: bodies
     // ------------------------------------------------------------------
 
-    /// Apply a `body { … }` block to the zone of the node it was written on.
+    /// Make sure a zone-owning node's body network exists, and refuse a node
+    /// that owns no body.
     ///
-    /// The block is **total** over the body: names it mentions are created or
-    /// updated in place — keeping their node ids and their positions — and
-    /// every other body node is removed (D6/D8). That is what makes
-    /// `query` → `edit --replace` exact, and what stops a one-node change from
-    /// scrambling the other twenty-nine.
-    fn apply_body(
-        &mut self,
-        scope: &[u64],
-        name_path: &[String],
-        name: &str,
-        path: &str,
-        node_id: u64,
-        body_statements: &[Statement],
-    ) -> Result<(), String> {
-        // The zone has to exist *now*. `ensure_zone_init` also runs during
-        // validation (`node_type_registry`), but that is long after this
-        // editor returns, and the statements below need somewhere to land
-        // (D13). `populate_custom_node_type_cache` already called it during
-        // create/update; this repeats it because it is idempotent and because
-        // the requirement belongs here, where the body is used.
+    /// Zone init is **eager** here. `ensure_zone_init` also runs during
+    /// validation (`node_type_registry`), but that is long after this editor
+    /// returns, and body statements need somewhere to land *now* (D13).
+    /// `populate_custom_node_type_cache` already called it during
+    /// create/update; this repeats it because it is idempotent and because the
+    /// requirement belongs where the body is used.
+    fn ensure_zone(&mut self, scope: &[u64], node_id: u64, path: &str) -> Result<(), String> {
         let resolved_type = {
             let network = scope_net(self.network, scope)
                 .ok_or_else(|| format!("Scope for '{}' no longer exists", path))?;
@@ -780,6 +810,65 @@ impl<'a> NetworkEditor<'a> {
         {
             node.ensure_zone_init(&resolved_type);
         }
+        Ok(())
+    }
+
+    /// Walk a statement's path prefix (`m1/`, `outer/inner/`) down from the
+    /// scope the statement was written in, and return the scope it addresses
+    /// (D7).
+    ///
+    /// Every segment must already name a zone-owning node — created earlier in
+    /// the same script or already present. A path never *creates* the HOF it
+    /// addresses: there would be no way to guess its type.
+    ///
+    /// The prefix only selects a scope. Everything inside the statement —
+    /// bare names, `$…`, `^…` — is then relative to the scope it lands on,
+    /// which is what makes a path statement and the same statement written
+    /// inside a `body { … }` block mean exactly the same thing.
+    fn resolve_path_scope(
+        &mut self,
+        scope: &[u64],
+        name_path: &[String],
+        prefix: &[String],
+    ) -> Result<(ScopePath, NamePath), String> {
+        let mut scope = scope.to_vec();
+        let mut name_path = name_path.to_vec();
+        for segment in prefix {
+            let owner_path = path_string(&name_path, segment);
+            let node_id = self.lookup(&scope, segment).ok_or_else(|| {
+                format!(
+                    "Cannot address '{}': no such node — a path may only address a body that already exists",
+                    owner_path
+                )
+            })?;
+            self.ensure_zone(&scope, node_id, &owner_path)?;
+            scope.push(node_id);
+            name_path.push(segment.clone());
+            // A body the edit has not descended into yet has no name map.
+            if !self.scopes.contains_key(&scope) {
+                self.build_existing_name_map(&scope);
+            }
+        }
+        Ok((scope, name_path))
+    }
+
+    /// Apply a `body { … }` block to the zone of the node it was written on.
+    ///
+    /// The block is **total** over the body: names it mentions are created or
+    /// updated in place — keeping their node ids and their positions — and
+    /// every other body node is removed (D6/D8). That is what makes
+    /// `query` → `edit --replace` exact, and what stops a one-node change from
+    /// scrambling the other twenty-nine.
+    fn apply_body(
+        &mut self,
+        scope: &[u64],
+        name_path: &[String],
+        name: &str,
+        path: &str,
+        node_id: u64,
+        body_statements: &[Statement],
+    ) -> Result<(), String> {
+        self.ensure_zone(scope, node_id, path)?;
 
         let mut body_scope = scope.to_vec();
         body_scope.push(node_id);
@@ -790,10 +879,16 @@ impl<'a> NetworkEditor<'a> {
 
         // Totality: a name the block does not mention is gone. Everything it
         // does mention is matched by name below and keeps its id and position.
+        // A path-addressed statement inside the block mentions the *owner* of
+        // the body it reaches into (`m1/x = …` mentions `m1`), which is what
+        // keeps the block from deleting the very node the next statement
+        // addresses.
         let mentioned: HashSet<&str> = body_statements
             .iter()
             .filter_map(|stmt| match stmt {
-                Statement::Assignment { name, .. } => Some(name.as_str()),
+                Statement::Assignment {
+                    scope_path, name, ..
+                } => Some(scope_path.first().unwrap_or(name).as_str()),
                 _ => None,
             })
             .collect();
@@ -820,9 +915,15 @@ impl<'a> NetworkEditor<'a> {
 
         self.process_statements(body_statements, &body_scope, &body_name_path);
 
-        // The block's `output`, or its absence — which clears the wire.
+        // The block's own `output`, or its absence — which clears the wire.
+        // A path-addressed `output m1/x` written inside the block names
+        // *another* node's zone output, not this one's, and so must not count
+        // as this block's — nor as its absence.
         let source_name = body_statements.iter().rev().find_map(|stmt| match stmt {
-            Statement::Output { node_name } => Some(node_name.clone()),
+            Statement::Output {
+                scope_path,
+                node_name,
+            } if scope_path.is_empty() => Some(node_name.clone()),
             _ => None,
         });
         self.deferred.push(DeferredOp::ZoneOutput {

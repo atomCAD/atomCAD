@@ -364,14 +364,18 @@ mod parser_tests {
     fn test_parse_output_statement() {
         let stmts = Parser::parse("output result").unwrap();
 
-        assert!(matches!(&stmts[0], Statement::Output { node_name } if node_name == "result"));
+        assert!(
+            matches!(&stmts[0], Statement::Output { scope_path, node_name } if scope_path.is_empty() && node_name == "result")
+        );
     }
 
     #[test]
     fn test_parse_delete_statement() {
         let stmts = Parser::parse("delete old_node").unwrap();
 
-        assert!(matches!(&stmts[0], Statement::Delete { node_name } if node_name == "old_node"));
+        assert!(
+            matches!(&stmts[0], Statement::Delete { scope_path, node_name } if scope_path.is_empty() && node_name == "old_node")
+        );
     }
 
     #[test]

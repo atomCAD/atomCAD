@@ -559,3 +559,6 @@ mod text_format_zone_body_test;
 
 #[path = "structure_designer/text_format_zone_body_edit_test.rs"]
 mod text_format_zone_body_edit_test;
+
+#[path = "structure_designer/text_format_zone_body_path_test.rs"]
+mod text_format_zone_body_path_test;

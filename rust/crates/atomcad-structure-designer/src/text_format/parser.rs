@@ -64,6 +64,7 @@ pub enum Token {
     Hash,         // #
     Dollar,       // $ (zone-input sigil)
     Caret,        // ^ (scope operator, one per level)
+    Slash,        // / (path separator: `m1/x`)
     Arrow,        // -> (destination side of a wire reference)
     Output,       // output keyword
     Delete,       // delete keyword
@@ -96,6 +97,11 @@ pub const BODY_KEYWORD: &str = "body";
 pub enum Statement {
     /// Node assignment: `name = type { prop: value, ..., body { ... } }`
     Assignment {
+        /// The scope prefix of a path-addressed statement (`m1/x = …` gives
+        /// `["m1"]`), empty for the ordinary same-scope form. Each segment
+        /// names a zone-owning node, walked outward-in from the scope the
+        /// statement is written in (D7).
+        scope_path: Vec<String>,
         name: String,
         node_type: String,
         properties: Vec<(String, PropertyValue)>,
@@ -110,10 +116,20 @@ pub enum Statement {
         /// structural rather than a rule the editor has to remember (D13).
         body: Option<Vec<Statement>>,
     },
-    /// Output statement: `output node_name`
-    Output { node_name: String },
-    /// Delete statement: `delete node_name`
-    Delete { node_name: String },
+    /// Output statement: `output node_name`, or `output m1/x` to re-point the
+    /// zone-output wire of one body (D7).
+    Output {
+        /// Scope prefix, as on [`Statement::Assignment`].
+        scope_path: Vec<String>,
+        node_name: String,
+    },
+    /// Delete statement: `delete node_name`, or `delete m1/x` for one body
+    /// node.
+    Delete {
+        /// Scope prefix, as on [`Statement::Assignment`].
+        scope_path: Vec<String>,
+        node_name: String,
+    },
     /// Description statement: `description "text"` or `description """multi-line"""`
     Description { text: String },
     /// Summary statement: `summary "text"` - short description for CLI listings
@@ -389,6 +405,19 @@ impl Lexer {
                 self.advance();
                 Ok(TokenInfo {
                     token: Token::Caret,
+                    line,
+                    column,
+                })
+            }
+
+            // Path separator (D7). `/` never occurs inside a bare identifier —
+            // `read_identifier` claims only alphanumerics and `_` — so a
+            // backtick-quoted name containing a slash stays one token and is
+            // still addressable as `` m1/`a/b` ``.
+            Some('/') => {
+                self.advance();
+                Ok(TokenInfo {
+                    token: Token::Slash,
                     line,
                     column,
                 })
@@ -777,6 +806,24 @@ impl Parser {
         }
     }
 
+    /// Parse a node path: `x`, `m1/x`, or `outer/inner/x` (D7).
+    ///
+    /// Returns the scope prefix and the final segment, which is the node's own
+    /// name — **the prefix selects the scope, the last segment names the node
+    /// in it**. The separator is `/` rather than `.` because `.` already means
+    /// pin access in value position, which would make `output m1.d` genuinely
+    /// ambiguous.
+    fn expect_path(&mut self) -> Result<(Vec<String>, String), ParseError> {
+        let mut scope_path = Vec::new();
+        let mut name = self.expect_identifier()?;
+        while self.peek() == &Token::Slash {
+            self.bump();
+            scope_path.push(name);
+            name = self.expect_identifier()?;
+        }
+        Ok((scope_path, name))
+    }
+
     fn skip_newlines(&mut self) {
         while self.peek() == &Token::Newline || self.peek() == &Token::Hash {
             if self.peek() == &Token::Hash {
@@ -843,7 +890,7 @@ impl Parser {
 
     /// Parse an assignment: `name = type { props, body { … } }`
     fn parse_assignment(&mut self) -> Result<Statement, ParseError> {
-        let name = self.expect_identifier()?;
+        let (scope_path, name) = self.expect_path()?;
         self.expect(&Token::Equals)?;
         let node_type = self.expect_identifier()?;
 
@@ -854,6 +901,7 @@ impl Parser {
         };
 
         Ok(Statement::Assignment {
+            scope_path,
             name,
             node_type,
             properties,
@@ -861,18 +909,24 @@ impl Parser {
         })
     }
 
-    /// Parse an output statement: `output node_name`
+    /// Parse an output statement: `output node_name` or `output m1/x`
     fn parse_output_statement(&mut self) -> Result<Statement, ParseError> {
         self.expect(&Token::Output)?;
-        let node_name = self.expect_identifier()?;
-        Ok(Statement::Output { node_name })
+        let (scope_path, node_name) = self.expect_path()?;
+        Ok(Statement::Output {
+            scope_path,
+            node_name,
+        })
     }
 
-    /// Parse a delete statement: `delete node_name`
+    /// Parse a delete statement: `delete node_name` or `delete m1/x`
     fn parse_delete_statement(&mut self) -> Result<Statement, ParseError> {
         self.expect(&Token::Delete)?;
-        let node_name = self.expect_identifier()?;
-        Ok(Statement::Delete { node_name })
+        let (scope_path, node_name) = self.expect_path()?;
+        Ok(Statement::Delete {
+            scope_path,
+            node_name,
+        })
     }
 
     /// Parse a description statement: `description "text"` or `description """multi-line"""`
