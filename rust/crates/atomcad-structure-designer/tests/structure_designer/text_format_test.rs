@@ -4134,3 +4134,399 @@ output s
         assert_eq!(arg_src(network, s, 2), Some(node_id_by_name(network, "b")));
     }
 }
+
+// ============================================================================
+// Literal-assignment disconnect tests
+// ============================================================================
+// A property mentioned in an incremental edit assigns that pin's whole inbound
+// wire set. `doc/node_network_text_format.md` has always specified this
+// ("setting it to a literal removes any existing connection"), but the editor
+// only ever cleared a pin on the way to wiring it, so a literal left the wire
+// in place — and the wire kept winning at evaluation while the serializer hid
+// the dead stored value. The array half had the mirror-image bug: multi pins
+// were never cleared, so they could grow but never shrink.
+// ============================================================================
+mod literal_disconnect_tests {
+    use super::*;
+    use atomcad_structure_designer::node_network::NodeNetwork;
+    use atomcad_structure_designer::node_type::NodeTypeCategory;
+    use atomcad_structure_designer::node_type::{NodeType, OutputPinDefinition};
+    use atomcad_structure_designer::node_type_registry::NodeTypeRegistry;
+    use atomcad_structure_designer::text_format::{edit_network, serialize_network};
+
+    fn create_test_registry() -> NodeTypeRegistry {
+        NodeTypeRegistry::new()
+    }
+
+    fn create_test_network() -> NodeNetwork {
+        let node_type = NodeType {
+            name: "test".to_string(),
+            description: "Test network".to_string(),
+            summary: None,
+            category: NodeTypeCategory::Custom,
+            parameters: vec![],
+            output_pins: OutputPinDefinition::single(DataType::Blueprint),
+            zone_input_pins: vec![],
+            zone_output_pins: vec![],
+            public: true,
+            node_data_creator: || Box::new(atomcad_structure_designer::node_data::NoData {}),
+            node_data_saver: atomcad_structure_designer::node_type::no_data_saver,
+            node_data_loader: atomcad_structure_designer::node_type::no_data_loader,
+        };
+        NodeNetwork::new(node_type)
+    }
+
+    /// Number of inbound wires on `node_name`'s parameter at `param_index`.
+    fn wire_count(network: &NodeNetwork, node_name: &str, param_index: usize) -> usize {
+        let node = network
+            .nodes
+            .values()
+            .find(|n| n.custom_name.as_deref() == Some(node_name))
+            .unwrap_or_else(|| panic!("no node named '{}'", node_name));
+        node.arguments
+            .get(param_index)
+            .map(|a| a.incoming_wires.len())
+            .unwrap_or(0)
+    }
+
+    #[test]
+    fn literal_on_wired_pin_removes_the_wire() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            r#"
+            r = float { value: 3.0 }
+            s = sphere { center: (0, 0, 0), radius: r, visible: true }
+            output s
+        "#,
+            true,
+        );
+        assert!(result.success, "setup should succeed: {:?}", result.errors);
+        assert_eq!(wire_count(&network, "s", 1), 1, "radius should be wired");
+
+        let result = edit_network(&mut network, &registry, "s = sphere { radius: 9.0 }", false);
+
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert!(
+            result.warnings.is_empty(),
+            "no warnings expected, got: {:?}",
+            result.warnings
+        );
+        assert_eq!(
+            wire_count(&network, "s", 1),
+            0,
+            "the literal should have disconnected the radius wire"
+        );
+
+        // And the stored value is now the visible one: while the wire was
+        // there, the serializer suppressed whatever was in the node's data.
+        let serialized = serialize_network(&network, &registry, None);
+        assert!(
+            serialized.contains("radius: 9"),
+            "stored radius should now serialize, got:\n{}",
+            serialized
+        );
+        assert!(
+            !serialized.contains("radius: r"),
+            "the wire should be gone, got:\n{}",
+            serialized
+        );
+
+        // The float node itself survives — only the wire was assigned away.
+        assert!(
+            serialized.contains("r = float"),
+            "the source node must not be deleted, got:\n{}",
+            serialized
+        );
+    }
+
+    #[test]
+    fn disconnect_is_reported_in_the_result() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        edit_network(
+            &mut network,
+            &registry,
+            r#"
+            r = float { value: 3.0 }
+            s = sphere { center: (0, 0, 0), radius: r }
+        "#,
+            true,
+        );
+
+        let result = edit_network(&mut network, &registry, "s = sphere { radius: 9.0 }", false);
+        assert!(
+            result
+                .connections_made
+                .iter()
+                .any(|c| c.contains("s.radius") && c.contains("disconnected")),
+            "the removal should be reported, got: {:?}",
+            result.connections_made
+        );
+    }
+
+    #[test]
+    fn literal_on_an_unwired_pin_reports_nothing() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        edit_network(
+            &mut network,
+            &registry,
+            "s = sphere { center: (0, 0, 0), radius: 3.0 }",
+            true,
+        );
+
+        let result = edit_network(&mut network, &registry, "s = sphere { radius: 9.0 }", false);
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert!(
+            result.connections_made.is_empty(),
+            "nothing was disconnected, so nothing should be reported: {:?}",
+            result.connections_made
+        );
+    }
+
+    #[test]
+    fn array_pin_shrinks_when_the_statement_names_fewer_sources() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            r#"
+            a = sphere { radius: 1.0 }
+            b = sphere { radius: 2.0 }
+            c = sphere { radius: 3.0 }
+            u = union { shapes: [a, b, c], visible: true }
+            output u
+        "#,
+            true,
+        );
+        assert!(result.success, "setup should succeed: {:?}", result.errors);
+        assert_eq!(wire_count(&network, "u", 0), 3);
+
+        let result = edit_network(&mut network, &registry, "u = union { shapes: [a] }", false);
+
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert_eq!(
+            wire_count(&network, "u", 0),
+            1,
+            "an array pin is assigned as a whole, so b and c should be gone"
+        );
+        let serialized = serialize_network(&network, &registry, None);
+        assert!(
+            serialized.contains("u = union { shapes: a"),
+            "only a should remain wired, got:\n{}",
+            serialized
+        );
+    }
+
+    #[test]
+    fn array_pin_still_grows() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        edit_network(
+            &mut network,
+            &registry,
+            r#"
+            a = sphere { radius: 1.0 }
+            b = sphere { radius: 2.0 }
+            u = union { shapes: [a] }
+        "#,
+            true,
+        );
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            "u = union { shapes: [a, b] }",
+            false,
+        );
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert_eq!(wire_count(&network, "u", 0), 2);
+    }
+
+    #[test]
+    fn empty_array_disconnects_an_array_pin() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        edit_network(
+            &mut network,
+            &registry,
+            r#"
+            a = sphere { radius: 1.0 }
+            b = sphere { radius: 2.0 }
+            u = union { shapes: [a, b] }
+        "#,
+            true,
+        );
+        assert_eq!(wire_count(&network, "u", 0), 2);
+
+        let result = edit_network(&mut network, &registry, "u = union { shapes: [] }", false);
+
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert_eq!(
+            wire_count(&network, "u", 0),
+            0,
+            "`[]` is how an array pin is disconnected"
+        );
+        // `[]` on an array pin is a disconnect instruction, not an ignored
+        // wire-only literal — warning about it would flag the one spelling
+        // that does exactly what was asked.
+        assert!(
+            result.warnings.is_empty(),
+            "no warnings expected, got: {:?}",
+            result.warnings
+        );
+    }
+
+    #[test]
+    fn literal_on_a_wire_only_pin_keeps_the_wire() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // `half_plane.m_index` is wirable but has no stored-value backing, so
+        // its literal is rejected with a warning. Clearing the wire as well
+        // would leave the pin with neither a wire nor a value.
+        let result = edit_network(
+            &mut network,
+            &registry,
+            r#"
+            mi = ivec2 { value: (1, 2) }
+            hp = half_plane { m_index: mi }
+        "#,
+            true,
+        );
+        assert!(result.success, "setup should succeed: {:?}", result.errors);
+        // `m_index` is half_plane's parameter index 1 (after `d_plane`).
+        assert_eq!(wire_count(&network, "hp", 1), 1, "m_index should be wired");
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            "hp = half_plane { m_index: (3, 4) }",
+            false,
+        );
+
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert!(
+            result.warnings.iter().any(|w| w.contains("wire-only")),
+            "the ignored literal should still warn, got: {:?}",
+            result.warnings
+        );
+        assert_eq!(
+            wire_count(&network, "hp", 1),
+            1,
+            "an ignored literal must not drop the wire it could not replace"
+        );
+    }
+
+    #[test]
+    fn text_only_property_does_not_disconnect_anything() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        // `polygon.vertices` is a stored text property, not a pin; `d_plane`
+        // is the node's only parameter. Assigning vertices must leave it alone.
+        let result = edit_network(
+            &mut network,
+            &registry,
+            r#"
+            dp = drawing_plane { }
+            poly = polygon { d_plane: dp, vertices: [(0, 0), (10, 0), (5, 10)] }
+        "#,
+            true,
+        );
+        assert!(result.success, "setup should succeed: {:?}", result.errors);
+        assert_eq!(
+            wire_count(&network, "poly", 0),
+            1,
+            "d_plane should be wired"
+        );
+
+        let result = edit_network(
+            &mut network,
+            &registry,
+            "poly = polygon { vertices: [(0, 0), (4, 0), (2, 4)] }",
+            false,
+        );
+
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert_eq!(
+            wire_count(&network, "poly", 0),
+            1,
+            "a text-only property names no pin, so nothing should be disconnected"
+        );
+        let serialized = serialize_network(&network, &registry, None);
+        assert!(
+            serialized.contains("(4, 0)"),
+            "the new vertices should be stored, got:\n{}",
+            serialized
+        );
+    }
+
+    #[test]
+    fn unmentioned_pins_keep_their_wires() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        edit_network(
+            &mut network,
+            &registry,
+            r#"
+            c = vec3 { value: (1.0, 2.0, 3.0) }
+            r = float { value: 3.0 }
+            s = sphere { center: c, radius: r }
+        "#,
+            true,
+        );
+        assert_eq!(wire_count(&network, "s", 0), 1, "center should be wired");
+        assert_eq!(wire_count(&network, "s", 1), 1, "radius should be wired");
+
+        // Only `radius` is mentioned: incremental means an omitted property is
+        // unchanged, so `center` keeps its wire.
+        let result = edit_network(&mut network, &registry, "s = sphere { radius: 9.0 }", false);
+
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert_eq!(
+            wire_count(&network, "s", 0),
+            1,
+            "an unmentioned pin must be left alone"
+        );
+        assert_eq!(wire_count(&network, "s", 1), 0);
+    }
+
+    #[test]
+    fn rewiring_a_pin_to_another_node_still_works() {
+        let registry = create_test_registry();
+        let mut network = create_test_network();
+
+        edit_network(
+            &mut network,
+            &registry,
+            r#"
+            r1 = float { value: 3.0 }
+            r2 = float { value: 7.0 }
+            s = sphere { radius: r1 }
+        "#,
+            true,
+        );
+
+        let result = edit_network(&mut network, &registry, "s = sphere { radius: r2 }", false);
+        assert!(result.success, "edit should succeed: {:?}", result.errors);
+        assert_eq!(wire_count(&network, "s", 1), 1);
+        let serialized = serialize_network(&network, &registry, None);
+        assert!(
+            serialized.contains("radius: r2"),
+            "radius should now come from r2, got:\n{}",
+            serialized
+        );
+    }
+}

@@ -175,7 +175,18 @@ The parser determines whether a key corresponds to a property or input pin based
 
 **Serialization rule**: When a parameter has both a stored default value and an input connection, only the connection is serialized (the stored value is omitted). This keeps the format clean and unambiguous for LLM consumption. The connection represents the actual runtime value.
 
-**Edit semantics**: Setting a parameter to a node reference (e.g., `radius: int1`) creates a connection. Setting it to a literal (e.g., `radius: 5`) removes any existing connection and sets the stored value.
+**Edit semantics**: A property you mention assigns that pin's **whole** set of inbound wires — whatever the statement names replaces what was there.
+
+- `radius: int1` connects the pin to `int1`, replacing any wire it had.
+- `radius: 5` removes any existing connection and sets the stored value. (The wire otherwise keeps winning at evaluation and the serialization rule above hides the stored value, so a literal that left the wire in place would be a silent no-op.)
+- `shapes: [a, b]` on an array pin sets the wire list to exactly `a` and `b` — a source that was there and is not named is disconnected. `shapes: []` disconnects the pin entirely; an array pin has no stored-value form, so `[]` is how you empty one.
+
+A property you **omit** is left alone, wire and all — that is what makes an incremental edit incremental. So the only pin an edit ever disconnects is one it names.
+
+Two pins are deliberately exempt from the literal rule, because their literal is not applied either:
+
+- a **wire-only** pin (a parameter with no stored-value backing, such as `half_plane.m_index`) warns that the literal was ignored and keeps its wire — clearing it would leave the pin with neither a wire nor a value;
+- a **stored property that is not a pin** (such as `polygon.vertices`) names no wire to begin with.
 
 ## Visibility
 
@@ -403,10 +414,14 @@ When processing an edit command in incremental mode:
 |-----------|--------------|--------|
 | `sphere1 = sphere { radius: 4.0 }` | Yes | Update properties |
 | `cylinder1 = cylinder { ... }` | No | Create new node |
-| `union1 = union { shapes: [a, b] }` | Yes, inputs changed | Rewire connections |
+| `union1 = union { shapes: [a, b] }` | Yes, inputs changed | Set the pin's wires to exactly `a` and `b` |
+| `sphere1 = sphere { radius: 4.0 }` | Yes, `radius` was wired | Disconnect `radius`, store `4.0` |
+| `union1 = union { shapes: [] }` | Yes | Disconnect the pin |
 | `delete box1` | Yes | Remove node and all connections |
 
-**Nodes not mentioned in an edit command remain unchanged.**
+**Nodes not mentioned in an edit command remain unchanged**, and so do properties not mentioned on a node that is. See *Edit semantics* above for how a mentioned property assigns its pin.
+
+Deleting a node is the only way to remove a wire *without* naming the pin it lands on.
 
 ### Replace Mode
 

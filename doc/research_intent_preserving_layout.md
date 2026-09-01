@@ -65,7 +65,7 @@ algorithm":
 | `Node` has **only** `position: DVec2` | `node_network.rs` | There is no `pinned`, no `manually_placed`, no constraint list. Any provenance-based approach needs new persisted state. |
 | Layout never recurses into HOF bodies | `grep zone/walk_all_nodes layout/` → no matches | Bodies (`node.zone`) are laid out never, and `body_width`/`body_height` are themselves layout variables. Any rework inherits this gap. |
 | Node sizes are *estimated* from pin counts, not measured | `node_layout::estimate_node_height` | Comments (200×100 default) and HOF bodies (arbitrary) are badly mis-sized. Already flagged in the anchors doc. |
-| Ordering ties are broken by `HashMap` iteration order | Sugiyama component sort; `network.nodes` iteration | Layout is **not deterministic across processes** today. Any stability work needs determinism first — otherwise "stable" is untestable. |
+| Within-layer order is seeded by ascending node id | `group_by_depth` ends with `layer.sort()`; every downstream sort is stable | The barycenter sweep is an order-sensitive heuristic, so this seed shapes the result. It is atomCAD's de-facto model order (§8). Residual nondeterminism is narrow: equal-size disconnected components, seeded from a `HashMap`. |
 | `layout_active_network()` wraps the reflow in one `MoveNodesCommand` | `structure_designer.rs`, #270 | Undo is already correct at the whole-reflow granularity. |
 | The text format carries **no coordinates** | `text_format/network_serializer.rs` | Position lives only in `.cnnd`. If the AI ever operates in `replace` mode, all positional intent is lost before layout runs. |
 
@@ -433,10 +433,13 @@ of them incrementally is a viable path to F11 without a big-bang rewrite.
 
 ## 5. Cross-cutting concerns worth designing in
 
-**Determinism first.** Layout currently ties-breaks on `HashMap` iteration
-order, which std randomizes per process. Stability is meaningless and untestable
-until every ordering decision has an explicit deterministic tiebreak. This is a
-prerequisite, not a feature — and it is cheap.
+**Determinism first.** Stability is untestable without it — "did this edit move
+anything?" has no answer if two runs disagree. Layout is mostly deterministic
+already (`group_by_depth` sorts; the barycenter sort is stable), with one hole:
+`find_connected_components` seeds its BFS from `network.nodes.keys()` and the
+size sort is stable, so equal-size components stack in a per-process-random
+order. Cheap to close, and a prerequisite. See §8 for where order actually
+decides the drawing.
 
 **Stability metrics, as test assertions.** The rework needs numbers, or reviews
 become taste arguments:
@@ -542,7 +545,160 @@ visibly change the look of every existing network.
 
 ---
 
-## 8. References
+## 8. How much layout should the AI control?
+
+A separate axis from everything above: the algorithms in §4 assume the AI edits
+the *network* and something else decides the *drawing*. Should the AI have more
+say, and if so through what channel? This section records the analysis; the
+conclusion is **keep the text format geometry-free**.
+
+### The spectrum
+
+| Level | Channel | Verdict |
+|---|---|---|
+| 0 | Text only, no layout information | today, and `doc/design_incremental_layout.md` |
+| 1 | Statement order used as the within-layer seed | the only candidate worth building — but not free, see below |
+| 2 | Declarative grouping / ordering hints in the text | defer; atomCAD already has a better idiom |
+| 3 | Qualitative relative hints ("below", "adjacent to") | no — needs a constraint solver (F5) to consume |
+| 4 | Absolute coordinates emitted by the AI | reject |
+
+A second axis matters more than the level: **whose nodes**. "The AI may position
+nodes it creates, never ones it did not" is far safer than blanket control at
+any level.
+
+### Why level 4 is rejected
+
+Not primarily because language models are weak at spatial reasoning, though they
+are. Three sharper reasons:
+
+- **No feedback loop.** The AI cannot see the rendered canvas. Node heights are
+  derived at runtime from parameter counts, comment boxes are whatever the user
+  dragged them to, HOF body boxes are arbitrary. An AI emitting coordinates is
+  doing collision detection against dimensions it does not have, and never
+  learns it was wrong.
+- **Coordinates are not the AI's information to give.** Existing positions are
+  human intent (§1). A coordinate channel is a channel for overwriting it — and
+  it *must* overwrite, because a partial coordinate set is inconsistent with the
+  rest of the drawing. Coordinate control is inherently non-incremental.
+- **Attention is a budget.** Emitting positions spends output tokens on the task
+  the model is worst at, in direct competition with designing the network.
+
+### The distinction that matters: geometry vs. semantics
+
+"Text ↔ coordinates" collapses two different things. Models are weak at
+*absolute geometry* and strong at *semantic-relational* facts — grouping,
+reading order, which chain is the spine — because when the AI authored the
+network those facts are its own authorship, not inference from pixels. The
+second kind is exactly what F3 / F9 / F10 wanted and could not get.
+
+### Why levels 2–4 are squeezed from both sides
+
+- **On the incremental path the wiring already carries it.** Step 3 of the
+  incremental design derives placement from anchors: upstream *and* downstream
+  anchors ⇒ an insertion, placed between them; upstream only ⇒ it hangs off the
+  end. The AI must emit that wiring anyway. A hint saying "this is an insertion"
+  restates information already required.
+- **On the full-reflow path the user opted into an algorithmic result.** That is
+  the point of making it an explicit command.
+
+A hint channel therefore has to find value in the gap between "already implied
+by the wiring" and "the user asked for algorithmic output". That gap is thin.
+
+There is also a fixed cost per channel: **anything in the text format must
+round-trip or the AI silently deletes it on its next edit** —
+`design_wire_annotations.md` makes exactly this point about anchors. Each
+channel is a serializer pass, a parser change, an editor special case and a
+repair rule.
+
+### On grouping specifically (level 2)
+
+atomCAD already has two ways to say "these nodes are one thing": make it a
+**subnetwork** (custom node type), or use a **zone / HOF body**. Both are real
+containment with real semantics and both already scope layout. A layout-only
+`group` annotation would be a weaker parallel channel for something the language
+expresses better.
+
+The one case with genuine value is a **greenfield network**, where there is no
+baseline to preserve and topology alone underdetermines the drawing — Sugiyama
+may interleave three parallel synthesis routes that should read as three blocks.
+But consuming a grouping hint requires clustered / compound layout, which the
+current Sugiyama cannot do. Real value, expensive to use. Revisit only if
+greenfield layouts prove visibly bad.
+
+### Level 1 in detail: what "model order" would actually change
+
+ELK's *model order* (§3 S3, §4 F10) is described in the literature as a
+tie-breaker. In atomCAD's code the picture is more specific, and less favourable
+than it first looks.
+
+**Where order matters in the current pipeline:**
+
+| # | Decision | Ties when | Resolved today by |
+|---|---|---|---|
+| 1 | Initial within-layer permutation — the **seed** for barycenter iteration | always (see below) | `group_by_depth` ends with `layer.sort()` ⇒ ascending node id |
+| 2 | Equal barycenter values during a sweep | two nodes share an average neighbour position, e.g. two constants feeding one node | `sort_by(partial_cmp)` is **stable** ⇒ the seed |
+| 3 | Nodes with no neighbour in the sweep direction | `compute_barycenter` returns `f64::MAX` for all of them | stable sort ⇒ the seed |
+| 4 | Equal-size disconnected components | same node count | stable sort over `HashMap`-seeded BFS discovery ⇒ nondeterministic (see the incremental design's D7) |
+
+**#1 is not a tie at all, and it is the important one.** `minimize_crossings` is
+an iterative local heuristic — sweep down, sweep up, repeat until no
+improvement. A local heuristic reaches a different fixed point from a different
+starting permutation *even when no two barycenters are ever equal*. The initial
+order is a **seed**, not a tiebreak, and #2 and #3 simply inherit whatever it
+decided, because every downstream sort is stable. #3 is a large class: on a
+backward sweep every node lacking an input in the previous layer piles up at
+`f64::MAX`, in seed order.
+
+**The deflating finding: text order is not an independent signal.**
+`network_serializer.rs:90` emits statements in topological order and its DFS
+sorts ids at every choice point (`node_ids.sort()`, `dep_ids.sort()`), so text
+order is a deterministic function of (topology, node ids). The layout seed is
+*also* node id. New nodes receive ids in creation order, which follows the order
+the AI wrote them. **atomCAD therefore already has a crude model order — it is
+called "node id", it means "creation order", and it already seeds the layout.**
+
+What it cannot do is be *re-ordered*: moving a statement in the text changes no
+id, so it changes no drawing. That — making reading order an editable control —
+is the actual feature, and it costs a persisted `model_order` per node,
+maintained across every edit path, undoable, and round-tripping. Not free.
+
+One apparent conflict resolves cleanly: model order could not be a free
+permutation if the serializer must emit topologically. But it is only ever
+consulted **within a layer**, and same-depth nodes are mutually independent by
+construction, so any within-layer permutation is topologically valid.
+
+### Recommendation
+
+**Keep the text format geometry-free.** Reject level 4, decline level 3, defer
+level 2 in favour of subnetworks and zones.
+
+Level 1 remains the only channel worth building, and for the right reason:
+reordering statements is a **semantic** act ("this reads first"), not a spatial
+one; it needs no spatial reasoning from the AI; it round-trips for free because
+it *is* the text; and a human gets identical control by dragging a line in the
+editor. But it should be adopted on the strength of that argument, not on a
+false claim of being free. Sequence it after the incremental design's Phases
+1–4, and only if within-layer ordering proves to be a visible annoyance.
+
+Two things worth more than any hint channel:
+
+1. **Let the AI recommend a reflow, not perform one.** After a large
+   restructuring the AI knows the edit was substantial. One boolean on the edit
+   result, surfaced as an offer and never automatic, is AI control over layout
+   at the right granularity — a *decision*, not coordinates.
+2. **Edit discipline beats hints.** An AI emitting minimal incremental diffs
+   preserves the layout for free; one rewriting the network in `replace` mode
+   destroys it however good the layout algorithm is. That is a prompting and
+   tooling problem, and it is why the name-matching fallback in
+   `design_incremental_layout.md` matters.
+
+The principle, stated once: **the AI should influence layout through meaning,
+not geometry** — and most of the meaning it can usefully convey, it is already
+conveying.
+
+---
+
+## 9. References
 
 **Mental map & stability**
 - Misue, Eades, Lai, Sugiyama, *Layout Adjustment and the Mental Map*, JVLC 1995 — [ScienceDirect](https://www.sciencedirect.com/science/article/abs/pii/S1045926X85710105) · [Semantic Scholar](https://www.semanticscholar.org/paper/8f3ea4c4374a59f2625a68e9498da03195f2efc0)

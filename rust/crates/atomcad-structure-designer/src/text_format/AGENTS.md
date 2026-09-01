@@ -70,7 +70,40 @@ Supports two modes:
 - **Replace mode:** Clears network first, then creates from scratch
 - **Incremental mode:** Merges new statements with existing nodes
 
+The in-app *Text* tab always uses **replace** mode
+(`api::…::apply_text_to_active_network`), so incremental mode is reached only
+through the AI-assistant HTTP `/edit?replace=false` and `atomcad-cli edit` —
+where it is the **default**. A bug that only shows in incremental mode is
+therefore invisible in the app and hits every AI edit.
+
 Returns `EditResult` with success/failure/warning counts.
+
+### A mentioned property assigns the pin's whole wire set
+
+This is the invariant that makes incremental mode able to *remove* a wire, and
+it is easy to break by accident, because the natural implementation of "wire
+this up" only clears on the way to writing something.
+
+`wire_connection` clears the destination `Argument` **unconditionally** —
+including array pins, which is what lets `shapes: [a, b, c]` shrink to
+`shapes: [a]` — and `collect_connections` queues a `PendingConnection` even when
+the property named **no** source, so a literal (or `[]`) reaches that clear. Do
+not "optimize" the source-free queueing away: without it a literal on a wired
+pin lands in the node's data, the wire keeps winning at evaluation, and
+`network_serializer` suppresses the stored value on a wired pin — a silent
+no-op reported as `success: true`, which is how this shipped for a long time.
+
+`property_disconnects_pin` holds the two exemptions, and both matter: a
+**wire-only** pin's literal is rejected with a warning, so clearing its wire
+would leave it with neither a wire nor a value; and a name that is not a
+parameter at all (a text-only property like `polygon.vertices`) has no pin to
+clear. A property omitted from the statement is untouched — that is what
+"incremental" means, and it is why the *only* pin an edit disconnects is one it
+names.
+
+Tests: `text_format_test.rs::literal_disconnect_tests`. The user-facing
+contract is in `doc/node_network_text_format.md` (§Edit semantics) and
+`.claude/skills/atomcad/references/text-format.md`.
 
 ## NetworkSerializer (network_serializer.rs)
 

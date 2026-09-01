@@ -88,10 +88,23 @@ move" would make some edits unsatisfiable.
 node, and repairing a backward wire all reduce to "put this rectangle here and
 make it not overlap anything". A single routine serves all three.
 
-**D7 — Determinism is a requirement, not a nicety.** Every iteration over nodes
-is over ids sorted ascending. Layout today ties-breaks on `HashMap` iteration
-order, which std randomizes per process; stability is untestable until that is
-fixed. This is a prerequisite of the first phase.
+**D7 — Determinism is a requirement, not a nicety.** Stability is untestable
+without it: "did this edit move anything?" has no answer if two runs of the same
+input disagree. Every iteration over nodes in new code is over ids sorted
+ascending.
+
+Existing layout is **mostly** already deterministic, and the gap is narrower
+than it first appears. `group_by_depth` ends with `layer.sort()`, so the
+within-layer seed is ascending node id; `reorder_by_barycenter` uses a stable
+sort, so equal barycenters preserve that seed; and `place_comments` sorts
+comment ids explicitly. One genuine hole remains:
+`sugiyama::find_connected_components` seeds its BFS by iterating
+`network.nodes.keys()` — a `HashMap`, randomized per process — and
+`components.sort_by_key(Reverse(len))` is stable, so **two disconnected
+components of equal size stack in a per-process-random order**. (#427 removed
+the largest source of this by excluding comments from the component walk; what
+is left is genuine equal-size components.) Fixing it is a one-line sort of the
+seed ids, and it is a prerequisite of Phase 1.
 
 **D8 — No global post-pass.** No compaction, no beautification, no
 "while we're here" improvements. The output differs from the input only where
@@ -153,6 +166,41 @@ already moved, in the direction of where the human had put it. That is squarely
 
 ---
 
+## The edit surface
+
+The AI reaches the network through exactly one function:
+
+```rust
+#[frb(sync)]
+pub fn ai_edit_network(code: String, replace: bool) -> String   // JSON EditResult
+```
+
+surfaced by the `atomcad` skill as `atomcad-cli edit [--replace]`, with the
+script passed via `--code` or (recommended) stdin / a heredoc. The CLI REPL has
+`edit` and `replace` modes where a block accumulates until a blank line or `.`.
+
+**`code` is a whole multi-statement script, not a single statement.**
+`NetworkEditor::apply` runs a first pass creating and updating nodes and
+collecting pending connections, a second pass resolving those connections, then
+`validate_network`, then — today — `layout_network` **once**
+(`ai_assistant_api.rs:~228`).
+
+So the transaction granularity is already right:
+
+> **N statements in one call = one transaction = one layout pass.**
+
+The incremental pass replaces that single `layout_network` call and needs no
+batching of its own. The `LayoutSnapshot` for D1 is captured at the top of
+`ai_edit_network`, before `NetworkEditor` runs, and the diff is computed after
+validation.
+
+| Mode | Flag | Behaviour |
+|---|---|---|
+| Incremental merge | *(default)* | Statements merge into the existing network. Node ids and positions of untouched nodes survive. |
+| Replace | `--replace` | The network is cleared first, then the script is applied. Every node is new. |
+
+---
+
 ## The edit delta
 
 ```rust
@@ -183,12 +231,41 @@ event at all and is excluded.
 
 ### Name-based identity for `replace` mode
 
-`text_edit_network(…, replace: bool)` clears the network when `replace == true`,
-so every node is "added" and the incremental path degenerates to a full reflow.
-The text format is name-based, so this is recoverable cheaply: when replace mode
-rebuilds the network, **match new nodes to snapshot nodes by `custom_name`** and
-carry the old position and `hand_moved` flag across. A matched node is `kept`,
-not `added`. This makes the design work for both edit modes and costs one
+In replace mode the network is cleared before the script is applied, so every
+node is `added`, every position is lost, and the incremental path degenerates
+into exactly the full reflow this design exists to avoid.
+
+**This is not an edge case.** `ai_query_network`'s output is *designed* to be
+fed straight back: the `atomcad` skill documents that "the header and footer use
+comment syntax (`#`), so the output is valid input to `edit --replace`". A
+query → modify → `edit --replace` round-trip is a normal thing for the AI to do,
+and today it discards the entire hand layout every time.
+
+The fix is cheap and, importantly, **total**: match rebuilt nodes to snapshot
+nodes by name, and carry the old `position` and `hand_moved` across. A matched
+node is `kept`, not `added`, and the rest of the algorithm proceeds unchanged.
+
+Names are a reliable key here because **every node has one**. Every
+node-creation path in `node_network.rs` sets `custom_name: Some(display_name)`,
+and `network_editor.rs:244` states the invariant outright — *"all nodes now have
+persistent names assigned at creation time"*. Both sides of the text format
+already key on it exclusively: the serializer's `get_node_name` reads
+`custom_name` and nothing else, and the editor's `build_existing_name_map`
+inserts only nodes that have one. So there is no "unnamed node" case needing a
+special rule, and a name that survives a round-trip is exactly a node whose
+identity the AI intended to preserve.
+
+Two residual cases, both handled by the same fallback:
+
+- `Node.custom_name` is still typed `Option<String>`, so a legacy `.cnnd`
+  predating the invariant could carry `None`;
+- the AI may deliberately rename a node, which *is* a new identity.
+
+In both, the node simply fails to match and is treated as `added` — placed by
+Steps 2–4 like any other new node. Falling back to "added" is always safe;
+matching the wrong node would not be.
+
+This makes the design work for both edit modes at the cost of one
 `HashMap<String, u64>` lookup per node.
 
 ---
@@ -526,14 +603,18 @@ and the full reflow is only ever user-invoked. See open question 1.
 ### Phase 1 — Foundations
 `Node.hand_moved` with `#[serde(default)]`, set from the drag path, persisted
 and undoable. `node_size` extended to return the body box for an expanded HOF.
-Deterministic id ordering throughout `layout/` (D7). `LayoutSnapshot` +
-`diff_networks` producing an `EditDelta`, with tests but not yet wired to
-anything.
+The `find_connected_components` seed sorted, closing the last cross-process
+nondeterminism (D7). `LayoutSnapshot` + `diff_networks` producing an
+`EditDelta`, including the `replace`-mode name match, with tests but not yet
+wired to anything.
 
 *Tests:* delta correctly classifies add / modify / remove / rewire; a value-only
 change produces an empty delta; `hand_moved` round-trips through `.cnnd` and
-copy/paste; a pre-flag `.cnnd` loads with `hand_moved = false`; layout output is
-byte-identical across two processes.
+copy/paste; a pre-flag `.cnnd` loads with `hand_moved = false`; a network with
+two equal-size disconnected components lays out byte-identically across two
+processes (D7); a `replace`-mode rebuild of an unchanged script matches every
+node by name and yields an **empty** delta; a renamed node in a `replace`
+rebuild is classified `added`, not matched to its old identity.
 
 ### Phase 2 — Block layout and placement
 `layout_subgraph`, block decomposition, anchor computation, Step 3 target
@@ -607,9 +688,11 @@ Recursion into HOF bodies if Phase 4 leaves it out.
    number of backward wires introduced since the last full reflow) could drive a
    passive "this network could use a tidy-up" hint. Suggestion only, never
    automatic.
-6. **Does `replace` mode get name-matching in v1?** It is cheap and makes the
-   feature work regardless of which mode the AI uses, but it needs a rule for
-   nodes without a `custom_name`.
+6. **Does `replace` mode get name-matching in v1?** Recommended yes — it is a
+   `HashMap` lookup per node and it protects an advertised workflow
+   (query → `edit --replace`). The unnamed-node concern that originally made
+   this a question turned out not to exist: every node carries a
+   `custom_name` from creation.
 7. **Should Step 7 fall back to a partial move when the exact target
    collides?** Specified as all-or-nothing. The interpolation refinement is
    noted in Step 7; it recovers more cases but introduces a sample count.

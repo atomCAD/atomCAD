@@ -80,6 +80,31 @@ For array inputs (multiple wires):
 combined = union { shapes: [part1, part2, part3] }
 ```
 
+### Removing a wire
+
+Mentioning an input assigns its **whole** wire set, so you remove a wire by
+saying what the input should be instead:
+
+```
+# Was `radius: r`; now a stored value, and the wire to r is gone
+sphere1 = sphere { radius: 5 }
+
+# Was [part1, part2, part3]; now just part1 — the other two are disconnected
+combined = union { shapes: [part1] }
+
+# Disconnect an array input entirely
+combined = union { shapes: [] }
+```
+
+An input you do **not** mention keeps its wire. `delete <node_id>` is the only
+way to remove wires without naming the input they land on.
+
+Two cases where a literal does not remove a wire, because the literal is not
+applied either: a **wire-only** input (a pin with no stored-value backing, e.g.
+`half_plane.m_index`) warns that the value was ignored and keeps its wire; and a
+stored property that is not an input at all (e.g. `polygon.vertices`) has no
+wire to remove.
+
 ## Output Node Syntax
 
 Sets which node provides the network's output value (for use as a custom node):
@@ -159,7 +184,9 @@ atomcad-cli edit --replace --code="sphere1 = sphere { radius: 10 }"
 When editing (not replacing), if a node ID already exists:
 - The existing node is updated with the new input values
 - The node type cannot be changed (create a new node instead)
-- Existing wires to/from the node are preserved unless overwritten
+- Inputs you mention are reassigned; inputs you leave out keep their wires. See
+  [Removing a wire](#removing-a-wire)
+- Wires *from* the node (to its consumers) are untouched either way
 
 ## Error Handling
 

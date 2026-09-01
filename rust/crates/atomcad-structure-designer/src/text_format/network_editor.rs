@@ -463,22 +463,34 @@ impl<'a> NetworkEditor<'a> {
         node_id: u64,
         properties: &[(String, PropertyValue)],
     ) -> Result<(), String> {
-        // Get valid parameter names for this node type (for validation)
-        let (valid_params, node_type_name): (Vec<String>, String) = self
+        // Get valid parameter names for this node type (for validation), plus
+        // the subset that is array-typed — those are the multi-input pins,
+        // whose only literal form is the empty array.
+        let (valid_params, multi_params, node_type_name): (
+            Vec<String>,
+            std::collections::HashSet<String>,
+            String,
+        ) = self
             .network
             .nodes
             .get(&node_id)
             .and_then(|node| {
                 self.registry.get_node_type_for_node(node).map(|node_type| {
-                    let params = node_type
+                    let params: Vec<String> = node_type
                         .parameters
                         .iter()
                         .map(|p| p.name.clone())
                         .collect();
-                    (params, node.node_type_name.clone())
+                    let multi = node_type
+                        .parameters
+                        .iter()
+                        .filter(|p| p.data_type.is_array())
+                        .map(|p| p.name.clone())
+                        .collect();
+                    (params, multi, node.node_type_name.clone())
                 })
             })
-            .unwrap_or_else(|| (Vec::new(), String::new()));
+            .unwrap_or_else(|| (Vec::new(), std::collections::HashSet::new(), String::new()));
 
         // Get text property names (for literal-only properties that aren't in parameters)
         let text_prop_names: std::collections::HashSet<String> = self
@@ -507,6 +519,19 @@ impl<'a> NetworkEditor<'a> {
             // is a list of node ids, so both are handled in the
             // connection-collection pass, which can see the whole network.
             if prop_name == "visible" || prop_name == ANCHOR_PROPERTY {
+                continue;
+            }
+
+            // `shapes: []` on an array pin is an instruction for the connection
+            // pass ("no inbound wires"), not a stored value. Array pins have no
+            // stored-value backing, so without this it would be reported as an
+            // ignored wire-only literal — a warning on the one spelling that
+            // does exactly what the user asked. A pin that *does* back its
+            // array with a text property keeps the normal path and stores `[]`.
+            if multi_params.contains(prop_name)
+                && !text_prop_names.contains(prop_name)
+                && matches!(prop_value, PropertyValue::Array(items) if items.is_empty())
+            {
                 continue;
             }
 
@@ -592,9 +617,17 @@ impl<'a> NetworkEditor<'a> {
                 continue;
             }
 
-            // Collect connection references
+            // Collect connection references. A property that names no source
+            // is still an assignment of that pin — `radius: 5.0` says the pin
+            // is a stored value now, not a wire — so it is queued too, with an
+            // empty source list, and `wire_connection` clears the pin. Queuing
+            // nothing here is what used to let a literal silently coexist with
+            // a live wire: the literal landed in the node's data, the wire kept
+            // winning at evaluation, and the serializer hid the dead value.
             let source_refs = self.extract_source_refs(prop_value);
-            if !source_refs.is_empty() {
+            if !source_refs.is_empty()
+                || self.property_disconnects_pin(node_id, prop_name, prop_value)
+            {
                 self.pending_connections.push(PendingConnection {
                     dest_node_name: dest_node_name.to_string(),
                     param_name: prop_name.clone(),
@@ -602,6 +635,56 @@ impl<'a> NetworkEditor<'a> {
                 });
             }
         }
+    }
+
+    /// Whether a source-free property should disconnect the pin it names.
+    ///
+    /// Only a property that is *entirely* literal counts: a `WireRef` outside
+    /// `on:` names no value at all, and an array that still mentions nodes goes
+    /// down the ordinary wiring path. Beyond that there are two pins a literal
+    /// must **not** clear:
+    ///
+    /// - a name that is not a wirable parameter (a text-only property such as
+    ///   `polygon.vertices`) — there is no pin to clear;
+    /// - a wire-only scalar pin, whose literal `apply_literal_properties`
+    ///   rejects with a warning — clearing its wire would leave it with
+    ///   neither a wire nor a stored value.
+    fn property_disconnects_pin(
+        &self,
+        node_id: u64,
+        prop_name: &str,
+        prop_value: &PropertyValue,
+    ) -> bool {
+        if Self::property_value_to_text_value(prop_value).is_none() {
+            return false;
+        }
+        let Ok((_, is_multi)) = self.get_param_index(node_id, prop_name) else {
+            return false;
+        };
+        if is_multi {
+            // An array pin's literal form *is* its wire list, so `[]` — and
+            // only `[]` — means "no inbound wires". A non-empty literal array
+            // on such a pin is a type error the literal pass already warns
+            // about; it must not silently drop the wires as well.
+            return matches!(prop_value, PropertyValue::Array(items) if items.is_empty());
+        }
+        self.pin_accepts_stored_value(node_id, prop_name)
+    }
+
+    /// Whether a pin on this node can hold a stored literal value, i.e. the
+    /// node's data exposes a text property of that name — or the node is a
+    /// custom node type, which accepts literals for all of its parameters.
+    fn pin_accepts_stored_value(&self, node_id: u64, prop_name: &str) -> bool {
+        let Some(node) = self.network.nodes.get(&node_id) else {
+            return false;
+        };
+        if self.registry.is_custom_node_type(&node.node_type_name) {
+            return true;
+        }
+        node.data
+            .get_text_properties()
+            .iter()
+            .any(|(name, _)| name == prop_name)
     }
 
     /// Extract source node references from a property value.
@@ -650,7 +733,7 @@ impl<'a> NetworkEditor<'a> {
             .ok_or_else(|| format!("Destination node '{}' not found", conn.dest_node_name))?;
 
         // Get destination node's parameter index
-        let (param_index, is_multi) = self.get_param_index(dest_node_id, &conn.param_name)?;
+        let (param_index, _is_multi) = self.get_param_index(dest_node_id, &conn.param_name)?;
 
         // Get destination node for modification
         let dest_node = self.network.nodes.get_mut(&dest_node_id).ok_or_else(|| {
@@ -665,9 +748,23 @@ impl<'a> NetworkEditor<'a> {
             dest_node.arguments.push(Argument::new());
         }
 
-        // Clear existing connections for this parameter if it's not multi
-        if !is_multi {
-            dest_node.arguments[param_index].clear();
+        // Mentioning a property assigns that pin's whole inbound wire set:
+        // what the statement names replaces what was there. This clears for
+        // array pins too, which is what lets `shapes: [a, b, c]` shrink to
+        // `shapes: [a]` — appending only, as this used to do for multi pins,
+        // made an array pin able to grow but never shrink. An empty source
+        // list (a literal, or `[]`) therefore disconnects the pin; see
+        // `property_disconnects_pin`.
+        let removed_wires = dest_node.arguments[param_index].incoming_wires.len();
+        dest_node.arguments[param_index].clear();
+        if conn.source_refs.is_empty() && removed_wires > 0 {
+            self.result.connections_made.push(format!(
+                "{}.{} disconnected ({} wire{} removed)",
+                conn.dest_node_name,
+                conn.param_name,
+                removed_wires,
+                if removed_wires == 1 { "" } else { "s" }
+            ));
         }
 
         // Wire each source
