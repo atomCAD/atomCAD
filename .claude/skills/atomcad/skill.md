@@ -124,6 +124,200 @@ vec3 { x: 1.5, y: 2.5, z: 3.5 }
 ivec3 { x: 1, y: 2, z: 3 }
 ```
 
+### Zone Bodies (`map`, `filter`, `fold`, `foreach`, `zip_with`, `closure`)
+
+These node types carry an **inline body** — a nested network that runs once per
+element (or, for `closure`, is exposed as a `Function` value). The body is
+projected as a `body { … }` **block** in the node's braces, and it is the last
+item in the property list:
+
+```
+r = range { start: 0, count: 5, step: 1 }
+scale = int { value: 3 }
+
+m1 = map {
+  xs: r,
+  input_type: Int,
+  output_type: Int,
+  body {
+    d = expr { a: $element, b: ^scale, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+    e = expr { a: d, expression: "a + 1", parameters: [{ name: "a", data_type: Int }] }
+    output e
+  }
+}
+
+output m1
+```
+
+- `body { … }` is a **block**, not a property value — there is no `:` after
+  `body`, and the statements inside carry no commas.
+- `output e` **inside** the block feeds the HOF's zone-output pin. `output m1`
+  **outside** it sets the network's return node. Same keyword; the position
+  disambiguates.
+- A node carrying a body spans several lines. Consumers that assumed
+  "one statement = one line" must brace-match.
+- A node whose body is **empty emits no block at all** — that is the shape of an
+  HOF driven through its `f:` pin.
+- A `body { … }` block on a node type that has no body (`i = int { value: 1,
+  body { … } }`) is refused, not ignored.
+
+#### Referring outward from inside a body
+
+Four spellings, and nothing else. With `k` = the number of leading `^`:
+**`k` carets → a node `k` scopes out; a `$` prefix → a zone input `k + 1` frames
+out.**
+
+| Written | Resolves to | Encoding |
+|---------|-------------|----------|
+| `n` | a node in this body | `NodeOutput`, depth 0 |
+| `^n` | a node one scope out (a *capture*) | `NodeOutput`, depth 1 |
+| `^^n` | a node two scopes out | `NodeOutput`, depth 2 |
+| `$element` | this body's own HOF's iteration value | `ZoneInput`, depth 1 |
+| `^$element` | the **enclosing** HOF's iteration value | `ZoneInput`, depth 2 |
+| `^^$element` | two HOFs out | `ZoneInput`, depth 3 |
+
+The `+ 1` is a real asymmetry, not a typo: `^n` counts networks, while `$name`
+already names this body's own owner, so reaching the *enclosing* HOF's element
+needs one caret.
+
+```
+outer = map {
+  xs: rows,
+  body {
+    inner = map {
+      xs: $element,
+      body {
+        p = expr { a: $element, b: ^$element, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+        output p
+      }
+    }
+    output inner
+  }
+}
+```
+
+`$element` in the inner body is the inner `map`'s element; `^$element` is the
+outer `map`'s.
+
+A **bare** name is resolved lexically — this body first, then outward — so
+`b: scale` also works above. `$name` **never** searches outward: promoting a
+per-iteration read into a capture would change evaluation semantics, not just
+the referent. `query` always emits the explicit `^` form.
+
+#### Zone pin names are not uniform
+
+Only `map` and `zip_with` call the result `result`. Read them from this table,
+or from `atomcad-cli describe <node>`:
+
+| Node | Zone inputs (`$…`) | Zone output (`output …`) |
+|------|--------------------|--------------------------|
+| `map` | `element` | `result` |
+| `filter` | `element` | **`keep`** (`Bool`) |
+| `foreach` | `element` | **`out`** (`Unit`) |
+| `fold` | `acc`, `element` | `new_acc` |
+| `zip_with` | `element1` … `elementN` | `result` |
+| `closure` | its own `params` | per kind: `new_acc` (fold), `out` (foreach), else `result` |
+
+#### `closure` nodes
+
+A `closure` carries its own definition, and its zone inputs are named by its
+`params`:
+
+```
+f1 = closure {
+  kind: "custom",
+  params: ["x", "y"],
+  type_args: [Int, Int, Int],
+  body {
+    p = expr { a: $x, b: $y, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+    output p
+  }
+}
+```
+
+- `kind` — `"map"`, `"filter"`, `"fold"`, `"foreach"` or `"custom"` (quoted).
+- `params` — the parameter names, and therefore what the body's `$x` binds to.
+  Only meaningful for `kind: "custom"`; the preset kinds name their own
+  (`element`, or `acc`/`element` for `fold`).
+- `type_args` — the free type slots: `[T, U]` for `map`, `[T]` for `filter` and
+  `foreach`, `[A, T]` for `fold`, `[p0, …, pN-1, R]` for `custom`.
+
+Write these properties in any order relative to the block — the editor always
+applies a statement's properties **before** its body, so `$x` binds correctly
+even when `params:` comes after `body { … }`.
+
+#### `f:` overrides `body`
+
+Every HOF also has an optional `f:` function pin. **When `f` is wired it
+overrides the inline body** — the body is ignored at evaluation. `query` emits
+both when both exist, so a network can show a `body { … }` that never runs.
+Don't author a body for a node whose `f:` you are also wiring.
+
+#### Editing a body: a block replaces, a path merges
+
+```
+# Whole-body assign: m1's body becomes exactly what the block says.
+m1 = map { xs: r, body { a = int { value: 1 } output a } }
+
+# Path-addressed: merges into the existing body, siblings untouched.
+m1/d = expr { a: $element, expression: "a * 4", parameters: [{ name: "a", data_type: Int }] }
+m1/new1 = int { value: 7 }         # add a node to m1's body
+output m1/new1                      # re-point m1's zone-output wire
+delete m1/e                         # remove one body node
+outer/inner/n1 = int { value: 2 }   # depth 2
+```
+
+Rules that matter:
+
+- **A mentioned `body { … }` block assigns the whole body**, exactly like any
+  other property. Omit `body` and the body is left alone.
+- **A block with no `output` statement *clears* the zone-output wire.** The
+  block is total over the parent's zone-output too — that is what makes
+  `query` → `edit --replace` exact. `body { }` empties the body and clears the
+  wire.
+- **A path merges.** `m1/x = …` creates or updates `x` and leaves every sibling's
+  identity and canvas position alone.
+- **The separator is `/`, never `.`** — `.` already means pin access
+  (`atom_edit.diff`).
+- **Inside a path statement everything is relative to the scope it lands on:**
+  bare names resolve in that body, `$…` are *its* zone inputs, and `^…` walks
+  outward from *it*. So `m1/x = …` means exactly what the same statement means
+  written inside `m1`'s block.
+- **A path never creates the HOF it addresses.** `m1` must already exist and own
+  a body, or the statement is an error, not a silent no-op.
+- **Ordering within one script is significant.** A `body` block followed by a
+  path statement for the same node applies in order: the block wipes, the path
+  merges into the result. Don't straddle the two unless you mean to.
+- **Rebuilt body nodes keep their identity by name**, so an `edit --replace` of
+  unchanged `query` output changes no ids and moves nothing on the canvas.
+
+#### `success` means *validates*, not merely *parsed*
+
+`edit` returns JSON. `success: true` means the script parsed, applied **and**
+the resulting network validates. Blocking validation errors land in `errors`
+(and fail the edit); non-blocking ones land in `warnings`. Names in
+`nodes_created` / `nodes_updated` / `nodes_deleted` and in error text are **full
+paths** (`m1/a`), because `m1/a` and `m2/a` are different nodes.
+
+Two things a body edit commonly trips on, both reported this way:
+
+- A body with **no wire into its zone-output pin** is a blocking error — a
+  freshly created HOF gets an *empty* body, so `m1 = map { xs: r }` alone leaves
+  `m1` invalid until you give it a `body` or wire its `f:`.
+- A `^` depth that walks past the outermost scope is an error, not a silent drop.
+
+**Round-trip caveat:** `query` output contains blank lines, and `atomcad-cli
+edit` reading from **stdin** stops at the first blank line. To feed query output
+straight back, strip the blank lines, or pass it via `--code` with `\n` escapes.
+
+#### Every edit is one undo step
+
+Each `edit` call is recorded in the app's undo stack as a single step labelled
+*AI edit network*, so the user can revert a whole edit — zone bodies included —
+with Ctrl+Z, and reapply it with Ctrl+Y. An edit that applied but then failed
+validation is still undoable. Tell the user this rather than trying to
+reconstruct a previous state yourself; there is no CLI undo command.
+
 ## CLI Commands
 
 ### Global Options

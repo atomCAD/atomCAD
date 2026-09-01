@@ -1422,6 +1422,18 @@ fn undo_across_network_switch() {
 /// Removes the network from the registry, applies the edit, puts it back,
 /// and pushes an undo command.
 fn apply_text_edit(designer: &mut StructureDesigner, network_name: &str, code: &str) {
+    apply_text_edit_inner(designer, network_name, code, true, "Text edit network");
+}
+
+/// The shared body of the two text-edit surfaces: the in-app *Text* tab
+/// (always replace mode) and the AI/CLI one (`ai_edit_network`, either mode).
+fn apply_text_edit_inner(
+    designer: &mut StructureDesigner,
+    network_name: &str,
+    code: &str,
+    replace: bool,
+    description: &'static str,
+) {
     use atomcad_structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
     use atomcad_structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
 
@@ -1440,8 +1452,8 @@ fn apply_text_edit(designer: &mut StructureDesigner, network_name: &str, code: &
     )
     .ok();
 
-    // Apply text edit in replace mode
-    let result = text_edit_network(&mut network, &designer.node_type_registry, code, true);
+    // Apply text edit
+    let result = text_edit_network(&mut network, &designer.node_type_registry, code, replace);
 
     // Snapshot after
     let after_snapshot = node_network_to_serializable(
@@ -1472,6 +1484,7 @@ fn apply_text_edit(designer: &mut StructureDesigner, network_name: &str, code: &
                 network_name: network_name.to_string(),
                 before_snapshot: before,
                 after_snapshot: after,
+                description,
             });
         }
     }
@@ -3571,5 +3584,175 @@ fn undo_delete_of_the_comment_itself_restores_its_anchors() {
         anchors_of(&designer, "test", comment_id),
         vec![anchor],
         "the restored comment must come back with its anchor"
+    );
+}
+
+// ===== Phase 5: AI edits are one undo step =====
+
+/// The AI / CLI edit surface's undo shape (`api::…::ai_edit_network`,
+/// `doc/design_hof_body_text_format.md` Phase 5). Same whole-network
+/// before/after snapshot as the *Text* tab, with two differences that matter:
+/// it is reachable in **incremental** mode (the CLI's default, and a mode the
+/// in-app tab never uses), and it carries its own undo label.
+fn apply_ai_edit(designer: &mut StructureDesigner, network_name: &str, code: &str, replace: bool) {
+    apply_text_edit_inner(designer, network_name, code, replace, "AI edit network");
+}
+
+/// Number of nodes inside a named node's zone body (0 if it owns no body).
+fn body_node_count(designer: &StructureDesigner, network_name: &str, node_name: &str) -> usize {
+    designer
+        .node_type_registry
+        .node_networks
+        .get(network_name)
+        .expect("Network not found")
+        .nodes
+        .values()
+        .find(|n| n.custom_name.as_deref() == Some(node_name))
+        .expect("Node not found")
+        .zone
+        .as_ref()
+        .map_or(0, |body| body.nodes.len())
+}
+
+/// The regression Phase 5 exists for. `edit --replace` clears the network
+/// before the first statement is applied, so an HOF rebuilt by a script that
+/// does not restate its `body { … }` comes back with an **empty** one. Before
+/// this phase `ai_edit_network` recorded no undo command at all, which made
+/// that loss permanent.
+#[test]
+fn undo_ai_edit_restores_a_wiped_zone_body() {
+    let mut designer = setup_designer_with_network("test");
+
+    apply_ai_edit(
+        &mut designer,
+        "test",
+        "r = range { start: 0, count: 5, step: 1 }\n\
+         m1 = map { xs: r, input_type: Int, output_type: Int, body { d = int { value: 7 } output d } }\n\
+         output m1",
+        true,
+    );
+    assert_eq!(
+        body_node_count(&designer, "test", "m1"),
+        1,
+        "the body should have been created by the first edit"
+    );
+    designer.undo_stack.clear();
+
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    // A --replace that does not restate the body destroys it.
+    apply_ai_edit(
+        &mut designer,
+        "test",
+        "r = range { start: 0, count: 5, step: 1 }\n\
+         m1 = map { xs: r, input_type: Int, output_type: Int }\n\
+         output m1",
+        true,
+    );
+    assert_eq!(
+        body_node_count(&designer, "test", "m1"),
+        0,
+        "the body node should be gone — this is the destruction being guarded"
+    );
+
+    assert!(designer.undo(), "the AI edit must be undoable");
+    assert_eq!(
+        body_node_count(&designer, "test", "m1"),
+        1,
+        "undo must bring the body node back"
+    );
+    assert_eq!(
+        before,
+        snapshot_all_networks(&mut designer.node_type_registry),
+        "undo should restore the network exactly, body included"
+    );
+}
+
+/// Incremental mode is the CLI's default and is never reached from the in-app
+/// *Text* tab, so it needs its own coverage.
+#[test]
+fn undo_ai_edit_in_incremental_mode() {
+    let mut designer = setup_designer_with_network("test");
+    apply_ai_edit(&mut designer, "test", "s = sphere { radius: 5 }", false);
+    designer.undo_stack.clear();
+
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    apply_ai_edit(
+        &mut designer,
+        "test",
+        "c = cuboid { extent: (4, 4, 4) }",
+        false,
+    );
+    let after = snapshot_all_networks(&mut designer.node_type_registry);
+    assert_ne!(
+        before, after,
+        "the incremental edit should have added a node"
+    );
+
+    assert!(designer.undo());
+    assert_eq!(
+        before,
+        snapshot_all_networks(&mut designer.node_type_registry)
+    );
+    assert!(designer.redo());
+    assert_eq!(
+        after,
+        snapshot_all_networks(&mut designer.node_type_registry)
+    );
+}
+
+/// An edit that applies but then fails validation is still on the network, so
+/// it must still be undoable — a bad edit is precisely the one the user reaches
+/// for Ctrl+Z over. `m1` here has neither a body nor a wired `f`, which is a
+/// blocking validation error.
+#[test]
+fn an_invalid_ai_edit_is_still_undoable() {
+    let mut designer = setup_designer_with_network("test");
+    apply_ai_edit(&mut designer, "test", "s = sphere { radius: 5 }", false);
+    designer.undo_stack.clear();
+
+    let before = snapshot_all_networks(&mut designer.node_type_registry);
+
+    apply_ai_edit(
+        &mut designer,
+        "test",
+        "r = range { start: 0, count: 5, step: 1 }\nm1 = map { xs: r }",
+        false,
+    );
+    assert!(
+        !designer
+            .node_type_registry
+            .node_networks
+            .get("test")
+            .unwrap()
+            .validation_errors
+            .is_empty(),
+        "an HOF with an empty body and no `f` should fail validation"
+    );
+
+    assert!(designer.undo(), "the edit landed, so it must be undoable");
+    assert_eq!(
+        before,
+        snapshot_all_networks(&mut designer.node_type_registry)
+    );
+}
+
+/// The undo tooltip is the only place the user learns whether the step came
+/// from the AI or from their own typing in the *Text* tab.
+#[test]
+fn ai_and_text_edits_carry_distinct_undo_descriptions() {
+    let mut designer = setup_designer_with_network("test");
+
+    apply_ai_edit(&mut designer, "test", "s = sphere { radius: 5 }", false);
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("AI edit network")
+    );
+
+    apply_text_edit(&mut designer, "test", "c = cuboid { extent: (4, 4, 4) }");
+    assert_eq!(
+        designer.undo_stack.undo_description(),
+        Some("Text edit network")
     );
 }

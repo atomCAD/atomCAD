@@ -46,6 +46,9 @@ output nodename    # Set the return/output node of the network
 delete nodename    # Remove a node and its connections
 ```
 
+Both take a **path** when they address a node inside a zone body — `output m1/e`,
+`delete m1/e`. See [Zone Bodies](#zone-bodies).
+
 ### Comments
 
 ```
@@ -244,6 +247,194 @@ at the wrong wire is documentation that actively lies, so the only two outcomes
 are "the same target" or "no anchor". A comment statement that says nothing
 about `on` leaves its existing anchors alone.
 
+## Zone Bodies
+
+Six node types own an **inline body** — a nested network that belongs to the
+node itself: the higher-order functions `map`, `filter`, `fold`, `foreach` and
+`zip_with`, and the `closure` node. The body is projected into the text format
+as a `body { … }` **block** among the node's properties.
+
+```
+r = range { start: 0, count: 5, step: 1 }
+scale = int { value: 3 }
+
+m1 = map {
+  xs: r,
+  input_type: Int,
+  output_type: Int,
+  body {
+    d = expr { a: $element, b: ^scale, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+    e = expr { a: d, expression: "a + 1", parameters: [{ name: "a", data_type: Int }] }
+    output e
+  }
+}
+
+output m1
+```
+
+`body` is followed by `{`, never by `:` — it is a **block**, not a property
+value. That single missing colon is what tells it apart from an anonymous record
+literal (which is always in property-value position) on one token of lookahead.
+The items inside are statements, so they carry no separating commas; the
+properties around the block still do. A node has at most one body, and the block
+may appear anywhere in the property list.
+
+A statement carrying a body therefore spans several lines. Any consumer that
+assumed "one statement = one line" must brace-match instead.
+
+An **empty** body emits no block at all. That is the shape of an HOF driven
+through its `f:` pin, and it means an omitted `body` and an emitted-nothing body
+agree — the round trip stays exact.
+
+A `body { … }` block written on a node type that owns no body is refused with a
+"has no body" error rather than ignored, and a `$name` written outside any body
+is reported rather than dropped.
+
+### Referring outward from inside a body
+
+A body communicates with the outside in exactly four ways, so there are exactly
+four reference spellings. With `k` = the number of leading `^`:
+
+| Written | Resolves to | Wire |
+|---------|-------------|------|
+| `n` | a node in this body | `NodeOutput`, depth 0 |
+| `^n` | a node one scope out | `NodeOutput`, depth 1 |
+| `^^n` | a node two scopes out | `NodeOutput`, depth 2 |
+| `$element` | this body's own owner's iteration value | `ZoneInput`, depth 1 |
+| `^$element` | the enclosing HOF's iteration value | `ZoneInput`, depth 2 |
+| `^^$element` | two HOFs out | `ZoneInput`, depth 3 |
+
+One rule generates the table: **`k` carets → `NodeOutput` at depth `k`; a `$`
+prefix → `ZoneInput` at depth `k + 1`.**
+
+`^` is a *scope* operator — "go up one level" — and what follows names something
+in the scope it lands on. The `+ 1` is not a quirk of the format: a `NodeOutput`
+depth counts networks (`0` is this body), while a `ZoneInput` depth counts
+owning-HOF body frames (`1` is this body's own owner), so `$name` on its own
+already addresses one level and each caret steps one owner further out.
+
+A wire crossing the body boundary is a **capture** — an outer value frozen once
+per instantiation of the body rather than recomputed per iteration.
+`^$element` is a capture in exactly that sense, which is why it carries the same
+`^`.
+
+Nested bodies compose:
+
+```
+outer = map {
+  xs: rows,
+  body {
+    inner = map {
+      xs: $element,
+      body {
+        p = expr { a: $element, b: ^$element, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+        output p
+      }
+    }
+    output inner
+  }
+}
+```
+
+`$element` in the inner body is the inner `map`'s element; `^$element` is the
+outer `map`'s. Both are `ZoneInput` wires — they differ only in depth.
+
+**Resolution of a bare name is lexical**: this body first, then each enclosing
+scope outward, inner shadowing outer. A `$name` is **never** resolved outward —
+silently promoting a per-iteration read into a capture would change evaluation
+semantics, not just the referent — so an outer element always needs an explicit
+`^`. The serializer always emits the explicit `^` form, so a round trip never
+depends on shadowing.
+
+Reaching past the outermost scope is an error, not a silent drop.
+
+Names are unique **per scope**, not globally: `m1/a` and `m2/a` are different
+nodes and both may exist. `visible: true` likewise works per scope.
+
+### `output` inside a block
+
+An `output <name>` statement inside a body block sets the **owning node's**
+zone-output wire — not the body network's own return node. The same keyword at
+the top level sets the network's return node. Position is what distinguishes
+them.
+
+### Zone pin names
+
+Zone pin names are not uniform, so read them from the node type rather than
+assuming `element` / `result`:
+
+| Node | Zone inputs (`$…`) | Zone output (`output …`) |
+|------|--------------------|--------------------------|
+| `map` | `element` | `result` |
+| `filter` | `element` | `keep` (`Bool`) |
+| `foreach` | `element` | `out` (`Unit`) |
+| `fold` | `acc`, `element` | `new_acc` |
+| `zip_with` | `element1` … `elementN` | `result` |
+| `closure` | its own `params` | `new_acc` (fold kind), `out` (foreach kind), else `result` |
+
+### `closure` properties
+
+`closure` is the one zone-bearing type whose interface is data rather than
+fixed by the node type, so it carries three text properties:
+
+| Property | Value | Meaning |
+|----------|-------|---------|
+| `kind` | `"map"`, `"filter"`, `"fold"`, `"foreach"`, `"custom"` | the shape template |
+| `params` | array of strings | parameter names (`kind: "custom"` only) — what the body's `$x` binds to |
+| `type_args` | array of data types | the kind's free type slots |
+
+```
+f1 = closure {
+  kind: "custom",
+  params: ["x", "y"],
+  type_args: [Int, Int, Int],
+  body {
+    p = expr { a: $x, b: $y, expression: "a * b", parameters: [{ name: "a", data_type: Int }, { name: "b", data_type: Int }] }
+    output p
+  }
+}
+```
+
+A statement's properties are always applied **before** its body block, whatever
+order they are written in, so `$x` binds to parameter 0 even when `params:`
+follows the block.
+
+### `f:` overrides `body`
+
+Every HOF also exposes an optional `f:` function pin. When `f` is wired it drives
+the node and the inline body is ignored at evaluation. Serialization emits both
+when both exist (faithfulness over tidiness), so a network can legitimately show
+a `body { … }` that never runs.
+
+### Path-addressed statements
+
+The second edit granularity, alongside the whole-body block. **The prefix selects
+the scope and the last segment names the node in it** — one rule, applied to all
+three statement forms:
+
+```
+m1/d = expr { a: $element, expression: "a * 4", parameters: [{ name: "a", data_type: Int }] }
+output m1/d                          # re-point m1's zone-output wire
+delete m1/e                          # remove one body node
+outer/inner/n = int { value: 2 }     # depth 2
+```
+
+- The separator is `/`, never `.`: `.` already means pin access in value
+  position, so `output m1.d` would be ambiguous between "scope `m1`, node `d`"
+  and "the `d` output pin of `m1`".
+- Paths split on the `/` token only, so a backtick-quoted segment containing a
+  slash (`` m1/`a/b` ``) remains a single segment.
+- Everything inside a path statement is **relative to the scope it lands on**:
+  bare names resolve in that body, `$…` are its zone inputs, `^…` walks outward
+  from it. `m1/x = …` means exactly what the same statement means written inside
+  `m1`'s block.
+- A path never *creates* the scope it addresses, and never guesses a node type
+  for it. A segment naming no node, or naming a node that owns no body, is an
+  error rather than a silent no-op.
+
+The serializer emits only the block form; paths are input-only sugar, which keeps
+query output single-valued and one node to one statement shape.
+
 ## Type Annotations
 
 Some nodes have dynamic types that must be specified explicitly:
@@ -418,10 +609,29 @@ When processing an edit command in incremental mode:
 | `sphere1 = sphere { radius: 4.0 }` | Yes, `radius` was wired | Disconnect `radius`, store `4.0` |
 | `union1 = union { shapes: [] }` | Yes | Disconnect the pin |
 | `delete box1` | Yes | Remove node and all connections |
+| `m1 = map { body { ... } }` | Yes | Replace `m1`'s **whole** body; set its zone-output wire from the block's `output` |
+| `m1 = map { xs: r }` (no `body`) | Yes | Leave the body alone |
+| `m1/x = ...` | — | Merge into `m1`'s body: create or update `x`, siblings untouched |
+| `output m1/x` | — | Set `m1`'s zone-output wire to body node `x` |
+| `delete m1/x` | — | Remove `x` from `m1`'s body |
 
 **Nodes not mentioned in an edit command remain unchanged**, and so do properties not mentioned on a node that is. See *Edit semantics* above for how a mentioned property assigns its pin.
 
 Deleting a node is the only way to remove a wire *without* naming the pin it lands on.
+
+A `body { ... }` block follows the same "a mentioned property assigns its whole
+value" rule, and it is total over the owning node's **zone-output wire** too: a
+block carrying no `output` statement *clears* that wire, and `body { }` empties
+the body and clears it. That is the only reading under which
+query → `edit --replace` is exact. A path-addressed statement is surgical by
+contrast — it never touches the zone-output wire unless it is itself an
+`output m1/x`, or a `delete m1/x` that removes the wire's source (which clears
+it rather than leaving it dangling).
+
+Statements apply in source order, so a script containing both
+`m1 = map { body { ... } }` and `m1/x = ...` wipes and then merges. This needs no
+special rule, but straddling the two forms for one node is an easy way to lose
+body nodes by accident.
 
 ### Replace Mode
 
@@ -441,15 +651,19 @@ atomcad-cli edit --replace --code="sphere1 = sphere { radius: 10 }"
 ## Formal Grammar
 
 ```
-document     := line*
-line         := assignment | statement | comment | blank
-assignment   := name '=' type '{' props '}'
-statement    := 'output' name | 'delete' name
+document     := statement*
+statement    := assignment | output-stmt | delete-stmt | description | summary
+assignment   := path '=' type '{' block-items '}'
+output-stmt  := 'output' path
+delete-stmt  := 'delete' path
 comment      := '#' any-text-to-eol
-props        := (prop (',' prop)* ','?)?
+path         := (name '/')* name
+block-items  := (block-item (',' block-item)* ','?)?
+block-item   := prop | body
 prop         := name ':' value
-value        := literal | node-ref | '@' name | array | object
-node-ref     := name ('.' name)?
+body         := 'body' '{' statement* '}'
+value        := literal | source-ref | array | object
+source-ref   := '^'* ( '$' name | '@' name | name ('.' name)? )
 literal      := bool | int | float | string | vector
 bool         := 'true' | 'false'
 int          := [+-]? digit+
@@ -459,10 +673,24 @@ string       := '"' chars '"' | '"""' multiline-chars '"""'
 vector       := '(' number ',' number (',' number)? ')'
 array        := '[' (value (',' value)*)? ']'
 object       := '{' props '}'
-name         := [a-zA-Z_][a-zA-Z0-9_]*
+props        := (prop (',' prop)* ','?)?
+name         := [a-zA-Z_][a-zA-Z0-9_]* | '`' relaxed-chars '`'
 type         := [a-z][a-z0-9_]*
 number       := int | float
 ```
+
+Notes on the zone-body productions:
+
+- `body` is distinguished from a `prop` on **one** token of lookahead: an
+  identifier followed by `:` opens a property, one followed by `{` opens the
+  body. No backtracking.
+- A `body` block contains *statements*, not properties, so its items are not
+  comma-separated. Its `output` sets the owning node's zone-output wire.
+- `'^'*` counts carets: `k` carets name a node `k` scopes out, and a `$` prefix
+  names a zone input `k + 1` frames out. See
+  [Zone Bodies](#referring-outward-from-inside-a-body).
+- A `path` splits on the `/` **token** only, so a backtick-quoted segment may
+  contain a slash.
 
 ## Examples
 
@@ -560,3 +788,11 @@ Node positions (layout) are **not exposed** in this format:
 - The LLM edits semantics (data flow), not visual layout
 - New nodes are placed automatically
 - Users can manually reorganize after AI edits
+
+Because a position can never be *written*, it can only be **carried**. Before an
+edit runs — and, in replace mode, before the network is cleared — the editor
+snapshots every node's `(scope path, name) -> (id, position)`. A node it then
+creates under a name that was in the snapshot inherits that node's id and
+position instead of being auto-placed. This is what makes an `edit --replace` of
+unchanged query output a no-op on the canvas, inside zone bodies as well as at
+the top level.

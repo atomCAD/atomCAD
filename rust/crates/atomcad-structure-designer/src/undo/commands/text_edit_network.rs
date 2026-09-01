@@ -6,13 +6,23 @@ use crate::undo::{UndoCommand, UndoContext, UndoRefreshMode};
 /// Command for undoing/redoing text-based network edits.
 ///
 /// Text edits can make arbitrary changes to a network. Rather than decomposing
-/// into fine-grained commands, we store before/after snapshots of the entire network.
+/// into fine-grained commands, we store before/after snapshots of the entire
+/// network — which is also what makes this command cover **zone bodies** for
+/// free, since `SerializableNode::zone` carries the whole body.
+///
+/// Two callers push it, and the label is how the undo tooltip tells them apart:
+/// the in-app *Text* tab (`apply_text_to_active_network`) and the AI/CLI edit
+/// surface (`ai_edit_network`, `doc/design_hof_body_text_format.md` Phase 5).
+/// The distinction matters to the user: "what the AI just did to my network" is
+/// exactly the step they reach for Ctrl+Z over.
 pub struct TextEditNetworkCommand {
     pub network_name: String,
     /// Serialized network state before the text edit
     pub before_snapshot: SerializableNodeNetwork,
     /// Serialized network state after the text edit
     pub after_snapshot: SerializableNodeNetwork,
+    /// Undo-tooltip label naming the edit's origin.
+    pub description: &'static str,
 }
 
 // Manual Debug impl because SerializableNodeNetwork doesn't derive Debug
@@ -20,6 +30,7 @@ impl std::fmt::Debug for TextEditNetworkCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("TextEditNetworkCommand")
             .field("network_name", &self.network_name)
+            .field("description", &self.description)
             .finish()
     }
 }
@@ -41,7 +52,7 @@ impl TextEditNetworkCommand {
 
 impl UndoCommand for TextEditNetworkCommand {
     fn description(&self) -> &str {
-        "Text edit network"
+        self.description
     }
 
     fn undo(&self, ctx: &mut UndoContext) {

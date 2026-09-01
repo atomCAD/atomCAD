@@ -9447,6 +9447,7 @@ pub fn apply_text_to_active_network(code: String) -> APITextEditResult {
                                 network_name: network_name.clone(),
                                 before_snapshot: before,
                                 after_snapshot: after,
+                                description: "Text edit network",
                             });
                     }
                 }

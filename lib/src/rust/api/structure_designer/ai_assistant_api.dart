@@ -47,6 +47,10 @@ String aiQueryNetwork() => RustLib.instance.api
 /// - `errors` - Error messages if any
 /// - `warnings` - Warning messages if any
 ///
+/// The whole call is recorded as **one undo step** ("AI edit network"), so a
+/// bad edit — including one that emptied a zone body — is recoverable with
+/// Ctrl+Z in the app (`doc/design_hof_body_text_format.md` Phase 5).
+///
 /// # Example Input
 /// ```text
 /// sphere1 = sphere { center: (0, 0, 0), radius: 10, visible: true }

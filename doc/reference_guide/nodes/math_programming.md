@@ -711,13 +711,22 @@ A `map` node placed in a network looks like this — the rectangle in the middle
 Every HOF body has two kinds of inside-facing pins:
 
 - **Zone-input pins** (inner-left, facing into the body): sources that supply per-iteration values to body nodes. `map` / `filter` / `foreach` have one — `element` — the current iteration value. `fold` has two — `acc` (the running accumulator) and `element`.
-- **Zone-output pin** (inner-right, facing into the body): the destination that receives the body's per-iteration return value. `map`'s is `result` (the transformed element), `filter`'s is `result` (the `Bool` predicate decision), `fold`'s is `new_acc` (the next accumulator), `foreach`'s is `out` (whose value is discarded).
+- **Zone-output pin** (inner-right, facing into the body): the destination that receives the body's per-iteration return value. `map`'s is `result` (the transformed element), `filter`'s is `keep` (the `Bool` predicate decision), `fold`'s is `new_acc` (the next accumulator), `foreach`'s is `out` (whose value is discarded). The names are **not** uniform — only `map` and `zip_with` call the result `result`.
 
 You build the body by clicking into the body region (which makes it the *active scope*) and adding nodes there the same way you add nodes to a top-level network — right-click in the body, or drag a wire from a pin and drop on body empty space. Every node you add lives in **that body's scope**, with its own selection, undo, and copy/paste set. Wires between body nodes work like ordinary wires. The body region grows automatically as you add content and can also be dragged larger from its bottom-right corner.
 
 **Captures.** A wire that starts from a pin **outside** the body and ends on a pin **inside** the body is a **capture** — it crosses the body's boundary and carries an outer-scope value into the per-iteration evaluation. Captures are how the inline-body model replaces the "extra parameters bound at function-pin wiring" mechanism: rather than pre-binding parameters of a function value, you just drag a wire from any outer node's output pin straight into a body node's input pin. The wire is drawn as a normal bezier visibly crossing the body's translucent edge; a small dot marks the boundary crossing. A capture from a deeper scope into a doubly-nested body crosses two boundaries and gets one marker per crossing.
 
 Nested HOFs work the same way recursively: a `map` placed inside another `map`'s body renders its own inline body region; a capture from the outer-outer scope into the inner body crosses two boundaries.
+
+**In the text format.** An inline body is not editor-only state — it is part of
+the [node network text format](../../node_network_text_format.md#zone-bodies),
+so `atomcad-cli query` shows it and `edit` can author one. The body is a
+`body { … }` block inside the node's braces; inside it, `$element` (or `$acc`,
+`$element1` …) names a zone input, `^name` reaches a node one scope out (a
+capture), `^$element` reaches the enclosing HOF's iteration value, and `output`
+feeds the zone-output pin. A body node can also be addressed from outside its
+block by a path, as in `m1/d = …`.
 
 **Authoring tips.**
 
@@ -782,7 +791,7 @@ A two-lane summing zip has a body of one `expr` with parameters `a` and `b` (wir
 
 ## filter
 
-Returns a stream containing the elements of `xs` for which the body's `result` zone-output was `true`, preserving order. The filter is **lazy**: the body runs one element at a time, only when a downstream consumer pulls from `filter`'s output, and rejected elements are skipped without buffering.
+Returns a stream containing the elements of `xs` for which the body's `keep` zone-output was `true`, preserving order. The filter is **lazy**: the body runs one element at a time, only when a downstream consumer pulls from `filter`'s output, and rejected elements are skipped without buffering.
 
 **Properties**
 
@@ -797,13 +806,13 @@ Returns a stream containing the elements of `xs` for which the body's `result` z
 **Body (inline)**
 
 - Zone-input `element: ElementType` — the current iteration value.
-- Zone-output `result: Bool` — the predicate decision. Must have at least one incoming wire.
+- Zone-output `keep: Bool` — the predicate decision. Must have at least one incoming wire.
 
 **Behavior**
 
 If `xs` is unconnected the node produces an error. With `xs` wired, downstream pulls from the output stream advance the upstream `xs` walker until the body returns `true` for an element, then yield that element; consumers see only the kept elements, in their original order. An empty `xs` produces an empty stream; the body is never run. If the body returns anything other than `Bool`, the stream yields `Error("filter: f returned non-Bool")` and then ends — same fuse semantics as the rest of the iterator pipeline. The same applies if any required input inside the body is unwired and propagates as `None` — the predicate result is non-`Bool`.
 
-A typical filter body is one `expr` node with an `Int` parameter named `x` wired from `element`, computing `x % 2 == 0` (keep evens) into `result`.
+A typical filter body is one `expr` node with an `Int` parameter named `x` wired from `element`, computing `x % 2 == 0` (keep evens) into `keep`.
 
 ## fold
 
@@ -926,6 +935,12 @@ Exposes its inline zone body as a first-class `Function` value on its output pin
 The body is authored exactly like an HOF body: click into the region to make it the active scope, add nodes, and drag capture wires across the boundary. Captures are ordinary capture wires drawn into the body — they are *not* part of the shape, so the kind/type editor only ever describes parameters and result.
 
 **Viewing the body (0-ary closures only).** Body nodes normally have no visibility eye icons, but a **0-ary closure** is the exception: with no parameters its body is fully determined, so its nodes get working per-pin eyes and render in the 3D viewport like top-level nodes. Adding a parameter hides the eyes again and stops the body rendering; the display state is remembered (dormant, not discarded) and returns if you remove the parameter. See [Viewing the contents of a parameter-less closure](../node_networks.md#viewing-the-contents-of-a-parameter-less-closure).
+
+**In the text format.** A `closure` serializes with its `kind`, `params` and
+`type_args` alongside a `body { … }` block, and its zone inputs are named by
+its own `params` — so a `Custom` closure with parameters `x` and `y` reads them
+as `$x` and `$y`. See
+[Zone Bodies](../../node_network_text_format.md#zone-bodies).
 
 A `closure` can be promoted into a reusable named subnetwork (and the reverse) via the right-click **Extract to Network…** / **Convert to Closure** operations — see [Convert between a closure and a named network](../ui.md#manipulating-nodes-and-wires).
 

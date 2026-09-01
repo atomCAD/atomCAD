@@ -30,10 +30,12 @@ use atomcad_structure_designer::layout;
 use atomcad_structure_designer::scoped_validation_errors::{
     collect_scoped_validation_errors, error_node_path,
 };
+use atomcad_structure_designer::serialization::node_networks_serialization::node_network_to_serializable;
 use atomcad_structure_designer::text_format::{
     EditResult, describe_node_type, edit_network as text_edit_network, get_display_summary,
     serialize_network,
 };
+use atomcad_structure_designer::undo::commands::text_edit_network::TextEditNetworkCommand;
 
 // =============================================================================
 // FFI Functions (exposed to Flutter via flutter_rust_bridge)
@@ -109,6 +111,10 @@ pub fn ai_query_network() -> String {
 /// - `connections_made` - Descriptions of wire connections
 /// - `errors` - Error messages if any
 /// - `warnings` - Warning messages if any
+///
+/// The whole call is recorded as **one undo step** ("AI edit network"), so a
+/// bad edit — including one that emptied a zone body — is recoverable with
+/// Ctrl+Z in the app (`doc/design_hof_body_text_format.md` Phase 5).
 ///
 /// # Example Input
 /// ```text
@@ -197,6 +203,20 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                         });
                     }
                 };
+
+                // Snapshot the whole network BEFORE the edit, while it is
+                // still out of the registry (`node_network_to_serializable`
+                // wants `&mut` the network and `&` the registry's built-in
+                // types, which is exactly the borrow split the remove above
+                // already bought). The snapshot carries every node's `zone`,
+                // so one command covers body edits too
+                // (`doc/design_hof_body_text_format.md` Phase 5).
+                let before_snapshot = node_network_to_serializable(
+                    &mut network,
+                    &structure_designer.node_type_registry.built_in_node_types,
+                    None,
+                )
+                .ok();
 
                 // Apply the edit commands
                 let mut result = text_edit_network(
@@ -290,21 +310,74 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                     }
                 }
 
-                // Mark that a full refresh is needed since the network was edited directly
-                // (bypassing StructureDesigner change tracking)
-                cad_instance.structure_designer.mark_full_refresh();
-
-                // Set dirty flag if any modifications were made
-                // (text_edit_network bypasses normal edit methods that set dirty)
-                if edit_applied
+                // Did the edit actually change anything? Gates both the dirty
+                // flag and the undo command below.
+                //
+                // Deliberately keyed on `edit_applied`, not `result.success`:
+                // an edit that applied and then failed *validation* is still on
+                // the network, and a bad edit is precisely the one the user
+                // reaches for Ctrl+Z over. Gating on the post-fold `success`
+                // would leave the most damaging edits unrecoverable — the
+                // opposite of what this phase is for.
+                let made_changes = edit_applied
                     && (!result.nodes_created.is_empty()
                         || !result.nodes_updated.is_empty()
                         || !result.nodes_deleted.is_empty()
                         || !result.connections_made.is_empty()
                         || result.description_set.is_some()
                         || result.summary_set.is_some()
-                        || result.output_set.is_some())
-                {
+                        || result.output_set.is_some());
+
+                // Record the edit as one undo step
+                // (`doc/design_hof_body_text_format.md` Phase 5). Until now
+                // `ai_edit_network` pushed nothing at all, so an
+                // `edit --replace` that emptied a zone body was unrecoverable.
+                //
+                // The after-snapshot is taken **here**, past validation and
+                // past auto-layout, because `redo` restores it verbatim and
+                // re-runs neither: captured any earlier, a redo would put every
+                // node back at its pre-layout position.
+                if made_changes {
+                    let after_snapshot = if let Some(mut network) = structure_designer
+                        .node_type_registry
+                        .node_networks
+                        .remove(&network_name)
+                    {
+                        let snapshot = node_network_to_serializable(
+                            &mut network,
+                            &structure_designer.node_type_registry.built_in_node_types,
+                            None,
+                        )
+                        .ok();
+                        structure_designer
+                            .node_type_registry
+                            .node_networks
+                            .insert(network_name.clone(), network);
+                        snapshot
+                    } else {
+                        None
+                    };
+                    if let (Some(before), Some(after)) = (before_snapshot, after_snapshot) {
+                        structure_designer.push_command(TextEditNetworkCommand {
+                            network_name: network_name.clone(),
+                            before_snapshot: before,
+                            after_snapshot: after,
+                            // Distinct from the in-app *Text* tab's label: the
+                            // undo tooltip is the only place the user learns
+                            // that the step they are about to revert came from
+                            // the AI rather than from their own typing.
+                            description: "AI edit network",
+                        });
+                    }
+                }
+
+                // Mark that a full refresh is needed since the network was edited directly
+                // (bypassing StructureDesigner change tracking)
+                cad_instance.structure_designer.mark_full_refresh();
+
+                // Set dirty flag if any modifications were made
+                // (text_edit_network bypasses normal edit methods that set dirty)
+                if made_changes {
                     cad_instance.structure_designer.set_dirty(true);
                 }
 

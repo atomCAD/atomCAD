@@ -3,17 +3,23 @@
 **Status:** first draft for review. Motivated by the need to evaluate
 `doc/design_incremental_layout.md` before and after it lands.
 
-**Depends on `doc/design_hof_body_text_format.md`, which should land first.**
-Until it does, the text format does not project HOF zone bodies at all
-(`text_format/network_serializer.rs:326-328`), so a snapshot is blind to the 141
-body nodes in the corpus and a body edit is invisible in the diff. Two
-consequences for this design once that lands:
+**Depended on `doc/design_hof_body_text_format.md`, which has landed** (all five
+phases). Before it, the text format did not project HOF zone bodies at all, so a
+snapshot was blind to the 141 body nodes in the corpus and a body edit was
+invisible in the diff. Two consequences for this design, now in force:
 
-- a zone-bearing node's statement becomes **multi-line** (that design's D14), so
-  the *By node* splitter below must brace-match rather than assume one statement
-  per line;
-- `EditResult` starts reporting **full paths** (`m1/a`, not `a`), which is what
-  the *By node* diff must key on — two bodies may each contain a node named `a`.
+- a zone-bearing node's statement is **multi-line** (that design's D14), so the
+  *By node* splitter below must brace-match rather than assume one statement per
+  line;
+- `EditResult` reports **full paths** (`m1/a`, not `a`), which is what the
+  *By node* diff must key on — two bodies may each contain a node named `a`.
+
+A third consequence is about what this design is *not* for. That design's
+Phase 5 made `ai_edit_network` push a `TextEditNetworkCommand`, so an AI edit is
+now one undo step and the "unrecoverable" half of the problem below is solved.
+The log's job is unchanged and unduplicated: undo restores *state*, while this
+design records *what was submitted, when, with which flags, and what came back*
+— including the entries an undo deliberately does not erase (D6).
 
 Both are recorded here so the diff viewer is built against the final format
 rather than retrofitted. Nothing else in this design changes.

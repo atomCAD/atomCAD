@@ -54,6 +54,14 @@ undo/
 
 Commands are created inside `StructureDesigner` methods (not the API layer), because StructureDesigner owns the mutation logic and has access to the before-state. Exception: `TextEditNetworkCommand` is created in the API layer because text editing logic lives there.
 
+It has **two** call sites, and both must keep pushing: `apply_text_to_active_network` (the in-app *Text* tab) and `ai_edit_network` (the AI/CLI edit surface — `doc/design_hof_body_text_format.md` Phase 5). They differ in three ways worth remembering:
+
+- **Label.** The command carries a `description: &'static str` (`"Text edit network"` / `"AI edit network"`) rather than hard-coding one, because the undo tooltip is where the user learns whether the step they are about to revert was theirs or the AI's.
+- **When the after-snapshot is taken.** `redo` restores the snapshot verbatim and re-runs nothing, so the capture must come **after** everything that mutates the network — including validation and, on the AI path, the optional auto-layout pass. Snapshot earlier and a redo silently moves every node back to its pre-layout position.
+- **What gates the push.** `ai_edit_network` gates on `edit_applied` (did the statements parse and apply), **not** on the post-validation `success`. An edit that applied and then failed validation is still on the network, and it is exactly the one the user wants to undo.
+
+The whole-network snapshot carries `SerializableNode::zone`, so one command covers zone-body edits with no extra machinery — which is what makes the AI's new body-reaching powers recoverable.
+
 ### Refresh After Undo/Redo
 
 `UndoRefreshMode` controls post-undo/redo evaluation:
