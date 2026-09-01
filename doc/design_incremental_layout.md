@@ -199,6 +199,18 @@ validation.
 | Incremental merge | *(default)* | Statements merge into the existing network. Node ids and positions of untouched nodes survive. |
 | Replace | `--replace` | The network is cleared first, then the script is applied. Every node is new. |
 
+**Wires are assigned, not accumulated** (since `1b93cab8`). Mentioning a
+property assigns that pin's *whole* inbound wire set — what the statement names
+replaces what was there — for array pins as well as scalar ones. So
+`shapes: [a, b, c]` shrinks to `shapes: [a]`, and an entirely literal value
+(`radius: 5.0`, or `[]` on an array pin) **disconnects** the pin. A property
+left out of the statement is untouched.
+
+Before that fix the format could add a wire but not remove one: array pins only
+grew, and a literal on a wired pin silently coexisted with the live wire. The
+delta below assumes the fixed semantics — wire removal is now a first-class,
+routine edit.
+
 ---
 
 ## The edit delta
@@ -207,27 +219,62 @@ validation.
 pub struct EditDelta {
     /// Present after, absent before.
     pub added: Vec<u64>,
-    /// Present in both, but wiring, node type, or parameter count changed.
+    /// Present in both, but geometry-relevant state changed.
     pub modified: Vec<u64>,
     /// Present before, absent after.
     pub removed: Vec<u64>,
     /// Wires that did not exist before. Keyed like `WireAnchor` (#427).
     pub added_wires: Vec<WireKey>,
+    /// Wires that existed before and do not now. Layout-inert; see below.
+    pub removed_wires: Vec<WireKey>,
 }
 ```
 
 Computed by `diff_networks(before: &LayoutSnapshot, after: &NodeNetwork)`, where
 `LayoutSnapshot` is a transient pre-edit capture of `{id → (position, size,
-wire set)}`. Not persisted.
+wire set)}`. Not persisted. Both wire lists fall out of the same set difference,
+so `removed_wires` is free once `added_wires` is computed.
 
 `modified` matters for two reasons only, both geometric:
 
 - **the node got taller** (parameter count changed) and may now overlap a
   neighbour;
-- **the node was rewired** and a new wire may now point backwards.
+- **the node gained a wire** that may now point backwards.
 
 A node whose *value* changed but whose size and wiring did not is not a layout
 event at all and is excluded.
+
+### Wire removal is layout-inert
+
+Since `1b93cab8` the text format can remove wires (see
+[The edit surface](#the-edit-surface)), so `removed_wires` is routinely
+non-empty. It triggers **no repair**, and the reason is worth stating rather
+than leaving implicit:
+
+- it **cannot create an overlap** — nothing moves and nothing grows;
+- it **cannot create a backward wire** — removing an edge relaxes a constraint,
+  it never adds one. Step 5's check exists for wires that *appeared*;
+- it can leave a node with no wires at all. That node stays exactly where it is,
+  by D3 and by the same reasoning as D4: an orphan sitting in place is a hole,
+  and holes are left alone.
+
+So a node whose only change is losing wires is **not** classified `modified`.
+`removed_wires` is carried in the delta because the delta should faithfully
+describe the edit — and because a large rewiring is exactly the signal a future
+"this network was substantially restructured, re-lay it out?" prompt would key
+on (`research_intent_preserving_layout.md` §8) — not because layout acts on it.
+
+Two second-order effects, both already handled elsewhere:
+
+- **A comment's wire anchor can dangle.** #427's D6 drops an anchor whose wire
+  is gone, in `repair_node_network`. Step 7 then finds `anchors[0]`
+  unresolvable and skips the comment, which is the documented behaviour. Worth
+  noting only because removing a wire is now easy, so that path fires far more
+  often than it did when the format could not express a disconnect.
+- **A rewire is one statement, not two.** `diff1 = diff { base: newthing }`
+  removes the old `base` wire and adds a new one in a single assignment. The
+  removal is inert; the addition goes through Step 5's backward-wire check as
+  normal. No special handling for the pair.
 
 ### Name-based identity for `replace` mode
 
@@ -609,7 +656,9 @@ nondeterminism (D7). `LayoutSnapshot` + `diff_networks` producing an
 wired to anything.
 
 *Tests:* delta correctly classifies add / modify / remove / rewire; a value-only
-change produces an empty delta; `hand_moved` round-trips through `.cnnd` and
+change produces an empty delta; a statement that shrinks an array pin
+(`[a, b]` → `[a]`) yields the dropped wire in `removed_wires` and leaves
+`modified` empty; a literal on a wired scalar pin does the same; `hand_moved` round-trips through `.cnnd` and
 copy/paste; a pre-flag `.cnnd` loads with `hand_moved = false`; a network with
 two equal-size disconnected components lays out byte-identically across two
 processes (D7); a `replace`-mode rebuild of an unchanged script matches every
@@ -640,7 +689,8 @@ column; the cascade pushes a node whose x-interval overlaps a *pushed* node but
 not `R` (the widening case — the narrow reading of the closure fails this one);
 a node that grew pushes its neighbours down and nothing else; a rewire that
 points backward shifts the half-plane; a wire that was **already** backward
-before the edit is not touched; a 400x300 comment in the band is pushed like any
+before the edit is not touched; **removing** a wire moves nothing at all, and a
+node left with no wires stays at its exact position; a 400x300 comment in the band is pushed like any
 other node, by the minimum amount, and never ends up overlapped (D9);
 **Step 7** — a comment left behind by a half-plane shift is pulled back to its
 exact original offset; a drifted comment whose original spot is now occupied
