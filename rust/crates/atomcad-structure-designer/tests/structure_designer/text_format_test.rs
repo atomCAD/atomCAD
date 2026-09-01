@@ -290,6 +290,7 @@ mod parser_tests {
             name,
             node_type,
             properties,
+            ..
         } = &stmts[0]
         {
             assert_eq!(name, "sphere1");

@@ -556,3 +556,6 @@ mod layout_comments_test;
 
 #[path = "structure_designer/text_format_zone_body_test.rs"]
 mod text_format_zone_body_test;
+
+#[path = "structure_designer/text_format_zone_body_edit_test.rs"]
+mod text_format_zone_body_edit_test;

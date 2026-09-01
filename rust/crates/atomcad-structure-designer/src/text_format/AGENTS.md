@@ -62,9 +62,25 @@ it.
 
 ## NetworkEditor (network_editor.rs)
 
-Applies edits from parsed text to a `NodeNetwork`. Two-pass approach:
-1. **Create pass:** Create/update nodes with literal properties
-2. **Wire pass:** Connect node-to-node references as wires
+Applies edits from parsed text to a `NodeNetwork`. Four passes, and the
+**borrow discipline is what dictates them**: `Node.zone` is an
+`Arc<NodeNetwork>` mutated through `zone_mut()` → `Arc::make_mut`, so a body
+borrow cannot be held while the parent's name map is read — which is exactly
+what resolving a `^capture` needs.
+
+0. **Snapshot pass:** record `(name path) → position` over the whole network
+   including bodies, **before** `clear_network` in replace mode.
+1. **Create pass:** create/update nodes with literal properties, recursing
+   into `body { … }` blocks.
+2. **Wire pass:** connect references as wires, then comment anchors, then
+   visibility.
+3. **Deferred pass:** the `delete` / `output` statements, in source order.
+
+No borrow is ever held across a scope boundary: `scope_net` / `scope_net_mut`
+re-walk the scope path from the root each time (`O(depth)`, and depth is 1 or 2
+in practice). Everything that used to be flat — the name maps, pending
+connections, visible nodes, anchors — is keyed by **scope path**, the chain of
+zone-owning node ids down to the body.
 
 Supports two modes:
 - **Replace mode:** Clears network first, then creates from scratch
@@ -76,7 +92,16 @@ through the AI-assistant HTTP `/edit?replace=false` and `atomcad-cli edit` —
 where it is the **default**. A bug that only shows in incremental mode is
 therefore invisible in the app and hits every AI edit.
 
-Returns `EditResult` with success/failure/warning counts.
+Returns `EditResult` with success/failure/warning counts. Its node lists carry
+**full paths** (`m1/a`), not bare names — with bodies in play `m1/a` and `m2/a`
+are different nodes.
+
+`EditResult.success` means **parsed, applied *and* validates**: `ai_edit_network`
+folds `validate_network`'s verdict in (blocking → `errors`, non-blocking →
+`warnings`), which is the AI's only signal that an edit broke something. The
+gates that are about *what the editor did* — auto-layout, the dirty flag — read
+a separate `edit_applied` flag captured before that fold, so a valid-but-flagged
+edit still lays out and still marks the project dirty.
 
 ### A mentioned property assigns the pin's whole wire set
 
@@ -115,11 +140,10 @@ Converts a `NodeNetwork` back to text format:
 
 ## Zone bodies (`body { … }`)
 
-`doc/design_hof_body_text_format.md`. **The serializer is scope-aware; the
-parser and the editor are not yet** — Phase 1 landed reading only, so `query`
-output is complete but `edit` still rejects the new syntax (an unrecognized
-`body` inside a property block is a parse error, and a `$`/`^` sigil does not
-lex).
+`doc/design_hof_body_text_format.md`. The serializer, the parser and the editor
+are all scope-aware: `query` projects bodies and `edit` accepts them. **Path
+addressing (`m1/x = …`) is Phase 3 and does not exist yet** — a body is edited
+by restating its block.
 
 A zone-owning node's statement becomes multi-line, with the body block as its
 last property-position item:
@@ -156,6 +180,34 @@ Three things that are easy to get wrong here:
   already-empty body is the same state, so the round-trip stays exact.
 
 Consumers that assumed "one statement = one line" must brace-match now.
+
+### Writing one: what a block assigns
+
+A mentioned `body { … }` block assigns the **whole** body — the same rule as
+any other property — and it is total over the parent's `zone_output_arguments`
+too: a block with **no** `output` statement *clears* the zone-output wire. That
+is the only reading under which `query` → `edit --replace` is exact, and it is
+easy to "fix" into a bug by making an absent `output` mean "leave it".
+
+Two things the editor must keep doing:
+
+- **Identity is name-keyed, per scope, and carries `position`.** A rebuilt body
+  node matched by name keeps its node id and its position; an unmatched name is
+  new. Positions are **not in the text format at all** — the serializer emits
+  none and `create_node` synthesizes one — so the only way one survives is the
+  Pass 0 snapshot, which must be taken *ahead of* `clear_network`. Without it,
+  every `--replace` scrambles the layout of everything inside every body.
+- **A statement's properties are applied before its body block.** A `closure`'s
+  zone-input *names* are its own `params:`, which the same statement may be
+  setting — so `$x` cannot bind until they are in place. This is structural
+  rather than remembered: the parser keeps the body out of `properties`, and
+  `apply_body` runs after `create_node` / `update_node` (which is also what
+  makes the owner's resolved `NodeType::zone_input_pins` current by then).
+  Do not "tidy" the body into the property list.
+
+Zone init is **eager**: `apply_body` calls `ensure_zone_init` itself rather
+than leaving it to validation, which runs long after the editor returns and so
+would give the body statements nowhere to land.
 
 ## Auto-Layout (auto_layout.rs)
 

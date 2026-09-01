@@ -62,6 +62,8 @@ pub enum Token {
     At,           // @
     Dot,          // .
     Hash,         // #
+    Dollar,       // $ (zone-input sigil)
+    Caret,        // ^ (scope operator, one per level)
     Arrow,        // -> (destination side of a wire reference)
     Output,       // output keyword
     Delete,       // delete keyword
@@ -83,14 +85,30 @@ pub struct TokenInfo {
 // Parsed Statement Types
 // ============================================================================
 
+/// The reserved property-block item that opens a zone body. Not a lexer
+/// keyword: it is an ordinary identifier, distinguished from a property only
+/// by the token that follows it (`{` versus `:`), so a node type is still free
+/// to have a parameter called `body` — none does today (D2).
+pub const BODY_KEYWORD: &str = "body";
+
 /// Parsed statements from the text format
 #[derive(Debug, Clone)]
 pub enum Statement {
-    /// Node assignment: `name = type { prop: value, ... }`
+    /// Node assignment: `name = type { prop: value, ..., body { ... } }`
     Assignment {
         name: String,
         node_type: String,
         properties: Vec<(String, PropertyValue)>,
+        /// The statements of this node's `body { … }` block, when it has one.
+        /// `None` means the statement did not mention a body, which leaves an
+        /// existing body untouched; `Some(vec![])` is `body { }`, which empties
+        /// it (`doc/design_hof_body_text_format.md` D6).
+        ///
+        /// Kept out of `properties` on purpose: a body is a block of
+        /// *statements*, not a property value, and holding it separately is
+        /// what makes "properties are applied before the body block"
+        /// structural rather than a rule the editor has to remember (D13).
+        body: Option<Vec<Statement>>,
     },
     /// Output statement: `output node_name`
     Output { node_name: String },
@@ -123,11 +141,34 @@ pub enum PropertyValue {
     WireRef {
         source: String,
         source_pin: Option<String>,
+        /// Number of leading `^` on the source side — the scope the source
+        /// node lives in, counted outward from the scope the *wire* is in.
+        /// `0` for the ordinary same-scope case.
+        source_depth: usize,
         dest: String,
         dest_param: String,
     },
     /// Array of references or values: `[sphere1, box1]`
     Array(Vec<PropertyValue>),
+    /// A reference into an **enclosing** scope: `^name`, `^^name.pin`,
+    /// `^@name`. `depth` is the caret count and is always `>= 1` — depth 0 is
+    /// spelled by [`PropertyValue::NodeRef`] / [`PropertyValue::FunctionRef`],
+    /// which additionally get the lexical outward fallback (D4).
+    ///
+    /// Encodes a `NodeOutput` wire at `source_scope_depth = depth`.
+    ScopedRef {
+        depth: usize,
+        name: String,
+        pin_name: Option<String>,
+        is_function_ref: bool,
+    },
+    /// An enclosing HOF's per-iteration value: `$element`, `^$acc`. `depth` is
+    /// the caret count, so `$name` is `depth = 0` (this body's own owner).
+    ///
+    /// Encodes a `ZoneInput` wire at `source_scope_depth = depth + 1`. The
+    /// `+ 1` is the base asymmetry between the two source kinds — see the
+    /// reference table in `network_serializer.rs`'s module docs.
+    ZoneInputRef { depth: usize, name: String },
 }
 
 // ============================================================================
@@ -328,6 +369,26 @@ impl Lexer {
                 self.advance();
                 Ok(TokenInfo {
                     token: Token::Dot,
+                    line,
+                    column,
+                })
+            }
+
+            Some('$') => {
+                self.advance();
+                Ok(TokenInfo {
+                    token: Token::Dollar,
+                    line,
+                    column,
+                })
+            }
+
+            // One `^` per token, never a `^^` digraph: the parser counts them,
+            // so scope depth is not capped by the lexer.
+            Some('^') => {
+                self.advance();
+                Ok(TokenInfo {
+                    token: Token::Caret,
                     line,
                     column,
                 })
@@ -665,6 +726,15 @@ impl Parser {
             .unwrap_or(&Token::Eof)
     }
 
+    /// The token `n` positions ahead of the cursor. Only `n == 1` is used: the
+    /// body block is decided on one token of lookahead (D2).
+    fn peek_ahead(&self, n: usize) -> &Token {
+        self.tokens
+            .get(self.pos + n)
+            .map(|ti| &ti.token)
+            .unwrap_or(&Token::Eof)
+    }
+
     fn current_position(&self) -> (usize, usize) {
         self.tokens
             .get(self.pos)
@@ -719,14 +789,28 @@ impl Parser {
         }
     }
 
-    /// Parse all statements
+    /// Parse all statements of the input.
     fn parse_statements(&mut self) -> Result<Vec<Statement>, ParseError> {
+        self.parse_statement_list(false)
+    }
+
+    /// Parse a run of statements.
+    ///
+    /// `in_body` switches the terminator: the top level runs to `Eof`, while a
+    /// `body { … }` block ends at its closing brace — and an `Eof` reached
+    /// inside one is an unterminated block, not a successful parse.
+    fn parse_statement_list(&mut self, in_body: bool) -> Result<Vec<Statement>, ParseError> {
         let mut statements = Vec::new();
 
         loop {
             self.skip_newlines();
 
             match self.peek() {
+                Token::RightBrace if in_body => break,
+                Token::Eof if in_body => {
+                    let (line, col) = self.current_position();
+                    return Err(ParseError::new("Unterminated `body` block", line, col));
+                }
                 Token::Eof => break,
                 Token::Output => {
                     statements.push(self.parse_output_statement()?);
@@ -757,22 +841,23 @@ impl Parser {
         Ok(statements)
     }
 
-    /// Parse an assignment: `name = type { props }`
+    /// Parse an assignment: `name = type { props, body { … } }`
     fn parse_assignment(&mut self) -> Result<Statement, ParseError> {
         let name = self.expect_identifier()?;
         self.expect(&Token::Equals)?;
         let node_type = self.expect_identifier()?;
 
-        let properties = if self.peek() == &Token::LeftBrace {
+        let (properties, body) = if self.peek() == &Token::LeftBrace {
             self.parse_property_block()?
         } else {
-            vec![]
+            (vec![], None)
         };
 
         Ok(Statement::Assignment {
             name,
             node_type,
             properties,
+            body,
         })
     }
 
@@ -824,18 +909,48 @@ impl Parser {
         }
     }
 
-    /// Parse a property block: `{ prop: value, ... }`
-    fn parse_property_block(&mut self) -> Result<Vec<(String, PropertyValue)>, ParseError> {
+    /// Parse a property block: `{ prop: value, ..., body { … } }`.
+    ///
+    /// Returns the properties and, separately, the statements of the node's
+    /// `body { … }` block if it has one. The two are told apart on **one**
+    /// token of lookahead: inside a property block, an identifier followed by
+    /// `:` opens a property and one followed by `{` opens the body (D2). No
+    /// backtracking, and the error lands on the offending token rather than
+    /// after the whole block has been consumed.
+    #[allow(clippy::type_complexity)]
+    fn parse_property_block(
+        &mut self,
+    ) -> Result<(Vec<(String, PropertyValue)>, Option<Vec<Statement>>), ParseError> {
         self.expect(&Token::LeftBrace)?;
         self.skip_newlines();
 
         let mut properties = Vec::new();
+        let mut body: Option<Vec<Statement>> = None;
 
         while self.peek() != &Token::RightBrace && self.peek() != &Token::Eof {
-            let prop_name = self.expect_identifier()?;
-            self.expect(&Token::Colon)?;
-            let value = self.parse_property_value()?;
-            properties.push((prop_name, value));
+            let opens_body = matches!(self.peek(), Token::Identifier(n) if n == BODY_KEYWORD)
+                && self.peek_ahead(1) == &Token::LeftBrace;
+
+            if opens_body {
+                let (line, col) = self.current_position();
+                if body.is_some() {
+                    return Err(ParseError::new(
+                        "Duplicate `body` block: a node has exactly one body",
+                        line,
+                        col,
+                    ));
+                }
+                self.bump(); // `body`
+                self.expect(&Token::LeftBrace)?;
+                let statements = self.parse_statement_list(true)?;
+                self.expect(&Token::RightBrace)?;
+                body = Some(statements);
+            } else {
+                let prop_name = self.expect_identifier()?;
+                self.expect(&Token::Colon)?;
+                let value = self.parse_property_value()?;
+                properties.push((prop_name, value));
+            }
 
             self.skip_newlines();
 
@@ -847,12 +962,16 @@ impl Parser {
         }
 
         self.expect(&Token::RightBrace)?;
-        Ok(properties)
+        Ok((properties, body))
     }
 
     /// Parse a property value (literal, reference, or array)
     fn parse_property_value(&mut self) -> Result<PropertyValue, ParseError> {
         match self.peek() {
+            // `^…` walks up the scope chain and `$…` names an iteration
+            // value; the two compose (`^$element`). One production handles
+            // all of them — see `parse_scoped_reference`.
+            Token::Caret | Token::Dollar => self.parse_scoped_reference(),
             Token::At => {
                 // Function reference: @node_name
                 self.bump();
@@ -861,7 +980,7 @@ impl Parser {
                     // `@f -> apply1.f`: a wire whose source is a function
                     // pin. A wire is identified by its source *node*, so the
                     // `@` carries no extra information here and is dropped.
-                    return self.parse_wire_ref_tail(name, None);
+                    return self.parse_wire_ref_tail(name, None, 0);
                 }
                 Ok(PropertyValue::FunctionRef(name))
             }
@@ -908,7 +1027,7 @@ impl Parser {
                     if self.peek() == &Token::Arrow {
                         // `source -> dest.param`: a wire reference, where the
                         // part parsed so far is its source side.
-                        return self.parse_wire_ref_tail(name, pin_name);
+                        return self.parse_wire_ref_tail(name, pin_name, 0);
                     }
                     // It's a node reference, optionally qualified with a pin name
                     Ok(PropertyValue::NodeRef(name, pin_name))
@@ -959,6 +1078,7 @@ impl Parser {
         &mut self,
         source: String,
         source_pin: Option<String>,
+        source_depth: usize,
     ) -> Result<PropertyValue, ParseError> {
         self.expect(&Token::Arrow)?;
         let dest = self.expect_identifier()?;
@@ -967,8 +1087,66 @@ impl Parser {
         Ok(PropertyValue::WireRef {
             source,
             source_pin,
+            source_depth,
             dest,
             dest_param,
+        })
+    }
+
+    /// Parse the one sigil-led reference form: `^* [$] ident [. pin]`.
+    ///
+    /// The carets are counted first, then a single token decides what the
+    /// scope they landed on is being asked for — `$` an iteration value, `@` a
+    /// function pin, anything else a node output. That is the whole of D4's
+    /// rule: **`k` carets → `NodeOutput` at depth `k`, a `$` prefix →
+    /// `ZoneInput` at depth `k + 1`**; the `+ 1` is applied by the editor, not
+    /// here, so the AST stays a faithful record of what was written.
+    ///
+    /// Only reached with a leading `^` or `$`, so a bare name never comes
+    /// through here — bare names keep their lexical outward fallback.
+    fn parse_scoped_reference(&mut self) -> Result<PropertyValue, ParseError> {
+        let mut depth = 0usize;
+        while self.peek() == &Token::Caret {
+            self.bump();
+            depth += 1;
+        }
+
+        if self.peek() == &Token::Dollar {
+            self.bump();
+            let name = self.expect_identifier()?;
+            // `$name` never searches outward: promoting a per-iteration read
+            // to a capture would change evaluation semantics, not just the
+            // referent (D4). An outer HOF's element must be written `^$name`.
+            return Ok(PropertyValue::ZoneInputRef { depth, name });
+        }
+
+        if self.peek() == &Token::At {
+            self.bump();
+            let name = self.expect_identifier()?;
+            return Ok(PropertyValue::ScopedRef {
+                depth,
+                name,
+                pin_name: None,
+                is_function_ref: true,
+            });
+        }
+
+        let name = self.expect_identifier()?;
+        let pin_name = if self.peek() == &Token::Dot {
+            self.bump();
+            Some(self.expect_identifier()?)
+        } else {
+            None
+        };
+        if self.peek() == &Token::Arrow {
+            // A comment anchor naming a wire whose source is a capture.
+            return self.parse_wire_ref_tail(name, pin_name, depth);
+        }
+        Ok(PropertyValue::ScopedRef {
+            depth,
+            name,
+            pin_name,
+            is_function_ref: false,
         })
     }
 

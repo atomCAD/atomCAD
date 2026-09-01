@@ -27,6 +27,9 @@ use crate::api::api_common::{
     refresh_structure_designer_auto, with_cad_instance_or, with_mut_cad_instance_or,
 };
 use atomcad_structure_designer::layout;
+use atomcad_structure_designer::scoped_validation_errors::{
+    collect_scoped_validation_errors, error_node_path,
+};
 use atomcad_structure_designer::text_format::{
     EditResult, describe_node_type, edit_network as text_edit_network, get_display_summary,
     serialize_network,
@@ -196,12 +199,19 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                 };
 
                 // Apply the edit commands
-                let result = text_edit_network(
+                let mut result = text_edit_network(
                     &mut network,
                     &structure_designer.node_type_registry,
                     &code,
                     replace,
                 );
+
+                // Whether the statements parsed and applied. The gates below
+                // are about *what the editor did*, so they keep asking this —
+                // `result.success` is about to mean something stricter (D15),
+                // and an edit that landed still needs its layout and its
+                // dirty flag.
+                let edit_applied = result.success;
 
                 // Put the network back into the registry
                 structure_designer
@@ -225,9 +235,38 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
                     }
                 }
 
+                // `success` means *parsed, applied, and validates* — not
+                // merely *parsed* (`doc/design_hof_body_text_format.md` D15).
+                // The verdict above used to be computed for its side effects
+                // and thrown away, which is how an edit that silently emptied
+                // a zone body could still report `success: true`. Errors are
+                // reported with the offending node's full path (D10) so the
+                // AI can find it, including inside a body.
+                if let Some(network) = structure_designer
+                    .node_type_registry
+                    .node_networks
+                    .get(&network_name)
+                {
+                    for error in collect_scoped_validation_errors(network) {
+                        let located =
+                            match error_node_path(network, &error.scope_path, error.node_id) {
+                                Some(path) => format!("{}: {}", path, error.error_text),
+                                None => error.error_text.clone(),
+                            };
+                        // The severity split is the existing one: blocking
+                        // errors fail the edit, non-blocking ones are
+                        // advisory (`project_nonblocking_validation_errors`).
+                        if error.blocking {
+                            result.add_error(located);
+                        } else {
+                            result.add_warning(located);
+                        }
+                    }
+                }
+
                 // Apply auto-layout if enabled in preferences and edit was successful
                 // This recomputes the entire network layout using the user's preferred algorithm.
-                if result.success
+                if edit_applied
                     && structure_designer
                         .preferences
                         .layout_preferences
@@ -257,7 +296,7 @@ pub fn ai_edit_network(code: String, replace: bool) -> String {
 
                 // Set dirty flag if any modifications were made
                 // (text_edit_network bypasses normal edit methods that set dirty)
-                if result.success
+                if edit_applied
                     && (!result.nodes_created.is_empty()
                         || !result.nodes_updated.is_empty()
                         || !result.nodes_deleted.is_empty()

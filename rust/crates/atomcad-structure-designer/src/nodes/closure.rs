@@ -32,6 +32,7 @@ use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
 use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// A shape template for a function value. Fixes the arity and decides, per pin,
 /// whether the type is **free** (the user picks a `DataType`) or **fixed**
@@ -393,6 +394,61 @@ impl NodeData for ClosureData {
                 ),
             ),
         ]
+    }
+
+    /// The write half of [`ClosureData::get_text_properties`] (D12).
+    ///
+    /// Each property is independent, so a statement may mention any subset;
+    /// what it does not mention is left alone, exactly like every other node's
+    /// text properties. `params` is what a body's `$x` references bind to, so
+    /// the editor applies this **before** the statement's `body { … }` block —
+    /// see `text_format/network_editor.rs::apply_body` (D13).
+    ///
+    /// No cross-field repair happens here: `type_args` shorter or longer than
+    /// the kind expects is a legal transient state (`ClosureKind`'s accessors
+    /// already default the missing tail), and normalizing it would silently
+    /// rewrite what the author wrote.
+    fn set_text_properties(&mut self, props: &HashMap<String, TextValue>) -> Result<(), String> {
+        if let Some(v) = props.get("kind") {
+            let name = v
+                .as_string()
+                .ok_or_else(|| "kind must be a string".to_string())?;
+            self.kind = ClosureKind::from_text_name(name).ok_or_else(|| {
+                format!(
+                    "unknown closure kind '{}' (expected map, filter, fold, foreach or custom)",
+                    name
+                )
+            })?;
+        }
+        if let Some(v) = props.get("params") {
+            let arr = v
+                .as_array()
+                .ok_or_else(|| "params must be an array of strings".to_string())?;
+            let mut names = Vec::with_capacity(arr.len());
+            for item in arr {
+                names.push(
+                    item.as_string()
+                        .ok_or_else(|| "params entries must be strings".to_string())?
+                        .to_string(),
+                );
+            }
+            self.param_names = names;
+        }
+        if let Some(v) = props.get("type_args") {
+            let arr = v
+                .as_array()
+                .ok_or_else(|| "type_args must be an array of data types".to_string())?;
+            let mut types = Vec::with_capacity(arr.len());
+            for item in arr {
+                types.push(
+                    item.as_data_type()
+                        .ok_or_else(|| "type_args entries must be DataTypes".to_string())?
+                        .clone(),
+                );
+            }
+            self.type_args = types;
+        }
+        Ok(())
     }
 }
 

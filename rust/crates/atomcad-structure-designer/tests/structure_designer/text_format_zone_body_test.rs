@@ -714,18 +714,21 @@ fn an_empty_body_emits_no_block() {
 }
 
 // ============================================================================
-// Phase 1 is read-only, deliberately
+// Reading and writing now meet
 // ============================================================================
 
-/// The editor is still single-scope, so `query` output for a body-bearing
-/// network is not yet valid `edit --replace` input — the parser has no `body`
-/// block and no `$` / `^` sigils. Phase 2 is what closes that.
+/// The round trip this design exists for, from the reading side: a body built
+/// by direct manipulation serializes to text that `edit --replace` accepts and
+/// reproduces exactly.
 ///
-/// Note what the failure replaces: before this change the round trip
-/// *succeeded* and silently deleted every body node. A refused edit is the
-/// better of the two states, but it is not the end state.
+/// In Phase 1 this test asserted the *opposite* — the editor was still
+/// single-scope, so `query` output for a body-bearing network was not valid
+/// input. (Before Phase 1 the round trip "succeeded" and silently deleted
+/// every body node.) The writing half lands in
+/// `text_format_zone_body_edit_test.rs`, which pins the semantics; this one
+/// pins that the two halves agree on a body the serializer built.
 #[test]
-fn query_output_is_not_yet_valid_edit_input() {
+fn query_output_is_valid_edit_input() {
     let designer = build_map_with_two_node_body();
     let text = serialize(&designer);
 
@@ -738,8 +741,13 @@ fn query_output_is_not_yet_valid_edit_input() {
     let result = edit_network(&mut network, &designer.node_type_registry, &text, true);
 
     assert!(
-        !result.success,
-        "Phase 1 does not parse `body` blocks; expected a refused edit, got:\n{:?}",
+        result.success,
+        "query output must be valid edit input, errors:\n{:?}",
         result.errors
+    );
+    assert_eq!(
+        serialize_network(&network, &designer.node_type_registry, None),
+        text,
+        "the round trip must be exact"
     );
 }

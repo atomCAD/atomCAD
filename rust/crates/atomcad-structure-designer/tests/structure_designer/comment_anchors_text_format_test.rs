@@ -178,6 +178,7 @@ fn wire_ref_parses_with_and_without_a_source_pin() {
                 source_pin,
                 dest,
                 dest_param,
+                ..
             } => {
                 assert_eq!(source, "mybox");
                 assert_eq!(source_pin, &None);

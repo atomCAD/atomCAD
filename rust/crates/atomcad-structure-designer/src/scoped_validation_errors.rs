@@ -55,6 +55,31 @@ pub fn collect_scoped_validation_errors(network: &NodeNetwork) -> Vec<ScopedVali
     out
 }
 
+/// Render the full, text-format path of a node a [`ScopedValidationError`]
+/// points at: `a` at the top level, `m1/a` inside `m1`'s body — the same
+/// spelling `EditResult` reports (`doc/design_hof_body_text_format.md` D10),
+/// so an error the AI is handed names a node it can address.
+///
+/// Returns `None` for a network-level error (no `node_id`) and for a node that
+/// no longer resolves, so callers fall back to an unqualified message rather
+/// than inventing a path.
+pub fn error_node_path(
+    network: &NodeNetwork,
+    scope_path: &[u64],
+    node_id: Option<u64>,
+) -> Option<String> {
+    let node_id = node_id?;
+    let mut segments = Vec::with_capacity(scope_path.len() + 1);
+    let mut current = network;
+    for owner_id in scope_path {
+        let owner = current.nodes.get(owner_id)?;
+        segments.push(owner.custom_name.clone()?);
+        current = owner.zone.as_deref()?;
+    }
+    segments.push(current.nodes.get(&node_id)?.custom_name.clone()?);
+    Some(segments.join("/"))
+}
+
 fn collect_in(
     network: &NodeNetwork,
     scope_path: &mut Vec<u64>,
