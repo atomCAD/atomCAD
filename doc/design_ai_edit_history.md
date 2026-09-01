@@ -3,6 +3,21 @@
 **Status:** first draft for review. Motivated by the need to evaluate
 `doc/design_incremental_layout.md` before and after it lands.
 
+**Depends on `doc/design_hof_body_text_format.md`, which should land first.**
+Until it does, the text format does not project HOF zone bodies at all
+(`text_format/network_serializer.rs:326-328`), so a snapshot is blind to the 141
+body nodes in the corpus and a body edit is invisible in the diff. Two
+consequences for this design once that lands:
+
+- a zone-bearing node's statement becomes **multi-line** (that design's D14), so
+  the *By node* splitter below must brace-match rather than assume one statement
+  per line;
+- `EditResult` starts reporting **full paths** (`m1/a`, not `a`), which is what
+  the *By node* diff must key on — two bodies may each contain a node named `a`.
+
+Both are recorded here so the diff viewer is built against the final format
+rather than retrofitted. Nothing else in this design changes.
+
 **Problem.** The AI edit surface (`ai_edit_network`, reached as
 `atomcad-cli edit [--replace]`) is the only mutation path in the application
 that leaves **no trace**. After a session of AI editing, the maintainer can see
@@ -137,8 +152,16 @@ thing that happened, and often the most interesting thing that happened.
 **D7 — Divergence between entries is detected and shown.** When recording, the
 new `before_text` is compared against the `after_text` of the most recent entry
 *for the same network*. If they differ, the entry is flagged `diverged` and the
-panel draws a marker between the rows: *"this network changed outside the CLI
+panel draws a marker between the rows: *"this network changed outside `edit`
 since the previous entry."*
+
+The wording is deliberate. `ai_edit_network` is the only choke point for **text
+edits**, but `/networks/rename`, `/load` and `/new`
+(`ai_assistant/http_server.dart:931, 1008, 1118`) also mutate — and a rename
+changes the `# Network:` header line, so the next edit would trip the marker
+about something the CLI itself did. Phase 1 therefore records those three
+endpoints as well (they are single call sites), and the marker claims only what
+it can prove: the state changed between two `edit` calls.
 
 This is what makes the log honest without logging GUI edits. Human drags, GUI
 node edits, undos and file loads all show up as a gap in the right place, at the
@@ -186,8 +209,13 @@ the same view in a large dialog for deep reading.
 returns lightweight rows (seq, timestamp, network, flags, counts) with no
 snapshot text; code, results and diffs are fetched per selected entry. Shipping
 every snapshot on every refresh would put megabytes through FFI on a path that
-`design_eval_profiling.md` D8a exists to keep cheap. The list call is safe to
-make from `refreshFromKernel`; nothing else is.
+`design_eval_profiling.md` D8a exists to keep cheap.
+
+Even the list is not free: it allocates up to 200 structs of several heap
+`String`s each, and the cost grows with session length. So `refreshFromKernel`
+calls a cheap `ai_history_version() -> u64` and re-fetches the list only when
+that changed **and** the panel is visible — the pull-in-`build` pattern
+`profiler_panel.dart` already uses. Nothing else is safe on that path.
 
 **D13 — A session label, set by the user.** The application cannot know which
 model is driving the CLI. A free-text field on the panel toolbar ("Opus 5 /
@@ -263,11 +291,11 @@ constants.
 1. resolve network name        → on failure: push a failed record, return
 2. check the CLI write lock    → on failure: push a failed record, return
 3. before_text = text_format::serialize_network(network, registry, name)
-   before_positions = {id → position}
+   before_positions = {custom_name → position}
 4. (existing) remove from registry, text_edit_network, reinsert, validate
 5. (existing) layout pass, if enabled
 6. after_text = text_format::serialize_network(...)
-   after_positions = {id → position}   → LayoutOutcome
+   after_positions = {custom_name → position}   → LayoutOutcome
 7. push the record
 8. (existing) mark_full_refresh, set_dirty, refresh
 ```
@@ -277,6 +305,14 @@ registry it lives in — which is exactly what `ai_query_network` already does.
 The snapshots bracket validation and layout, so a partially-applied edit (some
 statements succeeded, a later one failed) shows its real partial effect rather
 than nothing.
+
+**Positions are keyed by name, never by node id.** `clear_network`
+(`text_format/network_editor.rs:220`) removes every node without resetting
+`next_node_id`, so a `--replace` rebuild mints fresh, higher ids for everything
+and an id-keyed comparison matches nothing — reporting "nothing moved" on the
+single most layout-destructive kind of edit. Name keying is the same match
+`design_incremental_layout.md` specifies for replace mode; a name present only
+after the edit is a new node, not a moved one.
 
 Two `text_format::serialize_network` calls per edit is the entire runtime cost,
 on a path that already runs `validate_network`, a layout pass and a full
@@ -308,10 +344,16 @@ Both use the `similar` crate. It is already in `rust/Cargo.lock` at 2.7.0 (as an
 as a direct dependency of `atomcad-structure-designer` adds no new code to the
 tree.
 
-The text format's header (`# Network 'x' — N nodes`) changes whenever the node
-count changes and would otherwise show as a spurious first-line change on every
-edit; it is dropped from both snapshots before diffing in the *Text* view, and
-falls into the "other" bucket in *By node*.
+**What to strip, precisely.** The volatile part is the **footer**, not the
+header: `serialize` ends with `
+# N nodes` (`network_serializer.rs:113-117`),
+which churns on every edit that changes the node count. That line is dropped
+from both snapshots before diffing. The **header** is `# Network: <name>`
+(`network_serializer.rs:59-61`), which changes only on a rename and is worth
+seeing; and the `description "…"` / `summary "…"` lines that follow it are real,
+AI-editable statements that must stay **in** the diff. In *By node* the header
+and footer land in the "other" bucket; the `description` and `summary`
+statements are diffed there too.
 
 ---
 

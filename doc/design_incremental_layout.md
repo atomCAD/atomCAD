@@ -53,6 +53,13 @@ Point 3 generalizes to the rule this design follows throughout:
 uses, so it undercounts — comments are 200×100+ and HOF bodies larger. See
 [Prerequisite: real node sizes](#prerequisite-real-node-sizes).)*
 
+*(The measurement covers **top-level networks only**: the corpus also holds 48
+HOF nodes whose bodies contain 141 more nodes, and nothing here is known about
+how those hand-drawn body layouts look. The network and node counts above should
+also be re-derived — a straightforward count of `from_mechadense.cnnd` gives 89
+networks and 2,305 top-level nodes, so the 76 / 2,262 figures were taken over
+some subset.)*
+
 ---
 
 ## Design decisions
@@ -606,12 +613,24 @@ dimensions for comments and the `estimate_node_height(params, outputs,
 subtitle)` estimate otherwise, so **the comment half of this is done** and this
 design uses those functions rather than adding its own.
 
-What remains: **HOF bodies are still unsized.** A node with a `zone` falls
-through to the parameter-count estimate and its `body_width` / `body_height` —
-which can be many hundreds of pixels — are ignored. A block placed next to a
-collapsed-vs-expanded HOF will overlap it. Extending `node_size` to return the
-body box for an expanded HOF is a prerequisite of Phase 2, and it improves
-`place_comments` on the full-reflow path for free.
+What remains: **`layout/common.rs::node_size` ignores HOF bodies.** A node with
+a `zone` falls through to the parameter-count estimate and its `body_width` /
+`body_height` — which can be many hundreds of pixels — are ignored. A block
+placed next to an expanded HOF will overlap it.
+
+But the missing half **already exists elsewhere**:
+`node_inlining::estimate_node_size_in_network` handles expanded HOFs correctly,
+including `resolve_body_collapsed`, `rendered_body_size` (mirroring Flutter's
+`max(content_extent + padding, stored)`) and recursion into nested HOFs — while
+estimating comments rather than reading `CommentData`. So the prerequisite is to
+**unify the two into one function** that is correct for both classes, not to
+extend either in place. Two divergent size functions is how a collision test and
+a reflow disagree about the same node. This is a prerequisite of Phase 2, and it
+improves `place_comments` on the full-reflow path for free.
+
+Note also that a stored `body_width` / `body_height` is a floor, not the size —
+the rendered body is `max(stored, content + padding)`. Layout should let the max
+take over rather than writing the stored values, which are a user choice.
 
 ---
 
@@ -626,12 +645,45 @@ anchor when the two are pushed differently; [Step 7](#step-7--restore-drifted-co
 pulls it back when the original spot is free, and the leader line keeps the
 association legible when it is not.
 
-**HOF bodies.** Layout does not recurse into `node.zone` today (verified: no
-mention of `zone` or `walk_all_nodes` anywhere in `layout/`). The delta and this
-whole algorithm are scope-local, so the natural rule is: run it independently
-per network, including bodies, on the scope the edit touched. A body whose
-content grew may need its `body_width`/`body_height` increased, and the node then
-counts as "grew" for Step 5 in its *parent* scope.
+**HOF bodies — this section needs a proper revision before Phase 1.** Layout
+does not recurse into `node.zone` today (verified: no mention of `zone` or
+`walk_all_nodes` anywhere in `layout/`), and once
+`doc/design_hof_body_text_format.md` lands the AI *will* edit inside bodies, so
+this can no longer be a paragraph. Open question 3 is answered — bodies are in
+scope for v1 — but the treatment below is not yet a design. What is established:
+
+- **Most of the cross-scope machinery already exists and must be reused, not
+  reinvented.** `doc/design_reflow_on_footprint_change.md` (Phases 0-3, landed)
+  provides `StructureDesigner::reflow_for_footprint_change(scope_path, node_id,
+  old_sizes) -> Vec<ScopedMoves>`, which cascades a grown node's footprint **up
+  the scope chain**, plus `capture_footprint_chain` (must be called *before*
+  mutating) and `node_inlining::make_space_for_inline`. Phase 3 wired the
+  in-body growth case into five GUI mutation sites. "A body grew, push its
+  neighbours in the parent" is solved; the AI edit path needs to call it, not
+  duplicate it. That also means D6's "one collision primitive" is already two —
+  `make_space_for_inline` exists — and the two must be reconciled.
+- **The node-size prerequisite is a unification, not an extension.** There are
+  two size functions, each correct for a different node class:
+  `node_inlining::estimate_node_size_in_network` already handles expanded HOFs
+  correctly (`resolve_body_collapsed`, `rendered_body_size` mirroring Flutter's
+  `max(content + padding, stored)`, recursing into nested HOFs) but estimates
+  comments; `layout/common.rs::node_size` uses real `CommentData` dimensions but
+  ignores bodies. See [Prerequisite: real node sizes](#prerequisite-real-node-sizes).
+- **Layout must run inside-out.** A parent's node sizes are not known until its
+  children's bodies have settled, because an expanded HOF's footprint *is* a
+  function of its body's content bbox. So deepest scope first, then outward.
+- **The delta is no longer singular.** One `ai_edit_network` call can touch the
+  top-level network and several bodies (path-addressed statements), so D1's
+  `EditDelta` becomes a map from scope path to `EditDelta`, processed inside-out.
+- **Undo bundling changes shape.** Moves now land in multiple scopes, which is
+  what `ScopedMoves` + `CompositeCommand` + `combine_refresh_modes` already
+  exist for; the single `MoveNodesCommand` assumed under **Undo** below is not
+  enough.
+- **Cross-scope wires are out of scope for repair.** A capture (`^name`) or a
+  zone-input wire has no source position in the body's own network —
+  `layout/common.rs::wire_midpoint` already treats the destination pin as
+  standing in for it. Step 5's backward-wire check applies to same-scope wires
+  only; a capture that "points backwards" is left alone.
 
 **Undo.** The whole AI edit, including the layout adjustment, must be one undo
 step. `layout_active_network()` already wraps a reflow in one `MoveNodesCommand`
@@ -731,7 +783,12 @@ Recursion into HOF bodies if Phase 4 leaves it out.
 2. **Does a full reflow clear `hand_moved`?** Clearing is semantically honest
    but silently discards intent. Alternative: keep the flags, so a subsequent
    "respect manually placed nodes" reflow can restore the distinction.
-3. **Does the incremental pass recurse into HOF bodies in v1, or Phase 5?**
+3. ~~**Does the incremental pass recurse into HOF bodies in v1, or Phase 5?**~~
+   **Answered: v1.** Once `doc/design_hof_body_text_format.md` lands the AI can
+   edit inside bodies, so a body edit that reflows the whole body would be the
+   same intent-destroying behaviour this design exists to prevent, one scope
+   down. See [Interaction with other subsystems](#interaction-with-other-subsystems)
+   — that section needs a proper revision before Phase 1 starts.
 4. **Is `SLIDE_WINDOW` exposed?** Preference is: no. One internal constant,
    documented, not tunable.
 5. **Should the drift after many edits be surfaced?** A cheap counter (e.g.
