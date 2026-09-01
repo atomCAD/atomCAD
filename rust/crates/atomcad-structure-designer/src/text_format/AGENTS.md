@@ -111,6 +111,51 @@ Converts a `NodeNetwork` back to text format:
 - Topological sort ensures dependencies appear before dependents
 - Handles multi-input pins, function references, visibility
 - Cycle detection with error reporting
+- Projects HOF/closure zone bodies as nested `body { … }` blocks (see below)
+
+## Zone bodies (`body { … }`)
+
+`doc/design_hof_body_text_format.md`. **The serializer is scope-aware; the
+parser and the editor are not yet** — Phase 1 landed reading only, so `query`
+output is complete but `edit` still rejects the new syntax (an unrecognized
+`body` inside a property block is a parse error, and a `$`/`^` sigil does not
+lex).
+
+A zone-owning node's statement becomes multi-line, with the body block as its
+last property-position item:
+
+```
+m1 = map {
+  xs: r,
+  body {
+    d = mul { a: $element, b: ^scale }
+    output d
+  }
+}
+```
+
+Four spellings, and nothing else. With `k` = the number of leading `^`:
+**`k` carets → `NodeOutput` at depth `k`; a `$` prefix → `ZoneInput` at depth
+`k + 1`.** The `+ 1` is a real asymmetry in the data model, not a quirk of the
+format: a `NodeOutput` depth counts *networks* (`0` = this body) while a
+`ZoneInput` depth counts *owning-HOF body frames* (`1` = this body's own
+owner) — the same arithmetic `network_evaluator.rs`'s `ZoneInput` arm does.
+`format_wire_source` is the single implementation; don't re-derive it.
+
+Three things that are easy to get wrong here:
+
+- **Zone pin names are not uniform.** Only `map` / `zip_with` call the output
+  `result` (`filter` → `keep`, `foreach` → `out`, `fold` → `acc`/`new_acc`,
+  `zip_with` → `element1…N`, `closure` → its own `param_names`). Read them off
+  the resolved `NodeType::zone_input_pins`, never from a hand-written table.
+- **`output` inside a block writes the *parent HOF node's*
+  `zone_output_arguments`**, not the body network's `return_node_id`. Same
+  keyword as the network-level `output`; only the position distinguishes them.
+- **An empty body emits no block at all.** That is the shape of an HOF driven
+  through its `f:` pin, and an omitted `body` means "untouched" — which for an
+  already-empty body is the same state, so the round-trip stays exact.
+
+Consumers that assumed "one statement = one line" must brace-match now.
 
 ## Auto-Layout (auto_layout.rs)
 

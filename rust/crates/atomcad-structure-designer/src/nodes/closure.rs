@@ -30,6 +30,7 @@ use crate::node_type::{
 };
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::structure_designer::StructureDesigner;
+use crate::text_format::TextValue;
 use serde::{Deserialize, Serialize};
 
 /// A shape template for a function value. Fixes the arity and decides, per pin,
@@ -117,6 +118,30 @@ impl ClosureKind {
             ClosureKind::Fold => "new_acc",
             ClosureKind::Foreach => "out",
             _ => "result",
+        }
+    }
+
+    /// The kind's spelling in the AI text format (`kind: "custom"`). Lower
+    /// case, matching the node-type names the preset kinds mirror.
+    pub fn text_name(&self) -> &'static str {
+        match self {
+            ClosureKind::Map => "map",
+            ClosureKind::Filter => "filter",
+            ClosureKind::Fold => "fold",
+            ClosureKind::Foreach => "foreach",
+            ClosureKind::Custom => "custom",
+        }
+    }
+
+    /// Inverse of [`ClosureKind::text_name`].
+    pub fn from_text_name(name: &str) -> Option<Self> {
+        match name {
+            "map" => Some(ClosureKind::Map),
+            "filter" => Some(ClosureKind::Filter),
+            "fold" => Some(ClosureKind::Fold),
+            "foreach" => Some(ClosureKind::Foreach),
+            "custom" => Some(ClosureKind::Custom),
+            _ => None,
         }
     }
 
@@ -330,6 +355,44 @@ impl NodeData for ClosureData {
         _connected_input_pins: &std::collections::HashSet<String>,
     ) -> Option<String> {
         None
+    }
+
+    /// A `closure` is defined entirely by its stored data — without these it
+    /// round-tripped through the text format as `c1 = closure { }`, losing its
+    /// kind, arity and types (`doc/design_hof_body_text_format.md` D12). The
+    /// parameter names matter twice over: they are also what the body's
+    /// `$x` zone-input references bind to.
+    ///
+    /// `params` is written even when empty, because for a `Custom` closure an
+    /// empty list is the 0-ary shape `() -> T` (the default, issue #418) and
+    /// not an absent value. `type_args` is the stored vector verbatim, which
+    /// can be shorter than the kind expects while the user is mid-edit —
+    /// `ClosureKind`'s accessors already default the missing tail.
+    fn get_text_properties(&self) -> Vec<(String, TextValue)> {
+        vec![
+            (
+                "kind".to_string(),
+                TextValue::String(self.kind.text_name().to_string()),
+            ),
+            (
+                "params".to_string(),
+                TextValue::Array(
+                    self.param_names
+                        .iter()
+                        .map(|name| TextValue::String(name.clone()))
+                        .collect(),
+                ),
+            ),
+            (
+                "type_args".to_string(),
+                TextValue::Array(
+                    self.type_args
+                        .iter()
+                        .map(|t| TextValue::DataType(t.clone()))
+                        .collect(),
+                ),
+            ),
+        ]
     }
 }
 

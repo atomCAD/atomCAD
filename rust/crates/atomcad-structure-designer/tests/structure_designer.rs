@@ -553,3 +553,6 @@ mod comment_anchors_text_format_test;
 
 #[path = "structure_designer/layout_comments_test.rs"]
 mod layout_comments_test;
+
+#[path = "structure_designer/text_format_zone_body_test.rs"]
+mod text_format_zone_body_test;
