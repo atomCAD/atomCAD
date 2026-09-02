@@ -9,10 +9,11 @@ use std::collections::{HashMap, HashSet};
 
 use glam::DVec2;
 
+use crate::layout::size::{comment_data, rendered_node_size_by_id};
 use crate::node_layout;
 use crate::node_network::{Node, NodeNetwork, SourcePin, Wire};
 use crate::node_type_registry::NodeTypeRegistry;
-use crate::nodes::comment::{CommentData, ResolvedAnchor};
+use crate::nodes::comment::ResolvedAnchor;
 
 /// Available layout algorithms for full network reorganization.
 ///
@@ -232,7 +233,16 @@ pub const START_X: f64 = 100.0;
 /// See [`START_X`].
 pub const START_Y: f64 = 100.0;
 /// Horizontal pitch between columns: `NODE_WIDTH` (160) + a 50 px gap.
+///
+/// Still the pitch the topological-grid layout uses. Sugiyama sizes each
+/// column by its widest member instead — an expanded HOF is 460 px wide, so a
+/// fixed 210 px pitch drew it straight through the next column — and spends
+/// [`COLUMN_GAP`] between them.
 pub const COLUMN_WIDTH: f64 = 210.0;
+/// Whitespace between two Sugiyama columns, i.e. [`COLUMN_WIDTH`] minus the
+/// base node width. Keeps a network of uniform 160 px nodes laid out exactly
+/// as it was before per-layer widths landed.
+pub const COLUMN_GAP: f64 = COLUMN_WIDTH - node_layout::NODE_WIDTH;
 /// Vertical gap between two nodes stacked in the same column.
 pub const VERTICAL_GAP: f64 = 30.0;
 
@@ -266,14 +276,6 @@ impl LayoutRect {
     }
 }
 
-/// The `CommentData` of `node`, or `None` if it is not a comment node.
-///
-/// Detection is by data type rather than by node type name, so a renamed or
-/// re-registered comment type keeps working.
-fn comment_data(node: &Node) -> Option<&CommentData> {
-    node.data.as_any_ref().downcast_ref::<CommentData>()
-}
-
 /// Whether `node` is a comment node, and therefore excluded from the graph
 /// layout entirely (D8).
 pub fn is_comment(node: &Node) -> bool {
@@ -291,37 +293,24 @@ pub fn graph_node_ids(network: &NodeNetwork) -> HashSet<u64> {
         .collect()
 }
 
-/// The estimated height of a node, as both layout algorithms size their columns.
+/// The rendered height of a node, as both layout algorithms size their columns.
+///
+/// A thin projection of [`crate::layout::size::rendered_node_size`], which is
+/// the one authority on how big a node is (design doc, "Prerequisite: one size
+/// function"). It therefore sees a comment's real dimensions *and* an expanded
+/// HOF's body region, where the old local estimate saw neither.
 pub fn node_height(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> f64 {
-    let node = match network.nodes.get(&node_id) {
-        Some(node) => node,
-        None => return node_layout::estimate_node_height(0, 1, true),
-    };
-    if let Some(comment) = comment_data(node) {
-        return comment.height;
-    }
+    node_size(node_id, network, registry).y
+}
 
-    let node_type = registry.get_node_type(&node.node_type_name);
-    let num_params = node_type.map(|nt| nt.parameters.len()).unwrap_or(0);
-    let num_outputs = node_type.map(|nt| nt.output_pin_count()).unwrap_or(1);
-
-    node_layout::estimate_node_height(num_params, num_outputs, true)
+/// The rendered width of a node. See [`node_height`].
+pub fn node_width(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> f64 {
+    node_size(node_id, network, registry).x
 }
 
 /// The box a node occupies for collision purposes.
-///
-/// A comment uses its **real** `CommentData` dimensions, never
-/// `estimate_node_height`: the estimate is 83 px against a default of 100 and a
-/// routine resized value of 300+, so sizing it wrongly would only produce
-/// overlaps in a tidier arrangement.
-fn node_size(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> DVec2 {
-    match network.nodes.get(&node_id).and_then(comment_data) {
-        Some(comment) => DVec2::new(comment.width, comment.height),
-        None => DVec2::new(
-            node_layout::NODE_WIDTH,
-            node_height(node_id, network, registry),
-        ),
-    }
+pub fn node_size(node_id: u64, network: &NodeNetwork, registry: &NodeTypeRegistry) -> DVec2 {
+    rendered_node_size_by_id(network, registry, node_id)
 }
 
 /// The union of `rects`, or `None` if there are none.

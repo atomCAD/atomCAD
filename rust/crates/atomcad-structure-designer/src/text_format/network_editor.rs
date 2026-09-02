@@ -53,7 +53,9 @@ use std::collections::{HashMap, HashSet};
 
 use glam::DVec2;
 
-use crate::node_network::{Argument, ArgumentKind, IncomingWire, NodeNetwork, SourcePin, Wire};
+use crate::node_network::{
+    Argument, ArgumentKind, CollapseMode, IncomingWire, NodeNetwork, SourcePin, Wire,
+};
 use crate::node_type_registry::NodeTypeRegistry;
 use crate::nodes::comment::{ANCHOR_PROPERTY, CommentAnchor, CommentData, WireAnchor};
 use crate::nodes::parameter::ParameterData;
@@ -70,9 +72,40 @@ type ScopePath = Vec<u64>;
 /// `clear_network` — node ids do not.
 pub type NamePath = Vec<String>;
 
-/// `(name path) → position` over a whole network, bodies included. The one
+/// Everything about one node that the *text format cannot say* and that a
+/// human none the less chose (`doc/design_incremental_layout.md` D14).
+///
+/// Position was the original member (D8 of
+/// `doc/design_hof_body_text_format.md`); the rest were added because a
+/// `--replace` round-trip clears them too. The text format carries no
+/// `body_width`, `body_height` or `collapse_mode`, so replacing an unchanged
+/// script used to reset every HOF to the 320x180 default *and* to `Auto`,
+/// re-expanding a body the user had deliberately collapsed.
+///
+/// `footprint` is the node's rendered size at snapshot time. It is not
+/// re-applied — a node's size is derived, never stored — but it is the "before"
+/// half of the footprint comparison that decides whether a node counts as
+/// *grown* (D13), which is the only growth detector the incremental layout pass
+/// has.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NodeLayoutState {
+    /// Top-left corner, in the coordinates of the node's own scope.
+    pub position: DVec2,
+    /// Rendered footprint (`layout::rendered_node_size`) at snapshot time.
+    pub footprint: DVec2,
+    /// Stored body width; a floor on an HOF's rendered body, never its value.
+    pub body_width: f64,
+    /// Stored body height. See [`body_width`](Self::body_width).
+    pub body_height: f64,
+    /// The user's collapse choice.
+    pub collapse_mode: CollapseMode,
+    /// Whether a human had dragged this node (D5).
+    pub hand_moved: bool,
+}
+
+/// `(name path) -> layout state` over a whole network, bodies included. The one
 /// identity map two designs share — see [`snapshot_node_positions`].
-pub type PositionSnapshot = HashMap<NamePath, DVec2>;
+pub type PositionSnapshot = HashMap<NamePath, NodeLayoutState>;
 
 /// Record `(name path) → position` for every node in `network`, including
 /// every node nested in a zone body at any depth.
@@ -90,25 +123,44 @@ pub type PositionSnapshot = HashMap<NamePath, DVec2>;
 /// names are unique *per scope* only — `m1/d` and `m2/d` are different nodes.
 ///
 /// Shared deliberately: `doc/design_ai_edit_history.md` D9 measures layout
-/// against exactly the identity match [`NetworkEditor`] performs, and two
+/// against exactly the identity match [`NetworkEditor`] performs, and
+/// `layout::diff_scope` diffs against exactly the same map. Three
 /// implementations of the same key would drift.
-pub fn snapshot_node_positions(network: &NodeNetwork) -> PositionSnapshot {
-    fn walk(network: &NodeNetwork, prefix: &mut NamePath, out: &mut PositionSnapshot) {
+pub fn snapshot_node_positions(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+) -> PositionSnapshot {
+    fn walk(
+        network: &NodeNetwork,
+        registry: &NodeTypeRegistry,
+        prefix: &mut NamePath,
+        out: &mut PositionSnapshot,
+    ) {
         for node in network.nodes.values() {
             let Some(name) = node.custom_name.as_ref() else {
                 continue;
             };
             prefix.push(name.clone());
-            out.insert(prefix.clone(), node.position);
+            out.insert(
+                prefix.clone(),
+                NodeLayoutState {
+                    position: node.position,
+                    footprint: crate::layout::rendered_node_size(node, registry),
+                    body_width: node.body_width,
+                    body_height: node.body_height,
+                    collapse_mode: node.collapse_mode,
+                    hand_moved: node.hand_moved,
+                },
+            );
             if let Some(body) = node.zone.as_deref() {
-                walk(body, prefix, out);
+                walk(body, registry, prefix, out);
             }
             prefix.pop();
         }
     }
     let mut prefix = Vec::new();
     let mut out = HashMap::new();
-    walk(network, &mut prefix, &mut out);
+    walk(network, registry, &mut prefix, &mut out);
     out
 }
 
@@ -409,7 +461,7 @@ impl<'a> NetworkEditor<'a> {
     /// `doc/design_ai_edit_history.md` D9 reuses so its layout measurement is
     /// keyed identically to the match performed here.
     fn snapshot_positions(&mut self) {
-        self.positions = snapshot_node_positions(self.network);
+        self.positions = snapshot_node_positions(self.network, self.registry);
     }
 
     /// Clear the entire network (for replace mode).
@@ -649,8 +701,9 @@ impl<'a> NetworkEditor<'a> {
         // position; only a genuinely new name is laid out (D8).
         let mut identity_key = name_path.to_vec();
         identity_key.push(name.to_string());
-        let position = match self.positions.get(&identity_key) {
-            Some(position) => *position,
+        let previous = self.positions.get(&identity_key).copied();
+        let position = match previous {
+            Some(state) => state.position,
             None => {
                 let network = scope_net(self.network, scope)
                     .ok_or_else(|| format!("Scope for '{}' no longer exists", path))?;
@@ -706,6 +759,22 @@ impl<'a> NetworkEditor<'a> {
             scope_net_mut(self.network, scope).and_then(|network| network.nodes.get_mut(&node_id))
         {
             self.registry.populate_custom_node_type_cache(node, true);
+        }
+
+        // Re-apply the rest of the identity snapshot (D14). Position was
+        // applied at creation; body size, collapse mode and `hand_moved` are
+        // applied *after* `populate_custom_node_type_cache`, whose
+        // `ensure_zone_init` is what installs a zone-bearing node's body and
+        // its default dimensions. Applied unconditionally: on a node with no
+        // zone these three fields are inert, so there is nothing to gate on.
+        if let Some(state) = previous
+            && let Some(node) = scope_net_mut(self.network, scope)
+                .and_then(|network| network.nodes.get_mut(&node_id))
+        {
+            node.body_width = state.body_width;
+            node.body_height = state.body_height;
+            node.collapse_mode = state.collapse_mode;
+            node.hand_moved = state.hand_moved;
         }
 
         self.result.nodes_created.push(path.to_string());

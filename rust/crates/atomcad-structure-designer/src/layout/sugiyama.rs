@@ -28,8 +28,7 @@ use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
 
 use super::common::{
-    COLUMN_WIDTH, START_X, START_Y, VERTICAL_GAP, compute_node_depths, graph_node_ids,
-    place_comments,
+    COLUMN_GAP, START_X, START_Y, VERTICAL_GAP, compute_node_depths, graph_node_ids, place_comments,
 };
 
 // Layout constants
@@ -174,7 +173,14 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
     let mut visited: HashSet<u64> = HashSet::new();
     let mut components: Vec<HashSet<u64>> = Vec::new();
 
-    for &node_id in network.nodes.keys() {
+    // Seed the BFS in ascending id order, never in `HashMap` order
+    // (`doc/design_incremental_layout.md` D7). The component list is sorted by
+    // size below, and `sort_by_key` is stable, so two equal-size components
+    // kept the order they were discovered in — which was per-process random.
+    let mut seed_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    seed_ids.sort_unstable();
+
+    for node_id in seed_ids {
         if visited.contains(&node_id) || !graph_nodes.contains(&node_id) {
             continue;
         }
@@ -598,8 +604,14 @@ fn assign_coordinates(
         .max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
         .unwrap_or(0.0);
 
+    // Per-layer column x. A layer is as wide as its widest member, so an
+    // expanded HOF (460 px and up) no longer overhangs the next column the way
+    // a fixed `COLUMN_WIDTH` pitch made it
+    // (`doc/design_incremental_layout.md`, "Prerequisite: one size function").
+    let column_x = column_positions(graph, network, registry);
+
     for (layer_idx, layer) in graph.layers.iter().enumerate() {
-        let x = START_X + layer_idx as f64 * COLUMN_WIDTH;
+        let x = column_x[layer_idx];
 
         // Calculate total height of this layer
         let layer_height = calculate_layer_height(layer, network, registry);
@@ -628,6 +640,32 @@ fn assign_coordinates(
     refine_vertical_alignment(&mut positions, graph, network, registry);
 
     positions
+}
+
+/// The x coordinate of every layer, each column sized by its widest member.
+///
+/// `x[0] = START_X`; `x[k+1] = x[k] + width(k) + COLUMN_GAP`, where `width(k)`
+/// is the widest **real** node in layer `k`, never below `NODE_WIDTH` so a
+/// layer of dummies alone keeps the ordinary pitch. On a network of uniform
+/// 160 px nodes this reproduces the old `START_X + k * COLUMN_WIDTH` exactly.
+fn column_positions(
+    graph: &LayeredGraph,
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+) -> Vec<f64> {
+    let mut xs = Vec::with_capacity(graph.layers.len());
+    let mut x = START_X;
+    for layer in &graph.layers {
+        xs.push(x);
+        let width = layer
+            .nodes
+            .iter()
+            .filter_map(|node| node.real_id())
+            .map(|id| super::common::node_width(id, network, registry))
+            .fold(node_layout::NODE_WIDTH, f64::max);
+        x += width + COLUMN_GAP;
+    }
+    xs
 }
 
 /// Calculate the total height of a layer including gaps.
@@ -736,12 +774,11 @@ fn can_move_to_y(
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
 ) -> bool {
-    let node_height = super::common::node_height(node_id, network, registry);
     let proposed_pos = DVec2::new(
         positions.get(&node_id).map(|p| p.x).unwrap_or(START_X),
         target_y,
     );
-    let proposed_size = DVec2::new(node_layout::NODE_WIDTH, node_height);
+    let proposed_size = super::common::node_size(node_id, network, registry);
 
     // Check against other nodes in the same layer
     for &other in &graph.layers[layer_idx].nodes {
@@ -751,8 +788,7 @@ fn can_move_to_y(
             }
 
             if let Some(&other_pos) = positions.get(&other_id) {
-                let other_height = super::common::node_height(other_id, network, registry);
-                let other_size = DVec2::new(node_layout::NODE_WIDTH, other_height);
+                let other_size = super::common::node_size(other_id, network, registry);
 
                 if node_layout::nodes_overlap(
                     proposed_pos,

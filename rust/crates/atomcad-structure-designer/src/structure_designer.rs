@@ -1073,6 +1073,7 @@ impl StructureDesigner {
                         scope_path: sm.scope_path,
                         moves: sm.moves,
                         description: "Reflow neighbours".to_string(),
+                        hand_moved_before: Vec::new(),
                     },
                 ));
             }
@@ -1588,6 +1589,7 @@ impl StructureDesigner {
                     scope_path: sm.scope_path,
                     moves: sm.moves,
                     description: "Reflow neighbours".to_string(),
+                    hand_moved_before: Vec::new(),
                 },
             ));
         }
@@ -6436,11 +6438,37 @@ impl StructureDesigner {
             } else {
                 format!("Move {} nodes", moves.len())
             };
+
+            // This is the one path that sets `hand_moved`
+            // (`doc/design_incremental_layout.md` D5): a node the user dragged,
+            // in whatever scope it lives. Record each flag's previous value so
+            // the same Ctrl+Z that puts the node back also takes the claim
+            // back. Nodes already flagged are recorded too — restoring `true`
+            // is a no-op, and skipping them would make the list depend on
+            // history rather than on what this drag touched.
+            let hand_moved_before: Vec<(u64, bool)> = moves
+                .iter()
+                .filter_map(|&(node_id, _, _)| {
+                    network
+                        .nodes
+                        .get(&node_id)
+                        .map(|node| (node_id, node.hand_moved))
+                })
+                .collect();
+            if let Some(network) = self.get_scope_network_mut(&pending.scope_path) {
+                for &(node_id, _) in &hand_moved_before {
+                    if let Some(node) = network.nodes.get_mut(&node_id) {
+                        node.hand_moved = true;
+                    }
+                }
+            }
+
             self.push_command(super::undo::commands::move_nodes::MoveNodesCommand {
                 network_name,
                 scope_path: pending.scope_path,
                 moves,
                 description,
+                hand_moved_before,
             });
         }
     }
@@ -6502,7 +6530,11 @@ impl StructureDesigner {
             network_name,
             scope_path: Vec::new(),
             moves,
+            // An explicit reflow is not a hand placement: it moves everything,
+            // so it claims nothing about intent (design doc, open question 2 —
+            // the flags survive a full reflow rather than being cleared by it).
             description: "Auto-Layout Network".to_string(),
+            hand_moved_before: Vec::new(),
         });
         self.set_dirty(true);
         true
@@ -6932,6 +6964,7 @@ impl StructureDesigner {
                             scope_path: sm.scope_path,
                             moves: sm.moves,
                             description: "Reflow neighbours".to_string(),
+                            hand_moved_before: Vec::new(),
                         },
                     ));
                 }
@@ -7215,6 +7248,7 @@ impl StructureDesigner {
                         scope_path: sm.scope_path,
                         moves: sm.moves,
                         description: "Reflow neighbours".to_string(),
+                        hand_moved_before: Vec::new(),
                     },
                 ));
             }
@@ -9641,7 +9675,7 @@ impl StructureDesigner {
         } = plan;
 
         // Read `C`'s geometry/name and its declared node type before mutating.
-        let (custom_name, position, body_width, body_height, collapse_mode) = {
+        let (custom_name, position, body_width, body_height, collapse_mode, hand_moved) = {
             let target = self.get_scope_network(&scope_path).unwrap();
             let c = target.nodes.get(&node_id).unwrap();
             (
@@ -9650,6 +9684,7 @@ impl StructureDesigner {
                 c.body_width,
                 c.body_height,
                 c.collapse_mode,
+                c.hand_moved,
             )
         };
         let i_node_type = new_network.node_type.clone();
@@ -9690,6 +9725,7 @@ impl StructureDesigner {
                 // params + captures vs. the instance's parameter pins), so any
                 // role overrides on `C` are meaningless here — start clean.
                 function_pin_roles: std::collections::BTreeMap::new(),
+                hand_moved,
             };
 
             let target = self

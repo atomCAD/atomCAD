@@ -212,6 +212,17 @@ pub struct SerializableNode {
     /// `Auto` entries are healed away). See `doc/design_function_pin_roles.md`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub function_pin_roles: std::collections::BTreeMap<usize, FunctionPinRole>,
+    /// The user dragged this node by hand (`doc/design_incremental_layout.md`
+    /// D5). Additive + `#[serde(default)]` + skipped when `false`, so pre-flag
+    /// files load as "not hand-moved" and a network nobody has dragged
+    /// serializes byte-identically — no migration, no version bump.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub hand_moved: bool,
+}
+
+/// `skip_serializing_if` predicate for a `bool` that defaults to `false`.
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 fn default_body_width() -> f64 {
@@ -515,6 +526,7 @@ pub fn node_to_serializable(
         body_height: node.body_height,
         collapse_mode: node.collapse_mode,
         function_pin_roles: node.function_pin_roles.clone(),
+        hand_moved: node.hand_moved,
     })
 }
 
@@ -596,6 +608,7 @@ pub fn serializable_to_node(
         // "heal on load" treatment the other map invariants get. Keeps the
         // undo command's `Option<FunctionPinRole>` mirroring entry presence.
         function_pin_roles: prune_auto_function_pin_roles(&serializable.function_pin_roles),
+        hand_moved: serializable.hand_moved,
     })
 }
 

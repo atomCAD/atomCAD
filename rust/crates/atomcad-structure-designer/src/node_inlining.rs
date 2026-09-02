@@ -20,10 +20,7 @@
 use glam::f64::DVec2;
 use std::collections::{HashMap, HashSet};
 
-use super::node_layout;
-use super::node_network::{
-    Argument, IncomingWire, Node, NodeNetwork, SourcePin, resolve_body_collapsed,
-};
+use super::node_network::{Argument, IncomingWire, Node, NodeNetwork, SourcePin};
 use super::node_type_registry::NodeTypeRegistry;
 use super::nodes::parameter::ParameterData;
 
@@ -170,6 +167,7 @@ pub fn copy_content_into(
             body_height: old_node.body_height,
             collapse_mode: old_node.collapse_mode,
             function_pin_roles: old_node.function_pin_roles.clone(),
+            hand_moved: old_node.hand_moved,
         };
         target.nodes.insert(new_id, new_node);
 
@@ -206,87 +204,15 @@ fn dedup_name(target: &NodeNetwork, desired: &str) -> String {
     }
 }
 
-/// Estimated (width, height) of `node` within its network, using the node's
-/// resolved type (custom-node types resolve through `custom_node_type`). Mirrors
-/// the layout heuristic used elsewhere (`auto_layout::get_node_size`): subtitle
-/// always assumed present, which is the common case for the node kinds inline
-/// operates on.
+/// Rendered (width, height) of `node` within its network.
 ///
-/// An **expanded** HOF / zone-owning node (`map` / `filter` / `fold` /
-/// `foreach` / `closure`) is sized by its body region via
-/// [`node_layout::estimate_hof_node_size`] — its real footprint is dominated by
-/// the body, far larger than the pin-count estimate. Without this, inlining a
-/// network that contains an expanded HOF leaves too little room and the copied
-/// content overlaps existing parent nodes. A collapsed HOF falls back to the
-/// regular size (it renders as a regular-node footprint).
-///
-/// The body dimensions fed to [`node_layout::estimate_hof_node_size`] come from
-/// [`rendered_body_size`], which measures the body's **actual content**
-/// (recursing into nested HOFs) rather than trusting the stored
-/// `body_width`/`body_height`. The stored values are only a floor — a freshly
-/// built `closure` carries the flat `DEFAULT_BODY_*` even when its body holds
-/// nested zone nodes (a `map`, another `closure`) that render far wider, so
-/// trusting them would undersize the node and leave neighbours overlapping.
+/// A pass-through to [`crate::layout::size::rendered_node_size`], the one size
+/// function (`doc/design_incremental_layout.md`, "Prerequisite: one size
+/// function"). This module used to carry its own copy of the rule — right
+/// about HOF bodies, wrong about comments — and the two drifted; keeping the
+/// name as a local alias keeps the call sites below reading the way they did.
 fn estimate_node_size_in_network(node: &Node, registry: &NodeTypeRegistry) -> DVec2 {
-    let node_type = registry.get_node_type_for_node(node);
-    let (n_in, n_out) = node_type
-        .map(|nt| (nt.parameters.len(), nt.output_pin_count()))
-        .unwrap_or((0, 1));
-
-    if let Some(nt) = node_type
-        && nt.has_zone()
-        && !resolve_body_collapsed(node, nt)
-    {
-        let (body_width, body_height) = rendered_body_size(node, registry);
-        return node_layout::estimate_hof_node_size(
-            n_in,
-            n_out,
-            nt.zone_input_pins.len(),
-            nt.zone_output_pins.len(),
-            body_width,
-            body_height,
-            true,
-            node.node_type_name == "closure",
-        );
-    }
-
-    node_layout::estimate_node_size(n_in, n_out, true)
-}
-
-/// Rendered body-region size (logical) of an expanded zone-owning node,
-/// mirroring Flutter's `_computeBodySize` (`scope_resolver.dart`):
-/// `max(content_extent + padding, stored)`, where each body node's footprint is
-/// its **rendered** size — recursing into nested HOFs via
-/// [`estimate_node_size_in_network`]. The content extent is measured from the
-/// body-local origin (rightmost / bottommost edge), matching Flutter and the
-/// fact that [`copy_content_into`] anchors freshly-copied body content at the
-/// origin.
-///
-/// Without the recursion, a body containing a nested expanded HOF is undersized
-/// by that inner HOF's entire footprint, so the space-made for the outer node
-/// falls short and it overlaps its neighbours — the closure-conversion bug this
-/// addresses.
-fn rendered_body_size(node: &Node, registry: &NodeTypeRegistry) -> (f64, f64) {
-    let stored_width = node.body_width;
-    let stored_height = node.body_height;
-    let Some(body) = node.zone.as_deref() else {
-        return (stored_width, stored_height);
-    };
-
-    let mut max_right = 0.0_f64;
-    let mut max_bottom = 0.0_f64;
-    for child in body.nodes.values() {
-        let size = estimate_node_size_in_network(child, registry);
-        max_right = max_right.max(child.position.x + size.x);
-        max_bottom = max_bottom.max(child.position.y + size.y);
-    }
-
-    let content_width = max_right + node_layout::HOF_BODY_BOTTOM_PADDING;
-    let content_height = max_bottom + node_layout::HOF_BODY_BOTTOM_PADDING;
-    (
-        content_width.max(stored_width),
-        content_height.max(stored_height),
-    )
+    crate::layout::size::rendered_node_size(node, registry)
 }
 
 /// Estimated size of the custom-node *instance* that is being inlined. Equal to

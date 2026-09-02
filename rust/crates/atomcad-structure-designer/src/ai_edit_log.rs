@@ -195,11 +195,12 @@ impl LayoutOutcome {
         let mut moved: Vec<MovedNode> = after
             .iter()
             .filter_map(|(name_path, after_pos)| {
-                let before_pos = *before.get(name_path)?;
-                (before_pos != *after_pos).then(|| MovedNode {
+                let before_pos = before.get(name_path)?.position;
+                let after_pos = after_pos.position;
+                (before_pos != after_pos).then(|| MovedNode {
                     path: name_path.clone(),
                     before: before_pos,
-                    after: *after_pos,
+                    after: after_pos,
                 })
             })
             .collect();

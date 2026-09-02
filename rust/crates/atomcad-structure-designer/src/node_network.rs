@@ -480,7 +480,9 @@ impl<'de> Deserialize<'de> for Argument {
 /// zone-output pin on a zone-owning (HOF) node: the destination argument is
 /// in the HOF's owned body. Phase 2 lands the enum and the `Wire` view field
 /// but every wire built today is `External`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub enum ArgumentKind {
     /// Sourced from the destination's `arguments` (today's behavior).
     #[default]
@@ -716,6 +718,17 @@ pub struct Node {
     /// entries and [`function_pin_dispositions`] ignores any that remain. See
     /// `doc/design_function_pin_roles.md`.
     pub function_pin_roles: BTreeMap<usize, FunctionPinRole>,
+    /// The user has dragged this node by hand, in whatever scope it lives.
+    ///
+    /// A **tiebreaker for layout, never a hard constraint**
+    /// (`doc/design_incremental_layout.md` D5): the incremental pass prefers to
+    /// push a node nobody placed deliberately, and an explicit full reflow can
+    /// offer to respect these. Nothing reads it as permission to skip a repair.
+    ///
+    /// Set by the drag handler (`StructureDesigner::end_move_nodes`), carried
+    /// through copy / paste / duplicate / factoring / inlining, persisted in
+    /// `.cnnd` with `#[serde(default)]`, and never cleared automatically.
+    pub hand_moved: bool,
 }
 
 /// Default stored body width for newly created HOF nodes (logical pixels).
@@ -1319,6 +1332,9 @@ impl NodeNetwork {
                 body_height: source_node.body_height,
                 collapse_mode: source_node.collapse_mode,
                 function_pin_roles: source_node.function_pin_roles.clone(),
+                // Carried through copy/paste: the pasted node keeps whatever
+                // deliberate-placement status the original had (D5).
+                hand_moved: source_node.hand_moved,
             };
 
             self.nodes.insert(new_id, new_node);
@@ -1509,6 +1525,7 @@ impl NodeNetwork {
             body_height: DEFAULT_BODY_HEIGHT,
             collapse_mode: CollapseMode::Auto,
             function_pin_roles: BTreeMap::new(),
+            hand_moved: false,
         };
 
         self.next_node_id += 1;
@@ -1547,6 +1564,7 @@ impl NodeNetwork {
             body_height: DEFAULT_BODY_HEIGHT,
             collapse_mode: CollapseMode::Auto,
             function_pin_roles: BTreeMap::new(),
+            hand_moved: false,
         };
 
         // Ensure next_node_id stays ahead of any manually assigned ID
@@ -2459,6 +2477,7 @@ impl NodeNetwork {
             body_height: original_node.body_height,
             collapse_mode: original_node.collapse_mode,
             function_pin_roles: original_node.function_pin_roles.clone(),
+            hand_moved: original_node.hand_moved,
         };
 
         // Insert the duplicated node into the network

@@ -131,6 +131,7 @@ pub fn promote_node_to_parameter(
         body_height: crate::node_network::DEFAULT_BODY_HEIGHT,
         collapse_mode: crate::node_network::CollapseMode::Auto,
         function_pin_roles: std::collections::BTreeMap::new(),
+        hand_moved: false,
     };
     param_node.set_custom_node_type(custom_type, false);
     network.nodes.insert(new_id, param_node);

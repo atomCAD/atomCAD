@@ -112,7 +112,7 @@ impl StructureDesigner {
             match self.node_type_registry.node_networks.get(&network_name) {
                 Some(network) => (
                     serialize_network(network, &self.node_type_registry, Some(&network_name)),
-                    snapshot_node_positions(network),
+                    snapshot_node_positions(network, &self.node_type_registry),
                 ),
                 // --- Rejection path 3: the network is gone ---------------
                 None => {
@@ -237,7 +237,8 @@ impl StructureDesigner {
         let (after_text, layout_outcome) =
             match self.node_type_registry.node_networks.get(&network_name) {
                 Some(network) => {
-                    let after_positions = snapshot_node_positions(network);
+                    let after_positions =
+                        snapshot_node_positions(network, &self.node_type_registry);
                     (
                         serialize_network(network, &self.node_type_registry, Some(&network_name)),
                         LayoutOutcome::compute(

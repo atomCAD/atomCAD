@@ -13,10 +13,10 @@ use atomcad_structure_designer::ai_edit_log::{
     snapshot_is_complete,
 };
 use atomcad_structure_designer::data_type::DataType;
-use atomcad_structure_designer::node_network::NodeNetwork;
+use atomcad_structure_designer::node_network::{CollapseMode, NodeNetwork};
 use atomcad_structure_designer::node_type::NodeTypeCategory;
 use atomcad_structure_designer::node_type::{NodeType, OutputPinDefinition};
-use atomcad_structure_designer::text_format::PositionSnapshot;
+use atomcad_structure_designer::text_format::{NodeLayoutState, PositionSnapshot};
 use glam::DVec2;
 
 // ============================================================================
@@ -57,7 +57,21 @@ fn empty_network() -> NodeNetwork {
 fn positions(entries: &[(&[&str], DVec2)]) -> PositionSnapshot {
     entries
         .iter()
-        .map(|(path, pos)| (path.iter().map(|s| s.to_string()).collect(), *pos))
+        .map(|(path, pos)| {
+            (
+                path.iter().map(|s| s.to_string()).collect(),
+                NodeLayoutState {
+                    position: *pos,
+                    // Only `position` is read by `LayoutOutcome::compute`; the
+                    // rest of the D14 state is irrelevant to a moved-list test.
+                    footprint: DVec2::new(160.0, 83.0),
+                    body_width: 320.0,
+                    body_height: 180.0,
+                    collapse_mode: CollapseMode::Auto,
+                    hand_moved: false,
+                },
+            )
+        })
         .collect()
 }
 

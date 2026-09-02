@@ -517,7 +517,7 @@ fn the_shared_identity_walk_keys_body_nodes_by_path() {
     );
 
     let network = sd.node_type_registry.node_networks.get("main").unwrap();
-    let snapshot = snapshot_node_positions(network);
+    let snapshot = snapshot_node_positions(network, &sd.node_type_registry);
 
     let mut paths: Vec<String> = snapshot.keys().map(|p| p.join("/")).collect();
     paths.sort();
@@ -541,11 +541,17 @@ fn the_shared_identity_walk_keys_body_nodes_by_path() {
         node.position += DVec2::new(40.0, 0.0);
     }
 
-    let moved = snapshot_node_positions(sd.node_type_registry.node_networks.get("main").unwrap());
+    let moved = snapshot_node_positions(
+        sd.node_type_registry.node_networks.get("main").unwrap(),
+        &sd.node_type_registry,
+    );
     let m1_d = vec!["m1".to_string(), "d".to_string()];
     let m2_d = vec!["m2".to_string(), "d".to_string()];
-    assert_eq!(moved[&m1_d], snapshot[&m1_d] + DVec2::new(40.0, 0.0));
-    assert_eq!(moved[&m2_d], snapshot[&m2_d]);
+    assert_eq!(
+        moved[&m1_d].position,
+        snapshot[&m1_d].position + DVec2::new(40.0, 0.0)
+    );
+    assert_eq!(moved[&m2_d].position, snapshot[&m2_d].position);
 }
 
 // ============================================================================

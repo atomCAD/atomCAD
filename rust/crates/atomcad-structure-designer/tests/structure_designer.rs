@@ -82,6 +82,28 @@ mod layout_sugiyama_test;
 #[path = "structure_designer/layout_after_edit_test.rs"]
 mod layout_after_edit_test;
 
+// --- Incremental layout (doc/design_incremental_layout.md) -----------------
+#[path = "structure_designer/layout_test_support.rs"]
+mod layout_test_support;
+
+#[path = "structure_designer/layout_oracle.rs"]
+mod layout_oracle;
+
+#[path = "structure_designer/layout_size_test.rs"]
+mod layout_size_test;
+
+#[path = "structure_designer/layout_delta_test.rs"]
+mod layout_delta_test;
+
+#[path = "structure_designer/layout_columns_test.rs"]
+mod layout_columns_test;
+
+#[path = "structure_designer/layout_hand_moved_test.rs"]
+mod layout_hand_moved_test;
+
+#[path = "structure_designer/layout_oracle_test.rs"]
+mod layout_oracle_test;
+
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
 

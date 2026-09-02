@@ -68,8 +68,8 @@ Applies edits from parsed text to a `NodeNetwork`. Four passes, and the
 borrow cannot be held while the parent's name map is read — which is exactly
 what resolving a `^capture` needs.
 
-0. **Snapshot pass:** record `(name path) → position` over the whole network
-   including bodies, **before** `clear_network` in replace mode.
+0. **Snapshot pass:** record `(name path) → NodeLayoutState` over the whole
+   network including bodies, **before** `clear_network` in replace mode.
 1. **Create pass:** create/update nodes with literal properties, recursing
    into `body { … }` blocks.
 2. **Wire pass:** connect references as wires, then comment anchors, then
@@ -190,12 +190,20 @@ easy to "fix" into a bug by making an absent `output` mean "leave it".
 
 Two things the editor must keep doing:
 
-- **Identity is name-keyed, per scope, and carries `position`.** A rebuilt body
-  node matched by name keeps its node id and its position; an unmatched name is
-  new. Positions are **not in the text format at all** — the serializer emits
-  none and `create_node` synthesizes one — so the only way one survives is the
-  Pass 0 snapshot, which must be taken *ahead of* `clear_network`. Without it,
-  every `--replace` scrambles the layout of everything inside every body.
+- **Identity is name-keyed, per scope, and carries every drawing decision the
+  format cannot spell.** A rebuilt body node matched by name keeps its node id,
+  its position, its stored `body_width` / `body_height`, its `collapse_mode` and
+  its `hand_moved` flag (`doc/design_incremental_layout.md` D14); an unmatched
+  name is new. None of those are in the text format — the serializer emits no
+  coordinates and no body geometry, and `create_node` synthesizes a position —
+  so the only way they survive is the Pass 0 snapshot, which must be taken
+  *ahead of* `clear_network`. Without it, every `--replace` scrambles the layout
+  of everything inside every body **and** re-expands every HOF the user had
+  collapsed, at the 320x180 default. The snapshot also records each node's
+  rendered `footprint`, which is not re-applied (size is derived) but is the
+  "before" half of the growth comparison `layout::diff_scope` runs.
+  `snapshot_node_positions` therefore takes the registry: a footprint needs a
+  resolved node type.
   That snapshot is the **public** `snapshot_node_positions`, not a private
   method: `ai_edit_log` measures what layout did to a drawing against exactly
   this identity match (`doc/design_ai_edit_history.md` D9), and two path-keyed

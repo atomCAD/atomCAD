@@ -28,6 +28,7 @@
 
 use glam::DVec2;
 
+use crate::layout::rendered_node_size;
 use crate::node_layout;
 use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
@@ -59,8 +60,10 @@ pub fn calculate_new_node_position(
             .iter()
             .filter_map(|(id, _)| {
                 let node = network.nodes.get(id)?;
-                let source_type = &node.node_type_name;
-                let source_size = get_node_size(registry, source_type);
+                // A source node *exists*, so it is measured, not estimated:
+                // an expanded HOF is 460 px wide and the type-name estimate
+                // would drop the new node on top of its body.
+                let source_size = rendered_node_size(node, registry);
                 Some((DVec2::new(node.position.x, node.position.y), source_size))
             })
             .collect();
@@ -88,9 +91,16 @@ pub fn calculate_new_node_position(
     find_empty_position(network, registry, new_node_size)
 }
 
-/// Get the estimated size of a node based on its type.
+/// The estimated size of a node that does not exist yet, from its type alone.
 ///
-/// Uses the node type's parameter count to estimate height.
+/// The **only** legitimate use of an estimate rather than
+/// [`rendered_node_size`]: this function is called to place a node before it is
+/// created, so there is no node to measure — no body, no comment dimensions, no
+/// literal values to derive a subtitle from. Every caller that has a real
+/// `Node` in hand must use `rendered_node_size` instead
+/// (`doc/design_incremental_layout.md`, "Prerequisite: one size function"), and
+/// from Phase 3 the position produced here is a throwaway that the incremental
+/// pass overwrites anyway.
 pub fn get_node_size(registry: &NodeTypeRegistry, node_type_name: &str) -> DVec2 {
     let num_params = registry
         .get_node_type(node_type_name)
@@ -214,7 +224,7 @@ fn get_existing_node_bounds(
         .nodes
         .values()
         .map(|node| {
-            let size = get_node_size(registry, &node.node_type_name);
+            let size = rendered_node_size(node, registry);
             (DVec2::new(node.position.x, node.position.y), size)
         })
         .collect()

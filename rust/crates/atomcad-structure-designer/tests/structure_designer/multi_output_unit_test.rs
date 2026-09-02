@@ -1370,6 +1370,7 @@ mod resolve_output_type_tests {
             body_height: atomcad_structure_designer::node_network::DEFAULT_BODY_HEIGHT,
             collapse_mode: atomcad_structure_designer::node_network::CollapseMode::Auto,
             function_pin_roles: std::collections::BTreeMap::new(),
+            hand_moved: false,
         }
     }
 

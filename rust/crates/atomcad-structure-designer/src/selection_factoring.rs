@@ -451,6 +451,7 @@ pub fn create_subnetwork_from_selection(
             body_height: old_node.body_height,
             collapse_mode: old_node.collapse_mode,
             function_pin_roles: old_node.function_pin_roles.clone(),
+            hand_moved: old_node.hand_moved,
         };
         new_network.nodes.insert(new_id, new_node);
 
@@ -505,6 +506,7 @@ pub fn create_subnetwork_from_selection(
             body_height: crate::node_network::DEFAULT_BODY_HEIGHT,
             collapse_mode: crate::node_network::CollapseMode::Auto,
             function_pin_roles: std::collections::BTreeMap::new(),
+            hand_moved: false,
         };
 
         new_network.nodes.insert(param_id, param_node);

@@ -28,15 +28,24 @@
 //! # Module Structure
 //!
 //! - `common.rs` - Shared utilities (depth computation, graph traversal)
+//! - `size.rs` - `rendered_node_size`, the one node-size function
+//! - `delta.rs` - `EditDelta` / `diff_scope`, the incremental pass's input
 //! - `topological_grid.rs` - Simple, reliable layered layout
 //! - `sugiyama.rs` - Sophisticated layout with crossing minimization
 
 pub mod common;
+pub mod delta;
+pub mod size;
 pub mod sugiyama;
 pub mod topological_grid;
 
 // Re-export main types and functions
 pub use common::LayoutAlgorithm;
+pub use delta::{
+    EditDelta, WireEnd, WireKey, WireSlot, collect_all_wires, diff_scope, node_ids_by_path,
+    scopes_inside_out,
+};
+pub use size::{rendered_body_size, rendered_node_size, rendered_node_size_by_id};
 
 use std::collections::HashMap;
 

@@ -321,6 +321,9 @@ pub fn build_closure_from_instance(
         body_height: DEFAULT_BODY_HEIGHT,
         collapse_mode: CollapseMode::default(),
         function_pin_roles: std::collections::BTreeMap::new(),
+        // The closure stands where the instance stood, so it inherits the
+        // instance's "a human put this here" status (D5).
+        hand_moved: instance.hand_moved,
     };
 
     // Derive C's `custom_node_type` (named zone-input pins + the single
@@ -923,6 +926,7 @@ fn add_parameter_node(
         body_height: DEFAULT_BODY_HEIGHT,
         collapse_mode: CollapseMode::Auto,
         function_pin_roles: std::collections::BTreeMap::new(),
+        hand_moved: false,
     };
     network.nodes.insert(param_id, node);
     param_id
