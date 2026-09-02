@@ -78,7 +78,10 @@ undoable, `#[serde(default)]`. A tiebreaker, never a hard constraint.
 **D6 — Exactly two motion primitives, one per axis.** The **horizontal
 half-plane shift** (rigid, global) and the **vertical cascade** (minimal,
 local). Placing a block, growing a node and repairing a backward wire all reduce
-to these two. The landed quadrant shift (`node_inlining::make_space_for_inline`)
+to these two. The shift takes a **fixed set**, the site's must-not-move nodes
+and their upstream closure, which it leaves in place; the cascade clears
+whatever the shift landed on them. The cascade repairs only overlaps it
+created. The landed quadrant shift (`node_inlining::make_space_for_inline`)
 is **retired on both the AI and the GUI paths**. See
 [The two motion primitives](#the-two-motion-primitives).
 
@@ -123,8 +126,11 @@ text format has no `body_width`, `body_height` or `collapse_mode`, so a
 `hand_moved`**, and the editor re-applies all of them on a name match. (This
 extends `design_hof_body_text_format.md` D8, which carries position only.)
 
-**D15 — A half-plane shift cuts inside a window and snaps left into whitespace
-within it.** An empty window means no shift. See [The window rule](#the-window-rule).
+**D15 — A half-plane shift line is placed by the window rule.** It starts at
+the site's default, never right of the leftmost must-move node, and snaps left
+into whitespace. Must-not-move nodes are excluded from the shift rather than
+bounding the line, so there is no empty-window case and a consumer sitting left
+of its input is moved past it. See [The window rule](#the-window-rule).
 
 ---
 
@@ -159,9 +165,15 @@ pub struct EditDelta {
     /// Present in both; rendered footprint grew in either axis (D13).
     pub grown: Vec<(u64, DVec2 /* old */, DVec2 /* new */)>,
     pub removed: Vec<u64>,
-    pub added_wires: Vec<WireKey>,   // keyed like `WireAnchor` (#427)
+    pub added_wires: Vec<WireKey>,
     pub removed_wires: Vec<WireKey>, // layout-inert, carried for faithfulness
 }
+
+/// A wire by the name paths of its endpoints: source path + output pin,
+/// destination path + the slot `WireAnchor` (#427) uses. Never by node id:
+/// `--replace` mints fresh ids, and an id-keyed diff would report every wire
+/// of the network as `added` and hand the whole drawing to Step 6.
+pub struct WireKey { /* … */ }
 ```
 
 Computed by `diff_scope(snapshot, scope, network)`, where the snapshot is the
@@ -180,9 +192,12 @@ different numbers naming the same body. Ids are resolved after the match.
 - **Cross-scope wires** — a zone input `$element`, a capture `^name`, an outer
   zone input `^$element`, and the body's `output` — appear in the delta and
   serve as anchors (Step 4) but are never repaired (Step 6).
-- **Name matching is total**: every node has a `custom_name` from creation. A
-  renamed node, or a legacy node without one, simply fails to match and is
-  `added`, which is always safe.
+- **Name matching is total**: every node has a `custom_name` from creation,
+  and `.cnnd` load assigns one to every legacy node that lacks it
+  (`serializable_to_node_network`, recursing into bodies), so a file whose
+  nodes carry no `custom_name` on disk (demolib is one) is fully named in
+  memory. A renamed node simply fails to match and is `added`, which is
+  always safe.
 
 ---
 
@@ -191,9 +206,22 @@ different numbers naming the same body. Ids are resolved after the match.
 Eight steps per scope, in order. Grown nodes are repaired **before** blocks are
 placed, so blocks see settled obstacles.
 
-### Step 1 — Remove
+Layout runs on the **post-edit** network: the `removed` nodes are already gone,
+and the `added` nodes already exist, sitting at the throwaway positions the
+editor gave them at creation (`calculate_new_node_position`; a matched node
+under `--replace` is back at its snapshot position). **An added node is
+invisible until its block is placed in Step 5** (a new comment until Step 7):
+it is not an obstacle, not a snap candidate, not part of the drawing's bbox,
+and neither primitive moves it. The obstacle set of a scope is its kept nodes
+plus the blocks placed so far; "placed node" below means a member of that set.
+Get this wrong and Step 2 pushes junk-positioned new nodes around while Step 5
+slides around phantoms.
 
-Delete the `removed` nodes and their wires. Nothing else (D4).
+### Step 1 — Take stock
+
+Nothing moves. The `removed` nodes are gone already and leave holes (D4); their
+only layout use is Step 8, where a comment whose anchor was removed is skipped.
+Build the obstacle set: the kept nodes.
 
 ### Step 2 — Repair grown nodes
 
@@ -245,7 +273,7 @@ x_max = min over d in D of (d.x - GAP - W)
 | `U` empty | `x = x_max` |
 | `D` empty | `x = x_min` |
 | `x_min ≤ x_max` | `x = x_min` |
-| `x_min > x_max` | **no room**: `shift_half_plane(T, x_min − x_max)` with `T` from the [window rule](#the-window-rule), window `(max u.x, min d.x]`; then `x = x_min`. Empty window ⇒ no shift, `x = x_min`, Step 5 handles overlap, the wire to that consumer stays backward. |
+| `x_min > x_max` | **no room**: `shift_half_plane(T, x_min − x_max, fixed = U ∪ upstream(U))` with `T` from the [window rule](#the-window-rule), default `x_min`, right end `min d.x`; then `x = x_min`. A consumer at or left of an input is moved past the block like any other; the input and its upstream closure stay. |
 
 **Vertical:** align by connections, `y_offset = mean over external wires of
 (anchor.y_center − internal.y_center_local)`. No anchors: below the drawing's
@@ -268,8 +296,9 @@ stored body size cascades into the parent, so candidates inside the stored size
 window is used only when none is free.
 
 **(5b) Push.** Otherwise place at the target `y` and run the
-[vertical cascade](#the-vertical-cascade) over `R`, direction per node by which
-side of `R`'s centre it lies on.
+[vertical cascade](#the-vertical-cascade) over `R` with empty `fixed` and
+`ignore` sets, direction per first-round node by which side of `R`'s centre it
+lies on.
 
 Simulated on both corpora (`scripts/layout_cascade_sim.py`: a node-sized rect
 dropped onto each node's position with that node removed from the obstacles):
@@ -285,9 +314,18 @@ dropped onto each node's position with that node removed from the obstacles):
 ### Step 6 — Repair new backward wires
 
 For each wire in `added_wires` with both endpoints kept and in this scope: if
-`source.x + width(source) + GAP > dest.x`, `shift_half_plane(T, deficit)` with
-window `(source.x, dest.x]`. Wires already backward before the edit are left
-alone; cross-scope wires are skipped.
+`source.x + width(source) + GAP > dest.x`,
+`shift_half_plane(T, deficit, fixed = {source} ∪ upstream(source))` with the
+window's right end at `dest.x`. This covers the genuinely backward wire, a
+destination **left** of its source, and not only a consumer crowding its
+producer: the destination and everything else at or right of `T` move right by
+the deficit while the source and its upstream closure stay, so the wire ends
+forward and no other wire flips (see [the primitive](#shift_half_planet-dx-fixed)).
+A plain half-plane shift could never do this, since it preserves x-order and
+any line at or left of the destination would carry the source along. The price
+is proportional to how far left the destination sat, the same widening any
+insertion costs. Wires already backward before the edit are left alone;
+cross-scope wires are skipped.
 
 ### Step 7 — New comment nodes
 
@@ -309,41 +347,64 @@ whose anchor moved right.
 
 ## The two motion primitives
 
-Both preserve order along their axis and neither can create an overlap.
+Both preserve order along their axis among the nodes they move, and a call to
+either ends with no overlap it did not inherit.
 
-### `shift_half_plane(x_threshold, dx)`
+### `shift_half_plane(T, dx, fixed)`
 
-Translate every node with `x ≥ x_threshold` right by `dx`. Rigid and global:
-alignment and gaps within the moved and the unmoved set are preserved exactly,
-and **a forward wire can never turn backward** (wires crossing the line only get
-longer). The drawing gets wider, which is the honest cost of inserting
-something. Used by Step 2 (via `grow_rect`), Step 4 and Step 6.
+Translate every placed node with `x ≥ T` right by `dx`, except the nodes in
+`fixed`. `fixed` is the site's must-not-move nodes together with their
+**upstream closure**, every node with a wire path into them. The closure is
+what keeps the shift wire-safe:
+
+- a wire from an unmoved node into a moved one only gets longer;
+- a wire from a moved node into a fixed one cannot exist: its source would be
+  upstream of a fixed node and therefore fixed itself;
+- wires between two moved nodes, or between two unmoved nodes, are unchanged.
+
+So **a forward wire never turns backward**, and alignment and gaps are
+preserved exactly within the moved set and within the unmoved set. The
+exclusion has one cost: a moved node can land on a fixed node that sits at or
+right of `T`. After the translation, each such fixed node is handed to the
+cascade as `R` (direction per intruder by which side of the fixed node it lies
+on, `ignore` = the nodes that already overlapped it before the shift), which
+pushes the intruders off vertically. Fixed nodes at or right of `T` are rare
+(an input whose consumer sat left of it), so this is usually a no-op. The
+drawing gets wider, which is the honest cost of inserting something. Used by
+Step 2 (via `grow_rect`), Step 4 and Step 6.
 
 ### The window rule
 
 A shift is safe at any threshold but not equally good at any: dropped at an
 arbitrary x it cuts through a loose column (half the nodes are within 8 px of
 another node's x). Each shift site has nodes that must move and nodes that
-must not, and they bound the line:
+must not. The latter go into `fixed`; the former bound the line on the right:
 
-| Site | Must not move | Must move | Window for `T` |
+| Site | Fixed (plus upstream closure) | Must move | Right end of window |
 |---|---|---|---|
-| Step 4, no room | every upstream anchor | every downstream anchor | `(max u.x, min d.x]` |
-| Step 2, `grow_rect` width | the grown node | everything right of its old right edge | `(node.x, old right edge]` |
-| Step 6, backward wire | the source | the destination | `(source.x, dest.x]` |
+| Step 4, no room | every upstream anchor | every downstream anchor | `min d.x` |
+| Step 2, `grow_rect` width | the grown node | everything right of its old right edge | the old right edge |
+| Step 6, backward wire | the source | the destination | `dest.x` |
 
 1. Start at the site's default (`x_min`, the old right edge, `dest.x`),
-   clamped to the window's right end. `x_min` can lie right of `min d.x` when a
+   clamped to the right end. `x_min` can lie right of `min d.x` when a
    consumer's left edge overlaps an input horizontally; clamping is what makes
    that consumer move.
-2. Snap **left, never right**: to the nearest x where no node's left edge is
-   within 8 px and no node box straddles the line. Left keeps every required
-   node moving; right would not. Keep the default if no gap exists within one
-   node width.
-3. Never leave the window: at or below an upstream anchor, the anchor moves
-   and `x_min` with it, and no room is created.
-4. Empty window (a consumer at or left of an input's left edge; a destination
-   at or left of its source) ⇒ no shift.
+2. Snap **left, never right**: to the nearest x where no placed node's left
+   edge is within 8 px and no placed **non-fixed** node's box straddles the
+   line. Left keeps every required node moving; right would not. A fixed node
+   still counts for the 8 px test (a line at its left edge would move its
+   column-mates and not it) but its box may be cut: it stays whichever side of
+   the line it is on, which is why the grown node's own box, or the source's,
+   cannot block the snap. Without that exclusion the snap could never enter
+   the box that spans the whole `grow_rect` window, and the default would
+   always be kept. Search at most one node width left of the default; keep the
+   default if no gap exists within it.
+3. There is no left bound and no empty case. Whatever `fixed` holds stays put
+   wherever the line falls, and the deficit was measured against those fixed
+   nodes, so any `T` at or left of the right end creates the room. A consumer
+   at or left of its input, or a destination at or left of its source, is
+   simply moved past it.
 
 Why the default is the left end of the useful range rather than `min d.x`: the
 nodes in the strip between `x_min` and the consumers are inside the column that
@@ -353,25 +414,49 @@ human would do, while leaving them to the cascade splits them from their row.
 ### The vertical cascade
 
 ```
-cascade(R, dir_of):
-    W ← nodes overlapping R in both axes, ordered by |y_center − R.y_center|
-    dir(n) ← dir_of(n) for n in W                 # up / down
-    while W not empty:
-        n ← pop W
-        push n by the minimum along dir(n) to clear its blocker
-            (R on the first round, else the node that enqueued it)
-        for every node m in the WHOLE network with x-overlap(n, m),
-            y-overlap(n, m) and m further along dir(n):
-                dir(m) ← dir(n); push m to clear n; enqueue m
+cascade(R, dir_of, fixed, ignore):
+    Q ← placed nodes overlapping R in both axes, not in fixed, not in ignore,
+        ascending id, each tagged dir(n) ← dir_of(n) and blocker ← R
+    while Q not empty:
+        (n, blocker) ← pop front
+        before ← n's rect
+        move n along dir(n) by the minimum (possibly zero) that clears blocker + GAP;
+            then, while n overlaps a fixed node it did not overlap at `before`,
+            move it further along dir(n) to clear that node too
+        for every placed m ∉ fixed, m ≠ n, ascending id, with x-overlap(n, m),
+            y-overlap(n, m) now and NO y-overlap(before, m):
+                dir(m) ← dir(n); push (m, blocker ← n) to the back of Q
 ```
 
-A vertical Force-Scan: only colliding nodes move, by the minimum, and the push
-propagates only through further collisions. It must test against every node,
-not a band: a pushed node can land on a node whose x-interval overlaps *its*
-but not `R`'s. It terminates (every enqueued node is strictly further along
-`dir`, nothing moves back) and preserves vertical order by construction. What
-stops it is vertical whitespace, which the simulation says arrives almost
-immediately. No cap is imposed; Phase 4 asserts a generous bound in tests.
+A vertical Force-Scan restricted to **new** overlaps: only colliding nodes
+move, by the minimum, and the push propagates only through collisions the
+cascade itself created. A pre-existing overlap, whether listed in `ignore` or
+between any two nodes that already overlapped, is never repaired, so a node
+that already sat on `R` is neither enqueued nor an obstacle to those that are.
+It must test against every placed node, not a band: a pushed node can land on
+a node whose x-interval overlaps *its* but not `R`'s.
+
+Why the enqueue test is "newly overlapped" and not "further along `dir`": a
+node that `n`'s move newly overlaps lies **entirely on the `dir` side of `n`'s
+previous rect** (it did not overlap that rect, and `n` moved toward it), so
+pushing it the same way keeps the pair in its original order whatever their
+centres say. A centre test misses a taller node, a comment or an expanded HOF,
+whose box `n` has entered but whose centre is still behind `n`'s, and leaves
+that overlap standing.
+
+Correctness, in three parts. (i) The up-set and the down-set never meet: a
+first-round down node has its centre below `R`'s, every node it newly
+overlaps lies below its old bottom, and so on down the chain, so every
+down-set node has its top below `R`'s centre; symmetrically every up-set node
+has its bottom above it, and no node can be both. (ii) It terminates: a node is
+pushed only by nodes that were originally entirely on its far side with an
+overlapping x-interval, a strict order, so each push sets the node to at most
+the longest-path bound over that order, every move is monotone along `dir`,
+and by induction over the order each node is pushed finitely often. (iii) At
+exit no node overlaps `R`, a fixed node, or any node it did not already
+overlap before the call. What stops it in practice is vertical whitespace,
+which the simulation says arrives almost immediately. No cap is imposed;
+Phase 4 asserts a generous bound in tests.
 
 ### `grow_rect`
 
@@ -380,16 +465,20 @@ immediately. No cap is imposed; Phase 4 asserts a generous bound in tests.
 fn grow_rect(network, registry, node_id, old: DVec2, new: DVec2) -> Vec<(u64, DVec2, DVec2)> {
     let anchor = node.position;
     let (dw, dh) = (max(0, new.x - old.x), max(0, new.y - old.y));
-    if dw > 0 { shift_half_plane(snap(anchor.x + old.x, window = (anchor.x, anchor.x + old.x]), dw); }
+    let fixed = {node_id} ∪ upstream(node_id);
+    if dw > 0 { shift_half_plane(snap(default = anchor.x + old.x, right_end = anchor.x + old.x), dw, fixed); }
     if dh > 0 { cascade(R = (anchor, new) inflated by GAP, dir_of = |_| down,
-                        excluding node_id and any node that already overlapped (anchor, old)); }
+                        fixed = {node_id}, ignore = nodes overlapping (anchor, old)); }
     diff positions
 }
 ```
 
 Horizontal first so the cascade sees post-shift positions. Pre-existing overlaps
-with the old rect are left alone, which is also what makes forcing `down`
-correct: after the shift every *new* collision lies below the old bottom edge.
+with the old rect go into `ignore`, which is also what makes forcing `down`
+correct: after the shift every *new* collision lies below the old bottom edge
+(a node left of the line that reaches into the widened strip already overlapped
+the old rect horizontally, so if it is new it is new in y, and the rect only
+grew downward).
 
 ### Why one primitive per axis
 
@@ -520,6 +609,78 @@ full reflow, also Phase 1: per-layer column width, and body-aware obstacles in
 
 ---
 
+## Testing
+
+The per-phase lists below are scenario catalogues. They are not the safety
+net; the invariants are, and every test asserts them mechanically.
+
+**The oracle.** One shared support module,
+`tests/structure_designer/layout_oracle.rs` (the `diff_test_support.rs`
+precedent), exposes `check(before, after, delta, fixed)` and is called by every
+layout test and by the corpus run. It walks every scope (`walk_all_nodes`) and
+asserts:
+
+1. **No new overlap:** the set of overlapping placed-node pairs after ⊆ before,
+   per scope, at `rendered_node_size`.
+2. **No wire flipped:** every wire forward before (source right edge + `GAP` ≤
+   dest x) is forward after; cross-scope wires excluded.
+3. **Untouched means untouched:** every node not in the delta and not in the
+   returned move list is at its exact pre-edit position, bit-identical.
+4. **Rigid shifts:** among nodes a `shift_half_plane` moved, pairwise offsets
+   are unchanged; `fixed` nodes did not move.
+5. **Order among the pushed:** for every x-overlapping pair the cascade moved,
+   the vertical order is the pre-edit order.
+6. **Bodies:** no negative coordinate; every HOF's rendered footprint contains
+   its body content plus padding; a body that did not grow past its stored
+   size left the parent's delta empty.
+7. **Determinism:** the run is repeated from the same input and compared
+   bit-identical (D7).
+8. **Bound:** no single cascade moved more than 20 nodes.
+
+A scenario test therefore states only what is *specific* to it (which node
+landed where, what moved) and gets the eight properties for free. If a
+property is expected to be violated, the test says so explicitly and why (the
+only known case: pre-existing overlaps, which invariant 1 already tolerates).
+
+**Corpus.** `demolib/baselib_with_demos.cnnd` is tracked and is the CI corpus;
+`from_mechadense.cnnd` is the maintainer's private file and runs only when
+`ATOMCAD_LAYOUT_CORPUS` names it. Both load through the real `.cnnd` loader
+(so names are total, see [the delta](#the-edit-delta)), not by parsing JSON.
+Two runs:
+
+- *Randomized edits*, `tests/structure_designer/layout_corpus_test.rs`: a
+  seeded generator applies, to every network with ≥ 2 nodes, each of: add one
+  node wired from a random kept node; add a 3-node chain between two random
+  kept nodes; grow a random node by a pin; add a node to a random body; rewire
+  a random consumer to a producer right of it; delete a random node; add an
+  anchored comment. Every edit goes through `ai_text_edit` and the oracle. A
+  failure prints the network name, seed and script so it can be pinned as a
+  scenario test.
+- *Moved-list snapshots*: for one fixed edit per demolib network, the
+  name-path keyed `LayoutOutcome.moved` list (the AI edit log's own
+  measurement, not test bookkeeping) is an `insta` snapshot. An algorithm
+  change then shows exactly which drawings it touched and `cargo insta review`
+  is the review. Positions themselves are not snapshotted; the oracle covers
+  them.
+
+**Flutter parity of the size function.** The Rust size fixture is not
+hand-copied numbers. A Dart test in `test/` (`flutter_test`, the existing
+`node_network_content_test.dart` style) loads
+`tests/fixtures/layout_size_parity.cnnd` through `ScopeResolver` and writes
+`tests/fixtures/layout_size_parity.json`: name path → rendered size, for a
+comment, an expanded HOF, a collapsed HOF, a closure and a two-level nested
+HOF. The JSON is checked in; the Rust test reads it and asserts
+`rendered_node_size` equal to the pixel. Regenerating the JSON is the Dart
+test's job, so a Flutter-side size change fails the Rust test until the
+fixture is refreshed, which is the point.
+
+**What stays manual.** Anything that needs the rendered canvas: the
+walkthrough in Phase 5, run by the maintainer
+(`feedback_manual_test_for_editor_ui`; the Flutter smoke test is never run by
+an agent).
+
+---
+
 ## Phases
 
 ### Phase 1 — Foundations
@@ -527,9 +688,11 @@ full reflow, also Phase 1: per-layer column width, and body-aware obstacles in
 callers; per-layer column width in Sugiyama. `Node.hand_moved`, set from the
 scope-aware drag path. The identity snapshot extended per D14 and re-applied on
 a name match. The `find_connected_components` seed sorted (D7). `diff_scope`
-producing per-scope `EditDelta`s, tested but not wired.
+producing per-scope `EditDelta`s, tested but not wired. The
+[oracle](#testing) module and the parity fixture pipeline, so every later
+phase's tests have them from the start.
 
-*Tests:* the size fixture; a 320-wide HOF in a Sugiyama layer no longer overlaps
+*Tests:* the size fixture against the Dart-generated JSON; a 320-wide HOF in a Sugiyama layer no longer overlaps
 the next column; delta classifies add / grow / remove / rewire; a value-only
 change gives an empty delta; shrinking an array pin or putting a literal on a
 wired pin yields `removed_wires` and no `grown`; unwiring `f:` on an Auto-mode
@@ -551,11 +714,16 @@ below; height-only growth pushes only colliding nodes, by the minimum; the
 quadrant shift's right-moved / down-moved overlap does not occur; a node that
 already overlapped the old rect is left alone; the cascade terminates on a
 dense column and reaches a node whose x-interval overlaps a pushed node but not
-`R`; a forward wire crossing the line stays forward; a loose column straddling
-the default threshold (`T − 3`, `T + 3`) moves as a whole; a snap never lands
-at or below the grown node's x; the default is kept when the nearest gap is
-over a node width away; cases A / B / C reflow tests pass with new
-expectations and single-step undo/redo unchanged.
+`R`; a short node pushed into a taller comment's box pushes the comment too,
+whatever the centres say; a pushed node that reaches a fixed node clears it;
+the up-set and the down-set never touch; a pre-existing overlap is neither
+repaired nor an obstacle; a forward wire crossing the line stays forward; a
+loose column straddling the default threshold (`T − 3`, `T + 3`) moves as a
+whole; a snap into the grown node's own box is accepted and moves nothing of
+the grown node; an input of the grown node sitting right of the line stays
+(upstream closure) and the node that lands on it is pushed off; the default
+is kept when the nearest gap is over a node width away; cases A / B / C reflow
+tests pass with new expectations and single-step undo/redo unchanged.
 
 ### Phase 3 — Block layout and placement
 `layout_subgraph`, blocks, anchors including the synthesized body anchors,
@@ -566,7 +734,9 @@ connected addition is placed as one block and nothing moves; an anchorless
 addition goes right of the drawing; a block needing a new column shifts the
 half-plane and nothing reorders; a consumer whose left edge overlaps an input
 is still moved (threshold clamped); a consumer at or left of an input's left
-edge produces no shift and no input moves; an uncollided comment stays at its
+edge is moved right past the block while the input and its upstream chain
+stay; a new node dropped by `calculate_new_node_position` onto a kept node
+moves nothing before its block is placed; an uncollided comment stays at its
 exact position whichever side of its anchor it is on; a `$element → mul →
 output` body lays out left to right and does not grow a default body; a node
 added to a body with slack leaves the parent's delta empty; a node added to a
@@ -578,8 +748,12 @@ a negative coordinate.
 ### Phase 4 — Repair passes and tiebreakers
 Steps 6, 7, 8 and the `hand_moved` tiebreakers.
 
-*Tests:* a backward rewire shifts the half-plane; an already-backward wire is
-untouched; a cross-scope wire is never repaired; removing a wire moves nothing;
+*Tests:* a rewire whose destination sits left of its source moves the
+destination (and what lies right of it) past the source while the source's
+upstream chain stays, and no other wire flips; a rewire within one loose
+column widens the gap; a `--replace` of an unchanged script classifies no wire
+as added; an already-backward wire is untouched; a cross-scope wire is never
+repaired; removing a wire moves nothing;
 a 400×300 comment is pushed by the minimum and never overlapped; a comment left
 behind by a shift is pulled back to its exact offset, one whose spot is taken
 stays, one that drifted closer is not moved, one with an unresolvable anchor is
@@ -592,11 +766,12 @@ Replace the `layout_network` call in `ai_text_edit`, producing
 Auto-Layout menu item. Reference guide: `doc/reference_guide/node_networks.md`
 and `doc/reference_guide/ui.md`.
 
-*Tests:* end-to-end through `ai_text_edit`; a corpus regression on both
-corpora (a synthetic edit to one network; every node outside the delta and the
-pushed band is at its exact position, bodies included; no loose column of
-demolib split); a `query` → `edit --replace` round-trip of a body-bearing
-network moves nothing; a full reflow with an expanded HOF produces no overlap.
+*Tests:* end-to-end through `ai_text_edit`; the randomized corpus run and the
+moved-list snapshots of [Testing](#testing) switched on (demolib in CI, the
+working file behind the env var), plus one hand-checked demolib case where a
+loose column straddles the shift line and is asserted to move as a whole; a
+`query` → `edit --replace` round-trip of a body-bearing network moves
+nothing; a full reflow with an expanded HOF produces no overlap.
 
 *Manual verification* (`feedback_manual_test_for_editor_ui`): AI-add a node in
 a dense region; AI-add a subassembly; AI-add a node inside a `map` body and
@@ -605,7 +780,7 @@ hole stays; drag a node then AI-edit near it; collapse an HOF, round-trip via
 `--replace`, confirm it stays collapsed; full reflow and undo.
 
 ### Phase 6 (later)
-Downstream-cone shifting instead of half-plane. Hole reuse. A partial-move
+Downstream-cone shifting where the half-plane moves too much. Hole reuse. A partial-move
 fallback in Step 8. `grow_rect` on the zone-resize drag (`set_zone_size`).
 
 ---
