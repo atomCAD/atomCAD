@@ -196,6 +196,11 @@ Two things the editor must keep doing:
   none and `create_node` synthesizes one — so the only way one survives is the
   Pass 0 snapshot, which must be taken *ahead of* `clear_network`. Without it,
   every `--replace` scrambles the layout of everything inside every body.
+  That snapshot is the **public** `snapshot_node_positions`, not a private
+  method: `ai_edit_log` measures what layout did to a drawing against exactly
+  this identity match (`doc/design_ai_edit_history.md` D9), and two path-keyed
+  walks would drift. Keep it shared, and keep the key a `NamePath` — an id
+  matches nothing across a `--replace`, and a bare name collides across scopes.
 - **A statement's properties are applied before its body block.** A `closure`'s
   zone-input *names* are its own `params:`, which the same statement may be
   setting — so `$x` cannot bind until they are in place. This is structural

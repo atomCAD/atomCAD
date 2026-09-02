@@ -64,6 +64,8 @@ structure_designer/
 ├── navigation_history.rs      # Back/forward network navigation
 ├── common_constants.rs        # Shared constants
 ├── preferences.rs             # User preferences persistence
+├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
+├── ai_edit_log.rs             # Session log of AI edits (runtime-only, never in .cnnd)
 ├── cli_runner.rs              # CLI batch execution mode
 ├── node_networks_import_manager.rs # Import networks from .cnnd libraries
 ├── undo/                      # Undo/redo system (command pattern)
@@ -222,6 +224,46 @@ Body errors land on `body.validation_errors` with `node_id == Some(body_internal
 The exceptions — places where a single-frame walk is intentional — are selection state, layout/sugiyama positioning, per-network camera, text-format editing of the active network, and similar UI-frame bookkeeping. When in doubt, prefer the helper.
 
 Design docs: `doc/design_zones.md` (Rust side, phases 1–6) and `doc/design_zones_ui.md` (Flutter side, phases U1–U7).
+
+## The AI edit choke point
+
+Every AI edit — the HTTP server's `/edit`, the CLI REPL's `edit` / `replace`,
+any future direct FFI caller — funnels through
+**`StructureDesigner::ai_text_edit`** (`ai_text_edit.rs`). The api function
+`ai_edit_network` is a thin wrapper: it calls this, then refreshes the scene and
+serializes the `EditResult` to JSON. Keep it that way — the orchestration is
+domain work, and up in `api/` it would only be reachable through the
+`CAD_INSTANCE` global, which is to say untestable.
+
+One call is **one undo step** (`AI_EDIT_COMMAND_DESCRIPTION`, i.e. `"AI edit
+network"`) and **one entry in `StructureDesigner::ai_edit_log`**
+(`doc/design_ai_edit_history.md`). Two things to know before touching it:
+
+- **All three rejection paths log too** — no active network, CLI write lock,
+  network not found. A rejected edit is the feedback the log most exists to
+  surface. Their records carry empty snapshots, which is also what keeps them
+  out of divergence detection at both ends.
+- **Two verdicts, never one.** `applied` is the editor's own ("the statements
+  parsed and landed"); `success` folds in a *whole-network* validation verdict,
+  so an already-broken network makes every later edit report `success: false`
+  however clean it was. Anything gating on "did the edit work" wants `applied`.
+
+The log is runtime-only, like `print_log`: never serialized to `.cnnd`, no undo
+command, and undo never rewrites it — an entry that was later undone is still a
+thing that happened. Divergence between entries is detected by **one string
+comparison** (this entry's `before_text` against the previous entry's
+`after_text`, per network), which is what catches GUI edits, loads, renames and
+`node-policy` changes without instrumenting any of them. Don't add a second
+detection mechanism; `StructureDesigner::undo`/`redo` only *annotate* it, via
+`AiEditLog::note_ai_edit_undo`, so the marker can say "edit #N undone".
+
+**Node identity across an edit is a name *path*, and there is one walk for it:**
+`text_format::snapshot_node_positions`, shared by `NetworkEditor`'s Pass 0 and
+by the log's layout measurement. Never key positions by node id (`--replace`
+mints fresh ids for everything) and never by a bare name (body names are unique
+per scope only, so `m1/d` and `m2/d` would collide). A second implementation
+would drift, and the measurement is only meaningful keyed identically to the
+identity match it measures.
 
 ## Validation errors: blocking vs non-blocking vs interface
 

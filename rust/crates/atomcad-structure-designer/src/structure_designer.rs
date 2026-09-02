@@ -1,3 +1,4 @@
+use super::ai_edit_log::{AI_EDIT_COMMAND_DESCRIPTION, AiEditLog, AiEditRecord};
 use super::camera_settings::CameraSettings;
 use super::eval_errors::{EvalErrorEntry, harvest_eval_errors};
 use super::evaluator::network_evaluator::{
@@ -236,6 +237,14 @@ pub struct StructureDesigner {
     // (Phase 4 — Console panel).
     pub print_log: Vec<PrintLogEntry>,
 
+    // Session log of AI edits (`doc/design_ai_edit_history.md` Phase 1).
+    // Runtime-only, like `print_log` above and for the same reason: it is a
+    // record of what the AI did during this session, not document state, so it
+    // is never serialized to `.cnnd` and takes no undo command (D10, D6).
+    // Written only through `record_ai_edit`, which is where the divergence
+    // flags are derived.
+    pub ai_edit_log: AiEditLog,
+
     // Last-known evaluation-error snapshot per network, keyed by network name
     // (error-management Phase 4, `doc/design_error_management.md` D6).
     // Runtime-only — never serialized. The active network's entry is replaced
@@ -379,6 +388,7 @@ impl StructureDesigner {
             direct_editing_mode: true,
             cli_access_rules: HashMap::new(),
             print_log: Vec::new(),
+            ai_edit_log: AiEditLog::new(),
             eval_error_snapshots: HashMap::new(),
             pending_load_param_id_repairs: Vec::new(),
             refresh_profiles: RefreshProfileHistory::new(),
@@ -912,8 +922,23 @@ impl StructureDesigner {
 
     // --- Undo/Redo ---
 
+    /// Append one entry to the session's AI edit log
+    /// (`doc/design_ai_edit_history.md` Phase 1). The single write path, so
+    /// the divergence flags are derived in exactly one place (D7).
+    pub fn record_ai_edit(&mut self, record: AiEditRecord) {
+        self.ai_edit_log.push(record);
+    }
+
     /// Undo the last command. Returns true if an undo was performed.
     pub fn undo(&mut self) -> bool {
+        // An undo of an AI edit is now the likeliest source of the divergence
+        // the next log entry will detect, and the marker should say so rather
+        // than report an unknown outside change (D7). Read *before* the undo,
+        // because `undo_description` names the command the cursor is about to
+        // step back over.
+        let undoing_ai_edit =
+            self.undo_stack.undo_description() == Some(AI_EDIT_COMMAND_DESCRIPTION);
+
         // Temporarily take the undo stack to avoid borrow conflict
         let mut stack = std::mem::take(&mut self.undo_stack);
         let result = stack.undo(&mut UndoContext {
@@ -925,6 +950,9 @@ impl StructureDesigner {
         self.undo_stack = stack;
 
         if let Some(refresh_mode) = result {
+            if undoing_ai_edit {
+                self.ai_edit_log.note_ai_edit_undo();
+            }
             self.apply_undo_refresh_mode(refresh_mode);
             // The picked atom of the Guideline tool may have moved/vanished;
             // auto-unpick to avoid a stale constrained-drag state (#368).
@@ -937,6 +965,11 @@ impl StructureDesigner {
 
     /// Redo the last undone command. Returns true if a redo was performed.
     pub fn redo(&mut self) -> bool {
+        // Same reasoning as in `undo`: a redo of an AI edit also explains the
+        // gap the next log entry will see (D7).
+        let redoing_ai_edit =
+            self.undo_stack.redo_description() == Some(AI_EDIT_COMMAND_DESCRIPTION);
+
         let mut stack = std::mem::take(&mut self.undo_stack);
         let result = stack.redo(&mut UndoContext {
             node_type_registry: &mut self.node_type_registry,
@@ -947,6 +980,9 @@ impl StructureDesigner {
         self.undo_stack = stack;
 
         if let Some(refresh_mode) = result {
+            if redoing_ai_edit {
+                self.ai_edit_log.note_ai_edit_undo();
+            }
             self.apply_undo_refresh_mode(refresh_mode);
             // The picked atom of the Guideline tool may have moved/vanished;
             // auto-unpick to avoid a stale constrained-drag state (#368).

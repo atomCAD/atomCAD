@@ -68,7 +68,49 @@ type ScopePath = Vec<u64>;
 /// The same chain spelled by node *name*. Identity across an edit is
 /// name-keyed (D8), and a name path is the only form of it that survives
 /// `clear_network` — node ids do not.
-type NamePath = Vec<String>;
+pub type NamePath = Vec<String>;
+
+/// `(name path) → position` over a whole network, bodies included. The one
+/// identity map two designs share — see [`snapshot_node_positions`].
+pub type PositionSnapshot = HashMap<NamePath, DVec2>;
+
+/// Record `(name path) → position` for every node in `network`, including
+/// every node nested in a zone body at any depth.
+///
+/// This is the only form of a node's identity that survives an edit. The text
+/// format does not carry positions — the serializer emits none and the editor
+/// synthesizes one for every node it creates — so without carrying them
+/// across, a whole-body assign (and every `--replace`) would throw the layout
+/// away (D8 of `doc/design_hof_body_text_format.md`).
+///
+/// Keyed by *name path*, never by id and never by a bare name.
+/// `clear_network` deletes every node before the first statement is processed
+/// and does not reset `next_node_id`, so a `--replace` mints fresh ids and an
+/// id-keyed map matches nothing; and a bare name collides across scopes, since
+/// names are unique *per scope* only — `m1/d` and `m2/d` are different nodes.
+///
+/// Shared deliberately: `doc/design_ai_edit_history.md` D9 measures layout
+/// against exactly the identity match [`NetworkEditor`] performs, and two
+/// implementations of the same key would drift.
+pub fn snapshot_node_positions(network: &NodeNetwork) -> PositionSnapshot {
+    fn walk(network: &NodeNetwork, prefix: &mut NamePath, out: &mut PositionSnapshot) {
+        for node in network.nodes.values() {
+            let Some(name) = node.custom_name.as_ref() else {
+                continue;
+            };
+            prefix.push(name.clone());
+            out.insert(prefix.clone(), node.position);
+            if let Some(body) = node.zone.as_deref() {
+                walk(body, prefix, out);
+            }
+            prefix.pop();
+        }
+    }
+    let mut prefix = Vec::new();
+    let mut out = HashMap::new();
+    walk(network, &mut prefix, &mut out);
+    out
+}
 
 /// The separator between the scopes of a node's path, in messages and in
 /// `EditResult` (D10). `/`, not `.`, because `.` already means pin access.
@@ -283,7 +325,7 @@ pub struct NetworkEditor<'a> {
     /// `delete` / `output` statements, in source order.
     deferred: Vec<DeferredOp>,
     /// Pre-edit `(name path) → position`, taken in Pass 0 (D8).
-    positions: HashMap<NamePath, DVec2>,
+    positions: PositionSnapshot,
     /// Result tracking
     result: EditResult,
 }
@@ -363,37 +405,11 @@ impl<'a> NetworkEditor<'a> {
     // Pass 0: the identity snapshot
     // ------------------------------------------------------------------
 
-    /// Record `(name path) → position` for every node in the network,
-    /// including every node nested in a zone body at any depth (D8).
-    ///
-    /// This is the only way a position survives an edit. The text format does
-    /// not carry positions — the serializer emits none and the editor
-    /// synthesizes one for every node it creates — so without carrying them
-    /// across, a whole-body assign (and every `--replace`) would throw the
-    /// layout away. Keyed by *name*, not id, because `clear_network` deletes
-    /// every node before the first statement is processed.
+    /// Take the pre-edit identity snapshot (D8) via the shared walk, which
+    /// `doc/design_ai_edit_history.md` D9 reuses so its layout measurement is
+    /// keyed identically to the match performed here.
     fn snapshot_positions(&mut self) {
-        fn walk(
-            network: &NodeNetwork,
-            prefix: &mut Vec<String>,
-            out: &mut HashMap<NamePath, DVec2>,
-        ) {
-            for node in network.nodes.values() {
-                let Some(name) = node.custom_name.as_ref() else {
-                    continue;
-                };
-                prefix.push(name.clone());
-                out.insert(prefix.clone(), node.position);
-                if let Some(body) = node.zone.as_deref() {
-                    walk(body, prefix, out);
-                }
-                prefix.pop();
-            }
-        }
-        let mut prefix = Vec::new();
-        let mut out = HashMap::new();
-        walk(self.network, &mut prefix, &mut out);
-        self.positions = out;
+        self.positions = snapshot_node_positions(self.network);
     }
 
     /// Clear the entire network (for replace mode).

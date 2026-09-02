@@ -20,6 +20,8 @@
 //!   has to be visible to Dart, keep the authoritative definition here and a
 //!   same-named twin in `api/` with `From` impls (D9a).
 
+pub mod ai_edit_log;
+pub mod ai_text_edit;
 pub mod camera_settings;
 pub mod canonicalize;
 pub mod canvas_viewport;

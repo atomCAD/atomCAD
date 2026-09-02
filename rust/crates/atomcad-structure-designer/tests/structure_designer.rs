@@ -299,6 +299,12 @@ mod materialize_regions_test;
 #[path = "structure_designer/phase_transitions_test.rs"]
 mod phase_transitions_test;
 
+#[path = "structure_designer/ai_edit_history_test.rs"]
+mod ai_edit_history_test;
+
+#[path = "structure_designer/ai_edit_log_test.rs"]
+mod ai_edit_log_test;
+
 #[path = "structure_designer/alignment_test.rs"]
 mod alignment_test;
 

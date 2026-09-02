@@ -46,7 +46,9 @@ mod parser;
 mod serializer;
 mod text_value;
 
-pub use network_editor::{EditResult, NetworkEditor, edit_network};
+pub use network_editor::{
+    EditResult, NamePath, NetworkEditor, PositionSnapshot, edit_network, snapshot_node_positions,
+};
 pub use network_serializer::{NetworkSerializer, serialize_network};
 pub use node_type_introspection::{describe_node_type, get_display_summary, truncate_description};
 pub use parser::{Lexer, ParseError, Parser, PropertyValue, Statement, Token, TokenInfo};
