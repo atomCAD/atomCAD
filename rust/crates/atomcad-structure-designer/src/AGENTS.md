@@ -67,6 +67,7 @@ structure_designer/
 ├── ai_text_edit.rs            # ai_text_edit: the AI edit choke point (edit → validate → layout → log → undo)
 ├── ai_edit_log.rs             # Session log of AI edits (runtime-only, never in .cnnd)
 ├── ai_edit_diff.rs            # Diffs two AI text-format snapshots (By node / Text)
+├── ai_edit_export.rs          # Renders the AI edit log as JSON (canonical) / Markdown (readable)
 ├── cli_runner.rs              # CLI batch execution mode
 ├── node_networks_import_manager.rs # Import networks from .cnnd libraries
 ├── undo/                      # Undo/redo system (command pattern)

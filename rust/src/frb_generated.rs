@@ -14918,6 +14918,7 @@ impl SseDecode
 2 => crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::StructureImport,
 3 => crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::StructureExport,
 4 => crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::NetworkImage,
+5 => crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::AiHistory,
             _ => unreachable!("Invalid variant for APIFileDialogPurpose: {}", inner),
         };
     }
@@ -22317,6 +22318,7 @@ impl flutter_rust_bridge::IntoDart
             Self::StructureImport => 2.into_dart(),
             Self::StructureExport => 3.into_dart(),
             Self::NetworkImage => 4.into_dart(),
+            Self::AiHistory => 5.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -27514,6 +27516,7 @@ crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpo
 crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::StructureImport => { 2 }
 crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::StructureExport => { 3 }
 crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::NetworkImage => { 4 }
+crate::api::structure_designer::structure_designer_api_types::APIFileDialogPurpose::AiHistory => { 5 }
  _ => { unimplemented!(""); }}, serializer);
     }
 }

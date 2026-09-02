@@ -649,6 +649,32 @@ node's body are never re-laid-out, so a body node that moved was placed there
 when it was created. *No layout pass* together with a non-empty list of moved
 nodes is therefore correct rather than contradictory.
 
+### Keeping a session: the toolbar
+
+The log lives in memory only, so when the application closes it is gone. The
+panel header is where you keep one.
+
+- **The session label** — a free-text field ("Opus 5 / skill v3"). The
+  application has no way to know which model is driving the CLI, so it asks;
+  whatever you type here is stamped into every export. It is what makes a folder
+  of exported sessions comparable rather than a pile of anonymous files.
+- **Export** (the download icon) writes the whole log to a file, in one of two
+  forms:
+  - **JSON** is the canonical one. Every field of every entry, including both
+    text snapshots, so an export can be diffed, machine-compared across sessions
+    and models, or fed back to `edit --replace` an entry at a time.
+  - **Markdown** is the readable one, for pasting a session into a conversation
+    about the prompt that produced it. It carries the verdicts, the counts, the
+    layout numbers, the errors and warnings and the submitted script — but not
+    the snapshots, which are what would make the message unreadable.
+- **Clear** (the bin icon) discards every entry. It asks first, because there is
+  no way back: the log is not written anywhere and undo does not restore it.
+  Sequence numbers keep counting across a clear, so `#41` still means the
+  forty-second edit of the session and two exports taken either side of a clear
+  cannot be confused for each other.
+
+Both buttons are greyed while the log is empty.
+
 ### When a snapshot is untrustworthy
 
 If a network contains a wire cycle, the text serializer stops at it, so the

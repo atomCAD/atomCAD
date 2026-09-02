@@ -7,7 +7,7 @@ import '../../frb_generated.dart';
 import '../common_api_types.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `build`, `record_to_json`, `record_to_markdown`
+// These functions are ignored because they are not marked as `pub`: `build`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 /// Bumped on every push, on `clear`, and on a session-label change.
@@ -37,11 +37,17 @@ APIAiDiff? aiHistoryDiff({required BigInt seq, required bool byNode}) =>
 /// The whole session as JSON — the canonical export form, machine-comparable
 /// across sessions and models (D10). The caller writes it through the standard
 /// file-save path so it picks up the last-directory behaviour.
+///
+/// The formatting itself lives in
+/// [`atomcad_structure_designer::ai_edit_export`]: the log is domain state, and
+/// a formatter reachable only through the global `CAD_INSTANCE` could not be
+/// tested.
 String aiHistoryExportJson() => RustLib.instance.api
     .crateApiStructureDesignerAiHistoryApiAiHistoryExportJson();
 
 /// The whole session as Markdown — a convenience for pasting into a
-/// skill-refinement conversation, where JSON would be unreadable.
+/// skill-refinement conversation, where JSON would be unreadable. Omits the
+/// snapshots for the same reason.
 String aiHistoryExportMarkdown() => RustLib.instance.api
     .crateApiStructureDesignerAiHistoryApiAiHistoryExportMarkdown();
 

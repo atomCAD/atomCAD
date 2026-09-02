@@ -255,6 +255,17 @@ their use sites: a row carries **two verdicts** (`applied` is the AI's own,
 ordinary), and `LayoutPath.none` **does not** mean nothing moved (body nodes are
 placed at creation time rather than reflowed).
 
+- **the session-label field is deliberately un-notified.** `setAiHistorySessionLabel`
+  updates the model and the kernel without `notifyListeners()`: the field is the
+  source of the value and already shows it, so a rebuild per keystroke would
+  only fight the caret. It does resync `_aiHistoryVersion`, because the kernel
+  bumps the log version on a label change and the panel must not read that as an
+  edit arriving.
+
+Export (`ai_history_export.dart`) is the reason the log is worth keeping at all
+— it is memory-only, so an unexported session dies with the process. It goes
+through `file_dialog_directory.dart` like every other file dialog.
+
 ## node_networks_list/ Subdirectory
 
 Unified user-types panel — lists both node networks and record type defs:

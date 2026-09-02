@@ -302,6 +302,9 @@ mod phase_transitions_test;
 #[path = "structure_designer/ai_edit_diff_test.rs"]
 mod ai_edit_diff_test;
 
+#[path = "structure_designer/ai_edit_export_test.rs"]
+mod ai_edit_export_test;
+
 #[path = "structure_designer/ai_edit_history_test.rs"]
 mod ai_edit_history_test;
 

@@ -2379,6 +2379,7 @@ pub enum APIFileDialogPurpose {
     StructureImport,
     StructureExport,
     NetworkImage,
+    AiHistory,
 }
 
 impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
@@ -2389,6 +2390,7 @@ impl From<APIFileDialogPurpose> for DomainFileDialogPurpose {
             APIFileDialogPurpose::StructureImport => DomainFileDialogPurpose::StructureImport,
             APIFileDialogPurpose::StructureExport => DomainFileDialogPurpose::StructureExport,
             APIFileDialogPurpose::NetworkImage => DomainFileDialogPurpose::NetworkImage,
+            APIFileDialogPurpose::AiHistory => DomainFileDialogPurpose::AiHistory,
         }
     }
 }
@@ -2401,6 +2403,7 @@ impl From<DomainFileDialogPurpose> for APIFileDialogPurpose {
             DomainFileDialogPurpose::StructureImport => APIFileDialogPurpose::StructureImport,
             DomainFileDialogPurpose::StructureExport => APIFileDialogPurpose::StructureExport,
             DomainFileDialogPurpose::NetworkImage => APIFileDialogPurpose::NetworkImage,
+            DomainFileDialogPurpose::AiHistory => APIFileDialogPurpose::AiHistory,
         }
     }
 }

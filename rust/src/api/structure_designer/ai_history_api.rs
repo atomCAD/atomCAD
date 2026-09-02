@@ -28,6 +28,7 @@ use crate::api::common_api_types::APIVec2;
 use atomcad_structure_designer::ai_edit_diff::{
     AiDiff, DiffHunk, DiffHunkKind, DiffLine, DiffLineTag, diff_by_node, diff_text,
 };
+use atomcad_structure_designer::ai_edit_export::{export_json, export_markdown};
 use atomcad_structure_designer::ai_edit_log::{
     AiEditRecord, DeltaCounts, LayoutOutcome, LayoutPath, MovedNode,
 };
@@ -445,140 +446,32 @@ pub fn ai_history_diff(seq: u64, by_node: bool) -> Option<APIAiDiff> {
 /// The whole session as JSON — the canonical export form, machine-comparable
 /// across sessions and models (D10). The caller writes it through the standard
 /// file-save path so it picks up the last-directory behaviour.
+///
+/// The formatting itself lives in
+/// [`atomcad_structure_designer::ai_edit_export`]: the log is domain state, and
+/// a formatter reachable only through the global `CAD_INSTANCE` could not be
+/// tested.
 #[flutter_rust_bridge::frb(sync)]
 pub fn ai_history_export_json() -> String {
     unsafe {
         with_cad_instance_or(
-            |cad_instance| {
-                let log = &cad_instance.structure_designer.ai_edit_log;
-                let entries: Vec<serde_json::Value> = log.records().map(record_to_json).collect();
-                let document = serde_json::json!({
-                    "format": "atomcad-ai-edit-history",
-                    "version": 1,
-                    "session_label": log.session_label(),
-                    "entry_count": entries.len(),
-                    "entries": entries,
-                });
-                serde_json::to_string_pretty(&document)
-                    .unwrap_or_else(|error| format!("{{\"error\": \"{}\"}}", error))
-            },
+            |cad_instance| export_json(&cad_instance.structure_designer.ai_edit_log),
             String::new(),
         )
     }
 }
 
-fn record_to_json(record: &AiEditRecord) -> serde_json::Value {
-    serde_json::json!({
-        "seq": record.seq,
-        "timestamp_ms": record.timestamp_ms,
-        "network_name": record.network_name,
-        "replace": record.replace,
-        "code": record.code,
-        "applied": record.applied,
-        "success": record.success,
-        "nodes_created": record.nodes_created,
-        "nodes_updated": record.nodes_updated,
-        "nodes_deleted": record.nodes_deleted,
-        "connections_made": record.connections_made,
-        "description_set": record.description_set,
-        "summary_set": record.summary_set,
-        "output_set": record.output_set,
-        "errors": record.errors,
-        "warnings": record.warnings,
-        "before_text": record.before_text,
-        "after_text": record.after_text,
-        "before_complete": record.before_complete,
-        "after_complete": record.after_complete,
-        "diverged": record.diverged,
-        "diverged_by_undo": record.diverged_by_undo,
-        "layout": {
-            "path": match record.layout.path {
-                LayoutPath::None => "none",
-                LayoutPath::FullReflow => "full_reflow",
-                LayoutPath::Incremental => "incremental",
-            },
-            "node_count": record.layout.node_count,
-            "max_displacement": record.layout.max_displacement,
-            "moved": record.layout.moved.iter().map(|moved| serde_json::json!({
-                "path": moved.path_string(),
-                "before": [moved.before.x, moved.before.y],
-                "after": [moved.after.x, moved.after.y],
-                "displacement": moved.displacement(),
-            })).collect::<Vec<_>>(),
-        },
-    })
-}
-
 /// The whole session as Markdown — a convenience for pasting into a
-/// skill-refinement conversation, where JSON would be unreadable.
+/// skill-refinement conversation, where JSON would be unreadable. Omits the
+/// snapshots for the same reason.
 #[flutter_rust_bridge::frb(sync)]
 pub fn ai_history_export_markdown() -> String {
     unsafe {
         with_cad_instance_or(
-            |cad_instance| {
-                let log = &cad_instance.structure_designer.ai_edit_log;
-                let mut out = String::from("# AI edit history\n\n");
-                if !log.session_label().is_empty() {
-                    out.push_str(&format!("**Session:** {}\n\n", log.session_label()));
-                }
-                out.push_str(&format!("**Entries:** {}\n", log.len()));
-                for record in log.records() {
-                    out.push_str(&record_to_markdown(record));
-                }
-                out
-            },
+            |cad_instance| export_markdown(&cad_instance.structure_designer.ai_edit_log),
             String::new(),
         )
     }
-}
-
-fn record_to_markdown(record: &AiEditRecord) -> String {
-    let mut out = format!(
-        "\n---\n\n## #{} — {}{}\n\n",
-        record.seq,
-        if record.network_name.is_empty() {
-            "(no active network)"
-        } else {
-            &record.network_name
-        },
-        if record.replace { " (replace)" } else { "" }
-    );
-    out.push_str(&format!(
-        "- applied: {} | validates: {}\n",
-        record.applied, record.success
-    ));
-    out.push_str(&format!(
-        "- created {} | updated {} | deleted {} | connections {}\n",
-        record.nodes_created.len(),
-        record.nodes_updated.len(),
-        record.nodes_deleted.len(),
-        record.connections_made.len()
-    ));
-    if record.diverged {
-        out.push_str(if record.diverged_by_undo {
-            "- diverged: an AI edit was undone before this one\n"
-        } else {
-            "- diverged: the network changed outside `edit` before this one\n"
-        });
-    }
-    if !record.before_complete || !record.after_complete {
-        out.push_str("- **incomplete snapshot** (the serializer aborted on a wire cycle)\n");
-    }
-    out.push_str(&format!(
-        "- layout: {:?}, {} of {} nodes moved, max displacement {:.1}\n",
-        record.layout.path,
-        record.layout.moved.len(),
-        record.layout.node_count,
-        record.layout.max_displacement
-    ));
-    for error in &record.errors {
-        out.push_str(&format!("- error: {}\n", error));
-    }
-    for warning in &record.warnings {
-        out.push_str(&format!("- warning: {}\n", warning));
-    }
-    out.push_str(&format!("\n### Submitted\n\n```\n{}\n```\n", record.code));
-    out
 }
 
 /// Drop every entry. `seq` keeps counting, so an exported log stays

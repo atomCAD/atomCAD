@@ -386,6 +386,17 @@ class StructureDesignerModel extends ChangeNotifier {
   /// already happens each refresh.
   int unreadAiEditCount = 0;
 
+  /// The free-text session label stamped into AI history exports (D13) —
+  /// "Opus 5 / skill v3".
+  ///
+  /// The application cannot know which model is driving the CLI, so it is
+  /// asked. Mirrored here rather than read from the kernel on every rebuild:
+  /// the field is edited character by character, and a per-keystroke FFI read
+  /// to redraw a text field it is already holding would be pure ceremony.
+  /// Seeded from the kernel in [initAiHistorySessionLabel] so a `--resume`d
+  /// or otherwise pre-set label survives into the UI.
+  String aiHistorySessionLabel = '';
+
   /// Last observed value of `ai_history_version()`. The whole point of the
   /// version is that this compare — a `u64`, cheap — replaces re-marshalling
   /// the list on every refresh.
@@ -3638,6 +3649,35 @@ class StructureDesignerModel extends ChangeNotifier {
   void selectAiHistoryEntry(BigInt seq) {
     if (selectedAiHistorySeq == seq) return;
     selectedAiHistorySeq = seq;
+    notifyListeners();
+  }
+
+  /// Pull the session label the kernel holds. Called once, when the panel is
+  /// first built, so the field shows a label set before this model existed.
+  void initAiHistorySessionLabel() {
+    aiHistorySessionLabel = ai_history_api.aiHistoryGetSessionLabel();
+  }
+
+  /// Set the session label (D13). Does **not** notify: the panel's text field
+  /// is the source of the value and already shows it, and a rebuild here would
+  /// fight the caret. The kernel bumps the log version, which the next refresh
+  /// absorbs.
+  void setAiHistorySessionLabel(String label) {
+    if (label == aiHistorySessionLabel) return;
+    aiHistorySessionLabel = label;
+    ai_history_api.aiHistorySetSessionLabel(label: label);
+    _aiHistoryVersion = ai_history_api.aiHistoryVersion();
+  }
+
+  /// Drop every recorded AI edit. The log is session state, not document
+  /// state, so this takes no undo command (D6/D10) — and the sequence numbers
+  /// keep counting, so an export taken after a clear is still unambiguous.
+  void clearAiHistory() {
+    ai_history_api.aiHistoryClear();
+    aiHistory = [];
+    selectedAiHistorySeq = null;
+    unreadAiEditCount = 0;
+    _aiHistoryVersion = ai_history_api.aiHistoryVersion();
     notifyListeners();
   }
 

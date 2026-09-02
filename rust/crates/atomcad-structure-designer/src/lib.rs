@@ -21,6 +21,7 @@
 //!   same-named twin in `api/` with `From` impls (D9a).
 
 pub mod ai_edit_diff;
+pub mod ai_edit_export;
 pub mod ai_edit_log;
 pub mod ai_text_edit;
 pub mod camera_settings;

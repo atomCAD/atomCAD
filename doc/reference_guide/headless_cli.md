@@ -71,6 +71,27 @@ zone bodies included; Ctrl+Y (redo) reapplies it.
 An edit that applied but then failed validation is still undoable — that is the
 case the step exists for.
 
+### Every edit is recorded
+
+Each `atomcad-cli edit` — merge or `--replace`, applied or rejected — is
+recorded in the running application's [AI History
+panel](./ui.md#ai-history-panel): the submitted script, what came back, the
+network before and after, and which nodes the layout pass moved. Edits refused
+because the network is locked against CLI writes are recorded too; locking a
+network does not hide the attempts.
+
+The log is a **session** log. It is kept in memory only, nothing about it goes
+into your `.cnnd` file, and undo does not erase an entry — undoing an AI edit
+puts the network back and leaves the record of it standing.
+
+So if you want to keep a session — to refine a prompt against what the model
+actually did, or to compare two models on the same task — **export it before
+closing the application**. The panel's toolbar writes the whole log to a file:
+JSON keeps everything, including both text snapshots per edit, and Markdown is
+the readable form for pasting into a conversation. The session-label field
+beside it stamps a name of your choosing ("Opus 5 / skill v3") into the export,
+since the application has no way to know which model was driving the CLI.
+
 ### Reading query output back in
 
 `query` output contains blank lines, and `atomcad-cli edit` reading from

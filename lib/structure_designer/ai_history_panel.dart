@@ -32,8 +32,10 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_cad/common/draggable_dialog.dart';
 import 'package:flutter_cad/src/rust/api/structure_designer/ai_history_api.dart';
 import 'package:provider/provider.dart';
+import 'ai_history_export.dart';
 import 'structure_designer_model.dart';
 
 // Shared with the Console and Profiler panels so the three read as one dock.
@@ -150,6 +152,7 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
   }
 
   Widget _buildHeader(StructureDesignerModel model) {
+    final isEmpty = model.aiHistory.isEmpty;
     return Container(
       height: 28,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -171,6 +174,59 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
             style: const TextStyle(color: Colors.white38, fontSize: 11),
           ),
           const Spacer(),
+          const _SessionLabelField(),
+          const SizedBox(width: 8),
+          // Export is how a session leaves the process (D10): the log is
+          // memory-only, so an unexported session is gone when the application
+          // closes. Both forms sit in one menu rather than two buttons because
+          // the choice is occasional and the header is narrow.
+          PopupMenuButton<AiHistoryExportFormat>(
+            key: const Key('ai_history_export_button'),
+            enabled: !isEmpty,
+            tooltip: isEmpty ? 'Nothing to export yet' : 'Export the session',
+            padding: EdgeInsets.zero,
+            position: PopupMenuPosition.under,
+            onSelected: (format) => exportAiHistory(context, format),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: AiHistoryExportFormat.json,
+                height: 32,
+                child: Text('Export as JSON…', style: TextStyle(fontSize: 12)),
+              ),
+              PopupMenuItem(
+                value: AiHistoryExportFormat.markdown,
+                height: 32,
+                child:
+                    Text('Export as Markdown…', style: TextStyle(fontSize: 12)),
+              ),
+            ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Icon(
+                Icons.file_download_outlined,
+                size: 16,
+                color: isEmpty ? Colors.white24 : Colors.white70,
+              ),
+            ),
+          ),
+          // Clearing is unrecoverable — the log is persisted nowhere and undo
+          // does not touch it (D6) — so it asks first, unlike the Console
+          // panel's Clear, whose entries the next evaluation reproduces.
+          InkWell(
+            key: const Key('ai_history_clear_button'),
+            onTap: isEmpty ? null : () => _confirmClear(context, model),
+            child: Tooltip(
+              message: isEmpty ? 'Nothing to clear' : 'Clear the AI history',
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Icon(
+                  Icons.delete_outline,
+                  size: 16,
+                  color: isEmpty ? Colors.white24 : Colors.white70,
+                ),
+              ),
+            ),
+          ),
           InkWell(
             key: const Key('ai_history_close_button'),
             onTap: () => model.toggleAiHistoryPanel(),
@@ -185,6 +241,44 @@ class _AiHistoryPanelState extends State<AiHistoryPanel>
         ],
       ),
     );
+  }
+
+  Future<void> _confirmClear(
+    BuildContext context,
+    StructureDesignerModel model,
+  ) async {
+    final count = model.aiHistory.length;
+    final confirmed = await showDraggableAlertDialog<bool>(
+      context: context,
+      title: const Text('Clear AI history?'),
+      content: Text(
+        'Discards $count recorded edit${count == 1 ? "" : "s"}. The log is '
+        'kept in memory only and undo does not restore it, so export first if '
+        'you want to keep the session.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          key: const Key('ai_history_clear_confirm_button'),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Clear'),
+        ),
+      ],
+    );
+    if (confirmed != true) return;
+    model.clearAiHistory();
+    // The selection went with the entries; drop the memoised payloads so the
+    // detail pane stops rendering an entry that no longer exists.
+    if (!mounted) return;
+    setState(() {
+      _payloadSeq = null;
+      _payloadByNode = null;
+      _detail = null;
+      _diff = null;
+    });
   }
 
   Widget _buildDetail() {
@@ -539,6 +633,80 @@ class _Badge extends StatelessWidget {
 /// The gap marker of D7. It claims only what the one string comparison proves —
 /// that the network's text changed between two `edit` calls — and names an undo
 /// only when the undo stack said so.
+/// The free-text session label stamped into exports (D13).
+///
+/// The application cannot know which model is driving the CLI — the CLI does
+/// not identify itself, and a `X-Client-Label` header is deferred to a later
+/// phase — so it is asked. One line of UI, and it is what turns a pile of
+/// exported sessions into a comparable set.
+///
+/// Stateful, with its own controller, because the model deliberately does not
+/// notify on a label change: a rebuild per keystroke would fight the caret, and
+/// the field already shows the value it just sent.
+class _SessionLabelField extends StatefulWidget {
+  const _SessionLabelField();
+
+  @override
+  State<_SessionLabelField> createState() => _SessionLabelFieldState();
+}
+
+class _SessionLabelFieldState extends State<_SessionLabelField> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Seeded from the kernel rather than from the model's default: a label may
+    // have been set before this panel was first opened.
+    final model = context.read<StructureDesignerModel>();
+    model.initAiHistorySessionLabel();
+    _controller = TextEditingController(text: model.aiHistorySessionLabel);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Session label — stamped into exports, e.g. "Opus 5 / skill v3"',
+      child: SizedBox(
+        width: 180,
+        height: 20,
+        child: TextField(
+          key: const Key('ai_history_session_label_field'),
+          controller: _controller,
+          style: const TextStyle(color: Colors.white70, fontSize: 11),
+          cursorColor: _accent,
+          decoration: const InputDecoration(
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            hintText: 'Session label',
+            hintStyle: TextStyle(color: Colors.white24, fontSize: 11),
+            filled: true,
+            fillColor: _stripBackground,
+            border: OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.black54),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.black54),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: _accent),
+            ),
+          ),
+          onChanged: (value) => context
+              .read<StructureDesignerModel>()
+              .setAiHistorySessionLabel(value),
+        ),
+      ),
+    );
+  }
+}
+
 class _DivergenceMarker extends StatelessWidget {
   const _DivergenceMarker({required this.entry, required this.previousSeq});
 
