@@ -1,5 +1,15 @@
 # Design: Reflow Neighbours on Node Footprint Growth
 
+**Status (2026-09):** landed (Phases 0-3). The **spatial half is superseded** by
+`doc/design_incremental_layout.md` D6/D11: the quadrant shift
+(`node_inlining::make_space_for_inline`) is retired in favour of `grow_rect`
+(horizontal half-plane shift for the width delta, vertical cascade for the
+height delta) at all three call sites, including `inline_custom_node` and
+`convert_instance_to_closure`. See that design's §"Why one primitive per axis"
+for the argument. The **undo half stands** unchanged: `CompositeCommand`,
+`ScopedMoves`, `reflow_for_footprint_change`'s walk up the scope chain,
+`capture_footprint_chain`, and the per-case bundling below.
+
 ## Summary
 
 When an edit makes a node's **rendered footprint grow in place** — without the

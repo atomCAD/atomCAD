@@ -1,18 +1,24 @@
 # Design: incremental layout for AI/human co-editing
 
-**Status:** first draft for review. Framework proposed by the maintainer;
-details filled in here. Research background: `doc/research_intent_preserving_layout.md`.
+**Status:** second draft for review, revised after `doc/design_hof_body_text_format.md`
+landed (all five phases). Framework proposed by the maintainer; details filled
+in here. Research background: `doc/research_intent_preserving_layout.md`.
 
 **Problem.** `auto_layout_after_edit` defaults to `true` and the default
 algorithm is Sugiyama, so every AI text edit re-derives every node position from
-the topology alone. A human's arrangement is destroyed on every edit.
+the topology alone. A human's arrangement is destroyed on every edit. And since
+the AI can now edit *inside* HOF bodies, a body edit that grows the body grows
+the owning HOF in its parent network, which today overlaps whatever sits next to
+it — there is no layout pass inside bodies at all.
 
-**Approach.** Characterize the edit as a delta (added / modified / removed),
-lay out only the added nodes, fit them into the existing drawing, and repair
-locally. Existing nodes move only when something forces them to, and then by a
-rigid translation that preserves their relative structure. A full
-non-incremental Sugiyama stays available as an explicit user command — the user
-trades familiarity for algorithmic optimality when *they* decide to.
+**Approach.** Characterize the edit as a delta (added / modified / removed) per
+scope, lay out only the added nodes, fit them into the existing drawing, and
+repair locally. Existing nodes move only when something forces them to, and then
+by a rigid translation that preserves their relative structure. Scopes are
+processed inside-out, so a body settles before its owning HOF's new footprint is
+known and repaired in the parent. A full non-incremental Sugiyama stays available
+as an explicit user command — the user trades familiarity for algorithmic
+optimality when *they* decide to.
 
 ---
 
@@ -51,7 +57,7 @@ Point 3 generalizes to the rule this design follows throughout:
 
 *(Overlap count is approximate: it uses the same 160×83 estimate the layout code
 uses, so it undercounts — comments are 200×100+ and HOF bodies larger. See
-[Prerequisite: real node sizes](#prerequisite-real-node-sizes).)*
+[Prerequisite: one size function](#prerequisite-one-size-function).)*
 
 *(The measurement covers **top-level networks only**: the corpus also holds 48
 HOF nodes whose bodies contain 141 more nodes, and nothing here is known about
@@ -62,13 +68,39 @@ some subset.)*
 
 ---
 
+## What changed since the first draft
+
+Three premises of the first draft are no longer true, and the revision below
+follows from them.
+
+- **Undo is solved, more simply than assumed.** The AI edit is now one
+  whole-network snapshot command (`TextEditNetworkCommand`, pushed by
+  `StructureDesigner::ai_text_edit`) that carries every zone. Any layout move in
+  any scope rides the after-snapshot for free. The `ScopedMoves` +
+  `CompositeCommand` bundling only concerns the GUI reflow path.
+- **The name-keyed identity snapshot exists.** The editor's Pass 0 walk
+  (`text_format::snapshot_node_positions`) records position by *name path*,
+  bodies included, and the AI edit path already diffs it for the history log's
+  moved-list. Phase 1 extends that walk rather than building a second snapshot.
+- **The current layout path is body-blind in both directions.** After an edit,
+  the root scope gets a full Sugiyama that sizes every node at 160×83 in a fixed
+  210-wide column, so an expanded HOF already overlaps its neighbours on every
+  edit. Body nodes get no layout pass at all: their only placement is the
+  creation-time placer (`text_format::auto_layout::calculate_new_node_position`),
+  which in an empty body drops the first node at (100, 100) inside a default
+  320×180 body. That first node alone exceeds the default height, so **every
+  fresh AI-written body grows its HOF immediately.**
+
+---
+
 ## Design decisions
 
 **D1 — The unit of work is a diff, not a network.** Layout consumes an
 `EditDelta` (added / modified / removed node ids, plus added and removed wires),
 computed by comparing a pre-edit snapshot against the post-edit network. This is
 possible because `NetworkEditor::apply(code, replace=false)` already merges
-incrementally: node ids and positions of untouched nodes survive the edit.
+incrementally: node ids and positions of untouched nodes survive the edit. There
+is **one delta per scope** (D12); each is shaped identically.
 
 **D2 — Added nodes are laid out as a group, by Sugiyama, in isolation.** New
 nodes have no layout history, so there is nothing to preserve and the best
@@ -84,21 +116,29 @@ the translated set exactly — which is the entire point.
 **D4 — Deletion leaves holes.** Removing a node does not compact the drawing.
 Compaction would move untouched nodes, which is the thing being avoided, and the
 hole is free space the next block can use. Drift from accumulated holes is
-accepted; the explicit full reflow is the cure.
+accepted; the explicit full reflow is the cure. The same holds one scope down: a
+body that *shrinks* leaves its HOF's footprint where it was, bounded below by the
+stored body size, and nothing in the parent moves inward.
 
-**D5 — `Node.hand_moved: bool`.** Set when a user drags a node. Persisted,
-undoable, `#[serde(default)]`. Used as a *tiebreaker*, never as a hard
+**D5 — `Node.hand_moved: bool`.** Set when a user drags a node, in any scope.
+Persisted, undoable, `#[serde(default)]`. Used as a *tiebreaker*, never as a hard
 constraint (see [Uses of `hand_moved`](#uses-of-hand_moved)) — a hard "never
 move" would make some edits unsatisfiable.
 
-**D6 — One collision primitive, used everywhere.** Placing a block, growing a
-node, and repairing a backward wire all reduce to "put this rectangle here and
-make it not overlap anything". A single routine serves all three.
+**D6 — Exactly two motion primitives, one per axis, and every situation is a
+composition of them.** The **horizontal half-plane shift** (rigid, global) and
+the **vertical cascade** (minimal, local). Placing a block, growing a node, and
+repairing a backward wire all reduce to these two. The first draft asked for
+"one collision primitive"; the landed GUI code has a third, the diagonal
+*quadrant shift* (`node_inlining::make_space_for_inline`), and this design
+**retires it** on both the AI and the GUI paths. Why two, why these two, and why
+the quadrant shift loses, is argued in
+[The two motion primitives](#the-two-motion-primitives).
 
 **D7 — Determinism is a requirement, not a nicety.** Stability is untestable
 without it: "did this edit move anything?" has no answer if two runs of the same
 input disagree. Every iteration over nodes in new code is over ids sorted
-ascending.
+ascending; every iteration over scopes is by depth, then by name path.
 
 Existing layout is **mostly** already deterministic, and the gap is narrower
 than it first appears. `group_by_depth` ends with `layer.sort()`, so the
@@ -146,13 +186,13 @@ Treating them as ordinary nodes is also strictly better on this path:
 - and it obeys D3, which a re-derivation would violate — a comment the human
   positioned is a position the human chose.
 
-The measured cascade figures in [Step 4](#step-4--fit-the-block-in-the-collision-primitive)
-already reflect this rule: that simulation used real comment dimensions and
-treated comments as ordinary obstacles.
+The measured cascade figures in [Step 5](#step-5--fit-the-block-in) already
+reflect this rule: that simulation used real comment dimensions and treated
+comments as ordinary obstacles.
 
 **D10 — A drifted comment is pulled back to its anchor, if the spot is free.**
 D9 lets an anchored comment and its anchor be displaced differently, which
-stretches the leader line. A final pass (see [Step 7](#step-7--restore-drifted-comments))
+stretches the leader line. A final pass (see [Step 8](#step-8--restore-drifted-comments))
 tries to restore the comment's original offset from its anchor exactly, and
 accepts the result only if it is collision-free. All-or-nothing: no partial
 moves, no second-choice positions.
@@ -171,6 +211,41 @@ this one only undoes disturbance **this edit caused**, to a node this edit
 already moved, in the direction of where the human had put it. That is squarely
 "repair only what this edit broke", running restoratively.
 
+**D11 — Growth is two-dimensional, and `grow_rect` is its one operation.** A
+node whose rendered footprint grew — an HOF whose body got bigger, an `expr`
+that gained a pin, an Auto-mode HOF whose `f` wire was removed — grows **right
+and down from a fixed top-left**. The width delta is absorbed by a horizontal
+half-plane shift at the node's old right edge; the height delta by a vertical
+cascade over the new rect. One routine, `grow_rect`, does both in that order,
+and it is the *only* way a grown node makes room, on every path
+(see [`grow_rect`](#grow_rect)).
+
+**D12 — Scopes are processed inside-out, and a settled body reports its HOF's
+growth to the parent as a `grown` entry.** A parent's node sizes are not known
+until its children's bodies have settled, because an expanded HOF's footprint
+*is* a function of its body's content bbox. So: deepest scope first; when a body
+settles, its owning HOF's footprint is re-measured and, if it exceeds the
+pre-edit footprint, the HOF joins the parent delta's `modified` set with that
+delta vector. See [Scopes: inside-out](#scopes-inside-out).
+
+**D13 — `modified` means "footprint grew, measured", not "parameter count
+changed".** The delta classifies a kept node as modified by comparing its
+pre-edit and post-edit rendered footprint from the one size function. That
+single rule subsumes every growth trigger — added pins, body growth, the
+collapse flip when a text edit unwires `f:` on an Auto-mode HOF — and needs no
+per-trigger detection.
+
+**D14 — The identity snapshot carries the node's layout state, not just its
+position.** The text format has no `body_width`, `body_height` or
+`collapse_mode`, so a `--replace` round-trip today resets every HOF to the
+320×180 default body and to `Auto`. A user-collapsed HOF re-expands, which is
+exactly the footprint jump D11 then has to absorb in the parent. The Pass 0
+snapshot therefore records, per name path, **position, rendered footprint,
+`body_width`, `body_height`, `collapse_mode` and `hand_moved`**, and the editor
+re-applies all of them on a name match — an extension of
+`design_hof_body_text_format.md` D8, listed there as carrying "`position` and
+nothing else" precisely so that this design could add the rest.
+
 ---
 
 ## The edit surface
@@ -182,29 +257,30 @@ The AI reaches the network through exactly one function:
 pub fn ai_edit_network(code: String, replace: bool) -> String   // JSON EditResult
 ```
 
-surfaced by the `atomcad` skill as `atomcad-cli edit [--replace]`, with the
-script passed via `--code` or (recommended) stdin / a heredoc. The CLI REPL has
-`edit` and `replace` modes where a block accumulates until a blank line or `.`.
+which is a thin wrapper over `StructureDesigner::ai_text_edit`
+(`crates/atomcad-structure-designer/src/ai_text_edit.rs`), the choke point
+every transport funnels through — the HTTP `/edit` handler, the CLI REPL's
+`edit` / `replace` modes, the `atomcad` skill's `atomcad-cli edit [--replace]`.
 
 **`code` is a whole multi-statement script, not a single statement.**
-`NetworkEditor::apply` runs a first pass creating and updating nodes and
-collecting pending connections, a second pass resolving those connections, then
-`validate_network`, then — today — `layout_network` **once**
-(`ai_assistant_api.rs:~228`).
+`ai_text_edit` takes the identity snapshot, runs `text_edit_network` (Pass 0–3,
+scope-aware), reinserts the network, validates, and then — today — calls
+`layout::layout_network` **once** on the root scope. Then it takes the log's
+after-pair and pushes the whole-network undo snapshot.
 
 So the transaction granularity is already right:
 
 > **N statements in one call = one transaction = one layout pass.**
 
 The incremental pass replaces that single `layout_network` call and needs no
-batching of its own. The `LayoutSnapshot` for D1 is captured at the top of
-`ai_edit_network`, before `NetworkEditor` runs, and the diff is computed after
+batching of its own. The snapshot for D1 is the one already captured at the top
+of `ai_text_edit` (extended per D14), and the per-scope diffs are computed after
 validation.
 
 | Mode | Flag | Behaviour |
 |---|---|---|
 | Incremental merge | *(default)* | Statements merge into the existing network. Node ids and positions of untouched nodes survive. |
-| Replace | `--replace` | The network is cleared first, then the script is applied. Every node is new. |
+| Replace | `--replace` | The network is cleared first, then the script is applied. Every node is rebuilt, and matched to its old identity by name (D14). |
 
 **Wires are assigned, not accumulated** (since `1b93cab8`). Mentioning a
 property assigns that pin's *whole* inbound wire set — what the statement names
@@ -218,6 +294,12 @@ grew, and a literal on a wired pin silently coexisted with the live wire. The
 delta below assumes the fixed semantics — wire removal is now a first-class,
 routine edit.
 
+**Bodies are on the surface too.** A `body { … }` block assigns a whole body
+(name-matched, so surviving nodes keep id and position); `m1/x = …`,
+`output m1/x` and `delete m1/x` address one node inside one. One script can
+therefore touch the root scope and several bodies at once, which is why the
+delta is per scope (D12).
+
 ---
 
 ## The edit delta
@@ -226,8 +308,9 @@ routine edit.
 pub struct EditDelta {
     /// Present after, absent before.
     pub added: Vec<u64>,
-    /// Present in both, but geometry-relevant state changed.
-    pub modified: Vec<u64>,
+    /// Present in both, and the rendered footprint grew in either axis (D13).
+    /// Carries the pre-edit and post-edit footprint.
+    pub modified: Vec<(u64, DVec2, DVec2)>,
     /// Present before, absent after.
     pub removed: Vec<u64>,
     /// Wires that did not exist before. Keyed like `WireAnchor` (#427).
@@ -237,19 +320,25 @@ pub struct EditDelta {
 }
 ```
 
-Computed by `diff_networks(before: &LayoutSnapshot, after: &NodeNetwork)`, where
-`LayoutSnapshot` is a transient pre-edit capture of `{id → (position, size,
-wire set)}`. Not persisted. Both wire lists fall out of the same set difference,
-so `removed_wires` is free once `added_wires` is computed.
+One `EditDelta` per scope, computed by
+`diff_scope(before: &LayoutSnapshot, scope: &[u64], after: &NodeNetwork)`.
+`LayoutSnapshot` is the Pass 0 walk of D14: `(name path) → {position,
+footprint, body_width, body_height, collapse_mode, hand_moved}`, transient, not
+persisted. Diffing is **by name path**, never by id or id-scope-path: a
+`--replace` mints fresh ids for every node, so the scope path `[m1_id]` before
+and after the edit are different numbers naming the same body. Ids are resolved
+from names *after* the match, for applying moves. Both wire lists fall out of
+the same set difference, so `removed_wires` is free once `added_wires` is
+computed.
 
-`modified` matters for two reasons only, both geometric:
+`modified` matters for one reason only, and it is geometric: **the node's box
+got bigger** and may now overlap a neighbour. Growth is measured (D13), so the
+delta does not need to know *why* — it is the same entry whether an `expr`
+gained a parameter, a `map`'s body acquired a node, or an Auto-mode HOF lost its
+`f` wire and flipped to expanded.
 
-- **the node got taller** (parameter count changed) and may now overlap a
-  neighbour;
-- **the node gained a wire** that may now point backwards.
-
-A node whose *value* changed but whose size and wiring did not is not a layout
-event at all and is excluded.
+A node whose *value* changed but whose footprint did not is not a layout event
+at all and is excluded. A node that **shrank** is excluded too (D4).
 
 ### Wire removal is layout-inert
 
@@ -260,7 +349,7 @@ than leaving implicit:
 
 - it **cannot create an overlap** — nothing moves and nothing grows;
 - it **cannot create a backward wire** — removing an edge relaxes a constraint,
-  it never adds one. Step 5's check exists for wires that *appeared*;
+  it never adds one. Step 6's check exists for wires that *appeared*;
 - it can leave a node with no wires at all. That node stays exactly where it is,
   by D3 and by the same reasoning as D4: an orphan sitting in place is a hole,
   and holes are left alone.
@@ -271,43 +360,58 @@ describe the edit — and because a large rewiring is exactly the signal a futur
 "this network was substantially restructured, re-lay it out?" prompt would key
 on (`research_intent_preserving_layout.md` §8) — not because layout acts on it.
 
+The one exception is indirect and already covered by D13: removing the `f` wire
+of an Auto-mode HOF flips it from compact to expanded. That is a footprint
+change, the footprint comparison catches it, and the HOF lands in `modified`
+like any other grown node. Nothing keys on the wire itself.
+
 Two second-order effects, both already handled elsewhere:
 
 - **A comment's wire anchor can dangle.** #427's D6 drops an anchor whose wire
-  is gone, in `repair_node_network`. Step 7 then finds `anchors[0]`
+  is gone, in `repair_node_network`. Step 8 then finds `anchors[0]`
   unresolvable and skips the comment, which is the documented behaviour. Worth
   noting only because removing a wire is now easy, so that path fires far more
   often than it did when the format could not express a disconnect.
 - **A rewire is one statement, not two.** `diff1 = diff { base: newthing }`
   removes the old `base` wire and adds a new one in a single assignment. The
-  removal is inert; the addition goes through Step 5's backward-wire check as
+  removal is inert; the addition goes through Step 6's backward-wire check as
   normal. No special handling for the pair.
+
+### Wires that cross a scope boundary
+
+Inside a body three wire kinds have no source node in the body's own network: a
+zone input (`$element`), a capture (`^name`), and an outer HOF's zone input
+(`^$element`). The zone output (`output x` inside the block) has no destination
+node there either. All four appear in the delta as ordinary `WireKey`s — they
+are needed for **anchors** (Step 4) — but none is ever **repaired**: Step 6's
+backward-wire check applies to same-scope wires only. A capture that "points
+backwards" is left alone; `layout/common.rs::wire_midpoint` already treats the
+destination pin as standing in for the missing source.
 
 ### Name-based identity for `replace` mode
 
-In replace mode the network is cleared before the script is applied, so every
-node is `added`, every position is lost, and the incremental path degenerates
-into exactly the full reflow this design exists to avoid.
+In replace mode the network is cleared before the script is applied, so without
+a match every node would be `added`, every position lost, and the incremental
+path would degenerate into exactly the full reflow this design exists to avoid.
 
 **This is not an edge case.** `ai_query_network`'s output is *designed* to be
 fed straight back: the `atomcad` skill documents that "the header and footer use
 comment syntax (`#`), so the output is valid input to `edit --replace`". A
-query → modify → `edit --replace` round-trip is a normal thing for the AI to do,
-and today it discards the entire hand layout every time.
+query → modify → `edit --replace` round-trip is a normal thing for the AI to do.
 
-The fix is cheap and, importantly, **total**: match rebuilt nodes to snapshot
-nodes by name, and carry the old `position` and `hand_moved` across. A matched
+The match **already exists**, built by `design_hof_body_text_format.md` D8: the
+editor's Pass 0 snapshot is taken ahead of `clear_network`, keyed `(name path)`,
+and a rebuilt node whose name path matches inherits the old position. A matched
 node is `kept`, not `added`, and the rest of the algorithm proceeds unchanged.
+What this design adds is D14: the same match also carries the footprint, the
+stored body size, the collapse mode and `hand_moved`, so a round-trip is
+layout-neutral for HOFs as well.
 
 Names are a reliable key here because **every node has one**. Every
 node-creation path in `node_network.rs` sets `custom_name: Some(display_name)`,
-and `network_editor.rs:244` states the invariant outright — *"all nodes now have
+and `network_editor.rs` states the invariant outright — *"all nodes now have
 persistent names assigned at creation time"*. Both sides of the text format
-already key on it exclusively: the serializer's `get_node_name` reads
-`custom_name` and nothing else, and the editor's `build_existing_name_map`
-inserts only nodes that have one. So there is no "unnamed node" case needing a
-special rule, and a name that survives a round-trip is exactly a node whose
-identity the AI intended to preserve.
+already key on it exclusively.
 
 Two residual cases, both handled by the same fallback:
 
@@ -316,23 +420,32 @@ Two residual cases, both handled by the same fallback:
 - the AI may deliberately rename a node, which *is* a new identity.
 
 In both, the node simply fails to match and is treated as `added` — placed by
-Steps 2–4 like any other new node. Falling back to "added" is always safe;
+Steps 3–5 like any other new node. Falling back to "added" is always safe;
 matching the wrong node would not be.
-
-This makes the design work for both edit modes at the cost of one
-`HashMap<String, u64>` lookup per node.
 
 ---
 
 ## Algorithm
 
-Seven steps, in order. Each is small.
+Eight steps per scope, in order. Each is small. The order matters more than it
+did in the first draft: **grown nodes are repaired before new blocks are
+placed**, so that a block sees the settled obstacles. The other way round, a
+block placed against an HOF's old size is pushed by that HOF's growth a moment
+later — motion the block did not need.
 
 ### Step 1 — Remove
 
 Delete the `removed` nodes and their wires. Do nothing else (D4).
 
-### Step 2 — Lay out the added nodes as blocks
+### Step 2 — Repair grown nodes
+
+For every entry `(id, old_size, new_size)` in `modified`, in ascending id:
+`grow_rect(scope, id, old_size, new_size)`. Positions are re-read between
+entries, so a second grown HOF that the first one's shift moved is repaired at
+its new position. The grown node itself never moves (D3 — its top-left is the
+anchor).
+
+### Step 3 — Lay out the added nodes as blocks
 
 Restrict the graph to `added` and split into connected components (using only
 wires **between added nodes**). Each component is a **block**.
@@ -355,19 +468,41 @@ leaving the subset are ignored. This reuses the whole existing pipeline rather
 than duplicating it, and `layout_network` becomes `layout_subgraph` over all
 ids.
 
+Two things the existing pipeline must learn first, both from
+[Prerequisite: one size function](#prerequisite-one-size-function): node
+heights come from the unified size, and **column width is per layer**, the
+widest node in the layer plus the gap, instead of the fixed `COLUMN_WIDTH`.
+Without both, a new `map` beside a new `int` in the same block overlap. An added
+HOF's size here is its **settled** footprint, because its body was laid out
+before its parent (D12).
+
 The result is a set of local positions per block; take its bounding box
 `(W, H)`.
 
 Blocks are processed in a deterministic order: by `(min anchor x, min node id)`
-— see Step 3 for anchors. Each block, once placed, joins the obstacle set for
+— see Step 4 for anchors. Each block, once placed, joins the obstacle set for
 the next.
 
-### Step 3 — Choose each block's target position
+### Step 4 — Choose each block's target position
 
-Define the block's **anchors** — kept nodes wired to it:
+Define the block's **anchors** — kept things wired to it:
 
 - `U` = kept nodes with a wire *into* the block (upstream);
 - `D` = kept nodes fed *by* the block (downstream).
+
+**Inside a body, the scope's own edges are anchors too.** Zone inputs, captures
+and the zone output are the dominant wires in a body — the corpus mean body is
+2.9 nodes, and nearly every one reads `$element` and ends in `output`. They have
+no node position, and under the rule above a typical body block would have no
+anchors, land right of the body's bounding box, and grow the HOF every time. So:
+
+| Wire kind | Anchor synthesized |
+|---|---|
+| `$name` (zone input, any depth) and `^name` (capture) | a zero-width box at the body's **left edge** (`x = 0`), at the pin's rendered y — `FIRST_PIN_OFFSET + index · PER_PARAM_HEIGHT` from the body top for zone inputs, the body top for captures |
+| the body's `output` (zone output) | a zero-width box at the body's **right edge** (`x = body_width`), at the output pin's y |
+
+A `$element → mul → output` body then lays out left to right on its own.
+Everything below applies unchanged with these boxes in `U` and `D`.
 
 **Horizontal.** Let `GAP` be the standard horizontal gap
 (`node_layout::DEFAULT_HORIZONTAL_GAP`).
@@ -395,63 +530,40 @@ y_offset = mean over external wires of (anchor.y_center - internal.y_center_loca
 
 This naturally places a block feeding one node level with that node, and a block
 straddling two anchors between them. With no anchors, place below the drawing's
-bbox.
+bbox. In an **empty body** there is no bbox: the block goes at the body's left
+padding, level with the first zone-input pin.
 
-### Step 4 — Fit the block in (the collision primitive)
+**Body coordinates are non-negative.** A body's content extent is measured from
+its origin (`rendered_body_size`, and Flutter's `_computeBodySize`), so a node at
+a negative position is invisible to the size computation and renders clipped.
+Every candidate position in a body is clamped to `≥ 0` on both axes; the "no
+room" shift above is the one thing that can push content past the right edge,
+and that is growth the HOF absorbs (D12).
+
+### Step 5 — Fit the block in
 
 The block now has a target rect `R = (x, y_offset, W, H)` inflated by `GAP`.
 Two mechanisms, tried in order:
 
-**(4a) Slide the block.** Search for a free `y` near the target — alternating
+**(5a) Slide the block.** Search for a free `y` near the target — alternating
 down and up in increments of `VERTICAL_GAP` — within a bounded window
 (`SLIDE_WINDOW`, suggested: two node heights). Nothing existing moves. If a free
 `y` is found, done.
 
+**Inside a body, growth is not free, so the slide is slack-first.** At top level
+"right of the bbox" or "below the bbox" costs nothing; in a body every pixel
+past the stored `body_width` / `body_height` grows the HOF and cascades into the
+parent. So the slide first searches candidates whose rect stays inside the
+stored body size minus its padding, over the *whole* body height rather than
+`SLIDE_WINDOW`, and only when none is free falls back to the ordinary window
+and accepts the growth. This is the one placement rule a body has that the top
+level does not.
+
 Comments are ordinary obstacles here, at their real `CommentData` size (D9).
 
-**(4b) Push the wavefront open.** Otherwise place the block at its target `y`
-and displace the kept nodes that are in the way — a vertical Force-Scan:
-
-```
-W ← every kept node overlapping R in BOTH axes,
-    ordered by |node.y_center − R.y_center|
-for each n in W:  dir(n) ← up if n.y_center < R.y_center else down
-
-while W not empty:
-    n ← pop W
-    push n by the minimum amount along dir(n) to clear its blocker
-        (R on the first round; otherwise the node that enqueued it)
-    for every node m in the WHOLE network — not merely the initial set —
-        with x-overlap(n, m) and y-overlap(n, m) and m further along dir(n):
-            dir(m) ← dir(n); push m to clear n; enqueue m
-```
-
-**The propagation must test against every node, not a fixed band.** A node
-pushed upward can land on a node whose x-interval overlaps *its* — but not
-`R`'s. Restricting the closure to nodes that overlap `R` would leave that
-collision unresolved and silently create a new overlap. Consequently the
-horizontal footprint of a push is **emergent and monotonically non-decreasing**:
-it is whatever the closure happens to reach, and it can end up considerably
-wider than `R`. Think of it as a wavefront moving in one vertical direction, not
-as a band.
-
-Two properties make this safe:
-
-- **It terminates.** Every node enqueued by `n` is strictly further along
-  `dir(n)` than `n` is, and no node ever moves back. A cycle would require a
-  node to be both above and below another. Finite node count, monotone
-  displacement. Naive cost is O(n²); the largest network in the corpus has 155
-  nodes.
-- **Vertical ordering is preserved by construction** — Misue et al.'s
-  orthogonal-ordering property, which is what a hand drawing actually encodes.
-  Nodes move by the *minimum* amount, so displacement stays small.
-
-**What stops the cascade is vertical whitespace, not the band edge.** x-overlap
-is necessary but not sufficient to propagate; an actual y-collision is required.
-This matters because x-overlap is rampant in real drawings — the corpus has
-nearly one distinct x per node with 160px boxes, so the "x-intervals overlap"
-graph is usually a single component spanning the whole network. In principle one
-cascade could reach everything; in practice it runs out of collisions first.
+**(5b) Push the wavefront open.** Otherwise place the block at its target `y`
+and run the [vertical cascade](#the-vertical-cascade) over `R`, choosing the
+direction per node by which side of `R`'s centre it lies on.
 
 Measured over 2,280 simulated insertions on `from_mechadense.cnnd` — dropping a
 node-sized rect exactly onto each existing node's position, a guaranteed initial
@@ -467,31 +579,21 @@ collision, using real comment dimensions:
 
 The 5.80× worst case is 571px of extent in a 1052px-wide network; the worst on a
 large network was 608px of 5837px. Both figures overstate the real cost, because
-(4a) runs first and a dead-centre drop is the densest possible start.
-
-**No cap is imposed on the cascade.** A limit would be a tuning constant with no
-evidence behind it, and the fallback it would need (abandon the push, slide the
-block arbitrarily far) is not obviously better than a wide push. Phase 3 asserts
-a generous bound in tests instead, to catch a regression rather than to shape
-behaviour.
+(5a) runs first and a dead-centre drop is the densest possible start.
 
 `SLIDE_WINDOW` is the design's one real tuning constant. It sets the trade
 between long wires (slide too far) and disturbed neighbours (push too eagerly).
 
-### Step 5 — Repair modified nodes
+### Step 6 — Repair new backward wires
 
-Only for nodes in `modified`, and only for the two geometric cases:
-
-**Grew taller.** Run (4b) with the node's own new rect as `R`, with the node
-itself excluded from the obstacle set. Same primitive (D6).
-
-**New backward wire.** For each wire in `added_wires` whose endpoints are both
-kept, if `source.x + width(source) + GAP > dest.x`, then
+For each wire in `added_wires` whose endpoints are both kept and both in this
+scope, if `source.x + width(source) + GAP > dest.x`, then
 `shift_half_plane(dest.x, deficit)`. Wires that were already backward before the
 edit are left alone — that is the baseline rule, and the measurement says 177 of
-them exist.
+them exist. Cross-scope wires are skipped (see
+[Wires that cross a scope boundary](#wires-that-cross-a-scope-boundary)).
 
-### Step 6 — New comment nodes
+### Step 7 — New comment nodes
 
 Existing comments need no step at all: they are ordinary nodes throughout
 (D9). The only comment-specific rule is the *initial* position of a comment the
@@ -501,15 +603,15 @@ edit **created**, which by definition has no prior position to preserve.
   gained `on:` in `design_wire_annotations.md` Phase 2): place it at the first
   collision-free position among the four sides of its anchor's box, using the
   landed `anchor_placement_box` and `surrounding_candidates` helpers, then fall
-  back to Step 4 like any other block. Here the four-sides rule is exactly
+  back to Step 5 like any other block. Here the four-sides rule is exactly
   right: there is no human intent to override.
-- **Unanchored:** it is an anchorless block, and Step 3's "`U` and `D` both
+- **Unanchored:** it is an anchorless block, and Step 4's "`U` and `D` both
   empty" case already covers it — right of the drawing's bounding box.
 
 Neither case requires touching `place_comments`, which keeps serving the
 full-reflow path unchanged.
 
-### Step 7 — Restore drifted comments
+### Step 8 — Restore drifted comments
 
 A final pass over anchored comments only, in ascending node id order (D10).
 Let `anchor_box(positions)` be the landed `anchor_placement_box` resolving
@@ -557,25 +659,244 @@ and take the furthest free one. It recovers partial ground in the cases this
 pass currently abandons, at the cost of turning an all-or-nothing rule into one
 with a sample count.
 
-### The `shift_half_plane` primitive
+---
+
+## The two motion primitives
+
+Every movement of an existing node in this design is one of two operations.
+Both preserve order along their axis, and neither can create an overlap. They
+differ in what else they preserve and in how much they disturb.
+
+### `shift_half_plane`
 
 ```rust
 /// Translate every node with `x >= x_threshold` right by `dx`.
 fn shift_half_plane(network: &mut NodeNetwork, x_threshold: f64, dx: f64);
 ```
 
-A rigid translation of a half-plane. It cannot introduce an overlap, it cannot
-reorder anything, and it preserves every alignment and every deliberate gap
-within the moved set and within the unmoved set. It makes the drawing wider,
-which is the honest cost of inserting something.
+A rigid translation of a half-plane: **global, dumb, safe**. Every node past the
+line moves by the same amount whether or not anything collided. It cannot
+introduce an overlap — a moved node only moves away from every unmoved one, and
+moved nodes keep their relative positions — it cannot reorder anything, and it
+preserves every alignment and every deliberate gap within the moved set and
+within the unmoved set. It makes the drawing wider, which is the honest cost of
+inserting something. Crucially, **it can never turn a forward wire backward**:
+every wire crossing the line left-to-right only gets longer, and wires on either
+side keep their length.
 
-Used in exactly two places: Step 3 (no horizontal room for a block) and Step 5
-(a rewire made an existing wire point backwards).
+Used in three places: Step 2 (a node grew wider, via `grow_rect`), Step 4 (no
+horizontal room for a block) and Step 6 (a rewire made a wire point backwards).
 
 *Refinement, not for v1:* shift only the destination's **downstream cone**
 instead of the whole half-plane. More surgical, but a translated cone can
-collide with non-cone nodes, so it needs (4b) afterwards. The half-plane version
-is unconditionally safe.
+collide with non-cone nodes, so it needs the cascade afterwards. The half-plane
+version is unconditionally safe.
+
+### The vertical cascade
+
+```
+cascade(R, dir_of):
+    W ← every kept node overlapping R in BOTH axes,
+        ordered by |node.y_center − R.y_center|
+    for each n in W:  dir(n) ← dir_of(n)          # up / down
+
+    while W not empty:
+        n ← pop W
+        push n by the minimum amount along dir(n) to clear its blocker
+            (R on the first round; otherwise the node that enqueued it)
+        for every node m in the WHOLE network — not merely the initial set —
+            with x-overlap(n, m) and y-overlap(n, m) and m further along dir(n):
+                dir(m) ← dir(n); push m to clear n; enqueue m
+```
+
+A vertical Force-Scan: **local, minimal, safe**. Only nodes that actually
+collide move, by the least amount that clears the collision, and the push
+propagates only through further actual collisions. Step 5 chooses `dir_of` by
+which side of `R`'s centre a node lies on; `grow_rect` forces `down`.
+
+**The propagation must test against every node, not a fixed band.** A node
+pushed upward can land on a node whose x-interval overlaps *its* — but not
+`R`'s. Restricting the closure to nodes that overlap `R` would leave that
+collision unresolved and silently create a new overlap. Consequently the
+horizontal footprint of a push is **emergent and monotonically non-decreasing**:
+it is whatever the closure happens to reach, and it can end up considerably
+wider than `R`. Think of it as a wavefront moving in one vertical direction, not
+as a band.
+
+Two properties make this safe:
+
+- **It terminates.** Every node enqueued by `n` is strictly further along
+  `dir(n)` than `n` is, and no node ever moves back. A cycle would require a
+  node to be both above and below another. Finite node count, monotone
+  displacement. Naive cost is O(n²); the largest network in the corpus has 155
+  nodes.
+- **Vertical ordering is preserved by construction** — Misue et al.'s
+  orthogonal-ordering property, which is what a hand drawing actually encodes.
+  Nodes move by the *minimum* amount, so displacement stays small.
+
+**What stops the cascade is vertical whitespace, not the band edge.** x-overlap
+is necessary but not sufficient to propagate; an actual y-collision is required.
+This matters because x-overlap is rampant in real drawings — the corpus has
+nearly one distinct x per node with 160px boxes, so the "x-intervals overlap"
+graph is usually a single component spanning the whole network. In principle one
+cascade could reach everything; in practice it runs out of collisions first
+(the Step 5 figures: half the simulated drops push nothing).
+
+**No cap is imposed on the cascade.** A limit would be a tuning constant with no
+evidence behind it, and the fallback it would need (abandon the push, slide the
+block arbitrarily far) is not obviously better than a wide push. Phase 4 asserts
+a generous bound in tests instead, to catch a regression rather than to shape
+behaviour.
+
+### `grow_rect`
+
+```rust
+/// `node_id`'s rendered footprint grew from `old` to `new`, top-left fixed.
+/// Make room for it. Returns the moves for the caller's undo bookkeeping.
+fn grow_rect(network, registry, node_id, old: DVec2, new: DVec2) -> Vec<(u64, DVec2, DVec2)> {
+    let anchor = node.position;
+    let dw = max(0, new.x - old.x);
+    let dh = max(0, new.y - old.y);
+    if dw > 0 { shift_half_plane(anchor.x + old.x, dw); }        // 1. width: old right edge
+    if dh > 0 { cascade(R = (anchor, new) inflated by GAP,       // 2. height: new rect
+                        dir_of = |_| down,
+                        excluding node_id and any node that already overlapped (anchor, old)); }
+    diff positions
+}
+```
+
+Horizontal first, so the cascade sees post-shift positions. The grown node's own
+x is left of the threshold, so it is naturally exempt from the shift. A node
+that already overlapped the *old* rect is a pre-existing irregularity and is
+left alone — the baseline rule — which is also what makes forcing `down`
+correct: after the shift, every *new* collision with the new rect lies below the
+old bottom edge.
+
+### Why one primitive per axis, and why these two
+
+The obvious alternative is the landed quadrant shift
+(`node_inlining::make_space_for_inline`): classify every node by its top-left
+corner against the growing node's box and shift the lower-right quadrant
+diagonally, the right band right, the lower band down. It looks like the
+symmetric choice. It is not one operation — gate a horizontal half-plane shift
+at the old right edge and a vertical one at the old bottom edge and the four
+regions fall out — so the real question is **half-plane or cascade, per axis**,
+and the drawing decides each axis differently.
+
+- **x carries a directional invariant, y carries none.** Nine wires in ten
+  point right, and that is the property the design protects. A horizontal
+  *cascade* can break it: the grown node pushes B right, B feeds C in a row that
+  did not collide, C stays, and the B→C wire flips backward. Step 6 would then
+  fix that with a half-plane shift anyway, so a horizontal cascade is a
+  half-plane shift done in two steps with extra motion. A horizontal half-plane
+  shift provably never flips a forward wire. Vertically there is no direction to
+  protect, so the minimal operation is free to be minimal.
+- **Width growth moves a pin, height growth does not.** A body grows from a
+  fixed top-left. Growing wider moves the HOF's output pin right by `dw`, and
+  everything downstream is wired to that pin; shifting all of it by exactly `dw`
+  keeps every downstream wire the length the human chose. Growing taller moves
+  no pin at all. Nodes below have no wire reason to move, only a collision
+  reason, so the operation that moves them only on collision is the right one.
+- **The corpus says a horizontal cascade would not be local anyway.** With
+  nearly one distinct x per node the x-overlap graph is one connected component
+  across the whole network, so a horizontal cascade would propagate through most
+  of the right-hand side — raggedly, row by row. The half-plane shift is the
+  rigid version of what the cascade would approximately do. Vertically the
+  opposite holds: half of the simulated insertions pushed nothing and nearly all
+  pushed at most five nodes, because vertical whitespace stops a cascade almost
+  immediately. A vertical half-plane shift would instead move every independent
+  pipeline stacked below the grown node, for no benefit, and the AI edit history
+  would list hundreds of moved nodes for a body that grew by thirty pixels.
+
+So the combination is not less principled than the quadrant shift; it is more.
+It uses the rigid global operation exactly where the drawing has global
+structure to protect, and the minimal local operation exactly where it does
+not. The quadrant shift applies the global operation on both axes because it
+was written without node sizes and without the rightward invariant in mind.
+
+Two concrete defects of the quadrant shift follow from that origin, and both
+are reasons to **retire** it rather than keep it as the GUI's primitive:
+
+- **Its vertical half violates D3.** It moves every node below the growing
+  node's top and right of its left edge by `dh`, colliding or not.
+- **Its middle band can create overlaps.** Because it is size-blind, it gates
+  on the *near* corner and splits the overlap band by a cross product against
+  the node's diagonal. Two neighbours straddling that diagonal go in orthogonal
+  directions by different amounts; when `dw` is large and `dh` is small, the
+  right-moved one lands on the down-moved one. Two plain half-plane shifts
+  cannot do that, and neither can `grow_rect`. Once the size function is
+  unified the heuristic has no reason to exist.
+
+**Retirement plan.** `make_space_for_inline` has three call sites, all in
+`structure_designer.rs`: the GUI reflow cascade
+(`reflow_for_footprint_change`), `inline_custom_node`, and
+`convert_instance_to_closure`. All three become `grow_rect` calls with the same
+`(anchor, old_size, new_size)` arguments — for inlining, `old` is the instance's
+footprint and `new` the content's bounding box, exactly as today. The scope
+cascade in `reflow_for_footprint_change`, its `capture_footprint_chain`
+contract and its `ScopedMoves` / `CompositeCommand` undo bundling are untouched;
+only the spatial step inside the loop changes. `design_reflow_on_footprint_change.md`'s
+spatial half is thereby superseded; its undo half stands. Existing
+`reflow_test.rs` expectations change where they asserted that a *non-colliding*
+node below the grown HOF moved — under `grow_rect` it does not.
+
+---
+
+## Scopes: inside-out
+
+A body is a full `NodeNetwork` with its own coordinate system, so the algorithm
+above runs on it unchanged. What is new is the **driver** that orders the
+scopes and connects a body's outcome to its parent's delta.
+
+```
+snapshot ← Pass 0 walk, before the edit (D14):
+    (name path) → { position, footprint, body_width, body_height, collapse_mode, hand_moved }
+    for every node at every depth
+
+apply the edit; validate
+
+scopes ← every scope in the post-edit network, deepest first, ties by name path
+grown  ← ∅                                     # (parent scope, hof id, old, new)
+
+for scope in scopes:
+    delta ← diff_scope(snapshot, scope)        # by name path; ids resolved after
+    delta.modified ∪= grown entries whose parent scope is this one
+    run Steps 1–8 on scope
+
+    if scope is a body owned by hof H in parent P:
+        new ← rendered footprint of H            # settled: the body just laid out
+        old ← snapshot[H].footprint              # absent ⇒ H is new ⇒ already in P.added
+        if old exists and new exceeds old in either axis:
+            grown ∪= (P, H, old, new)
+```
+
+Points that are easy to get wrong:
+
+- **A parent's delta cannot be finalized until its children have settled.**
+  That is the whole reason for the ordering, and why `modified` is completed
+  inside the loop rather than computed up front. The footprint measurement is
+  the recursive `rendered_body_size` rule (`max(stored, content + padding)`,
+  nested HOFs included), which is correct as long as it is called *after* the
+  inner scopes are done.
+- **A new HOF is `added` in its parent, at its settled size.** Its body nodes
+  are `added` in the body scope, laid out first against synthesized anchors
+  (Step 4); then the HOF's footprint is known; then Step 3 in the parent sizes
+  the block correctly. Nothing about the HOF is special beyond its size.
+- **Several bodies under one parent, several grown HOFs.** Step 2 repairs them
+  in ascending id, re-reading positions between them (D7).
+- **Growth at depth ≥ 2 cascades naturally.** The grandparent sees the parent
+  HOF's `grown` entry only after the parent scope — itself a body — has run
+  Steps 1–8, including the Step 2 repair that may have widened its content.
+  Nothing climbs more than one level per iteration, and nothing needs the
+  GUI's pre-captured `old_sizes` chain: the snapshot holds every node's old
+  footprint already.
+- **Shrinking is a hole** (D4). The stored body size is a floor, so an HOF never
+  shrinks below what the user sized it to, and the parent never compacts.
+- **The creation-time placer is superseded.** Until Phase 5 wires this pass in,
+  `calculate_new_node_position` is the only placement a body node gets, and it
+  sizes nodes by type name alone. After Phase 5 its output is a throwaway
+  initial position, overwritten by Step 3. It is not worth improving in
+  between.
 
 ---
 
@@ -584,10 +905,10 @@ is unconditionally safe.
 The flag is a tiebreaker in three places. None of them is a hard constraint —
 a node that must move to keep the drawing correct still moves.
 
-1. **Push direction (4b).** When both up and down clear the block, push the
-   direction that displaces fewer hand-moved nodes; on a tie, fewer nodes; on a
-   tie, the smaller total displacement; on a tie, up.
-2. **Slide vs. push (4a→4b).** Extend `SLIDE_WINDOW` when every obstacle in the
+1. **Cascade direction (Step 5b).** When both up and down clear the block, push
+   the direction that displaces fewer hand-moved nodes; on a tie, fewer nodes;
+   on a tie, the smaller total displacement; on a tie, up.
+2. **Slide vs. push (5a→5b).** Extend `SLIDE_WINDOW` when every obstacle in the
    band is hand-moved — prefer to route the new block around a deliberately
    arranged region rather than through it.
 3. **Explicit full reflow.** A "respect manually placed nodes" option on the
@@ -595,7 +916,8 @@ a node that must move to keep the drawing correct still moves.
    whole point of the explicit command is to get the algorithmic result.
 
 The flag is set in the drag handler (Flutter → API → `Node.hand_moved = true`),
-persisted in `.cnnd`, and carried through copy/paste and the name-match path.
+in whatever scope the dragged node lives, persisted in `.cnnd`, and carried
+through copy/paste and the name-match path (D14).
 
 **Open:** whether a full reflow *clears* the flags on the nodes it moved. It
 should — after the algorithm has placed a node, "a human placed this" is false —
@@ -604,29 +926,35 @@ but that makes the reflow destroy intent in a second, less obvious way. See
 
 ---
 
-## Prerequisite: real node sizes
+## Prerequisite: one size function
 
-Every collision test above needs a node's actual box.
-`layout/common.rs::node_height` / `node_size` — landed with
-`design_wire_annotations.md` Phase 5 — already returns real `CommentData`
-dimensions for comments and the `estimate_node_height(params, outputs,
-subtitle)` estimate otherwise, so **the comment half of this is done** and this
-design uses those functions rather than adding its own.
+Every collision test, every anchor, every footprint comparison and every
+block bounding box above needs a node's actual box. There are **four** size
+functions today, and no two agree:
 
-What remains: **`layout/common.rs::node_size` ignores HOF bodies.** A node with
-a `zone` falls through to the parameter-count estimate and its `body_width` /
-`body_height` — which can be many hundreds of pixels — are ignored. A block
-placed next to an expanded HOF will overlap it.
+| Function | Comments | Expanded HOF bodies |
+|---|---|---|
+| `layout/common.rs::node_size` / `node_height` (Sugiyama, `place_comments`) | real `CommentData` dimensions | **ignored** — 160×83 |
+| `node_inlining::estimate_node_size_in_network` / `rendered_body_size` (inlining, GUI reflow) | pin estimate — **wrong** | correct: `resolve_body_collapsed`, `max(stored, content + padding)`, recursive |
+| `text_format/auto_layout::get_node_size` (creation-time placer) | by type name — wrong | by type name — wrong |
+| Flutter `scope_resolver.dart::_computeBodySize` | ground truth | ground truth |
 
-But the missing half **already exists elsewhere**:
-`node_inlining::estimate_node_size_in_network` handles expanded HOFs correctly,
-including `resolve_body_collapsed`, `rendered_body_size` (mirroring Flutter's
-`max(content_extent + padding, stored)`) and recursion into nested HOFs — while
-estimating comments rather than reading `CommentData`. So the prerequisite is to
-**unify the two into one function** that is correct for both classes, not to
-extend either in place. Two divergent size functions is how a collision test and
-a reflow disagree about the same node. This is a prerequisite of Phase 2, and it
-improves `place_comments` on the full-reflow path for free.
+Two divergent size functions is how a collision test and a reflow disagree
+about the same node; four is how the AI's edit log reports "moved" for a node
+Flutter never drew anywhere else. The prerequisite is to **unify into one**
+`rendered_node_size(node, registry)` — the inlining rule for bodies, the layout
+rule for comments, recursive into nested HOFs — and route all four callers
+through it. A test fixture pins its output for a comment, an expanded HOF, a
+collapsed HOF, a closure and a two-level nested HOF against the Flutter rule.
+
+It is a **Phase 1** prerequisite, not Phase 2 as the first draft had it: D13's
+`modified` is a footprint comparison, and D12 reports a body's growth to its
+parent as a footprint, so the delta is meaningless without it.
+
+Two consequences for the full-reflow path, also Phase 1: Sugiyama's column
+width becomes **per layer** (the widest node in the layer plus the gap) rather
+than the fixed 210, since an expanded HOF is 320 px wide by default; and
+`place_comments` gets the body-aware obstacle sizes for free.
 
 Note also that a stored `body_width` / `body_height` is a floor, not the size —
 the rendered body is `max(stored, content + padding)`. Layout should let the max
@@ -640,56 +968,49 @@ take over rather than writing the stored values, which are a user choice.
 path (D9) — obstacles, pushable, shiftable — so they can neither overlap nor be
 gratuitously relocated, and `place_comments` is left untouched for the
 full-reflow path. Only a comment the edit *created* needs a rule, and that is
-[Step 6](#step-6--new-comment-nodes). An anchored comment may drift from its
-anchor when the two are pushed differently; [Step 7](#step-7--restore-drifted-comments)
+[Step 7](#step-7--new-comment-nodes). An anchored comment may drift from its
+anchor when the two are pushed differently; [Step 8](#step-8--restore-drifted-comments)
 pulls it back when the original spot is free, and the leader line keeps the
 association legible when it is not.
 
-**HOF bodies — this section needs a proper revision before Phase 1.** Layout
-does not recurse into `node.zone` today (verified: no mention of `zone` or
-`walk_all_nodes` anywhere in `layout/`), and once
-`doc/design_hof_body_text_format.md` lands the AI *will* edit inside bodies, so
-this can no longer be a paragraph. Open question 3 is answered — bodies are in
-scope for v1 — but the treatment below is not yet a design. What is established:
+**HOF bodies in the text format (`design_hof_body_text_format.md`, landed).**
+That design built the per-scope name match and the pre-clear position snapshot
+(its D8) and deliberately carried "`position` and nothing else". This design
+consumes both and extends the snapshot (D14). A body edit produces a body-scope
+`EditDelta` shaped exactly like a top-level one, which is what lets the
+algorithm run inside bodies with no new machinery beyond the driver in
+[Scopes: inside-out](#scopes-inside-out) and the two body-only rules
+(synthesized anchors in Step 4, slack-first slide in Step 5a).
 
-- **Most of the cross-scope machinery already exists and must be reused, not
-  reinvented.** `doc/design_reflow_on_footprint_change.md` (Phases 0-3, landed)
-  provides `StructureDesigner::reflow_for_footprint_change(scope_path, node_id,
-  old_sizes) -> Vec<ScopedMoves>`, which cascades a grown node's footprint **up
-  the scope chain**, plus `capture_footprint_chain` (must be called *before*
-  mutating) and `node_inlining::make_space_for_inline`. Phase 3 wired the
-  in-body growth case into five GUI mutation sites. "A body grew, push its
-  neighbours in the parent" is solved; the AI edit path needs to call it, not
-  duplicate it. That also means D6's "one collision primitive" is already two —
-  `make_space_for_inline` exists — and the two must be reconciled.
-- **The node-size prerequisite is a unification, not an extension.** There are
-  two size functions, each correct for a different node class:
-  `node_inlining::estimate_node_size_in_network` already handles expanded HOFs
-  correctly (`resolve_body_collapsed`, `rendered_body_size` mirroring Flutter's
-  `max(content + padding, stored)`, recursing into nested HOFs) but estimates
-  comments; `layout/common.rs::node_size` uses real `CommentData` dimensions but
-  ignores bodies. See [Prerequisite: real node sizes](#prerequisite-real-node-sizes).
-- **Layout must run inside-out.** A parent's node sizes are not known until its
-  children's bodies have settled, because an expanded HOF's footprint *is* a
-  function of its body's content bbox. So deepest scope first, then outward.
-- **The delta is no longer singular.** One `ai_edit_network` call can touch the
-  top-level network and several bodies (path-addressed statements), so D1's
-  `EditDelta` becomes a map from scope path to `EditDelta`, processed inside-out.
-- **Undo bundling changes shape.** Moves now land in multiple scopes, which is
-  what `ScopedMoves` + `CompositeCommand` + `combine_refresh_modes` already
-  exist for; the single `MoveNodesCommand` assumed under **Undo** below is not
-  enough.
-- **Cross-scope wires are out of scope for repair.** A capture (`^name`) or a
-  zone-input wire has no source position in the body's own network —
-  `layout/common.rs::wire_midpoint` already treats the destination pin as
-  standing in for it. Step 5's backward-wire check applies to same-scope wires
-  only; a capture that "points backwards" is left alone.
+**Reflow on footprint growth (`design_reflow_on_footprint_change.md`, landed).**
+Its **undo half stands**: `reflow_for_footprint_change`'s walk up the scope
+chain, `capture_footprint_chain`, `ScopedMoves`, `CompositeCommand` and the
+per-case bundling for GUI cases A (f-disconnect), B (`set_collapse_mode`) and C
+(in-body add / paste / duplicate / connect). Its **spatial half is superseded**:
+the quadrant shift it built on is replaced by `grow_rect` at all three call
+sites, per the retirement plan above. The GUI path and the AI path then agree
+on what "this body grew" does to the parent.
 
-**Undo.** The whole AI edit, including the layout adjustment, must be one undo
-step. `layout_active_network()` already wraps a reflow in one `MoveNodesCommand`
-(#270); the incremental pass produces a smaller set of moves and uses the same
-command. Setting `hand_moved` on a drag is a persisted mutation and needs to
-ride in the existing move command rather than becoming a separate undo entry.
+**Full reflow (the explicit user command).** Stays Sugiyama, stays user-invoked,
+but becomes body-aware in Phase 5: per-layer column widths from the unified
+size, and the same inside-out recursion — lay out the body, size the HOF, lay
+out the parent. Without that, D4's "the reflow is the cure" is false for any
+network with an expanded HOF, which today's reflow overlaps with its right
+neighbour every time.
+
+**AI edit history (`design_ai_edit_history.md`).** `ai_edit_log::LayoutPath`
+already reserves an `Incremental` variant "for `doc/design_incremental_layout.md`;
+nothing produces it yet". Phase 5 produces it. The `moved` list is keyed by name
+path and already covers bodies, so a body-only edit that moves nothing outside
+the body reports exactly that.
+
+**Undo.** The AI edit is one whole-network snapshot command
+(`TextEditNetworkCommand`), taken after validation and after layout, and it
+carries every zone. Every move this design makes, in every scope, is inside
+that snapshot; **no `MoveNodesCommand` and no composite is needed on the AI
+path**. The GUI reflow path keeps its `ScopedMoves` bundling unchanged. Setting
+`hand_moved` on a drag is a persisted mutation and rides in the existing move
+command rather than becoming a separate undo entry.
 
 **Preferences.** `auto_layout_after_edit: bool` is replaced by a tri-state, or
 simply repurposed: the incremental pass always runs (it is repair, not layout),
@@ -700,27 +1021,55 @@ and the full reflow is only ever user-invoked. See open question 1.
 ## Phases
 
 ### Phase 1 — Foundations
-`Node.hand_moved` with `#[serde(default)]`, set from the drag path, persisted
-and undoable. `node_size` extended to return the body box for an expanded HOF.
-The `find_connected_components` seed sorted, closing the last cross-process
-nondeterminism (D7). `LayoutSnapshot` + `diff_networks` producing an
-`EditDelta`, including the `replace`-mode name match, with tests but not yet
+The unified `rendered_node_size` with the Flutter-parity fixture, routed through
+all four callers; per-layer column width in Sugiyama. `Node.hand_moved` with
+`#[serde(default)]`, set from the scope-aware drag path, persisted and undoable.
+The identity snapshot extended per D14 and the editor re-applying `body_width`
+/ `body_height` / `collapse_mode` / `hand_moved` on a name match. The
+`find_connected_components` seed sorted (D7). `diff_scope` producing a
+per-scope `EditDelta` with footprint-based `modified`, with tests but not yet
 wired to anything.
 
-*Tests:* delta correctly classifies add / modify / remove / rewire; a value-only
-change produces an empty delta; a statement that shrinks an array pin
-(`[a, b]` → `[a]`) yields the dropped wire in `removed_wires` and leaves
-`modified` empty; a literal on a wired scalar pin does the same; `hand_moved` round-trips through `.cnnd` and
-copy/paste; a pre-flag `.cnnd` loads with `hand_moved = false`; a network with
-two equal-size disconnected components lays out byte-identically across two
-processes (D7); a `replace`-mode rebuild of an unchanged script matches every
-node by name and yields an **empty** delta; a renamed node in a `replace`
-rebuild is classified `added`, not matched to its old identity.
+*Tests:* the size fixture; an expanded 320-wide HOF in a Sugiyama layer no
+longer overlaps the next column; delta correctly classifies add / grow / remove
+/ rewire; a value-only change produces an empty delta; a statement that shrinks
+an array pin (`[a, b]` → `[a]`) yields the dropped wire in `removed_wires` and
+leaves `modified` empty; a literal on a wired scalar pin does the same;
+unwiring `f:` on an Auto-mode `map` classifies it `modified` with the expanded
+footprint; a body statement that adds a node classifies the **owning HOF**
+`modified` in the parent's delta (D12/D13); `hand_moved` round-trips through
+`.cnnd` and copy/paste; a pre-flag `.cnnd` loads with `hand_moved = false`; a
+network with two equal-size disconnected components lays out byte-identically
+across two processes (D7); a `replace`-mode rebuild of an unchanged script
+matches every node by name and yields an **empty** delta in every scope; a
+`replace` round-trip of a **`Collapsed`** HOF leaves it collapsed and its body
+size bit-identical (D14); a renamed node in a `replace` rebuild is classified
+`added`, not matched to its old identity.
 
-### Phase 2 — Block layout and placement
-`layout_subgraph`, block decomposition, anchor computation, Step 3 target
-position, Step 4a slide. No pushing yet: if the target is occupied, the block
-falls below the drawing. `shift_half_plane` for the no-horizontal-room case.
+### Phase 2 — Motion primitives, and the GUI migration
+`shift_half_plane`, the vertical cascade, `grow_rect`. Step 2 as a callable
+unit. **Retire the quadrant shift**: switch the three `make_space_for_inline`
+call sites to `grow_rect`, delete it, and adjust `reflow_test.rs`. This phase
+is independently valuable — it fixes the GUI's overlap-creating growth today —
+and it validates the primitive on the real cases A, B, C before the AI path
+depends on it.
+
+*Tests:* `grow_rect` on width alone shifts exactly the half-plane and moves
+nothing below; on height alone pushes only colliding nodes down, by the
+minimum, and a node with whitespace above it does not move; the
+right-moved / down-moved overlap the quadrant shift produced (large `dw`, small
+`dh`, two neighbours straddling the diagonal) does **not** occur; a node that
+already overlapped the old rect is left alone; the cascade terminates on a
+dense column and pushes a node whose x-interval overlaps a *pushed* node but
+not `R` (the widening case); a forward wire crossing the shift line stays
+forward; existing case A / B / C reflow tests pass with the new expectations,
+and their single-step undo/redo is unchanged.
+
+### Phase 3 — Block layout and placement
+`layout_subgraph` with unified sizes, block decomposition, anchor computation
+including the synthesized body anchors, Step 4 target position, Step 5a slide
+with the slack-first rule in bodies, Step 5b via the cascade. The inside-out
+driver over scopes.
 
 *Tests:* one added node lands beside its input and **no existing node moves**; a
 20-node connected addition is laid out internally by Sugiyama and placed as one
@@ -728,49 +1077,60 @@ block with no existing node moving; an addition with no anchors goes right of
 the drawing; a block needing a new column shifts the half-plane and nothing
 reorders; an existing comment that nothing collides with stays at its **exact**
 original position, on whichever side of its anchor the human put it (D9 — the
-four-sides rule must not fire); a newly created `on:`-anchored comment lands
-beside its anchor (Step 6).
+four-sides rule must not fire); a `$element → mul → output` body lays out left
+to right against the synthesized anchors and **does not grow the body** when
+the default body has room; a node added to a body with slack lands inside the
+stored size and the parent's delta is empty; a node added to a full body grows
+the HOF and the HOF's right neighbour in the parent shifts by exactly the width
+delta; two-level nesting cascades to the grandparent; a new `map` with a
+three-node body created in one script is placed in the parent at its settled
+footprint and overlaps nothing; no body node ever receives a negative
+coordinate.
 
-### Phase 3 — Band push and repair
-Step 4b Force-Scan band push with cascade, the `hand_moved` tiebreakers, and
-Step 5 (grown node, backward wire).
+### Phase 4 — Repair passes and tiebreakers
+Step 6 (backward wires), Step 7 (new comments), Step 8 (drifted comments), the
+`hand_moved` tiebreakers.
 
-*Tests:* a block placed into an occupied band displaces the minimum number of
-nodes and **never inverts a vertical order**; the cascade terminates on a dense
-column; the cascade pushes a node whose x-interval overlaps a *pushed* node but
-not `R` (the widening case — the narrow reading of the closure fails this one);
-a node that grew pushes its neighbours down and nothing else; a rewire that
-points backward shifts the half-plane; a wire that was **already** backward
-before the edit is not touched; **removing** a wire moves nothing at all, and a
-node left with no wires stays at its exact position; a 400x300 comment in the band is pushed like any
-other node, by the minimum amount, and never ends up overlapped (D9);
-**Step 7** — a comment left behind by a half-plane shift is pulled back to its
-exact original offset; a drifted comment whose original spot is now occupied
-stays where the cascade left it; a comment that drifted *closer* to its anchor
-is not moved; a comment with an unresolvable anchor is skipped; the pass never
-introduces an overlap. Plus a generous guard assertion — no cascade
-pushes more than ~20 nodes — to catch a regression, not to bound behaviour.
+*Tests:* a rewire that points backward shifts the half-plane; a wire that was
+**already** backward before the edit is not touched; a cross-scope wire is never
+repaired; **removing** a wire moves nothing at all, and a node left with no
+wires stays at its exact position; a 400×300 comment in the band is pushed like
+any other node, by the minimum amount, and never ends up overlapped (D9); a
+comment left behind by a half-plane shift is pulled back to its exact original
+offset; a drifted comment whose original spot is now occupied stays where the
+cascade left it; a comment that drifted *closer* to its anchor is not moved; a
+comment with an unresolvable anchor is skipped; the pass never introduces an
+overlap; a newly created `on:`-anchored comment lands beside its anchor. Plus a
+generous guard assertion — no cascade pushes more than ~20 nodes — to catch a
+regression, not to bound behaviour.
 
-### Phase 4 — Wiring it up
-Replace the `layout_network` call in `ai_assistant_api.rs` with the incremental
-pass. Preferences and the Auto-Layout menu item ("respect manually placed
-nodes"). Reference guide: `doc/reference_guide/node_networks.md` (what happens
-to your layout when the AI edits, and how to get a full reflow) and
-`doc/reference_guide/ui.md` for the menu/preference.
+### Phase 5 — Wiring it up
+Replace the `layout_network` call in `ai_text_edit` with the incremental pass,
+producing `LayoutPath::Incremental`. Make the explicit full reflow body-aware
+(inside-out recursion). Preferences and the Auto-Layout menu item ("respect
+manually placed nodes"). Reference guide: `doc/reference_guide/node_networks.md`
+(what happens to your layout when the AI edits, and how to get a full reflow)
+and `doc/reference_guide/ui.md` for the menu/preference.
 
-*Tests:* end-to-end through `text_edit_network`; and a **corpus regression** —
-load `from_mechadense.cnnd`, apply a synthetic edit to one network, assert that
+*Tests:* end-to-end through `ai_text_edit`; a **corpus regression** — load
+`from_mechadense.cnnd`, apply a synthetic edit to one network, assert that
 every node outside the delta and outside the pushed band is at its exact
-original position.
+original position, bodies included; a `query` → `edit --replace` round-trip of
+a body-bearing network moves nothing; a full reflow of a network with an
+expanded HOF produces no overlap.
 
 *Manual verification* (per `feedback_manual_test_for_editor_ui`): AI-add a node
-in a dense region; AI-add a subassembly; delete a node and confirm the hole
-stays; drag a node then AI-edit near it; full reflow and undo.
+in a dense region; AI-add a subassembly; AI-add a node inside a `map` body and
+confirm the map's neighbour shifts right by the growth and nothing below moves;
+delete a node and confirm the hole stays; drag a node then AI-edit near it;
+collapse an HOF, `query` → `edit --replace`, confirm it is still collapsed;
+full reflow and undo.
 
-### Phase 5 (later) — Refinements
+### Phase 6 (later) — Refinements
 Downstream-cone shifting instead of half-plane. Hole reuse (place a block into a
-deletion hole when one fits). Anchored-comment following once #427 lands.
-Recursion into HOF bodies if Phase 4 leaves it out.
+deletion hole when one fits). The Step 8 partial-move refinement. Applying
+`grow_rect` to the user's zone-resize drag (`set_zone_size`), which the reflow
+design left out of scope.
 
 ---
 
@@ -783,23 +1143,26 @@ Recursion into HOF bodies if Phase 4 leaves it out.
 2. **Does a full reflow clear `hand_moved`?** Clearing is semantically honest
    but silently discards intent. Alternative: keep the flags, so a subsequent
    "respect manually placed nodes" reflow can restore the distinction.
-3. ~~**Does the incremental pass recurse into HOF bodies in v1, or Phase 5?**~~
-   **Answered: v1.** Once `doc/design_hof_body_text_format.md` lands the AI can
-   edit inside bodies, so a body edit that reflows the whole body would be the
-   same intent-destroying behaviour this design exists to prevent, one scope
-   down. See [Interaction with other subsystems](#interaction-with-other-subsystems)
-   — that section needs a proper revision before Phase 1 starts.
+3. ~~**Does the incremental pass recurse into HOF bodies in v1, or later?**~~
+   **Answered: v1**, and now designed — see [Scopes: inside-out](#scopes-inside-out).
 4. **Is `SLIDE_WINDOW` exposed?** Preference is: no. One internal constant,
    documented, not tunable.
 5. **Should the drift after many edits be surfaced?** A cheap counter (e.g.
    number of backward wires introduced since the last full reflow) could drive a
    passive "this network could use a tidy-up" hint. Suggestion only, never
    automatic.
-6. **Does `replace` mode get name-matching in v1?** Recommended yes — it is a
-   `HashMap` lookup per node and it protects an advertised workflow
-   (query → `edit --replace`). The unnamed-node concern that originally made
-   this a question turned out not to exist: every node carries a
-   `custom_name` from creation.
-7. **Should Step 7 fall back to a partial move when the exact target
+6. ~~**Does `replace` mode get name-matching in v1?**~~ **Answered: it already
+   has it**, built by `design_hof_body_text_format.md` D8. What remains is D14's
+   extension of what the match carries.
+7. **Should Step 8 fall back to a partial move when the exact target
    collides?** Specified as all-or-nothing. The interpolation refinement is
-   noted in Step 7; it recovers more cases but introduces a sample count.
+   noted in Step 8; it recovers more cases but introduces a sample count.
+8. **Should the slack-first slide in a body also prefer the stored size over
+   the wire-derived x?** As specified, Step 4 computes the target x from anchors
+   and Step 5a slides only in y within the slack. A block whose anchor-derived x
+   already lies past the stored width grows the body regardless. Accepting that
+   keeps the body rule to one clause; the alternative is a two-axis search.
+9. **Should the zone-resize drag reflow?** The reflow design left
+   `set_zone_size` out of scope because the user is already dragging. With
+   `grow_rect` available it is a one-line addition; deferred to Phase 6 until
+   someone wants it.
