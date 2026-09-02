@@ -9058,7 +9058,7 @@ impl StructureDesigner {
     /// One reflow step at `scope_path` for `node_id`, which has just grown in
     /// place from `old_sizes[0]`. Re-estimates the node's new rendered size; if
     /// it grew, pushes the surrounding nodes in its own network out of the way
-    /// (via [`node_inlining::make_space_for_inline`]) and records the moves. If
+    /// (via [`crate::layout::motion::grow_rect`]) and records the moves. If
     /// that network is itself a zone body whose own footprint grew past its
     /// stored size, the cascade recurses one scope up with the enclosing HOF as
     /// the node. Returns one [`ScopedMoves`] per scope that actually moved nodes
@@ -9085,7 +9085,8 @@ impl StructureDesigner {
         node_id: u64,
         old_sizes: &[DVec2],
     ) -> Vec<ScopedMoves> {
-        use super::node_inlining::{instance_size, make_space_for_inline};
+        use super::layout::motion::{grow_rect, measure_scope};
+        use super::node_inlining::instance_size;
 
         let mut out: Vec<ScopedMoves> = Vec::new();
         let mut path: Vec<u64> = scope_path.to_vec();
@@ -9099,10 +9100,12 @@ impl StructureDesigner {
                 break;
             };
 
-            // Immutable phase: estimate the grown node's new size and, only if it
-            // actually grew, capture the sibling positions to diff against after
-            // make_space. The registry and the resolved network are both
-            // borrowed immutably here; the mutable borrow is taken below.
+            // Immutable phase: estimate the grown node's new size and, only if
+            // it actually grew, measure the whole scope. Sizes have to be taken
+            // here because the network *lives inside* the registry, so the
+            // mutable borrow below cannot coexist with a registry borrow —
+            // hence `grow_rect` consuming a measured map rather than a registry
+            // (`layout::motion`'s module docs).
             let prep = {
                 let Some(net) = self.get_scope_network(&path) else {
                     break;
@@ -9110,7 +9113,6 @@ impl StructureDesigner {
                 let Some(node) = net.nodes.get(&nid) else {
                     break;
                 };
-                let anchor = node.position;
                 let new = instance_size(node, &self.node_type_registry);
                 let delta = (new - old).max(DVec2::ZERO);
                 if delta.x == 0.0 && delta.y == 0.0 {
@@ -9118,34 +9120,22 @@ impl StructureDesigner {
                     // cascade can climb no further.
                     None
                 } else {
-                    let before: Vec<(u64, DVec2)> = net
-                        .nodes
-                        .iter()
-                        .filter(|&(&id, _)| id != nid)
-                        .map(|(&id, n)| (id, n.position))
-                        .collect();
-                    Some((anchor, new, before))
+                    Some((new, measure_scope(net, &self.node_type_registry)))
                 }
             };
 
-            let Some((anchor, new, before)) = prep else {
+            let Some((new, sizes)) = prep else {
                 break;
             };
 
-            // Mutable phase: make space, then diff the captured before-positions
-            // against the post-move positions to build (id, old_pos, new_pos).
+            // Mutable phase: grow the node's rect in place — the width delta as
+            // a rigid half-plane shift, the height delta as a minimal downward
+            // cascade — and take the moves it reports.
             let moves = {
                 let Some(net) = self.get_scope_network_mut(&path) else {
                     break;
                 };
-                make_space_for_inline(net, nid, anchor, old, new);
-                before
-                    .into_iter()
-                    .filter_map(|(id, old_pos)| {
-                        let new_pos = net.nodes.get(&id)?.position;
-                        (new_pos != old_pos).then_some((id, old_pos, new_pos))
-                    })
-                    .collect::<Vec<(u64, DVec2, DVec2)>>()
+                grow_rect(net, &sizes, nid, old, new)
             };
 
             if !moves.is_empty() {
@@ -9237,19 +9227,20 @@ impl StructureDesigner {
         };
 
         // 6. Run the three helpers on the resolved target network (top-level
-        //    active network or a nested body). The helpers touch no registry
-        //    state, so a plain `&mut NodeNetwork` borrow suffices.
+        //    active network or a nested body). `grow_rect` needs the scope's
+        //    footprints, and the network lives inside the registry, so measure
+        //    before taking the mutable borrow.
+        let sizes = {
+            let target = self
+                .get_scope_network(&scope_path)
+                .ok_or("Scope not found")?;
+            crate::layout::motion::measure_scope(target, &self.node_type_registry)
+        };
         {
             let target = self
                 .get_scope_network_mut(&scope_path)
                 .ok_or("Scope not found")?;
-            node_inlining::make_space_for_inline(
-                target,
-                node_id,
-                anchor,
-                original_size,
-                content_size,
-            );
+            crate::layout::motion::grow_rect(target, &sizes, node_id, original_size, content_size);
             let id_mapping = node_inlining::copy_content_into(target, &source, anchor, content_min);
             node_inlining::splice_inline_boundary(target, node_id, &source, &id_mapping);
         }
@@ -9472,40 +9463,44 @@ impl StructureDesigner {
             conv::build_closure_from_instance(instance, &source, &self.node_type_registry)?
         };
 
-        // 6b. Placement geometry for make-space (immutable registry borrow, taken
+        // 6b. Placement geometry for the grow (immutable registry borrow, taken
         //     before the mutable target borrow below). `C` renders far larger
         //     than the instance it replaces — its body shows the inlined network,
-        //     including nested zone nodes — so the lower-right region must be
-        //     pushed out or `C` overlaps its neighbours (e.g. a downstream
-        //     `collect`). The closure's size is measured from its actual body
-        //     content (`instance_size` → `rendered_body_size`), not its flat
+        //     including nested zone nodes — so room has to be made or `C`
+        //     overlaps its neighbours (e.g. a downstream `collect`). The
+        //     closure's size is measured from its actual body content
+        //     (`instance_size` → `rendered_body_size`), not its flat
         //     `DEFAULT_BODY_*` placeholder.
         let closure_size = node_inlining::instance_size(&closure_node, &self.node_type_registry);
-        let (anchor, original_size) = {
+        let original_size = {
             let target = self.get_scope_network(&scope_path).unwrap();
             let instance = target.nodes.get(&node_id).unwrap();
-            (
-                instance.position,
-                node_inlining::instance_size(instance, &self.node_type_registry),
-            )
+            node_inlining::instance_size(instance, &self.node_type_registry)
         };
 
         // 7. Replace `I` with `C` (same id), make room for the larger closure,
         //    redirect `-1` consumers to pin `0`, and drop any stale display state
-        //    (C's pin 0 is a Function — no viewport output).
+        //    (C's pin 0 is a Function — no viewport output). The swap happens in
+        //    its own borrow so the scope can be measured with `C` already in it;
+        //    `grow_rect` cannot hold a registry borrow (see `layout::motion`).
         {
             let target = self
                 .get_scope_network_mut(&scope_path)
                 .ok_or("Scope not found")?;
             target.nodes.insert(node_id, closure_node);
             target.displayed_nodes.remove(&node_id);
-            node_inlining::make_space_for_inline(
-                target,
-                node_id,
-                anchor,
-                original_size,
-                closure_size,
-            );
+        }
+        let sizes = {
+            let target = self
+                .get_scope_network(&scope_path)
+                .ok_or("Scope not found")?;
+            crate::layout::motion::measure_scope(target, &self.node_type_registry)
+        };
+        {
+            let target = self
+                .get_scope_network_mut(&scope_path)
+                .ok_or("Scope not found")?;
+            crate::layout::motion::grow_rect(target, &sizes, node_id, original_size, closure_size);
             conv::redirect_function_consumers(target, node_id);
         }
 

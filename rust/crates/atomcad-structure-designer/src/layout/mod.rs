@@ -30,11 +30,16 @@
 //! - `common.rs` - Shared utilities (depth computation, graph traversal)
 //! - `size.rs` - `rendered_node_size`, the one node-size function
 //! - `delta.rs` - `EditDelta` / `diff_scope`, the incremental pass's input
+//! - `motion.rs` - `shift_half_plane` / `cascade` / `grow_rect`, the two
+//!   motion primitives the incremental pass repairs a drawing with
+//! - `incremental.rs` - the incremental pass itself, step by step
 //! - `topological_grid.rs` - Simple, reliable layered layout
 //! - `sugiyama.rs` - Sophisticated layout with crossing minimization
 
 pub mod common;
 pub mod delta;
+pub mod incremental;
+pub mod motion;
 pub mod size;
 pub mod sugiyama;
 pub mod topological_grid;
@@ -44,6 +49,11 @@ pub use common::LayoutAlgorithm;
 pub use delta::{
     EditDelta, WireEnd, WireKey, WireSlot, collect_all_wires, diff_scope, node_ids_by_path,
     scopes_inside_out,
+};
+pub use incremental::repair_grown;
+pub use motion::{
+    CascadeDir, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
+    snap_shift_line, upstream_closure,
 };
 pub use size::{rendered_body_size, rendered_node_size, rendered_node_size_by_id};
 

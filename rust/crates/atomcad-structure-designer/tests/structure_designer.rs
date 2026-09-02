@@ -104,6 +104,12 @@ mod layout_hand_moved_test;
 #[path = "structure_designer/layout_oracle_test.rs"]
 mod layout_oracle_test;
 
+#[path = "structure_designer/layout_motion_test.rs"]
+mod layout_motion_test;
+
+#[path = "structure_designer/layout_incremental_test.rs"]
+mod layout_incremental_test;
+
 #[path = "structure_designer/parameter_wire_preservation_test.rs"]
 mod parameter_wire_preservation_test;
 

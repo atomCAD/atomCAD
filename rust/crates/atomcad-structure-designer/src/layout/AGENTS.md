@@ -8,6 +8,8 @@ Automatic layout algorithms for repositioning nodes in a network.
 |------|---------|
 | `size.rs` | `rendered_node_size` — **the** node-size function (see below) |
 | `delta.rs` | `EditDelta` / `diff_scope` — the incremental pass's input |
+| `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
+| `incremental.rs` | The incremental pass, step by step (Step 2 so far) |
 | `common.rs` | Shared types and constants, depth computation, and the comment-placement pass |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
 | `sugiyama.rs` | Sugiyama-style layout with crossing minimization |
@@ -99,6 +101,51 @@ Three rules follow:
   the two rules have drifted before and the drift was invisible until something
   overlapped on screen. The refresh cycle is in `layout_size_test.rs`'s module
   docs — Rust, then Dart, then Rust again.
+
+## Two motion primitives, one per axis
+
+`doc/design_incremental_layout.md` D6. Everything that has to make room in an
+existing drawing — the incremental pass, and since Phase 2 the GUI's
+growth reflow as well — goes through exactly two operations in `motion.rs`,
+and adding a third is a design change, not a refactor:
+
+- **`shift_half_plane(T, dx, fixed)`** — horizontal, rigid, global. Every placed
+  node with `x >= T` moves right by `dx`, except a `fixed` set. `fixed` must be
+  closed upstream (`upstream_closure`), and that is the whole correctness
+  argument: with it, a wire from a moved node into an unmoved one cannot exist,
+  so **a forward wire can never turn backward**. Drop the closure and the
+  primitive stops being wire-safe.
+- **`cascade(R, dir, fixed, ignore)`** — vertical, minimal, local. Only nodes
+  that actually collide move, by the least that clears the collision, and the
+  push propagates **only through overlaps the cascade itself created**. A
+  pre-existing overlap is never repaired and never blocks anything — the design
+  rule is *repair only what this edit broke*, and both hand-drawn corpora
+  contain overlaps their authors are content with.
+
+The pairing is not symmetric by accident: x carries a directional invariant
+(rightward flow) and y carries none, so x gets the operation that provably
+preserves order and y gets the one that moves the least.
+
+**`grow_rect(node, old, new)` is the one growth operation** (D11) — width delta
+as a shift, height delta as a downward cascade, in that order. Every path where
+a node's footprint grows in place calls it: `reflow_for_footprint_change`,
+`inline_custom_node`, `convert_instance_to_closure`, and Step 2 of the
+incremental pass. It replaced `node_inlining::make_space_for_inline`, the
+quadrant shift, which swept the whole lower-right region on both axes — moving
+nodes nothing was going to collide with, and occasionally driving its
+right-moved and down-moved halves into each other.
+
+Two things to know before calling any of them:
+
+- **They take a measured `sizes` map, not a `&NodeTypeRegistry`.** A
+  `NodeNetwork` lives *inside* the registry (`NodeTypeRegistry::node_networks`),
+  so `&mut NodeNetwork` and `&NodeTypeRegistry` cannot be held at once. Call
+  `measure_scope` before taking the mutable borrow. Sizes are position-
+  independent, so one measurement is good for a whole pass over one scope.
+- **The map's keys are the placed set.** A node absent from `sizes` is invisible:
+  not an obstacle, not moved. From Phase 3 that is how a freshly added node stays
+  out of the way until its block is placed, so do not "helpfully" fall back to
+  every node in the network.
 
 ## Sugiyama columns are per layer
 

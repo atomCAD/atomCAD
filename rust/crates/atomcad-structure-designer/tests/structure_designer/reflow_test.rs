@@ -5,6 +5,10 @@
 //! - `combine_refresh_modes` folding table,
 //! - `StructureDesigner::reflow_for_footprint_change` spatial behaviour
 //!   (single scope + the cascade across two body levels), pure — no undo wiring.
+//!
+//! The spatial half moved to `layout::motion::grow_rect` in Phase 2 of
+//! `doc/design_incremental_layout.md`, which is why the expectations below are
+//! per axis. See [`rightward`].
 
 use glam::f64::DVec2;
 use std::sync::{Arc, Mutex};
@@ -51,6 +55,26 @@ fn pos(designer: &StructureDesigner, scope_path: &[u64], id: u64) -> DVec2 {
 
 fn grew(new: DVec2, old: DVec2) -> DVec2 {
     (new - old).max(DVec2::ZERO)
+}
+
+/// The vertical clearance `layout::motion::cascade` keeps between two nodes
+/// (`layout::common::VERTICAL_GAP`). A neighbour placed at exactly this
+/// distance below a box is clear of it, and moves by exactly the box's growth.
+const CASCADE_GAP: f64 = 30.0;
+
+/// The part of a growth delta that reaches a neighbour sitting clear of the
+/// grown box to its right: the **width**, rigidly, and nothing on y.
+///
+/// Reflow used to make room with a quadrant shift, which swept the whole
+/// lower-right region on both axes — moving nodes nothing was going to collide
+/// with. `layout::motion::grow_rect` (`doc/design_incremental_layout.md`
+/// D6/D11) splits the job by axis instead: the width delta is a rigid
+/// half-plane shift of everything right of the old right edge, and the height
+/// delta a downward cascade that only touches what the taller box actually
+/// reaches. A neighbour out in the lower-right therefore takes the width and
+/// stays exactly where it was vertically.
+fn rightward(delta: DVec2) -> DVec2 {
+    DVec2::new(delta.x, 0.0)
 }
 
 // ---------------------------------------------------------------------------
@@ -223,7 +247,7 @@ fn combine_refresh_modes_table() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn reflow_single_scope_pushes_lower_right_neighbour() {
+fn reflow_single_scope_shifts_the_half_plane_right() {
     let mut designer = setup_designer_with_network("main");
 
     // An expanded `map` HOF at the origin is the node that will grow (its
@@ -239,10 +263,10 @@ fn reflow_single_scope_pushes_lower_right_neighbour() {
     // `reflow_for_footprint_change` below as the sole reflow under test.
     designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
 
-    // A neighbour strictly in the lower-right sweep band (past both the right
-    // and bottom edges of the map's *original* footprint) — it should shift on
-    // both axes by the growth delta. Placed via top-level `add_node`, which
-    // does not reflow.
+    // A neighbour out past the right and bottom edges of the map's *original*
+    // footprint. It is right of the shift line, so it takes the width delta
+    // rigidly; nothing reaches it vertically. Placed via top-level `add_node`,
+    // which does not reflow.
     let lower_right =
         designer.add_node("union", DVec2::new(old_size.x + 500.0, old_size.y + 500.0));
     let lr_before = pos(&designer, &[], lower_right);
@@ -266,8 +290,8 @@ fn reflow_single_scope_pushes_lower_right_neighbour() {
     let sm = &scoped_moves[0];
     assert_eq!(sm.scope_path, Vec::<u64>::new());
 
-    // The lower-right neighbour moved by exactly the delta; the grown node and
-    // the safe node are absent from the move list.
+    // The lower-right neighbour moved by exactly the width delta; the grown
+    // node and the safe node are absent from the move list.
     assert_eq!(
         sm.moves.len(),
         1,
@@ -276,10 +300,13 @@ fn reflow_single_scope_pushes_lower_right_neighbour() {
     let (moved_id, old_pos, new_pos) = sm.moves[0];
     assert_eq!(moved_id, lower_right);
     assert_eq!(old_pos, lr_before);
-    assert_eq!(new_pos, lr_before + delta);
+    assert_eq!(new_pos, lr_before + rightward(delta));
 
     // The actual stored positions match the reported moves.
-    assert_eq!(pos(&designer, &[], lower_right), lr_before + delta);
+    assert_eq!(
+        pos(&designer, &[], lower_right),
+        lr_before + rightward(delta)
+    );
     assert_eq!(pos(&designer, &[], safe), safe_before);
 }
 
@@ -325,14 +352,15 @@ fn reflow_cascades_across_two_body_levels() {
     // the tracked neighbours.
     designer.add_node_scoped(&[m1, m2], "union", DVec2::new(1500.0, 1500.0), None);
 
-    // A sibling of m2 inside m1's body, in m2's *pre-trigger* lower-right band.
+    // A sibling of m2 inside m1's body, out past m2's *pre-trigger* footprint.
     let s_mid = designer.add_node_scoped(
         &[m1],
         "union",
         DVec2::new(m2_old.x + 500.0, m2_old.y + 500.0),
         None,
     );
-    // A sibling of m1 in the top-level network, in m1's *pre-trigger* band.
+    // A sibling of m1 in the top-level network, out past m1's *pre-trigger*
+    // footprint.
     let s_top = designer.add_node("union", DVec2::new(m1_old.x + 500.0, m1_old.y + 500.0));
 
     let s_mid_before = pos(&designer, &[m1], s_mid);
@@ -359,7 +387,7 @@ fn reflow_cascades_across_two_body_levels() {
     let (mid_id, mid_old, mid_new) = body_entry.moves[0];
     assert_eq!(mid_id, s_mid);
     assert_eq!(mid_old, s_mid_before);
-    assert_eq!(mid_new, s_mid_before + delta_mid);
+    assert_eq!(mid_new, s_mid_before + rightward(delta_mid));
 
     // Entry 1: the top-level scope [] — s_top pushed by m1's growth.
     let top_entry = scoped_moves
@@ -373,11 +401,17 @@ fn reflow_cascades_across_two_body_levels() {
     let (top_moved_id, top_old, top_new) = top_entry.moves[0];
     assert_eq!(top_moved_id, s_top);
     assert_eq!(top_old, s_top_before);
-    assert_eq!(top_new, s_top_before + delta_top);
+    assert_eq!(top_new, s_top_before + rightward(delta_top));
 
     // Stored positions reflect the reported moves.
-    assert_eq!(pos(&designer, &[m1], s_mid), s_mid_before + delta_mid);
-    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+    assert_eq!(
+        pos(&designer, &[m1], s_mid),
+        s_mid_before + rightward(delta_mid)
+    );
+    assert_eq!(
+        pos(&designer, &[], s_top),
+        s_top_before + rightward(delta_top)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -410,7 +444,7 @@ fn set_collapse_mode_expand_pushes_neighbour_single_step_undo() {
     designer.set_collapse_mode(&[], map_id, CollapseMode::Collapsed);
     let compact_size = node_size(&designer, &[], map_id);
 
-    // Neighbour in the compact footprint's lower-right sweep band.
+    // Neighbour out past the compact footprint's right and bottom edges.
     let neighbour = designer.add_node(
         "union",
         DVec2::new(compact_size.x + 500.0, compact_size.y + 500.0),
@@ -426,7 +460,10 @@ fn set_collapse_mode_expand_pushes_neighbour_single_step_undo() {
         delta.x > 0.0 && delta.y > 0.0,
         "expected the map to grow on both axes, got delta {delta:?}"
     );
-    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+    assert_eq!(
+        pos(&designer, &[], neighbour),
+        neighbour_before + rightward(delta)
+    );
     assert_eq!(
         collapse_mode(&designer, &[], map_id),
         CollapseMode::Expanded
@@ -448,7 +485,10 @@ fn set_collapse_mode_expand_pushes_neighbour_single_step_undo() {
         collapse_mode(&designer, &[], map_id),
         CollapseMode::Expanded
     );
-    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+    assert_eq!(
+        pos(&designer, &[], neighbour),
+        neighbour_before + rightward(delta)
+    );
 }
 
 /// Collapsing (a shrink) moves nothing and records a single bare command.
@@ -458,7 +498,7 @@ fn set_collapse_mode_collapse_moves_nothing() {
     let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
     designer.add_node_scoped(&[map_id], "union", DVec2::new(1200.0, 1200.0), None);
 
-    // map is Auto/expanded; put a neighbour in its expanded lower-right band.
+    // map is Auto/expanded; put a neighbour out past its expanded footprint.
     let expanded_size = node_size(&designer, &[], map_id);
     let neighbour = designer.add_node(
         "union",
@@ -492,7 +532,7 @@ fn set_collapse_mode_nested_expand_cascades_and_undoes_single_step() {
     // Compact `inner` first so expansion is the growing direction.
     designer.set_collapse_mode(&[outer], inner, CollapseMode::Collapsed);
 
-    // Sibling of `inner` inside the outer body, in `inner`'s lower-right band.
+    // Sibling of `inner` inside the outer body, past `inner`'s footprint.
     let inner_compact = node_size(&designer, &[outer], inner);
     let s_body = designer.add_node_scoped(
         &[outer],
@@ -500,7 +540,7 @@ fn set_collapse_mode_nested_expand_cascades_and_undoes_single_step() {
         DVec2::new(inner_compact.x + 500.0, inner_compact.y + 500.0),
         None,
     );
-    // Sibling of `outer` at top level, in `outer`'s lower-right band.
+    // Sibling of `outer` at top level, past `outer`'s footprint.
     let outer_size = node_size(&designer, &[], outer);
     let s_top = designer.add_node(
         "union",
@@ -520,8 +560,14 @@ fn set_collapse_mode_nested_expand_cascades_and_undoes_single_step() {
     let delta_top = grew(node_size(&designer, &[], outer), outer_old);
     assert!(delta_body.x > 0.0 && delta_body.y > 0.0);
     assert!(delta_top.x > 0.0 && delta_top.y > 0.0);
-    assert_eq!(pos(&designer, &[outer], s_body), s_body_before + delta_body);
-    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+    assert_eq!(
+        pos(&designer, &[outer], s_body),
+        s_body_before + rightward(delta_body)
+    );
+    assert_eq!(
+        pos(&designer, &[], s_top),
+        s_top_before + rightward(delta_top)
+    );
 
     // One undo restores the mode and both reflowed positions.
     assert!(designer.undo());
@@ -539,8 +585,14 @@ fn set_collapse_mode_nested_expand_cascades_and_undoes_single_step() {
         collapse_mode(&designer, &[outer], inner),
         CollapseMode::Expanded
     );
-    assert_eq!(pos(&designer, &[outer], s_body), s_body_before + delta_body);
-    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+    assert_eq!(
+        pos(&designer, &[outer], s_body),
+        s_body_before + rightward(delta_body)
+    );
+    assert_eq!(
+        pos(&designer, &[], s_top),
+        s_top_before + rightward(delta_top)
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -635,7 +687,10 @@ fn delete_f_wire_expands_map_and_reflows_single_step_undo() {
         delta.x > 0.0 && delta.y > 0.0,
         "map should expand once its f wire is gone, got delta {delta:?}"
     );
-    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+    assert_eq!(
+        pos(&designer, &[], neighbour),
+        neighbour_before + rightward(delta)
+    );
 
     // One undo restores the wire (map back to compact) and the neighbour.
     assert!(designer.undo());
@@ -646,7 +701,10 @@ fn delete_f_wire_expands_map_and_reflows_single_step_undo() {
     // Redo re-applies both.
     assert!(designer.redo());
     assert_eq!(node_size(&designer, &[], map_id), expanded_size);
-    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+    assert_eq!(
+        pos(&designer, &[], neighbour),
+        neighbour_before + rightward(delta)
+    );
 }
 
 /// Deleting the `f`-**source node** (the closure) disconnects `f` the same way:
@@ -676,7 +734,10 @@ fn delete_f_source_node_expands_map_and_reflows() {
     let expanded_size = node_size(&designer, &[], map_id);
     let delta = grew(expanded_size, compact_size);
     assert!(delta.x > 0.0 && delta.y > 0.0);
-    assert_eq!(pos(&designer, &[], neighbour), neighbour_before + delta);
+    assert_eq!(
+        pos(&designer, &[], neighbour),
+        neighbour_before + rightward(delta)
+    );
 
     // Single undo restores the closure, the wire, and the neighbour position.
     assert!(designer.undo());
@@ -722,7 +783,7 @@ fn delete_f_wire_in_body_reflows_body_single_step_undo() {
     );
     assert_eq!(
         pos(&designer, &[outer], neighbour),
-        neighbour_before + delta
+        neighbour_before + rightward(delta)
     );
 
     // One undo restores the body wholesale: wire back, map compact, neighbour
@@ -736,7 +797,7 @@ fn delete_f_wire_in_body_reflows_body_single_step_undo() {
     assert!(designer.redo());
     assert_eq!(
         pos(&designer, &[outer], neighbour),
-        neighbour_before + delta
+        neighbour_before + rightward(delta)
     );
 }
 
@@ -755,8 +816,8 @@ fn add_node_in_body_pushes_parent_sibling_single_step_undo() {
     let mut designer = setup_designer_with_network("main");
     let map_id = designer.add_node("map", DVec2::new(0.0, 0.0));
 
-    // Sibling of the (empty, expanded) map in its lower-right sweep band at the
-    // top level — it should shift once the map's footprint grows.
+    // Sibling of the (empty, expanded) map out past its right and bottom edges
+    // at the top level — it should shift right once the map's footprint grows.
     let map_old = node_size(&designer, &[], map_id);
     let sibling = designer.add_node("union", DVec2::new(map_old.x + 500.0, map_old.y + 500.0));
     let sibling_before = pos(&designer, &[], sibling);
@@ -772,7 +833,10 @@ fn add_node_in_body_pushes_parent_sibling_single_step_undo() {
         delta.x > 0.0 && delta.y > 0.0,
         "adding a body node should grow the map's footprint, got delta {delta:?}"
     );
-    assert_eq!(pos(&designer, &[], sibling), sibling_before + delta);
+    assert_eq!(
+        pos(&designer, &[], sibling),
+        sibling_before + rightward(delta)
+    );
 
     // One undo step removes the body node AND restores the sibling position.
     assert!(designer.undo());
@@ -783,7 +847,10 @@ fn add_node_in_body_pushes_parent_sibling_single_step_undo() {
     // Redo re-applies the body edit and the reflow together.
     assert!(designer.redo());
     assert_eq!(node_size(&designer, &[], map_id), map_new);
-    assert_eq!(pos(&designer, &[], sibling), sibling_before + delta);
+    assert_eq!(
+        pos(&designer, &[], sibling),
+        sibling_before + rightward(delta)
+    );
 }
 
 /// Adding a node inside a nested `map`'s body (scope `[outer, inner]`) cascades:
@@ -797,7 +864,7 @@ fn add_node_in_nested_body_cascades_to_grandparent_single_step_undo() {
     let outer = designer.add_node("map", DVec2::new(0.0, 0.0));
     let inner = designer.add_node_scoped(&[outer], "map", DVec2::new(0.0, 0.0), None);
 
-    // Sibling of `inner` inside the outer body, in `inner`'s lower-right band.
+    // Sibling of `inner` inside the outer body, past `inner`'s footprint.
     let inner_old0 = node_size(&designer, &[outer], inner);
     let s_mid = designer.add_node_scoped(
         &[outer],
@@ -805,7 +872,7 @@ fn add_node_in_nested_body_cascades_to_grandparent_single_step_undo() {
         DVec2::new(inner_old0.x + 500.0, inner_old0.y + 500.0),
         None,
     );
-    // Sibling of `outer` at top level, in `outer`'s lower-right band.
+    // Sibling of `outer` at top level, past `outer`'s footprint.
     let outer_old0 = node_size(&designer, &[], outer);
     let s_top = designer.add_node(
         "union",
@@ -825,8 +892,14 @@ fn add_node_in_nested_body_cascades_to_grandparent_single_step_undo() {
     let delta_top = grew(node_size(&designer, &[], outer), outer_old);
     assert!(delta_mid.x > 0.0 && delta_mid.y > 0.0);
     assert!(delta_top.x > 0.0 && delta_top.y > 0.0);
-    assert_eq!(pos(&designer, &[outer], s_mid), s_mid_before + delta_mid);
-    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+    assert_eq!(
+        pos(&designer, &[outer], s_mid),
+        s_mid_before + rightward(delta_mid)
+    );
+    assert_eq!(
+        pos(&designer, &[], s_top),
+        s_top_before + rightward(delta_top)
+    );
 
     // One undo restores the inner body edit and both ancestor positions.
     assert!(designer.undo());
@@ -837,8 +910,14 @@ fn add_node_in_nested_body_cascades_to_grandparent_single_step_undo() {
 
     // Redo re-applies the whole cascade in one step.
     assert!(designer.redo());
-    assert_eq!(pos(&designer, &[outer], s_mid), s_mid_before + delta_mid);
-    assert_eq!(pos(&designer, &[], s_top), s_top_before + delta_top);
+    assert_eq!(
+        pos(&designer, &[outer], s_mid),
+        s_mid_before + rightward(delta_mid)
+    );
+    assert_eq!(
+        pos(&designer, &[], s_top),
+        s_top_before + rightward(delta_top)
+    );
 }
 
 /// A body with enough slack to absorb the new node (it lands well within the
@@ -872,8 +951,9 @@ fn add_node_in_body_with_slack_pushes_nothing() {
 
 /// Duplicating a node inside a body grows it (the copy is offset *below* the
 /// original — `duplicate_node` only shifts vertically), exercising the
-/// `duplicate_node_scoped` Case-C call site: the parent sibling is pushed
-/// downward and one undo step restores both.
+/// `duplicate_node_scoped` Case-C call site *and* the vertical half of
+/// `grow_rect`: a pure height growth pushes only what the taller box actually
+/// reaches, by the minimum, and one undo step restores both.
 #[test]
 fn duplicate_node_in_body_pushes_parent_sibling_single_step_undo() {
     let mut designer = setup_designer_with_network("main");
@@ -882,8 +962,12 @@ fn duplicate_node_in_body_pushes_parent_sibling_single_step_undo() {
     // expands the body's bottom.
     let inner = designer.add_node_scoped(&[map_id], "union", DVec2::new(900.0, 900.0), None);
 
+    // Directly below the map, at exactly the cascade's clearance: the growth
+    // reaches it, so it moves — by the height delta and nothing more. A
+    // neighbour out in the lower right would not move at all, which is the
+    // point of splitting the primitives by axis.
     let map_old = node_size(&designer, &[], map_id);
-    let sibling = designer.add_node("union", DVec2::new(map_old.x + 500.0, map_old.y + 500.0));
+    let sibling = designer.add_node("union", DVec2::new(0.0, map_old.y + CASCADE_GAP));
     let sibling_before = pos(&designer, &[], sibling);
     designer.undo_stack.clear();
 
@@ -897,7 +981,10 @@ fn duplicate_node_in_body_pushes_parent_sibling_single_step_undo() {
         delta.x == 0.0 && delta.y > 0.0,
         "the duplicate should grow the body vertically, got delta {delta:?}"
     );
-    assert_eq!(pos(&designer, &[], sibling), sibling_before + delta);
+    assert_eq!(
+        pos(&designer, &[], sibling),
+        sibling_before + DVec2::new(0.0, delta.y)
+    );
 
     // One undo removes the duplicate AND restores the sibling.
     assert!(designer.undo());

@@ -11,20 +11,25 @@
 //!
 //! # Which invariants are live
 //!
-//! The document lists eight. Six are implemented here; two need machinery that
-//! does not exist yet and are called out at their check sites rather than
-//! silently omitted:
+//! The document lists eight. Seven are implemented here; the last needs
+//! machinery that does not exist yet and is called out at its check site rather
+//! than silently omitted:
 //!
 //! | # | Invariant | Status |
 //! |---|---|---|
 //! | 1 | No new overlap | live |
 //! | 2 | No wire flipped | live |
 //! | 3 | Untouched means untouched | live |
-//! | 4 | Rigid shifts | Phase 2 (needs `shift_half_plane`'s moved set) |
-//! | 5 | Order among the pushed | Phase 2 (needs the cascade's moved set) |
+//! | 4 | Rigid shifts | live, via [`check_rigid_shift`] |
+//! | 5 | Order among the pushed | live, via [`check_pushed_order`] |
 //! | 6 | Bodies | live |
 //! | 7 | Determinism | live, via [`assert_deterministic`] |
 //! | 8 | Cascade bound | Phase 4 (needs a per-cascade move count) |
+//!
+//! Invariants 4 and 5 are the two that are *about a primitive* rather than
+//! about a whole pass, so they take the primitive's own reported move set and a
+//! plain `id -> rect` map instead of a [`Drawing`]. [`rects`] projects one scope
+//! of a drawing into that shape for a caller that has a drawing instead.
 
 #![allow(dead_code)]
 
@@ -191,12 +196,16 @@ impl Touched {
     }
 }
 
-/// Assert every live invariant of a layout pass.
+/// Assert every whole-pass invariant of a layout pass.
 ///
 /// Panics with the offending node's path on the first violation. Pre-existing
 /// violations are tolerated throughout: the rule the whole design follows is
 /// *repair only what this edit broke*, and the corpora contain overlapping
 /// nodes and backward wires their authors are content with.
+///
+/// Invariants 4 and 5 are **not** included: they are statements about one
+/// primitive call and need that call's own move set, so a test that made one
+/// adds [`check_rigid_shift`] / [`check_pushed_order`] itself.
 pub fn check(before: &Drawing, after: &Drawing, touched: &Touched) {
     check_no_new_overlap(before, after);
     check_no_wire_flipped(before, after);
@@ -289,6 +298,94 @@ pub fn check_untouched_unmoved(before: &Drawing, after: &Drawing, touched: &Touc
             "node {} moved but was in neither the delta nor the move list",
             path.join("/")
         );
+    }
+}
+
+/// One scope of a drawing as the plain `id`-free `name -> rect` map the
+/// primitive-level invariants take. Present so a scenario test that already
+/// built a [`Drawing`] does not have to assemble one by hand; a test that drove
+/// a primitive directly usually has ids and builds the map itself.
+pub fn rects(drawing: &Drawing, scope: &[String]) -> HashMap<String, Placed> {
+    drawing.scopes.get(scope).cloned().unwrap_or_default()
+}
+
+/// **4 — Rigid shifts.** Among the nodes a `shift_half_plane` reports having
+/// moved, every pairwise offset is unchanged — on *both* axes, since a rigid
+/// translation preserves the whole arrangement, not just the spacing along its
+/// own axis. Nodes the call was told to hold `fixed` did not move at all.
+///
+/// This is what buys the design's D3: relative order, alignment, spacing and
+/// whitespace inside the translated set survive exactly, so a shift can never
+/// quietly re-tidy a region it was only supposed to push.
+///
+/// Keys may be anything hashable that names a node — an id when a test drove a
+/// primitive directly, a name when it came from a [`Drawing`].
+pub fn check_rigid_shift<K: std::hash::Hash + Eq + std::fmt::Debug>(
+    before: &HashMap<K, Placed>,
+    after: &HashMap<K, Placed>,
+    shifted: &HashSet<K>,
+    fixed: &HashSet<K>,
+) {
+    for key in fixed {
+        let (Some(was), Some(now)) = (before.get(key), after.get(key)) else {
+            continue;
+        };
+        assert_eq!(
+            was.position, now.position,
+            "fixed node {key:?} moved during a half-plane shift"
+        );
+    }
+
+    let mut members: Vec<&K> = shifted.iter().collect();
+    members.sort_by_key(|key| format!("{key:?}"));
+    for (i, a) in members.iter().enumerate() {
+        for b in &members[i + 1..] {
+            let (Some(a0), Some(b0), Some(a1), Some(b1)) =
+                (before.get(*a), before.get(*b), after.get(*a), after.get(*b))
+            else {
+                continue;
+            };
+            assert_eq!(
+                a1.position - b1.position,
+                a0.position - b0.position,
+                "the shift was not rigid: {a:?} and {b:?} changed their offset"
+            );
+        }
+    }
+}
+
+/// **5 — Order among the pushed.** For every pair of nodes a cascade moved
+/// whose x-intervals overlap, the vertical order after is the vertical order
+/// before.
+///
+/// The cascade is allowed to move a node a long way; it is not allowed to
+/// reorder a column. Nodes with disjoint x-intervals are unconstrained — they
+/// are in different columns and their relative height was never a statement.
+pub fn check_pushed_order<K: std::hash::Hash + Eq + std::fmt::Debug>(
+    before: &HashMap<K, Placed>,
+    after: &HashMap<K, Placed>,
+    pushed: &HashSet<K>,
+) {
+    let mut members: Vec<&K> = pushed.iter().collect();
+    members.sort_by_key(|key| format!("{key:?}"));
+    for (i, a) in members.iter().enumerate() {
+        for b in &members[i + 1..] {
+            let (Some(a0), Some(b0), Some(a1), Some(b1)) =
+                (before.get(*a), before.get(*b), after.get(*a), after.get(*b))
+            else {
+                continue;
+            };
+            // Different columns: nothing to preserve.
+            if a0.right() <= b0.position.x || b0.right() <= a0.position.x {
+                continue;
+            }
+            let was = a0.position.y.partial_cmp(&b0.position.y);
+            let now = a1.position.y.partial_cmp(&b1.position.y);
+            assert_eq!(
+                was, now,
+                "the cascade reordered {a:?} and {b:?}: {a0:?}/{b0:?} became {a1:?}/{b1:?}"
+            );
+        }
     }
 }
 
