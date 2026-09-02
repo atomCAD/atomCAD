@@ -52,12 +52,32 @@ pub enum LayoutAlgorithm {
 /// # Returns
 /// A HashMap from node ID to its computed depth
 pub fn compute_node_depths(network: &NodeNetwork) -> HashMap<u64, usize> {
+    let all: HashSet<u64> = network.nodes.keys().copied().collect();
+    compute_node_depths_within(network, &all)
+}
+
+/// [`compute_node_depths`] restricted to a subgraph.
+///
+/// Only the nodes in `ids` get a depth, and only wires **between** them count:
+/// a wire from outside the set is not an input at all, so a node fed only from
+/// outside is a source at depth 0. That is what makes a block of freshly added
+/// nodes lay out as its own little drawing rather than inheriting the column
+/// index its producer happens to sit in
+/// (`doc/design_incremental_layout.md`, Step 3).
+///
+/// [`compute_node_depths`] is this function over every id, so the two cannot
+/// drift.
+pub fn compute_node_depths_within(
+    network: &NodeNetwork,
+    ids: &HashSet<u64>,
+) -> HashMap<u64, usize> {
     let mut depths: HashMap<u64, usize> = HashMap::new();
     let mut visiting: HashSet<u64> = HashSet::new();
 
     fn visit(
         node_id: u64,
         network: &NodeNetwork,
+        ids: &HashSet<u64>,
         depths: &mut HashMap<u64, usize>,
         visiting: &mut HashSet<u64>,
     ) -> usize {
@@ -77,11 +97,17 @@ pub fn compute_node_depths(network: &NodeNetwork) -> HashMap<u64, usize> {
             None => return 0,
         };
 
-        // Find all input node IDs
+        // Find all input node IDs, inside the subgraph only. A cross-scope
+        // wire is skipped whatever id it carries: `$element` names the owning
+        // HOF in the *parent* scope, and ids are unique per network, so a body
+        // node can share that number without being connected to anything.
         let input_ids: Vec<u64> = node
             .arguments
             .iter()
-            .flat_map(|arg| arg.incoming_wires.iter().map(|w| w.source_node_id))
+            .flat_map(|arg| arg.incoming_wires.iter())
+            .filter(|wire| wire.source_scope_depth == 0)
+            .map(|wire| wire.source_node_id)
+            .filter(|source_id| ids.contains(source_id))
             .collect();
 
         // If no inputs, this is a source node at depth 0
@@ -94,7 +120,7 @@ pub fn compute_node_depths(network: &NodeNetwork) -> HashMap<u64, usize> {
         // Compute max depth of all inputs
         let max_input_depth = input_ids
             .iter()
-            .map(|&source_id| visit(source_id, network, depths, visiting))
+            .map(|&source_id| visit(source_id, network, ids, depths, visiting))
             .max()
             .unwrap_or(0);
 
@@ -105,9 +131,14 @@ pub fn compute_node_depths(network: &NodeNetwork) -> HashMap<u64, usize> {
         depth
     }
 
-    // Compute depth for all nodes
-    for &node_id in network.nodes.keys() {
-        visit(node_id, network, &mut depths, &mut visiting);
+    // Ascending id, never `HashMap` order (D7): the depths themselves do not
+    // depend on the visit order, but the recursion's cycle break does.
+    let mut seeds: Vec<u64> = ids.iter().copied().collect();
+    seeds.sort_unstable();
+    for node_id in seeds {
+        if network.nodes.contains_key(&node_id) {
+            visit(node_id, network, ids, &mut depths, &mut visiting);
+        }
     }
 
     depths

@@ -48,6 +48,27 @@ pub fn node_by_path<'a>(network: &'a NodeNetwork, path: &[&str]) -> &'a Node {
     named(scope, last, path)
 }
 
+/// The node at a name path, for mutation — descending through `zone_mut()` so
+/// the body `Arc`'s copy-on-write stays intact.
+///
+/// The setup half of every incremental-layout scenario: a test arranges its
+/// "before" drawing by hand, because the point of the pass is what it does to
+/// an arrangement a human made.
+pub fn node_by_path_mut<'a>(network: &'a mut NodeNetwork, path: &[&str]) -> &'a mut Node {
+    let (last, prefix) = path.split_last().expect("empty node path");
+    let mut scope = network;
+    for name in prefix {
+        let id = named(scope, name, path).id;
+        scope = scope
+            .nodes
+            .get_mut(&id)
+            .and_then(|node| node.zone_mut())
+            .unwrap_or_else(|| panic!("`{name}` in {path:?} owns no body"));
+    }
+    let id = named(scope, last, path).id;
+    scope.nodes.get_mut(&id).expect("just resolved")
+}
+
 /// The id of the node at a name path.
 pub fn id_by_path(network: &NodeNetwork, path: &[&str]) -> u64 {
     node_by_path(network, path).id

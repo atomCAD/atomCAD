@@ -16,7 +16,7 @@
 //! - Time: O(V + E) for depth computation, O(V log V) for sorting within columns
 //! - Space: O(V) for storing depths and positions
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use glam::DVec2;
 
@@ -24,7 +24,8 @@ use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
 
 use super::common::{
-    COLUMN_WIDTH, START_X, START_Y, VERTICAL_GAP, compute_node_depths, is_comment, place_comments,
+    COLUMN_WIDTH, START_X, START_Y, VERTICAL_GAP, compute_node_depths_within, is_comment,
+    place_comments,
 };
 
 /// Compute positions for all nodes using the topological grid layout algorithm.
@@ -47,11 +48,37 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
         return HashMap::new();
     }
 
+    let all: HashSet<u64> = network.nodes.keys().copied().collect();
+    let mut positions = layout_subgraph(network, registry, &all);
+
+    // Place the comments against the laid-out graph (D9). The full reflow's
+    // job alone — see the same note on `sugiyama::layout`.
+    place_comments(network, registry, &mut positions);
+
+    positions
+}
+
+/// The same algorithm restricted to a subgraph: only the nodes in `ids` are
+/// placed, and only the wires **between** them count as dependencies.
+///
+/// The subgraph counterpart Step 3 of the incremental pass lays a block out
+/// with when the user's preferred algorithm is the grid
+/// (`doc/design_incremental_layout.md` D2). Comments are excluded, as they are
+/// from every layer assignment (D8), and the caller places them.
+pub fn layout_subgraph(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    ids: &HashSet<u64>,
+) -> HashMap<u64, DVec2> {
+    if ids.is_empty() {
+        return HashMap::new();
+    }
+
     // Step 1: Compute depths, over the graph nodes alone. Comments never take
     // part in layer assignment (`doc/design_wire_annotations.md` D8) — they
     // would otherwise land at depth 0 and, having no consumers, be pushed to the
     // bottom of the leftmost column, interleaved with real source nodes.
-    let mut depths = compute_node_depths(network);
+    let mut depths = compute_node_depths_within(network, ids);
     depths.retain(|node_id, _| network.nodes.get(node_id).is_some_and(|n| !is_comment(n)));
 
     // Step 2: Group nodes by depth into columns
@@ -61,12 +88,7 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
     order_columns(&mut columns, network);
 
     // Step 4: Assign final coordinates
-    let mut positions = assign_positions(&columns, network, registry);
-
-    // Step 5: Place the comments against the laid-out graph (D9).
-    place_comments(network, registry, &mut positions);
-
-    positions
+    assign_positions(&columns, network, registry)
 }
 
 /// Group nodes into columns based on their computed depth.

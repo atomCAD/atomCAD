@@ -9,15 +9,20 @@ Automatic layout algorithms for repositioning nodes in a network.
 | `size.rs` | `rendered_node_size` — **the** node-size function (see below) |
 | `delta.rs` | `EditDelta` / `diff_scope` — the incremental pass's input |
 | `motion.rs` | `shift_half_plane` / `cascade` / `grow_rect` — the two motion primitives (see below) |
-| `incremental.rs` | The incremental pass, step by step (Step 2 so far) |
+| `incremental.rs` | The incremental pass, step by step (Steps 1-5 and the driver) |
 | `common.rs` | Shared types and constants, depth computation, and the comment-placement pass |
 | `topological_grid.rs` | Simple layered layout (fast, reliable) |
 | `sugiyama.rs` | Sugiyama-style layout with crossing minimization |
 
 ## Entry Points
 
-- `layout_network(network, registry)` → applies layout in-place
-- `compute_layout(network, registry)` → returns `LayoutResult` without mutating
+- `layout_network(network, registry, algorithm)` → applies a full reflow in-place
+- `compute_layout(network, registry, algorithm)` → the same positions without mutating
+- `layout_subgraph(network, registry, ids, algorithm)` → positions for **only**
+  the nodes in `ids`, wired to each other alone (see below)
+- `incremental::layout_incremental(network, registry, snapshot, wires, algorithm)`
+  → the incremental pass over every scope, inside-out. Not wired into
+  `ai_text_edit` yet; Phase 5 does that.
 
 ## Algorithms
 
@@ -146,6 +151,55 @@ Two things to know before calling any of them:
   not an obstacle, not moved. From Phase 3 that is how a freshly added node stays
   out of the way until its block is placed, so do not "helpfully" fall back to
   every node in the network.
+
+## The incremental pass: blocks, and the invisibility rule
+
+`incremental.rs` runs Steps 1-5 per scope, inside-out over
+`delta::scopes_inside_out` (Steps 6-8 are Phase 4). Three things about it are
+easy to break and expensive to debug:
+
+- **An added node is invisible until its block is placed.** It is not an
+  obstacle, not a snap candidate, not in the drawing's bounding box, and neither
+  primitive moves it. This is expressed by *excluding it from the `sizes` map*
+  (`measure_scope` minus `delta.added`), which is why "the map's keys are the
+  placed set" above is a rule and not a description. It joins the map the moment
+  its block lands. The same exclusion applies to the body measurement in
+  `body_frame`: a body's right edge — where the `output` anchor sits — is where
+  the body renders *before* this edit's nodes are placed, never a reading of
+  their throwaway creation-time positions.
+- **The inside-out order is what feeds a body's growth to its parent.** An HOF's
+  footprint is `max(stored, body content + padding)`, so a settled body makes its
+  owner measure bigger, and the parent's `EditDelta` — computed at the parent's
+  own turn, against the live network — already classifies the owner `grown` at
+  its settled size. Do not *also* thread a `grown` accumulator up from the child:
+  `grow_rect` moves by `new - old`, so repairing one HOF twice with two different
+  `new`s shifts its neighbours twice.
+- **A block is placed rigidly.** `Block.rects` are block-local with the bounding
+  box at the origin, so a placement is one translation; nothing inside a block is
+  ever re-derived against the drawing it landed in.
+
+Comments are ordinary nodes on this path (D9): obstacles at their real size,
+pushed by the cascade, never re-placed by rule. `place_comments` is *not* called
+here — it keeps serving the full reflow — which is why `layout_subgraph` stops
+short of it and each algorithm's `layout` calls it afterwards.
+
+## `layout_subgraph`: the same algorithms over a subset
+
+`layout_subgraph(network, registry, ids, algorithm)` restricts a full layout to
+`ids`: only those nodes are placed, and **only the wires between them are
+edges**. Step 3 lays a block out with it, and `layout` in both algorithms is now
+`layout_subgraph` over every id plus `place_comments`, so the two cannot drift.
+
+The restriction goes all the way down — `common::compute_node_depths_within`,
+component discovery, dummy nodes, barycenters. Two consequences worth knowing:
+
+- A node fed only from outside the subset is a **source at depth 0**, which is
+  what lets a block start its own drawing instead of inheriting the column index
+  its producer happens to sit in.
+- **A cross-scope wire is never an edge** (`source_scope_depth != 0`). `$element`
+  names the owning HOF in the *parent* scope and ids are unique per network, so
+  a body node can carry that same number without being connected to anything.
+  Every graph walk here filters on depth for that reason.
 
 ## Sugiyama columns are per layer
 

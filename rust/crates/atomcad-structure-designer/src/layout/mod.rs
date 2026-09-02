@@ -50,14 +50,16 @@ pub use delta::{
     EditDelta, WireEnd, WireKey, WireSlot, collect_all_wires, diff_scope, node_ids_by_path,
     scopes_inside_out,
 };
-pub use incremental::repair_grown;
+pub use incremental::{
+    Block, BodyFrame, SLIDE_WINDOW, layout_incremental, layout_scope, repair_grown,
+};
 pub use motion::{
     CascadeDir, Rect, ShiftOutcome, cascade, grow_rect, measure_scope, shift_half_plane,
     snap_shift_line, upstream_closure,
 };
 pub use size::{rendered_body_size, rendered_node_size, rendered_node_size_by_id};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use glam::DVec2;
 
@@ -92,6 +94,33 @@ pub fn layout_network(
         if let Some(node) = network.nodes.get_mut(&node_id) {
             node.position = position;
         }
+    }
+}
+
+/// Compute positions for a **subgraph** — only the nodes in `ids`, wired to
+/// each other alone.
+///
+/// Step 3 of the incremental pass (`doc/design_incremental_layout.md` D2): the
+/// freshly added nodes are laid out as a group, in isolation, and the result is
+/// placed into the existing drawing as one rigid block. Nothing outside `ids`
+/// is read as a neighbour, an edge or an obstacle, and nothing outside `ids`
+/// appears in the result.
+///
+/// The positions are in the algorithm's own frame (starting at
+/// `common::START_X` / `START_Y`); the caller normalizes and translates them.
+/// Comments are excluded from the layering as everywhere else (D8) and are not
+/// placed here — the full reflow's `place_comments` is deliberately not run.
+pub fn layout_subgraph(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    ids: &HashSet<u64>,
+    algorithm: LayoutAlgorithm,
+) -> HashMap<u64, DVec2> {
+    match algorithm {
+        LayoutAlgorithm::TopologicalGrid => {
+            topological_grid::layout_subgraph(network, registry, ids)
+        }
+        LayoutAlgorithm::Sugiyama => sugiyama::layout_subgraph(network, registry, ids),
     }
 }
 

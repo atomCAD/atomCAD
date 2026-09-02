@@ -28,7 +28,8 @@ use crate::node_network::NodeNetwork;
 use crate::node_type_registry::NodeTypeRegistry;
 
 use super::common::{
-    COLUMN_GAP, START_X, START_Y, VERTICAL_GAP, compute_node_depths, graph_node_ids, place_comments,
+    COLUMN_GAP, START_X, START_Y, VERTICAL_GAP, compute_node_depths_within, graph_node_ids,
+    place_comments,
 };
 
 // Layout constants
@@ -135,23 +136,53 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
         return HashMap::new();
     }
 
-    // Find connected components and lay them out separately
-    let components = find_connected_components(network);
-
-    let mut positions = if components.len() == 1 {
-        // Single component: use standard layout
-        layout_single_component(network, registry, &components[0])
-    } else {
-        // Multiple components (or none at all, in a comment-only network): lay
-        // out each and stack vertically
-        layout_with_components(network, registry, &components)
-    };
+    let all: HashSet<u64> = network.nodes.keys().copied().collect();
+    let mut positions = layout_subgraph(network, registry, &all);
 
     // Comments are not part of any component (D8); place them against the
-    // laid-out graph (`doc/design_wire_annotations.md` D9).
+    // laid-out graph (`doc/design_wire_annotations.md` D9). This is the full
+    // reflow's job alone — the incremental pass places a *new* comment by its
+    // own rule and never re-places an existing one
+    // (`doc/design_incremental_layout.md` D9), which is why `layout_subgraph`
+    // stops short of it.
     place_comments(network, registry, &mut positions);
 
     positions
+}
+
+/// The same algorithm restricted to a subgraph: only the nodes in `ids` are
+/// placed, and only the wires **between** them are edges.
+///
+/// This is how Step 3 of the incremental pass lays a block of freshly added
+/// nodes out in isolation (`doc/design_incremental_layout.md` D2). The
+/// restriction runs all the way down — depths
+/// ([`compute_node_depths_within`](super::common::compute_node_depths_within)),
+/// components, dummy nodes, barycenters — so a block inherits nothing from the
+/// drawing it is about to be fitted into, not even a column index.
+///
+/// The returned positions are in the algorithm's own frame, starting at
+/// ([`START_X`], [`START_Y`]); the caller translates them where it wants them.
+/// Comments are excluded, as they are from every layer assignment (D8).
+pub fn layout_subgraph(
+    network: &NodeNetwork,
+    registry: &NodeTypeRegistry,
+    ids: &HashSet<u64>,
+) -> HashMap<u64, DVec2> {
+    if ids.is_empty() {
+        return HashMap::new();
+    }
+
+    // Find connected components and lay them out separately
+    let components = find_connected_components(network, ids);
+
+    if components.len() == 1 {
+        // Single component: use standard layout
+        layout_single_component(network, registry, &components[0], ids)
+    } else {
+        // Multiple components (or none at all, in a comment-only network): lay
+        // out each and stack vertically
+        layout_with_components(network, registry, &components, ids)
+    }
 }
 
 // =============================================================================
@@ -168,8 +199,11 @@ pub fn layout(network: &NodeNetwork, registry: &NodeTypeRegistry) -> HashMap<u64
 /// and be stacked below the whole graph — and, tying on size against every other
 /// singleton, in an order that comes from `HashMap` iteration and so differs per
 /// process. `place_comments` positions them after the graph is laid out instead.
-fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
-    let graph_nodes = graph_node_ids(network);
+fn find_connected_components(network: &NodeNetwork, ids: &HashSet<u64>) -> Vec<HashSet<u64>> {
+    let graph_nodes: HashSet<u64> = graph_node_ids(network)
+        .into_iter()
+        .filter(|id| ids.contains(id))
+        .collect();
     let mut visited: HashSet<u64> = HashSet::new();
     let mut components: Vec<HashSet<u64>> = Vec::new();
 
@@ -177,7 +211,7 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
     // (`doc/design_incremental_layout.md` D7). The component list is sorted by
     // size below, and `sort_by_key` is stable, so two equal-size components
     // kept the order they were discovered in — which was per-process random.
-    let mut seed_ids: Vec<u64> = network.nodes.keys().copied().collect();
+    let mut seed_ids: Vec<u64> = ids.iter().copied().collect();
     seed_ids.sort_unstable();
 
     for node_id in seed_ids {
@@ -198,9 +232,15 @@ fn find_connected_components(network: &NodeNetwork) -> Vec<HashSet<u64>> {
 
             // Add all connected nodes (both inputs and outputs)
             if let Some(node) = network.nodes.get(&current) {
-                // Input connections
+                // Input connections. Cross-scope wires are not edges of this
+                // graph: `$element` names a node in the *parent* scope, and ids
+                // are unique per network, so the number can collide with a
+                // node's here.
                 for arg in &node.arguments {
                     for wire in &arg.incoming_wires {
+                        if wire.source_scope_depth != 0 {
+                            continue;
+                        }
                         let source_id = wire.source_node_id;
                         if !component.contains(&source_id) && graph_nodes.contains(&source_id) {
                             queue.push_back(source_id);
@@ -236,13 +276,14 @@ fn layout_with_components(
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
     components: &[HashSet<u64>],
+    ids: &HashSet<u64>,
 ) -> HashMap<u64, DVec2> {
     let mut all_positions: HashMap<u64, DVec2> = HashMap::new();
     let mut current_y: f64 = START_Y;
 
     for component_nodes in components {
         // Layout this component
-        let component_positions = layout_single_component(network, registry, component_nodes);
+        let component_positions = layout_single_component(network, registry, component_nodes, ids);
 
         // Find the bounding box of this component
         let (min_y, max_y) = component_bounding_box(&component_positions, network, registry);
@@ -292,9 +333,10 @@ fn layout_single_component(
     network: &NodeNetwork,
     registry: &NodeTypeRegistry,
     component_nodes: &HashSet<u64>,
+    ids: &HashSet<u64>,
 ) -> HashMap<u64, DVec2> {
-    // Phase 1: Layer assignment (compute depths)
-    let depths = compute_node_depths(network);
+    // Phase 1: Layer assignment (compute depths), over the subgraph alone
+    let depths = compute_node_depths_within(network, ids);
 
     // Filter to only nodes in this component
     let component_depths: HashMap<u64, usize> = depths
@@ -376,6 +418,9 @@ fn insert_dummy_nodes(
 
         for arg in &node.arguments {
             for wire in &arg.incoming_wires {
+                if wire.source_scope_depth != 0 {
+                    continue; // not an edge of this graph; see the component scan
+                }
                 let source_id = wire.source_node_id;
                 let Some(&source_layer) = depths.get(&source_id) else {
                     continue;
@@ -827,7 +872,8 @@ pub fn count_total_crossings(graph: &LayeredGraph) -> usize {
 /// Create a layered graph for testing purposes.
 /// Exposes the internal insert_dummy_nodes function.
 pub fn create_layered_graph_for_testing(network: &NodeNetwork) -> LayeredGraph {
-    let depths = compute_node_depths(network);
+    let all: HashSet<u64> = network.nodes.keys().copied().collect();
+    let depths = compute_node_depths_within(network, &all);
     let layers = group_by_depth(&depths);
     insert_dummy_nodes(&layers, network, &depths)
 }
