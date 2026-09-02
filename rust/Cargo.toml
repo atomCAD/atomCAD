@@ -69,6 +69,11 @@ regex = "1.5.4"
 rustc-hash = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# `similar`: the line/word differ behind the AI-history diff engine
+# (`doc/design_ai_edit_history.md` D4). Already in `Cargo.lock` at this version
+# as an `insta` dependency, so taking it as a direct dependency adds no new
+# code to the tree.
+similar = "2.7"
 # `union` is NOT optional polish: it is what makes `SmallVec<[InlineBond; 4]>`
 # store its inline buffer in a union, which is what keeps `crystolecule`'s `Atom`
 # at 64 bytes — one cache line, asserted by

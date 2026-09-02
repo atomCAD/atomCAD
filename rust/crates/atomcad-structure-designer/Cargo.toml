@@ -30,6 +30,7 @@ lru = { workspace = true }
 rustc-hash = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+similar = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

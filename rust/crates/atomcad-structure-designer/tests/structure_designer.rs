@@ -299,6 +299,9 @@ mod materialize_regions_test;
 #[path = "structure_designer/phase_transitions_test.rs"]
 mod phase_transitions_test;
 
+#[path = "structure_designer/ai_edit_diff_test.rs"]
+mod ai_edit_diff_test;
+
 #[path = "structure_designer/ai_edit_history_test.rs"]
 mod ai_edit_history_test;
 

@@ -1,4 +1,5 @@
 pub mod ai_assistant_api;
+pub mod ai_history_api;
 pub mod atom_edit_api;
 // Not in `flutter_rust_bridge.yaml`'s `rust_input`: these two hold the
 // presentation logic D10 moved up out of the domain, and their `pub fn`s
